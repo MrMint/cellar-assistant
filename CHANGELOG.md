@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.5](https://github.com/MrMint/cellar-assistant/compare/v0.0.4...v0.0.5) (2023-10-10)
+
+
+### Features
+
+* Adds Vercel analytics ([81be198](https://github.com/MrMint/cellar-assistant/commit/81be19842913103c12be2a78b5e02d2ff0f33abf))
+
 ### [0.0.4](https://github.com/MrMint/cellar-assistant/compare/v0.0.3...v0.0.4) (2023-10-10)
 
 
