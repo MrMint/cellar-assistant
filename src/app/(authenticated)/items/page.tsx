@@ -2,7 +2,8 @@
 
 import withAuth from "@/hocs/withAuth";
 import { Card, Grid, Typography } from "@mui/joy";
-import { useQuery, useSubscription } from "urql";
+import { useSubscription } from "urql";
+
 const itemsSub = `subscription GetItemsStreamingSubscription {
   items {
     id
@@ -16,7 +17,9 @@ const handleSubscription = (messages = [], response: { items: [] }) => {
 };
 
 const Items = () => {
-  const [res] = useSubscription<{ items: [] }>(
+  const [res] = useSubscription<{
+    items: { id: string; name: string; type: string }[];
+  }>(
     { query: itemsSub },
     // handleSubscription,
   );
