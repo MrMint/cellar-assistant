@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.4](https://github.com/MrMint/cellar-assistant/compare/v0.0.3...v0.0.4) (2023-10-10)
+
+
+### Bug Fixes
+
+* Adds nhost region & subdomain config ([e0e6031](https://github.com/MrMint/cellar-assistant/commit/e0e60314590cf45435ed5a6c84ec8ac158fdde95))
+
 ### [0.0.3](https://github.com/MrMint/cellar-assistant/compare/v0.0.2...v0.0.3) (2023-10-10)
 
 
