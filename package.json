@@ -1,12 +1,13 @@
 {
-  "name": "cellar-manager-next",
-  "version": "0.1.0",
+  "name": "cellar-assistant",
+  "version": "0.0.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "release": "standard-version"
   },
   "dependencies": {
     "@emotion/react": "11.11.1",
@@ -34,5 +35,8 @@
     "react-icons": "4.11.0",
     "typescript": "5.2.2",
     "urql": "4.0.5"
+  },
+  "devDependencies": {
+    "standard-version": "9.5.0"
   }
 }
