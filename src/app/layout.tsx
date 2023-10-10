@@ -7,6 +7,7 @@ import { Inter } from "next/font/google";
 import { NhostUrqlProvider } from "@/utilities/UrqlProvider";
 import ThemeRegistry from "@/components/ThemeRegistry";
 import { Box, GlobalStyles } from "@mui/joy";
+import { Analytics } from "@vercel/analytics/react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -50,6 +51,7 @@ export default function RootLayout({
             </ThemeRegistry>
           </NhostUrqlProvider>
         </NhostProvider>
+        <Analytics />
       </body>
     </html>
   );
