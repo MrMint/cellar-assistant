@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.3](https://github.com/MrMint/cellar-assistant/compare/v0.0.2...v0.0.3) (2023-10-10)
+
+
+### Bug Fixes
+
+* Adds TS typing to item subscription ([78b5819](https://github.com/MrMint/cellar-assistant/commit/78b58198880f38e3d1b51d51854e172e9e8ef521))
+
 ### 0.0.2 (2023-10-10)
 
 
