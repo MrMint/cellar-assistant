@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.6](https://github.com/MrMint/cellar-assistant/compare/v0.0.5...v0.0.6) (2023-10-11)
+
+
+### Features
+
+* Adds nhost config and hasura tables for items and cellars ([e7b82aa](https://github.com/MrMint/cellar-assistant/commit/e7b82aa744a1ad5d01442219db038f5093d3bbb4))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.10 ([f72e5e1](https://github.com/MrMint/cellar-assistant/commit/f72e5e19e201c98c0fedabbca904a26aea49f2ae))
+* **deps:** update react monorepo ([37928fe](https://github.com/MrMint/cellar-assistant/commit/37928feed7e28333f7e3ee8b0c5e0ac5fadea155))
+
 ### [0.0.5](https://github.com/MrMint/cellar-assistant/compare/v0.0.4...v0.0.5) (2023-10-10)
 
 
