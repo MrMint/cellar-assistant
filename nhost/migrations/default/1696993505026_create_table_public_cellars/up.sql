@@ -1,0 +1,1 @@
+CREATE TABLE public.cellars (id uuid DEFAULT gen_random_uuid() NOT NULL, created_at timestamptz DEFAULT now() NOT NULL, updated_at timestamptz DEFAULT now() NOT NULL, name text NOT NULL, created_by_id uuid NOT NULL, is_public bool DEFAULT 'false' NOT NULL, PRIMARY KEY (id), FOREIGN KEY (created_by_id) REFERENCES auth.users (id) ON UPDATE RESTRICT ON DELETE RESTRICT);
