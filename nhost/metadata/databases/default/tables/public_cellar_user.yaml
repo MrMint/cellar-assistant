@@ -1,0 +1,10 @@
+table:
+  name: cellar_user
+  schema: public
+object_relationships:
+  - name: cellar
+    using:
+      foreign_key_constraint_on: cellar_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
