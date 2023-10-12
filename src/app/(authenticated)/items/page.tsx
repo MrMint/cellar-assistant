@@ -1,32 +1,31 @@
 "use client";
 
+import { graphql } from "@/gql";
 import withAuth from "@/hocs/withAuth";
 import { Card, Grid, Typography } from "@mui/joy";
 import { useSubscription } from "urql";
 
-const itemsSub = `subscription GetItemsStreamingSubscription {
-  items {
-    id
-		name
-		type
+const itemsSub = graphql(`
+  subscription GetItemsStream {
+    items {
+      id
+      name
+      type
+    }
   }
-}`;
+`);
 
 const handleSubscription = (messages = [], response: { items: [] }) => {
   return [response.items, ...messages];
 };
 
 const Items = () => {
-  const [res] = useSubscription<{
-    items: { id: string; name: string; type: string }[];
-  }>(
-    { query: itemsSub },
-    // handleSubscription,
-  );
+  const [res] = useSubscription({ query: itemsSub });
+
   return (
     <div>
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
-        {res?.data?.items?.map((x) => (
+        {res?.data?.items.map((x) => (
           <Grid key={x.id} xs={6} md={4}>
             <Card>
               <Typography level="title-lg">{x.name}</Typography>
