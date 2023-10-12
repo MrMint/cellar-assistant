@@ -2538,12 +2538,36 @@ export type Cellars = {
   created_by_id: Scalars['uuid']['output'];
   id: Scalars['uuid']['output'];
   is_public: Scalars['Boolean']['output'];
+  /** An array relationship */
+  items: Array<Items>;
+  /** An aggregate relationship */
+  items_aggregate: Items_Aggregate;
   name: Scalars['String']['output'];
   updated_at: Scalars['timestamptz']['output'];
   /** An array relationship */
   users: Array<Cellar_User>;
   /** An aggregate relationship */
   users_aggregate: Cellar_User_Aggregate;
+};
+
+
+/** columns and relationships of "cellars" */
+export type CellarsItemsArgs = {
+  distinct_on?: InputMaybe<Array<Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Items_Order_By>>;
+  where?: InputMaybe<Items_Bool_Exp>;
+};
+
+
+/** columns and relationships of "cellars" */
+export type CellarsItems_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Items_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Items_Order_By>>;
+  where?: InputMaybe<Items_Bool_Exp>;
 };
 
 
@@ -2639,6 +2663,8 @@ export type Cellars_Bool_Exp = {
   created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
   is_public?: InputMaybe<Boolean_Comparison_Exp>;
+  items?: InputMaybe<Items_Bool_Exp>;
+  items_aggregate?: InputMaybe<Items_Aggregate_Bool_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   users?: InputMaybe<Cellar_User_Bool_Exp>;
@@ -2658,6 +2684,7 @@ export type Cellars_Insert_Input = {
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   is_public?: InputMaybe<Scalars['Boolean']['input']>;
+  items?: InputMaybe<Items_Arr_Rel_Insert_Input>;
   name?: InputMaybe<Scalars['String']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   users?: InputMaybe<Cellar_User_Arr_Rel_Insert_Input>;
@@ -2731,6 +2758,7 @@ export type Cellars_Order_By = {
   created_by_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   is_public?: InputMaybe<Order_By>;
+  items_aggregate?: InputMaybe<Items_Aggregate_Order_By>;
   name?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   users_aggregate?: InputMaybe<Cellar_User_Aggregate_Order_By>;
@@ -3501,6 +3529,17 @@ export type Items_Aggregate = {
   nodes: Array<Items>;
 };
 
+export type Items_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Items_Aggregate_Bool_Exp_Count>;
+};
+
+export type Items_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Items_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Items_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
 /** aggregate fields of "items" */
 export type Items_Aggregate_Fields = {
   __typename?: 'items_aggregate_fields';
@@ -3514,6 +3553,20 @@ export type Items_Aggregate_Fields = {
 export type Items_Aggregate_FieldsCountArgs = {
   columns?: InputMaybe<Array<Items_Select_Column>>;
   distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "items" */
+export type Items_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Items_Max_Order_By>;
+  min?: InputMaybe<Items_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "items" */
+export type Items_Arr_Rel_Insert_Input = {
+  data: Array<Items_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Items_On_Conflict>;
 };
 
 /** Boolean expression to filter rows from the table "items". All fields are combined with a logical 'AND'. */
@@ -3562,6 +3615,16 @@ export type Items_Max_Fields = {
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
 };
 
+/** order by max() on columns of table "items" */
+export type Items_Max_Order_By = {
+  cellar_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
 /** aggregate min on columns */
 export type Items_Min_Fields = {
   __typename?: 'items_min_fields';
@@ -3571,6 +3634,16 @@ export type Items_Min_Fields = {
   id?: Maybe<Scalars['uuid']['output']>;
   name?: Maybe<Scalars['String']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "items" */
+export type Items_Min_Order_By = {
+  cellar_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
 };
 
 /** response of any mutation on the table "items" */
@@ -4825,9 +4898,9 @@ export type Query_Root = {
   item_type_aggregate: Item_Type_Aggregate;
   /** fetch data from the table: "item_type" using primary key columns */
   item_type_by_pk?: Maybe<Item_Type>;
-  /** fetch data from the table: "items" */
+  /** An array relationship */
   items: Array<Items>;
-  /** fetch aggregated fields from the table: "items" */
+  /** An aggregate relationship */
   items_aggregate: Items_Aggregate;
   /** fetch data from the table: "items" using primary key columns */
   items_by_pk?: Maybe<Items>;
@@ -5319,9 +5392,9 @@ export type Subscription_Root = {
   item_type_by_pk?: Maybe<Item_Type>;
   /** fetch data from the table in a streaming manner: "item_type" */
   item_type_stream: Array<Item_Type>;
-  /** fetch data from the table: "items" */
+  /** An array relationship */
   items: Array<Items>;
-  /** fetch aggregated fields from the table: "items" */
+  /** An aggregate relationship */
   items_aggregate: Items_Aggregate;
   /** fetch data from the table: "items" using primary key columns */
   items_by_pk?: Maybe<Items>;
@@ -6827,10 +6900,10 @@ export type Virus_Updates = {
   where: Virus_Bool_Exp;
 };
 
-export type GetItemsStreamingSubscriptionSubscriptionVariables = Exact<{ [key: string]: never; }>;
+export type GetItemsStreamSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetItemsStreamingSubscriptionSubscription = { __typename?: 'subscription_root', items: Array<{ __typename?: 'items', id: any, name: string, type: Item_Type_Enum }> };
+export type GetItemsStreamSubscription = { __typename?: 'subscription_root', items: Array<{ __typename?: 'items', id: any, name: string, type: Item_Type_Enum }> };
 
 
-export const GetItemsStreamingSubscriptionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"GetItemsStreamingSubscription"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]} as unknown as DocumentNode<GetItemsStreamingSubscriptionSubscription, GetItemsStreamingSubscriptionSubscriptionVariables>;
+export const GetItemsStreamDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"GetItemsStream"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]} as unknown as DocumentNode<GetItemsStreamSubscription, GetItemsStreamSubscriptionVariables>;

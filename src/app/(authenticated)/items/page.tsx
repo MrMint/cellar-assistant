@@ -6,7 +6,7 @@ import { Card, Grid, Typography } from "@mui/joy";
 import { useSubscription } from "urql";
 
 const itemsSub = graphql(`
-  subscription GetItemsStreamingSubscription {
+  subscription GetItemsStream {
     items {
       id
       name
