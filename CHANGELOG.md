@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.1.0](https://github.com/MrMint/cellar-assistant/compare/v0.0.7...v0.1.0) (2023-10-12)
+
+
+### Features
+
+* Adds graphql codegen for type safe gql ([2866c23](https://github.com/MrMint/cellar-assistant/commit/2866c23ee5cbad321269fff665f2d8838b40dbfe))
+* Adds items relationship to cellars ([5cc5c3d](https://github.com/MrMint/cellar-assistant/commit/5cc5c3de54d89a6cdc619a3170484e7620fd6b38))
+* Adds prettier configuration ([03bcdbb](https://github.com/MrMint/cellar-assistant/commit/03bcdbb1ce85967247c92bbcb67a0538b999510d))
+* Removes standard-version(deprecated) in favor or release-please ([91771ae](https://github.com/MrMint/cellar-assistant/commit/91771ae867d1d41682fbb1655463a5e14560287f))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v20.8.5 ([c8ed2be](https://github.com/MrMint/cellar-assistant/commit/c8ed2be5e941e53ff73b54592eaab2eb36665739))
+* **deps:** update dependency @vercel/analytics to v1.1.1 ([92ab559](https://github.com/MrMint/cellar-assistant/commit/92ab559a53ebbccc1ed66ebc2713ada48f7c38c3))
+
 ### [0.0.7](https://github.com/MrMint/cellar-assistant/compare/v0.0.6...v0.0.7) (2023-10-12)
 
 
