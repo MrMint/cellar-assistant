@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "release": "standard-version"
+    "release": "standard-version",
+    "format": "prettier . --write"
   },
   "dependencies": {
     "@emotion/react": "11.11.1",
@@ -25,9 +26,11 @@
     "autoprefixer": "10.4.16",
     "eslint": "8.51.0",
     "eslint-config-next": "13.5.4",
+    "eslint-config-prettier": "9.0.0",
     "graphiql": "3.0.6",
     "graphql": "16.8.1",
     "graphql-ws": "5.14.1",
+    "prettier": "3.0.3",
     "next": "13.5.4",
     "ramda": "0.29.1",
     "react": "18.2.0",
