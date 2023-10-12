@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.7](https://github.com/MrMint/cellar-assistant/compare/v0.0.6...v0.0.7) (2023-10-12)
+
+
+### Features
+
+* Cleans up landing page ([ef8c85d](https://github.com/MrMint/cellar-assistant/commit/ef8c85da35787d618f600c620b48b67191c46f25))
+
 ### [0.0.6](https://github.com/MrMint/cellar-assistant/compare/v0.0.5...v0.0.6) (2023-10-11)
 
 
