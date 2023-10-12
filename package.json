@@ -8,12 +8,15 @@
     "start": "next start",
     "lint": "next lint",
     "release": "standard-version",
+    "codegen": "graphql-codegen",
     "format": "prettier . --write"
   },
   "dependencies": {
     "@emotion/react": "11.11.1",
     "@emotion/styled": "11.11.0",
     "@fontsource/inter": "5.0.13",
+    "@graphql-codegen/cli": "5.0.0",
+    "@graphql-codegen/client-preset": "4.1.0",
     "@mui/joy": "5.0.0-beta.10",
     "@nhost/nextjs": "1.13.38",
     "@types/node": "20.8.5",
@@ -29,14 +32,16 @@
     "eslint-config-prettier": "9.0.0",
     "graphiql": "3.0.6",
     "graphql": "16.8.1",
+    "graphql-config": "5.0.3",
     "graphql-ws": "5.14.1",
-    "prettier": "3.0.3",
     "next": "13.5.4",
+    "prettier": "3.0.3",
     "ramda": "0.29.1",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-hook-form": "7.47.0",
     "react-icons": "4.11.0",
+    "ts-node": "10.9.1",
     "typescript": "5.2.2",
     "urql": "4.0.5"
   }
