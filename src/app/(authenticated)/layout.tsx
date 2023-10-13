@@ -14,7 +14,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return (
     <Container>
       <SideNavigationBar />
-      <Box sx={{ padding: "1rem" }}>{children}</Box>
+      <Box>{children}</Box>
     </Container>
   );
 }
