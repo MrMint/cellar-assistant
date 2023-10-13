@@ -1910,6 +1910,17 @@ export type Beers_Aggregate = {
   nodes: Array<Beers>;
 };
 
+export type Beers_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Beers_Aggregate_Bool_Exp_Count>;
+};
+
+export type Beers_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Beers_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Beers_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
 /** aggregate fields of "beers" */
 export type Beers_Aggregate_Fields = {
   __typename?: 'beers_aggregate_fields';
@@ -1923,6 +1934,20 @@ export type Beers_Aggregate_Fields = {
 export type Beers_Aggregate_FieldsCountArgs = {
   columns?: InputMaybe<Array<Beers_Select_Column>>;
   distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "beers" */
+export type Beers_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Beers_Max_Order_By>;
+  min?: InputMaybe<Beers_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "beers" */
+export type Beers_Arr_Rel_Insert_Input = {
+  data: Array<Beers_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Beers_On_Conflict>;
 };
 
 /** Boolean expression to filter rows from the table "beers". All fields are combined with a logical 'AND'. */
@@ -1969,6 +1994,16 @@ export type Beers_Max_Fields = {
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
 };
 
+/** order by max() on columns of table "beers" */
+export type Beers_Max_Order_By = {
+  cellar_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
 /** aggregate min on columns */
 export type Beers_Min_Fields = {
   __typename?: 'beers_min_fields';
@@ -1978,6 +2013,16 @@ export type Beers_Min_Fields = {
   id?: Maybe<Scalars['uuid']['output']>;
   name?: Maybe<Scalars['String']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "beers" */
+export type Beers_Min_Order_By = {
+  cellar_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
 };
 
 /** response of any mutation on the table "beers" */
@@ -2724,6 +2769,10 @@ export type Cellar_User_Variance_Order_By = {
 /** columns and relationships of "cellars" */
 export type Cellars = {
   __typename?: 'cellars';
+  /** An array relationship */
+  beers: Array<Beers>;
+  /** An aggregate relationship */
+  beers_aggregate: Beers_Aggregate;
   /** An object relationship */
   createdBy: Users;
   created_at: Scalars['timestamptz']['output'];
@@ -2740,6 +2789,26 @@ export type Cellars = {
   users: Array<Cellar_User>;
   /** An aggregate relationship */
   users_aggregate: Cellar_User_Aggregate;
+};
+
+
+/** columns and relationships of "cellars" */
+export type CellarsBeersArgs = {
+  distinct_on?: InputMaybe<Array<Beers_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Beers_Order_By>>;
+  where?: InputMaybe<Beers_Bool_Exp>;
+};
+
+
+/** columns and relationships of "cellars" */
+export type CellarsBeers_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Beers_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Beers_Order_By>>;
+  where?: InputMaybe<Beers_Bool_Exp>;
 };
 
 
@@ -2850,6 +2919,8 @@ export type Cellars_Bool_Exp = {
   _and?: InputMaybe<Array<Cellars_Bool_Exp>>;
   _not?: InputMaybe<Cellars_Bool_Exp>;
   _or?: InputMaybe<Array<Cellars_Bool_Exp>>;
+  beers?: InputMaybe<Beers_Bool_Exp>;
+  beers_aggregate?: InputMaybe<Beers_Aggregate_Bool_Exp>;
   createdBy?: InputMaybe<Users_Bool_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -2871,6 +2942,7 @@ export enum Cellars_Constraint {
 
 /** input type for inserting data into table "cellars" */
 export type Cellars_Insert_Input = {
+  beers?: InputMaybe<Beers_Arr_Rel_Insert_Input>;
   createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -2945,6 +3017,7 @@ export type Cellars_On_Conflict = {
 
 /** Ordering options when selecting data from "cellars". */
 export type Cellars_Order_By = {
+  beers_aggregate?: InputMaybe<Beers_Aggregate_Order_By>;
   createdBy?: InputMaybe<Users_Order_By>;
   created_at?: InputMaybe<Order_By>;
   created_by_id?: InputMaybe<Order_By>;
@@ -5120,9 +5193,9 @@ export type Query_Root = {
   authUserSecurityKeys: Array<AuthUserSecurityKeys>;
   /** fetch aggregated fields from the table: "auth.user_security_keys" */
   authUserSecurityKeysAggregate: AuthUserSecurityKeys_Aggregate;
-  /** fetch data from the table: "beers" */
+  /** An array relationship */
   beers: Array<Beers>;
-  /** fetch aggregated fields from the table: "beers" */
+  /** An aggregate relationship */
   beers_aggregate: Beers_Aggregate;
   /** fetch data from the table: "beers" using primary key columns */
   beers_by_pk?: Maybe<Beers>;
@@ -5633,9 +5706,9 @@ export type Subscription_Root = {
   authUserSecurityKeysAggregate: AuthUserSecurityKeys_Aggregate;
   /** fetch data from the table in a streaming manner: "auth.user_security_keys" */
   authUserSecurityKeys_stream: Array<AuthUserSecurityKeys>;
-  /** fetch data from the table: "beers" */
+  /** An array relationship */
   beers: Array<Beers>;
-  /** fetch aggregated fields from the table: "beers" */
+  /** An aggregate relationship */
   beers_aggregate: Beers_Aggregate;
   /** fetch data from the table: "beers" using primary key columns */
   beers_by_pk?: Maybe<Beers>;
@@ -7226,12 +7299,33 @@ export type AddBeerMutationVariables = Exact<{
 
 export type AddBeerMutation = { __typename?: 'mutation_root', insert_beers_one?: { __typename?: 'beers', id: any } | null };
 
+export type GetCellarQueryVariables = Exact<{
+  cellarId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetCellarQuery = { __typename?: 'query_root', cellars_by_pk?: { __typename?: 'cellars', id: any, name: string, createdBy: { __typename?: 'users', displayName: string, avatarUrl: string } } | null };
+
 export type GetItemsQueryQueryVariables = Exact<{
   cellarId: Scalars['uuid']['input'];
 }>;
 
 
 export type GetItemsQueryQuery = { __typename?: 'query_root', beers: Array<{ __typename?: 'beers', id: any, name: string }>, items: Array<{ __typename?: 'items', id: any, name: string }> };
+
+export type AddCellarMutationVariables = Exact<{
+  cellar: Cellars_Insert_Input;
+}>;
+
+
+export type AddCellarMutation = { __typename?: 'mutation_root', insert_cellars_one?: { __typename?: 'cellars', id: any } | null };
+
+export type AddUserToCellarUsersMutationVariables = Exact<{
+  cellarUser: Cellar_User_Insert_Input;
+}>;
+
+
+export type AddUserToCellarUsersMutation = { __typename?: 'mutation_root', insert_cellar_user_one?: { __typename?: 'cellar_user', id: number } | null };
 
 export type GetCellarsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -7240,5 +7334,8 @@ export type GetCellarsQuery = { __typename?: 'query_root', cellars: Array<{ __ty
 
 
 export const AddBeerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addBeer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"beers_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_beers_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beer"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddBeerMutation, AddBeerMutationVariables>;
+export const GetCellarDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCellar"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cellars_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}}]}}]}}]} as unknown as DocumentNode<GetCellarQuery, GetCellarQueryVariables>;
 export const GetItemsQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetItemsQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beers"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"items"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<GetItemsQueryQuery, GetItemsQueryQueryVariables>;
+export const AddCellarDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addCellar"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellar"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"cellars_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_cellars_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellar"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddCellarMutation, AddCellarMutationVariables>;
+export const AddUserToCellarUsersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addUserToCellarUsers"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarUser"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"cellar_user_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_cellar_user_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarUser"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddUserToCellarUsersMutation, AddUserToCellarUsersMutationVariables>;
 export const GetCellarsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}}]}}]}}]} as unknown as DocumentNode<GetCellarsQuery, GetCellarsQueryVariables>;
