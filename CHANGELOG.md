@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.2.0](https://github.com/MrMint/cellar-assistant/compare/v0.1.0...v0.2.0) (2023-10-13)
+
+
+### Features
+
+* Adds create support for cellars ([0e0b921](https://github.com/MrMint/cellar-assistant/commit/0e0b92114582f7a0d22e8873b2535bd845d42924))
+* Adds insert support for beers ([7c176af](https://github.com/MrMint/cellar-assistant/commit/7c176afa8333e0ff2d6d1f5c11e4a0ec5fc3d698))
+* Adds sign up page ([fbbdfa5](https://github.com/MrMint/cellar-assistant/commit/fbbdfa59965a7ce2506c5155c3c008aa19740959))
+
 ## [0.1.0](https://github.com/MrMint/cellar-assistant/compare/v0.0.7...v0.1.0) (2023-10-12)
 
 
