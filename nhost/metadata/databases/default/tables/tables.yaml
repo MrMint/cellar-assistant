@@ -7,6 +7,7 @@
 - "!include auth_user_roles.yaml"
 - "!include auth_user_security_keys.yaml"
 - "!include auth_users.yaml"
+- "!include public_beers.yaml"
 - "!include public_cellar_user.yaml"
 - "!include public_cellars.yaml"
 - "!include public_item_type.yaml"

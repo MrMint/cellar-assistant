@@ -1888,6 +1888,198 @@ export type AuthUserSecurityKeys_Variance_Order_By = {
   counter?: InputMaybe<Order_By>;
 };
 
+/** columns and relationships of "beers" */
+export type Beers = {
+  __typename?: 'beers';
+  /** An object relationship */
+  cellar: Cellars;
+  cellar_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  createdBy: Users;
+  created_at: Scalars['timestamptz']['output'];
+  created_by_id: Scalars['uuid']['output'];
+  id: Scalars['uuid']['output'];
+  name: Scalars['String']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+};
+
+/** aggregated selection of "beers" */
+export type Beers_Aggregate = {
+  __typename?: 'beers_aggregate';
+  aggregate?: Maybe<Beers_Aggregate_Fields>;
+  nodes: Array<Beers>;
+};
+
+/** aggregate fields of "beers" */
+export type Beers_Aggregate_Fields = {
+  __typename?: 'beers_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Beers_Max_Fields>;
+  min?: Maybe<Beers_Min_Fields>;
+};
+
+
+/** aggregate fields of "beers" */
+export type Beers_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Beers_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "beers". All fields are combined with a logical 'AND'. */
+export type Beers_Bool_Exp = {
+  _and?: InputMaybe<Array<Beers_Bool_Exp>>;
+  _not?: InputMaybe<Beers_Bool_Exp>;
+  _or?: InputMaybe<Array<Beers_Bool_Exp>>;
+  cellar?: InputMaybe<Cellars_Bool_Exp>;
+  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
+  createdBy?: InputMaybe<Users_Bool_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  name?: InputMaybe<String_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "beers" */
+export enum Beers_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  BeersPkey = 'beers_pkey'
+}
+
+/** input type for inserting data into table "beers" */
+export type Beers_Insert_Input = {
+  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Beers_Max_Fields = {
+  __typename?: 'beers_max_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_by_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** aggregate min on columns */
+export type Beers_Min_Fields = {
+  __typename?: 'beers_min_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_by_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** response of any mutation on the table "beers" */
+export type Beers_Mutation_Response = {
+  __typename?: 'beers_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Beers>;
+};
+
+/** on_conflict condition type for table "beers" */
+export type Beers_On_Conflict = {
+  constraint: Beers_Constraint;
+  update_columns?: Array<Beers_Update_Column>;
+  where?: InputMaybe<Beers_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "beers". */
+export type Beers_Order_By = {
+  cellar?: InputMaybe<Cellars_Order_By>;
+  cellar_id?: InputMaybe<Order_By>;
+  createdBy?: InputMaybe<Users_Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: beers */
+export type Beers_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "beers" */
+export enum Beers_Select_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  CreatedById = 'created_by_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** input type for updating data in table "beers" */
+export type Beers_Set_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** Streaming cursor of the table "beers" */
+export type Beers_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Beers_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Beers_Stream_Cursor_Value_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** update columns of table "beers" */
+export enum Beers_Update_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  CreatedById = 'created_by_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Beers_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Beers_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Beers_Bool_Exp;
+};
+
 /** Boolean expression to compare columns of type "bigint". All fields are combined with logical 'AND'. */
 export type Bigint_Comparison_Exp = {
   _eq?: InputMaybe<Scalars['bigint']['input']>;
@@ -3832,6 +4024,10 @@ export type Mutation_Root = {
   deleteVirus?: Maybe<Virus>;
   /** delete data from the table: "storage.virus" */
   deleteViruses?: Maybe<Virus_Mutation_Response>;
+  /** delete data from the table: "beers" */
+  delete_beers?: Maybe<Beers_Mutation_Response>;
+  /** delete single row from the table: "beers" */
+  delete_beers_by_pk?: Maybe<Beers>;
   /** delete data from the table: "cellar_user" */
   delete_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
   /** delete single row from the table: "cellar_user" */
@@ -3896,6 +4092,10 @@ export type Mutation_Root = {
   insertVirus?: Maybe<Virus>;
   /** insert data into the table: "storage.virus" */
   insertViruses?: Maybe<Virus_Mutation_Response>;
+  /** insert data into the table: "beers" */
+  insert_beers?: Maybe<Beers_Mutation_Response>;
+  /** insert a single row into the table: "beers" */
+  insert_beers_one?: Maybe<Beers>;
   /** insert data into the table: "cellar_user" */
   insert_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
   /** insert a single row into the table: "cellar_user" */
@@ -3976,6 +4176,12 @@ export type Mutation_Root = {
   update_authUserRoles_many?: Maybe<Array<Maybe<AuthUserRoles_Mutation_Response>>>;
   /** update multiples rows of table: "auth.user_security_keys" */
   update_authUserSecurityKeys_many?: Maybe<Array<Maybe<AuthUserSecurityKeys_Mutation_Response>>>;
+  /** update data of the table: "beers" */
+  update_beers?: Maybe<Beers_Mutation_Response>;
+  /** update single row of the table: "beers" */
+  update_beers_by_pk?: Maybe<Beers>;
+  /** update multiples rows of table: "beers" */
+  update_beers_many?: Maybe<Array<Maybe<Beers_Mutation_Response>>>;
   /** update multiples rows of table: "storage.buckets" */
   update_buckets_many?: Maybe<Array<Maybe<Buckets_Mutation_Response>>>;
   /** update data of the table: "cellar_user" */
@@ -4152,6 +4358,18 @@ export type Mutation_RootDeleteVirusArgs = {
 /** mutation root */
 export type Mutation_RootDeleteVirusesArgs = {
   where: Virus_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_BeersArgs = {
+  where: Beers_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Beers_By_PkArgs = {
+  id: Scalars['uuid']['input'];
 };
 
 
@@ -4368,6 +4586,20 @@ export type Mutation_RootInsertVirusArgs = {
 export type Mutation_RootInsertVirusesArgs = {
   objects: Array<Virus_Insert_Input>;
   on_conflict?: InputMaybe<Virus_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_BeersArgs = {
+  objects: Array<Beers_Insert_Input>;
+  on_conflict?: InputMaybe<Beers_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Beers_OneArgs = {
+  object: Beers_Insert_Input;
+  on_conflict?: InputMaybe<Beers_On_Conflict>;
 };
 
 
@@ -4700,6 +4932,26 @@ export type Mutation_RootUpdate_AuthUserSecurityKeys_ManyArgs = {
 
 
 /** mutation root */
+export type Mutation_RootUpdate_BeersArgs = {
+  _set?: InputMaybe<Beers_Set_Input>;
+  where: Beers_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Beers_By_PkArgs = {
+  _set?: InputMaybe<Beers_Set_Input>;
+  pk_columns: Beers_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Beers_ManyArgs = {
+  updates: Array<Beers_Updates>;
+};
+
+
+/** mutation root */
 export type Mutation_RootUpdate_Buckets_ManyArgs = {
   updates: Array<Buckets_Updates>;
 };
@@ -4868,6 +5120,12 @@ export type Query_Root = {
   authUserSecurityKeys: Array<AuthUserSecurityKeys>;
   /** fetch aggregated fields from the table: "auth.user_security_keys" */
   authUserSecurityKeysAggregate: AuthUserSecurityKeys_Aggregate;
+  /** fetch data from the table: "beers" */
+  beers: Array<Beers>;
+  /** fetch aggregated fields from the table: "beers" */
+  beers_aggregate: Beers_Aggregate;
+  /** fetch data from the table: "beers" using primary key columns */
+  beers_by_pk?: Maybe<Beers>;
   /** fetch data from the table: "storage.buckets" using primary key columns */
   bucket?: Maybe<Buckets>;
   /** fetch data from the table: "storage.buckets" */
@@ -5100,6 +5358,29 @@ export type Query_RootAuthUserSecurityKeysAggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<AuthUserSecurityKeys_Order_By>>;
   where?: InputMaybe<AuthUserSecurityKeys_Bool_Exp>;
+};
+
+
+export type Query_RootBeersArgs = {
+  distinct_on?: InputMaybe<Array<Beers_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Beers_Order_By>>;
+  where?: InputMaybe<Beers_Bool_Exp>;
+};
+
+
+export type Query_RootBeers_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Beers_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Beers_Order_By>>;
+  where?: InputMaybe<Beers_Bool_Exp>;
+};
+
+
+export type Query_RootBeers_By_PkArgs = {
+  id: Scalars['uuid']['input'];
 };
 
 
@@ -5352,6 +5633,14 @@ export type Subscription_Root = {
   authUserSecurityKeysAggregate: AuthUserSecurityKeys_Aggregate;
   /** fetch data from the table in a streaming manner: "auth.user_security_keys" */
   authUserSecurityKeys_stream: Array<AuthUserSecurityKeys>;
+  /** fetch data from the table: "beers" */
+  beers: Array<Beers>;
+  /** fetch aggregated fields from the table: "beers" */
+  beers_aggregate: Beers_Aggregate;
+  /** fetch data from the table: "beers" using primary key columns */
+  beers_by_pk?: Maybe<Beers>;
+  /** fetch data from the table in a streaming manner: "beers" */
+  beers_stream: Array<Beers>;
   /** fetch data from the table: "storage.buckets" using primary key columns */
   bucket?: Maybe<Buckets>;
   /** fetch data from the table: "storage.buckets" */
@@ -5656,6 +5945,36 @@ export type Subscription_RootAuthUserSecurityKeys_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<AuthUserSecurityKeys_Stream_Cursor_Input>>;
   where?: InputMaybe<AuthUserSecurityKeys_Bool_Exp>;
+};
+
+
+export type Subscription_RootBeersArgs = {
+  distinct_on?: InputMaybe<Array<Beers_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Beers_Order_By>>;
+  where?: InputMaybe<Beers_Bool_Exp>;
+};
+
+
+export type Subscription_RootBeers_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Beers_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Beers_Order_By>>;
+  where?: InputMaybe<Beers_Bool_Exp>;
+};
+
+
+export type Subscription_RootBeers_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootBeers_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Beers_Stream_Cursor_Input>>;
+  where?: InputMaybe<Beers_Bool_Exp>;
 };
 
 
@@ -6900,10 +7219,26 @@ export type Virus_Updates = {
   where: Virus_Bool_Exp;
 };
 
-export type GetItemsStreamSubscriptionVariables = Exact<{ [key: string]: never; }>;
+export type AddBeerMutationVariables = Exact<{
+  beer: Beers_Insert_Input;
+}>;
 
 
-export type GetItemsStreamSubscription = { __typename?: 'subscription_root', items: Array<{ __typename?: 'items', id: any, name: string, type: Item_Type_Enum }> };
+export type AddBeerMutation = { __typename?: 'mutation_root', insert_beers_one?: { __typename?: 'beers', id: any } | null };
+
+export type GetItemsQueryQueryVariables = Exact<{
+  cellarId: Scalars['uuid']['input'];
+}>;
 
 
-export const GetItemsStreamDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"GetItemsStream"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]} as unknown as DocumentNode<GetItemsStreamSubscription, GetItemsStreamSubscriptionVariables>;
+export type GetItemsQueryQuery = { __typename?: 'query_root', beers: Array<{ __typename?: 'beers', id: any, name: string }>, items: Array<{ __typename?: 'items', id: any, name: string }> };
+
+export type GetCellarsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type GetCellarsQuery = { __typename?: 'query_root', cellars: Array<{ __typename?: 'cellars', id: any, name: string, createdBy: { __typename?: 'users', displayName: string, avatarUrl: string } }> };
+
+
+export const AddBeerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addBeer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"beers_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_beers_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beer"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddBeerMutation, AddBeerMutationVariables>;
+export const GetItemsQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetItemsQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beers"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"items"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<GetItemsQueryQuery, GetItemsQueryQueryVariables>;
+export const GetCellarsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}}]}}]}}]} as unknown as DocumentNode<GetCellarsQuery, GetCellarsQueryVariables>;

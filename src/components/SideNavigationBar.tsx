@@ -2,7 +2,7 @@ import { IconButton, List, ListItem, Sheet, styled } from "@mui/joy";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
-import { MdPerson } from "react-icons/md";
+import { MdPerson, MdWarehouse, MdWineBar } from "react-icons/md";
 
 const NavLinkIconButton = styled(IconButton)(({ theme }) => ({
   color: theme.palette.text.secondary,
@@ -43,9 +43,9 @@ const SideNavigationBar = () => {
       <List>
         <ListItem>
           <NavLinkButton
-            href="/items"
+            href="/cellars"
             pathname={pathname}
-            icon={<MdPerson />}
+            icon={<MdWarehouse />}
           />
         </ListItem>
         <ListItem>

@@ -47,7 +47,7 @@ const SignIn = () => {
   };
 
   useEffect(() => {
-    if (isSuccess) router.push("/items");
+    if (isSuccess) router.push("/cellars");
   }, [isSuccess, router]);
 
   const disableForm = isLoading || needsEmailVerification || isSuccess;
