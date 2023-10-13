@@ -1,5 +1,5 @@
 table:
-  name: items
+  name: beers
   schema: public
 object_relationships:
   - name: cellar
@@ -16,26 +16,23 @@ insert_permissions:
           createdBy:
             id:
               _eq: X-Hasura-User-Id
+      set:
+        created_by_id: x-hasura-User-Id
       columns:
-        - name
-        - type
-        - created_at
-        - updated_at
         - cellar_id
         - created_by_id
-        - id
+        - name
     comment: ""
 select_permissions:
   - role: user
     permission:
       columns:
-        - name
-        - type
-        - created_at
-        - updated_at
         - cellar_id
+        - created_at
         - created_by_id
         - id
+        - name
+        - updated_at
       filter:
         cellar:
           users:
@@ -47,8 +44,6 @@ update_permissions:
     permission:
       columns:
         - name
-        - type
-        - updated_at
       filter:
         created_by_id:
           _eq: X-Hasura-User-Id

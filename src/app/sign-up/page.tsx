@@ -13,28 +13,25 @@ import {
   Divider,
   Checkbox,
 } from "@mui/joy";
-import { useSignInEmailPassword } from "@nhost/nextjs";
+import { useSignUpEmailPassword } from "@nhost/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { FcGoogle } from "react-icons/fc";
 
 interface IFormInput {
   email: string;
   password: string;
 }
 
-const SignIn = () => {
-  const router = useRouter();
+const SignUp = () => {
   const {
-    signInEmailPassword,
     isLoading,
     isSuccess,
     needsEmailVerification,
     isError,
     error,
-  } = useSignInEmailPassword();
+    signUpEmailPassword,
+  } = useSignUpEmailPassword();
 
   const { control, handleSubmit } = useForm({
     defaultValues: {
@@ -44,12 +41,8 @@ const SignIn = () => {
   });
 
   const onSubmit: SubmitHandler<IFormInput> = async ({ email, password }) => {
-    await signInEmailPassword(email, password);
+    await signUpEmailPassword(email, password);
   };
-
-  useEffect(() => {
-    if (isSuccess) router.push("/cellars");
-  }, [isSuccess, router]);
 
   const disableForm = isLoading || needsEmailVerification || isSuccess;
 
@@ -63,32 +56,15 @@ const SignIn = () => {
       }}
     >
       <Box sx={{ width: "400px", display: "flex", flexDirection: "column" }}>
-        <Stack gap={4} sx={{ mb: 2 }}>
-          <Stack gap={1}>
-            <Typography level="h3">Sign in</Typography>
-            <Typography level="body-sm">
-              New to Cellar Assistant? <Link href="/sign-up">Sign up!</Link>
-            </Typography>
-          </Stack>
-
-          <Button
-            variant="soft"
-            color="neutral"
-            fullWidth
-            startDecorator={<FcGoogle />}
-          >
-            Continue with Google
-          </Button>
-        </Stack>
-        <Divider>or</Divider>
         {needsEmailVerification ? (
           <p>
             Please check your mailbox and follow the verification link to verify
             your email.
           </p>
         ) : (
-          <Stack gap={4} sx={{ mt: 2 }}>
-            <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <Stack gap={4} sx={{ mt: 2 }}>
+              <Typography level="h1">Sign up for Cellar Assitant</Typography>
               <FormControl required error={isError}>
                 <FormLabel>Email</FormLabel>
                 <Controller
@@ -110,31 +86,15 @@ const SignIn = () => {
                 />
                 {isError && <FormHelperText>{error?.message}</FormHelperText>}
               </FormControl>
-              <Stack gap={4} sx={{ mt: 2 }}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Checkbox size="sm" label="Remember me" name="persistent" />
-                  <Link href="#replace-with-a-link">Forgot your password?</Link>
-                </Box>
-                <Button
-                  loading={isLoading}
-                  type="submit"
-                  disabled={disableForm}
-                >
-                  Sign in
-                </Button>
-              </Stack>
-            </form>
-          </Stack>
+              <Button loading={isLoading} type="submit" disabled={disableForm}>
+                Sign up
+              </Button>
+            </Stack>
+          </form>
         )}
       </Box>
     </Box>
   );
 };
 
-export default withAuth(SignIn, "/cellars", RedirectOn.Authenticated);
+export default withAuth(SignUp, "/cellars", RedirectOn.Authenticated);
