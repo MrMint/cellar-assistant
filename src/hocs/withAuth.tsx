@@ -3,10 +3,16 @@
 import { CircularProgress } from "@mui/joy";
 import { useAuthenticationStatus } from "@nhost/nextjs";
 import { useRouter } from "next/navigation";
-import { FC } from "react";
+
+export enum RedirectOn {
+  NotAuthenticated,
+  Authenticated,
+}
 
 export default function withAuth<P extends {}>(
   Component: React.FunctionComponent<P>,
+  redirectUrl = "/sign-in",
+  redirectOn = RedirectOn.NotAuthenticated,
 ) {
   return function AuthProtected(props: P) {
     const router = useRouter();
@@ -20,11 +26,16 @@ export default function withAuth<P extends {}>(
       );
     }
 
-    if (!isAuthenticated) {
-      router.push("/sign-in");
-      return null;
+    switch (true) {
+      case redirectOn === RedirectOn.NotAuthenticated &&
+        isAuthenticated === false:
+      case redirectOn === RedirectOn.Authenticated &&
+        isAuthenticated === true: {
+        router.push(redirectUrl);
+        return null;
+      }
+      default:
+        return <Component {...props} />;
     }
-
-    return <Component {...props} />;
   };
 }
