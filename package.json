@@ -20,7 +20,7 @@
     "@mui/joy": "5.0.0-beta.10",
     "@nhost/nextjs": "1.13.38",
     "@parcel/watcher": "2.3.0",
-    "@types/node": "20.8.5",
+    "@types/node": "20.8.6",
     "@types/ramda": "0.29.6",
     "@types/react": "18.2.28",
     "@types/react-dom": "18.2.13",
