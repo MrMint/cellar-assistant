@@ -16,6 +16,7 @@ import Image from "next/image";
 import { useQuery } from "urql";
 import beer1 from "@/app/public/beer1.png";
 import { MdFavoriteBorder } from "react-icons/md";
+import InteractiveCard from "@/components/InteractiveCard";
 
 type ItemCardProps = {
   item: {
@@ -26,7 +27,7 @@ type ItemCardProps = {
 };
 
 const ItemCard = ({ item, type }: ItemCardProps) => (
-  <Card>
+  <InteractiveCard>
     <CardOverflow>
       <AspectRatio ratio="2">
         {type === "BEER" && (
@@ -45,7 +46,7 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
         <MdFavoriteBorder />
       </IconButton>
     </CardActions>
-  </Card>
+  </InteractiveCard>
 );
 
 const itemsSub = graphql(`

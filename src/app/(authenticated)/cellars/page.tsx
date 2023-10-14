@@ -22,6 +22,7 @@ import cellar3 from "@/app/public/cellar3.png";
 import cellar4 from "@/app/public/cellar4.png";
 import cellar5 from "@/app/public/cellar5.png";
 import Image from "next/image";
+import InteractiveCard from "@/components/InteractiveCard";
 
 const cellarImages = [cellar1, cellar2, cellar3, cellar4, cellar5];
 
@@ -34,7 +35,7 @@ type CellarCardProps = {
 };
 
 const CellarCard = ({ cellar, index }: CellarCardProps) => (
-  <Card>
+  <InteractiveCard>
     <CardOverflow>
       <AspectRatio ratio="2">
         <Image
@@ -73,7 +74,7 @@ const CellarCard = ({ cellar, index }: CellarCardProps) => (
         <MdDelete />
       </IconButton>
     </CardActions>
-  </Card>
+  </InteractiveCard>
 );
 
 const cellarsQuery = graphql(`
