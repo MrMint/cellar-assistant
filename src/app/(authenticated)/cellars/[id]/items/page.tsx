@@ -25,7 +25,7 @@ const Items = ({ params: { id } }: { params: { id: string } }) => {
   });
 
   return (
-    <Box sx={{ padding: "1rem" }}>
+    <Box sx={{ height: "100%", width: "100%" }}>
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
         {res?.data?.beers.map((x) => (
           <Grid key={x.id} xs={6} md={4}>
