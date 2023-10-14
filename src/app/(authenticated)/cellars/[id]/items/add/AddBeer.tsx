@@ -2,7 +2,7 @@
 
 import { graphql } from "@/gql";
 import { Box, Button, FormControl, FormLabel, Input, Stack } from "@mui/joy";
-import { useUserId } from "@nhost/nextjs";
+import { useRouter } from "next/navigation";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { useMutation } from "urql";
 
@@ -19,9 +19,8 @@ const addBeerMutation = graphql(`
 `);
 
 const AddBeer = ({ cellarId }: { cellarId: string }) => {
-  const [{ fetching, data, error }, addBeer] = useMutation(addBeerMutation);
-  const userId = useUserId();
-  if (userId === undefined) throw Error();
+  const router = useRouter();
+  const [{ fetching, error }, addBeer] = useMutation(addBeerMutation);
 
   const { control, handleSubmit } = useForm({
     defaultValues: {
@@ -30,7 +29,11 @@ const AddBeer = ({ cellarId }: { cellarId: string }) => {
   });
 
   const onSubmit: SubmitHandler<IFormInput> = async ({ name }) => {
-    addBeer({ beer: { cellar_id: cellarId, created_by_id: userId, name } });
+    addBeer({ beer: { cellar_id: cellarId, name } }).then((result) => {
+      if (result.error === undefined) {
+        router.push(`/cellars/${cellarId}/items`);
+      }
+    });
   };
 
   return (
