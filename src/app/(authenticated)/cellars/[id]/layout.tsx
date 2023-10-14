@@ -1,14 +1,14 @@
 "use client";
-import { Button, Input, Stack } from "@mui/joy";
+import { Box, Button, Input, Stack } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { MdAdd, MdSearch } from "react-icons/md";
 
 const ItemsLayout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   return (
-    <Stack>
-      <Stack direction="row">
-        <Input startDecorator={<MdSearch />} placeholder="Search" />
+    <Stack spacing={2}>
+      <Stack direction="row" spacing={2} sx={{ justifyContent: "flex-end" }}>
+        <Input startDecorator={<MdSearch />} placeholder="Search" disabled />
         <Button
           startDecorator={<MdAdd />}
           onClick={() => router.push("items/add")}
@@ -16,7 +16,7 @@ const ItemsLayout = ({ children }: { children: React.ReactNode }) => {
           Add Item
         </Button>
       </Stack>
-      {children}
+      <Box>{children}</Box>
     </Stack>
   );
 };

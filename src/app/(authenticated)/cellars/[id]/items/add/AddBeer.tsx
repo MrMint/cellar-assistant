@@ -37,9 +37,13 @@ const AddBeer = ({ cellarId }: { cellarId: string }) => {
   };
 
   return (
-    <Box>
+    <Box
+      sx={(theme) => ({
+        width: theme.breakpoints.values.sm,
+      })}
+    >
       <form onSubmit={handleSubmit(onSubmit)}>
-        <Stack>
+        <Stack spacing={2}>
           <FormControl required error={error !== undefined}>
             <FormLabel>Name</FormLabel>
             <Controller

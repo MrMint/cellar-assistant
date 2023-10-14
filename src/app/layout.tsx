@@ -43,7 +43,9 @@ export default function RootLayout({
         <NhostProvider nhost={nhost}>
           <NhostUrqlProvider nhost={nhost}>
             <ThemeRegistry>
-              <Box sx={{ height: "100vh", width: "100vw" }}>{children}</Box>
+              <Box sx={{ display: "flex", height: "100vh", width: "100vw" }}>
+                {children}
+              </Box>
             </ThemeRegistry>
           </NhostUrqlProvider>
         </NhostProvider>

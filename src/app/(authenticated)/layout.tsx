@@ -6,15 +6,14 @@ import { Box, styled } from "@mui/joy";
 
 const Container = styled(Box)(({ theme }) => ({
   display: "flex",
-  width: "100vh",
-  height: "100vh",
+  flexGrow: 1,
 }));
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return (
     <Container>
       <SideNavigationBar />
-      <Container>{children}</Container>
+      <Box sx={{ flexGrow: 1, padding: "1rem" }}>{children}</Box>
     </Container>
   );
 }
