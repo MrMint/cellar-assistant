@@ -78,9 +78,13 @@ const AddCellar = () => {
   }, [addCellar, addCellarUser, router]);
 
   return (
-    <Box>
+    <Box
+      sx={(theme) => ({
+        width: theme.breakpoints.values.sm,
+      })}
+    >
       <form onSubmit={handleSubmit(onSubmit)}>
-        <Stack>
+        <Stack spacing={2}>
           <FormControl
             required
             error={
