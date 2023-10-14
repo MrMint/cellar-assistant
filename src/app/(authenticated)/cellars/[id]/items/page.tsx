@@ -31,7 +31,12 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
     <CardOverflow>
       <AspectRatio ratio="2">
         {type === "BEER" && (
-          <Image src={beer1} alt="An image of a beer glass" fill />
+          <Image
+            src={beer1}
+            alt="An image of a beer glass"
+            fill
+            placeholder="blur"
+          />
         )}
       </AspectRatio>
     </CardOverflow>
@@ -72,12 +77,12 @@ const Items = ({ params: { id } }: { params: { id: string } }) => {
     <Box sx={{ height: "100%", width: "100%" }}>
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
         {res?.data?.beers.map((x) => (
-          <Grid key={x.id} xs={12} sm={6} md={4}>
+          <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
             <ItemCard item={x} type="BEER" />
           </Grid>
         ))}
         {res?.data?.items.map((x) => (
-          <Grid key={x.id} xs={6} md={4}>
+          <Grid key={x.id} xs={6} md={4} lg={3}>
             <Card>
               <Typography level="title-lg">{x.name}</Typography>
               <Typography level="body-sm">April 24 to May 02, 2021</Typography>

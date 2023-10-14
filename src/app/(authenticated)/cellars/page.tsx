@@ -42,6 +42,7 @@ const CellarCard = ({ cellar, index }: CellarCardProps) => (
           src={cellarImages[index % 5]}
           alt="An image of a wine cellar"
           fill
+          placeholder="blur"
         />
       </AspectRatio>
     </CardOverflow>
@@ -96,11 +97,11 @@ const Cellars = () => {
   return (
     <Grid container spacing={2} sx={{ flexGrow: 1 }}>
       {data?.cellars.map((x, i) => (
-        <Grid key={x.id} xs={12} sm={6} md={4}>
+        <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
           <CellarCard cellar={x} index={i} />
         </Grid>
       ))}
-      <Grid key="add-new-cellar" xs={6} md={4}>
+      <Grid key="add-new-cellar" xs={6} md={4} lg={3}>
         <Card>
           <CardContent>
             <Link overlay component={NextLink} href={`cellars/add`}>
