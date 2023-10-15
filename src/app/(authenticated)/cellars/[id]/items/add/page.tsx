@@ -80,7 +80,7 @@ const Add = ({ params: { id } }: { params: { id: string } }) => {
   const userId = useUserId();
   if (userId === undefined) throw Error();
 
-  const [{ data }] = useQuery({
+  const [{ data, fetching }] = useQuery({
     query: getCellarQuery,
     variables: { cellarId: id },
   });
@@ -92,20 +92,20 @@ const Add = ({ params: { id } }: { params: { id: string } }) => {
         <Typography level="h2">
           Add an item to {data?.cellars_by_pk?.name}
         </Typography>
-        {data?.cellars_by_pk?.created_by_id !== userId && (
+        {!fetching && data?.cellars_by_pk?.created_by_id !== userId && (
           <Typography level="body-md">
             You do not have permission to add items to this cellar.
           </Typography>
         )}
         {addType === undefined && (
           <Grid container spacing={2}>
-            <Grid xs={12} sm={6} md={4} lg={3}>
+            <Grid xs={12} sm={6} md={4} lg={2}>
               <AddItemTypeCard type="Wine" onClick={handleTypeClick} />
             </Grid>
-            <Grid xs={12} sm={6} md={4} lg={3}>
+            <Grid xs={12} sm={6} md={4} lg={2}>
               <AddItemTypeCard type="Beer" onClick={handleTypeClick} />
             </Grid>
-            <Grid xs={12} sm={6} md={4} lg={3}>
+            <Grid xs={12} sm={6} md={4} lg={2}>
               <AddItemTypeCard type="Liquor" onClick={handleTypeClick} />
             </Grid>
           </Grid>

@@ -103,17 +103,17 @@ const Items = ({ params: { id } }: { params: { id: string } }) => {
     <Box sx={{ height: "100%", width: "100%" }}>
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
         {res?.data?.beers.map((x) => (
-          <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
+          <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
             <ItemCard item={x} type="BEER" />
           </Grid>
         ))}
         {res?.data?.wines.map((x) => (
-          <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
+          <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
             <ItemCard item={x} type="WINE" />
           </Grid>
         ))}
         {res?.data?.liquors.map((x) => (
-          <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
+          <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
             <ItemCard item={x} type="LIQUOR" />
           </Grid>
         ))}
