@@ -9,6 +9,7 @@ import bot1 from "@/app/public/bot2.png";
 const Container = styled(Box)(({ theme }) => ({
   display: "flex",
   flexGrow: 1,
+  overflow: "hidden",
 }));
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -25,6 +26,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
           bottom: "0",
           zIndex: -10,
           opacity: 0.1,
+          userSelect: "none",
         }}
       >
         <Image

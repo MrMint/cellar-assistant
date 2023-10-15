@@ -1,6 +1,6 @@
 "use client";
 
-import { CircularProgress } from "@mui/joy";
+import { Box, CircularProgress } from "@mui/joy";
 import { useAuthenticationStatus } from "@nhost/nextjs";
 import { useRouter } from "next/navigation";
 
@@ -20,9 +20,16 @@ export default function withAuth<P extends {}>(
 
     if (isLoading) {
       return (
-        <div>
+        <Box
+          sx={{
+            display: "flex",
+            flexGrow: 1,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <CircularProgress />
-        </div>
+        </Box>
       );
     }
 
