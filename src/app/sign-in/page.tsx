@@ -58,8 +58,8 @@ const SignIn = () => {
       sx={{
         display: "flex",
         justifyContent: "center",
-        height: "100vh",
         alignItems: "center",
+        flexGrow: 1,
       }}
     >
       <Box sx={{ width: "400px", display: "flex", flexDirection: "column" }}>
@@ -87,8 +87,8 @@ const SignIn = () => {
             your email.
           </p>
         ) : (
-          <Stack gap={4} sx={{ mt: 2 }}>
-            <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <Stack gap={2} sx={{ mt: 2 }}>
               <FormControl required error={isError}>
                 <FormLabel>Email</FormLabel>
                 <Controller
@@ -110,7 +110,7 @@ const SignIn = () => {
                 />
                 {isError && <FormHelperText>{error?.message}</FormHelperText>}
               </FormControl>
-              <Stack gap={4} sx={{ mt: 2 }}>
+              <Stack gap={2} sx={{ mt: 2 }}>
                 <Box
                   sx={{
                     display: "flex",
@@ -129,8 +129,8 @@ const SignIn = () => {
                   Sign in
                 </Button>
               </Stack>
-            </form>
-          </Stack>
+            </Stack>
+          </form>
         )}
       </Box>
     </Box>
