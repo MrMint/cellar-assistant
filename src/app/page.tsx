@@ -5,7 +5,10 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <Box component={"main"} sx={{ display: "flex", justifyContent: "center" }}>
+    <Box
+      component={"main"}
+      sx={{ display: "flex", justifyContent: "center", flexGrow: 1 }}
+    >
       <Stack flexGrow={1} spacing={1} padding="0 2rem" alignItems="center">
         <Stack
           maxWidth="1280px"

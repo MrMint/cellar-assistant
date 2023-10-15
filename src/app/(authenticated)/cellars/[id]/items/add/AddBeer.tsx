@@ -3,6 +3,7 @@
 import { graphql } from "@/gql";
 import { Box, Button, FormControl, FormLabel, Input, Stack } from "@mui/joy";
 import { useRouter } from "next/navigation";
+import { isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { useMutation } from "urql";
 
@@ -20,7 +21,7 @@ const addBeerMutation = graphql(`
 
 const AddBeer = ({ cellarId }: { cellarId: string }) => {
   const router = useRouter();
-  const [{ fetching, error }, addBeer] = useMutation(addBeerMutation);
+  const [{ fetching, error, data }, addBeer] = useMutation(addBeerMutation);
 
   const { control, handleSubmit } = useForm({
     defaultValues: {
@@ -35,6 +36,7 @@ const AddBeer = ({ cellarId }: { cellarId: string }) => {
       }
     });
   };
+  const disabled = fetching || isNotNil(data?.insert_beers_one?.id);
 
   return (
     <Box
@@ -50,11 +52,11 @@ const AddBeer = ({ cellarId }: { cellarId: string }) => {
               name="name"
               control={control}
               rules={{ required: true }}
-              disabled={fetching}
+              disabled={disabled}
               render={({ field }) => <Input type="text" {...field} />}
             />
           </FormControl>
-          <Button loading={fetching} type="submit">
+          <Button loading={disabled} type="submit">
             Add
           </Button>
         </Stack>
