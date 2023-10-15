@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.3.0](https://github.com/MrMint/cellar-assistant/compare/v0.2.0...v0.3.0) (2023-10-15)
+
+
+### Features
+
+* Adds create path for liquors ([ab3fc00](https://github.com/MrMint/cellar-assistant/commit/ab3fc00b728aaca735449e7c35d1b67e6b96d081))
+* Adds create path for wine ([e237686](https://github.com/MrMint/cellar-assistant/commit/e237686bec22d9446192d02f7098823663ed78d8))
+* Adds hover styles to item & cellar cards ([ee4cf9b](https://github.com/MrMint/cellar-assistant/commit/ee4cf9bf6d0ac19a835c8df5fd6365e3a41cd494))
+* Adds item type selection to create flow ([588e21d](https://github.com/MrMint/cellar-assistant/commit/588e21daa1d1700dfea0f1c42e3cb51b8d4d3dae))
+* Cleans up styles on items and add pages ([9f666b8](https://github.com/MrMint/cellar-assistant/commit/9f666b81d14fc0e09e882650deba3402e0c7569b))
+* Updates cellar cards ([d5226c7](https://github.com/MrMint/cellar-assistant/commit/d5226c72e2bfaf3898c2b6cdd0c6bd9d656c88c5))
+* Updates item cards ([908019a](https://github.com/MrMint/cellar-assistant/commit/908019a3608c257e5cdc9eef6d626bd79fe83d65))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v20.8.6 ([50ddc1a](https://github.com/MrMint/cellar-assistant/commit/50ddc1aa6f4b3e00c8ed91ee1c694c32b7dd4769))
+* Fixes bad style on sign in/up page ([035c836](https://github.com/MrMint/cellar-assistant/commit/035c836d27a9da77b9160fb23d0ae08f76bba6af))
+* Fixes created_by error when adding beers ([b661fc1](https://github.com/MrMint/cellar-assistant/commit/b661fc11a55074678d15f19a03b4a800f456b04b))
+
 ## [0.2.0](https://github.com/MrMint/cellar-assistant/compare/v0.1.0...v0.2.0) (2023-10-13)
 
 
