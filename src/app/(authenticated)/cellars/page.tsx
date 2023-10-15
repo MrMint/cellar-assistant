@@ -22,6 +22,7 @@ import cellar3 from "@/app/public/cellar3.png";
 import cellar4 from "@/app/public/cellar4.png";
 import cellar5 from "@/app/public/cellar5.png";
 import Image from "next/image";
+import InteractiveCard from "@/components/InteractiveCard";
 
 const cellarImages = [cellar1, cellar2, cellar3, cellar4, cellar5];
 
@@ -34,13 +35,14 @@ type CellarCardProps = {
 };
 
 const CellarCard = ({ cellar, index }: CellarCardProps) => (
-  <Card>
+  <InteractiveCard>
     <CardOverflow>
       <AspectRatio ratio="2">
         <Image
           src={cellarImages[index % 5]}
           alt="An image of a wine cellar"
           fill
+          placeholder="blur"
         />
       </AspectRatio>
     </CardOverflow>
@@ -73,7 +75,7 @@ const CellarCard = ({ cellar, index }: CellarCardProps) => (
         <MdDelete />
       </IconButton>
     </CardActions>
-  </Card>
+  </InteractiveCard>
 );
 
 const cellarsQuery = graphql(`
@@ -95,11 +97,11 @@ const Cellars = () => {
   return (
     <Grid container spacing={2} sx={{ flexGrow: 1 }}>
       {data?.cellars.map((x, i) => (
-        <Grid key={x.id} xs={12} sm={6} md={4}>
+        <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
           <CellarCard cellar={x} index={i} />
         </Grid>
       ))}
-      <Grid key="add-new-cellar" xs={6} md={4}>
+      <Grid key="add-new-cellar" xs={6} md={4} lg={3}>
         <Card>
           <CardContent>
             <Link overlay component={NextLink} href={`cellars/add`}>
