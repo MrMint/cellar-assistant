@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.4.0](https://github.com/MrMint/cellar-assistant/compare/v0.3.0...v0.4.0) (2023-10-15)
+
+
+### Features
+
+* Improves styles on mobile devices ([7da11d4](https://github.com/MrMint/cellar-assistant/commit/7da11d43fac32d0d7fa8cfe5277fb1113361cb5b))
+
 ## [0.3.0](https://github.com/MrMint/cellar-assistant/compare/v0.2.0...v0.3.0) (2023-10-15)
 
 
