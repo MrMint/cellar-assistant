@@ -2780,15 +2780,19 @@ export type Cellars = {
   id: Scalars['uuid']['output'];
   is_public: Scalars['Boolean']['output'];
   /** An array relationship */
-  items: Array<Items>;
+  liquors: Array<Liquors>;
   /** An aggregate relationship */
-  items_aggregate: Items_Aggregate;
+  liquors_aggregate: Liquors_Aggregate;
   name: Scalars['String']['output'];
   updated_at: Scalars['timestamptz']['output'];
   /** An array relationship */
   users: Array<Cellar_User>;
   /** An aggregate relationship */
   users_aggregate: Cellar_User_Aggregate;
+  /** An array relationship */
+  wines: Array<Wines>;
+  /** An aggregate relationship */
+  wines_aggregate: Wines_Aggregate;
 };
 
 
@@ -2813,22 +2817,22 @@ export type CellarsBeers_AggregateArgs = {
 
 
 /** columns and relationships of "cellars" */
-export type CellarsItemsArgs = {
-  distinct_on?: InputMaybe<Array<Items_Select_Column>>;
+export type CellarsLiquorsArgs = {
+  distinct_on?: InputMaybe<Array<Liquors_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Items_Order_By>>;
-  where?: InputMaybe<Items_Bool_Exp>;
+  order_by?: InputMaybe<Array<Liquors_Order_By>>;
+  where?: InputMaybe<Liquors_Bool_Exp>;
 };
 
 
 /** columns and relationships of "cellars" */
-export type CellarsItems_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Items_Select_Column>>;
+export type CellarsLiquors_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Liquors_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Items_Order_By>>;
-  where?: InputMaybe<Items_Bool_Exp>;
+  order_by?: InputMaybe<Array<Liquors_Order_By>>;
+  where?: InputMaybe<Liquors_Bool_Exp>;
 };
 
 
@@ -2849,6 +2853,26 @@ export type CellarsUsers_AggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
   where?: InputMaybe<Cellar_User_Bool_Exp>;
+};
+
+
+/** columns and relationships of "cellars" */
+export type CellarsWinesArgs = {
+  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wines_Order_By>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
+};
+
+
+/** columns and relationships of "cellars" */
+export type CellarsWines_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wines_Order_By>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
 };
 
 /** aggregated selection of "cellars" */
@@ -2926,12 +2950,14 @@ export type Cellars_Bool_Exp = {
   created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
   is_public?: InputMaybe<Boolean_Comparison_Exp>;
-  items?: InputMaybe<Items_Bool_Exp>;
-  items_aggregate?: InputMaybe<Items_Aggregate_Bool_Exp>;
+  liquors?: InputMaybe<Liquors_Bool_Exp>;
+  liquors_aggregate?: InputMaybe<Liquors_Aggregate_Bool_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   users?: InputMaybe<Cellar_User_Bool_Exp>;
   users_aggregate?: InputMaybe<Cellar_User_Aggregate_Bool_Exp>;
+  wines?: InputMaybe<Wines_Bool_Exp>;
+  wines_aggregate?: InputMaybe<Wines_Aggregate_Bool_Exp>;
 };
 
 /** unique or primary key constraints on table "cellars" */
@@ -2948,10 +2974,11 @@ export type Cellars_Insert_Input = {
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   is_public?: InputMaybe<Scalars['Boolean']['input']>;
-  items?: InputMaybe<Items_Arr_Rel_Insert_Input>;
+  liquors?: InputMaybe<Liquors_Arr_Rel_Insert_Input>;
   name?: InputMaybe<Scalars['String']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   users?: InputMaybe<Cellar_User_Arr_Rel_Insert_Input>;
+  wines?: InputMaybe<Wines_Arr_Rel_Insert_Input>;
 };
 
 /** aggregate max on columns */
@@ -3023,10 +3050,11 @@ export type Cellars_Order_By = {
   created_by_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   is_public?: InputMaybe<Order_By>;
-  items_aggregate?: InputMaybe<Items_Aggregate_Order_By>;
+  liquors_aggregate?: InputMaybe<Liquors_Aggregate_Order_By>;
   name?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   users_aggregate?: InputMaybe<Cellar_User_Aggregate_Order_By>;
+  wines_aggregate?: InputMaybe<Wines_Aggregate_Order_By>;
 };
 
 /** primary key columns input for table: cellars */
@@ -3635,389 +3663,6 @@ export type Files_Variance_Order_By = {
   size?: InputMaybe<Order_By>;
 };
 
-/** columns and relationships of "item_type" */
-export type Item_Type = {
-  __typename?: 'item_type';
-  text: Scalars['String']['output'];
-};
-
-/** aggregated selection of "item_type" */
-export type Item_Type_Aggregate = {
-  __typename?: 'item_type_aggregate';
-  aggregate?: Maybe<Item_Type_Aggregate_Fields>;
-  nodes: Array<Item_Type>;
-};
-
-/** aggregate fields of "item_type" */
-export type Item_Type_Aggregate_Fields = {
-  __typename?: 'item_type_aggregate_fields';
-  count: Scalars['Int']['output'];
-  max?: Maybe<Item_Type_Max_Fields>;
-  min?: Maybe<Item_Type_Min_Fields>;
-};
-
-
-/** aggregate fields of "item_type" */
-export type Item_Type_Aggregate_FieldsCountArgs = {
-  columns?: InputMaybe<Array<Item_Type_Select_Column>>;
-  distinct?: InputMaybe<Scalars['Boolean']['input']>;
-};
-
-/** Boolean expression to filter rows from the table "item_type". All fields are combined with a logical 'AND'. */
-export type Item_Type_Bool_Exp = {
-  _and?: InputMaybe<Array<Item_Type_Bool_Exp>>;
-  _not?: InputMaybe<Item_Type_Bool_Exp>;
-  _or?: InputMaybe<Array<Item_Type_Bool_Exp>>;
-  text?: InputMaybe<String_Comparison_Exp>;
-};
-
-/** unique or primary key constraints on table "item_type" */
-export enum Item_Type_Constraint {
-  /** unique or primary key constraint on columns "text" */
-  ItemTypePkey = 'item_type_pkey'
-}
-
-export enum Item_Type_Enum {
-  Beer = 'BEER',
-  Wine = 'WINE'
-}
-
-/** Boolean expression to compare columns of type "item_type_enum". All fields are combined with logical 'AND'. */
-export type Item_Type_Enum_Comparison_Exp = {
-  _eq?: InputMaybe<Item_Type_Enum>;
-  _in?: InputMaybe<Array<Item_Type_Enum>>;
-  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
-  _neq?: InputMaybe<Item_Type_Enum>;
-  _nin?: InputMaybe<Array<Item_Type_Enum>>;
-};
-
-/** input type for inserting data into table "item_type" */
-export type Item_Type_Insert_Input = {
-  text?: InputMaybe<Scalars['String']['input']>;
-};
-
-/** aggregate max on columns */
-export type Item_Type_Max_Fields = {
-  __typename?: 'item_type_max_fields';
-  text?: Maybe<Scalars['String']['output']>;
-};
-
-/** aggregate min on columns */
-export type Item_Type_Min_Fields = {
-  __typename?: 'item_type_min_fields';
-  text?: Maybe<Scalars['String']['output']>;
-};
-
-/** response of any mutation on the table "item_type" */
-export type Item_Type_Mutation_Response = {
-  __typename?: 'item_type_mutation_response';
-  /** number of rows affected by the mutation */
-  affected_rows: Scalars['Int']['output'];
-  /** data from the rows affected by the mutation */
-  returning: Array<Item_Type>;
-};
-
-/** on_conflict condition type for table "item_type" */
-export type Item_Type_On_Conflict = {
-  constraint: Item_Type_Constraint;
-  update_columns?: Array<Item_Type_Update_Column>;
-  where?: InputMaybe<Item_Type_Bool_Exp>;
-};
-
-/** Ordering options when selecting data from "item_type". */
-export type Item_Type_Order_By = {
-  text?: InputMaybe<Order_By>;
-};
-
-/** primary key columns input for table: item_type */
-export type Item_Type_Pk_Columns_Input = {
-  text: Scalars['String']['input'];
-};
-
-/** select columns of table "item_type" */
-export enum Item_Type_Select_Column {
-  /** column name */
-  Text = 'text'
-}
-
-/** input type for updating data in table "item_type" */
-export type Item_Type_Set_Input = {
-  text?: InputMaybe<Scalars['String']['input']>;
-};
-
-/** Streaming cursor of the table "item_type" */
-export type Item_Type_Stream_Cursor_Input = {
-  /** Stream column input with initial value */
-  initial_value: Item_Type_Stream_Cursor_Value_Input;
-  /** cursor ordering */
-  ordering?: InputMaybe<Cursor_Ordering>;
-};
-
-/** Initial value of the column from where the streaming should start */
-export type Item_Type_Stream_Cursor_Value_Input = {
-  text?: InputMaybe<Scalars['String']['input']>;
-};
-
-/** update columns of table "item_type" */
-export enum Item_Type_Update_Column {
-  /** column name */
-  Text = 'text'
-}
-
-export type Item_Type_Updates = {
-  /** sets the columns of the filtered rows to the given values */
-  _set?: InputMaybe<Item_Type_Set_Input>;
-  /** filter the rows which have to be updated */
-  where: Item_Type_Bool_Exp;
-};
-
-/** columns and relationships of "items" */
-export type Items = {
-  __typename?: 'items';
-  /** An object relationship */
-  cellar: Cellars;
-  cellar_id: Scalars['uuid']['output'];
-  /** An object relationship */
-  createdBy: Users;
-  created_at: Scalars['timestamptz']['output'];
-  created_by_id: Scalars['uuid']['output'];
-  id: Scalars['uuid']['output'];
-  name: Scalars['String']['output'];
-  type: Item_Type_Enum;
-  updated_at: Scalars['timestamptz']['output'];
-};
-
-/** aggregated selection of "items" */
-export type Items_Aggregate = {
-  __typename?: 'items_aggregate';
-  aggregate?: Maybe<Items_Aggregate_Fields>;
-  nodes: Array<Items>;
-};
-
-export type Items_Aggregate_Bool_Exp = {
-  count?: InputMaybe<Items_Aggregate_Bool_Exp_Count>;
-};
-
-export type Items_Aggregate_Bool_Exp_Count = {
-  arguments?: InputMaybe<Array<Items_Select_Column>>;
-  distinct?: InputMaybe<Scalars['Boolean']['input']>;
-  filter?: InputMaybe<Items_Bool_Exp>;
-  predicate: Int_Comparison_Exp;
-};
-
-/** aggregate fields of "items" */
-export type Items_Aggregate_Fields = {
-  __typename?: 'items_aggregate_fields';
-  count: Scalars['Int']['output'];
-  max?: Maybe<Items_Max_Fields>;
-  min?: Maybe<Items_Min_Fields>;
-};
-
-
-/** aggregate fields of "items" */
-export type Items_Aggregate_FieldsCountArgs = {
-  columns?: InputMaybe<Array<Items_Select_Column>>;
-  distinct?: InputMaybe<Scalars['Boolean']['input']>;
-};
-
-/** order by aggregate values of table "items" */
-export type Items_Aggregate_Order_By = {
-  count?: InputMaybe<Order_By>;
-  max?: InputMaybe<Items_Max_Order_By>;
-  min?: InputMaybe<Items_Min_Order_By>;
-};
-
-/** input type for inserting array relation for remote table "items" */
-export type Items_Arr_Rel_Insert_Input = {
-  data: Array<Items_Insert_Input>;
-  /** upsert condition */
-  on_conflict?: InputMaybe<Items_On_Conflict>;
-};
-
-/** Boolean expression to filter rows from the table "items". All fields are combined with a logical 'AND'. */
-export type Items_Bool_Exp = {
-  _and?: InputMaybe<Array<Items_Bool_Exp>>;
-  _not?: InputMaybe<Items_Bool_Exp>;
-  _or?: InputMaybe<Array<Items_Bool_Exp>>;
-  cellar?: InputMaybe<Cellars_Bool_Exp>;
-  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
-  createdBy?: InputMaybe<Users_Bool_Exp>;
-  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
-  created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
-  id?: InputMaybe<Uuid_Comparison_Exp>;
-  name?: InputMaybe<String_Comparison_Exp>;
-  type?: InputMaybe<Item_Type_Enum_Comparison_Exp>;
-  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
-};
-
-/** unique or primary key constraints on table "items" */
-export enum Items_Constraint {
-  /** unique or primary key constraint on columns "id" */
-  ItemsPkey = 'items_pkey'
-}
-
-/** input type for inserting data into table "items" */
-export type Items_Insert_Input = {
-  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
-  createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
-  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
-  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
-  id?: InputMaybe<Scalars['uuid']['input']>;
-  name?: InputMaybe<Scalars['String']['input']>;
-  type?: InputMaybe<Item_Type_Enum>;
-  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
-};
-
-/** aggregate max on columns */
-export type Items_Max_Fields = {
-  __typename?: 'items_max_fields';
-  cellar_id?: Maybe<Scalars['uuid']['output']>;
-  created_at?: Maybe<Scalars['timestamptz']['output']>;
-  created_by_id?: Maybe<Scalars['uuid']['output']>;
-  id?: Maybe<Scalars['uuid']['output']>;
-  name?: Maybe<Scalars['String']['output']>;
-  updated_at?: Maybe<Scalars['timestamptz']['output']>;
-};
-
-/** order by max() on columns of table "items" */
-export type Items_Max_Order_By = {
-  cellar_id?: InputMaybe<Order_By>;
-  created_at?: InputMaybe<Order_By>;
-  created_by_id?: InputMaybe<Order_By>;
-  id?: InputMaybe<Order_By>;
-  name?: InputMaybe<Order_By>;
-  updated_at?: InputMaybe<Order_By>;
-};
-
-/** aggregate min on columns */
-export type Items_Min_Fields = {
-  __typename?: 'items_min_fields';
-  cellar_id?: Maybe<Scalars['uuid']['output']>;
-  created_at?: Maybe<Scalars['timestamptz']['output']>;
-  created_by_id?: Maybe<Scalars['uuid']['output']>;
-  id?: Maybe<Scalars['uuid']['output']>;
-  name?: Maybe<Scalars['String']['output']>;
-  updated_at?: Maybe<Scalars['timestamptz']['output']>;
-};
-
-/** order by min() on columns of table "items" */
-export type Items_Min_Order_By = {
-  cellar_id?: InputMaybe<Order_By>;
-  created_at?: InputMaybe<Order_By>;
-  created_by_id?: InputMaybe<Order_By>;
-  id?: InputMaybe<Order_By>;
-  name?: InputMaybe<Order_By>;
-  updated_at?: InputMaybe<Order_By>;
-};
-
-/** response of any mutation on the table "items" */
-export type Items_Mutation_Response = {
-  __typename?: 'items_mutation_response';
-  /** number of rows affected by the mutation */
-  affected_rows: Scalars['Int']['output'];
-  /** data from the rows affected by the mutation */
-  returning: Array<Items>;
-};
-
-/** on_conflict condition type for table "items" */
-export type Items_On_Conflict = {
-  constraint: Items_Constraint;
-  update_columns?: Array<Items_Update_Column>;
-  where?: InputMaybe<Items_Bool_Exp>;
-};
-
-/** Ordering options when selecting data from "items". */
-export type Items_Order_By = {
-  cellar?: InputMaybe<Cellars_Order_By>;
-  cellar_id?: InputMaybe<Order_By>;
-  createdBy?: InputMaybe<Users_Order_By>;
-  created_at?: InputMaybe<Order_By>;
-  created_by_id?: InputMaybe<Order_By>;
-  id?: InputMaybe<Order_By>;
-  name?: InputMaybe<Order_By>;
-  type?: InputMaybe<Order_By>;
-  updated_at?: InputMaybe<Order_By>;
-};
-
-/** primary key columns input for table: items */
-export type Items_Pk_Columns_Input = {
-  id: Scalars['uuid']['input'];
-};
-
-/** select columns of table "items" */
-export enum Items_Select_Column {
-  /** column name */
-  CellarId = 'cellar_id',
-  /** column name */
-  CreatedAt = 'created_at',
-  /** column name */
-  CreatedById = 'created_by_id',
-  /** column name */
-  Id = 'id',
-  /** column name */
-  Name = 'name',
-  /** column name */
-  Type = 'type',
-  /** column name */
-  UpdatedAt = 'updated_at'
-}
-
-/** input type for updating data in table "items" */
-export type Items_Set_Input = {
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
-  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
-  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
-  id?: InputMaybe<Scalars['uuid']['input']>;
-  name?: InputMaybe<Scalars['String']['input']>;
-  type?: InputMaybe<Item_Type_Enum>;
-  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
-};
-
-/** Streaming cursor of the table "items" */
-export type Items_Stream_Cursor_Input = {
-  /** Stream column input with initial value */
-  initial_value: Items_Stream_Cursor_Value_Input;
-  /** cursor ordering */
-  ordering?: InputMaybe<Cursor_Ordering>;
-};
-
-/** Initial value of the column from where the streaming should start */
-export type Items_Stream_Cursor_Value_Input = {
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
-  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
-  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
-  id?: InputMaybe<Scalars['uuid']['input']>;
-  name?: InputMaybe<Scalars['String']['input']>;
-  type?: InputMaybe<Item_Type_Enum>;
-  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
-};
-
-/** update columns of table "items" */
-export enum Items_Update_Column {
-  /** column name */
-  CellarId = 'cellar_id',
-  /** column name */
-  CreatedAt = 'created_at',
-  /** column name */
-  CreatedById = 'created_by_id',
-  /** column name */
-  Id = 'id',
-  /** column name */
-  Name = 'name',
-  /** column name */
-  Type = 'type',
-  /** column name */
-  UpdatedAt = 'updated_at'
-}
-
-export type Items_Updates = {
-  /** sets the columns of the filtered rows to the given values */
-  _set?: InputMaybe<Items_Set_Input>;
-  /** filter the rows which have to be updated */
-  where: Items_Bool_Exp;
-};
-
 export type Jsonb_Cast_Exp = {
   String?: InputMaybe<String_Comparison_Exp>;
 };
@@ -4044,6 +3689,243 @@ export type Jsonb_Comparison_Exp = {
   _lte?: InputMaybe<Scalars['jsonb']['input']>;
   _neq?: InputMaybe<Scalars['jsonb']['input']>;
   _nin?: InputMaybe<Array<Scalars['jsonb']['input']>>;
+};
+
+/** columns and relationships of "liquors" */
+export type Liquors = {
+  __typename?: 'liquors';
+  /** An object relationship */
+  cellar: Cellars;
+  cellar_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  createdBy: Users;
+  created_at: Scalars['timestamptz']['output'];
+  created_by_id: Scalars['uuid']['output'];
+  id: Scalars['uuid']['output'];
+  name: Scalars['String']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+};
+
+/** aggregated selection of "liquors" */
+export type Liquors_Aggregate = {
+  __typename?: 'liquors_aggregate';
+  aggregate?: Maybe<Liquors_Aggregate_Fields>;
+  nodes: Array<Liquors>;
+};
+
+export type Liquors_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Liquors_Aggregate_Bool_Exp_Count>;
+};
+
+export type Liquors_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Liquors_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Liquors_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "liquors" */
+export type Liquors_Aggregate_Fields = {
+  __typename?: 'liquors_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Liquors_Max_Fields>;
+  min?: Maybe<Liquors_Min_Fields>;
+};
+
+
+/** aggregate fields of "liquors" */
+export type Liquors_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Liquors_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "liquors" */
+export type Liquors_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Liquors_Max_Order_By>;
+  min?: InputMaybe<Liquors_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "liquors" */
+export type Liquors_Arr_Rel_Insert_Input = {
+  data: Array<Liquors_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Liquors_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "liquors". All fields are combined with a logical 'AND'. */
+export type Liquors_Bool_Exp = {
+  _and?: InputMaybe<Array<Liquors_Bool_Exp>>;
+  _not?: InputMaybe<Liquors_Bool_Exp>;
+  _or?: InputMaybe<Array<Liquors_Bool_Exp>>;
+  cellar?: InputMaybe<Cellars_Bool_Exp>;
+  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
+  createdBy?: InputMaybe<Users_Bool_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  name?: InputMaybe<String_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "liquors" */
+export enum Liquors_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  LiquorsPkey = 'liquors_pkey'
+}
+
+/** input type for inserting data into table "liquors" */
+export type Liquors_Insert_Input = {
+  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Liquors_Max_Fields = {
+  __typename?: 'liquors_max_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_by_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by max() on columns of table "liquors" */
+export type Liquors_Max_Order_By = {
+  cellar_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Liquors_Min_Fields = {
+  __typename?: 'liquors_min_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_by_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "liquors" */
+export type Liquors_Min_Order_By = {
+  cellar_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "liquors" */
+export type Liquors_Mutation_Response = {
+  __typename?: 'liquors_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Liquors>;
+};
+
+/** on_conflict condition type for table "liquors" */
+export type Liquors_On_Conflict = {
+  constraint: Liquors_Constraint;
+  update_columns?: Array<Liquors_Update_Column>;
+  where?: InputMaybe<Liquors_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "liquors". */
+export type Liquors_Order_By = {
+  cellar?: InputMaybe<Cellars_Order_By>;
+  cellar_id?: InputMaybe<Order_By>;
+  createdBy?: InputMaybe<Users_Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: liquors */
+export type Liquors_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "liquors" */
+export enum Liquors_Select_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  CreatedById = 'created_by_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** input type for updating data in table "liquors" */
+export type Liquors_Set_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** Streaming cursor of the table "liquors" */
+export type Liquors_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Liquors_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Liquors_Stream_Cursor_Value_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** update columns of table "liquors" */
+export enum Liquors_Update_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  CreatedById = 'created_by_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Liquors_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Liquors_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Liquors_Bool_Exp;
 };
 
 /** mutation root */
@@ -4109,14 +3991,14 @@ export type Mutation_Root = {
   delete_cellars?: Maybe<Cellars_Mutation_Response>;
   /** delete single row from the table: "cellars" */
   delete_cellars_by_pk?: Maybe<Cellars>;
-  /** delete data from the table: "item_type" */
-  delete_item_type?: Maybe<Item_Type_Mutation_Response>;
-  /** delete single row from the table: "item_type" */
-  delete_item_type_by_pk?: Maybe<Item_Type>;
-  /** delete data from the table: "items" */
-  delete_items?: Maybe<Items_Mutation_Response>;
-  /** delete single row from the table: "items" */
-  delete_items_by_pk?: Maybe<Items>;
+  /** delete data from the table: "liquors" */
+  delete_liquors?: Maybe<Liquors_Mutation_Response>;
+  /** delete single row from the table: "liquors" */
+  delete_liquors_by_pk?: Maybe<Liquors>;
+  /** delete data from the table: "wines" */
+  delete_wines?: Maybe<Wines_Mutation_Response>;
+  /** delete single row from the table: "wines" */
+  delete_wines_by_pk?: Maybe<Wines>;
   /** insert a single row into the table: "auth.providers" */
   insertAuthProvider?: Maybe<AuthProviders>;
   /** insert a single row into the table: "auth.provider_requests" */
@@ -4177,14 +4059,14 @@ export type Mutation_Root = {
   insert_cellars?: Maybe<Cellars_Mutation_Response>;
   /** insert a single row into the table: "cellars" */
   insert_cellars_one?: Maybe<Cellars>;
-  /** insert data into the table: "item_type" */
-  insert_item_type?: Maybe<Item_Type_Mutation_Response>;
-  /** insert a single row into the table: "item_type" */
-  insert_item_type_one?: Maybe<Item_Type>;
-  /** insert data into the table: "items" */
-  insert_items?: Maybe<Items_Mutation_Response>;
-  /** insert a single row into the table: "items" */
-  insert_items_one?: Maybe<Items>;
+  /** insert data into the table: "liquors" */
+  insert_liquors?: Maybe<Liquors_Mutation_Response>;
+  /** insert a single row into the table: "liquors" */
+  insert_liquors_one?: Maybe<Liquors>;
+  /** insert data into the table: "wines" */
+  insert_wines?: Maybe<Wines_Mutation_Response>;
+  /** insert a single row into the table: "wines" */
+  insert_wines_one?: Maybe<Wines>;
   /** update single row of the table: "auth.providers" */
   updateAuthProvider?: Maybe<AuthProviders>;
   /** update single row of the table: "auth.provider_requests" */
@@ -4271,22 +4153,22 @@ export type Mutation_Root = {
   update_cellars_many?: Maybe<Array<Maybe<Cellars_Mutation_Response>>>;
   /** update multiples rows of table: "storage.files" */
   update_files_many?: Maybe<Array<Maybe<Files_Mutation_Response>>>;
-  /** update data of the table: "item_type" */
-  update_item_type?: Maybe<Item_Type_Mutation_Response>;
-  /** update single row of the table: "item_type" */
-  update_item_type_by_pk?: Maybe<Item_Type>;
-  /** update multiples rows of table: "item_type" */
-  update_item_type_many?: Maybe<Array<Maybe<Item_Type_Mutation_Response>>>;
-  /** update data of the table: "items" */
-  update_items?: Maybe<Items_Mutation_Response>;
-  /** update single row of the table: "items" */
-  update_items_by_pk?: Maybe<Items>;
-  /** update multiples rows of table: "items" */
-  update_items_many?: Maybe<Array<Maybe<Items_Mutation_Response>>>;
+  /** update data of the table: "liquors" */
+  update_liquors?: Maybe<Liquors_Mutation_Response>;
+  /** update single row of the table: "liquors" */
+  update_liquors_by_pk?: Maybe<Liquors>;
+  /** update multiples rows of table: "liquors" */
+  update_liquors_many?: Maybe<Array<Maybe<Liquors_Mutation_Response>>>;
   /** update multiples rows of table: "auth.users" */
   update_users_many?: Maybe<Array<Maybe<Users_Mutation_Response>>>;
   /** update multiples rows of table: "storage.virus" */
   update_virus_many?: Maybe<Array<Maybe<Virus_Mutation_Response>>>;
+  /** update data of the table: "wines" */
+  update_wines?: Maybe<Wines_Mutation_Response>;
+  /** update single row of the table: "wines" */
+  update_wines_by_pk?: Maybe<Wines>;
+  /** update multiples rows of table: "wines" */
+  update_wines_many?: Maybe<Array<Maybe<Wines_Mutation_Response>>>;
 };
 
 
@@ -4471,25 +4353,25 @@ export type Mutation_RootDelete_Cellars_By_PkArgs = {
 
 
 /** mutation root */
-export type Mutation_RootDelete_Item_TypeArgs = {
-  where: Item_Type_Bool_Exp;
+export type Mutation_RootDelete_LiquorsArgs = {
+  where: Liquors_Bool_Exp;
 };
 
 
 /** mutation root */
-export type Mutation_RootDelete_Item_Type_By_PkArgs = {
-  text: Scalars['String']['input'];
+export type Mutation_RootDelete_Liquors_By_PkArgs = {
+  id: Scalars['uuid']['input'];
 };
 
 
 /** mutation root */
-export type Mutation_RootDelete_ItemsArgs = {
-  where: Items_Bool_Exp;
+export type Mutation_RootDelete_WinesArgs = {
+  where: Wines_Bool_Exp;
 };
 
 
 /** mutation root */
-export type Mutation_RootDelete_Items_By_PkArgs = {
+export type Mutation_RootDelete_Wines_By_PkArgs = {
   id: Scalars['uuid']['input'];
 };
 
@@ -4705,30 +4587,30 @@ export type Mutation_RootInsert_Cellars_OneArgs = {
 
 
 /** mutation root */
-export type Mutation_RootInsert_Item_TypeArgs = {
-  objects: Array<Item_Type_Insert_Input>;
-  on_conflict?: InputMaybe<Item_Type_On_Conflict>;
+export type Mutation_RootInsert_LiquorsArgs = {
+  objects: Array<Liquors_Insert_Input>;
+  on_conflict?: InputMaybe<Liquors_On_Conflict>;
 };
 
 
 /** mutation root */
-export type Mutation_RootInsert_Item_Type_OneArgs = {
-  object: Item_Type_Insert_Input;
-  on_conflict?: InputMaybe<Item_Type_On_Conflict>;
+export type Mutation_RootInsert_Liquors_OneArgs = {
+  object: Liquors_Insert_Input;
+  on_conflict?: InputMaybe<Liquors_On_Conflict>;
 };
 
 
 /** mutation root */
-export type Mutation_RootInsert_ItemsArgs = {
-  objects: Array<Items_Insert_Input>;
-  on_conflict?: InputMaybe<Items_On_Conflict>;
+export type Mutation_RootInsert_WinesArgs = {
+  objects: Array<Wines_Insert_Input>;
+  on_conflict?: InputMaybe<Wines_On_Conflict>;
 };
 
 
 /** mutation root */
-export type Mutation_RootInsert_Items_OneArgs = {
-  object: Items_Insert_Input;
-  on_conflict?: InputMaybe<Items_On_Conflict>;
+export type Mutation_RootInsert_Wines_OneArgs = {
+  object: Wines_Insert_Input;
+  on_conflict?: InputMaybe<Wines_On_Conflict>;
 };
 
 
@@ -5077,42 +4959,22 @@ export type Mutation_RootUpdate_Files_ManyArgs = {
 
 
 /** mutation root */
-export type Mutation_RootUpdate_Item_TypeArgs = {
-  _set?: InputMaybe<Item_Type_Set_Input>;
-  where: Item_Type_Bool_Exp;
+export type Mutation_RootUpdate_LiquorsArgs = {
+  _set?: InputMaybe<Liquors_Set_Input>;
+  where: Liquors_Bool_Exp;
 };
 
 
 /** mutation root */
-export type Mutation_RootUpdate_Item_Type_By_PkArgs = {
-  _set?: InputMaybe<Item_Type_Set_Input>;
-  pk_columns: Item_Type_Pk_Columns_Input;
+export type Mutation_RootUpdate_Liquors_By_PkArgs = {
+  _set?: InputMaybe<Liquors_Set_Input>;
+  pk_columns: Liquors_Pk_Columns_Input;
 };
 
 
 /** mutation root */
-export type Mutation_RootUpdate_Item_Type_ManyArgs = {
-  updates: Array<Item_Type_Updates>;
-};
-
-
-/** mutation root */
-export type Mutation_RootUpdate_ItemsArgs = {
-  _set?: InputMaybe<Items_Set_Input>;
-  where: Items_Bool_Exp;
-};
-
-
-/** mutation root */
-export type Mutation_RootUpdate_Items_By_PkArgs = {
-  _set?: InputMaybe<Items_Set_Input>;
-  pk_columns: Items_Pk_Columns_Input;
-};
-
-
-/** mutation root */
-export type Mutation_RootUpdate_Items_ManyArgs = {
-  updates: Array<Items_Updates>;
+export type Mutation_RootUpdate_Liquors_ManyArgs = {
+  updates: Array<Liquors_Updates>;
 };
 
 
@@ -5125,6 +4987,26 @@ export type Mutation_RootUpdate_Users_ManyArgs = {
 /** mutation root */
 export type Mutation_RootUpdate_Virus_ManyArgs = {
   updates: Array<Virus_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_WinesArgs = {
+  _set?: InputMaybe<Wines_Set_Input>;
+  where: Wines_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Wines_By_PkArgs = {
+  _set?: InputMaybe<Wines_Set_Input>;
+  pk_columns: Wines_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Wines_ManyArgs = {
+  updates: Array<Wines_Updates>;
 };
 
 /** column ordering options */
@@ -5223,18 +5105,12 @@ export type Query_Root = {
   files: Array<Files>;
   /** fetch aggregated fields from the table: "storage.files" */
   filesAggregate: Files_Aggregate;
-  /** fetch data from the table: "item_type" */
-  item_type: Array<Item_Type>;
-  /** fetch aggregated fields from the table: "item_type" */
-  item_type_aggregate: Item_Type_Aggregate;
-  /** fetch data from the table: "item_type" using primary key columns */
-  item_type_by_pk?: Maybe<Item_Type>;
   /** An array relationship */
-  items: Array<Items>;
+  liquors: Array<Liquors>;
   /** An aggregate relationship */
-  items_aggregate: Items_Aggregate;
-  /** fetch data from the table: "items" using primary key columns */
-  items_by_pk?: Maybe<Items>;
+  liquors_aggregate: Liquors_Aggregate;
+  /** fetch data from the table: "liquors" using primary key columns */
+  liquors_by_pk?: Maybe<Liquors>;
   /** fetch data from the table: "auth.users" using primary key columns */
   user?: Maybe<Users>;
   /** fetch data from the table: "auth.users" */
@@ -5247,6 +5123,12 @@ export type Query_Root = {
   viruses: Array<Virus>;
   /** fetch aggregated fields from the table: "storage.virus" */
   virusesAggregate: Virus_Aggregate;
+  /** An array relationship */
+  wines: Array<Wines>;
+  /** An aggregate relationship */
+  wines_aggregate: Wines_Aggregate;
+  /** fetch data from the table: "wines" using primary key columns */
+  wines_by_pk?: Maybe<Wines>;
 };
 
 
@@ -5549,48 +5431,25 @@ export type Query_RootFilesAggregateArgs = {
 };
 
 
-export type Query_RootItem_TypeArgs = {
-  distinct_on?: InputMaybe<Array<Item_Type_Select_Column>>;
+export type Query_RootLiquorsArgs = {
+  distinct_on?: InputMaybe<Array<Liquors_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Item_Type_Order_By>>;
-  where?: InputMaybe<Item_Type_Bool_Exp>;
+  order_by?: InputMaybe<Array<Liquors_Order_By>>;
+  where?: InputMaybe<Liquors_Bool_Exp>;
 };
 
 
-export type Query_RootItem_Type_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Item_Type_Select_Column>>;
+export type Query_RootLiquors_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Liquors_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Item_Type_Order_By>>;
-  where?: InputMaybe<Item_Type_Bool_Exp>;
+  order_by?: InputMaybe<Array<Liquors_Order_By>>;
+  where?: InputMaybe<Liquors_Bool_Exp>;
 };
 
 
-export type Query_RootItem_Type_By_PkArgs = {
-  text: Scalars['String']['input'];
-};
-
-
-export type Query_RootItemsArgs = {
-  distinct_on?: InputMaybe<Array<Items_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Items_Order_By>>;
-  where?: InputMaybe<Items_Bool_Exp>;
-};
-
-
-export type Query_RootItems_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Items_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Items_Order_By>>;
-  where?: InputMaybe<Items_Bool_Exp>;
-};
-
-
-export type Query_RootItems_By_PkArgs = {
+export type Query_RootLiquors_By_PkArgs = {
   id: Scalars['uuid']['input'];
 };
 
@@ -5638,6 +5497,29 @@ export type Query_RootVirusesAggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Virus_Order_By>>;
   where?: InputMaybe<Virus_Bool_Exp>;
+};
+
+
+export type Query_RootWinesArgs = {
+  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wines_Order_By>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
+};
+
+
+export type Query_RootWines_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wines_Order_By>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
+};
+
+
+export type Query_RootWines_By_PkArgs = {
+  id: Scalars['uuid']['input'];
 };
 
 export type Subscription_Root = {
@@ -5746,22 +5628,14 @@ export type Subscription_Root = {
   filesAggregate: Files_Aggregate;
   /** fetch data from the table in a streaming manner: "storage.files" */
   files_stream: Array<Files>;
-  /** fetch data from the table: "item_type" */
-  item_type: Array<Item_Type>;
-  /** fetch aggregated fields from the table: "item_type" */
-  item_type_aggregate: Item_Type_Aggregate;
-  /** fetch data from the table: "item_type" using primary key columns */
-  item_type_by_pk?: Maybe<Item_Type>;
-  /** fetch data from the table in a streaming manner: "item_type" */
-  item_type_stream: Array<Item_Type>;
   /** An array relationship */
-  items: Array<Items>;
+  liquors: Array<Liquors>;
   /** An aggregate relationship */
-  items_aggregate: Items_Aggregate;
-  /** fetch data from the table: "items" using primary key columns */
-  items_by_pk?: Maybe<Items>;
-  /** fetch data from the table in a streaming manner: "items" */
-  items_stream: Array<Items>;
+  liquors_aggregate: Liquors_Aggregate;
+  /** fetch data from the table: "liquors" using primary key columns */
+  liquors_by_pk?: Maybe<Liquors>;
+  /** fetch data from the table in a streaming manner: "liquors" */
+  liquors_stream: Array<Liquors>;
   /** fetch data from the table: "auth.users" using primary key columns */
   user?: Maybe<Users>;
   /** fetch data from the table: "auth.users" */
@@ -5778,6 +5652,14 @@ export type Subscription_Root = {
   viruses: Array<Virus>;
   /** fetch aggregated fields from the table: "storage.virus" */
   virusesAggregate: Virus_Aggregate;
+  /** An array relationship */
+  wines: Array<Wines>;
+  /** An aggregate relationship */
+  wines_aggregate: Wines_Aggregate;
+  /** fetch data from the table: "wines" using primary key columns */
+  wines_by_pk?: Maybe<Wines>;
+  /** fetch data from the table in a streaming manner: "wines" */
+  wines_stream: Array<Wines>;
 };
 
 
@@ -6171,63 +6053,33 @@ export type Subscription_RootFiles_StreamArgs = {
 };
 
 
-export type Subscription_RootItem_TypeArgs = {
-  distinct_on?: InputMaybe<Array<Item_Type_Select_Column>>;
+export type Subscription_RootLiquorsArgs = {
+  distinct_on?: InputMaybe<Array<Liquors_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Item_Type_Order_By>>;
-  where?: InputMaybe<Item_Type_Bool_Exp>;
+  order_by?: InputMaybe<Array<Liquors_Order_By>>;
+  where?: InputMaybe<Liquors_Bool_Exp>;
 };
 
 
-export type Subscription_RootItem_Type_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Item_Type_Select_Column>>;
+export type Subscription_RootLiquors_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Liquors_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Item_Type_Order_By>>;
-  where?: InputMaybe<Item_Type_Bool_Exp>;
+  order_by?: InputMaybe<Array<Liquors_Order_By>>;
+  where?: InputMaybe<Liquors_Bool_Exp>;
 };
 
 
-export type Subscription_RootItem_Type_By_PkArgs = {
-  text: Scalars['String']['input'];
-};
-
-
-export type Subscription_RootItem_Type_StreamArgs = {
-  batch_size: Scalars['Int']['input'];
-  cursor: Array<InputMaybe<Item_Type_Stream_Cursor_Input>>;
-  where?: InputMaybe<Item_Type_Bool_Exp>;
-};
-
-
-export type Subscription_RootItemsArgs = {
-  distinct_on?: InputMaybe<Array<Items_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Items_Order_By>>;
-  where?: InputMaybe<Items_Bool_Exp>;
-};
-
-
-export type Subscription_RootItems_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Items_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Items_Order_By>>;
-  where?: InputMaybe<Items_Bool_Exp>;
-};
-
-
-export type Subscription_RootItems_By_PkArgs = {
+export type Subscription_RootLiquors_By_PkArgs = {
   id: Scalars['uuid']['input'];
 };
 
 
-export type Subscription_RootItems_StreamArgs = {
+export type Subscription_RootLiquors_StreamArgs = {
   batch_size: Scalars['Int']['input'];
-  cursor: Array<InputMaybe<Items_Stream_Cursor_Input>>;
-  where?: InputMaybe<Items_Bool_Exp>;
+  cursor: Array<InputMaybe<Liquors_Stream_Cursor_Input>>;
+  where?: InputMaybe<Liquors_Bool_Exp>;
 };
 
 
@@ -6288,6 +6140,36 @@ export type Subscription_RootVirusesAggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Virus_Order_By>>;
   where?: InputMaybe<Virus_Bool_Exp>;
+};
+
+
+export type Subscription_RootWinesArgs = {
+  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wines_Order_By>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
+};
+
+
+export type Subscription_RootWines_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wines_Order_By>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
+};
+
+
+export type Subscription_RootWines_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootWines_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Wines_Stream_Cursor_Input>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
 };
 
 /** Boolean expression to compare columns of type "timestamptz". All fields are combined with logical 'AND'. */
@@ -7292,12 +7174,256 @@ export type Virus_Updates = {
   where: Virus_Bool_Exp;
 };
 
+/** columns and relationships of "wines" */
+export type Wines = {
+  __typename?: 'wines';
+  /** An object relationship */
+  cellar: Cellars;
+  cellar_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  createdBy: Users;
+  created_at: Scalars['timestamptz']['output'];
+  created_by_id: Scalars['uuid']['output'];
+  id: Scalars['uuid']['output'];
+  name: Scalars['String']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+};
+
+/** aggregated selection of "wines" */
+export type Wines_Aggregate = {
+  __typename?: 'wines_aggregate';
+  aggregate?: Maybe<Wines_Aggregate_Fields>;
+  nodes: Array<Wines>;
+};
+
+export type Wines_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Wines_Aggregate_Bool_Exp_Count>;
+};
+
+export type Wines_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Wines_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Wines_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "wines" */
+export type Wines_Aggregate_Fields = {
+  __typename?: 'wines_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Wines_Max_Fields>;
+  min?: Maybe<Wines_Min_Fields>;
+};
+
+
+/** aggregate fields of "wines" */
+export type Wines_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Wines_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "wines" */
+export type Wines_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Wines_Max_Order_By>;
+  min?: InputMaybe<Wines_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "wines" */
+export type Wines_Arr_Rel_Insert_Input = {
+  data: Array<Wines_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Wines_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "wines". All fields are combined with a logical 'AND'. */
+export type Wines_Bool_Exp = {
+  _and?: InputMaybe<Array<Wines_Bool_Exp>>;
+  _not?: InputMaybe<Wines_Bool_Exp>;
+  _or?: InputMaybe<Array<Wines_Bool_Exp>>;
+  cellar?: InputMaybe<Cellars_Bool_Exp>;
+  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
+  createdBy?: InputMaybe<Users_Bool_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  name?: InputMaybe<String_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "wines" */
+export enum Wines_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  WinesPkey = 'wines_pkey'
+}
+
+/** input type for inserting data into table "wines" */
+export type Wines_Insert_Input = {
+  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** aggregate max on columns */
+export type Wines_Max_Fields = {
+  __typename?: 'wines_max_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_by_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by max() on columns of table "wines" */
+export type Wines_Max_Order_By = {
+  cellar_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Wines_Min_Fields = {
+  __typename?: 'wines_min_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  created_by_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+};
+
+/** order by min() on columns of table "wines" */
+export type Wines_Min_Order_By = {
+  cellar_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "wines" */
+export type Wines_Mutation_Response = {
+  __typename?: 'wines_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Wines>;
+};
+
+/** on_conflict condition type for table "wines" */
+export type Wines_On_Conflict = {
+  constraint: Wines_Constraint;
+  update_columns?: Array<Wines_Update_Column>;
+  where?: InputMaybe<Wines_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "wines". */
+export type Wines_Order_By = {
+  cellar?: InputMaybe<Cellars_Order_By>;
+  cellar_id?: InputMaybe<Order_By>;
+  createdBy?: InputMaybe<Users_Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  created_by_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  name?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: wines */
+export type Wines_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "wines" */
+export enum Wines_Select_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  CreatedById = 'created_by_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+/** input type for updating data in table "wines" */
+export type Wines_Set_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** Streaming cursor of the table "wines" */
+export type Wines_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Wines_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Wines_Stream_Cursor_Value_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  created_by_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+};
+
+/** update columns of table "wines" */
+export enum Wines_Update_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  CreatedById = 'created_by_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Name = 'name',
+  /** column name */
+  UpdatedAt = 'updated_at'
+}
+
+export type Wines_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Wines_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Wines_Bool_Exp;
+};
+
 export type AddBeerMutationVariables = Exact<{
   beer: Beers_Insert_Input;
 }>;
 
 
 export type AddBeerMutation = { __typename?: 'mutation_root', insert_beers_one?: { __typename?: 'beers', id: any } | null };
+
+export type AddWineMutationVariables = Exact<{
+  wine: Wines_Insert_Input;
+}>;
+
+
+export type AddWineMutation = { __typename?: 'mutation_root', insert_wines_one?: { __typename?: 'wines', id: any } | null };
 
 export type GetCellarQueryVariables = Exact<{
   cellarId: Scalars['uuid']['input'];
@@ -7311,7 +7437,7 @@ export type GetItemsQueryQueryVariables = Exact<{
 }>;
 
 
-export type GetItemsQueryQuery = { __typename?: 'query_root', beers: Array<{ __typename?: 'beers', id: any, name: string }>, items: Array<{ __typename?: 'items', id: any, name: string }> };
+export type GetItemsQueryQuery = { __typename?: 'query_root', beers: Array<{ __typename?: 'beers', id: any, name: string }>, wines: Array<{ __typename?: 'wines', id: any, name: string }> };
 
 export type AddCellarMutationVariables = Exact<{
   cellar: Cellars_Insert_Input;
@@ -7334,8 +7460,9 @@ export type GetCellarsQuery = { __typename?: 'query_root', cellars: Array<{ __ty
 
 
 export const AddBeerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addBeer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"beers_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_beers_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beer"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddBeerMutation, AddBeerMutationVariables>;
+export const AddWineDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addWine"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"wine"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"wines_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_wines_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"wine"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddWineMutation, AddWineMutationVariables>;
 export const GetCellarDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCellar"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cellars_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}}]}}]}}]} as unknown as DocumentNode<GetCellarQuery, GetCellarQueryVariables>;
-export const GetItemsQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetItemsQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beers"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"items"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<GetItemsQueryQuery, GetItemsQueryQueryVariables>;
+export const GetItemsQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetItemsQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beers"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"wines"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<GetItemsQueryQuery, GetItemsQueryQueryVariables>;
 export const AddCellarDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addCellar"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellar"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"cellars_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_cellars_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellar"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddCellarMutation, AddCellarMutationVariables>;
 export const AddUserToCellarUsersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addUserToCellarUsers"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarUser"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"cellar_user_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_cellar_user_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarUser"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddUserToCellarUsersMutation, AddUserToCellarUsersMutationVariables>;
 export const GetCellarsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}}]}}]}}]} as unknown as DocumentNode<GetCellarsQuery, GetCellarsQueryVariables>;
