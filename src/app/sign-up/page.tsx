@@ -51,8 +51,8 @@ const SignUp = () => {
       sx={{
         display: "flex",
         justifyContent: "center",
-        height: "100vh",
         alignItems: "center",
+        flexGrow: 1,
       }}
     >
       <Box sx={{ width: "400px", display: "flex", flexDirection: "column" }}>

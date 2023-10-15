@@ -15,24 +15,52 @@ import {
 import Image from "next/image";
 import { useQuery } from "urql";
 import beer1 from "@/app/public/beer1.png";
+import liquor1 from "@/app/public/liquor1.png";
+import wine1 from "@/app/public/wine1.png";
 import { MdFavoriteBorder } from "react-icons/md";
+import InteractiveCard from "@/components/InteractiveCard";
 
 type ItemCardProps = {
   item: {
     id: string;
     name: string;
   };
-  type: "BEER" | "WINE";
+  type: "BEER" | "WINE" | "LIQUOR";
 };
 
 const ItemCard = ({ item, type }: ItemCardProps) => (
-  <Card>
+  <InteractiveCard>
     <CardOverflow>
-      <AspectRatio ratio="2">
-        {type === "BEER" && (
-          <Image src={beer1} alt="An image of a beer glass" fill />
-        )}
-      </AspectRatio>
+      {type === "BEER" && (
+        <AspectRatio ratio="1" maxHeight={300}>
+          <Image
+            src={beer1}
+            alt="An image of a beer glass"
+            fill
+            placeholder="blur"
+          />
+        </AspectRatio>
+      )}
+      {type === "WINE" && (
+        <AspectRatio ratio="1" maxHeight={300}>
+          <Image
+            src={wine1}
+            alt="An image of a wine bottle"
+            fill
+            placeholder="blur"
+          />
+        </AspectRatio>
+      )}
+      {type === "LIQUOR" && (
+        <AspectRatio ratio="1" maxHeight={300}>
+          <Image
+            src={liquor1}
+            alt="An image of a liquor bottle"
+            fill
+            placeholder="blur"
+          />
+        </AspectRatio>
+      )}
     </CardOverflow>
     <Typography level="title-lg">{item.name}</Typography>
     <CardActions buttonFlex="0 1 120px">
@@ -45,7 +73,7 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
         <MdFavoriteBorder />
       </IconButton>
     </CardActions>
-  </Card>
+  </InteractiveCard>
 );
 
 const itemsSub = graphql(`
@@ -54,7 +82,11 @@ const itemsSub = graphql(`
       id
       name
     }
-    items(where: { cellar_id: { _eq: $cellarId } }) {
+    wines(where: { cellar_id: { _eq: $cellarId } }) {
+      id
+      name
+    }
+    liquors(where: { cellar_id: { _eq: $cellarId } }) {
       id
       name
     }
@@ -71,16 +103,18 @@ const Items = ({ params: { id } }: { params: { id: string } }) => {
     <Box sx={{ height: "100%", width: "100%" }}>
       <Grid container spacing={2} sx={{ flexGrow: 1 }}>
         {res?.data?.beers.map((x) => (
-          <Grid key={x.id} xs={12} sm={6} md={4}>
+          <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
             <ItemCard item={x} type="BEER" />
           </Grid>
         ))}
-        {res?.data?.items.map((x) => (
-          <Grid key={x.id} xs={6} md={4}>
-            <Card>
-              <Typography level="title-lg">{x.name}</Typography>
-              <Typography level="body-sm">April 24 to May 02, 2021</Typography>
-            </Card>
+        {res?.data?.wines.map((x) => (
+          <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
+            <ItemCard item={x} type="WINE" />
+          </Grid>
+        ))}
+        {res?.data?.liquors.map((x) => (
+          <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
+            <ItemCard item={x} type="LIQUOR" />
           </Grid>
         ))}
       </Grid>
