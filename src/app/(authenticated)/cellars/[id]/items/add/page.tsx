@@ -20,6 +20,7 @@ import wine1 from "@/app/public/wine1.png";
 import liquor1 from "@/app/public/liquor1.png";
 import Image from "next/image";
 import AddWine from "./AddWine";
+import AddLiquor from "./AddLiquor";
 
 type ItemType = "Beer" | "Wine" | "Liquor";
 
@@ -105,12 +106,13 @@ const Add = ({ params: { id } }: { params: { id: string } }) => {
               <AddItemTypeCard type="Beer" onClick={handleTypeClick} />
             </Grid>
             <Grid xs={12} sm={6} md={4} lg={3}>
-              <AddItemTypeCard type="Liquor" onClick={() => {}} />
+              <AddItemTypeCard type="Liquor" onClick={handleTypeClick} />
             </Grid>
           </Grid>
         )}
         {addType === "Beer" && <AddBeer cellarId={id} />}
         {addType === "Wine" && <AddWine cellarId={id} />}
+        {addType === "Liquor" && <AddLiquor cellarId={id} />}
       </Stack>
     </Box>
   );
