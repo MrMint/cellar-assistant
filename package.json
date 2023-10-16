@@ -28,6 +28,7 @@
     "@urql/exchange-refocus": "1.0.2",
     "@vercel/analytics": "1.1.1",
     "autoprefixer": "10.4.16",
+    "date-fns": "2.30.0",
     "eslint": "8.51.0",
     "eslint-config-next": "13.5.5",
     "eslint-config-prettier": "9.0.0",
