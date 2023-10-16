@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.5.0](https://github.com/MrMint/cellar-assistant/compare/v0.4.0...v0.5.0) (2023-10-16)
+
+
+### Features
+
+* Adds new fields to wine and adds wine detail page ([a4f5e7d](https://github.com/MrMint/cellar-assistant/commit/a4f5e7db589a40784e87c06ec78487bfec94d99d))
+
+
+### Bug Fixes
+
+* **deps:** update nextjs monorepo to v13.5.5 ([5b72711](https://github.com/MrMint/cellar-assistant/commit/5b72711eb70b5c4087825dc6d63c2655d16b41d1))
+
 ## [0.4.0](https://github.com/MrMint/cellar-assistant/compare/v0.3.0...v0.4.0) (2023-10-15)
 
 
