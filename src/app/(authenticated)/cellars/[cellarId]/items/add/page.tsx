@@ -6,6 +6,7 @@ import {
   CardContent,
   CardOverflow,
   Grid,
+  Link,
   Stack,
   Typography,
 } from "@mui/joy";
@@ -19,18 +20,18 @@ import beer1 from "@/app/public/beer1.png";
 import wine1 from "@/app/public/wine1.png";
 import liquor1 from "@/app/public/liquor1.png";
 import Image from "next/image";
-import AddWine from "./AddWine";
+import NextLink from "next/link";
 import AddLiquor from "./AddLiquor";
 
 type ItemType = "Beer" | "Wine" | "Liquor";
 
 type AddItemTypeCardProps = {
   type: ItemType;
-  onClick: (type: ItemType) => void;
+  cellarId: string;
 };
 
-const AddItemTypeCard = ({ type, onClick }: AddItemTypeCardProps) => (
-  <InteractiveCard onClick={() => onClick(type)}>
+const AddItemTypeCard = ({ type, cellarId }: AddItemTypeCardProps) => (
+  <InteractiveCard>
     <CardOverflow>
       <AspectRatio ratio="1">
         {type === "Beer" && (
@@ -60,7 +61,13 @@ const AddItemTypeCard = ({ type, onClick }: AddItemTypeCardProps) => (
       </AspectRatio>
     </CardOverflow>
     <CardContent>
-      <Typography level="title-lg">{type}</Typography>
+      <Link
+        component={NextLink}
+        overlay
+        href={`/cellars/${cellarId}/${type.toLowerCase()}s/add`}
+      >
+        <Typography level="title-lg">{type}</Typography>
+      </Link>
     </CardContent>
   </InteractiveCard>
 );
@@ -75,17 +82,15 @@ const getCellarQuery = graphql(`
   }
 `);
 
-const Add = ({ params: { id } }: { params: { id: string } }) => {
-  const [addType, setAddType] = useState<ItemType | undefined>(undefined);
+const Add = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
   const userId = useUserId();
   if (userId === undefined) throw Error();
 
   const [{ data, fetching }] = useQuery({
     query: getCellarQuery,
-    variables: { cellarId: id },
+    variables: { cellarId },
   });
 
-  const handleTypeClick = (type: ItemType) => setAddType(type);
   return (
     <Box>
       <Stack spacing={4}>
@@ -97,22 +102,13 @@ const Add = ({ params: { id } }: { params: { id: string } }) => {
             You do not have permission to add items to this cellar.
           </Typography>
         )}
-        {addType === undefined && (
-          <Grid container spacing={2}>
-            <Grid xs={12} sm={6} md={4} lg={2}>
-              <AddItemTypeCard type="Wine" onClick={handleTypeClick} />
+        <Grid container spacing={2}>
+          {new Array<ItemType>("Wine", "Beer", "Liquor").map((x) => (
+            <Grid key={x} xs={12} sm={6} md={4} lg={2}>
+              <AddItemTypeCard type={x} cellarId={cellarId} />
             </Grid>
-            <Grid xs={12} sm={6} md={4} lg={2}>
-              <AddItemTypeCard type="Beer" onClick={handleTypeClick} />
-            </Grid>
-            <Grid xs={12} sm={6} md={4} lg={2}>
-              <AddItemTypeCard type="Liquor" onClick={handleTypeClick} />
-            </Grid>
-          </Grid>
-        )}
-        {addType === "Beer" && <AddBeer cellarId={id} />}
-        {addType === "Wine" && <AddWine cellarId={id} />}
-        {addType === "Liquor" && <AddLiquor cellarId={id} />}
+          ))}
+        </Grid>
       </Stack>
     </Box>
   );
