@@ -19,20 +19,39 @@ insert_permissions:
       set:
         created_by_id: x-hasura-User-Id
       columns:
+        - alcohol_content_percentage
         - cellar_id
         - created_by_id
+        - description
+        - ean_13
         - name
+        - price
+        - region
+        - special_designation
+        - variety
+        - vineyard_designation
+        - vintage
     comment: ""
 select_permissions:
   - role: user
     permission:
       columns:
-        - cellar_id
+        - ean_13
+        - vintage
+        - price
+        - alcohol_content_percentage
+        - description
+        - name
+        - region
+        - special_designation
+        - variety
+        - vineyard_designation
         - created_at
+        - updated_at
+        - cellar_id
         - created_by_id
         - id
-        - name
-        - updated_at
+        - winery_id
       filter:
         cellar:
           users:

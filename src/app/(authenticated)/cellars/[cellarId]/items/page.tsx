@@ -10,6 +10,7 @@ import {
   CardOverflow,
   Grid,
   IconButton,
+  Link,
   Typography,
 } from "@mui/joy";
 import Image from "next/image";
@@ -18,6 +19,7 @@ import beer1 from "@/app/public/beer1.png";
 import liquor1 from "@/app/public/liquor1.png";
 import wine1 from "@/app/public/wine1.png";
 import { MdFavoriteBorder } from "react-icons/md";
+import NextLink from "next/link";
 import InteractiveCard from "@/components/InteractiveCard";
 
 type ItemCardProps = {
@@ -62,7 +64,13 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
         </AspectRatio>
       )}
     </CardOverflow>
-    <Typography level="title-lg">{item.name}</Typography>
+    <Link
+      component={NextLink}
+      overlay
+      href={`${type.toLowerCase()}s/${item.id}`}
+    >
+      <Typography level="title-lg">{item.name}</Typography>
+    </Link>
     <CardActions buttonFlex="0 1 120px">
       <IconButton
         variant="outlined"
@@ -93,15 +101,15 @@ const itemsSub = graphql(`
   }
 `);
 
-const Items = ({ params: { id } }: { params: { id: string } }) => {
+const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
   const [res] = useQuery({
     query: itemsSub,
-    variables: { cellarId: id },
+    variables: { cellarId },
   });
 
   return (
-    <Box sx={{ height: "100%", width: "100%" }}>
-      <Grid container spacing={2} sx={{ flexGrow: 1 }}>
+    <Box>
+      <Grid container spacing={2}>
         {res?.data?.beers.map((x) => (
           <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
             <ItemCard item={x} type="BEER" />
