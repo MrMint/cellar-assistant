@@ -6,7 +6,10 @@ import Image from "next/image";
 import { graphql } from "@/gql";
 import { useQuery } from "urql";
 import { format, parseISO } from "date-fns";
-import { isNotNil } from "ramda";
+import { isNotNil, without } from "ramda";
+import { Spirit_Type_Enum } from "@/gql/graphql";
+import ItemDetails from "@/components/ItemDetails";
+import { formatAsPercentage, formatIsoDateString } from "@/utilities";
 
 const getSpiritQuery = graphql(`
   query GetSpirit($itemId: uuid!) {
@@ -16,11 +19,13 @@ const getSpiritQuery = graphql(`
       created_by_id
       vintage
       type
+      description
+      alcohol_content_percentage
+      style
     }
   }
 `);
-
-const ItemDetails = ({
+const SpiritDetails = ({
   params: { itemId },
 }: {
   params: { itemId: string };
@@ -56,14 +61,16 @@ const ItemDetails = ({
       <Grid xs={8}>
         <Sheet>
           {isLoading === false && spirit !== undefined && (
-            <Stack spacing={1} padding="1rem">
-              <Typography level="h3">{spirit.name}</Typography>
-              <Typography level="body-md">
-                {isNotNil(spirit.vintage) &&
-                  format(parseISO(spirit.vintage), "yyyy")}{" "}
-                {spirit.type}
-              </Typography>
-            </Stack>
+            <ItemDetails
+              title={spirit.name}
+              subTitlePhrases={[
+                formatIsoDateString(spirit.vintage, "yyyy"),
+                spirit.type,
+                spirit.style,
+                formatAsPercentage(spirit.alcohol_content_percentage),
+              ]}
+              description={spirit.description}
+            />
           )}
         </Sheet>
       </Grid>
@@ -72,4 +79,4 @@ const ItemDetails = ({
   );
 };
 
-export default ItemDetails;
+export default SpiritDetails;

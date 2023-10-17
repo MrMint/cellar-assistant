@@ -69,7 +69,7 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
       overlay
       href={`${type.toLowerCase()}s/${item.id}`}
     >
-      <Typography level="title-lg">{item.name}</Typography>
+      <Typography level="title-md">{item.name}</Typography>
     </Link>
     <CardActions buttonFlex="0 1 120px">
       <IconButton
