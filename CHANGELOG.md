@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.6.1](https://github.com/MrMint/cellar-assistant/compare/v0.6.0...v0.6.1) (2023-10-17)
+
+
+### Bug Fixes
+
+* Fixes bad enum parse for spirit type select field ([d11752e](https://github.com/MrMint/cellar-assistant/commit/d11752ecb8b6d18362f3ad052fdb58dbb95e221f))
+
 ## [0.6.0](https://github.com/MrMint/cellar-assistant/compare/v0.5.0...v0.6.0) (2023-10-17)
 
 
