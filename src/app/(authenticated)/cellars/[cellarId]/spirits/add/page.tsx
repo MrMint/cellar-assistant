@@ -2,7 +2,7 @@
 
 import { graphql } from "@/gql";
 import { Spirit_Type_Enum } from "@/gql/graphql";
-import { getEnumKeys, getEnums } from "@/utilities";
+import { getEnumKeys } from "@/utilities";
 import {
   Box,
   Button,

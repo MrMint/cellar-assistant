@@ -7,6 +7,8 @@ import { graphql } from "@/gql";
 import { useQuery } from "urql";
 import { format, parseISO } from "date-fns";
 import { isNotNil } from "ramda";
+import ItemDetails from "@/components/ItemDetails";
+import { formatAsPercentage, formatIsoDateString } from "@/utilities";
 
 const getBeerQuery = graphql(`
   query GetBeer($itemId: uuid!) {
@@ -16,11 +18,13 @@ const getBeerQuery = graphql(`
       created_by_id
       vintage
       style
+      description
+      alcohol_content_percentage
     }
   }
 `);
 
-const ItemDetails = ({
+const BeerDetails = ({
   params: { itemId },
 }: {
   params: { itemId: string };
@@ -52,14 +56,15 @@ const ItemDetails = ({
       <Grid xs={8}>
         <Sheet>
           {isLoading === false && beer !== undefined && (
-            <Stack spacing={1} padding="1rem">
-              <Typography level="h3">{beer.name}</Typography>
-              <Typography level="body-md">
-                {isNotNil(beer.vintage) &&
-                  format(parseISO(beer.vintage), "yyyy")}{" "}
-                {beer.style}
-              </Typography>
-            </Stack>
+            <ItemDetails
+              title={beer.name}
+              subTitlePhrases={[
+                formatIsoDateString(beer.vintage, "yyyy"),
+                beer.style,
+                formatAsPercentage(beer.alcohol_content_percentage),
+              ]}
+              description={beer.description}
+            />
           )}
         </Sheet>
       </Grid>
@@ -68,4 +73,4 @@ const ItemDetails = ({
   );
 };
 
-export default ItemDetails;
+export default BeerDetails;
