@@ -10,20 +10,17 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
-import AddBeer from "./AddBeer";
 import { graphql } from "@/gql";
 import { useQuery } from "urql";
 import { useUserId } from "@nhost/nextjs";
-import { useState } from "react";
 import InteractiveCard from "@/components/InteractiveCard";
 import beer1 from "@/app/public/beer1.png";
 import wine1 from "@/app/public/wine1.png";
-import liquor1 from "@/app/public/liquor1.png";
+import spirit1 from "@/app/public/spirit1.png";
 import Image from "next/image";
 import NextLink from "next/link";
-import AddLiquor from "./AddLiquor";
 
-type ItemType = "Beer" | "Wine" | "Liquor";
+type ItemType = "Beer" | "Wine" | "Spirit";
 
 type AddItemTypeCardProps = {
   type: ItemType;
@@ -50,9 +47,9 @@ const AddItemTypeCard = ({ type, cellarId }: AddItemTypeCardProps) => (
             placeholder="blur"
           />
         )}
-        {type === "Liquor" && (
+        {type === "Spirit" && (
           <Image
-            src={liquor1}
+            src={spirit1}
             alt="An image of a liquor bottle"
             fill
             placeholder="blur"
@@ -103,7 +100,7 @@ const Add = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
           </Typography>
         )}
         <Grid container spacing={2}>
-          {new Array<ItemType>("Wine", "Beer", "Liquor").map((x) => (
+          {new Array<ItemType>("Wine", "Beer", "Spirit").map((x) => (
             <Grid key={x} xs={12} sm={6} md={4} lg={2}>
               <AddItemTypeCard type={x} cellarId={cellarId} />
             </Grid>

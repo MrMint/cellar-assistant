@@ -1,0 +1,12 @@
+table:
+  name: spirit_type
+  schema: public
+is_enum: true
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - comment
+        - text
+      filter: {}
+    comment: ""
