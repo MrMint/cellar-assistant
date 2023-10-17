@@ -1,23 +1,21 @@
 "use client";
 
 import { AspectRatio, Grid, Sheet, Stack, Typography } from "@mui/joy";
-import wine1 from "@/app/public/wine1.png";
+import beer1 from "@/app/public/beer1.png";
 import Image from "next/image";
 import { graphql } from "@/gql";
 import { useQuery } from "urql";
 import { format, parseISO } from "date-fns";
 import { isNotNil } from "ramda";
 
-const getWineQuery = graphql(`
-  query GetWine($itemId: uuid!) {
-    wines_by_pk(id: $itemId) {
+const getBeerQuery = graphql(`
+  query GetBeer($itemId: uuid!) {
+    beers_by_pk(id: $itemId) {
       id
       name
       created_by_id
-      region
-      variety
       vintage
-      ean_13
+      style
     }
   }
 `);
@@ -28,14 +26,14 @@ const ItemDetails = ({
   params: { itemId: string };
 }) => {
   const [{ data, fetching, operation }] = useQuery({
-    query: getWineQuery,
+    query: getBeerQuery,
     variables: { itemId },
   });
   const isLoading = fetching || operation === undefined;
 
-  let wine = undefined;
-  if (isLoading === false && data !== undefined && isNotNil(data.wines_by_pk)) {
-    wine = data.wines_by_pk;
+  let beer = undefined;
+  if (isLoading === false && data !== undefined && isNotNil(data.beers_by_pk)) {
+    beer = data.beers_by_pk;
   }
 
   return (
@@ -44,8 +42,8 @@ const ItemDetails = ({
         <Stack>
           <AspectRatio ratio={1}>
             <Image
-              src={wine1}
-              alt="A picture of a wine bottle"
+              src={beer1}
+              alt="A picture of a beer bottle"
               placeholder="blur"
             />
           </AspectRatio>
@@ -53,12 +51,13 @@ const ItemDetails = ({
       </Grid>
       <Grid xs={8}>
         <Sheet>
-          {isLoading === false && wine !== undefined && (
+          {isLoading === false && beer !== undefined && (
             <Stack spacing={1} padding="1rem">
-              <Typography level="h3">{wine.name}</Typography>
+              <Typography level="h3">{beer.name}</Typography>
               <Typography level="body-md">
-                {format(parseISO(wine.vintage), "yyyy")} {wine.variety},{" "}
-                {wine.region}
+                {isNotNil(beer.vintage) &&
+                  format(parseISO(beer.vintage), "yyyy")}{" "}
+                {beer.style}
               </Typography>
             </Stack>
           )}
