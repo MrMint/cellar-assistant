@@ -16,7 +16,7 @@ import {
 import Image from "next/image";
 import { useQuery } from "urql";
 import beer1 from "@/app/public/beer1.png";
-import liquor1 from "@/app/public/liquor1.png";
+import spirit1 from "@/app/public/spirit1.png";
 import wine1 from "@/app/public/wine1.png";
 import { MdFavoriteBorder } from "react-icons/md";
 import NextLink from "next/link";
@@ -27,7 +27,7 @@ type ItemCardProps = {
     id: string;
     name: string;
   };
-  type: "BEER" | "WINE" | "LIQUOR";
+  type: "BEER" | "WINE" | "SPIRIT";
 };
 
 const ItemCard = ({ item, type }: ItemCardProps) => (
@@ -53,10 +53,10 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
           />
         </AspectRatio>
       )}
-      {type === "LIQUOR" && (
+      {type === "SPIRIT" && (
         <AspectRatio ratio="1" maxHeight={300}>
           <Image
-            src={liquor1}
+            src={spirit1}
             alt="An image of a liquor bottle"
             fill
             placeholder="blur"
@@ -94,7 +94,7 @@ const itemsSub = graphql(`
       id
       name
     }
-    liquors(where: { cellar_id: { _eq: $cellarId } }) {
+    spirits(where: { cellar_id: { _eq: $cellarId } }) {
       id
       name
     }
@@ -120,9 +120,9 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
             <ItemCard item={x} type="WINE" />
           </Grid>
         ))}
-        {res?.data?.liquors.map((x) => (
+        {res?.data?.spirits.map((x) => (
           <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
-            <ItemCard item={x} type="LIQUOR" />
+            <ItemCard item={x} type="SPIRIT" />
           </Grid>
         ))}
       </Grid>
