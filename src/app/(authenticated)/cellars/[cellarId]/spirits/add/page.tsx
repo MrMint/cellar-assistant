@@ -2,7 +2,7 @@
 
 import { graphql } from "@/gql";
 import { Spirit_Type_Enum } from "@/gql/graphql";
-import { getEnums } from "@/utilities";
+import { getEnumKeys, getEnums } from "@/utilities";
 import {
   Box,
   Button,
@@ -19,6 +19,8 @@ import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { useMutation } from "urql";
+
+const typeOptions = getEnumKeys(Spirit_Type_Enum);
 
 interface IFormInput {
   name: string;
@@ -48,9 +50,7 @@ const AddSpirit = ({
   const router = useRouter();
   const [{ fetching, error }, addSpirit] = useMutation(addSpiritMutation);
 
-  const { control, handleSubmit, clearErrors } = useForm<IFormInput>({
-    defaultValues: {},
-  });
+  const { control, handleSubmit } = useForm<IFormInput>();
 
   const onSubmit: SubmitHandler<IFormInput> = async ({
     name,
@@ -112,10 +112,16 @@ const AddSpirit = ({
                 control={control}
                 rules={{ required: true }}
                 render={({ field }) => (
-                  <Select placeholder="Choose one…" {...field}>
-                    {getEnums(Spirit_Type_Enum).map((x) => (
-                      <Option key={x[0]} value={x[1]}>
-                        {x[0]}
+                  <Select
+                    placeholder="Choose one…"
+                    {...field}
+                    onChange={(_, value) => {
+                      field.onChange(value);
+                    }}
+                  >
+                    {typeOptions.map((x) => (
+                      <Option key={x} value={Spirit_Type_Enum[x]}>
+                        {x}
                       </Option>
                     ))}
                   </Select>
