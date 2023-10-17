@@ -13,12 +13,12 @@ array_relationships:
         table:
           name: beers
           schema: public
-  - name: liquors
+  - name: spirits
     using:
       foreign_key_constraint_on:
         column: cellar_id
         table:
-          name: liquors
+          name: spirits
           schema: public
   - name: users
     using:

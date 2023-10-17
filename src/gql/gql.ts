@@ -15,9 +15,10 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
 const documents = {
     "\n  query GetBeer($itemId: uuid!) {\n    beers_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      vintage\n      style\n    }\n  }\n": types.GetBeerDocument,
     "\n  mutation addBeer($beer: beers_insert_input!) {\n    insert_beers_one(object: $beer) {\n      id\n    }\n  }\n": types.AddBeerDocument,
-    "\n  mutation addLiquor($liquor: liquors_insert_input!) {\n    insert_liquors_one(object: $liquor) {\n      id\n    }\n  }\n": types.AddLiquorDocument,
     "\n  query GetCellar($cellarId: uuid!) {\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n    }\n  }\n": types.GetCellarDocument,
-    "\n  query GetItemsQuery($cellarId: uuid!) {\n    beers(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    wines(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    liquors(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n  }\n": types.GetItemsQueryDocument,
+    "\n  query GetItemsQuery($cellarId: uuid!) {\n    beers(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    wines(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    spirits(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n  }\n": types.GetItemsQueryDocument,
+    "\n  query GetSpirit($itemId: uuid!) {\n    spirits_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      vintage\n      type\n    }\n  }\n": types.GetSpiritDocument,
+    "\n  mutation addSpirit($spirit: spirits_insert_input!) {\n    insert_spirits_one(object: $spirit) {\n      id\n    }\n  }\n": types.AddSpiritDocument,
     "\n  query GetWine($itemId: uuid!) {\n    wines_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      region\n      variety\n      vintage\n      ean_13\n    }\n  }\n": types.GetWineDocument,
     "\n  mutation addWine($wine: wines_insert_input!) {\n    insert_wines_one(object: $wine) {\n      id\n    }\n  }\n": types.AddWineDocument,
     "\n  mutation addCellar($cellar: cellars_insert_input!) {\n    insert_cellars_one(object: $cellar) {\n      id\n    }\n  }\n": types.AddCellarDocument,
@@ -50,15 +51,19 @@ export function graphql(source: "\n  mutation addBeer($beer: beers_insert_input!
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation addLiquor($liquor: liquors_insert_input!) {\n    insert_liquors_one(object: $liquor) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation addLiquor($liquor: liquors_insert_input!) {\n    insert_liquors_one(object: $liquor) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
 export function graphql(source: "\n  query GetCellar($cellarId: uuid!) {\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n    }\n  }\n"): (typeof documents)["\n  query GetCellar($cellarId: uuid!) {\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query GetItemsQuery($cellarId: uuid!) {\n    beers(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    wines(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    liquors(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n  }\n"): (typeof documents)["\n  query GetItemsQuery($cellarId: uuid!) {\n    beers(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    wines(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    liquors(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n  }\n"];
+export function graphql(source: "\n  query GetItemsQuery($cellarId: uuid!) {\n    beers(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    wines(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    spirits(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n  }\n"): (typeof documents)["\n  query GetItemsQuery($cellarId: uuid!) {\n    beers(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    wines(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n    spirits(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      name\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query GetSpirit($itemId: uuid!) {\n    spirits_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      vintage\n      type\n    }\n  }\n"): (typeof documents)["\n  query GetSpirit($itemId: uuid!) {\n    spirits_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      vintage\n      type\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation addSpirit($spirit: spirits_insert_input!) {\n    insert_spirits_one(object: $spirit) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation addSpirit($spirit: spirits_insert_input!) {\n    insert_spirits_one(object: $spirit) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

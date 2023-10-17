@@ -1,0 +1,3 @@
+-- Could not auto-generate a down migration.
+-- Please write an appropriate down migration for the SQL below:
+-- INSERT INTO "public"."spirit_type"("text") VALUES (E'VODKA'), (E'BOURBON'), (E'TEQUILA'), (E'RUM'), (E'GIN'), (E'LIQUEURS'), (E'SCOTCH'), (E'WHISKEY'), (E'BRANDY_COGNAC'), (E'AMARO_APERITIF_VERMOUTH'), (E'MEZCAL'), (E'MOONSHINE'), (E'SOJU'), (E'BAIJIU');
