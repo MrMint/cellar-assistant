@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.6.0](https://github.com/MrMint/cellar-assistant/compare/v0.5.0...v0.6.0) (2023-10-17)
+
+
+### Features
+
+* Adds new fields to beer and adds beer detail page ([1584b10](https://github.com/MrMint/cellar-assistant/commit/1584b10c81a697ed959df4c3ba4b17cc6a26d141))
+* Adds new fields to spirits and adds spirit details page ([ad73c8a](https://github.com/MrMint/cellar-assistant/commit/ad73c8a3b810bca016ddb6e53f6d87a99b9f5be1))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.11 ([e0aaaa0](https://github.com/MrMint/cellar-assistant/commit/e0aaaa03b2533b3733041d3bb1af17e95fc9b1c0))
+
 ## [0.5.0](https://github.com/MrMint/cellar-assistant/compare/v0.4.0...v0.5.0) (2023-10-16)
 
 
