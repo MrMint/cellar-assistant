@@ -8,6 +8,7 @@ import {
   FormLabel,
   Input,
   Stack,
+  Textarea,
   Typography,
 } from "@mui/joy";
 import { format } from "date-fns";
@@ -17,17 +18,19 @@ import { useMutation } from "urql";
 
 interface IFormInput {
   name: string;
-  vintage: number;
-  variety: string | undefined;
-  region: string | undefined;
+  description: string | undefined;
   price: number | undefined;
-  alcoholContent: number | undefined;
-  ean13: number | undefined;
+  alcohol_content_percentage: number | undefined;
+  ean_13: number | undefined;
+  upc_12: number | undefined;
+  international_bitterness_unit: number | undefined;
+  style: string | undefined;
+  vintage: number | undefined;
 }
 
-const addWineMutation = graphql(`
-  mutation addWine($wine: wines_insert_input!) {
-    insert_wines_one(object: $wine) {
+const addBeerMutation = graphql(`
+  mutation addBeer($beer: beers_insert_input!) {
+    insert_beers_one(object: $beer) {
       id
     }
   }
@@ -39,33 +42,38 @@ const AddWine = ({
   params: { cellarId: string };
 }) => {
   const router = useRouter();
-  const [{ fetching, error }, addWine] = useMutation(addWineMutation);
+  const [{ fetching, error }, addWine] = useMutation(addBeerMutation);
 
   const { control, handleSubmit, clearErrors } = useForm<IFormInput>({
-    defaultValues: {
-      vintage: 2023,
-    },
+    defaultValues: {},
   });
 
   const onSubmit: SubmitHandler<IFormInput> = async ({
     name,
-    vintage,
-    variety,
-    region,
     price,
-    alcoholContent,
-    ean13,
+    alcohol_content_percentage,
+    ean_13,
+    upc_12,
+    international_bitterness_unit,
+    description,
+    style,
+    vintage,
   }) => {
     addWine({
-      wine: {
+      beer: {
         cellar_id: cellarId,
         name,
-        vintage: format(new Date(vintage, 0, 1), "yyyy-MM-dd"),
-        variety,
-        region,
         price,
-        alcohol_content_percentage: alcoholContent,
-        ean_13: ean13,
+        alcohol_content_percentage,
+        ean_13,
+        style,
+        description,
+        international_bitterness_unit,
+        upc_12,
+        vintage:
+          vintage === undefined
+            ? undefined
+            : format(new Date(vintage, 0, 1), "yyyy-MM-dd"),
       },
     }).then((result) => {
       if (result.error === undefined) {
@@ -93,12 +101,21 @@ const AddWine = ({
                 )}
               />
             </FormControl>
-            <FormControl required>
+            <FormControl>
+              <FormLabel>Description</FormLabel>
+              <Controller
+                name="description"
+                control={control}
+                render={({ field }) => (
+                  <Textarea disabled={fetching} minRows={2} {...field} />
+                )}
+              />
+            </FormControl>
+            <FormControl>
               <FormLabel>Vintage</FormLabel>
               <Controller
                 name="vintage"
                 control={control}
-                rules={{ required: true }}
                 render={({ field }) => (
                   <Input
                     type="number"
@@ -116,19 +133,9 @@ const AddWine = ({
               />
             </FormControl>
             <FormControl>
-              <FormLabel>Variety</FormLabel>
+              <FormLabel>Style</FormLabel>
               <Controller
-                name="variety"
-                control={control}
-                render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Region</FormLabel>
-              <Controller
-                name="region"
+                name="style"
                 control={control}
                 render={({ field }) => (
                   <Input disabled={fetching} type="text" {...field} />
@@ -148,7 +155,7 @@ const AddWine = ({
             <FormControl>
               <FormLabel>Alcohol Content</FormLabel>
               <Controller
-                name="alcoholContent"
+                name="alcohol_content_percentage"
                 control={control}
                 render={({ field }) => (
                   <Input disabled={fetching} type="number" {...field} />
@@ -156,9 +163,29 @@ const AddWine = ({
               />
             </FormControl>
             <FormControl>
-              <FormLabel>EAN13</FormLabel>
+              <FormLabel>IBU</FormLabel>
               <Controller
-                name="ean13"
+                name="international_bitterness_unit"
+                control={control}
+                render={({ field }) => (
+                  <Input disabled={fetching} type="number" {...field} />
+                )}
+              />
+            </FormControl>
+            <FormControl>
+              <FormLabel>EAN</FormLabel>
+              <Controller
+                name="ean_13"
+                control={control}
+                render={({ field }) => (
+                  <Input disabled={fetching} type="number" {...field} />
+                )}
+              />
+            </FormControl>
+            <FormControl>
+              <FormLabel>UPC</FormLabel>
+              <Controller
+                name="upc_12"
                 control={control}
                 render={({ field }) => (
                   <Input disabled={fetching} type="number" {...field} />
