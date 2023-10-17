@@ -19,20 +19,36 @@ insert_permissions:
       set:
         created_by_id: x-hasura-User-Id
       columns:
+        - alcohol_content_percentage
         - cellar_id
         - created_by_id
+        - description
+        - ean_13
+        - international_bitterness_unit
         - name
+        - price
+        - style
+        - upc_12
+        - vintage
     comment: ""
 select_permissions:
   - role: user
     permission:
       columns:
+        - alcohol_content_percentage
         - cellar_id
         - created_at
         - created_by_id
+        - description
+        - ean_13
         - id
+        - international_bitterness_unit
         - name
+        - price
+        - style
+        - upc_12
         - updated_at
+        - vintage
       filter:
         cellar:
           users:
@@ -43,7 +59,15 @@ update_permissions:
   - role: user
     permission:
       columns:
+        - alcohol_content_percentage
+        - description
+        - ean_13
+        - international_bitterness_unit
         - name
+        - price
+        - style
+        - upc_12
+        - vintage
       filter:
         created_by_id:
           _eq: X-Hasura-User-Id

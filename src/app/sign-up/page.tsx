@@ -14,8 +14,6 @@ import {
   Checkbox,
 } from "@mui/joy";
 import { useSignUpEmailPassword } from "@nhost/nextjs";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 
 interface IFormInput {
@@ -63,8 +61,8 @@ const SignUp = () => {
           </p>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)}>
-            <Stack gap={4} sx={{ mt: 2 }}>
-              <Typography level="h1">Sign up for Cellar Assitant</Typography>
+            <Stack gap={4} sx={{ mt: 1 }}>
+              <Typography level="h3">Sign up for Cellar Assitant</Typography>
               <FormControl required error={isError}>
                 <FormLabel>Email</FormLabel>
                 <Controller
