@@ -2,7 +2,7 @@
 
 import SideNavigationBar from "@/components/SideNavigationBar";
 import withAuth from "@/hocs/withAuth";
-import { AspectRatio, Box, styled } from "@mui/joy";
+import { Box, styled } from "@mui/joy";
 import Image from "next/image";
 import bot1 from "@/app/public/bot2.png";
 
@@ -16,7 +16,14 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return (
     <Container>
       <SideNavigationBar />
-      <Box sx={{ flexGrow: 1, padding: "1rem", overflowY: "auto" }}>
+      <Box
+        sx={{
+          flexGrow: 1,
+          padding: "1rem",
+          overflowY: "auto",
+          overflowX: "hidden",
+        }}
+      >
         {children}
       </Box>
       <Box
