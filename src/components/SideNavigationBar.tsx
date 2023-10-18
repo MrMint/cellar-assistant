@@ -1,8 +1,18 @@
-import { IconButton, List, ListItem, Sheet, styled } from "@mui/joy";
+import {
+  Avatar,
+  Box,
+  IconButton,
+  List,
+  ListItem,
+  Sheet,
+  Tooltip,
+  styled,
+} from "@mui/joy";
+import { useSignOut, useUserAvatarUrl } from "@nhost/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
-import { MdPerson, MdWarehouse, MdWineBar } from "react-icons/md";
+import { MdWarehouse } from "react-icons/md";
 
 const NavLinkIconButton = styled(IconButton)(({ theme }) => ({
   color: theme.palette.text.secondary,
@@ -22,7 +32,7 @@ const NavLinkButton = styled(({ href, pathname, icon }: NavLinkButtonProps) => {
 
   return (
     <Link href={href}>
-      <NavLinkIconButton className={isActive ? "active" : ""}>
+      <NavLinkIconButton size="lg" className={isActive ? "active" : ""}>
         {icon}
       </NavLinkIconButton>
     </Link>
@@ -30,27 +40,40 @@ const NavLinkButton = styled(({ href, pathname, icon }: NavLinkButtonProps) => {
 })(({ theme }) => ({}));
 
 const NavContainer = styled(Sheet)(({ theme }) => ({
-  // width: "24px",
   display: "flex",
   flexDirection: "column",
 }));
 
 const SideNavigationBar = () => {
   const pathname = usePathname();
+  const userAvatar = useUserAvatarUrl();
+  const { signOut } = useSignOut();
+
+  const handleSignOutClick = async () => {
+    await signOut();
+  };
 
   return (
     <NavContainer>
-      <List>
-        <ListItem>
-          <NavLinkButton
-            href="/cellars"
-            pathname={pathname}
-            icon={<MdWarehouse />}
-          />
-        </ListItem>
-        <ListItem>
-          <NavLinkButton href="/" pathname={pathname} icon={<MdPerson />} />
-        </ListItem>
+      <List size="sm" sx={{ justifyContent: "space-between" }}>
+        <Box>
+          <Tooltip title="Cellars" arrow placement="right">
+            <ListItem>
+              <NavLinkButton
+                href="/cellars"
+                pathname={pathname}
+                icon={<MdWarehouse />}
+              />
+            </ListItem>
+          </Tooltip>
+        </Box>
+        <Tooltip title="Logout" arrow placement="right">
+          <ListItem>
+            <IconButton onClick={handleSignOutClick}>
+              <Avatar src={userAvatar} size="sm" />
+            </IconButton>
+          </ListItem>
+        </Tooltip>
       </List>
     </NavContainer>
   );
