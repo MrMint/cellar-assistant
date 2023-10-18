@@ -16,6 +16,15 @@ const config: CodegenConfig = {
       documents: ["src/**/*.tsx"],
       preset: "client",
       plugins: [],
+      config: {
+        scalars: {
+          date: "string",
+          money: "number",
+          bigint: "number",
+          uuid: "string",
+        },
+        nonOptionalTypename: true,
+      },
     },
   },
 };

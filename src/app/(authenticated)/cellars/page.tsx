@@ -25,8 +25,8 @@ import cellar3 from "@/app/public/cellar3.png";
 import cellar4 from "@/app/public/cellar4.png";
 import cellar5 from "@/app/public/cellar5.png";
 import Image from "next/image";
-import InteractiveCard from "@/components/InteractiveCard";
-import TopNavigationBar from "@/components/HeaderBar";
+import InteractiveCard from "@/components/common/InteractiveCard";
+import TopNavigationBar from "@/components/common/HeaderBar";
 
 const cellarImages = [cellar1, cellar2, cellar3, cellar4, cellar5];
 

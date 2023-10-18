@@ -6,9 +6,10 @@ import Image from "next/image";
 import { graphql } from "@/gql";
 import { useQuery } from "urql";
 import { isNotNil } from "ramda";
-import ItemDetails from "@/components/ItemDetails";
+import ItemDetails from "@/components/item/ItemDetails";
 import { formatAsPercentage, formatIsoDateString } from "@/utilities";
-import ItemHeader from "@/components/ItemHeader";
+import ItemHeader from "@/components/item/ItemHeader";
+import { ItemType } from "@/constants";
 
 const getBeerQuery = graphql(`
   query GetBeer($itemId: uuid!) {
@@ -46,6 +47,7 @@ const BeerDetails = ({
   return (
     <Stack spacing={2}>
       <ItemHeader
+        itemType={ItemType.Beer}
         itemId={itemId}
         itemName={beer?.name}
         cellarId={cellarId}

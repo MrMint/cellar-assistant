@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "codegen-watch": "graphql-codegen -w",
+    "codegen": "graphql-codegen",
     "format": "prettier . --write"
   },
   "dependencies": {
