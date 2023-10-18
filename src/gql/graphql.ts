@@ -14,15 +14,15 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
-  bigint: { input: any; output: any; }
+  bigint: { input: number; output: number; }
   bytea: { input: any; output: any; }
   citext: { input: any; output: any; }
-  date: { input: any; output: any; }
+  date: { input: string; output: string; }
   jsonb: { input: any; output: any; }
-  money: { input: any; output: any; }
+  money: { input: number; output: number; }
   numeric: { input: any; output: any; }
   timestamptz: { input: any; output: any; }
-  uuid: { input: any; output: any; }
+  uuid: { input: string; output: string; }
 };
 
 /** Boolean expression to compare columns of type "Boolean". All fields are combined with logical 'AND'. */
@@ -86,7 +86,7 @@ export type String_Comparison_Exp = {
 
 /** Oauth requests, inserted before redirecting to the provider's site. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type AuthProviderRequests = {
-  __typename?: 'authProviderRequests';
+  __typename: 'authProviderRequests';
   id: Scalars['uuid']['output'];
   options?: Maybe<Scalars['jsonb']['output']>;
 };
@@ -99,14 +99,14 @@ export type AuthProviderRequestsOptionsArgs = {
 
 /** aggregated selection of "auth.provider_requests" */
 export type AuthProviderRequests_Aggregate = {
-  __typename?: 'authProviderRequests_aggregate';
+  __typename: 'authProviderRequests_aggregate';
   aggregate?: Maybe<AuthProviderRequests_Aggregate_Fields>;
   nodes: Array<AuthProviderRequests>;
 };
 
 /** aggregate fields of "auth.provider_requests" */
 export type AuthProviderRequests_Aggregate_Fields = {
-  __typename?: 'authProviderRequests_aggregate_fields';
+  __typename: 'authProviderRequests_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<AuthProviderRequests_Max_Fields>;
   min?: Maybe<AuthProviderRequests_Min_Fields>;
@@ -162,19 +162,19 @@ export type AuthProviderRequests_Insert_Input = {
 
 /** aggregate max on columns */
 export type AuthProviderRequests_Max_Fields = {
-  __typename?: 'authProviderRequests_max_fields';
+  __typename: 'authProviderRequests_max_fields';
   id?: Maybe<Scalars['uuid']['output']>;
 };
 
 /** aggregate min on columns */
 export type AuthProviderRequests_Min_Fields = {
-  __typename?: 'authProviderRequests_min_fields';
+  __typename: 'authProviderRequests_min_fields';
   id?: Maybe<Scalars['uuid']['output']>;
 };
 
 /** response of any mutation on the table "auth.provider_requests" */
 export type AuthProviderRequests_Mutation_Response = {
-  __typename?: 'authProviderRequests_mutation_response';
+  __typename: 'authProviderRequests_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -259,7 +259,7 @@ export type AuthProviderRequests_Updates = {
 
 /** List of available Oauth providers. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type AuthProviders = {
-  __typename?: 'authProviders';
+  __typename: 'authProviders';
   id: Scalars['String']['output'];
   /** An array relationship */
   userProviders: Array<AuthUserProviders>;
@@ -289,14 +289,14 @@ export type AuthProvidersUserProviders_AggregateArgs = {
 
 /** aggregated selection of "auth.providers" */
 export type AuthProviders_Aggregate = {
-  __typename?: 'authProviders_aggregate';
+  __typename: 'authProviders_aggregate';
   aggregate?: Maybe<AuthProviders_Aggregate_Fields>;
   nodes: Array<AuthProviders>;
 };
 
 /** aggregate fields of "auth.providers" */
 export type AuthProviders_Aggregate_Fields = {
-  __typename?: 'authProviders_aggregate_fields';
+  __typename: 'authProviders_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<AuthProviders_Max_Fields>;
   min?: Maybe<AuthProviders_Min_Fields>;
@@ -333,19 +333,19 @@ export type AuthProviders_Insert_Input = {
 
 /** aggregate max on columns */
 export type AuthProviders_Max_Fields = {
-  __typename?: 'authProviders_max_fields';
+  __typename: 'authProviders_max_fields';
   id?: Maybe<Scalars['String']['output']>;
 };
 
 /** aggregate min on columns */
 export type AuthProviders_Min_Fields = {
-  __typename?: 'authProviders_min_fields';
+  __typename: 'authProviders_min_fields';
   id?: Maybe<Scalars['String']['output']>;
 };
 
 /** response of any mutation on the table "auth.providers" */
 export type AuthProviders_Mutation_Response = {
-  __typename?: 'authProviders_mutation_response';
+  __typename: 'authProviders_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -416,7 +416,7 @@ export type AuthProviders_Updates = {
 
 /** columns and relationships of "auth.refresh_token_types" */
 export type AuthRefreshTokenTypes = {
-  __typename?: 'authRefreshTokenTypes';
+  __typename: 'authRefreshTokenTypes';
   comment?: Maybe<Scalars['String']['output']>;
   /** An array relationship */
   refreshTokens: Array<AuthRefreshTokens>;
@@ -447,14 +447,14 @@ export type AuthRefreshTokenTypesRefreshTokens_AggregateArgs = {
 
 /** aggregated selection of "auth.refresh_token_types" */
 export type AuthRefreshTokenTypes_Aggregate = {
-  __typename?: 'authRefreshTokenTypes_aggregate';
+  __typename: 'authRefreshTokenTypes_aggregate';
   aggregate?: Maybe<AuthRefreshTokenTypes_Aggregate_Fields>;
   nodes: Array<AuthRefreshTokenTypes>;
 };
 
 /** aggregate fields of "auth.refresh_token_types" */
 export type AuthRefreshTokenTypes_Aggregate_Fields = {
-  __typename?: 'authRefreshTokenTypes_aggregate_fields';
+  __typename: 'authRefreshTokenTypes_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<AuthRefreshTokenTypes_Max_Fields>;
   min?: Maybe<AuthRefreshTokenTypes_Min_Fields>;
@@ -509,21 +509,21 @@ export type AuthRefreshTokenTypes_Insert_Input = {
 
 /** aggregate max on columns */
 export type AuthRefreshTokenTypes_Max_Fields = {
-  __typename?: 'authRefreshTokenTypes_max_fields';
+  __typename: 'authRefreshTokenTypes_max_fields';
   comment?: Maybe<Scalars['String']['output']>;
   value?: Maybe<Scalars['String']['output']>;
 };
 
 /** aggregate min on columns */
 export type AuthRefreshTokenTypes_Min_Fields = {
-  __typename?: 'authRefreshTokenTypes_min_fields';
+  __typename: 'authRefreshTokenTypes_min_fields';
   comment?: Maybe<Scalars['String']['output']>;
   value?: Maybe<Scalars['String']['output']>;
 };
 
 /** response of any mutation on the table "auth.refresh_token_types" */
 export type AuthRefreshTokenTypes_Mutation_Response = {
-  __typename?: 'authRefreshTokenTypes_mutation_response';
+  __typename: 'authRefreshTokenTypes_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -594,7 +594,7 @@ export type AuthRefreshTokenTypes_Updates = {
 
 /** User refresh tokens. Hasura auth uses them to rotate new access tokens as long as the refresh token is not expired. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type AuthRefreshTokens = {
-  __typename?: 'authRefreshTokens';
+  __typename: 'authRefreshTokens';
   createdAt: Scalars['timestamptz']['output'];
   expiresAt: Scalars['timestamptz']['output'];
   id: Scalars['uuid']['output'];
@@ -614,7 +614,7 @@ export type AuthRefreshTokensMetadataArgs = {
 
 /** aggregated selection of "auth.refresh_tokens" */
 export type AuthRefreshTokens_Aggregate = {
-  __typename?: 'authRefreshTokens_aggregate';
+  __typename: 'authRefreshTokens_aggregate';
   aggregate?: Maybe<AuthRefreshTokens_Aggregate_Fields>;
   nodes: Array<AuthRefreshTokens>;
 };
@@ -632,7 +632,7 @@ export type AuthRefreshTokens_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "auth.refresh_tokens" */
 export type AuthRefreshTokens_Aggregate_Fields = {
-  __typename?: 'authRefreshTokens_aggregate_fields';
+  __typename: 'authRefreshTokens_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<AuthRefreshTokens_Max_Fields>;
   min?: Maybe<AuthRefreshTokens_Min_Fields>;
@@ -714,7 +714,7 @@ export type AuthRefreshTokens_Insert_Input = {
 
 /** aggregate max on columns */
 export type AuthRefreshTokens_Max_Fields = {
-  __typename?: 'authRefreshTokens_max_fields';
+  __typename: 'authRefreshTokens_max_fields';
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   expiresAt?: Maybe<Scalars['timestamptz']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
@@ -733,7 +733,7 @@ export type AuthRefreshTokens_Max_Order_By = {
 
 /** aggregate min on columns */
 export type AuthRefreshTokens_Min_Fields = {
-  __typename?: 'authRefreshTokens_min_fields';
+  __typename: 'authRefreshTokens_min_fields';
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   expiresAt?: Maybe<Scalars['timestamptz']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
@@ -752,7 +752,7 @@ export type AuthRefreshTokens_Min_Order_By = {
 
 /** response of any mutation on the table "auth.refresh_tokens" */
 export type AuthRefreshTokens_Mutation_Response = {
-  __typename?: 'authRefreshTokens_mutation_response';
+  __typename: 'authRefreshTokens_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -873,7 +873,7 @@ export type AuthRefreshTokens_Updates = {
 
 /** Persistent Hasura roles for users. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type AuthRoles = {
-  __typename?: 'authRoles';
+  __typename: 'authRoles';
   role: Scalars['String']['output'];
   /** An array relationship */
   userRoles: Array<AuthUserRoles>;
@@ -927,14 +927,14 @@ export type AuthRolesUsersByDefaultRole_AggregateArgs = {
 
 /** aggregated selection of "auth.roles" */
 export type AuthRoles_Aggregate = {
-  __typename?: 'authRoles_aggregate';
+  __typename: 'authRoles_aggregate';
   aggregate?: Maybe<AuthRoles_Aggregate_Fields>;
   nodes: Array<AuthRoles>;
 };
 
 /** aggregate fields of "auth.roles" */
 export type AuthRoles_Aggregate_Fields = {
-  __typename?: 'authRoles_aggregate_fields';
+  __typename: 'authRoles_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<AuthRoles_Max_Fields>;
   min?: Maybe<AuthRoles_Min_Fields>;
@@ -974,19 +974,19 @@ export type AuthRoles_Insert_Input = {
 
 /** aggregate max on columns */
 export type AuthRoles_Max_Fields = {
-  __typename?: 'authRoles_max_fields';
+  __typename: 'authRoles_max_fields';
   role?: Maybe<Scalars['String']['output']>;
 };
 
 /** aggregate min on columns */
 export type AuthRoles_Min_Fields = {
-  __typename?: 'authRoles_min_fields';
+  __typename: 'authRoles_min_fields';
   role?: Maybe<Scalars['String']['output']>;
 };
 
 /** response of any mutation on the table "auth.roles" */
 export type AuthRoles_Mutation_Response = {
-  __typename?: 'authRoles_mutation_response';
+  __typename: 'authRoles_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -1058,7 +1058,7 @@ export type AuthRoles_Updates = {
 
 /** Active providers for a given user. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type AuthUserProviders = {
-  __typename?: 'authUserProviders';
+  __typename: 'authUserProviders';
   accessToken: Scalars['String']['output'];
   createdAt: Scalars['timestamptz']['output'];
   id: Scalars['uuid']['output'];
@@ -1075,7 +1075,7 @@ export type AuthUserProviders = {
 
 /** aggregated selection of "auth.user_providers" */
 export type AuthUserProviders_Aggregate = {
-  __typename?: 'authUserProviders_aggregate';
+  __typename: 'authUserProviders_aggregate';
   aggregate?: Maybe<AuthUserProviders_Aggregate_Fields>;
   nodes: Array<AuthUserProviders>;
 };
@@ -1093,7 +1093,7 @@ export type AuthUserProviders_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "auth.user_providers" */
 export type AuthUserProviders_Aggregate_Fields = {
-  __typename?: 'authUserProviders_aggregate_fields';
+  __typename: 'authUserProviders_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<AuthUserProviders_Max_Fields>;
   min?: Maybe<AuthUserProviders_Min_Fields>;
@@ -1163,7 +1163,7 @@ export type AuthUserProviders_Insert_Input = {
 
 /** aggregate max on columns */
 export type AuthUserProviders_Max_Fields = {
-  __typename?: 'authUserProviders_max_fields';
+  __typename: 'authUserProviders_max_fields';
   accessToken?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
@@ -1188,7 +1188,7 @@ export type AuthUserProviders_Max_Order_By = {
 
 /** aggregate min on columns */
 export type AuthUserProviders_Min_Fields = {
-  __typename?: 'authUserProviders_min_fields';
+  __typename: 'authUserProviders_min_fields';
   accessToken?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
@@ -1213,7 +1213,7 @@ export type AuthUserProviders_Min_Order_By = {
 
 /** response of any mutation on the table "auth.user_providers" */
 export type AuthUserProviders_Mutation_Response = {
-  __typename?: 'authUserProviders_mutation_response';
+  __typename: 'authUserProviders_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -1327,7 +1327,7 @@ export type AuthUserProviders_Updates = {
 
 /** Roles of users. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type AuthUserRoles = {
-  __typename?: 'authUserRoles';
+  __typename: 'authUserRoles';
   createdAt: Scalars['timestamptz']['output'];
   id: Scalars['uuid']['output'];
   role: Scalars['String']['output'];
@@ -1340,7 +1340,7 @@ export type AuthUserRoles = {
 
 /** aggregated selection of "auth.user_roles" */
 export type AuthUserRoles_Aggregate = {
-  __typename?: 'authUserRoles_aggregate';
+  __typename: 'authUserRoles_aggregate';
   aggregate?: Maybe<AuthUserRoles_Aggregate_Fields>;
   nodes: Array<AuthUserRoles>;
 };
@@ -1358,7 +1358,7 @@ export type AuthUserRoles_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "auth.user_roles" */
 export type AuthUserRoles_Aggregate_Fields = {
-  __typename?: 'authUserRoles_aggregate_fields';
+  __typename: 'authUserRoles_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<AuthUserRoles_Max_Fields>;
   min?: Maybe<AuthUserRoles_Min_Fields>;
@@ -1418,7 +1418,7 @@ export type AuthUserRoles_Insert_Input = {
 
 /** aggregate max on columns */
 export type AuthUserRoles_Max_Fields = {
-  __typename?: 'authUserRoles_max_fields';
+  __typename: 'authUserRoles_max_fields';
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   role?: Maybe<Scalars['String']['output']>;
@@ -1435,7 +1435,7 @@ export type AuthUserRoles_Max_Order_By = {
 
 /** aggregate min on columns */
 export type AuthUserRoles_Min_Fields = {
-  __typename?: 'authUserRoles_min_fields';
+  __typename: 'authUserRoles_min_fields';
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   role?: Maybe<Scalars['String']['output']>;
@@ -1452,7 +1452,7 @@ export type AuthUserRoles_Min_Order_By = {
 
 /** response of any mutation on the table "auth.user_roles" */
 export type AuthUserRoles_Mutation_Response = {
-  __typename?: 'authUserRoles_mutation_response';
+  __typename: 'authUserRoles_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -1538,7 +1538,7 @@ export type AuthUserRoles_Updates = {
 
 /** User webauthn security keys. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type AuthUserSecurityKeys = {
-  __typename?: 'authUserSecurityKeys';
+  __typename: 'authUserSecurityKeys';
   counter: Scalars['bigint']['output'];
   credentialId: Scalars['String']['output'];
   credentialPublicKey?: Maybe<Scalars['bytea']['output']>;
@@ -1552,7 +1552,7 @@ export type AuthUserSecurityKeys = {
 
 /** aggregated selection of "auth.user_security_keys" */
 export type AuthUserSecurityKeys_Aggregate = {
-  __typename?: 'authUserSecurityKeys_aggregate';
+  __typename: 'authUserSecurityKeys_aggregate';
   aggregate?: Maybe<AuthUserSecurityKeys_Aggregate_Fields>;
   nodes: Array<AuthUserSecurityKeys>;
 };
@@ -1570,7 +1570,7 @@ export type AuthUserSecurityKeys_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "auth.user_security_keys" */
 export type AuthUserSecurityKeys_Aggregate_Fields = {
-  __typename?: 'authUserSecurityKeys_aggregate_fields';
+  __typename: 'authUserSecurityKeys_aggregate_fields';
   avg?: Maybe<AuthUserSecurityKeys_Avg_Fields>;
   count: Scalars['Int']['output'];
   max?: Maybe<AuthUserSecurityKeys_Max_Fields>;
@@ -1615,7 +1615,7 @@ export type AuthUserSecurityKeys_Arr_Rel_Insert_Input = {
 
 /** aggregate avg on columns */
 export type AuthUserSecurityKeys_Avg_Fields = {
-  __typename?: 'authUserSecurityKeys_avg_fields';
+  __typename: 'authUserSecurityKeys_avg_fields';
   counter?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -1666,7 +1666,7 @@ export type AuthUserSecurityKeys_Insert_Input = {
 
 /** aggregate max on columns */
 export type AuthUserSecurityKeys_Max_Fields = {
-  __typename?: 'authUserSecurityKeys_max_fields';
+  __typename: 'authUserSecurityKeys_max_fields';
   counter?: Maybe<Scalars['bigint']['output']>;
   credentialId?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
@@ -1687,7 +1687,7 @@ export type AuthUserSecurityKeys_Max_Order_By = {
 
 /** aggregate min on columns */
 export type AuthUserSecurityKeys_Min_Fields = {
-  __typename?: 'authUserSecurityKeys_min_fields';
+  __typename: 'authUserSecurityKeys_min_fields';
   counter?: Maybe<Scalars['bigint']['output']>;
   credentialId?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
@@ -1708,7 +1708,7 @@ export type AuthUserSecurityKeys_Min_Order_By = {
 
 /** response of any mutation on the table "auth.user_security_keys" */
 export type AuthUserSecurityKeys_Mutation_Response = {
-  __typename?: 'authUserSecurityKeys_mutation_response';
+  __typename: 'authUserSecurityKeys_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -1770,7 +1770,7 @@ export type AuthUserSecurityKeys_Set_Input = {
 
 /** aggregate stddev on columns */
 export type AuthUserSecurityKeys_Stddev_Fields = {
-  __typename?: 'authUserSecurityKeys_stddev_fields';
+  __typename: 'authUserSecurityKeys_stddev_fields';
   counter?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -1781,7 +1781,7 @@ export type AuthUserSecurityKeys_Stddev_Order_By = {
 
 /** aggregate stddev_pop on columns */
 export type AuthUserSecurityKeys_Stddev_Pop_Fields = {
-  __typename?: 'authUserSecurityKeys_stddev_pop_fields';
+  __typename: 'authUserSecurityKeys_stddev_pop_fields';
   counter?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -1792,7 +1792,7 @@ export type AuthUserSecurityKeys_Stddev_Pop_Order_By = {
 
 /** aggregate stddev_samp on columns */
 export type AuthUserSecurityKeys_Stddev_Samp_Fields = {
-  __typename?: 'authUserSecurityKeys_stddev_samp_fields';
+  __typename: 'authUserSecurityKeys_stddev_samp_fields';
   counter?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -1822,7 +1822,7 @@ export type AuthUserSecurityKeys_Stream_Cursor_Value_Input = {
 
 /** aggregate sum on columns */
 export type AuthUserSecurityKeys_Sum_Fields = {
-  __typename?: 'authUserSecurityKeys_sum_fields';
+  __typename: 'authUserSecurityKeys_sum_fields';
   counter?: Maybe<Scalars['bigint']['output']>;
 };
 
@@ -1860,7 +1860,7 @@ export type AuthUserSecurityKeys_Updates = {
 
 /** aggregate var_pop on columns */
 export type AuthUserSecurityKeys_Var_Pop_Fields = {
-  __typename?: 'authUserSecurityKeys_var_pop_fields';
+  __typename: 'authUserSecurityKeys_var_pop_fields';
   counter?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -1871,7 +1871,7 @@ export type AuthUserSecurityKeys_Var_Pop_Order_By = {
 
 /** aggregate var_samp on columns */
 export type AuthUserSecurityKeys_Var_Samp_Fields = {
-  __typename?: 'authUserSecurityKeys_var_samp_fields';
+  __typename: 'authUserSecurityKeys_var_samp_fields';
   counter?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -1882,7 +1882,7 @@ export type AuthUserSecurityKeys_Var_Samp_Order_By = {
 
 /** aggregate variance on columns */
 export type AuthUserSecurityKeys_Variance_Fields = {
-  __typename?: 'authUserSecurityKeys_variance_fields';
+  __typename: 'authUserSecurityKeys_variance_fields';
   counter?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -1893,7 +1893,7 @@ export type AuthUserSecurityKeys_Variance_Order_By = {
 
 /** columns and relationships of "beers" */
 export type Beers = {
-  __typename?: 'beers';
+  __typename: 'beers';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   /** An object relationship */
   cellar: Cellars;
@@ -1916,7 +1916,7 @@ export type Beers = {
 
 /** aggregated selection of "beers" */
 export type Beers_Aggregate = {
-  __typename?: 'beers_aggregate';
+  __typename: 'beers_aggregate';
   aggregate?: Maybe<Beers_Aggregate_Fields>;
   nodes: Array<Beers>;
 };
@@ -1934,7 +1934,7 @@ export type Beers_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "beers" */
 export type Beers_Aggregate_Fields = {
-  __typename?: 'beers_aggregate_fields';
+  __typename: 'beers_aggregate_fields';
   avg?: Maybe<Beers_Avg_Fields>;
   count: Scalars['Int']['output'];
   max?: Maybe<Beers_Max_Fields>;
@@ -1979,7 +1979,7 @@ export type Beers_Arr_Rel_Insert_Input = {
 
 /** aggregate avg on columns */
 export type Beers_Avg_Fields = {
-  __typename?: 'beers_avg_fields';
+  __typename: 'beers_avg_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   international_bitterness_unit?: Maybe<Scalars['Float']['output']>;
@@ -2056,7 +2056,7 @@ export type Beers_Insert_Input = {
 
 /** aggregate max on columns */
 export type Beers_Max_Fields = {
-  __typename?: 'beers_max_fields';
+  __typename: 'beers_max_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
@@ -2093,7 +2093,7 @@ export type Beers_Max_Order_By = {
 
 /** aggregate min on columns */
 export type Beers_Min_Fields = {
-  __typename?: 'beers_min_fields';
+  __typename: 'beers_min_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
@@ -2130,7 +2130,7 @@ export type Beers_Min_Order_By = {
 
 /** response of any mutation on the table "beers" */
 export type Beers_Mutation_Response = {
-  __typename?: 'beers_mutation_response';
+  __typename: 'beers_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -2221,7 +2221,7 @@ export type Beers_Set_Input = {
 
 /** aggregate stddev on columns */
 export type Beers_Stddev_Fields = {
-  __typename?: 'beers_stddev_fields';
+  __typename: 'beers_stddev_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   international_bitterness_unit?: Maybe<Scalars['Float']['output']>;
@@ -2240,7 +2240,7 @@ export type Beers_Stddev_Order_By = {
 
 /** aggregate stddev_pop on columns */
 export type Beers_Stddev_Pop_Fields = {
-  __typename?: 'beers_stddev_pop_fields';
+  __typename: 'beers_stddev_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   international_bitterness_unit?: Maybe<Scalars['Float']['output']>;
@@ -2259,7 +2259,7 @@ export type Beers_Stddev_Pop_Order_By = {
 
 /** aggregate stddev_samp on columns */
 export type Beers_Stddev_Samp_Fields = {
-  __typename?: 'beers_stddev_samp_fields';
+  __typename: 'beers_stddev_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   international_bitterness_unit?: Maybe<Scalars['Float']['output']>;
@@ -2304,7 +2304,7 @@ export type Beers_Stream_Cursor_Value_Input = {
 
 /** aggregate sum on columns */
 export type Beers_Sum_Fields = {
-  __typename?: 'beers_sum_fields';
+  __typename: 'beers_sum_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   ean_13?: Maybe<Scalars['bigint']['output']>;
   international_bitterness_unit?: Maybe<Scalars['Int']['output']>;
@@ -2364,7 +2364,7 @@ export type Beers_Updates = {
 
 /** aggregate var_pop on columns */
 export type Beers_Var_Pop_Fields = {
-  __typename?: 'beers_var_pop_fields';
+  __typename: 'beers_var_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   international_bitterness_unit?: Maybe<Scalars['Float']['output']>;
@@ -2383,7 +2383,7 @@ export type Beers_Var_Pop_Order_By = {
 
 /** aggregate var_samp on columns */
 export type Beers_Var_Samp_Fields = {
-  __typename?: 'beers_var_samp_fields';
+  __typename: 'beers_var_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   international_bitterness_unit?: Maybe<Scalars['Float']['output']>;
@@ -2402,7 +2402,7 @@ export type Beers_Var_Samp_Order_By = {
 
 /** aggregate variance on columns */
 export type Beers_Variance_Fields = {
-  __typename?: 'beers_variance_fields';
+  __typename: 'beers_variance_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   international_bitterness_unit?: Maybe<Scalars['Float']['output']>;
@@ -2434,7 +2434,7 @@ export type Bigint_Comparison_Exp = {
 
 /** columns and relationships of "storage.buckets" */
 export type Buckets = {
-  __typename?: 'buckets';
+  __typename: 'buckets';
   cacheControl?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['timestamptz']['output'];
   downloadExpiration: Scalars['Int']['output'];
@@ -2471,14 +2471,14 @@ export type BucketsFiles_AggregateArgs = {
 
 /** aggregated selection of "storage.buckets" */
 export type Buckets_Aggregate = {
-  __typename?: 'buckets_aggregate';
+  __typename: 'buckets_aggregate';
   aggregate?: Maybe<Buckets_Aggregate_Fields>;
   nodes: Array<Buckets>;
 };
 
 /** aggregate fields of "storage.buckets" */
 export type Buckets_Aggregate_Fields = {
-  __typename?: 'buckets_aggregate_fields';
+  __typename: 'buckets_aggregate_fields';
   avg?: Maybe<Buckets_Avg_Fields>;
   count: Scalars['Int']['output'];
   max?: Maybe<Buckets_Max_Fields>;
@@ -2501,7 +2501,7 @@ export type Buckets_Aggregate_FieldsCountArgs = {
 
 /** aggregate avg on columns */
 export type Buckets_Avg_Fields = {
-  __typename?: 'buckets_avg_fields';
+  __typename: 'buckets_avg_fields';
   downloadExpiration?: Maybe<Scalars['Float']['output']>;
   maxUploadFileSize?: Maybe<Scalars['Float']['output']>;
   minUploadFileSize?: Maybe<Scalars['Float']['output']>;
@@ -2552,7 +2552,7 @@ export type Buckets_Insert_Input = {
 
 /** aggregate max on columns */
 export type Buckets_Max_Fields = {
-  __typename?: 'buckets_max_fields';
+  __typename: 'buckets_max_fields';
   cacheControl?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   downloadExpiration?: Maybe<Scalars['Int']['output']>;
@@ -2564,7 +2564,7 @@ export type Buckets_Max_Fields = {
 
 /** aggregate min on columns */
 export type Buckets_Min_Fields = {
-  __typename?: 'buckets_min_fields';
+  __typename: 'buckets_min_fields';
   cacheControl?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   downloadExpiration?: Maybe<Scalars['Int']['output']>;
@@ -2576,7 +2576,7 @@ export type Buckets_Min_Fields = {
 
 /** response of any mutation on the table "storage.buckets" */
 export type Buckets_Mutation_Response = {
-  __typename?: 'buckets_mutation_response';
+  __typename: 'buckets_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -2649,7 +2649,7 @@ export type Buckets_Set_Input = {
 
 /** aggregate stddev on columns */
 export type Buckets_Stddev_Fields = {
-  __typename?: 'buckets_stddev_fields';
+  __typename: 'buckets_stddev_fields';
   downloadExpiration?: Maybe<Scalars['Float']['output']>;
   maxUploadFileSize?: Maybe<Scalars['Float']['output']>;
   minUploadFileSize?: Maybe<Scalars['Float']['output']>;
@@ -2657,7 +2657,7 @@ export type Buckets_Stddev_Fields = {
 
 /** aggregate stddev_pop on columns */
 export type Buckets_Stddev_Pop_Fields = {
-  __typename?: 'buckets_stddev_pop_fields';
+  __typename: 'buckets_stddev_pop_fields';
   downloadExpiration?: Maybe<Scalars['Float']['output']>;
   maxUploadFileSize?: Maybe<Scalars['Float']['output']>;
   minUploadFileSize?: Maybe<Scalars['Float']['output']>;
@@ -2665,7 +2665,7 @@ export type Buckets_Stddev_Pop_Fields = {
 
 /** aggregate stddev_samp on columns */
 export type Buckets_Stddev_Samp_Fields = {
-  __typename?: 'buckets_stddev_samp_fields';
+  __typename: 'buckets_stddev_samp_fields';
   downloadExpiration?: Maybe<Scalars['Float']['output']>;
   maxUploadFileSize?: Maybe<Scalars['Float']['output']>;
   minUploadFileSize?: Maybe<Scalars['Float']['output']>;
@@ -2693,7 +2693,7 @@ export type Buckets_Stream_Cursor_Value_Input = {
 
 /** aggregate sum on columns */
 export type Buckets_Sum_Fields = {
-  __typename?: 'buckets_sum_fields';
+  __typename: 'buckets_sum_fields';
   downloadExpiration?: Maybe<Scalars['Int']['output']>;
   maxUploadFileSize?: Maybe<Scalars['Int']['output']>;
   minUploadFileSize?: Maybe<Scalars['Int']['output']>;
@@ -2730,7 +2730,7 @@ export type Buckets_Updates = {
 
 /** aggregate var_pop on columns */
 export type Buckets_Var_Pop_Fields = {
-  __typename?: 'buckets_var_pop_fields';
+  __typename: 'buckets_var_pop_fields';
   downloadExpiration?: Maybe<Scalars['Float']['output']>;
   maxUploadFileSize?: Maybe<Scalars['Float']['output']>;
   minUploadFileSize?: Maybe<Scalars['Float']['output']>;
@@ -2738,7 +2738,7 @@ export type Buckets_Var_Pop_Fields = {
 
 /** aggregate var_samp on columns */
 export type Buckets_Var_Samp_Fields = {
-  __typename?: 'buckets_var_samp_fields';
+  __typename: 'buckets_var_samp_fields';
   downloadExpiration?: Maybe<Scalars['Float']['output']>;
   maxUploadFileSize?: Maybe<Scalars['Float']['output']>;
   minUploadFileSize?: Maybe<Scalars['Float']['output']>;
@@ -2746,7 +2746,7 @@ export type Buckets_Var_Samp_Fields = {
 
 /** aggregate variance on columns */
 export type Buckets_Variance_Fields = {
-  __typename?: 'buckets_variance_fields';
+  __typename: 'buckets_variance_fields';
   downloadExpiration?: Maybe<Scalars['Float']['output']>;
   maxUploadFileSize?: Maybe<Scalars['Float']['output']>;
   minUploadFileSize?: Maybe<Scalars['Float']['output']>;
@@ -2767,7 +2767,7 @@ export type Bytea_Comparison_Exp = {
 
 /** columns and relationships of "cellar_user" */
 export type Cellar_User = {
-  __typename?: 'cellar_user';
+  __typename: 'cellar_user';
   /** An object relationship */
   cellar: Cellars;
   cellar_id: Scalars['uuid']['output'];
@@ -2779,7 +2779,7 @@ export type Cellar_User = {
 
 /** aggregated selection of "cellar_user" */
 export type Cellar_User_Aggregate = {
-  __typename?: 'cellar_user_aggregate';
+  __typename: 'cellar_user_aggregate';
   aggregate?: Maybe<Cellar_User_Aggregate_Fields>;
   nodes: Array<Cellar_User>;
 };
@@ -2797,7 +2797,7 @@ export type Cellar_User_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "cellar_user" */
 export type Cellar_User_Aggregate_Fields = {
-  __typename?: 'cellar_user_aggregate_fields';
+  __typename: 'cellar_user_aggregate_fields';
   avg?: Maybe<Cellar_User_Avg_Fields>;
   count: Scalars['Int']['output'];
   max?: Maybe<Cellar_User_Max_Fields>;
@@ -2842,7 +2842,7 @@ export type Cellar_User_Arr_Rel_Insert_Input = {
 
 /** aggregate avg on columns */
 export type Cellar_User_Avg_Fields = {
-  __typename?: 'cellar_user_avg_fields';
+  __typename: 'cellar_user_avg_fields';
   id?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -2879,7 +2879,7 @@ export type Cellar_User_Insert_Input = {
 
 /** aggregate max on columns */
 export type Cellar_User_Max_Fields = {
-  __typename?: 'cellar_user_max_fields';
+  __typename: 'cellar_user_max_fields';
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['Int']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
@@ -2894,7 +2894,7 @@ export type Cellar_User_Max_Order_By = {
 
 /** aggregate min on columns */
 export type Cellar_User_Min_Fields = {
-  __typename?: 'cellar_user_min_fields';
+  __typename: 'cellar_user_min_fields';
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['Int']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
@@ -2909,7 +2909,7 @@ export type Cellar_User_Min_Order_By = {
 
 /** response of any mutation on the table "cellar_user" */
 export type Cellar_User_Mutation_Response = {
-  __typename?: 'cellar_user_mutation_response';
+  __typename: 'cellar_user_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -2955,7 +2955,7 @@ export type Cellar_User_Set_Input = {
 
 /** aggregate stddev on columns */
 export type Cellar_User_Stddev_Fields = {
-  __typename?: 'cellar_user_stddev_fields';
+  __typename: 'cellar_user_stddev_fields';
   id?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -2966,7 +2966,7 @@ export type Cellar_User_Stddev_Order_By = {
 
 /** aggregate stddev_pop on columns */
 export type Cellar_User_Stddev_Pop_Fields = {
-  __typename?: 'cellar_user_stddev_pop_fields';
+  __typename: 'cellar_user_stddev_pop_fields';
   id?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -2977,7 +2977,7 @@ export type Cellar_User_Stddev_Pop_Order_By = {
 
 /** aggregate stddev_samp on columns */
 export type Cellar_User_Stddev_Samp_Fields = {
-  __typename?: 'cellar_user_stddev_samp_fields';
+  __typename: 'cellar_user_stddev_samp_fields';
   id?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3003,7 +3003,7 @@ export type Cellar_User_Stream_Cursor_Value_Input = {
 
 /** aggregate sum on columns */
 export type Cellar_User_Sum_Fields = {
-  __typename?: 'cellar_user_sum_fields';
+  __typename: 'cellar_user_sum_fields';
   id?: Maybe<Scalars['Int']['output']>;
 };
 
@@ -3029,7 +3029,7 @@ export type Cellar_User_Updates = {
 
 /** aggregate var_pop on columns */
 export type Cellar_User_Var_Pop_Fields = {
-  __typename?: 'cellar_user_var_pop_fields';
+  __typename: 'cellar_user_var_pop_fields';
   id?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3040,7 +3040,7 @@ export type Cellar_User_Var_Pop_Order_By = {
 
 /** aggregate var_samp on columns */
 export type Cellar_User_Var_Samp_Fields = {
-  __typename?: 'cellar_user_var_samp_fields';
+  __typename: 'cellar_user_var_samp_fields';
   id?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3051,7 +3051,7 @@ export type Cellar_User_Var_Samp_Order_By = {
 
 /** aggregate variance on columns */
 export type Cellar_User_Variance_Fields = {
-  __typename?: 'cellar_user_variance_fields';
+  __typename: 'cellar_user_variance_fields';
   id?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3062,7 +3062,7 @@ export type Cellar_User_Variance_Order_By = {
 
 /** columns and relationships of "cellars" */
 export type Cellars = {
-  __typename?: 'cellars';
+  __typename: 'cellars';
   /** An array relationship */
   beers: Array<Beers>;
   /** An aggregate relationship */
@@ -3171,7 +3171,7 @@ export type CellarsWines_AggregateArgs = {
 
 /** aggregated selection of "cellars" */
 export type Cellars_Aggregate = {
-  __typename?: 'cellars_aggregate';
+  __typename: 'cellars_aggregate';
   aggregate?: Maybe<Cellars_Aggregate_Fields>;
   nodes: Array<Cellars>;
 };
@@ -3205,7 +3205,7 @@ export type Cellars_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "cellars" */
 export type Cellars_Aggregate_Fields = {
-  __typename?: 'cellars_aggregate_fields';
+  __typename: 'cellars_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<Cellars_Max_Fields>;
   min?: Maybe<Cellars_Min_Fields>;
@@ -3277,7 +3277,7 @@ export type Cellars_Insert_Input = {
 
 /** aggregate max on columns */
 export type Cellars_Max_Fields = {
-  __typename?: 'cellars_max_fields';
+  __typename: 'cellars_max_fields';
   created_at?: Maybe<Scalars['timestamptz']['output']>;
   created_by_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
@@ -3296,7 +3296,7 @@ export type Cellars_Max_Order_By = {
 
 /** aggregate min on columns */
 export type Cellars_Min_Fields = {
-  __typename?: 'cellars_min_fields';
+  __typename: 'cellars_min_fields';
   created_at?: Maybe<Scalars['timestamptz']['output']>;
   created_by_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
@@ -3315,7 +3315,7 @@ export type Cellars_Min_Order_By = {
 
 /** response of any mutation on the table "cellars" */
 export type Cellars_Mutation_Response = {
-  __typename?: 'cellars_mutation_response';
+  __typename: 'cellars_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -3491,7 +3491,7 @@ export type Date_Comparison_Exp = {
 
 /** columns and relationships of "storage.files" */
 export type Files = {
-  __typename?: 'files';
+  __typename: 'files';
   /** An object relationship */
   bucket: Buckets;
   bucketId: Scalars['String']['output'];
@@ -3515,7 +3515,7 @@ export type FilesMetadataArgs = {
 
 /** aggregated selection of "storage.files" */
 export type Files_Aggregate = {
-  __typename?: 'files_aggregate';
+  __typename: 'files_aggregate';
   aggregate?: Maybe<Files_Aggregate_Fields>;
   nodes: Array<Files>;
 };
@@ -3549,7 +3549,7 @@ export type Files_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "storage.files" */
 export type Files_Aggregate_Fields = {
-  __typename?: 'files_aggregate_fields';
+  __typename: 'files_aggregate_fields';
   avg?: Maybe<Files_Avg_Fields>;
   count: Scalars['Int']['output'];
   max?: Maybe<Files_Max_Fields>;
@@ -3599,7 +3599,7 @@ export type Files_Arr_Rel_Insert_Input = {
 
 /** aggregate avg on columns */
 export type Files_Avg_Fields = {
-  __typename?: 'files_avg_fields';
+  __typename: 'files_avg_fields';
   size?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3671,7 +3671,7 @@ export type Files_Insert_Input = {
 
 /** aggregate max on columns */
 export type Files_Max_Fields = {
-  __typename?: 'files_max_fields';
+  __typename: 'files_max_fields';
   bucketId?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   etag?: Maybe<Scalars['String']['output']>;
@@ -3698,7 +3698,7 @@ export type Files_Max_Order_By = {
 
 /** aggregate min on columns */
 export type Files_Min_Fields = {
-  __typename?: 'files_min_fields';
+  __typename: 'files_min_fields';
   bucketId?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   etag?: Maybe<Scalars['String']['output']>;
@@ -3725,7 +3725,7 @@ export type Files_Min_Order_By = {
 
 /** response of any mutation on the table "storage.files" */
 export type Files_Mutation_Response = {
-  __typename?: 'files_mutation_response';
+  __typename: 'files_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -3827,7 +3827,7 @@ export type Files_Set_Input = {
 
 /** aggregate stddev on columns */
 export type Files_Stddev_Fields = {
-  __typename?: 'files_stddev_fields';
+  __typename: 'files_stddev_fields';
   size?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3838,7 +3838,7 @@ export type Files_Stddev_Order_By = {
 
 /** aggregate stddev_pop on columns */
 export type Files_Stddev_Pop_Fields = {
-  __typename?: 'files_stddev_pop_fields';
+  __typename: 'files_stddev_pop_fields';
   size?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3849,7 +3849,7 @@ export type Files_Stddev_Pop_Order_By = {
 
 /** aggregate stddev_samp on columns */
 export type Files_Stddev_Samp_Fields = {
-  __typename?: 'files_stddev_samp_fields';
+  __typename: 'files_stddev_samp_fields';
   size?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3883,7 +3883,7 @@ export type Files_Stream_Cursor_Value_Input = {
 
 /** aggregate sum on columns */
 export type Files_Sum_Fields = {
-  __typename?: 'files_sum_fields';
+  __typename: 'files_sum_fields';
   size?: Maybe<Scalars['Int']['output']>;
 };
 
@@ -3939,7 +3939,7 @@ export type Files_Updates = {
 
 /** aggregate var_pop on columns */
 export type Files_Var_Pop_Fields = {
-  __typename?: 'files_var_pop_fields';
+  __typename: 'files_var_pop_fields';
   size?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3950,7 +3950,7 @@ export type Files_Var_Pop_Order_By = {
 
 /** aggregate var_samp on columns */
 export type Files_Var_Samp_Fields = {
-  __typename?: 'files_var_samp_fields';
+  __typename: 'files_var_samp_fields';
   size?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -3961,7 +3961,7 @@ export type Files_Var_Samp_Order_By = {
 
 /** aggregate variance on columns */
 export type Files_Variance_Fields = {
-  __typename?: 'files_variance_fields';
+  __typename: 'files_variance_fields';
   size?: Maybe<Scalars['Float']['output']>;
 };
 
@@ -4013,7 +4013,7 @@ export type Money_Comparison_Exp = {
 
 /** mutation root */
 export type Mutation_Root = {
-  __typename?: 'mutation_root';
+  __typename: 'mutation_root';
   /** delete single row from the table: "auth.providers" */
   deleteAuthProvider?: Maybe<AuthProviders>;
   /** delete single row from the table: "auth.provider_requests" */
@@ -5188,7 +5188,7 @@ export enum Order_By {
 }
 
 export type Query_Root = {
-  __typename?: 'query_root';
+  __typename: 'query_root';
   /** fetch data from the table: "auth.providers" using primary key columns */
   authProvider?: Maybe<AuthProviders>;
   /** fetch data from the table: "auth.provider_requests" using primary key columns */
@@ -5715,21 +5715,21 @@ export type Query_RootWines_By_PkArgs = {
 
 /** columns and relationships of "spirit_type" */
 export type Spirit_Type = {
-  __typename?: 'spirit_type';
+  __typename: 'spirit_type';
   comment?: Maybe<Scalars['String']['output']>;
   text: Scalars['String']['output'];
 };
 
 /** aggregated selection of "spirit_type" */
 export type Spirit_Type_Aggregate = {
-  __typename?: 'spirit_type_aggregate';
+  __typename: 'spirit_type_aggregate';
   aggregate?: Maybe<Spirit_Type_Aggregate_Fields>;
   nodes: Array<Spirit_Type>;
 };
 
 /** aggregate fields of "spirit_type" */
 export type Spirit_Type_Aggregate_Fields = {
-  __typename?: 'spirit_type_aggregate_fields';
+  __typename: 'spirit_type_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<Spirit_Type_Max_Fields>;
   min?: Maybe<Spirit_Type_Min_Fields>;
@@ -5791,21 +5791,21 @@ export type Spirit_Type_Insert_Input = {
 
 /** aggregate max on columns */
 export type Spirit_Type_Max_Fields = {
-  __typename?: 'spirit_type_max_fields';
+  __typename: 'spirit_type_max_fields';
   comment?: Maybe<Scalars['String']['output']>;
   text?: Maybe<Scalars['String']['output']>;
 };
 
 /** aggregate min on columns */
 export type Spirit_Type_Min_Fields = {
-  __typename?: 'spirit_type_min_fields';
+  __typename: 'spirit_type_min_fields';
   comment?: Maybe<Scalars['String']['output']>;
   text?: Maybe<Scalars['String']['output']>;
 };
 
 /** response of any mutation on the table "spirit_type" */
 export type Spirit_Type_Mutation_Response = {
-  __typename?: 'spirit_type_mutation_response';
+  __typename: 'spirit_type_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -5875,7 +5875,7 @@ export type Spirit_Type_Updates = {
 
 /** columns and relationships of "spirits" */
 export type Spirits = {
-  __typename?: 'spirits';
+  __typename: 'spirits';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   /** An object relationship */
   cellar: Cellars;
@@ -5898,7 +5898,7 @@ export type Spirits = {
 
 /** aggregated selection of "spirits" */
 export type Spirits_Aggregate = {
-  __typename?: 'spirits_aggregate';
+  __typename: 'spirits_aggregate';
   aggregate?: Maybe<Spirits_Aggregate_Fields>;
   nodes: Array<Spirits>;
 };
@@ -5916,7 +5916,7 @@ export type Spirits_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "spirits" */
 export type Spirits_Aggregate_Fields = {
-  __typename?: 'spirits_aggregate_fields';
+  __typename: 'spirits_aggregate_fields';
   avg?: Maybe<Spirits_Avg_Fields>;
   count: Scalars['Int']['output'];
   max?: Maybe<Spirits_Max_Fields>;
@@ -5961,7 +5961,7 @@ export type Spirits_Arr_Rel_Insert_Input = {
 
 /** aggregate avg on columns */
 export type Spirits_Avg_Fields = {
-  __typename?: 'spirits_avg_fields';
+  __typename: 'spirits_avg_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
@@ -6035,7 +6035,7 @@ export type Spirits_Insert_Input = {
 
 /** aggregate max on columns */
 export type Spirits_Max_Fields = {
-  __typename?: 'spirits_max_fields';
+  __typename: 'spirits_max_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
@@ -6070,7 +6070,7 @@ export type Spirits_Max_Order_By = {
 
 /** aggregate min on columns */
 export type Spirits_Min_Fields = {
-  __typename?: 'spirits_min_fields';
+  __typename: 'spirits_min_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
@@ -6105,7 +6105,7 @@ export type Spirits_Min_Order_By = {
 
 /** response of any mutation on the table "spirits" */
 export type Spirits_Mutation_Response = {
-  __typename?: 'spirits_mutation_response';
+  __typename: 'spirits_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -6196,7 +6196,7 @@ export type Spirits_Set_Input = {
 
 /** aggregate stddev on columns */
 export type Spirits_Stddev_Fields = {
-  __typename?: 'spirits_stddev_fields';
+  __typename: 'spirits_stddev_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
@@ -6213,7 +6213,7 @@ export type Spirits_Stddev_Order_By = {
 
 /** aggregate stddev_pop on columns */
 export type Spirits_Stddev_Pop_Fields = {
-  __typename?: 'spirits_stddev_pop_fields';
+  __typename: 'spirits_stddev_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
@@ -6230,7 +6230,7 @@ export type Spirits_Stddev_Pop_Order_By = {
 
 /** aggregate stddev_samp on columns */
 export type Spirits_Stddev_Samp_Fields = {
-  __typename?: 'spirits_stddev_samp_fields';
+  __typename: 'spirits_stddev_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
@@ -6273,7 +6273,7 @@ export type Spirits_Stream_Cursor_Value_Input = {
 
 /** aggregate sum on columns */
 export type Spirits_Sum_Fields = {
-  __typename?: 'spirits_sum_fields';
+  __typename: 'spirits_sum_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   ean_13?: Maybe<Scalars['bigint']['output']>;
   price?: Maybe<Scalars['money']['output']>;
@@ -6331,7 +6331,7 @@ export type Spirits_Updates = {
 
 /** aggregate var_pop on columns */
 export type Spirits_Var_Pop_Fields = {
-  __typename?: 'spirits_var_pop_fields';
+  __typename: 'spirits_var_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
@@ -6348,7 +6348,7 @@ export type Spirits_Var_Pop_Order_By = {
 
 /** aggregate var_samp on columns */
 export type Spirits_Var_Samp_Fields = {
-  __typename?: 'spirits_var_samp_fields';
+  __typename: 'spirits_var_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
@@ -6365,7 +6365,7 @@ export type Spirits_Var_Samp_Order_By = {
 
 /** aggregate variance on columns */
 export type Spirits_Variance_Fields = {
-  __typename?: 'spirits_variance_fields';
+  __typename: 'spirits_variance_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
@@ -6381,7 +6381,7 @@ export type Spirits_Variance_Order_By = {
 };
 
 export type Subscription_Root = {
-  __typename?: 'subscription_root';
+  __typename: 'subscription_root';
   /** fetch data from the table: "auth.providers" using primary key columns */
   authProvider?: Maybe<AuthProviders>;
   /** fetch data from the table: "auth.provider_requests" using primary key columns */
@@ -7083,7 +7083,7 @@ export type Timestamptz_Comparison_Exp = {
 
 /** User account information. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type Users = {
-  __typename?: 'users';
+  __typename: 'users';
   activeMfaType?: Maybe<Scalars['String']['output']>;
   avatarUrl: Scalars['String']['output'];
   /** An array relationship */
@@ -7265,7 +7265,7 @@ export type UsersUserProviders_AggregateArgs = {
 
 /** aggregated selection of "auth.users" */
 export type Users_Aggregate = {
-  __typename?: 'users_aggregate';
+  __typename: 'users_aggregate';
   aggregate?: Maybe<Users_Aggregate_Fields>;
   nodes: Array<Users>;
 };
@@ -7299,7 +7299,7 @@ export type Users_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "auth.users" */
 export type Users_Aggregate_Fields = {
-  __typename?: 'users_aggregate_fields';
+  __typename: 'users_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<Users_Max_Fields>;
   min?: Maybe<Users_Min_Fields>;
@@ -7439,7 +7439,7 @@ export type Users_Insert_Input = {
 
 /** aggregate max on columns */
 export type Users_Max_Fields = {
-  __typename?: 'users_max_fields';
+  __typename: 'users_max_fields';
   activeMfaType?: Maybe<Scalars['String']['output']>;
   avatarUrl?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
@@ -7488,7 +7488,7 @@ export type Users_Max_Order_By = {
 
 /** aggregate min on columns */
 export type Users_Min_Fields = {
-  __typename?: 'users_min_fields';
+  __typename: 'users_min_fields';
   activeMfaType?: Maybe<Scalars['String']['output']>;
   avatarUrl?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
@@ -7537,7 +7537,7 @@ export type Users_Min_Order_By = {
 
 /** response of any mutation on the table "auth.users" */
 export type Users_Mutation_Response = {
-  __typename?: 'users_mutation_response';
+  __typename: 'users_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -7834,7 +7834,7 @@ export type Uuid_Comparison_Exp = {
 
 /** columns and relationships of "storage.virus" */
 export type Virus = {
-  __typename?: 'virus';
+  __typename: 'virus';
   createdAt: Scalars['timestamptz']['output'];
   /** An object relationship */
   file: Files;
@@ -7854,14 +7854,14 @@ export type VirusUserSessionArgs = {
 
 /** aggregated selection of "storage.virus" */
 export type Virus_Aggregate = {
-  __typename?: 'virus_aggregate';
+  __typename: 'virus_aggregate';
   aggregate?: Maybe<Virus_Aggregate_Fields>;
   nodes: Array<Virus>;
 };
 
 /** aggregate fields of "storage.virus" */
 export type Virus_Aggregate_Fields = {
-  __typename?: 'virus_aggregate_fields';
+  __typename: 'virus_aggregate_fields';
   count: Scalars['Int']['output'];
   max?: Maybe<Virus_Max_Fields>;
   min?: Maybe<Virus_Min_Fields>;
@@ -7929,7 +7929,7 @@ export type Virus_Insert_Input = {
 
 /** aggregate max on columns */
 export type Virus_Max_Fields = {
-  __typename?: 'virus_max_fields';
+  __typename: 'virus_max_fields';
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   fileId?: Maybe<Scalars['uuid']['output']>;
   filename?: Maybe<Scalars['String']['output']>;
@@ -7940,7 +7940,7 @@ export type Virus_Max_Fields = {
 
 /** aggregate min on columns */
 export type Virus_Min_Fields = {
-  __typename?: 'virus_min_fields';
+  __typename: 'virus_min_fields';
   createdAt?: Maybe<Scalars['timestamptz']['output']>;
   fileId?: Maybe<Scalars['uuid']['output']>;
   filename?: Maybe<Scalars['String']['output']>;
@@ -7951,7 +7951,7 @@ export type Virus_Min_Fields = {
 
 /** response of any mutation on the table "storage.virus" */
 export type Virus_Mutation_Response = {
-  __typename?: 'virus_mutation_response';
+  __typename: 'virus_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -8072,7 +8072,7 @@ export type Virus_Updates = {
 
 /** columns and relationships of "wines" */
 export type Wines = {
-  __typename?: 'wines';
+  __typename: 'wines';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   /** An object relationship */
   cellar: Cellars;
@@ -8088,6 +8088,7 @@ export type Wines = {
   price?: Maybe<Scalars['money']['output']>;
   region?: Maybe<Scalars['String']['output']>;
   special_designation?: Maybe<Scalars['String']['output']>;
+  upc_12?: Maybe<Scalars['bigint']['output']>;
   updated_at: Scalars['timestamptz']['output'];
   variety?: Maybe<Scalars['String']['output']>;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
@@ -8097,7 +8098,7 @@ export type Wines = {
 
 /** aggregated selection of "wines" */
 export type Wines_Aggregate = {
-  __typename?: 'wines_aggregate';
+  __typename: 'wines_aggregate';
   aggregate?: Maybe<Wines_Aggregate_Fields>;
   nodes: Array<Wines>;
 };
@@ -8115,7 +8116,7 @@ export type Wines_Aggregate_Bool_Exp_Count = {
 
 /** aggregate fields of "wines" */
 export type Wines_Aggregate_Fields = {
-  __typename?: 'wines_aggregate_fields';
+  __typename: 'wines_aggregate_fields';
   avg?: Maybe<Wines_Avg_Fields>;
   count: Scalars['Int']['output'];
   max?: Maybe<Wines_Max_Fields>;
@@ -8160,10 +8161,11 @@ export type Wines_Arr_Rel_Insert_Input = {
 
 /** aggregate avg on columns */
 export type Wines_Avg_Fields = {
-  __typename?: 'wines_avg_fields';
+  __typename: 'wines_avg_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
+  upc_12?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by avg() on columns of table "wines" */
@@ -8171,6 +8173,7 @@ export type Wines_Avg_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   ean_13?: InputMaybe<Order_By>;
   price?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
 };
 
 /** Boolean expression to filter rows from the table "wines". All fields are combined with a logical 'AND'. */
@@ -8191,6 +8194,7 @@ export type Wines_Bool_Exp = {
   price?: InputMaybe<Money_Comparison_Exp>;
   region?: InputMaybe<String_Comparison_Exp>;
   special_designation?: InputMaybe<String_Comparison_Exp>;
+  upc_12?: InputMaybe<Bigint_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   variety?: InputMaybe<String_Comparison_Exp>;
   vineyard_designation?: InputMaybe<String_Comparison_Exp>;
@@ -8209,6 +8213,7 @@ export type Wines_Inc_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
   ean_13?: InputMaybe<Scalars['bigint']['input']>;
   price?: InputMaybe<Scalars['money']['input']>;
+  upc_12?: InputMaybe<Scalars['bigint']['input']>;
 };
 
 /** input type for inserting data into table "wines" */
@@ -8226,6 +8231,7 @@ export type Wines_Insert_Input = {
   price?: InputMaybe<Scalars['money']['input']>;
   region?: InputMaybe<Scalars['String']['input']>;
   special_designation?: InputMaybe<Scalars['String']['input']>;
+  upc_12?: InputMaybe<Scalars['bigint']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   variety?: InputMaybe<Scalars['String']['input']>;
   vineyard_designation?: InputMaybe<Scalars['String']['input']>;
@@ -8235,7 +8241,7 @@ export type Wines_Insert_Input = {
 
 /** aggregate max on columns */
 export type Wines_Max_Fields = {
-  __typename?: 'wines_max_fields';
+  __typename: 'wines_max_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
@@ -8247,6 +8253,7 @@ export type Wines_Max_Fields = {
   price?: Maybe<Scalars['money']['output']>;
   region?: Maybe<Scalars['String']['output']>;
   special_designation?: Maybe<Scalars['String']['output']>;
+  upc_12?: Maybe<Scalars['bigint']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   variety?: Maybe<Scalars['String']['output']>;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
@@ -8267,6 +8274,7 @@ export type Wines_Max_Order_By = {
   price?: InputMaybe<Order_By>;
   region?: InputMaybe<Order_By>;
   special_designation?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   variety?: InputMaybe<Order_By>;
   vineyard_designation?: InputMaybe<Order_By>;
@@ -8276,7 +8284,7 @@ export type Wines_Max_Order_By = {
 
 /** aggregate min on columns */
 export type Wines_Min_Fields = {
-  __typename?: 'wines_min_fields';
+  __typename: 'wines_min_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
@@ -8288,6 +8296,7 @@ export type Wines_Min_Fields = {
   price?: Maybe<Scalars['money']['output']>;
   region?: Maybe<Scalars['String']['output']>;
   special_designation?: Maybe<Scalars['String']['output']>;
+  upc_12?: Maybe<Scalars['bigint']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   variety?: Maybe<Scalars['String']['output']>;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
@@ -8308,6 +8317,7 @@ export type Wines_Min_Order_By = {
   price?: InputMaybe<Order_By>;
   region?: InputMaybe<Order_By>;
   special_designation?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   variety?: InputMaybe<Order_By>;
   vineyard_designation?: InputMaybe<Order_By>;
@@ -8317,7 +8327,7 @@ export type Wines_Min_Order_By = {
 
 /** response of any mutation on the table "wines" */
 export type Wines_Mutation_Response = {
-  __typename?: 'wines_mutation_response';
+  __typename: 'wines_mutation_response';
   /** number of rows affected by the mutation */
   affected_rows: Scalars['Int']['output'];
   /** data from the rows affected by the mutation */
@@ -8346,6 +8356,7 @@ export type Wines_Order_By = {
   price?: InputMaybe<Order_By>;
   region?: InputMaybe<Order_By>;
   special_designation?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   variety?: InputMaybe<Order_By>;
   vineyard_designation?: InputMaybe<Order_By>;
@@ -8383,6 +8394,8 @@ export enum Wines_Select_Column {
   /** column name */
   SpecialDesignation = 'special_designation',
   /** column name */
+  Upc_12 = 'upc_12',
+  /** column name */
   UpdatedAt = 'updated_at',
   /** column name */
   Variety = 'variety',
@@ -8407,6 +8420,7 @@ export type Wines_Set_Input = {
   price?: InputMaybe<Scalars['money']['input']>;
   region?: InputMaybe<Scalars['String']['input']>;
   special_designation?: InputMaybe<Scalars['String']['input']>;
+  upc_12?: InputMaybe<Scalars['bigint']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   variety?: InputMaybe<Scalars['String']['input']>;
   vineyard_designation?: InputMaybe<Scalars['String']['input']>;
@@ -8416,10 +8430,11 @@ export type Wines_Set_Input = {
 
 /** aggregate stddev on columns */
 export type Wines_Stddev_Fields = {
-  __typename?: 'wines_stddev_fields';
+  __typename: 'wines_stddev_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
+  upc_12?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev() on columns of table "wines" */
@@ -8427,14 +8442,16 @@ export type Wines_Stddev_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   ean_13?: InputMaybe<Order_By>;
   price?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
 };
 
 /** aggregate stddev_pop on columns */
 export type Wines_Stddev_Pop_Fields = {
-  __typename?: 'wines_stddev_pop_fields';
+  __typename: 'wines_stddev_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
+  upc_12?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev_pop() on columns of table "wines" */
@@ -8442,14 +8459,16 @@ export type Wines_Stddev_Pop_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   ean_13?: InputMaybe<Order_By>;
   price?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
 };
 
 /** aggregate stddev_samp on columns */
 export type Wines_Stddev_Samp_Fields = {
-  __typename?: 'wines_stddev_samp_fields';
+  __typename: 'wines_stddev_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
+  upc_12?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev_samp() on columns of table "wines" */
@@ -8457,6 +8476,7 @@ export type Wines_Stddev_Samp_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   ean_13?: InputMaybe<Order_By>;
   price?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
 };
 
 /** Streaming cursor of the table "wines" */
@@ -8480,6 +8500,7 @@ export type Wines_Stream_Cursor_Value_Input = {
   price?: InputMaybe<Scalars['money']['input']>;
   region?: InputMaybe<Scalars['String']['input']>;
   special_designation?: InputMaybe<Scalars['String']['input']>;
+  upc_12?: InputMaybe<Scalars['bigint']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   variety?: InputMaybe<Scalars['String']['input']>;
   vineyard_designation?: InputMaybe<Scalars['String']['input']>;
@@ -8489,10 +8510,11 @@ export type Wines_Stream_Cursor_Value_Input = {
 
 /** aggregate sum on columns */
 export type Wines_Sum_Fields = {
-  __typename?: 'wines_sum_fields';
+  __typename: 'wines_sum_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   ean_13?: Maybe<Scalars['bigint']['output']>;
   price?: Maybe<Scalars['money']['output']>;
+  upc_12?: Maybe<Scalars['bigint']['output']>;
 };
 
 /** order by sum() on columns of table "wines" */
@@ -8500,6 +8522,7 @@ export type Wines_Sum_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   ean_13?: InputMaybe<Order_By>;
   price?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
 };
 
 /** update columns of table "wines" */
@@ -8527,6 +8550,8 @@ export enum Wines_Update_Column {
   /** column name */
   SpecialDesignation = 'special_designation',
   /** column name */
+  Upc_12 = 'upc_12',
+  /** column name */
   UpdatedAt = 'updated_at',
   /** column name */
   Variety = 'variety',
@@ -8549,10 +8574,11 @@ export type Wines_Updates = {
 
 /** aggregate var_pop on columns */
 export type Wines_Var_Pop_Fields = {
-  __typename?: 'wines_var_pop_fields';
+  __typename: 'wines_var_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
+  upc_12?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by var_pop() on columns of table "wines" */
@@ -8560,14 +8586,16 @@ export type Wines_Var_Pop_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   ean_13?: InputMaybe<Order_By>;
   price?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
 };
 
 /** aggregate var_samp on columns */
 export type Wines_Var_Samp_Fields = {
-  __typename?: 'wines_var_samp_fields';
+  __typename: 'wines_var_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
+  upc_12?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by var_samp() on columns of table "wines" */
@@ -8575,14 +8603,16 @@ export type Wines_Var_Samp_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   ean_13?: InputMaybe<Order_By>;
   price?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
 };
 
 /** aggregate variance on columns */
 export type Wines_Variance_Fields = {
-  __typename?: 'wines_variance_fields';
+  __typename: 'wines_variance_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
   ean_13?: Maybe<Scalars['Float']['output']>;
   price?: Maybe<Scalars['Float']['output']>;
+  upc_12?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by variance() on columns of table "wines" */
@@ -8590,92 +8620,144 @@ export type Wines_Variance_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   ean_13?: InputMaybe<Order_By>;
   price?: InputMaybe<Order_By>;
+  upc_12?: InputMaybe<Order_By>;
 };
+
+export type EditBeerPageQueryQueryVariables = Exact<{
+  itemId: Scalars['uuid']['input'];
+}>;
+
+
+export type EditBeerPageQueryQuery = { __typename: 'query_root', beers_by_pk?: { __typename: 'beers', id: string, name: string, created_by_id: string, vintage?: string | null, style?: string | null, description?: string | null, alcohol_content_percentage?: any | null, price?: number | null, upc_12?: number | null, ean_13?: number | null, international_bitterness_unit?: number | null } | null };
 
 export type GetBeerQueryVariables = Exact<{
   itemId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetBeerQuery = { __typename?: 'query_root', beers_by_pk?: { __typename?: 'beers', id: any, name: string, created_by_id: any, vintage?: any | null, style?: string | null, description?: string | null, alcohol_content_percentage?: any | null, cellar: { __typename?: 'cellars', name: string } } | null };
-
-export type AddBeerMutationVariables = Exact<{
-  beer: Beers_Insert_Input;
-}>;
-
-
-export type AddBeerMutation = { __typename?: 'mutation_root', insert_beers_one?: { __typename?: 'beers', id: any } | null };
+export type GetBeerQuery = { __typename: 'query_root', beers_by_pk?: { __typename: 'beers', id: string, name: string, created_by_id: string, vintage?: string | null, style?: string | null, description?: string | null, alcohol_content_percentage?: any | null, cellar: { __typename: 'cellars', name: string } } | null };
 
 export type GetCellarQueryVariables = Exact<{
   cellarId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetCellarQuery = { __typename?: 'query_root', cellars_by_pk?: { __typename?: 'cellars', id: any, name: string, created_by_id: any } | null };
+export type GetCellarQuery = { __typename: 'query_root', cellars_by_pk?: { __typename: 'cellars', id: string, name: string, created_by_id: string } | null };
 
 export type GetItemsQueryQueryVariables = Exact<{
   cellarId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetItemsQueryQuery = { __typename?: 'query_root', beers: Array<{ __typename?: 'beers', id: any, name: string }>, wines: Array<{ __typename?: 'wines', id: any, name: string }>, spirits: Array<{ __typename?: 'spirits', id: any, name: string }>, cellars_by_pk?: { __typename?: 'cellars', id: any, name: string } | null };
+export type GetItemsQueryQuery = { __typename: 'query_root', beers: Array<{ __typename: 'beers', id: string, name: string }>, wines: Array<{ __typename: 'wines', id: string, name: string }>, spirits: Array<{ __typename: 'spirits', id: string, name: string }>, cellars_by_pk?: { __typename: 'cellars', id: string, name: string } | null };
+
+export type EditSpiritPageQueryQueryVariables = Exact<{
+  itemId: Scalars['uuid']['input'];
+}>;
+
+
+export type EditSpiritPageQueryQuery = { __typename: 'query_root', spirits_by_pk?: { __typename: 'spirits', id: string, name: string, created_by_id: string, vintage?: string | null, type: Spirit_Type_Enum, style?: string | null, description?: string | null, alcohol_content_percentage?: any | null, price?: number | null, upc_12?: number | null, ean_13?: number | null } | null };
 
 export type GetSpiritQueryVariables = Exact<{
   itemId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetSpiritQuery = { __typename?: 'query_root', spirits_by_pk?: { __typename?: 'spirits', id: any, name: string, created_by_id: any, vintage?: any | null, type: Spirit_Type_Enum, description?: string | null, alcohol_content_percentage?: any | null, style?: string | null, cellar: { __typename?: 'cellars', name: string } } | null };
+export type GetSpiritQuery = { __typename: 'query_root', spirits_by_pk?: { __typename: 'spirits', id: string, name: string, created_by_id: string, vintage?: string | null, type: Spirit_Type_Enum, description?: string | null, alcohol_content_percentage?: any | null, style?: string | null, cellar: { __typename: 'cellars', name: string } } | null };
 
-export type AddSpiritMutationVariables = Exact<{
-  spirit: Spirits_Insert_Input;
+export type EditWinePageQueryQueryVariables = Exact<{
+  itemId: Scalars['uuid']['input'];
 }>;
 
 
-export type AddSpiritMutation = { __typename?: 'mutation_root', insert_spirits_one?: { __typename?: 'spirits', id: any } | null };
+export type EditWinePageQueryQuery = { __typename: 'query_root', wines_by_pk?: { __typename: 'wines', id: string, name: string, description?: string | null, created_by_id: string, vintage: string, alcohol_content_percentage?: any | null, price?: number | null, ean_13?: number | null, upc_12?: number | null, special_designation?: string | null, vineyard_designation?: string | null, variety?: string | null, region?: string | null } | null };
 
 export type GetWineQueryVariables = Exact<{
   itemId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetWineQuery = { __typename?: 'query_root', wines_by_pk?: { __typename?: 'wines', id: any, name: string, created_by_id: any, region?: string | null, variety?: string | null, vintage: any, ean_13?: any | null, description?: string | null, alcohol_content_percentage?: any | null, cellar: { __typename?: 'cellars', name: string } } | null };
-
-export type AddWineMutationVariables = Exact<{
-  wine: Wines_Insert_Input;
-}>;
-
-
-export type AddWineMutation = { __typename?: 'mutation_root', insert_wines_one?: { __typename?: 'wines', id: any } | null };
+export type GetWineQuery = { __typename: 'query_root', wines_by_pk?: { __typename: 'wines', id: string, name: string, created_by_id: string, region?: string | null, variety?: string | null, vintage: string, ean_13?: number | null, description?: string | null, alcohol_content_percentage?: any | null, cellar: { __typename: 'cellars', name: string } } | null };
 
 export type AddCellarMutationVariables = Exact<{
   cellar: Cellars_Insert_Input;
 }>;
 
 
-export type AddCellarMutation = { __typename?: 'mutation_root', insert_cellars_one?: { __typename?: 'cellars', id: any } | null };
+export type AddCellarMutation = { __typename: 'mutation_root', insert_cellars_one?: { __typename: 'cellars', id: string } | null };
 
 export type AddUserToCellarUsersMutationVariables = Exact<{
   cellarUser: Cellar_User_Insert_Input;
 }>;
 
 
-export type AddUserToCellarUsersMutation = { __typename?: 'mutation_root', insert_cellar_user_one?: { __typename?: 'cellar_user', id: number } | null };
+export type AddUserToCellarUsersMutation = { __typename: 'mutation_root', insert_cellar_user_one?: { __typename: 'cellar_user', id: number } | null };
 
 export type GetCellarsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetCellarsQuery = { __typename?: 'query_root', cellars: Array<{ __typename?: 'cellars', id: any, name: string, createdBy: { __typename?: 'users', displayName: string, avatarUrl: string } }> };
+export type GetCellarsQuery = { __typename: 'query_root', cellars: Array<{ __typename: 'cellars', id: string, name: string, createdBy: { __typename: 'users', displayName: string, avatarUrl: string } }> };
+
+export type AddBeerMutationVariables = Exact<{
+  beer: Beers_Insert_Input;
+}>;
 
 
+export type AddBeerMutation = { __typename: 'mutation_root', insert_beers_one?: { __typename: 'beers', id: string } | null };
+
+export type UpdateBeerMutationVariables = Exact<{
+  beerId: Scalars['uuid']['input'];
+  beer: Beers_Set_Input;
+}>;
+
+
+export type UpdateBeerMutation = { __typename: 'mutation_root', update_beers_by_pk?: { __typename: 'beers', id: string } | null };
+
+export type AddSpiritMutationVariables = Exact<{
+  spirit: Spirits_Insert_Input;
+}>;
+
+
+export type AddSpiritMutation = { __typename: 'mutation_root', insert_spirits_one?: { __typename: 'spirits', id: string } | null };
+
+export type UpdateSpiritMutationVariables = Exact<{
+  spiritId: Scalars['uuid']['input'];
+  spirit: Spirits_Set_Input;
+}>;
+
+
+export type UpdateSpiritMutation = { __typename: 'mutation_root', update_spirits_by_pk?: { __typename: 'spirits', id: string } | null };
+
+export type AddWineMutationVariables = Exact<{
+  wine: Wines_Insert_Input;
+}>;
+
+
+export type AddWineMutation = { __typename: 'mutation_root', insert_wines_one?: { __typename: 'wines', id: string } | null };
+
+export type UpdateWineMutationVariables = Exact<{
+  wineId: Scalars['uuid']['input'];
+  wine: Wines_Set_Input;
+}>;
+
+
+export type UpdateWineMutation = { __typename: 'mutation_root', update_wines_by_pk?: { __typename: 'wines', id: string } | null };
+
+
+export const EditBeerPageQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EditBeerPageQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beers_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}},{"kind":"Field","name":{"kind":"Name","value":"vintage"}},{"kind":"Field","name":{"kind":"Name","value":"style"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"alcohol_content_percentage"}},{"kind":"Field","name":{"kind":"Name","value":"price"}},{"kind":"Field","name":{"kind":"Name","value":"upc_12"}},{"kind":"Field","name":{"kind":"Name","value":"ean_13"}},{"kind":"Field","name":{"kind":"Name","value":"international_bitterness_unit"}}]}}]}}]} as unknown as DocumentNode<EditBeerPageQueryQuery, EditBeerPageQueryQueryVariables>;
 export const GetBeerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetBeer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beers_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}},{"kind":"Field","name":{"kind":"Name","value":"vintage"}},{"kind":"Field","name":{"kind":"Name","value":"style"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"alcohol_content_percentage"}},{"kind":"Field","name":{"kind":"Name","value":"cellar"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<GetBeerQuery, GetBeerQueryVariables>;
-export const AddBeerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addBeer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"beers_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_beers_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beer"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddBeerMutation, AddBeerMutationVariables>;
 export const GetCellarDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCellar"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cellars_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}}]}}]}}]} as unknown as DocumentNode<GetCellarQuery, GetCellarQueryVariables>;
 export const GetItemsQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetItemsQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beers"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"wines"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"spirits"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"cellar_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"cellars_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<GetItemsQueryQuery, GetItemsQueryQueryVariables>;
+export const EditSpiritPageQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EditSpiritPageQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spirits_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}},{"kind":"Field","name":{"kind":"Name","value":"vintage"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"style"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"alcohol_content_percentage"}},{"kind":"Field","name":{"kind":"Name","value":"price"}},{"kind":"Field","name":{"kind":"Name","value":"upc_12"}},{"kind":"Field","name":{"kind":"Name","value":"ean_13"}}]}}]}}]} as unknown as DocumentNode<EditSpiritPageQueryQuery, EditSpiritPageQueryQueryVariables>;
 export const GetSpiritDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetSpirit"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spirits_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}},{"kind":"Field","name":{"kind":"Name","value":"vintage"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"alcohol_content_percentage"}},{"kind":"Field","name":{"kind":"Name","value":"style"}},{"kind":"Field","name":{"kind":"Name","value":"cellar"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<GetSpiritQuery, GetSpiritQueryVariables>;
-export const AddSpiritDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addSpirit"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spirit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"spirits_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_spirits_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spirit"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddSpiritMutation, AddSpiritMutationVariables>;
+export const EditWinePageQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EditWinePageQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"wines_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}},{"kind":"Field","name":{"kind":"Name","value":"vintage"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"alcohol_content_percentage"}},{"kind":"Field","name":{"kind":"Name","value":"price"}},{"kind":"Field","name":{"kind":"Name","value":"ean_13"}},{"kind":"Field","name":{"kind":"Name","value":"upc_12"}},{"kind":"Field","name":{"kind":"Name","value":"special_designation"}},{"kind":"Field","name":{"kind":"Name","value":"vineyard_designation"}},{"kind":"Field","name":{"kind":"Name","value":"variety"}},{"kind":"Field","name":{"kind":"Name","value":"region"}}]}}]}}]} as unknown as DocumentNode<EditWinePageQueryQuery, EditWinePageQueryQueryVariables>;
 export const GetWineDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetWine"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"wines_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}},{"kind":"Field","name":{"kind":"Name","value":"region"}},{"kind":"Field","name":{"kind":"Name","value":"variety"}},{"kind":"Field","name":{"kind":"Name","value":"vintage"}},{"kind":"Field","name":{"kind":"Name","value":"ean_13"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"alcohol_content_percentage"}},{"kind":"Field","name":{"kind":"Name","value":"cellar"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<GetWineQuery, GetWineQueryVariables>;
-export const AddWineDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addWine"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"wine"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"wines_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_wines_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"wine"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddWineMutation, AddWineMutationVariables>;
 export const AddCellarDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addCellar"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellar"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"cellars_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_cellars_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellar"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddCellarMutation, AddCellarMutationVariables>;
 export const AddUserToCellarUsersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addUserToCellarUsers"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarUser"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"cellar_user_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_cellar_user_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarUser"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddUserToCellarUsersMutation, AddUserToCellarUsersMutationVariables>;
 export const GetCellarsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}}]}}]}}]} as unknown as DocumentNode<GetCellarsQuery, GetCellarsQueryVariables>;
+export const AddBeerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addBeer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"beers_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_beers_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beer"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddBeerMutation, AddBeerMutationVariables>;
+export const UpdateBeerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"updateBeer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beerId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"beers_set_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"update_beers_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"pk_columns"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beerId"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"_set"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beer"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateBeerMutation, UpdateBeerMutationVariables>;
+export const AddSpiritDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addSpirit"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spirit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"spirits_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_spirits_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spirit"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddSpiritMutation, AddSpiritMutationVariables>;
+export const UpdateSpiritDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"updateSpirit"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spiritId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spirit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"spirits_set_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"update_spirits_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"pk_columns"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spiritId"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"_set"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spirit"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateSpiritMutation, UpdateSpiritMutationVariables>;
+export const AddWineDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addWine"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"wine"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"wines_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_wines_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"wine"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddWineMutation, AddWineMutationVariables>;
+export const UpdateWineDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"updateWine"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"wineId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"wine"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"wines_set_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"update_wines_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"pk_columns"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"wineId"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"_set"},"value":{"kind":"Variable","name":{"kind":"Name","value":"wine"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateWineMutation, UpdateWineMutationVariables>;

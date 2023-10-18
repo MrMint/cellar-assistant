@@ -6,7 +6,6 @@ import {
   AspectRatio,
   Box,
   Button,
-  Card,
   CardActions,
   CardOverflow,
   Grid,
@@ -20,22 +19,23 @@ import beer1 from "@/app/public/beer1.png";
 import spirit1 from "@/app/public/spirit1.png";
 import wine1 from "@/app/public/wine1.png";
 import { MdAdd, MdFavoriteBorder } from "react-icons/md";
-import InteractiveCard from "@/components/InteractiveCard";
-import TopNavigationBar from "@/components/HeaderBar";
-import Link from "@/components/Link";
+import InteractiveCard from "@/components/common/InteractiveCard";
+import TopNavigationBar from "@/components/common/HeaderBar";
+import Link from "@/components/common/Link";
+import { ItemType } from "@/constants";
 
 type ItemCardProps = {
   item: {
     id: string;
     name: string;
   };
-  type: "BEER" | "WINE" | "SPIRIT";
+  type: ItemType;
 };
 
 const ItemCard = ({ item, type }: ItemCardProps) => (
   <InteractiveCard>
     <CardOverflow>
-      {type === "BEER" && (
+      {type === ItemType.Beer && (
         <AspectRatio ratio="1" maxHeight={300}>
           <Image
             src={beer1}
@@ -45,7 +45,7 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
           />
         </AspectRatio>
       )}
-      {type === "WINE" && (
+      {type === ItemType.Wine && (
         <AspectRatio ratio="1" maxHeight={300}>
           <Image
             src={wine1}
@@ -55,7 +55,7 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
           />
         </AspectRatio>
       )}
-      {type === "SPIRIT" && (
+      {type === ItemType.Spirit && (
         <AspectRatio ratio="1" maxHeight={300}>
           <Image
             src={spirit1}
@@ -66,7 +66,7 @@ const ItemCard = ({ item, type }: ItemCardProps) => (
         </AspectRatio>
       )}
     </CardOverflow>
-    <Link overlay href={`${type.toLowerCase()}s/${item.id}`}>
+    <Link overlay href={`${ItemType[type].toLowerCase()}s/${item.id}`}>
       <Typography level="title-md">{item.name}</Typography>
     </Link>
     <CardActions buttonFlex="0 1 120px">
@@ -133,17 +133,17 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
         <Grid container spacing={2}>
           {res?.data?.beers.map((x) => (
             <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
-              <ItemCard item={x} type="BEER" />
+              <ItemCard item={x} type={ItemType.Beer} />
             </Grid>
           ))}
           {res?.data?.wines.map((x) => (
             <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
-              <ItemCard item={x} type="WINE" />
+              <ItemCard item={x} type={ItemType.Wine} />
             </Grid>
           ))}
           {res?.data?.spirits.map((x) => (
             <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
-              <ItemCard item={x} type="SPIRIT" />
+              <ItemCard item={x} type={ItemType.Spirit} />
             </Grid>
           ))}
         </Grid>

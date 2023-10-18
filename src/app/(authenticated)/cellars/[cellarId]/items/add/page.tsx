@@ -13,7 +13,7 @@ import {
 import { graphql } from "@/gql";
 import { useQuery } from "urql";
 import { useUserId } from "@nhost/nextjs";
-import InteractiveCard from "@/components/InteractiveCard";
+import InteractiveCard from "@/components/common/InteractiveCard";
 import beer1 from "@/app/public/beer1.png";
 import wine1 from "@/app/public/wine1.png";
 import spirit1 from "@/app/public/spirit1.png";
