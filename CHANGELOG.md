@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.8.0](https://github.com/MrMint/cellar-assistant/compare/v0.7.0...v0.8.0) (2023-10-18)
+
+
+### Features
+
+* Adds ability to delete items ([a1368cb](https://github.com/MrMint/cellar-assistant/commit/a1368cbd43997ad738f08ca079a938264b781ae3))
+* Adds edit pages for all item types ([935d5fa](https://github.com/MrMint/cellar-assistant/commit/935d5fadf9d76b8f16b9c86f3fa860303155bee4))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/ramda to v0.29.7 ([a6f10bc](https://github.com/MrMint/cellar-assistant/commit/a6f10bc3694302f4fff6c98710ed5f15f3e089da))
+* **deps:** update dependency @types/react-dom to v18.2.14 ([d47df2b](https://github.com/MrMint/cellar-assistant/commit/d47df2bb99b300f8132902790fa4f4734934527b))
+* **deps:** update dependency eslint-config-next to v13.5.6 ([9b48fe9](https://github.com/MrMint/cellar-assistant/commit/9b48fe9132eba5bbcf7ab04d91f775022f28536d))
+* **deps:** update dependency next to v13.5.6 ([abd51b5](https://github.com/MrMint/cellar-assistant/commit/abd51b56fdfd067c9f5e4d28d5ec5c60c325c9bf))
+
 ## [0.7.0](https://github.com/MrMint/cellar-assistant/compare/v0.6.1...v0.7.0) (2023-10-18)
 
 
