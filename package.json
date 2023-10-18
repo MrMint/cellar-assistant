@@ -23,7 +23,7 @@
     "@types/node": "20.8.7",
     "@types/ramda": "0.29.7",
     "@types/react": "18.2.29",
-    "@types/react-dom": "18.2.13",
+    "@types/react-dom": "18.2.14",
     "@urql/devtools": "2.0.3",
     "@urql/exchange-refocus": "1.0.2",
     "@vercel/analytics": "1.1.1",
