@@ -1,12 +1,14 @@
 "use client";
 
-import { AspectRatio, Grid, Sheet, Stack, Typography } from "@mui/joy";
+import { AspectRatio, Grid, Sheet, Stack } from "@mui/joy";
 import wine1 from "@/app/public/wine1.png";
 import Image from "next/image";
 import { graphql } from "@/gql";
 import { useQuery } from "urql";
-import { format, parseISO } from "date-fns";
 import { isNotNil } from "ramda";
+import ItemDetails from "@/components/ItemDetails";
+import { formatAsPercentage, formatIsoDateString } from "@/utilities";
+import ItemHeader from "@/components/ItemHeader";
 
 const getWineQuery = graphql(`
   query GetWine($itemId: uuid!) {
@@ -18,14 +20,19 @@ const getWineQuery = graphql(`
       variety
       vintage
       ean_13
+      description
+      alcohol_content_percentage
+      cellar {
+        name
+      }
     }
   }
 `);
 
-const ItemDetails = ({
-  params: { itemId },
+const WineDetails = ({
+  params: { itemId, cellarId },
 }: {
-  params: { itemId: string };
+  params: { itemId: string; cellarId: string };
 }) => {
   const [{ data, fetching, operation }] = useQuery({
     query: getWineQuery,
@@ -39,34 +46,45 @@ const ItemDetails = ({
   }
 
   return (
-    <Grid container spacing={2}>
-      <Grid xs={4}>
-        <Stack>
-          <AspectRatio ratio={1}>
-            <Image
-              src={wine1}
-              alt="A picture of a wine bottle"
-              placeholder="blur"
-            />
-          </AspectRatio>
-        </Stack>
+    <Stack spacing={2}>
+      <ItemHeader
+        itemId={itemId}
+        itemName={wine?.name}
+        cellarId={cellarId}
+        cellarName={wine?.cellar?.name}
+      />
+      <Grid container spacing={2}>
+        <Grid xs={4}>
+          <Stack>
+            <AspectRatio ratio={1}>
+              <Image
+                src={wine1}
+                alt="A picture of a wine bottle"
+                placeholder="blur"
+              />
+            </AspectRatio>
+          </Stack>
+        </Grid>
+        <Grid xs={8}>
+          <Sheet>
+            {isLoading === false && wine !== undefined && (
+              <ItemDetails
+                title={wine.name}
+                subTitlePhrases={[
+                  formatIsoDateString(wine.vintage, "yyyy"),
+                  wine.variety,
+                  wine.region,
+                  formatAsPercentage(wine.alcohol_content_percentage),
+                ]}
+                description={wine.description}
+              />
+            )}
+          </Sheet>
+        </Grid>
+        <Grid></Grid>
       </Grid>
-      <Grid xs={8}>
-        <Sheet>
-          {isLoading === false && wine !== undefined && (
-            <Stack spacing={1} padding="1rem">
-              <Typography level="h3">{wine.name}</Typography>
-              <Typography level="body-md">
-                {format(parseISO(wine.vintage), "yyyy")} {wine.variety},{" "}
-                {wine.region}
-              </Typography>
-            </Stack>
-          )}
-        </Sheet>
-      </Grid>
-      <Grid></Grid>
-    </Grid>
+    </Stack>
   );
 };
 
-export default ItemDetails;
+export default WineDetails;

@@ -5,8 +5,10 @@ import spirit1 from "@/app/public/spirit1.png";
 import Image from "next/image";
 import { graphql } from "@/gql";
 import { useQuery } from "urql";
-import { format, parseISO } from "date-fns";
 import { isNotNil } from "ramda";
+import ItemDetails from "@/components/ItemDetails";
+import { formatAsPercentage, formatIsoDateString } from "@/utilities";
+import ItemHeader from "@/components/ItemHeader";
 
 const getSpiritQuery = graphql(`
   query GetSpirit($itemId: uuid!) {
@@ -16,14 +18,19 @@ const getSpiritQuery = graphql(`
       created_by_id
       vintage
       type
+      description
+      alcohol_content_percentage
+      style
+      cellar {
+        name
+      }
     }
   }
 `);
-
-const ItemDetails = ({
-  params: { itemId },
+const SpiritDetails = ({
+  params: { itemId, cellarId },
 }: {
-  params: { itemId: string };
+  params: { itemId: string; cellarId: string };
 }) => {
   const [{ data, fetching, operation }] = useQuery({
     query: getSpiritQuery,
@@ -41,35 +48,45 @@ const ItemDetails = ({
   }
 
   return (
-    <Grid container spacing={2}>
-      <Grid xs={4}>
-        <Stack>
-          <AspectRatio ratio={1}>
-            <Image
-              src={spirit1}
-              alt="A picture of a beer bottle"
-              placeholder="blur"
-            />
-          </AspectRatio>
-        </Stack>
+    <Stack spacing={2}>
+      <ItemHeader
+        itemId={itemId}
+        itemName={spirit?.name}
+        cellarId={cellarId}
+        cellarName={spirit?.cellar?.name}
+      />
+      <Grid container spacing={2}>
+        <Grid xs={4}>
+          <Stack>
+            <AspectRatio ratio={1}>
+              <Image
+                src={spirit1}
+                alt="A picture of a beer bottle"
+                placeholder="blur"
+              />
+            </AspectRatio>
+          </Stack>
+        </Grid>
+        <Grid xs={8}>
+          <Sheet>
+            {isLoading === false && spirit !== undefined && (
+              <ItemDetails
+                title={spirit.name}
+                subTitlePhrases={[
+                  formatIsoDateString(spirit.vintage, "yyyy"),
+                  spirit.type,
+                  spirit.style,
+                  formatAsPercentage(spirit.alcohol_content_percentage),
+                ]}
+                description={spirit.description}
+              />
+            )}
+          </Sheet>
+        </Grid>
+        <Grid></Grid>
       </Grid>
-      <Grid xs={8}>
-        <Sheet>
-          {isLoading === false && spirit !== undefined && (
-            <Stack spacing={1} padding="1rem">
-              <Typography level="h3">{spirit.name}</Typography>
-              <Typography level="body-md">
-                {isNotNil(spirit.vintage) &&
-                  format(parseISO(spirit.vintage), "yyyy")}{" "}
-                {spirit.type}
-              </Typography>
-            </Stack>
-          )}
-        </Sheet>
-      </Grid>
-      <Grid></Grid>
-    </Grid>
+    </Stack>
   );
 };
 
-export default ItemDetails;
+export default SpiritDetails;
