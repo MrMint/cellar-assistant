@@ -1,6 +1,6 @@
 "use client";
 
-import SideNavigationBar from "@/components/SideNavigationBar";
+import SideNavigationBar from "@/components/common/SideNavigationBar";
 import withAuth from "@/hocs/withAuth";
 import { Box, styled } from "@mui/joy";
 import Image from "next/image";

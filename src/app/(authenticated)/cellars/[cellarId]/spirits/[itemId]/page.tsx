@@ -6,9 +6,10 @@ import Image from "next/image";
 import { graphql } from "@/gql";
 import { useQuery } from "urql";
 import { isNotNil } from "ramda";
-import ItemDetails from "@/components/ItemDetails";
+import ItemDetails from "@/components/item/ItemDetails";
 import { formatAsPercentage, formatIsoDateString } from "@/utilities";
-import ItemHeader from "@/components/ItemHeader";
+import ItemHeader from "@/components/item/ItemHeader";
+import { ItemType } from "@/constants";
 
 const getSpiritQuery = graphql(`
   query GetSpirit($itemId: uuid!) {
@@ -52,6 +53,7 @@ const SpiritDetails = ({
       <ItemHeader
         itemId={itemId}
         itemName={spirit?.name}
+        itemType={ItemType.Spirit}
         cellarId={cellarId}
         cellarName={spirit?.cellar?.name}
       />
