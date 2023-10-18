@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.7.0](https://github.com/MrMint/cellar-assistant/compare/v0.6.1...v0.7.0) (2023-10-18)
+
+
+### Features
+
+* Adds logout to side nav ([05387a9](https://github.com/MrMint/cellar-assistant/commit/05387a963ce15ddfe64a9ff3c6056b928e664e95))
+* Adds metadata to root page ([f0cab4a](https://github.com/MrMint/cellar-assistant/commit/f0cab4a015e236d078d1318f0f92089bb0ec0a45))
+* Implements HeaderBar component ([fba2deb](https://github.com/MrMint/cellar-assistant/commit/fba2deb08b188847dcddb78e86f517de0cffff08))
+* Standardizes and cleans up item detail pages ([d679f8f](https://github.com/MrMint/cellar-assistant/commit/d679f8f6041643557ba5575da953dacfbb28f445))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v20.8.7 ([e244079](https://github.com/MrMint/cellar-assistant/commit/e244079c0aafa2074f2aade047312c4b62d33c7d))
+* **deps:** update dependency @types/react to v18.2.29 ([67a1f86](https://github.com/MrMint/cellar-assistant/commit/67a1f8606cd1edd3765823d46ace36fe34099768))
+
 ## [0.6.1](https://github.com/MrMint/cellar-assistant/compare/v0.6.0...v0.6.1) (2023-10-17)
 
 
