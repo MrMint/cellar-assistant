@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.10.0](https://github.com/MrMint/cellar-assistant/compare/v0.9.0...v0.10.0) (2023-10-19)
+
+
+### Features
+
+* Adds barcode scanning to add beer path ([baf693e](https://github.com/MrMint/cellar-assistant/commit/baf693e5296459f88648dbe6c3642ac5c50f01ba))
+* Adds barcode scanning to add spirit path ([7a127dd](https://github.com/MrMint/cellar-assistant/commit/7a127dd2f1ae2a26d8025966ec61edd9ce0dcd79))
+* Adds barcode scanning to add wine path ([a3085c5](https://github.com/MrMint/cellar-assistant/commit/a3085c5a6a84fa84491148920f631c385116b7e6))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fontsource/inter to v5.0.14 ([6c9f338](https://github.com/MrMint/cellar-assistant/commit/6c9f338e4693b6077151f2bd2cb1fea5abdb3a40))
+* **deps:** update dependency @types/react to v18.2.30 ([c708304](https://github.com/MrMint/cellar-assistant/commit/c708304e9b34be307744519faac244954cc434d0))
+
 ## [0.9.0](https://github.com/MrMint/cellar-assistant/compare/v0.8.0...v0.9.0) (2023-10-19)
 
 
