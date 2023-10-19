@@ -9,11 +9,7 @@ const AddWine = ({
   params: { cellarId: string };
 }) => {
   return (
-    <Box
-      sx={(theme) => ({
-        width: theme.breakpoints.values.sm,
-      })}
-    >
+    <Box>
       <WineOnboarding
         cellarId={cellarId}
         returnUrl={`/cellars/${cellarId}/items`}
