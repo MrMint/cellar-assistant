@@ -45,11 +45,7 @@ const EditWine = ({
     wine = nullsToUndefined(data.wines_by_pk);
   }
   return (
-    <Box
-      sx={(theme) => ({
-        width: theme.breakpoints.values.sm,
-      })}
-    >
+    <Box>
       {wine !== undefined && (
         <WineForm
           id={itemId}

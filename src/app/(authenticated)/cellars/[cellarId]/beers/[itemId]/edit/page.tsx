@@ -42,11 +42,7 @@ const EditBeer = ({
     beer = nullsToUndefined(data.beers_by_pk);
   }
   return (
-    <Box
-      sx={(theme) => ({
-        width: theme.breakpoints.values.sm,
-      })}
-    >
+    <Box>
       {beer !== undefined && (
         <BeerForm
           id={itemId}

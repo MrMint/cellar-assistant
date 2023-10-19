@@ -56,7 +56,7 @@ const WineDetails = ({
         cellarName={wine?.cellar?.name}
       />
       <Grid container spacing={2}>
-        <Grid xs={4}>
+        <Grid xs={12} sm={4}>
           <Stack>
             <AspectRatio ratio={1}>
               <Image
@@ -67,7 +67,7 @@ const WineDetails = ({
             </AspectRatio>
           </Stack>
         </Grid>
-        <Grid xs={8}>
+        <Grid xs={12} sm={8}>
           <Sheet>
             {isLoading === false && wine !== undefined && (
               <ItemDetails

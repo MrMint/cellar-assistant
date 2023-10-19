@@ -9,11 +9,7 @@ const AddSpirit = ({
   params: { cellarId: string };
 }) => {
   return (
-    <Box
-      sx={(theme) => ({
-        width: theme.breakpoints.values.sm,
-      })}
-    >
+    <Box>
       <SpiritOnboarding
         cellarId={cellarId}
         returnUrl={`/cellars/${cellarId}/items`}
