@@ -32,7 +32,7 @@ version = 18
 version = '0.21.2'
 
 [auth.redirections]
-clientUrl = 'https://cellar-assistant.vercel.app'
+clientUrl = 'https://cellar-assistant.vercel.app/cellars'
 
 [auth.signUp]
 enabled = true
