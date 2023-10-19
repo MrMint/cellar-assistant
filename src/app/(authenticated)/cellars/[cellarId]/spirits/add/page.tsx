@@ -1,6 +1,6 @@
 "use client";
 
-import SpiritForm from "@/components/spirit/SpiritForm";
+import { SpiritOnboarding } from "@/components/spirit/SpiritOnboarding";
 import { Box } from "@mui/joy";
 
 const AddSpirit = ({
@@ -14,7 +14,7 @@ const AddSpirit = ({
         width: theme.breakpoints.values.sm,
       })}
     >
-      <SpiritForm
+      <SpiritOnboarding
         cellarId={cellarId}
         returnUrl={`/cellars/${cellarId}/items`}
       />
