@@ -36,7 +36,7 @@ type DefaultValues = {
   vintage?: string;
 } & SharedFields;
 
-type BeerFormProps = {
+export type BeerFormProps = {
   id?: string;
   cellarId: string;
   returnUrl: string;
@@ -59,7 +59,7 @@ const updateBeerMutation = graphql(`
   }
 `);
 
-const BeerForm = ({
+export const BeerForm = ({
   id,
   cellarId,
   returnUrl,
@@ -123,7 +123,7 @@ const BeerForm = ({
   return (
     <Box
       sx={(theme) => ({
-        width: theme.breakpoints.values.sm,
+        maxWidth: theme.breakpoints.values.sm,
       })}
     >
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -243,5 +243,3 @@ const BeerForm = ({
     </Box>
   );
 };
-
-export default BeerForm;
