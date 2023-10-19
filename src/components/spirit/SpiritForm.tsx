@@ -22,7 +22,6 @@ import { CombinedError, useMutation } from "urql";
 const typeOptions = getEnumKeys(Spirit_Type_Enum);
 
 type SharedFields = {
-  type: Spirit_Type_Enum;
   description?: string;
   price?: number;
   alcohol_content_percentage?: number;
@@ -33,6 +32,7 @@ type SharedFields = {
 };
 
 type ISpiritFormInput = {
+  type: Spirit_Type_Enum;
   name: string;
   vintage?: number;
 } & SharedFields;
@@ -40,6 +40,7 @@ type ISpiritFormInput = {
 type DefaultValues = {
   name?: string;
   vintage?: string;
+  type?: Spirit_Type_Enum;
 } & SharedFields;
 
 type SpiritFormProps = {
@@ -129,7 +130,7 @@ const SpiritForm = ({
   return (
     <Box
       sx={(theme) => ({
-        width: theme.breakpoints.values.sm,
+        maxWidth: theme.breakpoints.values.sm,
       })}
     >
       <form onSubmit={handleSubmit(onSubmit)}>

@@ -28,6 +28,7 @@
     "@urql/devtools": "2.0.3",
     "@urql/exchange-refocus": "1.0.2",
     "@vercel/analytics": "1.1.1",
+    "@xstate/react": "4.0.0-beta.10",
     "autoprefixer": "10.4.16",
     "date-fns": "2.30.0",
     "eslint": "8.51.0",
@@ -44,8 +45,10 @@
     "react-dom": "18.2.0",
     "react-hook-form": "7.47.0",
     "react-icons": "4.11.0",
+    "react-zxing": "2.0.0",
     "ts-node": "10.9.1",
     "typescript": "5.2.2",
-    "urql": "4.0.5"
+    "urql": "4.0.5",
+    "xstate": "5.0.0-beta.35"
   }
 }

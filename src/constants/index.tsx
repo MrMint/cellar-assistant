@@ -3,3 +3,13 @@ export enum ItemType {
   Wine,
   Spirit,
 }
+
+export enum BarcodeType {
+  UPC_12,
+  EAN_13,
+}
+
+export type Barcode = {
+  text: string;
+  type: BarcodeType;
+};
