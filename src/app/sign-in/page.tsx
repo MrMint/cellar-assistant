@@ -13,12 +13,13 @@ import {
   Divider,
   Checkbox,
 } from "@mui/joy";
-import { useSignInEmailPassword } from "@nhost/nextjs";
+import { useNhostClient, useSignInEmailPassword } from "@nhost/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { FcGoogle } from "react-icons/fc";
+import { BsDiscord, BsFacebook } from "react-icons/bs";
 
 interface IFormInput {
   email: string;
@@ -26,6 +27,7 @@ interface IFormInput {
 }
 
 const SignIn = () => {
+  const [isRedirectingToSso, setIsRedirectingToSso] = useState(false);
   const router = useRouter();
   const {
     signInEmailPassword,
@@ -36,6 +38,7 @@ const SignIn = () => {
     error,
   } = useSignInEmailPassword();
 
+  const client = useNhostClient();
   const { control, handleSubmit } = useForm({
     defaultValues: {
       email: "",
@@ -51,7 +54,15 @@ const SignIn = () => {
     if (isSuccess) router.push("/cellars");
   }, [isSuccess, router]);
 
-  const disableForm = isLoading || needsEmailVerification || isSuccess;
+  const handleSignInSso = (provider: "google" | "discord" | "facebook") => {
+    setIsRedirectingToSso(true);
+    client.auth.signIn({
+      provider,
+    });
+  };
+
+  const disableForm =
+    isLoading || needsEmailVerification || isSuccess || isRedirectingToSso;
 
   return (
     <Box
@@ -63,7 +74,7 @@ const SignIn = () => {
       }}
     >
       <Box sx={{ width: "400px", display: "flex", flexDirection: "column" }}>
-        <Stack gap={4} sx={{ mb: 2 }}>
+        <Stack gap={1} sx={{ mb: 2 }}>
           <Stack gap={1}>
             <Typography level="h3">Sign in</Typography>
             <Typography level="body-sm">
@@ -72,12 +83,34 @@ const SignIn = () => {
           </Stack>
 
           <Button
+            onClick={() => handleSignInSso("google")}
             variant="soft"
             color="neutral"
             fullWidth
+            disabled={disableForm}
             startDecorator={<FcGoogle />}
           >
             Continue with Google
+          </Button>
+          <Button
+            onClick={() => handleSignInSso("discord")}
+            variant="soft"
+            color="neutral"
+            fullWidth
+            disabled={disableForm}
+            startDecorator={<BsDiscord />}
+          >
+            Continue with Discord
+          </Button>
+          <Button
+            onClick={() => handleSignInSso("facebook")}
+            variant="soft"
+            color="neutral"
+            fullWidth
+            disabled={disableForm}
+            startDecorator={<BsFacebook />}
+          >
+            Continue with Facebook
           </Button>
         </Stack>
         <Divider>or</Divider>
