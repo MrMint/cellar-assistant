@@ -1,6 +1,6 @@
 "use client";
 
-import WineForm from "@/components/wine/WineForm";
+import { WineOnboarding } from "@/components/wine/WineOnboarding";
 import { Box } from "@mui/joy";
 
 const AddWine = ({
@@ -14,7 +14,10 @@ const AddWine = ({
         width: theme.breakpoints.values.sm,
       })}
     >
-      <WineForm cellarId={cellarId} returnUrl={`/cellars/${cellarId}/items`} />
+      <WineOnboarding
+        cellarId={cellarId}
+        returnUrl={`/cellars/${cellarId}/items`}
+      />
     </Box>
   );
 };
