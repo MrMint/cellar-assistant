@@ -11,7 +11,7 @@ type HeaderBarProps = {
 const HeaderBar = ({ breadcrumbs = [], endComponent }: HeaderBarProps) => {
   return (
     <Stack
-      direction="row"
+      direction={{ xs: "column", sm: "row" }}
       spacing={2}
       sx={{ justifyContent: "space-between", alignItems: "center" }}
     >
@@ -22,7 +22,7 @@ const HeaderBar = ({ breadcrumbs = [], endComponent }: HeaderBarProps) => {
           </Link>
         ))}
       </Breadcrumbs>
-      <Stack direction="row" spacing={2}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
         <Input startDecorator={<MdSearch />} placeholder="Search" disabled />
         {endComponent}
       </Stack>
