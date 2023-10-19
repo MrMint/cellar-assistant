@@ -46,11 +46,7 @@ const EditSpirit = ({
     spirit = nullsToUndefined(data.spirits_by_pk);
   }
   return (
-    <Box
-      sx={(theme) => ({
-        width: theme.breakpoints.values.sm,
-      })}
-    >
+    <Box>
       {spirit !== undefined && (
         <SpiritForm
           id={itemId}
