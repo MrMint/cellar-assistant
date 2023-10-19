@@ -125,7 +125,7 @@ const WineForm = ({
   return (
     <Box
       sx={(theme) => ({
-        width: theme.breakpoints.values.sm,
+        maxWidth: theme.breakpoints.values.sm,
       })}
     >
       <form onSubmit={handleSubmit(onSubmit)}>

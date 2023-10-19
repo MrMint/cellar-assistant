@@ -1,6 +1,6 @@
 "use client";
 
-import BeerForm from "@/components/beer/BeerForm";
+import { BeerForm } from "@/components/beer/BeerForm";
 import { graphql } from "@/gql";
 import { nullsToUndefined } from "@/utilities";
 import { Box } from "@mui/joy";
