@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.11.0](https://github.com/MrMint/cellar-assistant/compare/v0.10.0...v0.11.0) (2023-10-19)
+
+
+### Features
+
+* Makes header responsive for mobile ([95b11a3](https://github.com/MrMint/cellar-assistant/commit/95b11a31dd7340757c08996266d8cc53540785df))
+* Updates nhost redirect to /cellars ([27ce44c](https://github.com/MrMint/cellar-assistant/commit/27ce44c41a3371a6d0e2d5d2298b695f8b9f3772))
+
 ## [0.10.0](https://github.com/MrMint/cellar-assistant/compare/v0.9.0...v0.10.0) (2023-10-19)
 
 
