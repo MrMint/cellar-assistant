@@ -76,9 +76,18 @@ const SignIn = () => {
         flexGrow: 1,
       }}
     >
-      <Box sx={{ width: "400px", display: "flex", flexDirection: "column" }}>
-        <Stack gap={1} sx={{ mb: 2 }}>
-          <Stack gap={1}>
+      <Box
+        sx={{
+          maxWidth: { xs: "400px" },
+          width: { xs: null, sm: "400px" },
+          flexGrow: { xs: 1, sm: 0 },
+          display: "flex",
+          flexDirection: "column",
+          padding: "1rem",
+        }}
+      >
+        <Stack gap={1} sx={{ marginBottom: 2 }}>
+          <Stack gap={1} marginBottom={2}>
             <Typography level="h3">Sign in</Typography>
             <Typography level="body-sm">
               New to Cellar Assistant? <Link href="/sign-up">Sign up!</Link>
