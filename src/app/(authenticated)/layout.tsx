@@ -4,7 +4,7 @@ import SideNavigationBar from "@/components/common/SideNavigationBar";
 import withAuth from "@/hocs/withAuth";
 import { Box, styled } from "@mui/joy";
 import Image from "next/image";
-import bot1 from "@/app/public/bot2.png";
+import bot1 from "@/images/bot2.png";
 
 const Container = styled(Box)(({ theme }) => ({
   display: "flex",

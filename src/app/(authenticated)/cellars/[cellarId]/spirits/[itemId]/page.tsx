@@ -1,7 +1,7 @@
 "use client";
 
 import { AspectRatio, Grid, Sheet, Stack, Typography } from "@mui/joy";
-import spirit1 from "@/app/public/spirit1.png";
+import spirit1 from "@/images/spirit1.png";
 import Image from "next/image";
 import { graphql } from "@/gql";
 import { useQuery } from "urql";

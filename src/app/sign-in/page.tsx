@@ -58,6 +58,9 @@ const SignIn = () => {
     setIsRedirectingToSso(true);
     client.auth.signIn({
       provider,
+      options: {
+        redirectTo: "/cellars",
+      },
     });
   };
 

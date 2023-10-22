@@ -15,9 +15,9 @@ import {
 } from "@mui/joy";
 import Image from "next/image";
 import { useQuery } from "urql";
-import beer1 from "@/app/public/beer1.png";
-import spirit1 from "@/app/public/spirit1.png";
-import wine1 from "@/app/public/wine1.png";
+import beer1 from "@/images/beer1.png";
+import spirit1 from "@/images/spirit1.png";
+import wine1 from "@/images/wine1.png";
 import { MdAdd, MdFavoriteBorder } from "react-icons/md";
 import InteractiveCard from "@/components/common/InteractiveCard";
 import TopNavigationBar from "@/components/common/HeaderBar";
