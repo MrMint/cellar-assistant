@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.12.0](https://github.com/MrMint/cellar-assistant/compare/v0.11.0...v0.12.0) (2023-10-22)
+
+
+### Features
+
+* Adds install PWA dialog ([2f0d795](https://github.com/MrMint/cellar-assistant/commit/2f0d795a8b9e154519113d3a71b4fa6cb4868221))
+* Adds manifest for pwa ([588a2b2](https://github.com/MrMint/cellar-assistant/commit/588a2b20b371cae0d90ef0a60cf2be61d29e9eb7))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fontsource/inter to v5.0.15 ([731f200](https://github.com/MrMint/cellar-assistant/commit/731f2006e1c86932975d3fc9d1295118325cd38c))
+* **deps:** update dependency @types/react to v18.2.31 ([aefe4c3](https://github.com/MrMint/cellar-assistant/commit/aefe4c389186cc391ea0ebf65481b049c17ba84b))
+* **deps:** update dependency eslint to v8.52.0 ([b7e3414](https://github.com/MrMint/cellar-assistant/commit/b7e3414b89e5990b72ab6a5438877f972f54c6ec))
+* **deps:** update dependency xstate to v5.0.0-beta.36 ([1ff2019](https://github.com/MrMint/cellar-assistant/commit/1ff2019e33475fac37a51d869c156f6415e76d63))
+
 ## [0.11.0](https://github.com/MrMint/cellar-assistant/compare/v0.10.0...v0.11.0) (2023-10-19)
 
 
