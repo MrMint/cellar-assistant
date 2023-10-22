@@ -4,7 +4,8 @@ import SideNavigationBar from "@/components/common/SideNavigationBar";
 import withAuth from "@/hocs/withAuth";
 import { Box, styled } from "@mui/joy";
 import Image from "next/image";
-import bot1 from "@/app/public/bot2.png";
+import bot1 from "@/images/bot2.png";
+import { InstallPwaDialog } from "@/components/common/InstallPwaDialog";
 
 const Container = styled(Box)(({ theme }) => ({
   display: "flex",
@@ -15,6 +16,7 @@ const Container = styled(Box)(({ theme }) => ({
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return (
     <Container>
+      <InstallPwaDialog />
       <SideNavigationBar />
       <Box
         sx={{

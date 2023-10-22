@@ -32,7 +32,13 @@ export default function RootLayout({
           }}
         />
         <NhostClientProvider>
-          <Box sx={{ display: "flex", height: "100vh", width: "100vw" }}>
+          <Box
+            sx={{
+              display: "flex",
+              height: "100vh",
+              width: "100vw",
+            }}
+          >
             {children}
           </Box>
         </NhostClientProvider>
