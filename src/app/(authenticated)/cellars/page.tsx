@@ -19,11 +19,11 @@ import {
 import NextLink from "next/link";
 import { MdAdd, MdDelete, MdEdit, MdFavoriteBorder } from "react-icons/md";
 import { useQuery } from "urql";
-import cellar1 from "@/app/public/cellar1.png";
-import cellar2 from "@/app/public/cellar2.png";
-import cellar3 from "@/app/public/cellar3.png";
-import cellar4 from "@/app/public/cellar4.png";
-import cellar5 from "@/app/public/cellar5.png";
+import cellar1 from "@/images/cellar1.png";
+import cellar2 from "@/images/cellar2.png";
+import cellar3 from "@/images/cellar3.png";
+import cellar4 from "@/images/cellar4.png";
+import cellar5 from "@/images/cellar5.png";
 import Image from "next/image";
 import InteractiveCard from "@/components/common/InteractiveCard";
 import TopNavigationBar from "@/components/common/HeaderBar";
