@@ -1,5 +1,4 @@
 import { MetadataRoute } from "next";
-// import icons from "@/app/icons.json";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -10,7 +9,6 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     background_color: "#302c3a",
     theme_color: "#302c3a",
-    // icons: icons.icons,
     orientation: "portrait",
     icons: [
       {
@@ -38,16 +36,5 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "48x48",
       },
     ],
-    // screenshots: [
-    //   {
-    //     src: "/icons/pwa-screenshot-1.png",
-    //     sizes: "3840x2160",
-    //     form_factor: "wide",
-    //   },
-    //   {
-    //     src: "/icons/pwa-screenshot-2.png",
-    //     sizes: "3840x2160",
-    //   },
-    // ],
   };
 }
