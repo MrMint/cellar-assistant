@@ -13,7 +13,14 @@ import {
 } from "@mui/joy";
 import { useEffect, useState } from "react";
 import { Result, useZxing } from "react-zxing";
-import { BarcodeFormat } from "@zxing/library";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
+const hints = new Map<DecodeHintType, any>([
+  [DecodeHintType.TRY_HARDER, true],
+  [
+    DecodeHintType.POSSIBLE_FORMATS,
+    [BarcodeFormat.EAN_13, BarcodeFormat.UPC_A],
+  ],
+]);
 
 const StyledVideo = styled("video")(() => ({
   objectFit: "scale-down",
@@ -36,6 +43,7 @@ const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
     onDecodeResult(result) {
       setResult(result);
     },
+    hints,
   });
 
   useEffect(() => {
