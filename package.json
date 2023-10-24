@@ -19,7 +19,7 @@
     "@graphql-codegen/cli": "5.0.0",
     "@graphql-codegen/client-preset": "4.1.0",
     "@mui/joy": "5.0.0-beta.11",
-    "@nhost/nextjs": "1.13.38",
+    "@nhost/nextjs": "1.13.39",
     "@parcel/watcher": "2.3.0",
     "@types/node": "20.8.8",
     "@types/ramda": "0.29.7",
