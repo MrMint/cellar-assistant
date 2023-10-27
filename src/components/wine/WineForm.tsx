@@ -1,4 +1,9 @@
 import { graphql } from "@/gql";
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+  Wines_Insert_Input,
+} from "@/gql/graphql";
 import { formatIsoDateString, nullsToUndefined } from "@/utilities";
 import {
   Box,
@@ -24,8 +29,8 @@ type SharedFields = {
   special_designation?: string;
   vineyard_designation?: string;
   alcohol_content_percentage?: number;
-  ean_13?: number;
-  upc_12?: number;
+  barcode_code?: string;
+  barcode_type?: string;
 };
 
 type IWineFormInput = {
@@ -33,7 +38,7 @@ type IWineFormInput = {
   vintage?: number;
 } & SharedFields;
 
-type DefaultValues = {
+export type WineFormDefaultValues = {
   name?: string;
   vintage?: string;
 } & SharedFields;
@@ -41,8 +46,9 @@ type DefaultValues = {
 type WineFormProps = {
   id?: string;
   cellarId: string;
+  itemOnboardingId?: string;
   returnUrl: string;
-  defaultValues?: DefaultValues;
+  defaultValues?: WineFormDefaultValues;
 };
 
 const addWineMutation = graphql(`
@@ -60,8 +66,36 @@ const updateWineMutation = graphql(`
     }
   }
 `);
+function mapFormValuesToInsertInput(
+  values: IWineFormInput,
+  cellar_id: string,
+): Wines_Insert_Input {
+  return {
+    name: values.name,
+    alcohol_content_percentage: values.alcohol_content_percentage,
+    cellar_id,
+    description: values.description,
+    region: values.region,
+    special_designation: values.special_designation,
+    vineyard_designation: values.vineyard_designation,
+    variety: values.variety,
+    vintage: isNil(values.vintage)
+      ? undefined
+      : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
+    barcode: {
+      data: {
+        code: values.barcode_code,
+        type: values.barcode_type,
+      },
+      on_conflict: {
+        constraint: Barcodes_Constraint.BarcodesPkey,
+        update_columns: [Barcodes_Update_Column.Code],
+      },
+    },
+  };
+}
 
-const WineForm = ({
+export const WineForm = ({
   id,
   cellarId,
   returnUrl,
@@ -94,19 +128,13 @@ const WineForm = ({
   });
 
   const onSubmit: SubmitHandler<IWineFormInput> = async (values) => {
-    const update = {
-      ...values,
-      vintage: isNil(values.vintage)
-        ? undefined
-        : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
-    };
-
     let errored: CombinedError | undefined;
+    const update = mapFormValuesToInsertInput(values, cellarId);
 
     if (id == undefined) {
       errored = (
         await addWine({
-          wine: { ...update, cellar_id: cellarId },
+          wine: update,
         })
       ).error;
     } else {
@@ -235,19 +263,9 @@ const WineForm = ({
               />
             </FormControl>
             <FormControl>
-              <FormLabel>EAN13</FormLabel>
+              <FormLabel>Barcode</FormLabel>
               <Controller
-                name="ean_13"
-                control={control}
-                render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>UPC12</FormLabel>
-              <Controller
-                name="upc_12"
+                name="barcode_code"
                 control={control}
                 render={({ field }) => (
                   <Input disabled={fetching} type="number" {...field} />
@@ -255,7 +273,6 @@ const WineForm = ({
               />
             </FormControl>
           </Stack>
-
           {error !== undefined && (
             <Typography>Woah error encountered</Typography>
           )}
@@ -267,5 +284,3 @@ const WineForm = ({
     </Box>
   );
 };
-
-export default WineForm;

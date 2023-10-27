@@ -10,7 +10,8 @@
     "lint": "next lint",
     "codegen-watch": "graphql-codegen -w",
     "codegen": "graphql-codegen",
-    "format": "prettier . --write"
+    "format": "prettier . --write",
+    "typecheck": "tsc"
   },
   "dependencies": {
     "@emotion/react": "11.11.1",
@@ -45,6 +46,7 @@
     "react-dom": "18.2.0",
     "react-hook-form": "7.47.0",
     "react-icons": "4.11.0",
+    "react-webcam": "7.1.1",
     "react-zxing": "2.0.0",
     "ts-node": "10.9.1",
     "typescript": "5.2.2",

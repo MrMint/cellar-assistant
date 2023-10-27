@@ -2,6 +2,9 @@ table:
   name: beers
   schema: public
 object_relationships:
+  - name: barcode
+    using:
+      foreign_key_constraint_on: barcode_code
   - name: cellar
     using:
       foreign_key_constraint_on: cellar_id
@@ -20,15 +23,16 @@ insert_permissions:
         created_by_id: x-hasura-User-Id
       columns:
         - alcohol_content_percentage
+        - back_label_image_id
+        - barcode_code
         - cellar_id
         - created_by_id
         - description
-        - ean_13
+        - front_label_image_id
         - international_bitterness_unit
         - name
         - price
         - style
-        - upc_12
         - vintage
     comment: ""
 select_permissions:
@@ -36,17 +40,18 @@ select_permissions:
     permission:
       columns:
         - alcohol_content_percentage
+        - back_label_image_id
+        - barcode_code
         - cellar_id
         - created_at
         - created_by_id
         - description
-        - ean_13
+        - front_label_image_id
         - id
         - international_bitterness_unit
         - name
         - price
         - style
-        - upc_12
         - updated_at
         - vintage
       filter:
@@ -60,13 +65,12 @@ update_permissions:
     permission:
       columns:
         - alcohol_content_percentage
+        - barcode_code
         - description
-        - ean_13
         - international_bitterness_unit
         - name
         - price
         - style
-        - upc_12
         - vintage
       filter:
         created_by_id:

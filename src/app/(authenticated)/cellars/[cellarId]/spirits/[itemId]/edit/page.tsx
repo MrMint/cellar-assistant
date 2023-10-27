@@ -1,6 +1,6 @@
 "use client";
 
-import SpiritForm from "@/components/spirit/SpiritForm";
+import { SpiritForm } from "@/components/spirit/SpiritForm";
 import { graphql } from "@/gql";
 import { nullsToUndefined } from "@/utilities";
 import { Box } from "@mui/joy";
@@ -19,8 +19,7 @@ const editSpiritPageQuery = graphql(`
       description
       alcohol_content_percentage
       price
-      upc_12
-      ean_13
+      barcode_code
     }
   }
 `);
@@ -46,7 +45,7 @@ const EditSpirit = ({
     spirit = nullsToUndefined(data.spirits_by_pk);
   }
   return (
-    <Box>
+    <>
       {spirit !== undefined && (
         <SpiritForm
           id={itemId}
@@ -59,13 +58,12 @@ const EditSpirit = ({
             vintage: spirit.vintage,
             type: spirit.type,
             alcohol_content_percentage: spirit.alcohol_content_percentage,
-            ean_13: spirit.ean_13,
             price: spirit.price,
-            upc_12: spirit.upc_12,
+            barcode_code: spirit.barcode_code,
           }}
         />
       )}
-    </Box>
+    </>
   );
 };
 

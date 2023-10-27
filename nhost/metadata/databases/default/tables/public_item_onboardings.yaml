@@ -1,0 +1,3 @@
+table:
+  name: item_onboardings
+  schema: public

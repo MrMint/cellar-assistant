@@ -1,41 +1,51 @@
 import { Barcode, BarcodeType } from "@/constants";
 import {
-  AspectRatio,
+  Button,
   Card,
   CardContent,
   CardCover,
-  CardOverflow,
   CircularProgress,
-  LinearProgress,
-  Stack,
   Typography,
   styled,
 } from "@mui/joy";
 import { useEffect, useState } from "react";
 import { Result, useZxing } from "react-zxing";
-import { BarcodeFormat } from "@zxing/library";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
+
+const hints = new Map<DecodeHintType, any>([
+  [
+    DecodeHintType.POSSIBLE_FORMATS,
+    [BarcodeFormat.EAN_13, BarcodeFormat.UPC_A],
+  ],
+]);
 
 const StyledVideo = styled("video")(() => ({
   objectFit: "scale-down",
 }));
 
-export type BarcodeScanResult = {
-  success: boolean;
-  barcode: Barcode;
-};
-
 type BarcodeScannerProps = {
-  onChange: (result: BarcodeScanResult) => void;
+  onChange: (result: Barcode) => void;
 };
 
-const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
+export const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
   const [result, setResult] = useState<Result>();
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
 
-  const { ref } = useZxing({
+  const {
+    ref,
+    torch: { off, on, status },
+  } = useZxing({
     onDecodeResult(result) {
       setResult(result);
     },
+    constraints: {
+      video: {
+        width: 1920,
+        height: 1080,
+        facingMode: "environment",
+      },
+    },
+    hints,
   });
 
   useEffect(() => {
@@ -43,7 +53,7 @@ const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
       let type: BarcodeType | undefined;
       switch (result.getBarcodeFormat()) {
         case BarcodeFormat.UPC_A:
-          type = BarcodeType.UPC_12;
+          type = BarcodeType.UPC_A;
           break;
         case BarcodeFormat.EAN_13:
           type = BarcodeType.EAN_13;
@@ -52,11 +62,8 @@ const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
           break;
       }
       onChange({
-        success: type !== undefined,
-        barcode: {
-          text: result.getText(),
-          type: type ?? BarcodeType.EAN_13,
-        },
+        text: result.getText(),
+        type: type,
       });
     }
   }, [result, onChange]);
@@ -77,6 +84,15 @@ const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
       </CardCover>
       {isVideoLoaded && (
         <CardContent>
+          {status !== "unavailable" && (
+            <Button
+              onClick={() => {
+                status === "on" ? off() : on();
+              }}
+            >
+              Toggle light
+            </Button>
+          )}
           <Typography level="body-lg" fontWeight="lg">
             Scanning...
           </Typography>
@@ -85,5 +101,3 @@ const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
     </Card>
   );
 };
-
-export default BarcodeScanner;

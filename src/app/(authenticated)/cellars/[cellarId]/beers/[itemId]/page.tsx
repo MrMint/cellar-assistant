@@ -65,7 +65,7 @@ const BeerDetails = ({
             </AspectRatio>
           </Stack>
         </Grid>
-        <Grid xs={12} smOffset={8}>
+        <Grid xs={12} sm={8}>
           <Sheet>
             {isLoading === false && beer !== undefined && (
               <ItemDetails

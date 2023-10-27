@@ -18,8 +18,7 @@ const editBeerPageQuery = graphql(`
       description
       alcohol_content_percentage
       price
-      upc_12
-      ean_13
+      barcode_code
       international_bitterness_unit
     }
   }
@@ -42,7 +41,7 @@ const EditBeer = ({
     beer = nullsToUndefined(data.beers_by_pk);
   }
   return (
-    <Box>
+    <>
       {beer !== undefined && (
         <BeerForm
           id={itemId}
@@ -54,14 +53,13 @@ const EditBeer = ({
             style: beer.style,
             vintage: beer.vintage,
             alcohol_content_percentage: beer.alcohol_content_percentage,
-            ean_13: beer.ean_13,
             price: beer.price,
-            upc_12: beer.upc_12,
+            barcode_code: beer.barcode_code,
             international_bitterness_unit: beer.international_bitterness_unit,
           }}
         />
       )}
-    </Box>
+    </>
   );
 };
 

@@ -2,6 +2,9 @@ table:
   name: spirits
   schema: public
 object_relationships:
+  - name: barcode
+    using:
+      foreign_key_constraint_on: barcode_code
   - name: cellar
     using:
       foreign_key_constraint_on: cellar_id
@@ -20,34 +23,32 @@ insert_permissions:
         created_by_id: x-hasura-User-Id
       columns:
         - alcohol_content_percentage
+        - barcode_code
         - cellar_id
         - description
-        - ean_13
         - name
         - price
         - style
         - type
-        - upc_12
         - vintage
     comment: ""
 select_permissions:
   - role: user
     permission:
       columns:
-        - ean_13
-        - upc_12
-        - vintage
-        - price
         - alcohol_content_percentage
+        - barcode_code
+        - cellar_id
+        - created_at
+        - created_by_id
         - description
+        - id
         - name
+        - price
         - style
         - type
-        - created_at
         - updated_at
-        - cellar_id
-        - created_by_id
-        - id
+        - vintage
       filter:
         cellar:
           createdBy:
@@ -59,13 +60,12 @@ update_permissions:
     permission:
       columns:
         - alcohol_content_percentage
+        - barcode_code
         - description
-        - ean_13
         - name
         - price
         - style
         - type
-        - upc_12
         - vintage
       filter:
         cellar:

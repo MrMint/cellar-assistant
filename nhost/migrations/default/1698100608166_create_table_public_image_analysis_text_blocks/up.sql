@@ -1,0 +1,1 @@
+CREATE TABLE "public"."image_analysis_text_blocks" ("id" serial NOT NULL, "text" text NOT NULL, "bounding_box" polygon NOT NULL, "image_analysis_id" integer NOT NULL, PRIMARY KEY ("id") , FOREIGN KEY ("image_analysis_id") REFERENCES "public"."image_analysis"("id") ON UPDATE restrict ON DELETE restrict);

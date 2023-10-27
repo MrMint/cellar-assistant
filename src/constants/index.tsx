@@ -5,13 +5,13 @@ export enum ItemType {
 }
 
 export enum BarcodeType {
-  UPC_12,
-  EAN_13,
+  UPC_A = "UPC_A",
+  EAN_13 = "EAN_13",
 }
 
 export type Barcode = {
   text: string;
-  type: BarcodeType;
+  type?: BarcodeType;
 };
 
 export interface BeforeInstallPromptEvent extends Event {

@@ -1,0 +1,13 @@
+table:
+  name: image_analysis_text_blocks
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - image_analysis_id
+        - bounding_box
+        - raw_text
+      filter: {}
+    comment: ""

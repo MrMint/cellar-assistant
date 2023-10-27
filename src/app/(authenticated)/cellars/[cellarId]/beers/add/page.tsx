@@ -1,7 +1,6 @@
 "use client";
 
 import { BeerOnboarding } from "@/components/beer/BeerOnboarding";
-import { Box } from "@mui/joy";
 
 const AddBeer = ({
   params: { cellarId },
@@ -9,12 +8,10 @@ const AddBeer = ({
   params: { cellarId: string };
 }) => {
   return (
-    <Box>
-      <BeerOnboarding
-        cellarId={cellarId}
-        returnUrl={`/cellars/${cellarId}/items`}
-      />
-    </Box>
+    <BeerOnboarding
+      cellarId={cellarId}
+      returnUrl={`/cellars/${cellarId}/items`}
+    />
   );
 };
 
