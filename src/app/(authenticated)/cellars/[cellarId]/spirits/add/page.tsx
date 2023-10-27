@@ -9,12 +9,10 @@ const AddSpirit = ({
   params: { cellarId: string };
 }) => {
   return (
-    <Box>
-      <SpiritOnboarding
-        cellarId={cellarId}
-        returnUrl={`/cellars/${cellarId}/items`}
-      />
-    </Box>
+    <SpiritOnboarding
+      cellarId={cellarId}
+      returnUrl={`/cellars/${cellarId}/items`}
+    />
   );
 };
 

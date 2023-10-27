@@ -1,0 +1,73 @@
+type Query {
+  beer_defaults(
+    hint: item_defaults_hint!
+  ): beer_defaults_result
+}
+
+type Query {
+  spirit_defaults(
+    hint: item_defaults_hint!
+  ): spirit_defaults_result
+}
+
+type Query {
+  wine_defaults(
+    hint: item_defaults_hint!
+  ): wine_defaults_result
+}
+
+input item_defaults_input {
+  barcode: String
+  barcodeType: String
+  frontLabelFileId: uuid
+  backLabelFileId: uuid
+}
+
+input item_defaults_hint {
+  barcode: String
+  barcodeType: String
+  frontLabelFileId: uuid
+  backLabelFileId: uuid
+}
+
+type wine_defaults_result {
+  alcohol_content_percentage: numeric
+  description: String
+  barcode_code: String
+  barcode_type: String
+  name: String
+  region: String
+  special_designation: String
+  variety: String
+  vineyard_designation: String
+  vintage: date
+  item_onboarding_id: String!
+}
+
+type beer_defaults_result {
+  alcohol_content_percentage: numeric
+  description: String
+  barcode_code: String
+  barcode_type: String
+  name: String
+  country: String
+  style: String
+  vintage: date
+  international_bitterness_unit: Int
+  item_onboarding_id: String!
+}
+
+type spirit_defaults_result {
+  alcohol_content_percentage: numeric
+  description: String
+  barcode_code: String
+  barcode_type: String
+  name: String
+  country: String
+  style: String
+  vintage: date
+  type: String
+  distillery: String
+  item_onboarding_id: String!
+}
+

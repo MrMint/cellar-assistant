@@ -9,12 +9,10 @@ const AddWine = ({
   params: { cellarId: string };
 }) => {
   return (
-    <Box>
-      <WineOnboarding
-        cellarId={cellarId}
-        returnUrl={`/cellars/${cellarId}/items`}
-      />
-    </Box>
+    <WineOnboarding
+      cellarId={cellarId}
+      returnUrl={`/cellars/${cellarId}/items`}
+    />
   );
 };
 

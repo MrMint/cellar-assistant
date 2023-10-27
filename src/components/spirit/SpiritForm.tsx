@@ -1,5 +1,10 @@
 import { graphql } from "@/gql";
-import { Spirit_Type_Enum } from "@/gql/graphql";
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+  Spirit_Type_Enum,
+  Spirits_Insert_Input,
+} from "@/gql/graphql";
 import { formatIsoDateString, getEnumKeys } from "@/utilities";
 import {
   Box,
@@ -25,9 +30,8 @@ type SharedFields = {
   description?: string;
   price?: number;
   alcohol_content_percentage?: number;
-  ean_13?: number;
-  upc_12?: number;
-  international_bitterness_unit?: number;
+  barcode_code?: string;
+  barcode_type?: string;
   style?: string;
 };
 
@@ -37,7 +41,7 @@ type ISpiritFormInput = {
   vintage?: number;
 } & SharedFields;
 
-type DefaultValues = {
+export type SpiritFormDefaultValues = {
   name?: string;
   vintage?: string;
   type?: Spirit_Type_Enum;
@@ -45,9 +49,10 @@ type DefaultValues = {
 
 type SpiritFormProps = {
   id?: string;
+  itemOnboardingId?: string;
   cellarId: string;
   returnUrl: string;
-  defaultValues?: DefaultValues;
+  defaultValues?: SpiritFormDefaultValues;
 };
 
 const addSpiritMutation = graphql(`
@@ -66,7 +71,34 @@ const updateSpiritMutation = graphql(`
   }
 `);
 
-const SpiritForm = ({
+function mapFormValuesToInsertInput(
+  values: ISpiritFormInput,
+  cellar_id: string,
+): Spirits_Insert_Input {
+  return {
+    name: values.name,
+    alcohol_content_percentage: values.alcohol_content_percentage,
+    cellar_id,
+    description: values.description,
+    type: values.type,
+    style: values.style,
+    vintage: isNil(values.vintage)
+      ? undefined
+      : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
+    barcode: {
+      data: {
+        code: values.barcode_code,
+        type: values.barcode_type,
+      },
+      on_conflict: {
+        constraint: Barcodes_Constraint.BarcodesPkey,
+        update_columns: [Barcodes_Update_Column.Code],
+      },
+    },
+  };
+}
+
+export const SpiritForm = ({
   id,
   cellarId,
   returnUrl,
@@ -99,19 +131,13 @@ const SpiritForm = ({
   });
 
   const onSubmit: SubmitHandler<ISpiritFormInput> = async (values) => {
-    const update = {
-      ...values,
-      vintage: isNil(values.vintage)
-        ? undefined
-        : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
-    };
-
     let errored: CombinedError | undefined;
+    const update = mapFormValuesToInsertInput(values, cellarId);
 
     if (id == undefined) {
       errored = (
         await addSpirit({
-          spirit: { ...update, cellar_id: cellarId },
+          spirit: update,
         })
       ).error;
     } else {
@@ -232,19 +258,9 @@ const SpiritForm = ({
               />
             </FormControl>
             <FormControl>
-              <FormLabel>EAN</FormLabel>
+              <FormLabel>Barcode</FormLabel>
               <Controller
-                name="ean_13"
-                control={control}
-                render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>UPC</FormLabel>
-              <Controller
-                name="upc_12"
+                name="barcode_code"
                 control={control}
                 render={({ field }) => (
                   <Input disabled={fetching} type="number" {...field} />
@@ -263,5 +279,3 @@ const SpiritForm = ({
     </Box>
   );
 };
-
-export default SpiritForm;
