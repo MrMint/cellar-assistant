@@ -1,6 +1,6 @@
 "use client";
 
-import WineForm from "@/components/wine/WineForm";
+import { WineForm } from "@/components/wine/WineForm";
 import { graphql } from "@/gql";
 import { nullsToUndefined } from "@/utilities";
 import { Box } from "@mui/joy";
@@ -18,8 +18,7 @@ const editWinePageQuery = graphql(`
       description
       alcohol_content_percentage
       price
-      ean_13
-      upc_12
+      barcode_code
       special_designation
       vineyard_designation
       variety
@@ -45,7 +44,7 @@ const EditWine = ({
     wine = nullsToUndefined(data.wines_by_pk);
   }
   return (
-    <Box>
+    <>
       {wine !== undefined && (
         <WineForm
           id={itemId}
@@ -56,9 +55,8 @@ const EditWine = ({
             description: wine.description,
             vintage: wine.vintage,
             alcohol_content_percentage: wine.alcohol_content_percentage,
-            ean_13: wine.ean_13,
             price: wine.price,
-            upc_12: wine.upc_12,
+            barcode_code: wine.barcode_code,
             region: wine.region,
             special_designation: wine.special_designation,
             variety: wine.variety,
@@ -66,7 +64,7 @@ const EditWine = ({
           }}
         />
       )}
-    </Box>
+    </>
   );
 };
 

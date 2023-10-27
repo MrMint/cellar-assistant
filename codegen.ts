@@ -13,7 +13,21 @@ const config: CodegenConfig = {
   ignoreNoDocuments: true,
   generates: {
     "./src/gql/": {
-      documents: ["src/**/*.tsx"],
+      documents: ["./src/**/*.(ts|tsx)"],
+      preset: "client",
+      plugins: [],
+      config: {
+        scalars: {
+          date: "string",
+          money: "number",
+          bigint: "number",
+          uuid: "string",
+        },
+        nonOptionalTypename: true,
+      },
+    },
+    "./functions/_gql/": {
+      documents: ["./functions/{*.ts,!(node_modules)/**/*.ts}"],
       preset: "client",
       plugins: [],
       config: {

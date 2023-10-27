@@ -1,5 +1,21 @@
 [global]
 
+[[global.environment]]
+name = 'GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS'
+value = '{{ secrets.GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS }}'
+
+[[global.environment]]
+name = 'GOOGLE_GCP_PROJECT_ID'
+value = '{{ secrets.GOOGLE_GCP_PROJECT_ID }}'
+
+[[global.environment]]
+name = 'GOOGLE_GCP_VERTEX_AI_LOCATION'
+value = 'us-central1'
+
+[[global.environment]]
+name = 'GOOGLE_GCP_VERTEX_AI_ENDPOINT'
+value = 'us-central1-aiplatform.googleapis.com'
+
 [hasura]
 version = 'v2.33.4-ce'
 adminSecret = '{{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}'

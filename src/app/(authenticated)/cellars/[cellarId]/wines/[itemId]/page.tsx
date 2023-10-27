@@ -20,8 +20,8 @@ const getWineQuery = graphql(`
       region
       variety
       vintage
-      ean_13
       description
+      barcode_code
       alcohol_content_percentage
       cellar {
         name
