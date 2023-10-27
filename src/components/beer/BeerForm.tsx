@@ -1,5 +1,10 @@
 import { graphql } from "@/gql";
-import { formatIsoDateString, nullsToUndefined } from "@/utilities";
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+  Beers_Insert_Input,
+} from "@/gql/graphql";
+import { formatIsoDateString } from "@/utilities";
 import {
   Box,
   Button,
@@ -20,8 +25,8 @@ type SharedFields = {
   description?: string;
   price?: number;
   alcohol_content_percentage?: number;
-  ean_13?: number;
-  upc_12?: number;
+  barcode_code?: string;
+  barcode_type?: string;
   international_bitterness_unit?: number;
   style?: string;
 };
@@ -31,7 +36,7 @@ type IBeerFormInput = {
   vintage?: number;
 } & SharedFields;
 
-type DefaultValues = {
+export type BeerFormDefaultValues = {
   name?: string;
   vintage?: string;
 } & SharedFields;
@@ -40,7 +45,8 @@ export type BeerFormProps = {
   id?: string;
   cellarId: string;
   returnUrl: string;
-  defaultValues?: DefaultValues;
+  itemOnboardingId?: string;
+  defaultValues?: BeerFormDefaultValues;
 };
 
 const addBeerMutation = graphql(`
@@ -58,6 +64,33 @@ const updateBeerMutation = graphql(`
     }
   }
 `);
+
+function mapFormValuesToInsertInput(
+  values: IBeerFormInput,
+  cellar_id: string,
+): Beers_Insert_Input {
+  return {
+    name: values.name,
+    alcohol_content_percentage: values.alcohol_content_percentage,
+    cellar_id,
+    description: values.description,
+    international_bitterness_unit: values.international_bitterness_unit,
+    style: values.style,
+    vintage: isNil(values.vintage)
+      ? undefined
+      : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
+    barcode: {
+      data: {
+        code: values.barcode_code,
+        type: values.barcode_type,
+      },
+      on_conflict: {
+        constraint: Barcodes_Constraint.BarcodesPkey,
+        update_columns: [Barcodes_Update_Column.Code],
+      },
+    },
+  };
+}
 
 export const BeerForm = ({
   id,
@@ -92,19 +125,13 @@ export const BeerForm = ({
   });
 
   const onSubmit: SubmitHandler<IBeerFormInput> = async (values) => {
-    const update = {
-      ...values,
-      vintage: isNil(values.vintage)
-        ? undefined
-        : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
-    };
-
     let errored: CombinedError | undefined;
+    const update = mapFormValuesToInsertInput(values, cellarId);
 
     if (id == undefined) {
       errored = (
         await addBeer({
-          beer: { ...update, cellar_id: cellarId },
+          beer: update,
         })
       ).error;
     } else {
@@ -212,22 +239,12 @@ export const BeerForm = ({
               />
             </FormControl>
             <FormControl>
-              <FormLabel>EAN</FormLabel>
+              <FormLabel>Barcode</FormLabel>
               <Controller
-                name="ean_13"
+                name="barcode_code"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>UPC</FormLabel>
-              <Controller
-                name="upc_12"
-                control={control}
-                render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Input disabled={fetching} type="text" {...field} />
                 )}
               />
             </FormControl>
