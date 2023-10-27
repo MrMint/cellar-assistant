@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.13.0](https://github.com/MrMint/cellar-assistant/compare/v0.12.0...v0.13.0) (2023-10-27)
+
+
+### Features
+
+* Adds Vision & LLM based product onboarding wizard ([30babad](https://github.com/MrMint/cellar-assistant/commit/30babad16de755226d5a0bca7808a8279129fa55))
+* Improves barcode scanner success chance ([d5d3317](https://github.com/MrMint/cellar-assistant/commit/d5d3317cc7e81387ee3ce0f27a19a204aaf4ef9e))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.12 ([6522407](https://github.com/MrMint/cellar-assistant/commit/65224079921c38e8efc56094a91602f18d55f3c3))
+* **deps:** update dependency @nhost/nextjs to v1.13.39 ([047cea2](https://github.com/MrMint/cellar-assistant/commit/047cea229190766a2b4acfa03dbd064160fd7b93))
+* **deps:** update dependency @types/node to v20.8.8 ([940b6b9](https://github.com/MrMint/cellar-assistant/commit/940b6b9098377e3934c94809af58c06f41a72b82))
+* **deps:** update dependency @types/node to v20.8.9 ([89f1553](https://github.com/MrMint/cellar-assistant/commit/89f15534a66029d1a877be2465128176f7bcbdd2))
+* **deps:** update dependency @types/react to v18.2.32 ([688b98e](https://github.com/MrMint/cellar-assistant/commit/688b98eb692f5616c19d8a305ea0060b1e5adfee))
+* **deps:** update dependency @types/react to v18.2.33 ([e3778aa](https://github.com/MrMint/cellar-assistant/commit/e3778aa2c7bd71b84541c3c5209a7589236da164))
+* **deps:** update dependency graphql-ws to v5.14.2 ([3875be1](https://github.com/MrMint/cellar-assistant/commit/3875be161c6e3cc11b354999afe57acd63ca1f5d))
+* **deps:** update dependency react-webcam to v7.2.0 ([8186b44](https://github.com/MrMint/cellar-assistant/commit/8186b44f898eea1a3c539245341db24b2b35c2f4))
+* **deps:** update dependency xstate to v5.0.0-beta.37 ([84b0e6e](https://github.com/MrMint/cellar-assistant/commit/84b0e6ea1ec55b2eac737e0ce791f86b292d4146))
+* **deps:** update dependency xstate to v5.0.0-beta.38 ([e3cfddf](https://github.com/MrMint/cellar-assistant/commit/e3cfddfb39ebeea9656c8a15e1ff919d542a7353))
+
 ## [0.12.0](https://github.com/MrMint/cellar-assistant/compare/v0.11.0...v0.12.0) (2023-10-22)
 
 
