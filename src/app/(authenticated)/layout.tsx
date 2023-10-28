@@ -7,15 +7,16 @@ import Image from "next/image";
 import bot1 from "@/images/bot2.png";
 import { InstallPwaDialog } from "@/components/common/InstallPwaDialog";
 
-const Container = styled(Box)(({ theme }) => ({
-  display: "flex",
-  flexGrow: 1,
-  overflow: "hidden",
-}));
-
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Container>
+    <Box
+      sx={{
+        display: "flex",
+        flexGrow: 1,
+        flexDirection: { xs: "column-reverse", sm: "row" },
+        overflow: "hidden",
+      }}
+    >
       <InstallPwaDialog />
       <SideNavigationBar />
       <Box
@@ -46,7 +47,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
           placeholder="blur"
         />
       </Box>
-    </Container>
+    </Box>
   );
 }
 export default withAuth(AuthenticatedLayout);
