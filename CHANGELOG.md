@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.15.0](https://github.com/MrMint/cellar-assistant/compare/v0.14.0...v0.15.0) (2023-10-28)
+
+
+### Features
+
+* Adds analyzing component during onboarding ([8f22b36](https://github.com/MrMint/cellar-assistant/commit/8f22b36a7d4f49c8e43c4619f58e3e54dfdd7393))
+* Makes nav bar mobile responsive ([3450482](https://github.com/MrMint/cellar-assistant/commit/345048203e1bb438df439c5597ed4e994504fbde))
+* Requests back label before front ([fa66d20](https://github.com/MrMint/cellar-assistant/commit/fa66d200e12111ba41910ce8e0fc40166e5e23f9))
+
 ## [0.14.0](https://github.com/MrMint/cellar-assistant/compare/v0.13.2...v0.14.0) (2023-10-28)
 
 
