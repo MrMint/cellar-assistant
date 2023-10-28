@@ -3,7 +3,7 @@ import { NhostClient } from "@nhost/nhost-js";
 import {
   RetrieveTextFromImageBody,
   RetrieveTextFromImageData,
-} from "../retrieveTextFromImage.ts";
+} from "../retrieveTextFromImage/index.js";
 import { NhostFunctionCallResponse } from "@nhost/nhost-js/dist/clients/functions/types";
 import { PredictionServiceClient } from "@google-cloud/aiplatform";
 import { callPredict, convertPredictionToJson } from "../_utils/gcp";
@@ -34,14 +34,7 @@ const nhostClient = new NhostClient({
   adminSecret: NHOST_ADMIN_SECRET,
 });
 
-const credResult = await nhostClient.graphql.request(getCredential, {
-  id: CREDENTIALS_GCP_ID,
-});
-
-const predictionServiceClient = new PredictionServiceClient({
-  credentials: credResult.data.admin_credentials_by_pk.credentials,
-  apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
-});
+let predictionServiceClient: PredictionServiceClient;
 
 type GetItemDefaultsResult =
   | Wine_Defaults_Result
@@ -63,134 +56,157 @@ export default async function getItemDefaults(
   >,
   res: Response<GetItemDefaultsResult>,
 ) {
-  if (req.method !== "POST") return res.status(405).send();
-  if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
-    return res.status(400).send();
-  }
+  try {
+    if (req.method !== "POST") return res.status(405).send();
+    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+      return res.status(400).send();
+    }
 
-  let prediction: string | undefined;
-  let results = {} as GetItemDefaultsResult;
-  const {
-    hint: { barcode, barcodeType, frontLabelFileId, backLabelFileId },
-    itemType,
-    session_variables,
-  } = req.body;
+    // TODO improve gcp credential handling
+    if (isNil(predictionServiceClient)) {
+      const credResult = await nhostClient.graphql.request(getCredential, {
+        id: CREDENTIALS_GCP_ID,
+      });
+      predictionServiceClient = new PredictionServiceClient({
+        credentials: credResult.data.admin_credentials_by_pk.credentials,
+        apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
+      });
+      console.log("Initialized GCP clients");
+    }
 
-  if (isNil(session_variables)) return res.status(400).send();
-  const userId = session_variables["x-hasura-user-id"];
+    let prediction: string | undefined;
+    let results = {} as GetItemDefaultsResult;
+    const {
+      hint: { barcode, barcodeType, frontLabelFileId, backLabelFileId },
+      itemType,
+      session_variables,
+    } = req.body;
 
-  if (isNil(userId)) {
-    return res.status(400).send();
-  }
-  console.log(`Received request`);
-  // TODO Check user item quota
-  // TODO search reference tables for item by barcode
+    if (isNil(session_variables)) return res.status(400).send();
+    const userId = session_variables["x-hasura-user-id"];
 
-  const labelTasks = new Array<
-    Promise<NhostFunctionCallResponse<RetrieveTextFromImageData>>
-  >();
+    if (isNil(userId)) {
+      return res.status(400).send();
+    }
+    console.log(`Received request`);
+    // TODO Check user item quota
+    // TODO search reference tables for item by barcode
 
-  if (isNotNil(frontLabelFileId)) {
-    labelTasks.push(
-      nhostClient.functions.call<
-        RetrieveTextFromImageData,
-        RetrieveTextFromImageBody,
-        any
-      >(
-        "retrieveTextFromImage",
-        { fileId: frontLabelFileId, itemType },
-        {
-          headers: { "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET },
-        },
-      ),
-    );
-    console.log(`Started text extraction for front label`);
-  }
+    const labelTasks = new Array<
+      Promise<NhostFunctionCallResponse<RetrieveTextFromImageData>>
+    >();
 
-  if (isNotNil(backLabelFileId)) {
-    labelTasks.push(
-      nhostClient.functions.call<
-        RetrieveTextFromImageData,
-        RetrieveTextFromImageBody,
-        any
-      >(
-        "retrieveTextFromImage",
-        { fileId: backLabelFileId, itemType },
-        {
-          headers: { "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET },
-        },
-      ),
-    );
-    console.log(`Started text extraction for back label`);
-  }
+    if (isNotNil(frontLabelFileId)) {
+      labelTasks.push(
+        nhostClient.functions.call<
+          RetrieveTextFromImageData,
+          RetrieveTextFromImageBody,
+          any
+        >(
+          "retrieveTextFromImage",
+          { fileId: frontLabelFileId, itemType },
+          {
+            headers: {
+              "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET,
+            },
+          },
+        ),
+      );
+      console.log(`Started text extraction for front label`);
+    }
 
-  if (labelTasks.length > 0) {
-    const labelResults = await Promise.allSettled(labelTasks);
+    if (isNotNil(backLabelFileId)) {
+      labelTasks.push(
+        nhostClient.functions.call<
+          RetrieveTextFromImageData,
+          RetrieveTextFromImageBody,
+          any
+        >(
+          "retrieveTextFromImage",
+          { fileId: backLabelFileId, itemType },
+          {
+            headers: {
+              "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET,
+            },
+          },
+        ),
+      );
+      console.log(`Started text extraction for back label`);
+    }
 
-    if (
-      labelResults.filter(isRejected).length > 0 ||
-      labelResults.filter(isFulfilled).filter((x) => isNotNil(x.value.error))
-        .length > 0
-    )
-      return res.status(500).send();
+    if (labelTasks.length > 0) {
+      const labelResults = await Promise.allSettled(labelTasks);
+      const promiseLevelErrors = labelResults.filter(isRejected);
+      const graphqlErrors = labelResults
+        .filter(isFulfilled)
+        .filter((x) => isNotNil(x.value.error));
 
-    console.log(`Completed text extraction`);
-    const labelResultsSuccess = labelResults
-      .filter(isFulfilled)
-      .map((x) => x.value.res.data);
+      if (promiseLevelErrors.length > 0 || graphqlErrors.length > 0) {
+        promiseLevelErrors.forEach(console.log);
+        graphqlErrors.forEach(console.log);
+        return res.status(500).send();
+      }
 
-    if (
-      labelResultsSuccess.find((x) =>
-        x.find((y) => not(isEmpty(y.enhanced_text))),
-      )
-    ) {
-      const mergedText = labelResultsSuccess.map((x) =>
-        x.flatMap((blocks) => blocks.enhanced_text).join(`
+      console.log(`Completed text extraction`);
+      const labelResultsSuccess = labelResults
+        .filter(isFulfilled)
+        .map((x) => x.value.res.data);
+
+      if (
+        labelResultsSuccess.find((x) =>
+          x.find((y) => not(isEmpty(y.enhanced_text))),
+        )
+      ) {
+        const mergedText = labelResultsSuccess.map((x) =>
+          x.flatMap((blocks) => blocks.enhanced_text).join(`
       `),
-      ).join(`
+        ).join(`
       `);
-      const prompt = `for the given text from a ${itemType} label return a single JSON object with the properties: ${getFieldsForType(
-        itemType,
-      )}.
+        const prompt = `for the given text from a ${itemType} label return a single JSON object with the properties: ${getFieldsForType(
+          itemType,
+        )}.
     
     input: ${mergedText}
     output:
     `;
 
-      console.log(prompt);
-      prediction = await callPredict(predictionServiceClient, prompt);
-      console.log(`Completed defaults prediction`);
-      try {
-        const jsonPrediction = convertPredictionToJson(prediction);
+        console.log(prompt);
+        prediction = await callPredict(predictionServiceClient, prompt);
+        console.log(`Completed defaults prediction`);
+        try {
+          const jsonPrediction = convertPredictionToJson(prediction);
 
-        console.log(`Completed converting defaults prediction to JSON`);
+          console.log(`Completed converting defaults prediction to JSON`);
 
-        results = mapJsonToReturnType(itemType, jsonPrediction);
-      } catch (exception) {
-        // TODO insert the bad prediction into the database for inspection
-        console.log(exception);
-        return res.status(500).send();
+          results = mapJsonToReturnType(itemType, jsonPrediction);
+        } catch (exception) {
+          // TODO insert the bad prediction into the database for inspection
+          console.log(exception);
+          return res.status(500).send();
+        }
       }
     }
-  }
-  try {
-    const {
-      data: {
-        insert_item_onboardings_one: { id },
+    const addOnboardingResult = await nhostClient.graphql.request(
+      addItemOnboarding,
+      {
+        onboarding: {
+          barcode: barcode,
+          barcode_type: barcodeType,
+          back_label_image_id: backLabelFileId,
+          front_label_image_id: frontLabelFileId,
+          item_type: itemType,
+          user_id: userId,
+          raw_defaults: prediction,
+          defaults: results,
+          status: "COMPLETED",
+        },
       },
-    } = await nhostClient.graphql.request(addItemOnboarding, {
-      onboarding: {
-        barcode: barcode,
-        barcode_type: barcodeType,
-        back_label_image_id: backLabelFileId,
-        front_label_image_id: frontLabelFileId,
-        item_type: itemType,
-        user_id: userId,
-        raw_defaults: prediction,
-        defaults: results,
-        status: "COMPLETED",
-      },
-    });
+    );
+
+    if (isNotNil(addOnboardingResult.error)) {
+      console.log(addOnboardingResult.error);
+      return res.status(500).send();
+    }
 
     if (isNotNil(barcode)) {
       results.barcode_code = barcode;
@@ -200,12 +216,11 @@ export default async function getItemDefaults(
       results.barcode_type = barcodeType;
     }
 
-    results.item_onboarding_id = id;
+    results.item_onboarding_id =
+      addOnboardingResult.data.insert_item_onboardings_one.id;
+    return res.status(200).send(results);
   } catch (exception) {
-    // TODO insert the bad prediction into the database for inspection
     console.log(exception);
     return res.status(500).send();
   }
-
-  res.status(200).send(results);
 }
