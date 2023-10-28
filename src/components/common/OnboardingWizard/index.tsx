@@ -1,76 +1,8 @@
-import { assign, createMachine } from "xstate";
 import { useMachine } from "@xstate/react";
 import { Barcode } from "@/constants";
 import { BarcodeStep } from "./BarcodeStep";
 import { PictureStep } from "./PictureStep";
-
-const toggleMachine = createMachine({
-  id: "onboarding-wizard",
-  initial: "barcode",
-  types: {} as {
-    context: {
-      barcode?: Barcode;
-      frontLabelDataUrl?: string;
-      backLabelDataUrl?: string;
-    };
-    events:
-      | {
-          type: "FOUND";
-          barcode?: Barcode;
-        }
-      | { type: "SKIP" }
-      | { type: "BACK" }
-      | { type: "CAPTURED"; image: string };
-    actions: { type: "handleDone" };
-  },
-  states: {
-    barcode: {
-      on: {
-        FOUND: {
-          actions: assign({
-            barcode: ({ event }) => event.barcode,
-          }),
-          target: "clearing",
-        },
-        SKIP: "clearing",
-      },
-    },
-    clearing: {
-      after: {
-        // We need to delay a bit to give time for the camera to deal with new video constraints
-        50: { target: "front" },
-      },
-    },
-    front: {
-      on: {
-        CAPTURED: {
-          actions: assign({
-            frontLabelDataUrl: ({ event }) => event.image,
-          }),
-          target: "back",
-        },
-        BACK: "barcode",
-        SKIP: "back",
-      },
-    },
-    back: {
-      on: {
-        CAPTURED: {
-          actions: assign({
-            backLabelDataUrl: ({ event }) => event.image,
-          }),
-          target: "done",
-        },
-        BACK: "front",
-        SKIP: "done",
-      },
-    },
-    done: {
-      entry: ["handleDone"],
-      type: "final",
-    },
-  },
-});
+import { pictureOnboardingMachine } from "./machines";
 
 export type OnboardingResult = {
   barcode?: Barcode;
@@ -84,7 +16,7 @@ export type OnboardingWizardProps = {
 
 export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
   const [state, send] = useMachine(
-    toggleMachine.provide({
+    pictureOnboardingMachine.provide({
       actions: {
         handleDone: ({
           context: { barcode, backLabelDataUrl, frontLabelDataUrl },
