@@ -85,6 +85,179 @@ export type String_Comparison_Exp = {
   _similar?: InputMaybe<Scalars['String']['input']>;
 };
 
+/** columns and relationships of "admin.credentials" */
+export type Admin_Credentials = {
+  __typename: 'admin_credentials';
+  credentials: Scalars['jsonb']['output'];
+  id: Scalars['String']['output'];
+};
+
+
+/** columns and relationships of "admin.credentials" */
+export type Admin_CredentialsCredentialsArgs = {
+  path?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregated selection of "admin.credentials" */
+export type Admin_Credentials_Aggregate = {
+  __typename: 'admin_credentials_aggregate';
+  aggregate?: Maybe<Admin_Credentials_Aggregate_Fields>;
+  nodes: Array<Admin_Credentials>;
+};
+
+/** aggregate fields of "admin.credentials" */
+export type Admin_Credentials_Aggregate_Fields = {
+  __typename: 'admin_credentials_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Admin_Credentials_Max_Fields>;
+  min?: Maybe<Admin_Credentials_Min_Fields>;
+};
+
+
+/** aggregate fields of "admin.credentials" */
+export type Admin_Credentials_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Admin_Credentials_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** append existing jsonb value of filtered columns with new jsonb value */
+export type Admin_Credentials_Append_Input = {
+  credentials?: InputMaybe<Scalars['jsonb']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "admin.credentials". All fields are combined with a logical 'AND'. */
+export type Admin_Credentials_Bool_Exp = {
+  _and?: InputMaybe<Array<Admin_Credentials_Bool_Exp>>;
+  _not?: InputMaybe<Admin_Credentials_Bool_Exp>;
+  _or?: InputMaybe<Array<Admin_Credentials_Bool_Exp>>;
+  credentials?: InputMaybe<Jsonb_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "admin.credentials" */
+export enum Admin_Credentials_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  CredentialsPkey = 'credentials_pkey'
+}
+
+/** delete the field or element with specified path (for JSON arrays, negative integers count from the end) */
+export type Admin_Credentials_Delete_At_Path_Input = {
+  credentials?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+/** delete the array element with specified index (negative integers count from the end). throws an error if top level container is not an array */
+export type Admin_Credentials_Delete_Elem_Input = {
+  credentials?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** delete key/value pair or string element. key/value pairs are matched based on their key value */
+export type Admin_Credentials_Delete_Key_Input = {
+  credentials?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** input type for inserting data into table "admin.credentials" */
+export type Admin_Credentials_Insert_Input = {
+  credentials?: InputMaybe<Scalars['jsonb']['input']>;
+  id?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregate max on columns */
+export type Admin_Credentials_Max_Fields = {
+  __typename: 'admin_credentials_max_fields';
+  id?: Maybe<Scalars['String']['output']>;
+};
+
+/** aggregate min on columns */
+export type Admin_Credentials_Min_Fields = {
+  __typename: 'admin_credentials_min_fields';
+  id?: Maybe<Scalars['String']['output']>;
+};
+
+/** response of any mutation on the table "admin.credentials" */
+export type Admin_Credentials_Mutation_Response = {
+  __typename: 'admin_credentials_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Admin_Credentials>;
+};
+
+/** on_conflict condition type for table "admin.credentials" */
+export type Admin_Credentials_On_Conflict = {
+  constraint: Admin_Credentials_Constraint;
+  update_columns?: Array<Admin_Credentials_Update_Column>;
+  where?: InputMaybe<Admin_Credentials_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "admin.credentials". */
+export type Admin_Credentials_Order_By = {
+  credentials?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: admin.credentials */
+export type Admin_Credentials_Pk_Columns_Input = {
+  id: Scalars['String']['input'];
+};
+
+/** prepend existing jsonb value of filtered columns with new jsonb value */
+export type Admin_Credentials_Prepend_Input = {
+  credentials?: InputMaybe<Scalars['jsonb']['input']>;
+};
+
+/** select columns of table "admin.credentials" */
+export enum Admin_Credentials_Select_Column {
+  /** column name */
+  Credentials = 'credentials',
+  /** column name */
+  Id = 'id'
+}
+
+/** input type for updating data in table "admin.credentials" */
+export type Admin_Credentials_Set_Input = {
+  credentials?: InputMaybe<Scalars['jsonb']['input']>;
+  id?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** Streaming cursor of the table "admin_credentials" */
+export type Admin_Credentials_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Admin_Credentials_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Admin_Credentials_Stream_Cursor_Value_Input = {
+  credentials?: InputMaybe<Scalars['jsonb']['input']>;
+  id?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** update columns of table "admin.credentials" */
+export enum Admin_Credentials_Update_Column {
+  /** column name */
+  Credentials = 'credentials',
+  /** column name */
+  Id = 'id'
+}
+
+export type Admin_Credentials_Updates = {
+  /** append existing jsonb value of filtered columns with new jsonb value */
+  _append?: InputMaybe<Admin_Credentials_Append_Input>;
+  /** delete the field or element with specified path (for JSON arrays, negative integers count from the end) */
+  _delete_at_path?: InputMaybe<Admin_Credentials_Delete_At_Path_Input>;
+  /** delete the array element with specified index (negative integers count from the end). throws an error if top level container is not an array */
+  _delete_elem?: InputMaybe<Admin_Credentials_Delete_Elem_Input>;
+  /** delete key/value pair or string element. key/value pairs are matched based on their key value */
+  _delete_key?: InputMaybe<Admin_Credentials_Delete_Key_Input>;
+  /** prepend existing jsonb value of filtered columns with new jsonb value */
+  _prepend?: InputMaybe<Admin_Credentials_Prepend_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Admin_Credentials_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Admin_Credentials_Bool_Exp;
+};
+
 /** Oauth requests, inserted before redirecting to the provider's site. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type AuthProviderRequests = {
   __typename: 'authProviderRequests';
@@ -5101,6 +5274,10 @@ export type Mutation_Root = {
   deleteVirus?: Maybe<Virus>;
   /** delete data from the table: "storage.virus" */
   deleteViruses?: Maybe<Virus_Mutation_Response>;
+  /** delete data from the table: "admin.credentials" */
+  delete_admin_credentials?: Maybe<Admin_Credentials_Mutation_Response>;
+  /** delete single row from the table: "admin.credentials" */
+  delete_admin_credentials_by_pk?: Maybe<Admin_Credentials>;
   /** delete data from the table: "barcodes" */
   delete_barcodes?: Maybe<Barcodes_Mutation_Response>;
   /** delete single row from the table: "barcodes" */
@@ -5189,6 +5366,10 @@ export type Mutation_Root = {
   insertVirus?: Maybe<Virus>;
   /** insert data into the table: "storage.virus" */
   insertViruses?: Maybe<Virus_Mutation_Response>;
+  /** insert data into the table: "admin.credentials" */
+  insert_admin_credentials?: Maybe<Admin_Credentials_Mutation_Response>;
+  /** insert a single row into the table: "admin.credentials" */
+  insert_admin_credentials_one?: Maybe<Admin_Credentials>;
   /** insert data into the table: "barcodes" */
   insert_barcodes?: Maybe<Barcodes_Mutation_Response>;
   /** insert a single row into the table: "barcodes" */
@@ -5277,6 +5458,12 @@ export type Mutation_Root = {
   updateVirus?: Maybe<Virus>;
   /** update data of the table: "storage.virus" */
   updateViruses?: Maybe<Virus_Mutation_Response>;
+  /** update data of the table: "admin.credentials" */
+  update_admin_credentials?: Maybe<Admin_Credentials_Mutation_Response>;
+  /** update single row of the table: "admin.credentials" */
+  update_admin_credentials_by_pk?: Maybe<Admin_Credentials>;
+  /** update multiples rows of table: "admin.credentials" */
+  update_admin_credentials_many?: Maybe<Array<Maybe<Admin_Credentials_Mutation_Response>>>;
   /** update multiples rows of table: "auth.provider_requests" */
   update_authProviderRequests_many?: Maybe<Array<Maybe<AuthProviderRequests_Mutation_Response>>>;
   /** update multiples rows of table: "auth.providers" */
@@ -5505,6 +5692,18 @@ export type Mutation_RootDeleteVirusArgs = {
 /** mutation root */
 export type Mutation_RootDeleteVirusesArgs = {
   where: Virus_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Admin_CredentialsArgs = {
+  where: Admin_Credentials_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Admin_Credentials_By_PkArgs = {
+  id: Scalars['String']['input'];
 };
 
 
@@ -5793,6 +5992,20 @@ export type Mutation_RootInsertVirusArgs = {
 export type Mutation_RootInsertVirusesArgs = {
   objects: Array<Virus_Insert_Input>;
   on_conflict?: InputMaybe<Virus_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Admin_CredentialsArgs = {
+  objects: Array<Admin_Credentials_Insert_Input>;
+  on_conflict?: InputMaybe<Admin_Credentials_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Admin_Credentials_OneArgs = {
+  object: Admin_Credentials_Insert_Input;
+  on_conflict?: InputMaybe<Admin_Credentials_On_Conflict>;
 };
 
 
@@ -6161,6 +6374,36 @@ export type Mutation_RootUpdateVirusesArgs = {
 
 
 /** mutation root */
+export type Mutation_RootUpdate_Admin_CredentialsArgs = {
+  _append?: InputMaybe<Admin_Credentials_Append_Input>;
+  _delete_at_path?: InputMaybe<Admin_Credentials_Delete_At_Path_Input>;
+  _delete_elem?: InputMaybe<Admin_Credentials_Delete_Elem_Input>;
+  _delete_key?: InputMaybe<Admin_Credentials_Delete_Key_Input>;
+  _prepend?: InputMaybe<Admin_Credentials_Prepend_Input>;
+  _set?: InputMaybe<Admin_Credentials_Set_Input>;
+  where: Admin_Credentials_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Admin_Credentials_By_PkArgs = {
+  _append?: InputMaybe<Admin_Credentials_Append_Input>;
+  _delete_at_path?: InputMaybe<Admin_Credentials_Delete_At_Path_Input>;
+  _delete_elem?: InputMaybe<Admin_Credentials_Delete_Elem_Input>;
+  _delete_key?: InputMaybe<Admin_Credentials_Delete_Key_Input>;
+  _prepend?: InputMaybe<Admin_Credentials_Prepend_Input>;
+  _set?: InputMaybe<Admin_Credentials_Set_Input>;
+  pk_columns: Admin_Credentials_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Admin_Credentials_ManyArgs = {
+  updates: Array<Admin_Credentials_Updates>;
+};
+
+
+/** mutation root */
 export type Mutation_RootUpdate_AuthProviderRequests_ManyArgs = {
   updates: Array<AuthProviderRequests_Updates>;
 };
@@ -6495,6 +6738,12 @@ export type Polygon_Comparison_Exp = {
 
 export type Query_Root = {
   __typename: 'query_root';
+  /** fetch data from the table: "admin.credentials" */
+  admin_credentials: Array<Admin_Credentials>;
+  /** fetch aggregated fields from the table: "admin.credentials" */
+  admin_credentials_aggregate: Admin_Credentials_Aggregate;
+  /** fetch data from the table: "admin.credentials" using primary key columns */
+  admin_credentials_by_pk?: Maybe<Admin_Credentials>;
   /** fetch data from the table: "auth.providers" using primary key columns */
   authProvider?: Maybe<AuthProviders>;
   /** fetch data from the table: "auth.provider_requests" using primary key columns */
@@ -6632,6 +6881,29 @@ export type Query_Root = {
   wines_aggregate: Wines_Aggregate;
   /** fetch data from the table: "wines" using primary key columns */
   wines_by_pk?: Maybe<Wines>;
+};
+
+
+export type Query_RootAdmin_CredentialsArgs = {
+  distinct_on?: InputMaybe<Array<Admin_Credentials_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Admin_Credentials_Order_By>>;
+  where?: InputMaybe<Admin_Credentials_Bool_Exp>;
+};
+
+
+export type Query_RootAdmin_Credentials_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Admin_Credentials_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Admin_Credentials_Order_By>>;
+  where?: InputMaybe<Admin_Credentials_Bool_Exp>;
+};
+
+
+export type Query_RootAdmin_Credentials_By_PkArgs = {
+  id: Scalars['String']['input'];
 };
 
 
@@ -7796,6 +8068,14 @@ export type Spirits_Variance_Order_By = {
 
 export type Subscription_Root = {
   __typename: 'subscription_root';
+  /** fetch data from the table: "admin.credentials" */
+  admin_credentials: Array<Admin_Credentials>;
+  /** fetch aggregated fields from the table: "admin.credentials" */
+  admin_credentials_aggregate: Admin_Credentials_Aggregate;
+  /** fetch data from the table: "admin.credentials" using primary key columns */
+  admin_credentials_by_pk?: Maybe<Admin_Credentials>;
+  /** fetch data from the table in a streaming manner: "admin.credentials" */
+  admin_credentials_stream: Array<Admin_Credentials>;
   /** fetch data from the table: "auth.providers" using primary key columns */
   authProvider?: Maybe<AuthProviders>;
   /** fetch data from the table: "auth.provider_requests" using primary key columns */
@@ -7972,6 +8252,36 @@ export type Subscription_Root = {
   wines_by_pk?: Maybe<Wines>;
   /** fetch data from the table in a streaming manner: "wines" */
   wines_stream: Array<Wines>;
+};
+
+
+export type Subscription_RootAdmin_CredentialsArgs = {
+  distinct_on?: InputMaybe<Array<Admin_Credentials_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Admin_Credentials_Order_By>>;
+  where?: InputMaybe<Admin_Credentials_Bool_Exp>;
+};
+
+
+export type Subscription_RootAdmin_Credentials_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Admin_Credentials_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Admin_Credentials_Order_By>>;
+  where?: InputMaybe<Admin_Credentials_Bool_Exp>;
+};
+
+
+export type Subscription_RootAdmin_Credentials_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootAdmin_Credentials_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Admin_Credentials_Stream_Cursor_Input>>;
+  where?: InputMaybe<Admin_Credentials_Bool_Exp>;
 };
 
 
@@ -10161,6 +10471,13 @@ export type Wines_Variance_Order_By = {
   price?: InputMaybe<Order_By>;
 };
 
+export type GetCredentialQueryVariables = Exact<{
+  id: Scalars['String']['input'];
+}>;
+
+
+export type GetCredentialQuery = { __typename: 'query_root', admin_credentials_by_pk?: { __typename: 'admin_credentials', id: string, credentials: any } | null };
+
 export type AddItemOnboardingMutationVariables = Exact<{
   onboarding: Item_Onboardings_Insert_Input;
 }>;
@@ -10183,6 +10500,7 @@ export type AddTextExtractionResultsMutationVariables = Exact<{
 export type AddTextExtractionResultsMutation = { __typename: 'mutation_root', insert_image_analysis_one?: { __typename: 'image_analysis', id: number } | null };
 
 
+export const GetCredentialDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCredential"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"admin_credentials_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"credentials"}}]}}]}}]} as unknown as DocumentNode<GetCredentialQuery, GetCredentialQueryVariables>;
 export const AddItemOnboardingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddItemOnboarding"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"onboarding"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"item_onboardings_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_item_onboardings_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"onboarding"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddItemOnboardingMutation, AddItemOnboardingMutationVariables>;
 export const GetFileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetFile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"file"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"bucket"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"mimeType"}},{"kind":"Field","name":{"kind":"Name","value":"size"}}]}}]}}]} as unknown as DocumentNode<GetFileQuery, GetFileQueryVariables>;
 export const AddTextExtractionResultsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddTextExtractionResults"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"analysis"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"image_analysis_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_image_analysis_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"analysis"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddTextExtractionResultsMutation, AddTextExtractionResultsMutationVariables>;

@@ -17,13 +17,13 @@ import {
 } from "../_gql/graphql.js";
 import { getFieldsForType, mapJsonToReturnType } from "./_utils.js";
 import { addItemOnboarding } from "./_queries.js";
+import { getCredential } from "../_utils/queries.js";
 
 const {
   NHOST_ADMIN_SECRET,
   NHOST_SUBDOMAIN,
   NHOST_REGION,
-  GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_CLIENT_EMAIL,
-  GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_PRIVATE_KEY,
+  CREDENTIALS_GCP_ID,
   GOOGLE_GCP_VERTEX_AI_ENDPOINT,
   NHOST_WEBHOOK_SECRET,
 } = process.env;
@@ -34,11 +34,12 @@ const nhostClient = new NhostClient({
   adminSecret: NHOST_ADMIN_SECRET,
 });
 
+const credResult = await nhostClient.graphql.request(getCredential, {
+  id: CREDENTIALS_GCP_ID,
+});
+
 const predictionServiceClient = new PredictionServiceClient({
-  credentials: {
-    client_email: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_CLIENT_EMAIL,
-    private_key: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_PRIVATE_KEY,
-  },
+  credentials: credResult.data.admin_credentials_by_pk.credentials,
   apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
 });
 
