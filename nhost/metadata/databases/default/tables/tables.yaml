@@ -1,3 +1,4 @@
+- "!include admin_credentials.yaml"
 - "!include auth_provider_requests.yaml"
 - "!include auth_providers.yaml"
 - "!include auth_refresh_token_types.yaml"

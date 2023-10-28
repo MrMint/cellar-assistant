@@ -1,7 +1,6 @@
 "use client";
 
 import { WineOnboarding } from "@/components/wine/WineOnboarding";
-import { Box } from "@mui/joy";
 
 const AddWine = ({
   params: { cellarId },
