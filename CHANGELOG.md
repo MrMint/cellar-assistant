@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.13.1](https://github.com/MrMint/cellar-assistant/compare/v0.13.0...v0.13.1) (2023-10-28)
+
+
+### Bug Fixes
+
+* Reduces size of GCP key to avoid lamda error ([6ed9c61](https://github.com/MrMint/cellar-assistant/commit/6ed9c61d828ca440323aac3b35a1077f43a7be16))
+
 ## [0.13.0](https://github.com/MrMint/cellar-assistant/compare/v0.12.0...v0.13.0) (2023-10-27)
 
 
