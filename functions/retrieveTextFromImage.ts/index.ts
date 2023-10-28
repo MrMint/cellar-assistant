@@ -6,14 +6,15 @@ import { PredictionServiceClient } from "@google-cloud/aiplatform";
 import { callPredict } from "../_utils/gcp";
 import pLimit from "p-limit";
 import { isFulfilled } from "../_utils";
-import { complement, isEmpty, isNil, isNotNil, not } from "ramda";
+import { isEmpty, isNil, not } from "ramda";
 import { ItemType } from "../getItemDefaults/_utils";
 
 const {
   NHOST_ADMIN_SECRET,
   NHOST_SUBDOMAIN,
   NHOST_REGION,
-  GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS,
+  GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_CLIENT_EMAIL,
+  GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_PRIVATE_KEY,
   GOOGLE_GCP_VERTEX_AI_ENDPOINT,
 } = process.env;
 
@@ -24,11 +25,17 @@ const nhostClient = new NhostClient({
 });
 
 const client = new v1.ImageAnnotatorClient({
-  credentials: JSON.parse(atob(GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS)),
+  credentials: {
+    client_email: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_CLIENT_EMAIL,
+    private_key: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_PRIVATE_KEY,
+  },
 });
 
 const predictionServiceClient = new PredictionServiceClient({
-  credentials: JSON.parse(atob(GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS)),
+  credentials: {
+    client_email: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_CLIENT_EMAIL,
+    private_key: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_PRIVATE_KEY,
+  },
   apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
 });
 
@@ -123,10 +130,10 @@ export default async function retrieveTextFromImage(
           return limit(async () => {
             const prediction = await callPredict(
               predictionServiceClient,
-              `For the given input text below found on a beer bottles label perform the following tasks:
+              `For the given input text below found on a ${itemType} bottles label perform the following tasks:
               1. Correct spelling, punctuation and grammar
               2. Remove any text that would trigger your safety filter
-              3. Format the text for a beer bottle label
+              3. Format the text for a ${itemType} bottle label
 
               input: ${x.raw_text}
               output: 
