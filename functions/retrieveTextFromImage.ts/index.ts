@@ -1,20 +1,20 @@
 import { v1 } from "@google-cloud/vision";
 import { Request, Response } from "express";
 import { NhostClient } from "@nhost/nhost-js";
-import { addTextExtractionResultsMutation, getFileQuery } from "./_queries";
+import { addTextExtractionResultsMutation, getFileQuery } from "./_queries.js";
 import { PredictionServiceClient } from "@google-cloud/aiplatform";
-import { callPredict } from "../_utils/gcp";
+import { callPredict } from "../_utils/gcp.js";
 import pLimit from "p-limit";
-import { isFulfilled } from "../_utils";
+import { isFulfilled } from "../_utils/index.js";
 import { isEmpty, isNil, not } from "ramda";
-import { ItemType } from "../getItemDefaults/_utils";
+import { ItemType } from "../getItemDefaults/_utils.js";
+import { getCredential } from "../_utils/queries.js";
 
 const {
   NHOST_ADMIN_SECRET,
   NHOST_SUBDOMAIN,
   NHOST_REGION,
-  GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_CLIENT_EMAIL,
-  GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_PRIVATE_KEY,
+  CREDENTIALS_GCP_ID,
   GOOGLE_GCP_VERTEX_AI_ENDPOINT,
 } = process.env;
 
@@ -24,18 +24,16 @@ const nhostClient = new NhostClient({
   adminSecret: NHOST_ADMIN_SECRET,
 });
 
+const credResult = await nhostClient.graphql.request(getCredential, {
+  id: CREDENTIALS_GCP_ID,
+});
+
 const client = new v1.ImageAnnotatorClient({
-  credentials: {
-    client_email: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_CLIENT_EMAIL,
-    private_key: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_PRIVATE_KEY,
-  },
+  credentials: credResult.data.admin_credentials_by_pk.credentials,
 });
 
 const predictionServiceClient = new PredictionServiceClient({
-  credentials: {
-    client_email: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_CLIENT_EMAIL,
-    private_key: GOOGLE_GCP_SERVICE_ACCOUNT_CREDENTIALS_PRIVATE_KEY,
-  },
+  credentials: credResult.data.admin_credentials_by_pk.credentials,
   apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
 });
 

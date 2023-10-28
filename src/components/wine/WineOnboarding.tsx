@@ -118,7 +118,7 @@ export const WineOnboarding = ({
       <Grid container spacing={2}>
         {state.value === "wizard" && (
           <Grid xs={12}>
-            <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.sm })}>
+            <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.lg })}>
               <OnboardingWizard onComplete={handleOnComplete} />
             </Box>
           </Grid>
