@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.13.2](https://github.com/MrMint/cellar-assistant/compare/v0.13.1...v0.13.2) (2023-10-28)
+
+
+### Bug Fixes
+
+* Moves gcp credentials to db ([56e812a](https://github.com/MrMint/cellar-assistant/commit/56e812a5c4fb9c2bbe388fbd28be06ccb89c77db))
+
 ## [0.13.1](https://github.com/MrMint/cellar-assistant/compare/v0.13.0...v0.13.1) (2023-10-28)
 
 
