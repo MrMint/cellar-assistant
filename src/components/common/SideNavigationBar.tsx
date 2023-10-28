@@ -7,12 +7,14 @@ import {
   Sheet,
   Tooltip,
   styled,
+  useTheme,
 } from "@mui/joy";
 import { useSignOut, useUserAvatarUrl } from "@nhost/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
-import { MdWarehouse } from "react-icons/md";
+import { MdSettings, MdWarehouse } from "react-icons/md";
+import { useMediaQuery } from "react-responsive";
 
 const NavLinkIconButton = styled(IconButton)(({ theme }) => ({
   color: theme.palette.text.secondary,
@@ -39,25 +41,32 @@ const NavLinkButton = styled(({ href, pathname, icon }: NavLinkButtonProps) => {
   );
 })(({ theme }) => ({}));
 
-const NavContainer = styled(Sheet)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "column",
-}));
-
 const SideNavigationBar = () => {
   const pathname = usePathname();
   const userAvatar = useUserAvatarUrl();
   const { signOut } = useSignOut();
+  const theme = useTheme();
+  const isMobile = useMediaQuery({
+    minWidth: theme.breakpoints.values["xs"],
+    maxWidth: theme.breakpoints.values["sm"],
+  });
 
   const handleSignOutClick = async () => {
     await signOut();
   };
 
+  const orientation = isMobile ? "horizontal" : "vertical";
+  const placement = isMobile ? "top" : "right";
+
   return (
-    <NavContainer>
-      <List size="sm" sx={{ justifyContent: "space-between" }}>
+    <Sheet sx={{ display: "flex", flexDirection: { xs: "row", sm: "column" } }}>
+      <List
+        orientation={isMobile ? "horizontal" : "vertical"}
+        size="sm"
+        sx={{ justifyContent: "space-between" }}
+      >
         <Box>
-          <Tooltip title="Cellars" arrow placement="right">
+          <Tooltip title="Cellars" arrow placement={placement}>
             <ListItem>
               <NavLinkButton
                 href="/cellars"
@@ -67,7 +76,7 @@ const SideNavigationBar = () => {
             </ListItem>
           </Tooltip>
         </Box>
-        <Tooltip title="Logout" arrow placement="right">
+        <Tooltip title="Logout" arrow placement={placement}>
           <ListItem>
             <IconButton onClick={handleSignOutClick}>
               <Avatar src={userAvatar} size="sm" />
@@ -75,7 +84,7 @@ const SideNavigationBar = () => {
           </ListItem>
         </Tooltip>
       </List>
-    </NavContainer>
+    </Sheet>
   );
 };
 
