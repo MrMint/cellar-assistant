@@ -14,6 +14,7 @@ import {
   defaultValuesResult,
   fetchDefaultsInput,
 } from "../common/OnboardingWizard/machines";
+import { Analyzing } from "../common/Analyzing";
 
 const getDefaultsQuery = graphql(`
   query GetWineDefaults($hint: item_defaults_hint!) {
@@ -125,14 +126,7 @@ export const WineOnboarding = ({
         )}
         {state.value === "analyze" && (
           <Grid xs={12} sm={6}>
-            <Card>
-              <Stack spacing={2}>
-                <Typography level="title-lg" textAlign="center">
-                  Analyzing...
-                </Typography>
-                <LinearProgress />
-              </Stack>
-            </Card>
+            <Analyzing />
           </Grid>
         )}
         {state.value === "form" && (
