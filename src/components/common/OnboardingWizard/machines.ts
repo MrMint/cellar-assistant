@@ -170,3 +170,71 @@ export const OnboardingMachine = createMachine(
     },
   },
 );
+
+export const pictureOnboardingMachine = createMachine({
+  id: "onboarding-wizard-sub",
+  initial: "barcode",
+  types: {} as {
+    context: {
+      barcode?: Barcode;
+      frontLabelDataUrl?: string;
+      backLabelDataUrl?: string;
+    };
+    events:
+      | {
+          type: "FOUND";
+          barcode?: Barcode;
+        }
+      | { type: "SKIP" }
+      | { type: "BACK" }
+      | { type: "CAPTURED"; image: string };
+    actions: { type: "handleDone" };
+  },
+  states: {
+    barcode: {
+      on: {
+        FOUND: {
+          actions: assign({
+            barcode: ({ event }) => event.barcode,
+          }),
+          target: "clearing",
+        },
+        SKIP: "clearing",
+      },
+    },
+    clearing: {
+      after: {
+        // We need to delay a bit to give time for the camera to deal with new video constraints
+        50: { target: "back" },
+      },
+    },
+    back: {
+      on: {
+        CAPTURED: {
+          actions: assign({
+            backLabelDataUrl: ({ event }) => event.image,
+          }),
+          target: "front",
+        },
+        BACK: "barcode",
+        SKIP: "front",
+      },
+    },
+    front: {
+      on: {
+        CAPTURED: {
+          actions: assign({
+            frontLabelDataUrl: ({ event }) => event.image,
+          }),
+          target: "done",
+        },
+        BACK: "back",
+        SKIP: "done",
+      },
+    },
+    done: {
+      entry: ["handleDone"],
+      type: "final",
+    },
+  },
+});
