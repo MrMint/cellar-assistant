@@ -1,0 +1,41 @@
+[
+  {
+    "op": "remove",
+    "path": "/auth/method/oauth/discord/clientId"
+  },
+  {
+    "op": "remove",
+    "path": "/auth/method/oauth/discord/clientSecret"
+  },
+  {
+    "value": false,
+    "op": "replace",
+    "path": "/auth/method/oauth/discord/enabled"
+  },
+  {
+    "op": "remove",
+    "path": "/auth/method/oauth/facebook/clientId"
+  },
+  {
+    "op": "remove",
+    "path": "/auth/method/oauth/facebook/clientSecret"
+  },
+  {
+    "value": false,
+    "op": "replace",
+    "path": "/auth/method/oauth/facebook/enabled"
+  },
+  {
+    "op": "remove",
+    "path": "/auth/method/oauth/google/clientId"
+  },
+  {
+    "op": "remove",
+    "path": "/auth/method/oauth/google/clientSecret"
+  },
+  {
+    "value": false,
+    "op": "replace",
+    "path": "/auth/method/oauth/google/enabled"
+  }
+]
