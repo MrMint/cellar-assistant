@@ -59,7 +59,13 @@ const SideNavigationBar = () => {
   const placement = isMobile ? "top" : "right";
 
   return (
-    <Sheet sx={{ display: "flex", flexDirection: { xs: "row", sm: "column" } }}>
+    <Sheet
+      sx={(theme) => ({
+        display: "flex",
+        flexDirection: { xs: "row", sm: "column" },
+        boxShadow: theme.shadow.lg,
+      })}
+    >
       <List
         orientation={isMobile ? "horizontal" : "vertical"}
         size="sm"
