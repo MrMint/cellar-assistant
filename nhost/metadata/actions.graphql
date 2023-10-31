@@ -37,8 +37,10 @@ type wine_defaults_result {
   barcode_type: String
   name: String
   region: String
+  country: String
   special_designation: String
   variety: String
+  style: String
   vineyard_designation: String
   vintage: date
   item_onboarding_id: String!

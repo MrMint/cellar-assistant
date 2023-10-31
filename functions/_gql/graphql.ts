@@ -2070,6 +2070,30 @@ export type Barcodes = {
   __typename: 'barcodes';
   code: Scalars['String']['output'];
   type?: Maybe<Scalars['String']['output']>;
+  /** An array relationship */
+  wines: Array<Wines>;
+  /** An aggregate relationship */
+  wines_aggregate: Wines_Aggregate;
+};
+
+
+/** columns and relationships of "barcodes" */
+export type BarcodesWinesArgs = {
+  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wines_Order_By>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
+};
+
+
+/** columns and relationships of "barcodes" */
+export type BarcodesWines_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wines_Order_By>>;
+  where?: InputMaybe<Wines_Bool_Exp>;
 };
 
 /** aggregated selection of "barcodes" */
@@ -2101,6 +2125,8 @@ export type Barcodes_Bool_Exp = {
   _or?: InputMaybe<Array<Barcodes_Bool_Exp>>;
   code?: InputMaybe<String_Comparison_Exp>;
   type?: InputMaybe<String_Comparison_Exp>;
+  wines?: InputMaybe<Wines_Bool_Exp>;
+  wines_aggregate?: InputMaybe<Wines_Aggregate_Bool_Exp>;
 };
 
 /** unique or primary key constraints on table "barcodes" */
@@ -2113,6 +2139,7 @@ export enum Barcodes_Constraint {
 export type Barcodes_Insert_Input = {
   code?: InputMaybe<Scalars['String']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+  wines?: InputMaybe<Wines_Arr_Rel_Insert_Input>;
 };
 
 /** aggregate max on columns */
@@ -2156,6 +2183,7 @@ export type Barcodes_On_Conflict = {
 export type Barcodes_Order_By = {
   code?: InputMaybe<Order_By>;
   type?: InputMaybe<Order_By>;
+  wines_aggregate?: InputMaybe<Wines_Aggregate_Order_By>;
 };
 
 /** primary key columns input for table: barcodes */
@@ -3374,6 +3402,203 @@ export type Cellar_User_Variance_Order_By = {
   id?: InputMaybe<Order_By>;
 };
 
+/** columns and relationships of "cellar_wine" */
+export type Cellar_Wine = {
+  __typename: 'cellar_wine';
+  /** An object relationship */
+  cellar: Cellars;
+  cellar_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  createdBy: Users;
+  created_at: Scalars['timestamptz']['output'];
+  id: Scalars['uuid']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+  user_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  wine: Wines;
+  wine_id: Scalars['uuid']['output'];
+};
+
+/** aggregated selection of "cellar_wine" */
+export type Cellar_Wine_Aggregate = {
+  __typename: 'cellar_wine_aggregate';
+  aggregate?: Maybe<Cellar_Wine_Aggregate_Fields>;
+  nodes: Array<Cellar_Wine>;
+};
+
+/** aggregate fields of "cellar_wine" */
+export type Cellar_Wine_Aggregate_Fields = {
+  __typename: 'cellar_wine_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Cellar_Wine_Max_Fields>;
+  min?: Maybe<Cellar_Wine_Min_Fields>;
+};
+
+
+/** aggregate fields of "cellar_wine" */
+export type Cellar_Wine_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Cellar_Wine_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "cellar_wine". All fields are combined with a logical 'AND'. */
+export type Cellar_Wine_Bool_Exp = {
+  _and?: InputMaybe<Array<Cellar_Wine_Bool_Exp>>;
+  _not?: InputMaybe<Cellar_Wine_Bool_Exp>;
+  _or?: InputMaybe<Array<Cellar_Wine_Bool_Exp>>;
+  cellar?: InputMaybe<Cellars_Bool_Exp>;
+  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
+  createdBy?: InputMaybe<Users_Bool_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  user_id?: InputMaybe<Uuid_Comparison_Exp>;
+  wine?: InputMaybe<Wines_Bool_Exp>;
+  wine_id?: InputMaybe<Uuid_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "cellar_wine" */
+export enum Cellar_Wine_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  CellarWinePkey = 'cellar_wine_pkey'
+}
+
+/** input type for inserting data into table "cellar_wine" */
+export type Cellar_Wine_Insert_Input = {
+  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine?: InputMaybe<Wines_Obj_Rel_Insert_Input>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** aggregate max on columns */
+export type Cellar_Wine_Max_Fields = {
+  __typename: 'cellar_wine_max_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+  wine_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** aggregate min on columns */
+export type Cellar_Wine_Min_Fields = {
+  __typename: 'cellar_wine_min_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+  wine_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** response of any mutation on the table "cellar_wine" */
+export type Cellar_Wine_Mutation_Response = {
+  __typename: 'cellar_wine_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Cellar_Wine>;
+};
+
+/** on_conflict condition type for table "cellar_wine" */
+export type Cellar_Wine_On_Conflict = {
+  constraint: Cellar_Wine_Constraint;
+  update_columns?: Array<Cellar_Wine_Update_Column>;
+  where?: InputMaybe<Cellar_Wine_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "cellar_wine". */
+export type Cellar_Wine_Order_By = {
+  cellar?: InputMaybe<Cellars_Order_By>;
+  cellar_id?: InputMaybe<Order_By>;
+  createdBy?: InputMaybe<Users_Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+  wine?: InputMaybe<Wines_Order_By>;
+  wine_id?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: cellar_wine */
+export type Cellar_Wine_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "cellar_wine" */
+export enum Cellar_Wine_Select_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  UserId = 'user_id',
+  /** column name */
+  WineId = 'wine_id'
+}
+
+/** input type for updating data in table "cellar_wine" */
+export type Cellar_Wine_Set_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** Streaming cursor of the table "cellar_wine" */
+export type Cellar_Wine_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Cellar_Wine_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Cellar_Wine_Stream_Cursor_Value_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** update columns of table "cellar_wine" */
+export enum Cellar_Wine_Update_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  UserId = 'user_id',
+  /** column name */
+  WineId = 'wine_id'
+}
+
+export type Cellar_Wine_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Cellar_Wine_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Cellar_Wine_Bool_Exp;
+};
+
 /** columns and relationships of "cellars" */
 export type Cellars = {
   __typename: 'cellars';
@@ -3397,10 +3622,6 @@ export type Cellars = {
   users: Array<Cellar_User>;
   /** An aggregate relationship */
   users_aggregate: Cellar_User_Aggregate;
-  /** An array relationship */
-  wines: Array<Wines>;
-  /** An aggregate relationship */
-  wines_aggregate: Wines_Aggregate;
 };
 
 
@@ -3461,26 +3682,6 @@ export type CellarsUsers_AggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
   where?: InputMaybe<Cellar_User_Bool_Exp>;
-};
-
-
-/** columns and relationships of "cellars" */
-export type CellarsWinesArgs = {
-  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Wines_Order_By>>;
-  where?: InputMaybe<Wines_Bool_Exp>;
-};
-
-
-/** columns and relationships of "cellars" */
-export type CellarsWines_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Wines_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Wines_Order_By>>;
-  where?: InputMaybe<Wines_Bool_Exp>;
 };
 
 /** aggregated selection of "cellars" */
@@ -3564,8 +3765,6 @@ export type Cellars_Bool_Exp = {
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   users?: InputMaybe<Cellar_User_Bool_Exp>;
   users_aggregate?: InputMaybe<Cellar_User_Aggregate_Bool_Exp>;
-  wines?: InputMaybe<Wines_Bool_Exp>;
-  wines_aggregate?: InputMaybe<Wines_Aggregate_Bool_Exp>;
 };
 
 /** unique or primary key constraints on table "cellars" */
@@ -3586,7 +3785,6 @@ export type Cellars_Insert_Input = {
   spirits?: InputMaybe<Spirits_Arr_Rel_Insert_Input>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   users?: InputMaybe<Cellar_User_Arr_Rel_Insert_Input>;
-  wines?: InputMaybe<Wines_Arr_Rel_Insert_Input>;
 };
 
 /** aggregate max on columns */
@@ -3662,7 +3860,6 @@ export type Cellars_Order_By = {
   spirits_aggregate?: InputMaybe<Spirits_Aggregate_Order_By>;
   updated_at?: InputMaybe<Order_By>;
   users_aggregate?: InputMaybe<Cellar_User_Aggregate_Order_By>;
-  wines_aggregate?: InputMaybe<Wines_Aggregate_Order_By>;
 };
 
 /** primary key columns input for table: cellars */
@@ -3780,6 +3977,347 @@ export type Citext_Comparison_Exp = {
   _regex?: InputMaybe<Scalars['citext']['input']>;
   /** does the column match the given SQL regular expression */
   _similar?: InputMaybe<Scalars['citext']['input']>;
+};
+
+/** columns and relationships of "country" */
+export type Country = {
+  __typename: 'country';
+  comment?: Maybe<Scalars['String']['output']>;
+  text: Scalars['String']['output'];
+};
+
+/** aggregated selection of "country" */
+export type Country_Aggregate = {
+  __typename: 'country_aggregate';
+  aggregate?: Maybe<Country_Aggregate_Fields>;
+  nodes: Array<Country>;
+};
+
+/** aggregate fields of "country" */
+export type Country_Aggregate_Fields = {
+  __typename: 'country_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Country_Max_Fields>;
+  min?: Maybe<Country_Min_Fields>;
+};
+
+
+/** aggregate fields of "country" */
+export type Country_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Country_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "country". All fields are combined with a logical 'AND'. */
+export type Country_Bool_Exp = {
+  _and?: InputMaybe<Array<Country_Bool_Exp>>;
+  _not?: InputMaybe<Country_Bool_Exp>;
+  _or?: InputMaybe<Array<Country_Bool_Exp>>;
+  comment?: InputMaybe<String_Comparison_Exp>;
+  text?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "country" */
+export enum Country_Constraint {
+  /** unique or primary key constraint on columns "text" */
+  CountryPkey = 'country_pkey'
+}
+
+export enum Country_Enum {
+  Afghanistan = 'AFGHANISTAN',
+  Albania = 'ALBANIA',
+  Algeria = 'ALGERIA',
+  Andorra = 'ANDORRA',
+  Angola = 'ANGOLA',
+  AntiguaAndBarbuda = 'ANTIGUA_AND_BARBUDA',
+  Argentina = 'ARGENTINA',
+  Armenia = 'ARMENIA',
+  Australia = 'AUSTRALIA',
+  Austria = 'AUSTRIA',
+  Azerbaijan = 'AZERBAIJAN',
+  Bahamas = 'BAHAMAS',
+  Bahrain = 'BAHRAIN',
+  Bangladesh = 'BANGLADESH',
+  Barbados = 'BARBADOS',
+  Belarus = 'BELARUS',
+  Belgium = 'BELGIUM',
+  Belize = 'BELIZE',
+  Benin = 'BENIN',
+  Bhutan = 'BHUTAN',
+  Bolivia = 'BOLIVIA',
+  BosniaAndHerzegovina = 'BOSNIA_AND_HERZEGOVINA',
+  Botswana = 'BOTSWANA',
+  Brazil = 'BRAZIL',
+  Brunei = 'BRUNEI',
+  Bulgaria = 'BULGARIA',
+  BurkinaFaso = 'BURKINA_FASO',
+  Burundi = 'BURUNDI',
+  Cambodia = 'CAMBODIA',
+  Cameroon = 'CAMEROON',
+  Canada = 'CANADA',
+  CapeVerdeCaboVerde = 'CAPE_VERDE_CABO_VERDE',
+  CentralAfricanRepublic = 'CENTRAL_AFRICAN_REPUBLIC',
+  Chad = 'CHAD',
+  Chile = 'CHILE',
+  China = 'CHINA',
+  Colombia = 'COLOMBIA',
+  Comoros = 'COMOROS',
+  CongoDemocraticRepublicOfThe = 'CONGO_DEMOCRATIC_REPUBLIC_OF_THE',
+  CongoRepublicOfThe = 'CONGO_REPUBLIC_OF_THE',
+  CostaRica = 'COSTA_RICA',
+  CoteDivoire = 'COTE_DIVOIRE',
+  Croatia = 'CROATIA',
+  Cuba = 'CUBA',
+  Cyprus = 'CYPRUS',
+  CzechRepublic = 'CZECH_REPUBLIC',
+  Denmark = 'DENMARK',
+  Djibouti = 'DJIBOUTI',
+  Dominica = 'DOMINICA',
+  DominicanRepublic = 'DOMINICAN_REPUBLIC',
+  Ecuador = 'ECUADOR',
+  Egypt = 'EGYPT',
+  ElSalvador = 'EL_SALVADOR',
+  EquatorialGuinea = 'EQUATORIAL_GUINEA',
+  Eritrea = 'ERITREA',
+  Estonia = 'ESTONIA',
+  Eswatini = 'ESWATINI',
+  Ethiopia = 'ETHIOPIA',
+  Fiji = 'FIJI',
+  Finland = 'FINLAND',
+  France = 'FRANCE',
+  Gabon = 'GABON',
+  Gambia = 'GAMBIA',
+  Georgia = 'GEORGIA',
+  Germany = 'GERMANY',
+  Ghana = 'GHANA',
+  Greece = 'GREECE',
+  Grenada = 'GRENADA',
+  Guatemala = 'GUATEMALA',
+  Guinea = 'GUINEA',
+  GuineaBissau = 'GUINEA_BISSAU',
+  Guyana = 'GUYANA',
+  Haiti = 'HAITI',
+  Honduras = 'HONDURAS',
+  Hungary = 'HUNGARY',
+  Iceland = 'ICELAND',
+  India = 'INDIA',
+  Indonesia = 'INDONESIA',
+  Iran = 'IRAN',
+  Iraq = 'IRAQ',
+  Ireland = 'IRELAND',
+  Israel = 'ISRAEL',
+  Italy = 'ITALY',
+  Jamaica = 'JAMAICA',
+  Japan = 'JAPAN',
+  Jordan = 'JORDAN',
+  Kazakhstan = 'KAZAKHSTAN',
+  Kenya = 'KENYA',
+  Kiribati = 'KIRIBATI',
+  Kosovo = 'KOSOVO',
+  Kuwait = 'KUWAIT',
+  Kyrgyzstan = 'KYRGYZSTAN',
+  Laos = 'LAOS',
+  Latvia = 'LATVIA',
+  Lebanon = 'LEBANON',
+  Lesotho = 'LESOTHO',
+  Liberia = 'LIBERIA',
+  Libya = 'LIBYA',
+  Liechtenstein = 'LIECHTENSTEIN',
+  Lithuania = 'LITHUANIA',
+  Luxembourg = 'LUXEMBOURG',
+  Madagascar = 'MADAGASCAR',
+  Malawi = 'MALAWI',
+  Malaysia = 'MALAYSIA',
+  Maldives = 'MALDIVES',
+  Mali = 'MALI',
+  Malta = 'MALTA',
+  MarshallIslands = 'MARSHALL_ISLANDS',
+  Mauritania = 'MAURITANIA',
+  Mauritius = 'MAURITIUS',
+  Mexico = 'MEXICO',
+  Micronesia = 'MICRONESIA',
+  Moldova = 'MOLDOVA',
+  Monaco = 'MONACO',
+  Mongolia = 'MONGOLIA',
+  Montenegro = 'MONTENEGRO',
+  Morocco = 'MOROCCO',
+  Mozambique = 'MOZAMBIQUE',
+  Myanmar = 'MYANMAR',
+  Namibia = 'NAMIBIA',
+  Nauru = 'NAURU',
+  Nepal = 'NEPAL',
+  Netherlands = 'NETHERLANDS',
+  NewZealand = 'NEW_ZEALAND',
+  Nicaragua = 'NICARAGUA',
+  Niger = 'NIGER',
+  Nigeria = 'NIGERIA',
+  NorthKorea = 'NORTH_KOREA',
+  NorthMacedonia = 'NORTH_MACEDONIA',
+  Norway = 'NORWAY',
+  Oman = 'OMAN',
+  Pakistan = 'PAKISTAN',
+  Palau = 'PALAU',
+  Panama = 'PANAMA',
+  PapuaNewGuinea = 'PAPUA_NEW_GUINEA',
+  Paraguay = 'PARAGUAY',
+  Peru = 'PERU',
+  Philippines = 'PHILIPPINES',
+  Poland = 'POLAND',
+  Portugal = 'PORTUGAL',
+  Qatar = 'QATAR',
+  Romania = 'ROMANIA',
+  Russia = 'RUSSIA',
+  Rwanda = 'RWANDA',
+  SaintKittsAndNevis = 'SAINT_KITTS_AND_NEVIS',
+  SaintLucia = 'SAINT_LUCIA',
+  SaintVincentAndTheGrenadines = 'SAINT_VINCENT_AND_THE_GRENADINES',
+  Samoa = 'SAMOA',
+  SanMarino = 'SAN_MARINO',
+  SaoTomeAndPrincipe = 'SAO_TOME_AND_PRINCIPE',
+  SaudiArabia = 'SAUDI_ARABIA',
+  Senegal = 'SENEGAL',
+  Serbia = 'SERBIA',
+  Seychelles = 'SEYCHELLES',
+  SierraLeone = 'SIERRA_LEONE',
+  Singapore = 'SINGAPORE',
+  Slovakia = 'SLOVAKIA',
+  Slovenia = 'SLOVENIA',
+  SolomonIslands = 'SOLOMON_ISLANDS',
+  Somalia = 'SOMALIA',
+  SouthAfrica = 'SOUTH_AFRICA',
+  SouthKorea = 'SOUTH_KOREA',
+  SouthSudan = 'SOUTH_SUDAN',
+  Spain = 'SPAIN',
+  SriLanka = 'SRI_LANKA',
+  Sudan = 'SUDAN',
+  Suriname = 'SURINAME',
+  Sweden = 'SWEDEN',
+  Switzerland = 'SWITZERLAND',
+  Syria = 'SYRIA',
+  Tajikistan = 'TAJIKISTAN',
+  Tanzania = 'TANZANIA',
+  Thailand = 'THAILAND',
+  TimorLeste = 'TIMOR_LESTE',
+  Togo = 'TOGO',
+  Tonga = 'TONGA',
+  TrinidadAndTobago = 'TRINIDAD_AND_TOBAGO',
+  Tunisia = 'TUNISIA',
+  Turkey = 'TURKEY',
+  Turkmenistan = 'TURKMENISTAN',
+  Tuvalu = 'TUVALU',
+  Uganda = 'UGANDA',
+  Ukraine = 'UKRAINE',
+  UnitedArabEmirates = 'UNITED_ARAB_EMIRATES',
+  UnitedKingdom = 'UNITED_KINGDOM',
+  UnitedStates = 'UNITED_STATES',
+  Uruguay = 'URUGUAY',
+  Uzbekistan = 'UZBEKISTAN',
+  Vanuatu = 'VANUATU',
+  VaticanCity = 'VATICAN_CITY',
+  Venezuela = 'VENEZUELA',
+  Vietnam = 'VIETNAM',
+  Yemen = 'YEMEN',
+  Zambia = 'ZAMBIA',
+  Zimbabwe = 'ZIMBABWE'
+}
+
+/** Boolean expression to compare columns of type "country_enum". All fields are combined with logical 'AND'. */
+export type Country_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Country_Enum>;
+  _in?: InputMaybe<Array<Country_Enum>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _neq?: InputMaybe<Country_Enum>;
+  _nin?: InputMaybe<Array<Country_Enum>>;
+};
+
+/** input type for inserting data into table "country" */
+export type Country_Insert_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregate max on columns */
+export type Country_Max_Fields = {
+  __typename: 'country_max_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** aggregate min on columns */
+export type Country_Min_Fields = {
+  __typename: 'country_min_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** response of any mutation on the table "country" */
+export type Country_Mutation_Response = {
+  __typename: 'country_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Country>;
+};
+
+/** on_conflict condition type for table "country" */
+export type Country_On_Conflict = {
+  constraint: Country_Constraint;
+  update_columns?: Array<Country_Update_Column>;
+  where?: InputMaybe<Country_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "country". */
+export type Country_Order_By = {
+  comment?: InputMaybe<Order_By>;
+  text?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: country */
+export type Country_Pk_Columns_Input = {
+  text: Scalars['String']['input'];
+};
+
+/** select columns of table "country" */
+export enum Country_Select_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+/** input type for updating data in table "country" */
+export type Country_Set_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** Streaming cursor of the table "country" */
+export type Country_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Country_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Country_Stream_Cursor_Value_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** update columns of table "country" */
+export enum Country_Update_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+export type Country_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Country_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Country_Bool_Exp;
 };
 
 /** ordering argument of a cursor */
@@ -5290,10 +5828,18 @@ export type Mutation_Root = {
   delete_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
   /** delete single row from the table: "cellar_user" */
   delete_cellar_user_by_pk?: Maybe<Cellar_User>;
+  /** delete data from the table: "cellar_wine" */
+  delete_cellar_wine?: Maybe<Cellar_Wine_Mutation_Response>;
+  /** delete single row from the table: "cellar_wine" */
+  delete_cellar_wine_by_pk?: Maybe<Cellar_Wine>;
   /** delete data from the table: "cellars" */
   delete_cellars?: Maybe<Cellars_Mutation_Response>;
   /** delete single row from the table: "cellars" */
   delete_cellars_by_pk?: Maybe<Cellars>;
+  /** delete data from the table: "country" */
+  delete_country?: Maybe<Country_Mutation_Response>;
+  /** delete single row from the table: "country" */
+  delete_country_by_pk?: Maybe<Country>;
   /** delete data from the table: "image_analysis" */
   delete_image_analysis?: Maybe<Image_Analysis_Mutation_Response>;
   /** delete single row from the table: "image_analysis" */
@@ -5314,6 +5860,14 @@ export type Mutation_Root = {
   delete_spirits?: Maybe<Spirits_Mutation_Response>;
   /** delete single row from the table: "spirits" */
   delete_spirits_by_pk?: Maybe<Spirits>;
+  /** delete data from the table: "wine_style" */
+  delete_wine_style?: Maybe<Wine_Style_Mutation_Response>;
+  /** delete single row from the table: "wine_style" */
+  delete_wine_style_by_pk?: Maybe<Wine_Style>;
+  /** delete data from the table: "wine_variety" */
+  delete_wine_variety?: Maybe<Wine_Variety_Mutation_Response>;
+  /** delete single row from the table: "wine_variety" */
+  delete_wine_variety_by_pk?: Maybe<Wine_Variety>;
   /** delete data from the table: "wines" */
   delete_wines?: Maybe<Wines_Mutation_Response>;
   /** delete single row from the table: "wines" */
@@ -5382,10 +5936,18 @@ export type Mutation_Root = {
   insert_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
   /** insert a single row into the table: "cellar_user" */
   insert_cellar_user_one?: Maybe<Cellar_User>;
+  /** insert data into the table: "cellar_wine" */
+  insert_cellar_wine?: Maybe<Cellar_Wine_Mutation_Response>;
+  /** insert a single row into the table: "cellar_wine" */
+  insert_cellar_wine_one?: Maybe<Cellar_Wine>;
   /** insert data into the table: "cellars" */
   insert_cellars?: Maybe<Cellars_Mutation_Response>;
   /** insert a single row into the table: "cellars" */
   insert_cellars_one?: Maybe<Cellars>;
+  /** insert data into the table: "country" */
+  insert_country?: Maybe<Country_Mutation_Response>;
+  /** insert a single row into the table: "country" */
+  insert_country_one?: Maybe<Country>;
   /** insert data into the table: "image_analysis" */
   insert_image_analysis?: Maybe<Image_Analysis_Mutation_Response>;
   /** insert a single row into the table: "image_analysis" */
@@ -5406,6 +5968,14 @@ export type Mutation_Root = {
   insert_spirits?: Maybe<Spirits_Mutation_Response>;
   /** insert a single row into the table: "spirits" */
   insert_spirits_one?: Maybe<Spirits>;
+  /** insert data into the table: "wine_style" */
+  insert_wine_style?: Maybe<Wine_Style_Mutation_Response>;
+  /** insert a single row into the table: "wine_style" */
+  insert_wine_style_one?: Maybe<Wine_Style>;
+  /** insert data into the table: "wine_variety" */
+  insert_wine_variety?: Maybe<Wine_Variety_Mutation_Response>;
+  /** insert a single row into the table: "wine_variety" */
+  insert_wine_variety_one?: Maybe<Wine_Variety>;
   /** insert data into the table: "wines" */
   insert_wines?: Maybe<Wines_Mutation_Response>;
   /** insert a single row into the table: "wines" */
@@ -5500,12 +6070,24 @@ export type Mutation_Root = {
   update_cellar_user_by_pk?: Maybe<Cellar_User>;
   /** update multiples rows of table: "cellar_user" */
   update_cellar_user_many?: Maybe<Array<Maybe<Cellar_User_Mutation_Response>>>;
+  /** update data of the table: "cellar_wine" */
+  update_cellar_wine?: Maybe<Cellar_Wine_Mutation_Response>;
+  /** update single row of the table: "cellar_wine" */
+  update_cellar_wine_by_pk?: Maybe<Cellar_Wine>;
+  /** update multiples rows of table: "cellar_wine" */
+  update_cellar_wine_many?: Maybe<Array<Maybe<Cellar_Wine_Mutation_Response>>>;
   /** update data of the table: "cellars" */
   update_cellars?: Maybe<Cellars_Mutation_Response>;
   /** update single row of the table: "cellars" */
   update_cellars_by_pk?: Maybe<Cellars>;
   /** update multiples rows of table: "cellars" */
   update_cellars_many?: Maybe<Array<Maybe<Cellars_Mutation_Response>>>;
+  /** update data of the table: "country" */
+  update_country?: Maybe<Country_Mutation_Response>;
+  /** update single row of the table: "country" */
+  update_country_by_pk?: Maybe<Country>;
+  /** update multiples rows of table: "country" */
+  update_country_many?: Maybe<Array<Maybe<Country_Mutation_Response>>>;
   /** update multiples rows of table: "storage.files" */
   update_files_many?: Maybe<Array<Maybe<Files_Mutation_Response>>>;
   /** update data of the table: "image_analysis" */
@@ -5542,6 +6124,18 @@ export type Mutation_Root = {
   update_users_many?: Maybe<Array<Maybe<Users_Mutation_Response>>>;
   /** update multiples rows of table: "storage.virus" */
   update_virus_many?: Maybe<Array<Maybe<Virus_Mutation_Response>>>;
+  /** update data of the table: "wine_style" */
+  update_wine_style?: Maybe<Wine_Style_Mutation_Response>;
+  /** update single row of the table: "wine_style" */
+  update_wine_style_by_pk?: Maybe<Wine_Style>;
+  /** update multiples rows of table: "wine_style" */
+  update_wine_style_many?: Maybe<Array<Maybe<Wine_Style_Mutation_Response>>>;
+  /** update data of the table: "wine_variety" */
+  update_wine_variety?: Maybe<Wine_Variety_Mutation_Response>;
+  /** update single row of the table: "wine_variety" */
+  update_wine_variety_by_pk?: Maybe<Wine_Variety>;
+  /** update multiples rows of table: "wine_variety" */
+  update_wine_variety_many?: Maybe<Array<Maybe<Wine_Variety_Mutation_Response>>>;
   /** update data of the table: "wines" */
   update_wines?: Maybe<Wines_Mutation_Response>;
   /** update single row of the table: "wines" */
@@ -5744,6 +6338,18 @@ export type Mutation_RootDelete_Cellar_User_By_PkArgs = {
 
 
 /** mutation root */
+export type Mutation_RootDelete_Cellar_WineArgs = {
+  where: Cellar_Wine_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Cellar_Wine_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
 export type Mutation_RootDelete_CellarsArgs = {
   where: Cellars_Bool_Exp;
 };
@@ -5752,6 +6358,18 @@ export type Mutation_RootDelete_CellarsArgs = {
 /** mutation root */
 export type Mutation_RootDelete_Cellars_By_PkArgs = {
   id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_CountryArgs = {
+  where: Country_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Country_By_PkArgs = {
+  text: Scalars['String']['input'];
 };
 
 
@@ -5812,6 +6430,30 @@ export type Mutation_RootDelete_SpiritsArgs = {
 /** mutation root */
 export type Mutation_RootDelete_Spirits_By_PkArgs = {
   id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Wine_StyleArgs = {
+  where: Wine_Style_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Wine_Style_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Wine_VarietyArgs = {
+  where: Wine_Variety_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Wine_Variety_By_PkArgs = {
+  text: Scalars['String']['input'];
 };
 
 
@@ -6052,6 +6694,20 @@ export type Mutation_RootInsert_Cellar_User_OneArgs = {
 
 
 /** mutation root */
+export type Mutation_RootInsert_Cellar_WineArgs = {
+  objects: Array<Cellar_Wine_Insert_Input>;
+  on_conflict?: InputMaybe<Cellar_Wine_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Cellar_Wine_OneArgs = {
+  object: Cellar_Wine_Insert_Input;
+  on_conflict?: InputMaybe<Cellar_Wine_On_Conflict>;
+};
+
+
+/** mutation root */
 export type Mutation_RootInsert_CellarsArgs = {
   objects: Array<Cellars_Insert_Input>;
   on_conflict?: InputMaybe<Cellars_On_Conflict>;
@@ -6062,6 +6718,20 @@ export type Mutation_RootInsert_CellarsArgs = {
 export type Mutation_RootInsert_Cellars_OneArgs = {
   object: Cellars_Insert_Input;
   on_conflict?: InputMaybe<Cellars_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_CountryArgs = {
+  objects: Array<Country_Insert_Input>;
+  on_conflict?: InputMaybe<Country_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Country_OneArgs = {
+  object: Country_Insert_Input;
+  on_conflict?: InputMaybe<Country_On_Conflict>;
 };
 
 
@@ -6132,6 +6802,34 @@ export type Mutation_RootInsert_SpiritsArgs = {
 export type Mutation_RootInsert_Spirits_OneArgs = {
   object: Spirits_Insert_Input;
   on_conflict?: InputMaybe<Spirits_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Wine_StyleArgs = {
+  objects: Array<Wine_Style_Insert_Input>;
+  on_conflict?: InputMaybe<Wine_Style_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Wine_Style_OneArgs = {
+  object: Wine_Style_Insert_Input;
+  on_conflict?: InputMaybe<Wine_Style_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Wine_VarietyArgs = {
+  objects: Array<Wine_Variety_Insert_Input>;
+  on_conflict?: InputMaybe<Wine_Variety_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Wine_Variety_OneArgs = {
+  object: Wine_Variety_Insert_Input;
+  on_conflict?: InputMaybe<Wine_Variety_On_Conflict>;
 };
 
 
@@ -6520,6 +7218,26 @@ export type Mutation_RootUpdate_Cellar_User_ManyArgs = {
 
 
 /** mutation root */
+export type Mutation_RootUpdate_Cellar_WineArgs = {
+  _set?: InputMaybe<Cellar_Wine_Set_Input>;
+  where: Cellar_Wine_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Cellar_Wine_By_PkArgs = {
+  _set?: InputMaybe<Cellar_Wine_Set_Input>;
+  pk_columns: Cellar_Wine_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Cellar_Wine_ManyArgs = {
+  updates: Array<Cellar_Wine_Updates>;
+};
+
+
+/** mutation root */
 export type Mutation_RootUpdate_CellarsArgs = {
   _set?: InputMaybe<Cellars_Set_Input>;
   where: Cellars_Bool_Exp;
@@ -6536,6 +7254,26 @@ export type Mutation_RootUpdate_Cellars_By_PkArgs = {
 /** mutation root */
 export type Mutation_RootUpdate_Cellars_ManyArgs = {
   updates: Array<Cellars_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_CountryArgs = {
+  _set?: InputMaybe<Country_Set_Input>;
+  where: Country_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Country_By_PkArgs = {
+  _set?: InputMaybe<Country_Set_Input>;
+  pk_columns: Country_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Country_ManyArgs = {
+  updates: Array<Country_Updates>;
 };
 
 
@@ -6670,6 +7408,46 @@ export type Mutation_RootUpdate_Users_ManyArgs = {
 /** mutation root */
 export type Mutation_RootUpdate_Virus_ManyArgs = {
   updates: Array<Virus_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Wine_StyleArgs = {
+  _set?: InputMaybe<Wine_Style_Set_Input>;
+  where: Wine_Style_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Wine_Style_By_PkArgs = {
+  _set?: InputMaybe<Wine_Style_Set_Input>;
+  pk_columns: Wine_Style_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Wine_Style_ManyArgs = {
+  updates: Array<Wine_Style_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Wine_VarietyArgs = {
+  _set?: InputMaybe<Wine_Variety_Set_Input>;
+  where: Wine_Variety_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Wine_Variety_By_PkArgs = {
+  _set?: InputMaybe<Wine_Variety_Set_Input>;
+  pk_columns: Wine_Variety_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Wine_Variety_ManyArgs = {
+  updates: Array<Wine_Variety_Updates>;
 };
 
 
@@ -6818,12 +7596,24 @@ export type Query_Root = {
   cellar_user_aggregate: Cellar_User_Aggregate;
   /** fetch data from the table: "cellar_user" using primary key columns */
   cellar_user_by_pk?: Maybe<Cellar_User>;
+  /** fetch data from the table: "cellar_wine" */
+  cellar_wine: Array<Cellar_Wine>;
+  /** fetch aggregated fields from the table: "cellar_wine" */
+  cellar_wine_aggregate: Cellar_Wine_Aggregate;
+  /** fetch data from the table: "cellar_wine" using primary key columns */
+  cellar_wine_by_pk?: Maybe<Cellar_Wine>;
   /** fetch data from the table: "cellars" */
   cellars: Array<Cellars>;
   /** fetch aggregated fields from the table: "cellars" */
   cellars_aggregate: Cellars_Aggregate;
   /** fetch data from the table: "cellars" using primary key columns */
   cellars_by_pk?: Maybe<Cellars>;
+  /** fetch data from the table: "country" */
+  country: Array<Country>;
+  /** fetch aggregated fields from the table: "country" */
+  country_aggregate: Country_Aggregate;
+  /** fetch data from the table: "country" using primary key columns */
+  country_by_pk?: Maybe<Country>;
   /** fetch data from the table: "storage.files" using primary key columns */
   file?: Maybe<Files>;
   /** An array relationship */
@@ -6875,6 +7665,18 @@ export type Query_Root = {
   /** fetch aggregated fields from the table: "storage.virus" */
   virusesAggregate: Virus_Aggregate;
   wine_defaults?: Maybe<Wine_Defaults_Result>;
+  /** fetch data from the table: "wine_style" */
+  wine_style: Array<Wine_Style>;
+  /** fetch aggregated fields from the table: "wine_style" */
+  wine_style_aggregate: Wine_Style_Aggregate;
+  /** fetch data from the table: "wine_style" using primary key columns */
+  wine_style_by_pk?: Maybe<Wine_Style>;
+  /** fetch data from the table: "wine_variety" */
+  wine_variety: Array<Wine_Variety>;
+  /** fetch aggregated fields from the table: "wine_variety" */
+  wine_variety_aggregate: Wine_Variety_Aggregate;
+  /** fetch data from the table: "wine_variety" using primary key columns */
+  wine_variety_by_pk?: Maybe<Wine_Variety>;
   /** An array relationship */
   wines: Array<Wines>;
   /** An aggregate relationship */
@@ -7188,6 +7990,29 @@ export type Query_RootCellar_User_By_PkArgs = {
 };
 
 
+export type Query_RootCellar_WineArgs = {
+  distinct_on?: InputMaybe<Array<Cellar_Wine_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Cellar_Wine_Order_By>>;
+  where?: InputMaybe<Cellar_Wine_Bool_Exp>;
+};
+
+
+export type Query_RootCellar_Wine_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Cellar_Wine_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Cellar_Wine_Order_By>>;
+  where?: InputMaybe<Cellar_Wine_Bool_Exp>;
+};
+
+
+export type Query_RootCellar_Wine_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
 export type Query_RootCellarsArgs = {
   distinct_on?: InputMaybe<Array<Cellars_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -7208,6 +8033,29 @@ export type Query_RootCellars_AggregateArgs = {
 
 export type Query_RootCellars_By_PkArgs = {
   id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootCountryArgs = {
+  distinct_on?: InputMaybe<Array<Country_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Country_Order_By>>;
+  where?: InputMaybe<Country_Bool_Exp>;
+};
+
+
+export type Query_RootCountry_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Country_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Country_Order_By>>;
+  where?: InputMaybe<Country_Bool_Exp>;
+};
+
+
+export type Query_RootCountry_By_PkArgs = {
+  text: Scalars['String']['input'];
 };
 
 
@@ -7402,6 +8250,52 @@ export type Query_RootVirusesAggregateArgs = {
 
 export type Query_RootWine_DefaultsArgs = {
   hint: Item_Defaults_Hint;
+};
+
+
+export type Query_RootWine_StyleArgs = {
+  distinct_on?: InputMaybe<Array<Wine_Style_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wine_Style_Order_By>>;
+  where?: InputMaybe<Wine_Style_Bool_Exp>;
+};
+
+
+export type Query_RootWine_Style_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Wine_Style_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wine_Style_Order_By>>;
+  where?: InputMaybe<Wine_Style_Bool_Exp>;
+};
+
+
+export type Query_RootWine_Style_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+export type Query_RootWine_VarietyArgs = {
+  distinct_on?: InputMaybe<Array<Wine_Variety_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wine_Variety_Order_By>>;
+  where?: InputMaybe<Wine_Variety_Bool_Exp>;
+};
+
+
+export type Query_RootWine_Variety_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Wine_Variety_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wine_Variety_Order_By>>;
+  where?: InputMaybe<Wine_Variety_Bool_Exp>;
+};
+
+
+export type Query_RootWine_Variety_By_PkArgs = {
+  text: Scalars['String']['input'];
 };
 
 
@@ -8172,6 +9066,14 @@ export type Subscription_Root = {
   cellar_user_by_pk?: Maybe<Cellar_User>;
   /** fetch data from the table in a streaming manner: "cellar_user" */
   cellar_user_stream: Array<Cellar_User>;
+  /** fetch data from the table: "cellar_wine" */
+  cellar_wine: Array<Cellar_Wine>;
+  /** fetch aggregated fields from the table: "cellar_wine" */
+  cellar_wine_aggregate: Cellar_Wine_Aggregate;
+  /** fetch data from the table: "cellar_wine" using primary key columns */
+  cellar_wine_by_pk?: Maybe<Cellar_Wine>;
+  /** fetch data from the table in a streaming manner: "cellar_wine" */
+  cellar_wine_stream: Array<Cellar_Wine>;
   /** fetch data from the table: "cellars" */
   cellars: Array<Cellars>;
   /** fetch aggregated fields from the table: "cellars" */
@@ -8180,6 +9082,14 @@ export type Subscription_Root = {
   cellars_by_pk?: Maybe<Cellars>;
   /** fetch data from the table in a streaming manner: "cellars" */
   cellars_stream: Array<Cellars>;
+  /** fetch data from the table: "country" */
+  country: Array<Country>;
+  /** fetch aggregated fields from the table: "country" */
+  country_aggregate: Country_Aggregate;
+  /** fetch data from the table: "country" using primary key columns */
+  country_by_pk?: Maybe<Country>;
+  /** fetch data from the table in a streaming manner: "country" */
+  country_stream: Array<Country>;
   /** fetch data from the table: "storage.files" using primary key columns */
   file?: Maybe<Files>;
   /** An array relationship */
@@ -8244,6 +9154,22 @@ export type Subscription_Root = {
   viruses: Array<Virus>;
   /** fetch aggregated fields from the table: "storage.virus" */
   virusesAggregate: Virus_Aggregate;
+  /** fetch data from the table: "wine_style" */
+  wine_style: Array<Wine_Style>;
+  /** fetch aggregated fields from the table: "wine_style" */
+  wine_style_aggregate: Wine_Style_Aggregate;
+  /** fetch data from the table: "wine_style" using primary key columns */
+  wine_style_by_pk?: Maybe<Wine_Style>;
+  /** fetch data from the table in a streaming manner: "wine_style" */
+  wine_style_stream: Array<Wine_Style>;
+  /** fetch data from the table: "wine_variety" */
+  wine_variety: Array<Wine_Variety>;
+  /** fetch aggregated fields from the table: "wine_variety" */
+  wine_variety_aggregate: Wine_Variety_Aggregate;
+  /** fetch data from the table: "wine_variety" using primary key columns */
+  wine_variety_by_pk?: Maybe<Wine_Variety>;
+  /** fetch data from the table in a streaming manner: "wine_variety" */
+  wine_variety_stream: Array<Wine_Variety>;
   /** An array relationship */
   wines: Array<Wines>;
   /** An aggregate relationship */
@@ -8645,6 +9571,36 @@ export type Subscription_RootCellar_User_StreamArgs = {
 };
 
 
+export type Subscription_RootCellar_WineArgs = {
+  distinct_on?: InputMaybe<Array<Cellar_Wine_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Cellar_Wine_Order_By>>;
+  where?: InputMaybe<Cellar_Wine_Bool_Exp>;
+};
+
+
+export type Subscription_RootCellar_Wine_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Cellar_Wine_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Cellar_Wine_Order_By>>;
+  where?: InputMaybe<Cellar_Wine_Bool_Exp>;
+};
+
+
+export type Subscription_RootCellar_Wine_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootCellar_Wine_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Cellar_Wine_Stream_Cursor_Input>>;
+  where?: InputMaybe<Cellar_Wine_Bool_Exp>;
+};
+
+
 export type Subscription_RootCellarsArgs = {
   distinct_on?: InputMaybe<Array<Cellars_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -8672,6 +9628,36 @@ export type Subscription_RootCellars_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<Cellars_Stream_Cursor_Input>>;
   where?: InputMaybe<Cellars_Bool_Exp>;
+};
+
+
+export type Subscription_RootCountryArgs = {
+  distinct_on?: InputMaybe<Array<Country_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Country_Order_By>>;
+  where?: InputMaybe<Country_Bool_Exp>;
+};
+
+
+export type Subscription_RootCountry_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Country_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Country_Order_By>>;
+  where?: InputMaybe<Country_Bool_Exp>;
+};
+
+
+export type Subscription_RootCountry_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootCountry_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Country_Stream_Cursor_Input>>;
+  where?: InputMaybe<Country_Bool_Exp>;
 };
 
 
@@ -8912,6 +9898,66 @@ export type Subscription_RootVirusesAggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Virus_Order_By>>;
   where?: InputMaybe<Virus_Bool_Exp>;
+};
+
+
+export type Subscription_RootWine_StyleArgs = {
+  distinct_on?: InputMaybe<Array<Wine_Style_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wine_Style_Order_By>>;
+  where?: InputMaybe<Wine_Style_Bool_Exp>;
+};
+
+
+export type Subscription_RootWine_Style_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Wine_Style_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wine_Style_Order_By>>;
+  where?: InputMaybe<Wine_Style_Bool_Exp>;
+};
+
+
+export type Subscription_RootWine_Style_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootWine_Style_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Wine_Style_Stream_Cursor_Input>>;
+  where?: InputMaybe<Wine_Style_Bool_Exp>;
+};
+
+
+export type Subscription_RootWine_VarietyArgs = {
+  distinct_on?: InputMaybe<Array<Wine_Variety_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wine_Variety_Order_By>>;
+  where?: InputMaybe<Wine_Variety_Bool_Exp>;
+};
+
+
+export type Subscription_RootWine_Variety_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Wine_Variety_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Wine_Variety_Order_By>>;
+  where?: InputMaybe<Wine_Variety_Bool_Exp>;
+};
+
+
+export type Subscription_RootWine_Variety_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootWine_Variety_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Wine_Variety_Stream_Cursor_Input>>;
+  where?: InputMaybe<Wine_Variety_Bool_Exp>;
 };
 
 
@@ -9951,14 +10997,357 @@ export type Wine_Defaults_Result = {
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   barcode_code?: Maybe<Scalars['String']['output']>;
   barcode_type?: Maybe<Scalars['String']['output']>;
+  country?: Maybe<Scalars['String']['output']>;
   description?: Maybe<Scalars['String']['output']>;
   item_onboarding_id: Scalars['String']['output'];
   name?: Maybe<Scalars['String']['output']>;
   region?: Maybe<Scalars['String']['output']>;
   special_designation?: Maybe<Scalars['String']['output']>;
+  style?: Maybe<Scalars['String']['output']>;
   variety?: Maybe<Scalars['String']['output']>;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
   vintage?: Maybe<Scalars['date']['output']>;
+};
+
+/** columns and relationships of "wine_style" */
+export type Wine_Style = {
+  __typename: 'wine_style';
+  comment?: Maybe<Scalars['String']['output']>;
+  text: Scalars['String']['output'];
+};
+
+/** aggregated selection of "wine_style" */
+export type Wine_Style_Aggregate = {
+  __typename: 'wine_style_aggregate';
+  aggregate?: Maybe<Wine_Style_Aggregate_Fields>;
+  nodes: Array<Wine_Style>;
+};
+
+/** aggregate fields of "wine_style" */
+export type Wine_Style_Aggregate_Fields = {
+  __typename: 'wine_style_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Wine_Style_Max_Fields>;
+  min?: Maybe<Wine_Style_Min_Fields>;
+};
+
+
+/** aggregate fields of "wine_style" */
+export type Wine_Style_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Wine_Style_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "wine_style". All fields are combined with a logical 'AND'. */
+export type Wine_Style_Bool_Exp = {
+  _and?: InputMaybe<Array<Wine_Style_Bool_Exp>>;
+  _not?: InputMaybe<Wine_Style_Bool_Exp>;
+  _or?: InputMaybe<Array<Wine_Style_Bool_Exp>>;
+  comment?: InputMaybe<String_Comparison_Exp>;
+  text?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "wine_style" */
+export enum Wine_Style_Constraint {
+  /** unique or primary key constraint on columns "text" */
+  WineTypePkey = 'wine_type_pkey'
+}
+
+export enum Wine_Style_Enum {
+  Dessert = 'DESSERT',
+  Red = 'RED',
+  Rose = 'ROSE',
+  Sparkling = 'SPARKLING',
+  White = 'WHITE'
+}
+
+/** Boolean expression to compare columns of type "wine_style_enum". All fields are combined with logical 'AND'. */
+export type Wine_Style_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Wine_Style_Enum>;
+  _in?: InputMaybe<Array<Wine_Style_Enum>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _neq?: InputMaybe<Wine_Style_Enum>;
+  _nin?: InputMaybe<Array<Wine_Style_Enum>>;
+};
+
+/** input type for inserting data into table "wine_style" */
+export type Wine_Style_Insert_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregate max on columns */
+export type Wine_Style_Max_Fields = {
+  __typename: 'wine_style_max_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** aggregate min on columns */
+export type Wine_Style_Min_Fields = {
+  __typename: 'wine_style_min_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** response of any mutation on the table "wine_style" */
+export type Wine_Style_Mutation_Response = {
+  __typename: 'wine_style_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Wine_Style>;
+};
+
+/** on_conflict condition type for table "wine_style" */
+export type Wine_Style_On_Conflict = {
+  constraint: Wine_Style_Constraint;
+  update_columns?: Array<Wine_Style_Update_Column>;
+  where?: InputMaybe<Wine_Style_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "wine_style". */
+export type Wine_Style_Order_By = {
+  comment?: InputMaybe<Order_By>;
+  text?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: wine_style */
+export type Wine_Style_Pk_Columns_Input = {
+  text: Scalars['String']['input'];
+};
+
+/** select columns of table "wine_style" */
+export enum Wine_Style_Select_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+/** input type for updating data in table "wine_style" */
+export type Wine_Style_Set_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** Streaming cursor of the table "wine_style" */
+export type Wine_Style_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Wine_Style_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Wine_Style_Stream_Cursor_Value_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** update columns of table "wine_style" */
+export enum Wine_Style_Update_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+export type Wine_Style_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Wine_Style_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Wine_Style_Bool_Exp;
+};
+
+/** columns and relationships of "wine_variety" */
+export type Wine_Variety = {
+  __typename: 'wine_variety';
+  comment?: Maybe<Scalars['String']['output']>;
+  text: Scalars['String']['output'];
+};
+
+/** aggregated selection of "wine_variety" */
+export type Wine_Variety_Aggregate = {
+  __typename: 'wine_variety_aggregate';
+  aggregate?: Maybe<Wine_Variety_Aggregate_Fields>;
+  nodes: Array<Wine_Variety>;
+};
+
+/** aggregate fields of "wine_variety" */
+export type Wine_Variety_Aggregate_Fields = {
+  __typename: 'wine_variety_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Wine_Variety_Max_Fields>;
+  min?: Maybe<Wine_Variety_Min_Fields>;
+};
+
+
+/** aggregate fields of "wine_variety" */
+export type Wine_Variety_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Wine_Variety_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "wine_variety". All fields are combined with a logical 'AND'. */
+export type Wine_Variety_Bool_Exp = {
+  _and?: InputMaybe<Array<Wine_Variety_Bool_Exp>>;
+  _not?: InputMaybe<Wine_Variety_Bool_Exp>;
+  _or?: InputMaybe<Array<Wine_Variety_Bool_Exp>>;
+  comment?: InputMaybe<String_Comparison_Exp>;
+  text?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "wine_variety" */
+export enum Wine_Variety_Constraint {
+  /** unique or primary key constraint on columns "text" */
+  WineVarietyPkey = 'wine_variety_pkey'
+}
+
+export enum Wine_Variety_Enum {
+  Aglianico = 'AGLIANICO',
+  Arneis = 'ARNEIS',
+  Asti = 'ASTI',
+  Barbera = 'BARBERA',
+  Blaufrankisch = 'BLAUFRANKISCH',
+  CabernetFranc = 'CABERNET_FRANC',
+  CabernetSauvignon = 'CABERNET_SAUVIGNON',
+  Carignan = 'CARIGNAN',
+  Cava = 'CAVA',
+  Champagne = 'CHAMPAGNE',
+  Chardonnay = 'CHARDONNAY',
+  CheninBlanc = 'CHENIN_BLANC',
+  Cinsault = 'CINSAULT',
+  Corvina = 'CORVINA',
+  Dolcetto = 'DOLCETTO',
+  Furmint = 'FURMINT',
+  Gamay = 'GAMAY',
+  Garganega = 'GARGANEGA',
+  Grenache = 'GRENACHE',
+  Malbec = 'MALBEC',
+  Malvasia = 'MALVASIA',
+  Marsanne = 'MARSANNE',
+  Merlot = 'MERLOT',
+  MourvedreMonastrell = 'MOURVEDRE_MONASTRELL',
+  Muscadet = 'MUSCADET',
+  Nebbiolo = 'NEBBIOLO',
+  PetiteSirah = 'PETITE_SIRAH',
+  PetitVerdot = 'PETIT_VERDOT',
+  Pinotage = 'PINOTAGE',
+  PinotBlanc = 'PINOT_BLANC',
+  PinotNoir = 'PINOT_NOIR',
+  Primitivo = 'PRIMITIVO',
+  Prosecco = 'PROSECCO',
+  Riesling = 'RIESLING',
+  Roussanne = 'ROUSSANNE',
+  Sangiovese = 'SANGIOVESE',
+  SauvignonBlanc = 'SAUVIGNON_BLANC',
+  Semillon = 'SEMILLON',
+  SyrahShiraz = 'SYRAH_SHIRAZ',
+  Tempranillo = 'TEMPRANILLO',
+  Torrontes = 'TORRONTES',
+  Verdejo = 'VERDEJO',
+  Viognier = 'VIOGNIER',
+  Zinfandel = 'ZINFANDEL'
+}
+
+/** Boolean expression to compare columns of type "wine_variety_enum". All fields are combined with logical 'AND'. */
+export type Wine_Variety_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Wine_Variety_Enum>;
+  _in?: InputMaybe<Array<Wine_Variety_Enum>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _neq?: InputMaybe<Wine_Variety_Enum>;
+  _nin?: InputMaybe<Array<Wine_Variety_Enum>>;
+};
+
+/** input type for inserting data into table "wine_variety" */
+export type Wine_Variety_Insert_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregate max on columns */
+export type Wine_Variety_Max_Fields = {
+  __typename: 'wine_variety_max_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** aggregate min on columns */
+export type Wine_Variety_Min_Fields = {
+  __typename: 'wine_variety_min_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** response of any mutation on the table "wine_variety" */
+export type Wine_Variety_Mutation_Response = {
+  __typename: 'wine_variety_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Wine_Variety>;
+};
+
+/** on_conflict condition type for table "wine_variety" */
+export type Wine_Variety_On_Conflict = {
+  constraint: Wine_Variety_Constraint;
+  update_columns?: Array<Wine_Variety_Update_Column>;
+  where?: InputMaybe<Wine_Variety_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "wine_variety". */
+export type Wine_Variety_Order_By = {
+  comment?: InputMaybe<Order_By>;
+  text?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: wine_variety */
+export type Wine_Variety_Pk_Columns_Input = {
+  text: Scalars['String']['input'];
+};
+
+/** select columns of table "wine_variety" */
+export enum Wine_Variety_Select_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+/** input type for updating data in table "wine_variety" */
+export type Wine_Variety_Set_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** Streaming cursor of the table "wine_variety" */
+export type Wine_Variety_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Wine_Variety_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Wine_Variety_Stream_Cursor_Value_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** update columns of table "wine_variety" */
+export enum Wine_Variety_Update_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+export type Wine_Variety_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Wine_Variety_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Wine_Variety_Bool_Exp;
 };
 
 /** columns and relationships of "wines" */
@@ -9968,21 +11357,20 @@ export type Wines = {
   /** An object relationship */
   barcode?: Maybe<Barcodes>;
   barcode_code?: Maybe<Scalars['String']['output']>;
-  /** An object relationship */
-  cellar: Cellars;
-  cellar_id: Scalars['uuid']['output'];
+  country?: Maybe<Country_Enum>;
   /** An object relationship */
   createdBy: Users;
   created_at: Scalars['timestamptz']['output'];
   created_by_id: Scalars['uuid']['output'];
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['uuid']['output'];
+  item_onboarding_id?: Maybe<Scalars['uuid']['output']>;
   name: Scalars['String']['output'];
-  price?: Maybe<Scalars['money']['output']>;
   region?: Maybe<Scalars['String']['output']>;
   special_designation?: Maybe<Scalars['String']['output']>;
+  style: Wine_Style_Enum;
   updated_at: Scalars['timestamptz']['output'];
-  variety?: Maybe<Scalars['String']['output']>;
+  variety: Wine_Variety_Enum;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
   vintage: Scalars['date']['output'];
   winery_id?: Maybe<Scalars['uuid']['output']>;
@@ -10055,13 +11443,11 @@ export type Wines_Arr_Rel_Insert_Input = {
 export type Wines_Avg_Fields = {
   __typename: 'wines_avg_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by avg() on columns of table "wines" */
 export type Wines_Avg_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** Boolean expression to filter rows from the table "wines". All fields are combined with a logical 'AND'. */
@@ -10072,19 +11458,19 @@ export type Wines_Bool_Exp = {
   alcohol_content_percentage?: InputMaybe<Numeric_Comparison_Exp>;
   barcode?: InputMaybe<Barcodes_Bool_Exp>;
   barcode_code?: InputMaybe<String_Comparison_Exp>;
-  cellar?: InputMaybe<Cellars_Bool_Exp>;
-  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
+  country?: InputMaybe<Country_Enum_Comparison_Exp>;
   createdBy?: InputMaybe<Users_Bool_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
   description?: InputMaybe<String_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
+  item_onboarding_id?: InputMaybe<Uuid_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
-  price?: InputMaybe<Money_Comparison_Exp>;
   region?: InputMaybe<String_Comparison_Exp>;
   special_designation?: InputMaybe<String_Comparison_Exp>;
+  style?: InputMaybe<Wine_Style_Enum_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
-  variety?: InputMaybe<String_Comparison_Exp>;
+  variety?: InputMaybe<Wine_Variety_Enum_Comparison_Exp>;
   vineyard_designation?: InputMaybe<String_Comparison_Exp>;
   vintage?: InputMaybe<Date_Comparison_Exp>;
   winery_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -10099,7 +11485,6 @@ export enum Wines_Constraint {
 /** input type for incrementing numeric columns in table "wines" */
 export type Wines_Inc_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
-  price?: InputMaybe<Scalars['money']['input']>;
 };
 
 /** input type for inserting data into table "wines" */
@@ -10107,19 +11492,19 @@ export type Wines_Insert_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
   barcode?: InputMaybe<Barcodes_Obj_Rel_Insert_Input>;
   barcode_code?: InputMaybe<Scalars['String']['input']>;
-  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  country?: InputMaybe<Country_Enum>;
   createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
-  price?: InputMaybe<Scalars['money']['input']>;
   region?: InputMaybe<Scalars['String']['input']>;
   special_designation?: InputMaybe<Scalars['String']['input']>;
+  style?: InputMaybe<Wine_Style_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
-  variety?: InputMaybe<Scalars['String']['input']>;
+  variety?: InputMaybe<Wine_Variety_Enum>;
   vineyard_designation?: InputMaybe<Scalars['String']['input']>;
   vintage?: InputMaybe<Scalars['date']['input']>;
   winery_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -10130,17 +11515,15 @@ export type Wines_Max_Fields = {
   __typename: 'wines_max_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   barcode_code?: Maybe<Scalars['String']['output']>;
-  cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
   created_by_id?: Maybe<Scalars['uuid']['output']>;
   description?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
+  item_onboarding_id?: Maybe<Scalars['uuid']['output']>;
   name?: Maybe<Scalars['String']['output']>;
-  price?: Maybe<Scalars['money']['output']>;
   region?: Maybe<Scalars['String']['output']>;
   special_designation?: Maybe<Scalars['String']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
-  variety?: Maybe<Scalars['String']['output']>;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
   vintage?: Maybe<Scalars['date']['output']>;
   winery_id?: Maybe<Scalars['uuid']['output']>;
@@ -10150,17 +11533,15 @@ export type Wines_Max_Fields = {
 export type Wines_Max_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   barcode_code?: InputMaybe<Order_By>;
-  cellar_id?: InputMaybe<Order_By>;
   created_at?: InputMaybe<Order_By>;
   created_by_id?: InputMaybe<Order_By>;
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
   region?: InputMaybe<Order_By>;
   special_designation?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
-  variety?: InputMaybe<Order_By>;
   vineyard_designation?: InputMaybe<Order_By>;
   vintage?: InputMaybe<Order_By>;
   winery_id?: InputMaybe<Order_By>;
@@ -10171,17 +11552,15 @@ export type Wines_Min_Fields = {
   __typename: 'wines_min_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   barcode_code?: Maybe<Scalars['String']['output']>;
-  cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
   created_by_id?: Maybe<Scalars['uuid']['output']>;
   description?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
+  item_onboarding_id?: Maybe<Scalars['uuid']['output']>;
   name?: Maybe<Scalars['String']['output']>;
-  price?: Maybe<Scalars['money']['output']>;
   region?: Maybe<Scalars['String']['output']>;
   special_designation?: Maybe<Scalars['String']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
-  variety?: Maybe<Scalars['String']['output']>;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
   vintage?: Maybe<Scalars['date']['output']>;
   winery_id?: Maybe<Scalars['uuid']['output']>;
@@ -10191,17 +11570,15 @@ export type Wines_Min_Fields = {
 export type Wines_Min_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   barcode_code?: InputMaybe<Order_By>;
-  cellar_id?: InputMaybe<Order_By>;
   created_at?: InputMaybe<Order_By>;
   created_by_id?: InputMaybe<Order_By>;
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
   region?: InputMaybe<Order_By>;
   special_designation?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
-  variety?: InputMaybe<Order_By>;
   vineyard_designation?: InputMaybe<Order_By>;
   vintage?: InputMaybe<Order_By>;
   winery_id?: InputMaybe<Order_By>;
@@ -10216,6 +11593,13 @@ export type Wines_Mutation_Response = {
   returning: Array<Wines>;
 };
 
+/** input type for inserting object relation for remote table "wines" */
+export type Wines_Obj_Rel_Insert_Input = {
+  data: Wines_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Wines_On_Conflict>;
+};
+
 /** on_conflict condition type for table "wines" */
 export type Wines_On_Conflict = {
   constraint: Wines_Constraint;
@@ -10228,17 +11612,17 @@ export type Wines_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   barcode?: InputMaybe<Barcodes_Order_By>;
   barcode_code?: InputMaybe<Order_By>;
-  cellar?: InputMaybe<Cellars_Order_By>;
-  cellar_id?: InputMaybe<Order_By>;
+  country?: InputMaybe<Order_By>;
   createdBy?: InputMaybe<Users_Order_By>;
   created_at?: InputMaybe<Order_By>;
   created_by_id?: InputMaybe<Order_By>;
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
   region?: InputMaybe<Order_By>;
   special_designation?: InputMaybe<Order_By>;
+  style?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   variety?: InputMaybe<Order_By>;
   vineyard_designation?: InputMaybe<Order_By>;
@@ -10258,7 +11642,7 @@ export enum Wines_Select_Column {
   /** column name */
   BarcodeCode = 'barcode_code',
   /** column name */
-  CellarId = 'cellar_id',
+  Country = 'country',
   /** column name */
   CreatedAt = 'created_at',
   /** column name */
@@ -10268,13 +11652,15 @@ export enum Wines_Select_Column {
   /** column name */
   Id = 'id',
   /** column name */
-  Name = 'name',
+  ItemOnboardingId = 'item_onboarding_id',
   /** column name */
-  Price = 'price',
+  Name = 'name',
   /** column name */
   Region = 'region',
   /** column name */
   SpecialDesignation = 'special_designation',
+  /** column name */
+  Style = 'style',
   /** column name */
   UpdatedAt = 'updated_at',
   /** column name */
@@ -10291,17 +11677,18 @@ export enum Wines_Select_Column {
 export type Wines_Set_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
   barcode_code?: InputMaybe<Scalars['String']['input']>;
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  country?: InputMaybe<Country_Enum>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
-  price?: InputMaybe<Scalars['money']['input']>;
   region?: InputMaybe<Scalars['String']['input']>;
   special_designation?: InputMaybe<Scalars['String']['input']>;
+  style?: InputMaybe<Wine_Style_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
-  variety?: InputMaybe<Scalars['String']['input']>;
+  variety?: InputMaybe<Wine_Variety_Enum>;
   vineyard_designation?: InputMaybe<Scalars['String']['input']>;
   vintage?: InputMaybe<Scalars['date']['input']>;
   winery_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -10311,39 +11698,33 @@ export type Wines_Set_Input = {
 export type Wines_Stddev_Fields = {
   __typename: 'wines_stddev_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev() on columns of table "wines" */
 export type Wines_Stddev_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** aggregate stddev_pop on columns */
 export type Wines_Stddev_Pop_Fields = {
   __typename: 'wines_stddev_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev_pop() on columns of table "wines" */
 export type Wines_Stddev_Pop_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** aggregate stddev_samp on columns */
 export type Wines_Stddev_Samp_Fields = {
   __typename: 'wines_stddev_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev_samp() on columns of table "wines" */
 export type Wines_Stddev_Samp_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** Streaming cursor of the table "wines" */
@@ -10358,17 +11739,18 @@ export type Wines_Stream_Cursor_Input = {
 export type Wines_Stream_Cursor_Value_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
   barcode_code?: InputMaybe<Scalars['String']['input']>;
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  country?: InputMaybe<Country_Enum>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
-  price?: InputMaybe<Scalars['money']['input']>;
   region?: InputMaybe<Scalars['String']['input']>;
   special_designation?: InputMaybe<Scalars['String']['input']>;
+  style?: InputMaybe<Wine_Style_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
-  variety?: InputMaybe<Scalars['String']['input']>;
+  variety?: InputMaybe<Wine_Variety_Enum>;
   vineyard_designation?: InputMaybe<Scalars['String']['input']>;
   vintage?: InputMaybe<Scalars['date']['input']>;
   winery_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -10378,13 +11760,11 @@ export type Wines_Stream_Cursor_Value_Input = {
 export type Wines_Sum_Fields = {
   __typename: 'wines_sum_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
-  price?: Maybe<Scalars['money']['output']>;
 };
 
 /** order by sum() on columns of table "wines" */
 export type Wines_Sum_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** update columns of table "wines" */
@@ -10394,7 +11774,7 @@ export enum Wines_Update_Column {
   /** column name */
   BarcodeCode = 'barcode_code',
   /** column name */
-  CellarId = 'cellar_id',
+  Country = 'country',
   /** column name */
   CreatedAt = 'created_at',
   /** column name */
@@ -10404,13 +11784,15 @@ export enum Wines_Update_Column {
   /** column name */
   Id = 'id',
   /** column name */
-  Name = 'name',
+  ItemOnboardingId = 'item_onboarding_id',
   /** column name */
-  Price = 'price',
+  Name = 'name',
   /** column name */
   Region = 'region',
   /** column name */
   SpecialDesignation = 'special_designation',
+  /** column name */
+  Style = 'style',
   /** column name */
   UpdatedAt = 'updated_at',
   /** column name */
@@ -10436,39 +11818,33 @@ export type Wines_Updates = {
 export type Wines_Var_Pop_Fields = {
   __typename: 'wines_var_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by var_pop() on columns of table "wines" */
 export type Wines_Var_Pop_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** aggregate var_samp on columns */
 export type Wines_Var_Samp_Fields = {
   __typename: 'wines_var_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by var_samp() on columns of table "wines" */
 export type Wines_Var_Samp_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** aggregate variance on columns */
 export type Wines_Variance_Fields = {
   __typename: 'wines_variance_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by variance() on columns of table "wines" */
 export type Wines_Variance_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 export type GetCredentialQueryVariables = Exact<{

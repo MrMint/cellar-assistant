@@ -1,0 +1,57 @@
+table:
+  name: cellar_wine
+  schema: public
+object_relationships:
+  - name: cellar
+    using:
+      foreign_key_constraint_on: cellar_id
+  - name: createdBy
+    using:
+      foreign_key_constraint_on: user_id
+  - name: wine
+    using:
+      foreign_key_constraint_on: wine_id
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        cellar:
+          created_by_id:
+            _eq: X-Hasura-User-Id
+      set:
+        user_id: x-hasura-User-Id
+      columns:
+        - cellar_id
+        - wine_id
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - cellar_id
+        - id
+        - user_id
+        - wine_id
+      filter:
+        cellar:
+          users:
+            user_id:
+              _eq: X-Hasura-User-Id
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - wine_id
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+    comment: ""
