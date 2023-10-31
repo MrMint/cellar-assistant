@@ -1,11 +1,11 @@
 "use client";
 
-import { WineForm } from "@/components/wine/WineForm";
-import { graphql } from "@/gql";
-import { nullsToUndefined } from "@/utilities";
 import { Box } from "@mui/joy";
 import { isNotNil, omit } from "ramda";
 import { useQuery } from "urql";
+import { WineForm } from "@/components/wine/WineForm";
+import { graphql } from "@/gql";
+import { nullsToUndefined } from "@/utilities";
 
 const editWinePageQuery = graphql(`
   query EditWinePageQuery($itemId: uuid!) {
@@ -50,7 +50,8 @@ const EditWine = ({
         <WineForm
           id={itemId}
           cellarId={cellarId}
-          returnUrl={`/cellars/${cellarId}/wines/${itemId}`}
+          onCreated={() => {}}
+          // returnUrl={`/cellars/${cellarId}/wines/${itemId}`}
           defaultValues={{
             name: wine.name,
             description: wine.description,

@@ -1,8 +1,11 @@
-import { Barcode } from "@/constants";
 import { type NhostClient } from "@nhost/nextjs";
+import { type AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { isEmpty, isNil, isNotNil, not } from "ramda";
 import { Client } from "urql";
-import { PromiseActorLogic, assign, createMachine, fromPromise } from "xstate";
+import { PromiseActorLogic, assign, createMachine } from "xstate";
+import { insertCellarItem } from "@/components/wine/actors/insertCellarItem";
+import { Barcode } from "@/constants";
+import { searchByBarcode } from "./actors/searchByBarcode";
 import {
   BarcodeSearchResult,
   DefaultValues,
@@ -10,10 +13,7 @@ import {
   FetchDefaultsInput,
   UploadFilesInput,
 } from "./actors/types";
-import { searchByBarcode } from "./actors/searchByBarcode";
 import { uploadFiles } from "./actors/uploadFiles";
-import { insertCellarItem } from "../../wine/actors/insertCellarItem";
-import { type AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 export const OnboardingMachine = createMachine(
   {
@@ -48,7 +48,7 @@ export const OnboardingMachine = createMachine(
             backLabel?: string;
             existingItemId?: string;
           }
-        | { type: "SUBMIT" }
+        | { type: "CREATED" }
         | { type: "ADD_ANOTHER" }
         | { type: "DONE" };
       actors:
@@ -138,7 +138,7 @@ export const OnboardingMachine = createMachine(
         },
       },
       form: {
-        on: { SUBMIT: "done" },
+        on: { CREATED: "finalPrompt" },
       },
       addExisting: {
         invoke: {
@@ -179,7 +179,6 @@ export const OnboardingMachine = createMachine(
   {
     actors: {
       uploadFiles,
-      insertCellarItem,
     },
   },
 );

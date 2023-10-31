@@ -12,9 +12,10 @@ import {
 } from "@mui/joy";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { isNotNil } from "ramda";
+import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useMutation } from "urql";
+import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
 import { graphql } from "@/gql";
 import {
   Barcodes_Constraint,
@@ -24,12 +25,7 @@ import {
   Country_Enum,
   Wine_Style_Enum,
 } from "@/gql/graphql";
-import { formatVintage, getEnumKeys } from "@/utilities";
-
-// TODO move these over to graphql queries to support enum tables edits at runtime
-const styleOptions = getEnumKeys(Wine_Style_Enum);
-const varietyOptions = getEnumKeys(Wine_Variety_Enum);
-const countryOptions = getEnumKeys(Country_Enum);
+import { formatVintage } from "@/utilities";
 
 type SharedFields = {
   description?: string;
@@ -60,8 +56,8 @@ type WineFormProps = {
   id?: string;
   cellarId: string;
   itemOnboardingId?: string;
-  returnUrl: string;
   defaultValues?: WineFormDefaultValues;
+  onCreated: (createdId: string) => void;
 };
 
 const addWineMutation = graphql(`
@@ -130,9 +126,9 @@ function mapFormValuesToInsertInput(
 export const WineForm = ({
   id,
   cellarId,
-  returnUrl,
   defaultValues,
   itemOnboardingId,
+  onCreated,
 }: WineFormProps) => {
   const router = useRouter();
   const [
@@ -162,30 +158,29 @@ export const WineForm = ({
 
   const onSubmit: SubmitHandler<IWineFormInput> = async (values) => {
     let errored: CombinedError | undefined;
+    let createdId: string | undefined;
     const update = mapFormValuesToInsertInput(
       values,
       cellarId,
       id,
       itemOnboardingId,
     );
-
     if (id == undefined) {
-      errored = (
-        await addWine({
-          wine: update,
-        })
-      ).error;
+      const result = await addWine({
+        wine: update,
+      });
+      errored = result.error;
+      createdId = result.data?.insert_cellar_wine_one?.id;
     } else {
-      errored = (
-        await updateWine({
-          wineId: id,
-          wine: update,
-        })
-      ).error;
+      const result = await updateWine({
+        wineId: id,
+        wine: update,
+      });
+      errored = result.error;
+      createdId = result.data?.update_wines_by_pk?.id;
     }
-
-    if (errored === undefined) {
-      router.push(returnUrl);
+    if (isNil(errored) && isNotNil(createdId)) {
+      onCreated(createdId);
     }
   };
   return (
@@ -254,7 +249,7 @@ export const WineForm = ({
                       field.onChange(value);
                     }}
                   >
-                    {styleOptions.map((x) => (
+                    {wineStyleKeys.map((x) => (
                       <Option key={x} value={Wine_Style_Enum[x]}>
                         {x}
                       </Option>
@@ -277,7 +272,7 @@ export const WineForm = ({
                       field.onChange(value);
                     }}
                   >
-                    {varietyOptions.map((x) => (
+                    {wineVarietyKeys.map((x) => (
                       <Option key={x} value={Wine_Variety_Enum[x]}>
                         {x}
                       </Option>
@@ -291,7 +286,6 @@ export const WineForm = ({
               <Controller
                 name="country"
                 control={control}
-                rules={{ required: true }}
                 render={({ field }) => (
                   <Select
                     placeholder="Choose one…"
@@ -300,7 +294,7 @@ export const WineForm = ({
                       field.onChange(value);
                     }}
                   >
-                    {countryOptions.map((x) => (
+                    {countryKeys.map((x) => (
                       <Option key={x} value={Country_Enum[x]}>
                         {x}
                       </Option>

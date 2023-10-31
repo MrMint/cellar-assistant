@@ -1,0 +1,12 @@
+table:
+  name: beer_style
+  schema: public
+is_enum: true
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - comment
+        - text
+      filter: {}
+    comment: ""

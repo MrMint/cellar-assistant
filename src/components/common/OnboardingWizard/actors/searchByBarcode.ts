@@ -1,13 +1,23 @@
-import { fromPromise } from "xstate";
-import { BarcodeSearchResult, SearchByBarcodeInput } from "./types";
 import { isNil, isNotNil } from "ramda";
+import { fromPromise } from "xstate";
 import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
+import { BarcodeSearchResult, SearchByBarcodeInput } from "./types";
 
 const searchByBarcodeQuery = graphql(`
   query SearchByBarcode($code: String!) {
     barcodes_by_pk(code: $code) {
       wines {
+        id
+        name
+        vintage
+      }
+      beers {
+        id
+        name
+        vintage
+      }
+      spirits {
         id
         name
         vintage
@@ -32,17 +42,41 @@ export const searchByBarcode = fromPromise(
       isNotNil(searchResults.data) &&
       isNotNil(searchResults.data.barcodes_by_pk)
     ) {
-      results = results.concat(
-        searchResults.data.barcodes_by_pk.wines.map(
-          (x) =>
-            ({
-              id: x.id,
-              name: x.name,
-              vintage: x.vintage,
-              type: ItemType.Wine,
-            }) as BarcodeSearchResult,
-        ),
-      );
+      const { wines, beers, spirits } = searchResults.data.barcodes_by_pk;
+      results = results
+        .concat(
+          wines.map(
+            (x) =>
+              ({
+                id: x.id,
+                name: x.name,
+                vintage: x.vintage,
+                type: ItemType.Wine,
+              }) as BarcodeSearchResult,
+          ),
+        )
+        .concat(
+          beers.map(
+            (x) =>
+              ({
+                id: x.id,
+                name: x.name,
+                vintage: x.vintage,
+                type: ItemType.Beer,
+              }) as BarcodeSearchResult,
+          ),
+        )
+        .concat(
+          spirits.map(
+            (x) =>
+              ({
+                id: x.id,
+                name: x.name,
+                vintage: x.vintage,
+                type: ItemType.Spirit,
+              }) as BarcodeSearchResult,
+          ),
+        );
     }
     return results;
   },

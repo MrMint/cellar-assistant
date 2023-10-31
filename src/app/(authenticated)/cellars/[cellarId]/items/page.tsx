@@ -1,20 +1,22 @@
 "use client";
 
-import { graphql } from "@/gql";
-import withAuth from "@/hocs/withAuth";
 import { Box, Button, Grid, Stack } from "@mui/joy";
-import { useQuery } from "urql";
 import { MdAdd } from "react-icons/md";
+import { useQuery } from "urql";
 import TopNavigationBar from "@/components/common/HeaderBar";
 import Link from "@/components/common/Link";
-import { ItemType } from "@/constants";
 import { ItemCard } from "@/components/item/ItemCard";
+import { ItemType } from "@/constants";
+import { graphql } from "@/gql";
+import withAuth from "@/hocs/withAuth";
 
 const itemsSub = graphql(`
   query GetItemsQuery($cellarId: uuid!) {
-    beers(where: { cellar_id: { _eq: $cellarId } }) {
+    cellar_beer(where: { cellar_id: { _eq: $cellarId } }) {
       id
-      name
+      beer {
+        name
+      }
     }
     cellar_wine(where: { cellar_id: { _eq: $cellarId } }) {
       id
@@ -62,10 +64,10 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
           }
         />
         <Grid container spacing={2}>
-          {res?.data?.beers.map((x) => (
+          {res?.data?.cellar_beer.map((x) => (
             <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
               <ItemCard
-                item={x}
+                item={{ id: x.id, name: x.beer.name }}
                 type={ItemType.Beer}
                 href={`${ItemType[ItemType.Beer].toLowerCase()}s/${x.id}`}
               />

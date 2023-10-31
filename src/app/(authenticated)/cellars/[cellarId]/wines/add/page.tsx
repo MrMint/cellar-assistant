@@ -7,12 +7,7 @@ const AddWine = ({
 }: {
   params: { cellarId: string };
 }) => {
-  return (
-    <WineOnboarding
-      cellarId={cellarId}
-      returnUrl={`/cellars/${cellarId}/items`}
-    />
-  );
+  return <WineOnboarding cellarId={cellarId} />;
 };
 
 export default AddWine;
