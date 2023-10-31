@@ -18,7 +18,6 @@ insert_permissions:
         - alcohol_content_percentage
         - barcode_code
         - country
-        - created_by_id
         - description
         - item_onboarding_id
         - name
@@ -61,6 +60,7 @@ update_permissions:
       columns:
         - alcohol_content_percentage
         - barcode_code
+        - country
         - description
         - name
         - region
@@ -73,11 +73,4 @@ update_permissions:
         created_by_id:
           _eq: X-Hasura-User-Id
       check: {}
-    comment: ""
-delete_permissions:
-  - role: user
-    permission:
-      filter:
-        created_by_id:
-          _eq: X-Hasura-User-Id
     comment: ""

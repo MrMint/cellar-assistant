@@ -1,14 +1,5 @@
-import {
-  curry,
-  defaultTo,
-  filter,
-  is,
-  isNotNil,
-  nth,
-  pipe,
-  prop,
-  toUpper,
-} from "ramda";
+import { extract } from "fuzzball";
+import { defaultTo, filter, is, isNotNil, nth, pipe } from "ramda";
 import {
   Beer_Defaults_Result,
   Country_Enum,
@@ -17,12 +8,13 @@ import {
   Wine_Defaults_Result,
   Wine_Style_Enum,
   Wine_Variety_Enum,
+  Beer_Style_Enum,
 } from "../_gql/graphql";
-import { extract } from "fuzzball";
-import { getEnumKeys, getEnumValues } from "../_utils";
+import { getEnumValues } from "../_utils";
 
-export const styleValues = getEnumValues(Wine_Style_Enum);
-export const varietyValues = getEnumValues(Wine_Variety_Enum);
+export const beerStyleValues = getEnumValues(Beer_Style_Enum);
+export const wineStyleValues = getEnumValues(Wine_Style_Enum);
+export const wineVarietyValues = getEnumValues(Wine_Variety_Enum);
 export const spiritTypes = getEnumValues(Spirit_Type_Enum);
 export const countries = getEnumValues(Country_Enum);
 
@@ -42,11 +34,11 @@ const wineFields = {
   description:
     "description (an experts creative description of the wines history, tasting notes, pairings, glassware)",
   vintage,
-  style: `style (one of [${styleValues.join(", ")}])`,
+  style: `style (one of [${wineStyleValues.join(", ")}])`,
   winery: "winery",
   region: "region",
   country,
-  variety: `variety (one of [${varietyValues.join(", ")}])`,
+  variety: `variety (one of [${wineVarietyValues.join(", ")}])`,
   alcohol_content_percentage,
   barcode,
   special_designation: "special_designation",
@@ -58,7 +50,7 @@ const beerFields = {
   name,
   description:
     "description (an experts creative description of the beers history, tasting notes, pairings, glassware)",
-  style: `style (one of [lager, ale, stout, ipa, porter, tripel])`,
+  style: `style (one of [${beerStyleValues.join(", ")}])`,
   vintage,
   brewery: "brewery",
   country,
@@ -117,7 +109,7 @@ export function mapJsonToReturnType(
     case "WINE":
       let style: String = null;
       if (isNotNil(jsonPrediction.style) && is(String, jsonPrediction.style)) {
-        style = getTopMatch(extract(jsonPrediction.style, styleValues)) as
+        style = getTopMatch(extract(jsonPrediction.style, wineStyleValues)) as
           | string
           | undefined;
       }
@@ -128,7 +120,7 @@ export function mapJsonToReturnType(
         is(String, jsonPrediction.variety)
       ) {
         variety = getTopMatch(
-          extract(jsonPrediction.variety, varietyValues),
+          extract(jsonPrediction.variety, wineVarietyValues),
         ) as string | undefined;
       }
 
