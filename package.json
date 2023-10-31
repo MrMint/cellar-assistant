@@ -22,6 +22,7 @@
     "@mui/joy": "5.0.0-beta.12",
     "@nhost/nextjs": "1.13.39",
     "@parcel/watcher": "2.3.0",
+    "@trivago/prettier-plugin-sort-imports": "4.2.1",
     "@types/node": "20.8.9",
     "@types/ramda": "0.29.7",
     "@types/react": "18.2.33",
