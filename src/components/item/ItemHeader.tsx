@@ -2,28 +2,28 @@ import TopNavigationBar from "@/components/common/HeaderBar";
 import { ItemType } from "@/constants";
 import {
   Button,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Modal,
-  ModalDialog,
+  ButtonGroup,
+  Dropdown,
+  Menu,
+  MenuButton,
+  MenuItem,
   Stack,
 } from "@mui/joy";
-import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
-import Link from "../common/Link";
+import { MdAdd, MdArrowDownward } from "react-icons/md";
 import { graphql } from "@/gql";
 import { useMutation } from "urql";
 import { useEffect, useState } from "react";
-import { isNil, isNotNil } from "ramda";
-import { useRouter } from "next/navigation";
+import { count, gt, isNil, isNotNil, length } from "ramda";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 type ItemHeaderProps = {
   itemId: string;
-  itemName: string | undefined;
+  itemName?: string;
   itemType: ItemType;
-  cellarId: string;
-  cellarName: string | undefined;
+  cellars?: {
+    id: string;
+    name: string;
+  }[];
 };
 
 const deleteBeerMutation = graphql(`
@@ -42,26 +42,28 @@ const deleteSpiritMutation = graphql(`
   }
 `);
 
-const deleteWineMutation = graphql(`
-  mutation DeleteWineMutation($itemId: uuid!) {
-    delete_wines_by_pk(id: $itemId) {
+const addWineMutation = graphql(`
+  mutation HeaderAddWineMutation($input: cellar_wine_insert_input!) {
+    insert_cellar_wine_one(object: $input) {
       id
+      cellar_id
     }
   }
 `);
 
-const ItemHeader = ({
+export const ItemHeader = ({
   itemType,
   itemId,
   itemName,
-  cellarId,
-  cellarName,
+  cellars,
 }: ItemHeaderProps) => {
   const router = useRouter();
+  const { get } = useSearchParams();
+  const defaultCellar = get("defaultCellar");
   const [open, setOpen] = useState(false);
   const [beerResponse, deleteBeer] = useMutation(deleteBeerMutation);
   const [spiritResponse, deleteSpirit] = useMutation(deleteSpiritMutation);
-  const [wineResponse, deleteWine] = useMutation(deleteWineMutation);
+  const [wineResponse, addWine] = useMutation(addWineMutation);
 
   const isFetching =
     beerResponse.fetching || spiritResponse.fetching || wineResponse.fetching;
@@ -76,9 +78,10 @@ const ItemHeader = ({
     isNotNil(spiritResponse.operation) ||
     isNotNil(wineResponse.operation);
 
-  const isDisabled = isFetching || (hasFetched && !isErrored);
+  const isLoading = isNil(cellars) || isFetching;
+  const isDisabled = isNil(cellars);
 
-  const handleDeleteClick = async () => {
+  const handleAddClick = async (cellarId: string) => {
     switch (itemType) {
       case ItemType.Beer:
         await deleteBeer({ itemId });
@@ -87,86 +90,67 @@ const ItemHeader = ({
         await deleteSpirit({ itemId });
         break;
       case ItemType.Wine:
-        await deleteWine({ itemId });
+        await addWine({ input: { cellar_id: cellarId, wine_id: itemId } });
         break;
 
       default:
         throw new Error(
-          `Unsupported type ${itemType} provided to handleDeleteClick()`,
+          `Unsupported type ${itemType} provided to handleAddClick()`,
         );
     }
   };
 
-  useEffect(() => {
-    if (!isFetching && hasFetched && !isErrored) {
-      router.replace(`/cellars/${cellarId}/items`);
-    }
-  }, [cellarId, isFetching, hasFetched, isErrored, router]);
+  // useEffect(() => {
+  //   if (!isFetching && hasFetched && !isErrored) {
+  //     router.replace(`/cellars/${cellarId}/items`);
+  //   }
+  // }, [isFetching, hasFetched, isErrored, router]);
 
   return (
     <TopNavigationBar
       breadcrumbs={[
-        { url: "/cellars", text: "Cellars" },
+        { url: `/${ItemType[itemType]}s`, text: `${ItemType[itemType]}s` },
         {
-          url: `/cellars/${cellarId}/items`,
-          text: cellarName ?? "loading...",
-        },
-        {
-          url: `${itemId}`,
+          url: `/${itemType}s/${itemId}`,
           text: itemName ?? "loading...",
         },
       ]}
       endComponent={
         <Stack spacing={2} direction="row">
-          <Button
-            component={Link}
-            href={`${itemId}/edit`}
-            startDecorator={<MdEdit />}
-          >
-            Edit item
-          </Button>
-          <Button
-            variant="outlined"
-            color="danger"
-            onClick={() => setOpen(true)}
-            startDecorator={<MdDelete />}
-          >
-            Delete item
-          </Button>
-          <Modal open={open} onClose={() => setOpen(false)}>
-            <ModalDialog variant="outlined" role="alertdialog">
-              <DialogTitle>
-                <MdWarning />
-                Confirmation
-              </DialogTitle>
-              <Divider />
-              <DialogContent>
-                Are you sure you want to delete {itemName}?
-              </DialogContent>
-              <DialogActions>
-                <Button
-                  variant="solid"
-                  color="danger"
+          {isNil(cellars) ||
+            (isNotNil(cellars) && length(cellars) === 1 && (
+              <Button
+                onClick={() => handleAddClick(cellars[0].id)}
+                startDecorator={<MdAdd />}
+                disabled={isDisabled}
+                loading={isLoading}
+              >
+                Add to Cellar
+              </Button>
+            ))}
+
+          {isNotNil(cellars) && gt(length(cellars), 1) && (
+            <ButtonGroup>
+              <Dropdown>
+                <MenuButton
                   disabled={isDisabled}
-                  onClick={handleDeleteClick}
+                  loading={isLoading}
+                  endDecorator={<MdArrowDownward />}
                 >
-                  Delete {ItemType[itemType]}
-                </Button>
-                <Button
-                  variant="plain"
-                  color="neutral"
-                  disabled={isDisabled}
-                  onClick={() => setOpen(false)}
-                >
-                  Cancel
-                </Button>
-              </DialogActions>
-            </ModalDialog>
-          </Modal>
+                  Add to Cellar
+                </MenuButton>
+                <Menu>
+                  {cellars.map((x) => (
+                    <MenuItem key={x.id} onClick={() => handleAddClick(x.id)}>
+                      {x.name}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </Dropdown>
+            </ButtonGroup>
+          )}
         </Stack>
       }
     />
   );
 };
-
-export default ItemHeader;

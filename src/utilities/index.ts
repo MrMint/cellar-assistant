@@ -1,4 +1,4 @@
-import { format as dateFnsFormat, parseISO } from "date-fns";
+import { format as dateFnsFormat, format, parseISO } from "date-fns";
 import { isNil, isNotNil } from "ramda";
 
 // https://stackoverflow.com/a/76775845
@@ -74,4 +74,8 @@ export function dataUrlToFile(
   const mime = mimeArr[1];
   const buff = Buffer.from(arr[1], "base64");
   return new File([buff], filename, { type: mime });
+}
+
+export function formatVintage(vintage: string | null | undefined) {
+  return formatIsoDateString(vintage, "yyyy");
 }

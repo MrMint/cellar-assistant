@@ -8,8 +8,8 @@ import { useQuery } from "urql";
 import { isNotNil } from "ramda";
 import ItemDetails from "@/components/item/ItemDetails";
 import { formatAsPercentage, formatIsoDateString } from "@/utilities";
-import ItemHeader from "@/components/item/ItemHeader";
 import { ItemType } from "@/constants";
+import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 
 const getBeerQuery = graphql(`
   query GetBeer($itemId: uuid!) {
@@ -46,7 +46,7 @@ const BeerDetails = ({
 
   return (
     <Stack spacing={2}>
-      <ItemHeader
+      <CellarItemHeader
         itemType={ItemType.Beer}
         itemId={itemId}
         itemName={beer?.name}

@@ -8,12 +8,14 @@ import { useActor } from "@xstate/react";
 import { graphql } from "@/gql";
 import { nullsToUndefined } from "@/utilities";
 import { isNil } from "ramda";
-import {
-  OnboardingMachine,
-  defaultValuesResult,
-  fetchDefaultsInput,
-} from "../common/OnboardingWizard/machines";
+import { OnboardingMachine } from "../common/OnboardingWizard/machines";
 import { Analyzing } from "../common/Analyzing";
+import { useCallback } from "react";
+import {
+  DefaultValuesResult,
+  FetchDefaultsInput,
+} from "../common/OnboardingWizard/actors/types";
+import { useRouter } from "next/navigation";
 
 const getDefaultsQuery = graphql(`
   query GetBeerDefaults($hint: item_defaults_hint!) {
@@ -42,14 +44,15 @@ export const BeerOnboarding = ({
   returnUrl,
 }: BeerOnboardingProps) => {
   const urqlClient = useClient();
+  const router = useRouter();
   const nhostClient = useNhostClient();
 
   const fetchDefaults = fromPromise(
     async ({
       input: { barcode, frontLabelFileId, backLabelFileId },
     }: {
-      input: fetchDefaultsInput;
-    }): Promise<defaultValuesResult<BeerFormDefaultValues>> => {
+      input: FetchDefaultsInput;
+    }): Promise<DefaultValuesResult<BeerFormDefaultValues>> => {
       const result = await urqlClient.query(getDefaultsQuery, {
         hint: {
           barcode: barcode?.text,
@@ -91,23 +94,25 @@ export const BeerOnboarding = ({
     {
       input: {
         nhostClient,
+        urqlClient,
+        cellarId,
+        router,
       },
     },
   );
 
   // TODO move this into machine, DUPED
-  const handleOnComplete = ({
-    barcode,
-    frontLabelDataUrl,
-    backLabelDataUrl,
-  }: OnboardingResult) => {
-    send({
-      type: "COMPLETE",
-      barcode: barcode,
-      frontLabel: frontLabelDataUrl,
-      backLabel: backLabelDataUrl,
-    });
-  };
+  const handleOnComplete = useCallback(
+    ({ barcode, frontLabelDataUrl, backLabelDataUrl }: OnboardingResult) => {
+      send({
+        type: "COMPLETE",
+        barcode: barcode,
+        frontLabel: frontLabelDataUrl,
+        backLabel: backLabelDataUrl,
+      });
+    },
+    [send],
+  );
 
   return (
     <Stack spacing={2}>
@@ -120,7 +125,7 @@ export const BeerOnboarding = ({
             </Box>
           </Grid>
         )}
-        {state.value === "analyze" && (
+        {(state.value === "upload" || state.value === "analyze") && (
           <Grid xs={12} sm={6}>
             <Analyzing />
           </Grid>

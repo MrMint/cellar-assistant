@@ -8,7 +8,7 @@ import { useQuery } from "urql";
 import { isNotNil } from "ramda";
 import ItemDetails from "@/components/item/ItemDetails";
 import { formatAsPercentage, formatIsoDateString } from "@/utilities";
-import ItemHeader from "@/components/item/ItemHeader";
+import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import { ItemType } from "@/constants";
 
 const getSpiritQuery = graphql(`
@@ -50,7 +50,7 @@ const SpiritDetails = ({
 
   return (
     <Stack spacing={2}>
-      <ItemHeader
+      <CellarItemHeader
         itemId={itemId}
         itemName={spirit?.name}
         itemType={ItemType.Spirit}

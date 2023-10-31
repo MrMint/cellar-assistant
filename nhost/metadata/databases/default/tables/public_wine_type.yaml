@@ -1,0 +1,3 @@
+table:
+  name: wine_type
+  schema: public

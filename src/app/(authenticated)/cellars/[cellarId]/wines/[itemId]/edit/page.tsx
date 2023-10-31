@@ -17,12 +17,13 @@ const editWinePageQuery = graphql(`
       vintage
       description
       alcohol_content_percentage
-      price
       barcode_code
       special_designation
       vineyard_designation
       variety
       region
+      style
+      country
     }
   }
 `);
@@ -55,11 +56,12 @@ const EditWine = ({
             description: wine.description,
             vintage: wine.vintage,
             alcohol_content_percentage: wine.alcohol_content_percentage,
-            price: wine.price,
             barcode_code: wine.barcode_code,
             region: wine.region,
+            country: wine.country,
             special_designation: wine.special_designation,
             variety: wine.variety,
+            style: wine.style,
             vineyard_designation: wine.vineyard_designation,
           }}
         />

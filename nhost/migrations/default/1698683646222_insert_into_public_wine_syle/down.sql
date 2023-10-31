@@ -1,0 +1,3 @@
+-- Could not auto-generate a down migration.
+-- Please write an appropriate down migration for the SQL below:
+-- INSERT INTO "public"."wine_style"("text") VALUES (E'RED'), (E'WHITE'), (E'SPARKLING'), (E'ROSE'), (E'DESSERT');
