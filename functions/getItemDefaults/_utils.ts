@@ -1,70 +1,173 @@
+import { extract } from "fuzzball";
+import { defaultTo, filter, is, isNotNil, nth, pipe } from "ramda";
 import {
   Beer_Defaults_Result,
+  Country_Enum,
   Spirit_Defaults_Result,
+  Spirit_Type_Enum,
   Wine_Defaults_Result,
+  Wine_Style_Enum,
+  Wine_Variety_Enum,
+  Beer_Style_Enum,
 } from "../_gql/graphql";
+import { getEnumValues } from "../_utils";
+
+export const beerStyleValues = getEnumValues(Beer_Style_Enum);
+export const wineStyleValues = getEnumValues(Wine_Style_Enum);
+export const wineVarietyValues = getEnumValues(Wine_Variety_Enum);
+export const spiritTypes = getEnumValues(Spirit_Type_Enum);
+export const countries = getEnumValues(Country_Enum);
 
 export type ItemType = "BEER" | "WINE" | "SPIRIT";
 
-// TODO query db for enum'd types
-const spiritTypes = "VODKA, BOURBON, TEQUILA, RUM, GIN, WHISKEY";
-export function getFieldsForType(itemType: ItemType) {
-  switch (itemType) {
-    case "WINE":
-      return `name, description(an experts creative description of the wines history, tasting notes, pairings, glassware), type(one of [red, white]), vintage (formatted as "yyyy"), winery, region, country, variety, alcohol_content_percentage (abv formatted as decimal), barcode (formatted as UPC or EAN code), special_designation, vineyard_designation, is_estate_brewed(formatted as boolean)`;
-    case "BEER":
-      return `name, description(an experts creative description of the beers history, tasting notes, pairings, glassware), style(one of [lager, ale, stout, ipa, porter, tripel]), vintage (formatted as "yyyy"), brewery, country, alcohol_content_percentage (abv formatted as decimal), international_bitterness_unit (ibu formatted as decimal), barcode (formatted as UPC or EAN code)`;
-    case "SPIRIT":
-      return `name, description(an experts creative description of the spirits history, tasting notes, pairings, glassware), type(one of [${spiritTypes}]), style, vintage (formatted as "yyyy"), distillery, country, alcohol_content_percentage (abv formatted as decimal), barcode (formatted as UPC or EAN code)`;
-    default:
-      throw Error();
+// SharedFields
+// TODO experiment with how to avoid the country embed, abbreviations are the problem
+const name = "name";
+const vintage = `vintage (formatted as "yyyy")`;
+const country = `country (one of ${countries.join(", ")})`;
+const alcohol_content_percentage =
+  "alcohol_content_percentage (ALC % or ABV formatted as decimal)";
+const barcode = "barcode (formatted as EAN or UPC code)";
+
+const wineFields = {
+  name,
+  description:
+    "description (an experts creative description of the wines history, tasting notes, pairings, glassware)",
+  vintage,
+  style: `style (one of [${wineStyleValues.join(", ")}])`,
+  winery: "winery",
+  region: "region",
+  country,
+  variety: `variety (one of [${wineVarietyValues.join(", ")}])`,
+  alcohol_content_percentage,
+  barcode,
+  special_designation: "special_designation",
+  vineyard_designation: "vineyard_designation",
+  estate_bottled: "estate_bottled (formatted as boolean)",
+};
+
+const beerFields = {
+  name,
+  description:
+    "description (an experts creative description of the beers history, tasting notes, pairings, glassware)",
+  style: `style (one of [${beerStyleValues.join(", ")}])`,
+  vintage,
+  brewery: "brewery",
+  country,
+  alcohol_content_percentage,
+  international_bitterness_unit:
+    "international_bitterness_unit (ibu formatted as decimal)",
+  barcode,
+};
+
+const spiritFields = {
+  name,
+  description:
+    "description (an experts creative description of the spirits history, tasting notes, pairings, recipes, glassware)",
+  type: `type (one of [${spiritTypes}])`,
+  style: "style (an example being anejo vs blanco)",
+  vintage,
+  distillery: "distillery",
+  country,
+  alcohol_content_percentage,
+  barcode,
+};
+
+const fieldPrompts = {
+  WINE: Object.values(wineFields).join(", "),
+  BEER: Object.values(beerFields).join(", "),
+  SPIRIT: Object.values(spiritFields).join(", "),
+};
+
+export const generateDefaultsPrompt = (
+  itemType: ItemType,
+  labelText: string,
+) => `Perform the following tasks for the given text from a ${itemType} label:
+    1. Remove the WARNING label
+    2. Create a single JSON object with the properties: ${fieldPrompts[itemType]}.
+    
+    input: ${labelText}
+    output:
+    `;
+
+const MINIMUM_MATCH_SCORE = 70;
+
+type ExtactionResult = [string, number, number][];
+const getTopMatch = pipe(
+  (input: ExtactionResult): ExtactionResult =>
+    filter((x) => x[1] >= MINIMUM_MATCH_SCORE)(input),
+  nth(0),
+  defaultTo([]),
+  nth(0),
+);
+
+function performEnumMatch(prediction: string, enumValues: string[]) {
+  let match: string = null;
+  if (isNotNil(prediction) && is(String, prediction)) {
+    match = getTopMatch(extract(prediction, enumValues)) as string | undefined;
   }
+  return match;
 }
 
 export function mapJsonToReturnType(
   itemType: ItemType,
   jsonPrediction: any,
 ): Beer_Defaults_Result | Wine_Defaults_Result | Spirit_Defaults_Result {
+  const country = performEnumMatch(jsonPrediction.country, countries);
+
   switch (itemType) {
-    case "WINE":
+    case "WINE": {
+      const style = performEnumMatch(jsonPrediction.style, wineStyleValues);
+      const variety = performEnumMatch(
+        jsonPrediction.variety,
+        wineVarietyValues,
+      );
+
       return {
         __typename: "wine_defaults_result",
         name: jsonPrediction.name,
         description: jsonPrediction.description,
-        variety: jsonPrediction.variety,
         vintage: jsonPrediction.vintage,
         region: jsonPrediction.region,
         alcohol_content_percentage: jsonPrediction.alcohol_content_percentage,
         barcode_code: jsonPrediction.barcode,
         special_designation: jsonPrediction.special_designation,
         vineyard_designation: jsonPrediction.vineyard_designation,
+        style,
+        variety,
+        country,
       } as Wine_Defaults_Result;
-    case "BEER":
+    }
+    case "BEER": {
+      const style = performEnumMatch(jsonPrediction.style, beerStyleValues);
       return {
         __typename: "beer_defaults_result",
         name: jsonPrediction.name,
         description: jsonPrediction.description,
         vintage: jsonPrediction.vintage,
-        country: jsonPrediction.country,
+        country,
         alcohol_content_percentage: jsonPrediction.alcohol_content_percentage,
         barcode_code: jsonPrediction.barcode,
-        style: jsonPrediction.style,
+        style,
         international_bitterness_unit:
           jsonPrediction.international_bitterness_unit,
       } as Beer_Defaults_Result;
-    case "SPIRIT":
+    }
+    case "SPIRIT": {
+      const type = performEnumMatch(jsonPrediction.type, spiritTypes);
       return {
         __typename: "spirit_defaults_result",
         name: jsonPrediction.name,
         description: jsonPrediction.description,
-        type: jsonPrediction.type,
+        type,
         style: jsonPrediction.style,
         vintage: jsonPrediction.vintage,
-        country: jsonPrediction.county,
+        country,
         alcohol_content_percentage: jsonPrediction.alcohol_content_percentage,
         barcode_code: jsonPrediction.barcode,
         distillery: jsonPrediction.distillery,
       } as Spirit_Defaults_Result;
+    }
     default:
       throw Error();
   }

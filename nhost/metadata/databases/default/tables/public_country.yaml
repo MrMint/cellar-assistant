@@ -1,0 +1,4 @@
+table:
+  name: country
+  schema: public
+is_enum: true

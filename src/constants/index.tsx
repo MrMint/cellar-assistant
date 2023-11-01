@@ -1,3 +1,11 @@
+import {
+  Beer_Style_Enum,
+  Country_Enum,
+  Wine_Style_Enum,
+  Wine_Variety_Enum,
+} from "@/gql/graphql";
+import { getEnumKeys } from "@/utilities";
+
 export enum ItemType {
   Beer,
   Wine,
@@ -31,3 +39,9 @@ declare global {
     beforeinstallprompt: BeforeInstallPromptEvent;
   }
 }
+
+// TODO move these over to graphql queries to support enum table edits at runtime
+export const beerStyleKeys = getEnumKeys(Beer_Style_Enum);
+export const wineStyleKeys = getEnumKeys(Wine_Style_Enum);
+export const wineVarietyKeys = getEnumKeys(Wine_Variety_Enum);
+export const countryKeys = getEnumKeys(Country_Enum);

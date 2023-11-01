@@ -15,7 +15,7 @@ import {
   Spirit_Defaults_Result,
   Wine_Defaults_Result,
 } from "../_gql/graphql.js";
-import { getFieldsForType, mapJsonToReturnType } from "./_utils.js";
+import { generateDefaultsPrompt, mapJsonToReturnType } from "./_utils.js";
 import { addItemOnboarding } from "./_queries.js";
 import { getCredential } from "../_utils/queries.js";
 
@@ -162,17 +162,13 @@ export default async function getItemDefaults(
       `),
         ).join(`
       `);
-        const prompt = `for the given text from a ${itemType} label return a single JSON object with the properties: ${getFieldsForType(
-          itemType,
-        )}.
-    
-    input: ${mergedText}
-    output:
-    `;
 
+        const prompt = generateDefaultsPrompt(itemType, mergedText);
         console.log(prompt);
+
         prediction = await callPredict(predictionServiceClient, prompt);
         console.log(`Completed defaults prediction`);
+
         try {
           const jsonPrediction = convertPredictionToJson(prediction);
 

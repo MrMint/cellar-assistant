@@ -1,34 +1,39 @@
-import { graphql } from "@/gql";
-import {
-  Barcodes_Constraint,
-  Barcodes_Update_Column,
-  Beers_Insert_Input,
-} from "@/gql/graphql";
-import { formatIsoDateString } from "@/utilities";
 import {
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
+  Option,
+  Select,
   Stack,
   Textarea,
   Typography,
 } from "@mui/joy";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { isNil } from "ramda";
+import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useMutation } from "urql";
+import { beerStyleKeys, countryKeys } from "@/constants";
+import { graphql } from "@/gql";
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+  Beer_Style_Enum,
+  Cellar_Beer_Insert_Input,
+  Country_Enum,
+} from "@/gql/graphql";
+import { formatVintage } from "@/utilities";
 
 type SharedFields = {
   description?: string;
-  price?: number;
   alcohol_content_percentage?: number;
   barcode_code?: string;
   barcode_type?: string;
   international_bitterness_unit?: number;
-  style?: string;
+  style?: Beer_Style_Enum;
+  country?: Country_Enum;
 };
 
 type IBeerFormInput = {
@@ -44,14 +49,14 @@ export type BeerFormDefaultValues = {
 export type BeerFormProps = {
   id?: string;
   cellarId: string;
-  returnUrl: string;
   itemOnboardingId?: string;
   defaultValues?: BeerFormDefaultValues;
+  onCreated: (createdId: string) => void;
 };
 
 const addBeerMutation = graphql(`
-  mutation addBeer($beer: beers_insert_input!) {
-    insert_beers_one(object: $beer) {
+  mutation addBeer($beer: cellar_beer_insert_input!) {
+    insert_cellar_beer_one(object: $beer) {
       id
     }
   }
@@ -64,22 +69,39 @@ const updateBeerMutation = graphql(`
     }
   }
 `);
-
 function mapFormValuesToInsertInput(
   values: IBeerFormInput,
   cellar_id: string,
-): Beers_Insert_Input {
-  return {
-    name: values.name,
-    alcohol_content_percentage: values.alcohol_content_percentage,
+  beer_id?: string,
+  itemOnboardingId?: string,
+): Cellar_Beer_Insert_Input {
+  if (isNotNil(beer_id)) {
+    return {
+      cellar_id,
+      beer_id,
+    };
+  }
+
+  const update = {
     cellar_id,
-    description: values.description,
-    international_bitterness_unit: values.international_bitterness_unit,
-    style: values.style,
-    vintage: isNil(values.vintage)
-      ? undefined
-      : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
-    barcode: {
+    beer: {
+      data: {
+        name: values.name,
+        alcohol_content_percentage: values.alcohol_content_percentage,
+        description: values.description,
+        country: values.country,
+        style: values.style,
+        vintage: isNotNil(values.vintage)
+          ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
+          : undefined,
+        item_onboarding_id: itemOnboardingId,
+        international_bitterness_unit: values.international_bitterness_unit,
+      },
+    },
+  } as Cellar_Beer_Insert_Input;
+
+  if (isNotNil(update.beer) && isNotNil(values.barcode_code)) {
+    update.beer.data.barcode = {
       data: {
         code: values.barcode_code,
         type: values.barcode_type,
@@ -88,15 +110,17 @@ function mapFormValuesToInsertInput(
         constraint: Barcodes_Constraint.BarcodesPkey,
         update_columns: [Barcodes_Update_Column.Code],
       },
-    },
-  };
+    };
+  }
+  return update;
 }
 
 export const BeerForm = ({
   id,
   cellarId,
-  returnUrl,
   defaultValues,
+  itemOnboardingId,
+  onCreated,
 }: BeerFormProps) => {
   const router = useRouter();
   const [
@@ -114,7 +138,7 @@ export const BeerForm = ({
     featchingUpdate ||
     (error === undefined && (opAdd !== undefined || opUpdate !== undefined));
 
-  const defaultVintage = formatIsoDateString(defaultValues?.vintage, "yyyy");
+  const defaultVintage = formatVintage(defaultValues?.vintage);
 
   const { control, handleSubmit, clearErrors } = useForm<IBeerFormInput>({
     defaultValues: {
@@ -126,25 +150,30 @@ export const BeerForm = ({
 
   const onSubmit: SubmitHandler<IBeerFormInput> = async (values) => {
     let errored: CombinedError | undefined;
-    const update = mapFormValuesToInsertInput(values, cellarId);
+    let createdId: string | undefined;
+    const update = mapFormValuesToInsertInput(
+      values,
+      cellarId,
+      id,
+      itemOnboardingId,
+    );
 
     if (id == undefined) {
-      errored = (
-        await addBeer({
-          beer: update,
-        })
-      ).error;
+      const result = await addBeer({
+        beer: update,
+      });
+      errored = result.error;
+      createdId = result.data?.insert_cellar_beer_one?.id;
     } else {
-      errored = (
-        await updateBeer({
-          beerId: id,
-          beer: update,
-        })
-      ).error;
+      const result = await updateBeer({
+        beerId: id,
+        beer: update,
+      });
+      errored = result.error;
+      createdId = result.data?.update_beers_by_pk?.id;
     }
-
-    if (errored === undefined) {
-      router.push(returnUrl);
+    if (isNil(errored) && isNotNil(createdId)) {
+      onCreated(createdId);
     }
   };
   return (
@@ -204,17 +233,41 @@ export const BeerForm = ({
                 name="style"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Select
+                    placeholder="Choose one…"
+                    {...field}
+                    onChange={(_, value) => {
+                      field.onChange(value);
+                    }}
+                  >
+                    {beerStyleKeys.map((x) => (
+                      <Option key={x} value={Beer_Style_Enum[x]}>
+                        {x}
+                      </Option>
+                    ))}
+                  </Select>
                 )}
               />
             </FormControl>
             <FormControl>
-              <FormLabel>Price</FormLabel>
+              <FormLabel>Country</FormLabel>
               <Controller
-                name="price"
+                name="country"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Select
+                    placeholder="Choose one…"
+                    {...field}
+                    onChange={(_, value) => {
+                      field.onChange(value);
+                    }}
+                  >
+                    {countryKeys.map((x) => (
+                      <Option key={x} value={Country_Enum[x]}>
+                        {x}
+                      </Option>
+                    ))}
+                  </Select>
                 )}
               />
             </FormControl>

@@ -1,11 +1,11 @@
 "use client";
 
-import { BeerForm } from "@/components/beer/BeerForm";
-import { graphql } from "@/gql";
-import { nullsToUndefined } from "@/utilities";
 import { Box } from "@mui/joy";
 import { isNotNil, omit } from "ramda";
 import { useQuery } from "urql";
+import { BeerForm } from "@/components/beer/BeerForm";
+import { graphql } from "@/gql";
+import { nullsToUndefined } from "@/utilities";
 
 const editBeerPageQuery = graphql(`
   query EditBeerPageQuery($itemId: uuid!) {
@@ -17,9 +17,9 @@ const editBeerPageQuery = graphql(`
       style
       description
       alcohol_content_percentage
-      price
       barcode_code
       international_bitterness_unit
+      country
     }
   }
 `);
@@ -46,14 +46,14 @@ const EditBeer = ({
         <BeerForm
           id={itemId}
           cellarId={cellarId}
-          returnUrl={`/cellars/${cellarId}/beers/${itemId}`}
+          onCreated={() => {}}
+          // returnUrl={`/cellars/${cellarId}/beers/${itemId}`}
           defaultValues={{
             name: beer.name,
             description: beer.description,
             style: beer.style,
             vintage: beer.vintage,
             alcohol_content_percentage: beer.alcohol_content_percentage,
-            price: beer.price,
             barcode_code: beer.barcode_code,
             international_bitterness_unit: beer.international_bitterness_unit,
           }}

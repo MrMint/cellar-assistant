@@ -1,0 +1,59 @@
+table:
+  name: cellar_spirit
+  schema: public
+object_relationships:
+  - name: cellar
+    using:
+      foreign_key_constraint_on: cellar_id
+  - name: createdBy
+    using:
+      foreign_key_constraint_on: user_id
+  - name: spirit
+    using:
+      foreign_key_constraint_on: spirit_id
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        cellar:
+          created_by_id:
+            _eq: X-Hasura-User-Id
+      set:
+        user_id: x-hasura-User-Id
+      columns:
+        - cellar_id
+        - spirit_id
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - created_at
+        - updated_at
+        - cellar_id
+        - id
+        - spirit_id
+        - user_id
+      filter:
+        cellar:
+          users:
+            user_id:
+              _eq: X-Hasura-User-Id
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - spirit_id
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+    comment: ""

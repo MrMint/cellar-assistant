@@ -1,113 +1,61 @@
-import { Box, Card, Grid, LinearProgress, Stack, Typography } from "@mui/joy";
-import { BeerForm, BeerFormDefaultValues } from "./BeerForm";
-import { OnboardingWizard, OnboardingResult } from "../common/OnboardingWizard";
+import { Box, Grid, Stack, Typography } from "@mui/joy";
 import { useNhostClient } from "@nhost/nextjs";
-import { useClient } from "urql";
-import { fromPromise } from "xstate";
 import { useActor } from "@xstate/react";
-import { graphql } from "@/gql";
-import { nullsToUndefined } from "@/utilities";
-import { isNil } from "ramda";
-import {
-  OnboardingMachine,
-  defaultValuesResult,
-  fetchDefaultsInput,
-} from "../common/OnboardingWizard/machines";
+import { useRouter } from "next/navigation";
+import { useCallback } from "react";
+import { useClient } from "urql";
 import { Analyzing } from "../common/Analyzing";
-
-const getDefaultsQuery = graphql(`
-  query GetBeerDefaults($hint: item_defaults_hint!) {
-    beer_defaults(hint: $hint) {
-      name
-      description
-      alcohol_content_percentage
-      vintage
-      barcode_code
-      barcode_type
-      country
-      international_bitterness_unit
-      style
-      item_onboarding_id
-    }
-  }
-`);
+import { OnboardingWizard, OnboardingResult } from "../common/OnboardingWizard";
+import { FinalPrompt } from "../common/OnboardingWizard/FinalPrompt";
+import { OnboardingMachine } from "../common/OnboardingWizard/machines";
+import { BeerForm, BeerFormDefaultValues } from "./BeerForm";
+import { fetchDefaults } from "./actors/fetchDefaults";
+import { insertCellarItem } from "./actors/insertCellarItem";
 
 type BeerOnboardingProps = {
   cellarId: string;
-  returnUrl: string;
 };
 
-export const BeerOnboarding = ({
-  cellarId,
-  returnUrl,
-}: BeerOnboardingProps) => {
+export const BeerOnboarding = ({ cellarId }: BeerOnboardingProps) => {
   const urqlClient = useClient();
+  const router = useRouter();
   const nhostClient = useNhostClient();
-
-  const fetchDefaults = fromPromise(
-    async ({
-      input: { barcode, frontLabelFileId, backLabelFileId },
-    }: {
-      input: fetchDefaultsInput;
-    }): Promise<defaultValuesResult<BeerFormDefaultValues>> => {
-      const result = await urqlClient.query(getDefaultsQuery, {
-        hint: {
-          barcode: barcode?.text,
-          barcodeType: barcode?.type,
-          frontLabelFileId,
-          backLabelFileId,
-        },
-      });
-      if (
-        isNil(result) ||
-        isNil(result.data) ||
-        isNil(result.data?.beer_defaults)
-      )
-        throw Error();
-
-      const beer = nullsToUndefined(result.data.beer_defaults);
-      return {
-        defaults: {
-          name: beer.name,
-          description: beer.description,
-          vintage: beer.vintage,
-          alcohol_content_percentage: beer.alcohol_content_percentage,
-          style: beer.style,
-          international_bitterness_unit: beer.international_bitterness_unit,
-          barcode_code: beer.barcode_code,
-          barcode_type: beer.barcode_type,
-        },
-        itemOnboardingId: result.data.beer_defaults.item_onboarding_id,
-      };
-    },
-  );
 
   const [state, send] = useActor(
     OnboardingMachine.provide({
       actors: {
         fetchDefaults,
+        insertCellarItem,
       },
     }),
     {
       input: {
         nhostClient,
+        urqlClient,
+        cellarId,
+        router,
       },
     },
   );
 
   // TODO move this into machine, DUPED
-  const handleOnComplete = ({
-    barcode,
-    frontLabelDataUrl,
-    backLabelDataUrl,
-  }: OnboardingResult) => {
-    send({
-      type: "COMPLETE",
-      barcode: barcode,
-      frontLabel: frontLabelDataUrl,
-      backLabel: backLabelDataUrl,
-    });
-  };
+  const handleOnComplete = useCallback(
+    ({
+      existingItemId,
+      barcode,
+      frontLabelDataUrl,
+      backLabelDataUrl,
+    }: OnboardingResult) => {
+      send({
+        type: "COMPLETE",
+        barcode: barcode,
+        frontLabel: frontLabelDataUrl,
+        backLabel: backLabelDataUrl,
+        existingItemId,
+      });
+    },
+    [send],
+  );
 
   return (
     <Stack spacing={2}>
@@ -120,18 +68,28 @@ export const BeerOnboarding = ({
             </Box>
           </Grid>
         )}
-        {state.value === "analyze" && (
+        {(state.value === "upload" ||
+          state.value === "analyze" ||
+          state.value === "addExisting") && (
           <Grid xs={12} sm={6}>
             <Analyzing />
+          </Grid>
+        )}
+        {state.value === "finalPrompt" && (
+          <Grid xs={12} sm={6}>
+            <FinalPrompt
+              onYes={() => send({ type: "ADD_ANOTHER" })}
+              onNo={() => send({ type: "DONE" })}
+            />
           </Grid>
         )}
         {state.value === "form" && (
           <Grid xs={12} justifyContent="center">
             <BeerForm
               cellarId={cellarId}
-              returnUrl={returnUrl}
               itemOnboardingId={state.context.itemOnboardingId}
-              defaultValues={state.context.defaults}
+              defaultValues={state.context.defaults as BeerFormDefaultValues}
+              onCreated={() => send({ type: "CREATED" })}
             />
           </Grid>
         )}

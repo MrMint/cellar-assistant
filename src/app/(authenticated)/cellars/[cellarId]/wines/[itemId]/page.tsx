@@ -1,28 +1,32 @@
 "use client";
 
 import { AspectRatio, Grid, Sheet, Stack } from "@mui/joy";
-import wine1 from "@/images/wine1.png";
 import Image from "next/image";
-import { graphql } from "@/gql";
-import { useQuery } from "urql";
 import { isNotNil } from "ramda";
+import { useQuery } from "urql";
+import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
-import { formatAsPercentage, formatIsoDateString } from "@/utilities";
-import ItemHeader from "@/components/item/ItemHeader";
 import { ItemType } from "@/constants";
+import { graphql } from "@/gql";
+import wine1 from "@/images/wine1.png";
+import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getWineQuery = graphql(`
-  query GetWine($itemId: uuid!) {
-    wines_by_pk(id: $itemId) {
-      id
-      name
-      created_by_id
-      region
-      variety
-      vintage
-      description
-      barcode_code
-      alcohol_content_percentage
+  query GetCellarWine($itemId: uuid!) {
+    cellar_wine_by_pk(id: $itemId) {
+      wine {
+        id
+        name
+        created_by_id
+        region
+        variety
+        vintage
+        style
+        country
+        description
+        barcode_code
+        alcohol_content_percentage
+      }
       cellar {
         name
       }
@@ -42,18 +46,25 @@ const WineDetails = ({
   const isLoading = fetching || operation === undefined;
 
   let wine = undefined;
-  if (isLoading === false && data !== undefined && isNotNil(data.wines_by_pk)) {
-    wine = data.wines_by_pk;
+  let cellar = undefined;
+  if (
+    isLoading === false &&
+    isNotNil(data) &&
+    isNotNil(data.cellar_wine_by_pk) &&
+    isNotNil(data.cellar_wine_by_pk.wine)
+  ) {
+    cellar = data.cellar_wine_by_pk.cellar;
+    wine = data.cellar_wine_by_pk.wine;
   }
 
   return (
     <Stack spacing={2}>
-      <ItemHeader
+      <CellarItemHeader
         itemId={itemId}
         itemName={wine?.name}
         itemType={ItemType.Wine}
         cellarId={cellarId}
-        cellarName={wine?.cellar?.name}
+        cellarName={cellar?.name}
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
@@ -73,7 +84,7 @@ const WineDetails = ({
               <ItemDetails
                 title={wine.name}
                 subTitlePhrases={[
-                  formatIsoDateString(wine.vintage, "yyyy"),
+                  formatVintage(wine.vintage),
                   wine.variety,
                   wine.region,
                   formatAsPercentage(wine.alcohol_content_percentage),

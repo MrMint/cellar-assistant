@@ -2,85 +2,11 @@
 
 import { graphql } from "@/gql";
 import withAuth from "@/hocs/withAuth";
-import {
-  AspectRatio,
-  Box,
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  CardOverflow,
-  Grid,
-  IconButton,
-  Link,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import NextLink from "next/link";
-import { MdAdd, MdDelete, MdEdit, MdFavoriteBorder } from "react-icons/md";
+import { Box, Button, Grid, Link, Stack } from "@mui/joy";
+import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
-import cellar1 from "@/images/cellar1.png";
-import cellar2 from "@/images/cellar2.png";
-import cellar3 from "@/images/cellar3.png";
-import cellar4 from "@/images/cellar4.png";
-import cellar5 from "@/images/cellar5.png";
-import Image from "next/image";
-import InteractiveCard from "@/components/common/InteractiveCard";
 import TopNavigationBar from "@/components/common/HeaderBar";
-
-const cellarImages = [cellar1, cellar2, cellar3, cellar4, cellar5];
-
-type CellarCardProps = {
-  cellar: {
-    id: string;
-    name: string;
-  };
-  index: number;
-};
-
-const CellarCard = ({ cellar, index }: CellarCardProps) => (
-  <InteractiveCard>
-    <CardOverflow>
-      <AspectRatio ratio="2">
-        <Image
-          src={cellarImages[index % 5]}
-          alt="An image of a wine cellar"
-          fill
-          placeholder="blur"
-        />
-      </AspectRatio>
-    </CardOverflow>
-    <Link component={NextLink} overlay href={`cellars/${cellar.id}/items`}>
-      <Typography level="title-lg">{cellar.name}</Typography>
-    </Link>
-    <CardActions buttonFlex="0 1 120px">
-      <IconButton
-        variant="outlined"
-        color="neutral"
-        sx={{ mr: "auto" }}
-        disabled
-      >
-        <MdFavoriteBorder />
-      </IconButton>
-      <IconButton
-        variant="outlined"
-        color="neutral"
-        sx={{ mr: "auto" }}
-        disabled
-      >
-        <MdEdit />
-      </IconButton>
-      <IconButton
-        variant="outlined"
-        color="neutral"
-        sx={{ mr: "auto" }}
-        disabled
-      >
-        <MdDelete />
-      </IconButton>
-    </CardActions>
-  </InteractiveCard>
-);
+import { CellarCard } from "@/components/cellar/CellarCard";
 
 const cellarsQuery = graphql(`
   query GetCellars {
