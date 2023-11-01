@@ -25,9 +25,12 @@ const itemsSub = graphql(`
         vintage
       }
     }
-    spirits(where: { cellar_id: { _eq: $cellarId } }) {
+    cellar_spirit(where: { cellar_id: { _eq: $cellarId } }) {
       id
-      name
+      spirit {
+        name
+        vintage
+      }
     }
     cellars_by_pk(id: $cellarId) {
       id
@@ -82,10 +85,13 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
               />
             </Grid>
           ))}
-          {res?.data?.spirits.map((x) => (
+          {res?.data?.cellar_spirit.map((x) => (
             <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
               <ItemCard
-                item={x}
+                item={{
+                  id: x.id,
+                  name: x.spirit.name,
+                }}
                 type={ItemType.Spirit}
                 href={`${ItemType[ItemType.Spirit].toLowerCase()}s/${x.id}`}
               />

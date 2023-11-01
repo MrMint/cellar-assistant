@@ -1,11 +1,10 @@
 "use client";
 
+import { isNotNil, omit } from "ramda";
+import { useQuery } from "urql";
 import { SpiritForm } from "@/components/spirit/SpiritForm";
 import { graphql } from "@/gql";
 import { nullsToUndefined } from "@/utilities";
-import { Box } from "@mui/joy";
-import { isNotNil, omit } from "ramda";
-import { useQuery } from "urql";
 
 const editSpiritPageQuery = graphql(`
   query EditSpiritPageQuery($itemId: uuid!) {
@@ -18,8 +17,8 @@ const editSpiritPageQuery = graphql(`
       style
       description
       alcohol_content_percentage
-      price
       barcode_code
+      country
     }
   }
 `);
@@ -50,7 +49,8 @@ const EditSpirit = ({
         <SpiritForm
           id={itemId}
           cellarId={cellarId}
-          returnUrl={`/cellars/${cellarId}/spirits/${itemId}`}
+          onCreated={() => {}}
+          // returnUrl={`/cellars/${cellarId}/spirits/${itemId}`}
           defaultValues={{
             name: spirit.name,
             description: spirit.description,
@@ -58,7 +58,6 @@ const EditSpirit = ({
             vintage: spirit.vintage,
             type: spirit.type,
             alcohol_content_percentage: spirit.alcohol_content_percentage,
-            price: spirit.price,
             barcode_code: spirit.barcode_code,
           }}
         />

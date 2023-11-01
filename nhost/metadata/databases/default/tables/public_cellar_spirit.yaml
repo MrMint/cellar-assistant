@@ -1,5 +1,5 @@
 table:
-  name: cellar_wine
+  name: cellar_spirit
   schema: public
 object_relationships:
   - name: cellar
@@ -8,9 +8,9 @@ object_relationships:
   - name: createdBy
     using:
       foreign_key_constraint_on: user_id
-  - name: wine
+  - name: spirit
     using:
-      foreign_key_constraint_on: wine_id
+      foreign_key_constraint_on: spirit_id
 insert_permissions:
   - role: user
     permission:
@@ -22,7 +22,7 @@ insert_permissions:
         user_id: x-hasura-User-Id
       columns:
         - cellar_id
-        - wine_id
+        - spirit_id
     comment: ""
 select_permissions:
   - role: user
@@ -32,8 +32,8 @@ select_permissions:
         - updated_at
         - cellar_id
         - id
+        - spirit_id
         - user_id
-        - wine_id
       filter:
         cellar:
           users:
@@ -44,7 +44,7 @@ update_permissions:
   - role: user
     permission:
       columns:
-        - wine_id
+        - spirit_id
       filter:
         user_id:
           _eq: X-Hasura-User-Id

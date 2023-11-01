@@ -3,7 +3,6 @@ import { type AppRouterInstance } from "next/dist/shared/lib/app-router-context.
 import { isEmpty, isNil, isNotNil, not } from "ramda";
 import { Client } from "urql";
 import { PromiseActorLogic, assign, createMachine } from "xstate";
-import { insertCellarItem } from "@/components/wine/actors/insertCellarItem";
 import { Barcode } from "@/constants";
 import { searchByBarcode } from "./actors/searchByBarcode";
 import {
@@ -11,6 +10,8 @@ import {
   DefaultValues,
   DefaultValuesResult,
   FetchDefaultsInput,
+  InsertCellarItemInput,
+  InsertCellarItemResult,
   UploadFilesInput,
 } from "./actors/types";
 import { uploadFiles } from "./actors/uploadFiles";
@@ -58,7 +59,10 @@ export const OnboardingMachine = createMachine(
           }
         | {
             src: "insertCellarItem";
-            logic: typeof insertCellarItem;
+            logic: PromiseActorLogic<
+              InsertCellarItemResult,
+              InsertCellarItemInput
+            >;
           }
         | {
             src: "fetchDefaults";

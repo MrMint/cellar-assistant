@@ -1,11 +1,3 @@
-import { graphql } from "@/gql";
-import {
-  Barcodes_Constraint,
-  Barcodes_Update_Column,
-  Spirit_Type_Enum,
-  Spirits_Insert_Input,
-} from "@/gql/graphql";
-import { formatIsoDateString, getEnumKeys } from "@/utilities";
 import {
   Box,
   Button,
@@ -20,19 +12,29 @@ import {
 } from "@mui/joy";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { isNil } from "ramda";
+import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useMutation } from "urql";
+import { countryKeys } from "@/constants";
+import { graphql } from "@/gql";
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+  Cellar_Spirit_Insert_Input,
+  Country_Enum,
+  Spirit_Type_Enum,
+} from "@/gql/graphql";
+import { formatVintage, getEnumKeys } from "@/utilities";
 
 const typeOptions = getEnumKeys(Spirit_Type_Enum);
 
 type SharedFields = {
   description?: string;
-  price?: number;
   alcohol_content_percentage?: number;
   barcode_code?: string;
   barcode_type?: string;
   style?: string;
+  country?: Country_Enum;
 };
 
 type ISpiritFormInput = {
@@ -51,13 +53,13 @@ type SpiritFormProps = {
   id?: string;
   itemOnboardingId?: string;
   cellarId: string;
-  returnUrl: string;
   defaultValues?: SpiritFormDefaultValues;
+  onCreated: (createdId: string) => void;
 };
 
 const addSpiritMutation = graphql(`
-  mutation addSpirit($spirit: spirits_insert_input!) {
-    insert_spirits_one(object: $spirit) {
+  mutation addSpirit($spirit: cellar_spirit_insert_input!) {
+    insert_cellar_spirit_one(object: $spirit) {
       id
     }
   }
@@ -70,22 +72,39 @@ const updateSpiritMutation = graphql(`
     }
   }
 `);
-
 function mapFormValuesToInsertInput(
   values: ISpiritFormInput,
   cellar_id: string,
-): Spirits_Insert_Input {
-  return {
-    name: values.name,
-    alcohol_content_percentage: values.alcohol_content_percentage,
+  spirit_id?: string,
+  itemOnboardingId?: string,
+): Cellar_Spirit_Insert_Input {
+  if (isNotNil(spirit_id)) {
+    return {
+      cellar_id,
+      spirit_id,
+    };
+  }
+
+  const update = {
     cellar_id,
-    description: values.description,
-    type: values.type,
-    style: values.style,
-    vintage: isNil(values.vintage)
-      ? undefined
-      : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
-    barcode: {
+    spirit: {
+      data: {
+        name: values.name,
+        alcohol_content_percentage: values.alcohol_content_percentage,
+        description: values.description,
+        country: values.country,
+        style: values.style,
+        type: values.type,
+        vintage: isNotNil(values.vintage)
+          ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
+          : undefined,
+        item_onboarding_id: itemOnboardingId,
+      },
+    },
+  } as Cellar_Spirit_Insert_Input;
+
+  if (isNotNil(update.spirit) && isNotNil(values.barcode_code)) {
+    update.spirit.data.barcode = {
       data: {
         code: values.barcode_code,
         type: values.barcode_type,
@@ -94,17 +113,18 @@ function mapFormValuesToInsertInput(
         constraint: Barcodes_Constraint.BarcodesPkey,
         update_columns: [Barcodes_Update_Column.Code],
       },
-    },
-  };
+    };
+  }
+  return update;
 }
 
 export const SpiritForm = ({
   id,
   cellarId,
-  returnUrl,
   defaultValues,
+  itemOnboardingId,
+  onCreated,
 }: SpiritFormProps) => {
-  const router = useRouter();
   const [
     { fetching: fetchingAdd, error: errorAdd, operation: opAdd },
     addSpirit,
@@ -120,7 +140,7 @@ export const SpiritForm = ({
     featchingUpdate ||
     (error === undefined && (opAdd !== undefined || opUpdate !== undefined));
 
-  const defaultVintage = formatIsoDateString(defaultValues?.vintage, "yyyy");
+  const defaultVintage = formatVintage(defaultValues?.vintage);
 
   const { control, handleSubmit, clearErrors } = useForm<ISpiritFormInput>({
     defaultValues: {
@@ -132,25 +152,29 @@ export const SpiritForm = ({
 
   const onSubmit: SubmitHandler<ISpiritFormInput> = async (values) => {
     let errored: CombinedError | undefined;
-    const update = mapFormValuesToInsertInput(values, cellarId);
-
+    let createdId: string | undefined;
+    const update = mapFormValuesToInsertInput(
+      values,
+      cellarId,
+      id,
+      itemOnboardingId,
+    );
     if (id == undefined) {
-      errored = (
-        await addSpirit({
-          spirit: update,
-        })
-      ).error;
+      const result = await addSpirit({
+        spirit: update,
+      });
+      errored = result.error;
+      createdId = result.data?.insert_cellar_spirit_one?.id;
     } else {
-      errored = (
-        await updateSpirit({
-          spiritId: id,
-          spirit: update,
-        })
-      ).error;
+      const result = await updateSpirit({
+        spiritId: id,
+        spirit: update,
+      });
+      errored = result.error;
+      createdId = result.data?.update_spirits_by_pk?.id;
     }
-
-    if (errored === undefined) {
-      router.push(returnUrl);
+    if (isNil(errored) && isNotNil(createdId)) {
+      onCreated(createdId);
     }
   };
   return (
@@ -238,9 +262,9 @@ export const SpiritForm = ({
               />
             </FormControl>
             <FormControl>
-              <FormLabel>Price</FormLabel>
+              <FormLabel>Alcohol Content</FormLabel>
               <Controller
-                name="price"
+                name="alcohol_content_percentage"
                 control={control}
                 render={({ field }) => (
                   <Input disabled={fetching} type="number" {...field} />
@@ -248,12 +272,24 @@ export const SpiritForm = ({
               />
             </FormControl>
             <FormControl>
-              <FormLabel>Alcohol Content</FormLabel>
+              <FormLabel>Country</FormLabel>
               <Controller
-                name="alcohol_content_percentage"
+                name="country"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Select
+                    placeholder="Choose one…"
+                    {...field}
+                    onChange={(_, value) => {
+                      field.onChange(value);
+                    }}
+                  >
+                    {countryKeys.map((x) => (
+                      <Option key={x} value={Country_Enum[x]}>
+                        {x}
+                      </Option>
+                    ))}
+                  </Select>
                 )}
               />
             </FormControl>

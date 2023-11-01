@@ -1,12 +1,14 @@
+import { Box, CircularProgress, Stack, Typography } from "@mui/joy";
 import { useMachine } from "@xstate/react";
-import { Barcode } from "@/constants";
-import { BarcodeStep } from "./BarcodeStep";
-import { PictureStep } from "./PictureStep";
-import { pictureOnboardingMachine } from "./machines";
-import { Analyzing } from "../Analyzing";
-import { ExistingItems } from "./ExistingItems";
 import { isNotNil } from "ramda";
 import { useClient } from "urql";
+import { Barcode } from "@/constants";
+import { Analyzing } from "../Analyzing";
+import { BarcodeStep } from "./BarcodeStep";
+import { ExistingItems } from "./ExistingItems";
+import { PictureStep } from "./PictureStep";
+import { SearchingStep } from "./SearchingStep";
+import { pictureOnboardingMachine } from "./machines";
 
 export type OnboardingResult = {
   barcode?: Barcode;
@@ -53,7 +55,7 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
           onSkip={() => send({ type: "SKIP" })}
         />
       )}
-      {state.value === "searching" && <Analyzing />}
+      {state.value === "searching" && <SearchingStep />}
       {state.value === "chooseExisting" &&
         isNotNil(state.context.existingItems) && (
           <ExistingItems

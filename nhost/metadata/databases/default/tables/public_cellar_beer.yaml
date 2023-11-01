@@ -15,8 +15,9 @@ insert_permissions:
   - role: user
     permission:
       check:
-        user_id:
-          _eq: X-Hasura-User-Id
+        cellar:
+          created_by_id:
+            _eq: X-Hasura-User-Id
       set:
         user_id: x-hasura-User-Id
       columns:

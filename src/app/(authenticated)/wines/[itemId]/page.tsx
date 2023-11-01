@@ -1,15 +1,15 @@
 "use client";
 
 import { AspectRatio, Grid, Sheet, Stack } from "@mui/joy";
-import wine1 from "@/images/wine1.png";
 import Image from "next/image";
-import { graphql } from "@/gql";
-import { useQuery } from "urql";
 import { isNotNil } from "ramda";
+import { useQuery } from "urql";
 import ItemDetails from "@/components/item/ItemDetails";
-import { formatAsPercentage, formatIsoDateString } from "@/utilities";
-import { ItemType } from "@/constants";
 import { ItemHeader } from "@/components/item/ItemHeader";
+import { ItemType } from "@/constants";
+import { graphql } from "@/gql";
+import wine1 from "@/images/wine1.png";
+import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getWineQuery = graphql(`
   query GetWinePageQuery($itemId: uuid!) {
@@ -82,7 +82,7 @@ const WineDetails = ({
               <ItemDetails
                 title={wine.name}
                 subTitlePhrases={[
-                  formatIsoDateString(wine.vintage, "yyyy"),
+                  formatVintage(wine.vintage),
                   wine.variety,
                   wine.region,
                   formatAsPercentage(wine.alcohol_content_percentage),

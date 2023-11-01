@@ -63,9 +63,9 @@ const beerFields = {
 const spiritFields = {
   name,
   description:
-    "description (an experts creative description of the beers history, tasting notes, pairings, recipes, glassware)",
+    "description (an experts creative description of the spirits history, tasting notes, pairings, recipes, glassware)",
   type: `type (one of [${spiritTypes}])`,
-  style: "style",
+  style: "style (an example being anejo vs blanco)",
   vintage,
   distillery: "distillery",
   country,
@@ -101,38 +101,27 @@ const getTopMatch = pipe(
   nth(0),
 );
 
+function performEnumMatch(prediction: string, enumValues: string[]) {
+  let match: string = null;
+  if (isNotNil(prediction) && is(String, prediction)) {
+    match = getTopMatch(extract(prediction, enumValues)) as string | undefined;
+  }
+  return match;
+}
+
 export function mapJsonToReturnType(
   itemType: ItemType,
   jsonPrediction: any,
 ): Beer_Defaults_Result | Wine_Defaults_Result | Spirit_Defaults_Result {
+  const country = performEnumMatch(jsonPrediction.country, countries);
+
   switch (itemType) {
-    case "WINE":
-      let style: String = null;
-      if (isNotNil(jsonPrediction.style) && is(String, jsonPrediction.style)) {
-        style = getTopMatch(extract(jsonPrediction.style, wineStyleValues)) as
-          | string
-          | undefined;
-      }
-
-      let variety: string = null;
-      if (
-        isNotNil(jsonPrediction.variety) &&
-        is(String, jsonPrediction.variety)
-      ) {
-        variety = getTopMatch(
-          extract(jsonPrediction.variety, wineVarietyValues),
-        ) as string | undefined;
-      }
-
-      let country: string = null;
-      if (
-        isNotNil(jsonPrediction.country) &&
-        is(String, jsonPrediction.country)
-      ) {
-        country = getTopMatch(extract(jsonPrediction.country, countries)) as
-          | string
-          | undefined;
-      }
+    case "WINE": {
+      const style = performEnumMatch(jsonPrediction.style, wineStyleValues);
+      const variety = performEnumMatch(
+        jsonPrediction.variety,
+        wineVarietyValues,
+      );
 
       return {
         __typename: "wine_defaults_result",
@@ -148,32 +137,37 @@ export function mapJsonToReturnType(
         variety,
         country,
       } as Wine_Defaults_Result;
-    case "BEER":
+    }
+    case "BEER": {
+      const style = performEnumMatch(jsonPrediction.style, beerStyleValues);
       return {
         __typename: "beer_defaults_result",
         name: jsonPrediction.name,
         description: jsonPrediction.description,
         vintage: jsonPrediction.vintage,
-        country: jsonPrediction.country,
+        country,
         alcohol_content_percentage: jsonPrediction.alcohol_content_percentage,
         barcode_code: jsonPrediction.barcode,
-        style: jsonPrediction.style,
+        style,
         international_bitterness_unit:
           jsonPrediction.international_bitterness_unit,
       } as Beer_Defaults_Result;
-    case "SPIRIT":
+    }
+    case "SPIRIT": {
+      const type = performEnumMatch(jsonPrediction.type, spiritTypes);
       return {
         __typename: "spirit_defaults_result",
         name: jsonPrediction.name,
         description: jsonPrediction.description,
-        type: jsonPrediction.type,
+        type,
         style: jsonPrediction.style,
         vintage: jsonPrediction.vintage,
-        country: jsonPrediction.county,
+        country,
         alcohol_content_percentage: jsonPrediction.alcohol_content_percentage,
         barcode_code: jsonPrediction.barcode,
         distillery: jsonPrediction.distillery,
       } as Spirit_Defaults_Result;
+    }
     default:
       throw Error();
   }

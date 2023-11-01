@@ -9,6 +9,13 @@ array_relationships:
         table:
           name: beers
           schema: public
+  - name: spirits
+    using:
+      foreign_key_constraint_on:
+        column: barcode_code
+        table:
+          name: spirits
+          schema: public
   - name: wines
     using:
       foreign_key_constraint_on:

@@ -12,6 +12,7 @@
 - "!include public_beer_style.yaml"
 - "!include public_beers.yaml"
 - "!include public_cellar_beer.yaml"
+- "!include public_cellar_spirit.yaml"
 - "!include public_cellar_user.yaml"
 - "!include public_cellar_wine.yaml"
 - "!include public_cellars.yaml"

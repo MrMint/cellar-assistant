@@ -9,7 +9,7 @@ import ItemDetails from "@/components/item/ItemDetails";
 import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
 import beer1 from "@/images/beer1.png";
-import { formatAsPercentage, formatIsoDateString } from "@/utilities";
+import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getBeerQuery = graphql(`
   query GetCellarBeer($itemId: uuid!) {
@@ -80,7 +80,7 @@ const BeerDetails = ({
               <ItemDetails
                 title={beer.name}
                 subTitlePhrases={[
-                  formatIsoDateString(beer.vintage, "yyyy"),
+                  formatVintage(beer.vintage),
                   beer.style,
                   formatAsPercentage(beer.alcohol_content_percentage),
                 ]}
