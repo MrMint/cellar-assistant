@@ -1,0 +1,3 @@
+-- Could not auto-generate a down migration.
+-- Please write an appropriate down migration for the SQL below:
+-- INSERT INTO "public"."wine_variety"("text") VALUES (E'AGLIANICO'), (E'BARBERA'), (E'BLAUFRÄNKISCH'), (E'CABERNET_FRANC'), (E'CABERNET_SAUVIGNON'), (E'CARIGNAN'), (E'CARMENÈRE'), (E'CINSAULT'), (E'CORVINA'), (E'DOLCETTO'), (E'GAMAY'), (E'GRENACHE'), (E'MALBEC'), (E'MERLOT'), (E'MOURVEDRE_MONASTRELL'), (E'NEBBIOLO'), (E'PETIT_VERDOT'), (E'PETITE_SIRAH'), (E'PINOTAGE'), (E'PINOT_NOIR'), (E'PRIMITIVO'), (E'RHÔNE_BLENDS'), (E'SANGIOVESE'), (E'SYRAH_SHIRAZ'), (E'TEMPRANILLO'), (E'ZINFANDEL');

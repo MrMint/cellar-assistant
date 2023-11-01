@@ -5,32 +5,25 @@ object_relationships:
   - name: barcode
     using:
       foreign_key_constraint_on: barcode_code
-  - name: cellar
-    using:
-      foreign_key_constraint_on: cellar_id
   - name: createdBy
     using:
       foreign_key_constraint_on: created_by_id
 insert_permissions:
   - role: user
     permission:
-      check:
-        cellar:
-          createdBy:
-            id:
-              _eq: X-Hasura-User-Id
+      check: {}
       set:
         created_by_id: x-hasura-User-Id
       columns:
         - alcohol_content_percentage
         - barcode_code
-        - cellar_id
-        - created_by_id
+        - country
         - description
+        - item_onboarding_id
         - name
-        - price
         - region
         - special_designation
+        - style
         - variety
         - vineyard_designation
         - vintage
@@ -41,25 +34,25 @@ select_permissions:
       columns:
         - alcohol_content_percentage
         - barcode_code
-        - cellar_id
+        - country
         - created_at
         - created_by_id
         - description
         - id
         - name
-        - price
         - region
         - special_designation
+        - style
         - updated_at
         - variety
         - vineyard_designation
         - vintage
         - winery_id
-      filter:
-        cellar:
-          users:
-            user_id:
-              _eq: X-Hasura-User-Id
+      filter: {}
+      query_root_fields:
+        - select_by_pk
+      subscription_root_fields:
+        - select_by_pk
     comment: ""
 update_permissions:
   - role: user
@@ -67,11 +60,12 @@ update_permissions:
       columns:
         - alcohol_content_percentage
         - barcode_code
+        - country
         - description
         - name
-        - price
         - region
         - special_designation
+        - style
         - variety
         - vineyard_designation
         - vintage
@@ -79,11 +73,4 @@ update_permissions:
         created_by_id:
           _eq: X-Hasura-User-Id
       check: {}
-    comment: ""
-delete_permissions:
-  - role: user
-    permission:
-      filter:
-        created_by_id:
-          _eq: X-Hasura-User-Id
     comment: ""

@@ -1,59 +1,68 @@
-import { graphql } from "@/gql";
-import {
-  Barcodes_Constraint,
-  Barcodes_Update_Column,
-  Wines_Insert_Input,
-} from "@/gql/graphql";
-import { formatIsoDateString, nullsToUndefined } from "@/utilities";
 import {
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
+  Option,
+  Select,
   Stack,
   Textarea,
   Typography,
 } from "@mui/joy";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { isNil } from "ramda";
+import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useMutation } from "urql";
+import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
+import { graphql } from "@/gql";
+import {
+  Barcodes_Constraint,
+  Wine_Variety_Enum,
+  Barcodes_Update_Column,
+  Cellar_Wine_Insert_Input,
+  Country_Enum,
+  Wine_Style_Enum,
+} from "@/gql/graphql";
+import { formatVintage } from "@/utilities";
 
 type SharedFields = {
   description?: string;
-  price?: number;
-  variety?: string;
   region?: string;
   special_designation?: string;
   vineyard_designation?: string;
   alcohol_content_percentage?: number;
   barcode_code?: string;
   barcode_type?: string;
+  country?: Country_Enum;
 };
 
 type IWineFormInput = {
   name: string;
-  vintage?: number;
+  vintage: number;
+  variety: Wine_Variety_Enum;
+  style: Wine_Style_Enum;
 } & SharedFields;
 
 export type WineFormDefaultValues = {
   name?: string;
   vintage?: string;
+  variety?: Wine_Variety_Enum;
+  style?: Wine_Style_Enum;
 } & SharedFields;
 
 type WineFormProps = {
   id?: string;
   cellarId: string;
   itemOnboardingId?: string;
-  returnUrl: string;
   defaultValues?: WineFormDefaultValues;
+  onCreated: (createdId: string) => void;
 };
 
 const addWineMutation = graphql(`
-  mutation addWine($wine: wines_insert_input!) {
-    insert_wines_one(object: $wine) {
+  mutation addWine($wine: cellar_wine_insert_input!) {
+    insert_cellar_wine_one(object: $wine) {
       id
     }
   }
@@ -66,23 +75,41 @@ const updateWineMutation = graphql(`
     }
   }
 `);
+
 function mapFormValuesToInsertInput(
   values: IWineFormInput,
   cellar_id: string,
-): Wines_Insert_Input {
-  return {
-    name: values.name,
-    alcohol_content_percentage: values.alcohol_content_percentage,
+  wine_id?: string,
+  itemOnboardingId?: string,
+): Cellar_Wine_Insert_Input {
+  if (isNotNil(wine_id)) {
+    return {
+      cellar_id,
+      wine_id,
+    };
+  }
+
+  const update = {
     cellar_id,
-    description: values.description,
-    region: values.region,
-    special_designation: values.special_designation,
-    vineyard_designation: values.vineyard_designation,
-    variety: values.variety,
-    vintage: isNil(values.vintage)
-      ? undefined
-      : format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
-    barcode: {
+    wine: {
+      data: {
+        name: values.name,
+        alcohol_content_percentage: values.alcohol_content_percentage,
+        description: values.description,
+        region: values.region,
+        country: values.country,
+        special_designation: values.special_designation,
+        vineyard_designation: values.vineyard_designation,
+        variety: values.variety,
+        style: values.style,
+        vintage: format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
+        item_onboarding_id: itemOnboardingId,
+      },
+    },
+  } as Cellar_Wine_Insert_Input;
+
+  if (isNotNil(update.wine) && isNotNil(values.barcode_code)) {
+    update.wine.data.barcode = {
       data: {
         code: values.barcode_code,
         type: values.barcode_type,
@@ -91,15 +118,17 @@ function mapFormValuesToInsertInput(
         constraint: Barcodes_Constraint.BarcodesPkey,
         update_columns: [Barcodes_Update_Column.Code],
       },
-    },
-  };
+    };
+  }
+  return update;
 }
 
 export const WineForm = ({
   id,
   cellarId,
-  returnUrl,
   defaultValues,
+  itemOnboardingId,
+  onCreated,
 }: WineFormProps) => {
   const router = useRouter();
   const [
@@ -117,7 +146,7 @@ export const WineForm = ({
     featchingUpdate ||
     (error === undefined && (opAdd !== undefined || opUpdate !== undefined));
 
-  const defaultVintage = formatIsoDateString(defaultValues?.vintage, "yyyy");
+  const defaultVintage = formatVintage(defaultValues?.vintage);
 
   const { control, handleSubmit, clearErrors } = useForm<IWineFormInput>({
     defaultValues: {
@@ -129,25 +158,29 @@ export const WineForm = ({
 
   const onSubmit: SubmitHandler<IWineFormInput> = async (values) => {
     let errored: CombinedError | undefined;
-    const update = mapFormValuesToInsertInput(values, cellarId);
-
+    let createdId: string | undefined;
+    const update = mapFormValuesToInsertInput(
+      values,
+      cellarId,
+      id,
+      itemOnboardingId,
+    );
     if (id == undefined) {
-      errored = (
-        await addWine({
-          wine: update,
-        })
-      ).error;
+      const result = await addWine({
+        wine: update,
+      });
+      errored = result.error;
+      createdId = result.data?.insert_cellar_wine_one?.id;
     } else {
-      errored = (
-        await updateWine({
-          wineId: id,
-          wine: update,
-        })
-      ).error;
+      const result = await updateWine({
+        wineId: id,
+        wine: update,
+      });
+      errored = result.error;
+      createdId = result.data?.update_wines_by_pk?.id;
     }
-
-    if (errored === undefined) {
-      router.push(returnUrl);
+    if (isNil(errored) && isNotNil(createdId)) {
+      onCreated(createdId);
     }
   };
   return (
@@ -202,13 +235,71 @@ export const WineForm = ({
                 )}
               />
             </FormControl>
-            <FormControl>
+            <FormControl required>
+              <FormLabel>Style</FormLabel>
+              <Controller
+                name="style"
+                control={control}
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <Select
+                    placeholder="Choose one…"
+                    {...field}
+                    onChange={(_, value) => {
+                      field.onChange(value);
+                    }}
+                  >
+                    {wineStyleKeys.map((x) => (
+                      <Option key={x} value={Wine_Style_Enum[x]}>
+                        {x}
+                      </Option>
+                    ))}
+                  </Select>
+                )}
+              />
+            </FormControl>
+            <FormControl required>
               <FormLabel>Variety</FormLabel>
               <Controller
                 name="variety"
                 control={control}
+                rules={{ required: true }}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Select
+                    placeholder="Choose one…"
+                    {...field}
+                    onChange={(_, value) => {
+                      field.onChange(value);
+                    }}
+                  >
+                    {wineVarietyKeys.map((x) => (
+                      <Option key={x} value={Wine_Variety_Enum[x]}>
+                        {x}
+                      </Option>
+                    ))}
+                  </Select>
+                )}
+              />
+            </FormControl>
+            <FormControl>
+              <FormLabel>Country</FormLabel>
+              <Controller
+                name="country"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    placeholder="Choose one…"
+                    {...field}
+                    onChange={(_, value) => {
+                      field.onChange(value);
+                    }}
+                  >
+                    {countryKeys.map((x) => (
+                      <Option key={x} value={Country_Enum[x]}>
+                        {x}
+                      </Option>
+                    ))}
+                  </Select>
                 )}
               />
             </FormControl>
@@ -219,16 +310,6 @@ export const WineForm = ({
                 control={control}
                 render={({ field }) => (
                   <Input disabled={fetching} type="text" {...field} />
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Price</FormLabel>
-              <Controller
-                name="price"
-                control={control}
-                render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
                 )}
               />
             </FormControl>

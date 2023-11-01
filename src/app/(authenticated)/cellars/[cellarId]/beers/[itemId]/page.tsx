@@ -1,26 +1,28 @@
 "use client";
 
 import { AspectRatio, Grid, Sheet, Stack } from "@mui/joy";
-import beer1 from "@/images/beer1.png";
 import Image from "next/image";
-import { graphql } from "@/gql";
-import { useQuery } from "urql";
 import { isNotNil } from "ramda";
+import { useQuery } from "urql";
+import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
-import { formatAsPercentage, formatIsoDateString } from "@/utilities";
-import ItemHeader from "@/components/item/ItemHeader";
 import { ItemType } from "@/constants";
+import { graphql } from "@/gql";
+import beer1 from "@/images/beer1.png";
+import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getBeerQuery = graphql(`
-  query GetBeer($itemId: uuid!) {
-    beers_by_pk(id: $itemId) {
-      id
-      name
-      created_by_id
-      vintage
-      style
-      description
-      alcohol_content_percentage
+  query GetCellarBeer($itemId: uuid!) {
+    cellar_beer_by_pk(id: $itemId) {
+      beer {
+        id
+        name
+        created_by_id
+        vintage
+        style
+        description
+        alcohol_content_percentage
+      }
       cellar {
         name
       }
@@ -40,18 +42,25 @@ const BeerDetails = ({
   const isLoading = fetching || operation === undefined;
 
   let beer = undefined;
-  if (isLoading === false && data !== undefined && isNotNil(data.beers_by_pk)) {
-    beer = data.beers_by_pk;
+  let cellar = undefined;
+  if (
+    isLoading === false &&
+    isNotNil(data) &&
+    isNotNil(data.cellar_beer_by_pk) &&
+    isNotNil(data.cellar_beer_by_pk.beer)
+  ) {
+    cellar = data.cellar_beer_by_pk.cellar;
+    beer = data.cellar_beer_by_pk.beer;
   }
 
   return (
     <Stack spacing={2}>
-      <ItemHeader
+      <CellarItemHeader
         itemType={ItemType.Beer}
         itemId={itemId}
         itemName={beer?.name}
         cellarId={cellarId}
-        cellarName={beer?.cellar?.name}
+        cellarName={cellar?.name}
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
@@ -71,7 +80,7 @@ const BeerDetails = ({
               <ItemDetails
                 title={beer.name}
                 subTitlePhrases={[
-                  formatIsoDateString(beer.vintage, "yyyy"),
+                  formatVintage(beer.vintage),
                   beer.style,
                   formatAsPercentage(beer.alcohol_content_percentage),
                 ]}

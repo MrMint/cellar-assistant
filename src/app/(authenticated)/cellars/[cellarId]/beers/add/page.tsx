@@ -7,12 +7,7 @@ const AddBeer = ({
 }: {
   params: { cellarId: string };
 }) => {
-  return (
-    <BeerOnboarding
-      cellarId={cellarId}
-      returnUrl={`/cellars/${cellarId}/items`}
-    />
-  );
+  return <BeerOnboarding cellarId={cellarId} />;
 };
 
 export default AddBeer;

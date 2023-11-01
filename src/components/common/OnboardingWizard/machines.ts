@@ -1,76 +1,34 @@
-import { BeerFormDefaultValues } from "@/components/beer/BeerForm";
-import { SpiritFormDefaultValues } from "@/components/spirit/SpiritForm";
-import { WineFormDefaultValues } from "@/components/wine/WineForm";
-import { Barcode } from "@/constants";
-import { dataUrlToFile } from "@/utilities";
 import { type NhostClient } from "@nhost/nextjs";
-import { isNotNil } from "ramda";
-import { PromiseActorLogic, assign, createMachine, fromPromise } from "xstate";
-
-export type uploadFilesInput = {
-  frontLabel?: string;
-  backLabel?: string;
-  nhostClient: NhostClient;
-};
-
-export type fetchDefaultsInput = {
-  barcode?: Barcode;
-  frontLabelFileId?: string;
-  backLabelFileId?: string;
-};
-
-type defaultValues =
-  | BeerFormDefaultValues
-  | WineFormDefaultValues
-  | SpiritFormDefaultValues;
-
-export interface defaultValuesResult<T extends defaultValues> {
-  defaults: T;
-  itemOnboardingId: string;
-}
-
-const uploadFiles = fromPromise(
-  async ({
-    input: { frontLabel, backLabel, nhostClient },
-  }: {
-    input: uploadFilesInput;
-  }): Promise<fetchDefaultsInput> => {
-    let frontLabelFileId: string | undefined;
-    let backLabelFileId: string | undefined;
-
-    nhostClient.storage.setAccessToken(nhostClient.auth.getAccessToken());
-
-    if (isNotNil(frontLabel)) {
-      const file = dataUrlToFile(frontLabel, "front-label.jpg");
-      if (isNotNil(file)) {
-        const { fileMetadata } = await nhostClient.storage.upload({
-          file,
-          bucketId: "label_images",
-        });
-        frontLabelFileId = fileMetadata?.id;
-      }
-    }
-    if (isNotNil(backLabel)) {
-      const file = dataUrlToFile(backLabel, "back-label.jpg");
-      if (isNotNil(file)) {
-        const { fileMetadata } = await nhostClient.storage.upload({
-          file,
-          bucketId: "label_images",
-        });
-        backLabelFileId = fileMetadata?.id;
-      }
-    }
-    return { frontLabelFileId, backLabelFileId };
-  },
-);
+import { type AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { isEmpty, isNil, isNotNil, not } from "ramda";
+import { Client } from "urql";
+import { PromiseActorLogic, assign, createMachine } from "xstate";
+import { Barcode } from "@/constants";
+import { searchByBarcode } from "./actors/searchByBarcode";
+import {
+  BarcodeSearchResult,
+  DefaultValues,
+  DefaultValuesResult,
+  FetchDefaultsInput,
+  InsertCellarItemInput,
+  InsertCellarItemResult,
+  UploadFilesInput,
+} from "./actors/types";
+import { uploadFiles } from "./actors/uploadFiles";
 
 export const OnboardingMachine = createMachine(
   {
     id: "onboarding-wizard",
     initial: "wizard",
     types: {} as {
-      input: { nhostClient: NhostClient };
+      input: {
+        nhostClient: NhostClient;
+        urqlClient: Client;
+        cellarId: string;
+        router: AppRouterInstance;
+      };
       context: {
+        urqlClient: Client;
         nhostClient: NhostClient;
         barcode?: Barcode;
         frontLabel?: string;
@@ -78,7 +36,10 @@ export const OnboardingMachine = createMachine(
         frontLabelFileId?: string;
         backLabelFileId?: string;
         itemOnboardingId: string;
-        defaults?: defaultValues;
+        defaults?: DefaultValues;
+        existingItemId?: string;
+        cellarId: string;
+        router: AppRouterInstance;
       };
       events:
         | {
@@ -86,37 +47,60 @@ export const OnboardingMachine = createMachine(
             barcode?: Barcode;
             frontLabel?: string;
             backLabel?: string;
+            existingItemId?: string;
           }
-        | { type: "SUBMIT" };
+        | { type: "CREATED" }
+        | { type: "ADD_ANOTHER" }
+        | { type: "DONE" };
       actors:
         | {
             src: "uploadFiles";
             logic: typeof uploadFiles;
           }
         | {
+            src: "insertCellarItem";
+            logic: PromiseActorLogic<
+              InsertCellarItemResult,
+              InsertCellarItemInput
+            >;
+          }
+        | {
             src: "fetchDefaults";
             logic: PromiseActorLogic<
-              defaultValuesResult<defaultValues>,
-              fetchDefaultsInput
+              DefaultValuesResult<DefaultValues>,
+              FetchDefaultsInput
             >;
           };
     },
     context: ({ input }) => ({
       itemOnboardingId: "",
       nhostClient: input.nhostClient,
+      urqlClient: input.urqlClient,
+      cellarId: input.cellarId,
+      router: input.router,
     }),
     states: {
       wizard: {
         on: {
-          COMPLETE: {
-            actions: assign({
-              barcode: ({ event }) => event.barcode,
-              frontLabel: ({ event }) => event.frontLabel,
-              backLabel: ({ event }) => event.backLabel,
-              defaults: undefined,
-            }),
-            target: "upload",
-          },
+          COMPLETE: [
+            {
+              guard: ({ event }) => isNil(event.existingItemId),
+              actions: assign({
+                barcode: ({ event }) => event.barcode,
+                frontLabel: ({ event }) => event.frontLabel,
+                backLabel: ({ event }) => event.backLabel,
+                defaults: undefined,
+              }),
+              target: "upload",
+            },
+            {
+              guard: ({ event }) => isNotNil(event.existingItemId),
+              actions: assign({
+                existingItemId: ({ event }) => event.existingItemId,
+              }),
+              target: "addExisting",
+            },
+          ],
         },
       },
       upload: {
@@ -127,7 +111,7 @@ export const OnboardingMachine = createMachine(
               backLabel,
               frontLabel,
               nhostClient,
-            }) as uploadFilesInput,
+            }) as UploadFilesInput,
           onDone: {
             target: "analyze",
             actions: assign({
@@ -141,8 +125,9 @@ export const OnboardingMachine = createMachine(
         invoke: {
           src: "fetchDefaults",
           input: ({
-            context: { barcode, backLabelFileId, frontLabelFileId },
+            context: { urqlClient, barcode, backLabelFileId, frontLabelFileId },
           }) => ({
+            urqlClient,
             barcode,
             backLabelFileId,
             frontLabelFileId,
@@ -157,7 +142,38 @@ export const OnboardingMachine = createMachine(
         },
       },
       form: {
-        on: { SUBMIT: "done" },
+        on: { CREATED: "finalPrompt" },
+      },
+      addExisting: {
+        invoke: {
+          src: "insertCellarItem",
+          input: ({ context: { existingItemId, cellarId, urqlClient } }) => ({
+            itemId: existingItemId ?? "",
+            cellarId,
+            urqlClient,
+          }),
+          onDone: [
+            {
+              target: "finalPrompt",
+            },
+          ],
+        },
+      },
+      finalPrompt: {
+        on: {
+          ADD_ANOTHER: {
+            actions: ({ context }) => {
+              context.router.push(`/cellars/${context.cellarId}/items/add`);
+            },
+            target: "done",
+          },
+          DONE: {
+            actions: ({ context }) => {
+              context.router.push(`/cellars/${context.cellarId}/items`);
+            },
+            target: "done",
+          },
+        },
       },
       done: {
         type: "final",
@@ -171,70 +187,114 @@ export const OnboardingMachine = createMachine(
   },
 );
 
-export const pictureOnboardingMachine = createMachine({
-  id: "onboarding-wizard-sub",
-  initial: "barcode",
-  types: {} as {
-    context: {
-      barcode?: Barcode;
-      frontLabelDataUrl?: string;
-      backLabelDataUrl?: string;
-    };
-    events:
-      | {
-          type: "FOUND";
-          barcode?: Barcode;
-        }
-      | { type: "SKIP" }
-      | { type: "BACK" }
-      | { type: "CAPTURED"; image: string };
-    actions: { type: "handleDone" };
+export const pictureOnboardingMachine = createMachine(
+  {
+    id: "onboarding-wizard-sub",
+    initial: "barcode",
+    types: {} as {
+      input: { urqlClient: Client };
+      context: {
+        barcode?: Barcode;
+        frontLabelDataUrl?: string;
+        backLabelDataUrl?: string;
+        existingItems?: BarcodeSearchResult[];
+        existingItemId?: string;
+        urqlClient: Client;
+      };
+      events:
+        | {
+            type: "FOUND";
+            barcode?: Barcode;
+          }
+        | { type: "SKIP" }
+        | { type: "BACK" }
+        | { type: "CHOOSE_ITEM"; existingItemId: string }
+        | { type: "CAPTURED"; image: string };
+      actions: { type: "handleDone" };
+      actors: { src: "searchByBarcode"; logic: typeof searchByBarcode };
+    },
+    context: ({ input }) => ({
+      urqlClient: input.urqlClient,
+    }),
+    states: {
+      barcode: {
+        on: {
+          FOUND: {
+            actions: assign({
+              barcode: ({ event }) => event.barcode,
+            }),
+            target: "searching",
+          },
+          SKIP: "clearing",
+        },
+      },
+      searching: {
+        invoke: {
+          src: "searchByBarcode",
+          input: ({ context: { barcode, urqlClient } }) => ({
+            barcode,
+            urqlClient,
+          }),
+          onDone: [
+            {
+              guard: ({ event }) => not(isEmpty(event.output)),
+              target: "chooseExisting",
+              actions: assign({
+                existingItems: ({ event }) => event.output,
+              }),
+            },
+            {
+              target: "clearing",
+            },
+          ],
+        },
+      },
+      chooseExisting: {
+        on: {
+          CHOOSE_ITEM: {
+            actions: assign({
+              existingItemId: ({ event }) => event.existingItemId,
+            }),
+            target: "done",
+          },
+          SKIP: "back",
+        },
+      },
+      clearing: {
+        after: {
+          // We need to delay a bit to give time for the camera to deal with new video constraints
+          50: { target: "back" },
+        },
+      },
+      back: {
+        on: {
+          CAPTURED: {
+            actions: assign({
+              backLabelDataUrl: ({ event }) => event.image,
+            }),
+            target: "front",
+          },
+          BACK: "barcode",
+          SKIP: "front",
+        },
+      },
+      front: {
+        on: {
+          CAPTURED: {
+            actions: assign({
+              frontLabelDataUrl: ({ event }) => event.image,
+            }),
+            target: "done",
+          },
+          BACK: "back",
+          SKIP: "done",
+        },
+      },
+      done: {
+        entry: ["handleDone"],
+        type: "final",
+      },
+    },
   },
-  states: {
-    barcode: {
-      on: {
-        FOUND: {
-          actions: assign({
-            barcode: ({ event }) => event.barcode,
-          }),
-          target: "clearing",
-        },
-        SKIP: "clearing",
-      },
-    },
-    clearing: {
-      after: {
-        // We need to delay a bit to give time for the camera to deal with new video constraints
-        50: { target: "back" },
-      },
-    },
-    back: {
-      on: {
-        CAPTURED: {
-          actions: assign({
-            backLabelDataUrl: ({ event }) => event.image,
-          }),
-          target: "front",
-        },
-        BACK: "barcode",
-        SKIP: "front",
-      },
-    },
-    front: {
-      on: {
-        CAPTURED: {
-          actions: assign({
-            frontLabelDataUrl: ({ event }) => event.image,
-          }),
-          target: "done",
-        },
-        BACK: "back",
-        SKIP: "done",
-      },
-    },
-    done: {
-      entry: ["handleDone"],
-      type: "final",
-    },
-  },
-});
+  { actors: { searchByBarcode } },
+);

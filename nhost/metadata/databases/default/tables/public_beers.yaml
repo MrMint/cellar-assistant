@@ -5,33 +5,23 @@ object_relationships:
   - name: barcode
     using:
       foreign_key_constraint_on: barcode_code
-  - name: cellar
-    using:
-      foreign_key_constraint_on: cellar_id
   - name: createdBy
     using:
       foreign_key_constraint_on: created_by_id
 insert_permissions:
   - role: user
     permission:
-      check:
-        cellar:
-          createdBy:
-            id:
-              _eq: X-Hasura-User-Id
+      check: {}
       set:
         created_by_id: x-hasura-User-Id
       columns:
         - alcohol_content_percentage
-        - back_label_image_id
         - barcode_code
-        - cellar_id
-        - created_by_id
+        - country
         - description
-        - front_label_image_id
         - international_bitterness_unit
+        - item_onboarding_id
         - name
-        - price
         - style
         - vintage
     comment: ""
@@ -40,25 +30,21 @@ select_permissions:
     permission:
       columns:
         - alcohol_content_percentage
-        - back_label_image_id
         - barcode_code
-        - cellar_id
         - created_at
         - created_by_id
         - description
-        - front_label_image_id
         - id
         - international_bitterness_unit
         - name
-        - price
         - style
         - updated_at
         - vintage
-      filter:
-        cellar:
-          users:
-            user_id:
-              _eq: X-Hasura-User-Id
+      filter: {}
+      query_root_fields:
+        - select_by_pk
+      subscription_root_fields:
+        - select_by_pk
     comment: ""
 update_permissions:
   - role: user
@@ -66,21 +52,14 @@ update_permissions:
       columns:
         - alcohol_content_percentage
         - barcode_code
+        - country
         - description
         - international_bitterness_unit
         - name
-        - price
         - style
         - vintage
       filter:
         created_by_id:
           _eq: X-Hasura-User-Id
       check: {}
-    comment: ""
-delete_permissions:
-  - role: user
-    permission:
-      filter:
-        created_by_id:
-          _eq: X-Hasura-User-Id
     comment: ""
