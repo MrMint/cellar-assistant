@@ -19,7 +19,6 @@ export type Scalars = {
   citext: { input: any; output: any; }
   date: { input: string; output: string; }
   jsonb: { input: any; output: any; }
-  money: { input: number; output: number; }
   numeric: { input: any; output: any; }
   polygon: { input: any; output: any; }
   timestamptz: { input: any; output: any; }
@@ -3508,6 +3507,203 @@ export type Cellar_Beer_Updates = {
   where: Cellar_Beer_Bool_Exp;
 };
 
+/** columns and relationships of "cellar_spirit" */
+export type Cellar_Spirit = {
+  __typename: 'cellar_spirit';
+  /** An object relationship */
+  cellar: Cellars;
+  cellar_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  createdBy: Users;
+  created_at: Scalars['timestamptz']['output'];
+  id: Scalars['uuid']['output'];
+  /** An object relationship */
+  spirit: Spirits;
+  spirit_id: Scalars['uuid']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+  user_id: Scalars['uuid']['output'];
+};
+
+/** aggregated selection of "cellar_spirit" */
+export type Cellar_Spirit_Aggregate = {
+  __typename: 'cellar_spirit_aggregate';
+  aggregate?: Maybe<Cellar_Spirit_Aggregate_Fields>;
+  nodes: Array<Cellar_Spirit>;
+};
+
+/** aggregate fields of "cellar_spirit" */
+export type Cellar_Spirit_Aggregate_Fields = {
+  __typename: 'cellar_spirit_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Cellar_Spirit_Max_Fields>;
+  min?: Maybe<Cellar_Spirit_Min_Fields>;
+};
+
+
+/** aggregate fields of "cellar_spirit" */
+export type Cellar_Spirit_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Cellar_Spirit_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "cellar_spirit". All fields are combined with a logical 'AND'. */
+export type Cellar_Spirit_Bool_Exp = {
+  _and?: InputMaybe<Array<Cellar_Spirit_Bool_Exp>>;
+  _not?: InputMaybe<Cellar_Spirit_Bool_Exp>;
+  _or?: InputMaybe<Array<Cellar_Spirit_Bool_Exp>>;
+  cellar?: InputMaybe<Cellars_Bool_Exp>;
+  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
+  createdBy?: InputMaybe<Users_Bool_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  spirit?: InputMaybe<Spirits_Bool_Exp>;
+  spirit_id?: InputMaybe<Uuid_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  user_id?: InputMaybe<Uuid_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "cellar_spirit" */
+export enum Cellar_Spirit_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  CellarSpiritPkey = 'cellar_spirit_pkey'
+}
+
+/** input type for inserting data into table "cellar_spirit" */
+export type Cellar_Spirit_Insert_Input = {
+  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  spirit?: InputMaybe<Spirits_Obj_Rel_Insert_Input>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** aggregate max on columns */
+export type Cellar_Spirit_Max_Fields = {
+  __typename: 'cellar_spirit_max_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  spirit_id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** aggregate min on columns */
+export type Cellar_Spirit_Min_Fields = {
+  __typename: 'cellar_spirit_min_fields';
+  cellar_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  spirit_id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** response of any mutation on the table "cellar_spirit" */
+export type Cellar_Spirit_Mutation_Response = {
+  __typename: 'cellar_spirit_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Cellar_Spirit>;
+};
+
+/** on_conflict condition type for table "cellar_spirit" */
+export type Cellar_Spirit_On_Conflict = {
+  constraint: Cellar_Spirit_Constraint;
+  update_columns?: Array<Cellar_Spirit_Update_Column>;
+  where?: InputMaybe<Cellar_Spirit_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "cellar_spirit". */
+export type Cellar_Spirit_Order_By = {
+  cellar?: InputMaybe<Cellars_Order_By>;
+  cellar_id?: InputMaybe<Order_By>;
+  createdBy?: InputMaybe<Users_Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  spirit?: InputMaybe<Spirits_Order_By>;
+  spirit_id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: cellar_spirit */
+export type Cellar_Spirit_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "cellar_spirit" */
+export enum Cellar_Spirit_Select_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  SpiritId = 'spirit_id',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  UserId = 'user_id'
+}
+
+/** input type for updating data in table "cellar_spirit" */
+export type Cellar_Spirit_Set_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** Streaming cursor of the table "cellar_spirit" */
+export type Cellar_Spirit_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Cellar_Spirit_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Cellar_Spirit_Stream_Cursor_Value_Input = {
+  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** update columns of table "cellar_spirit" */
+export enum Cellar_Spirit_Update_Column {
+  /** column name */
+  CellarId = 'cellar_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  SpiritId = 'spirit_id',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  UserId = 'user_id'
+}
+
+export type Cellar_Spirit_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Cellar_Spirit_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Cellar_Spirit_Bool_Exp;
+};
+
 /** columns and relationships of "cellar_user" */
 export type Cellar_User = {
   __typename: 'cellar_user';
@@ -6093,19 +6289,6 @@ export type Jsonb_Comparison_Exp = {
   _nin?: InputMaybe<Array<Scalars['jsonb']['input']>>;
 };
 
-/** Boolean expression to compare columns of type "money". All fields are combined with logical 'AND'. */
-export type Money_Comparison_Exp = {
-  _eq?: InputMaybe<Scalars['money']['input']>;
-  _gt?: InputMaybe<Scalars['money']['input']>;
-  _gte?: InputMaybe<Scalars['money']['input']>;
-  _in?: InputMaybe<Array<Scalars['money']['input']>>;
-  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
-  _lt?: InputMaybe<Scalars['money']['input']>;
-  _lte?: InputMaybe<Scalars['money']['input']>;
-  _neq?: InputMaybe<Scalars['money']['input']>;
-  _nin?: InputMaybe<Array<Scalars['money']['input']>>;
-};
-
 /** mutation root */
 export type Mutation_Root = {
   __typename: 'mutation_root';
@@ -6177,6 +6360,10 @@ export type Mutation_Root = {
   delete_cellar_beer?: Maybe<Cellar_Beer_Mutation_Response>;
   /** delete single row from the table: "cellar_beer" */
   delete_cellar_beer_by_pk?: Maybe<Cellar_Beer>;
+  /** delete data from the table: "cellar_spirit" */
+  delete_cellar_spirit?: Maybe<Cellar_Spirit_Mutation_Response>;
+  /** delete single row from the table: "cellar_spirit" */
+  delete_cellar_spirit_by_pk?: Maybe<Cellar_Spirit>;
   /** delete data from the table: "cellar_user" */
   delete_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
   /** delete single row from the table: "cellar_user" */
@@ -6293,6 +6480,10 @@ export type Mutation_Root = {
   insert_cellar_beer?: Maybe<Cellar_Beer_Mutation_Response>;
   /** insert a single row into the table: "cellar_beer" */
   insert_cellar_beer_one?: Maybe<Cellar_Beer>;
+  /** insert data into the table: "cellar_spirit" */
+  insert_cellar_spirit?: Maybe<Cellar_Spirit_Mutation_Response>;
+  /** insert a single row into the table: "cellar_spirit" */
+  insert_cellar_spirit_one?: Maybe<Cellar_Spirit>;
   /** insert data into the table: "cellar_user" */
   insert_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
   /** insert a single row into the table: "cellar_user" */
@@ -6437,6 +6628,12 @@ export type Mutation_Root = {
   update_cellar_beer_by_pk?: Maybe<Cellar_Beer>;
   /** update multiples rows of table: "cellar_beer" */
   update_cellar_beer_many?: Maybe<Array<Maybe<Cellar_Beer_Mutation_Response>>>;
+  /** update data of the table: "cellar_spirit" */
+  update_cellar_spirit?: Maybe<Cellar_Spirit_Mutation_Response>;
+  /** update single row of the table: "cellar_spirit" */
+  update_cellar_spirit_by_pk?: Maybe<Cellar_Spirit>;
+  /** update multiples rows of table: "cellar_spirit" */
+  update_cellar_spirit_many?: Maybe<Array<Maybe<Cellar_Spirit_Mutation_Response>>>;
   /** update data of the table: "cellar_user" */
   update_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
   /** update single row of the table: "cellar_user" */
@@ -6718,6 +6915,18 @@ export type Mutation_RootDelete_Cellar_BeerArgs = {
 
 /** mutation root */
 export type Mutation_RootDelete_Cellar_Beer_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Cellar_SpiritArgs = {
+  where: Cellar_Spirit_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Cellar_Spirit_By_PkArgs = {
   id: Scalars['uuid']['input'];
 };
 
@@ -7101,6 +7310,20 @@ export type Mutation_RootInsert_Cellar_BeerArgs = {
 export type Mutation_RootInsert_Cellar_Beer_OneArgs = {
   object: Cellar_Beer_Insert_Input;
   on_conflict?: InputMaybe<Cellar_Beer_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Cellar_SpiritArgs = {
+  objects: Array<Cellar_Spirit_Insert_Input>;
+  on_conflict?: InputMaybe<Cellar_Spirit_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Cellar_Spirit_OneArgs = {
+  object: Cellar_Spirit_Insert_Input;
+  on_conflict?: InputMaybe<Cellar_Spirit_On_Conflict>;
 };
 
 
@@ -7663,6 +7886,26 @@ export type Mutation_RootUpdate_Cellar_Beer_ManyArgs = {
 
 
 /** mutation root */
+export type Mutation_RootUpdate_Cellar_SpiritArgs = {
+  _set?: InputMaybe<Cellar_Spirit_Set_Input>;
+  where: Cellar_Spirit_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Cellar_Spirit_By_PkArgs = {
+  _set?: InputMaybe<Cellar_Spirit_Set_Input>;
+  pk_columns: Cellar_Spirit_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Cellar_Spirit_ManyArgs = {
+  updates: Array<Cellar_Spirit_Updates>;
+};
+
+
+/** mutation root */
 export type Mutation_RootUpdate_Cellar_UserArgs = {
   _set?: InputMaybe<Cellar_User_Set_Input>;
   where: Cellar_User_Bool_Exp;
@@ -8067,6 +8310,12 @@ export type Query_Root = {
   cellar_beer_aggregate: Cellar_Beer_Aggregate;
   /** fetch data from the table: "cellar_beer" using primary key columns */
   cellar_beer_by_pk?: Maybe<Cellar_Beer>;
+  /** fetch data from the table: "cellar_spirit" */
+  cellar_spirit: Array<Cellar_Spirit>;
+  /** fetch aggregated fields from the table: "cellar_spirit" */
+  cellar_spirit_aggregate: Cellar_Spirit_Aggregate;
+  /** fetch data from the table: "cellar_spirit" using primary key columns */
+  cellar_spirit_by_pk?: Maybe<Cellar_Spirit>;
   /** fetch data from the table: "cellar_user" */
   cellar_user: Array<Cellar_User>;
   /** fetch aggregated fields from the table: "cellar_user" */
@@ -8486,6 +8735,29 @@ export type Query_RootCellar_Beer_AggregateArgs = {
 
 
 export type Query_RootCellar_Beer_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootCellar_SpiritArgs = {
+  distinct_on?: InputMaybe<Array<Cellar_Spirit_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Cellar_Spirit_Order_By>>;
+  where?: InputMaybe<Cellar_Spirit_Bool_Exp>;
+};
+
+
+export type Query_RootCellar_Spirit_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Cellar_Spirit_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Cellar_Spirit_Order_By>>;
+  where?: InputMaybe<Cellar_Spirit_Bool_Exp>;
+};
+
+
+export type Query_RootCellar_Spirit_By_PkArgs = {
   id: Scalars['uuid']['input'];
 };
 
@@ -9026,17 +9298,15 @@ export type Spirits = {
   /** An object relationship */
   barcode?: Maybe<Barcodes>;
   barcode_code?: Maybe<Scalars['String']['output']>;
-  /** An object relationship */
-  cellar: Cellars;
-  cellar_id: Scalars['uuid']['output'];
+  country?: Maybe<Country_Enum>;
   /** An object relationship */
   createdBy: Users;
   created_at: Scalars['timestamptz']['output'];
   created_by_id: Scalars['uuid']['output'];
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['uuid']['output'];
+  item_onboarding_id: Scalars['uuid']['output'];
   name: Scalars['String']['output'];
-  price?: Maybe<Scalars['money']['output']>;
   style?: Maybe<Scalars['String']['output']>;
   type: Spirit_Type_Enum;
   updated_at: Scalars['timestamptz']['output'];
@@ -9110,13 +9380,11 @@ export type Spirits_Arr_Rel_Insert_Input = {
 export type Spirits_Avg_Fields = {
   __typename: 'spirits_avg_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by avg() on columns of table "spirits" */
 export type Spirits_Avg_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** Boolean expression to filter rows from the table "spirits". All fields are combined with a logical 'AND'. */
@@ -9127,15 +9395,14 @@ export type Spirits_Bool_Exp = {
   alcohol_content_percentage?: InputMaybe<Numeric_Comparison_Exp>;
   barcode?: InputMaybe<Barcodes_Bool_Exp>;
   barcode_code?: InputMaybe<String_Comparison_Exp>;
-  cellar?: InputMaybe<Cellars_Bool_Exp>;
-  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
+  country?: InputMaybe<Country_Enum_Comparison_Exp>;
   createdBy?: InputMaybe<Users_Bool_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
   description?: InputMaybe<String_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
+  item_onboarding_id?: InputMaybe<Uuid_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
-  price?: InputMaybe<Money_Comparison_Exp>;
   style?: InputMaybe<String_Comparison_Exp>;
   type?: InputMaybe<Spirit_Type_Enum_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
@@ -9151,7 +9418,6 @@ export enum Spirits_Constraint {
 /** input type for incrementing numeric columns in table "spirits" */
 export type Spirits_Inc_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
-  price?: InputMaybe<Scalars['money']['input']>;
 };
 
 /** input type for inserting data into table "spirits" */
@@ -9159,15 +9425,14 @@ export type Spirits_Insert_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
   barcode?: InputMaybe<Barcodes_Obj_Rel_Insert_Input>;
   barcode_code?: InputMaybe<Scalars['String']['input']>;
-  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  country?: InputMaybe<Country_Enum>;
   createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
-  price?: InputMaybe<Scalars['money']['input']>;
   style?: InputMaybe<Scalars['String']['input']>;
   type?: InputMaybe<Spirit_Type_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -9179,13 +9444,12 @@ export type Spirits_Max_Fields = {
   __typename: 'spirits_max_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   barcode_code?: Maybe<Scalars['String']['output']>;
-  cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
   created_by_id?: Maybe<Scalars['uuid']['output']>;
   description?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
+  item_onboarding_id?: Maybe<Scalars['uuid']['output']>;
   name?: Maybe<Scalars['String']['output']>;
-  price?: Maybe<Scalars['money']['output']>;
   style?: Maybe<Scalars['String']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   vintage?: Maybe<Scalars['date']['output']>;
@@ -9195,13 +9459,12 @@ export type Spirits_Max_Fields = {
 export type Spirits_Max_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   barcode_code?: InputMaybe<Order_By>;
-  cellar_id?: InputMaybe<Order_By>;
   created_at?: InputMaybe<Order_By>;
   created_by_id?: InputMaybe<Order_By>;
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
   style?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   vintage?: InputMaybe<Order_By>;
@@ -9212,13 +9475,12 @@ export type Spirits_Min_Fields = {
   __typename: 'spirits_min_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
   barcode_code?: Maybe<Scalars['String']['output']>;
-  cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
   created_by_id?: Maybe<Scalars['uuid']['output']>;
   description?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
+  item_onboarding_id?: Maybe<Scalars['uuid']['output']>;
   name?: Maybe<Scalars['String']['output']>;
-  price?: Maybe<Scalars['money']['output']>;
   style?: Maybe<Scalars['String']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   vintage?: Maybe<Scalars['date']['output']>;
@@ -9228,13 +9490,12 @@ export type Spirits_Min_Fields = {
 export type Spirits_Min_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   barcode_code?: InputMaybe<Order_By>;
-  cellar_id?: InputMaybe<Order_By>;
   created_at?: InputMaybe<Order_By>;
   created_by_id?: InputMaybe<Order_By>;
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
   style?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   vintage?: InputMaybe<Order_By>;
@@ -9249,6 +9510,13 @@ export type Spirits_Mutation_Response = {
   returning: Array<Spirits>;
 };
 
+/** input type for inserting object relation for remote table "spirits" */
+export type Spirits_Obj_Rel_Insert_Input = {
+  data: Spirits_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Spirits_On_Conflict>;
+};
+
 /** on_conflict condition type for table "spirits" */
 export type Spirits_On_Conflict = {
   constraint: Spirits_Constraint;
@@ -9261,15 +9529,14 @@ export type Spirits_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
   barcode?: InputMaybe<Barcodes_Order_By>;
   barcode_code?: InputMaybe<Order_By>;
-  cellar?: InputMaybe<Cellars_Order_By>;
-  cellar_id?: InputMaybe<Order_By>;
+  country?: InputMaybe<Order_By>;
   createdBy?: InputMaybe<Users_Order_By>;
   created_at?: InputMaybe<Order_By>;
   created_by_id?: InputMaybe<Order_By>;
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
   style?: InputMaybe<Order_By>;
   type?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
@@ -9288,7 +9555,7 @@ export enum Spirits_Select_Column {
   /** column name */
   BarcodeCode = 'barcode_code',
   /** column name */
-  CellarId = 'cellar_id',
+  Country = 'country',
   /** column name */
   CreatedAt = 'created_at',
   /** column name */
@@ -9298,9 +9565,9 @@ export enum Spirits_Select_Column {
   /** column name */
   Id = 'id',
   /** column name */
-  Name = 'name',
+  ItemOnboardingId = 'item_onboarding_id',
   /** column name */
-  Price = 'price',
+  Name = 'name',
   /** column name */
   Style = 'style',
   /** column name */
@@ -9315,13 +9582,13 @@ export enum Spirits_Select_Column {
 export type Spirits_Set_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
   barcode_code?: InputMaybe<Scalars['String']['input']>;
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  country?: InputMaybe<Country_Enum>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
-  price?: InputMaybe<Scalars['money']['input']>;
   style?: InputMaybe<Scalars['String']['input']>;
   type?: InputMaybe<Spirit_Type_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -9332,39 +9599,33 @@ export type Spirits_Set_Input = {
 export type Spirits_Stddev_Fields = {
   __typename: 'spirits_stddev_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev() on columns of table "spirits" */
 export type Spirits_Stddev_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** aggregate stddev_pop on columns */
 export type Spirits_Stddev_Pop_Fields = {
   __typename: 'spirits_stddev_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev_pop() on columns of table "spirits" */
 export type Spirits_Stddev_Pop_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** aggregate stddev_samp on columns */
 export type Spirits_Stddev_Samp_Fields = {
   __typename: 'spirits_stddev_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by stddev_samp() on columns of table "spirits" */
 export type Spirits_Stddev_Samp_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** Streaming cursor of the table "spirits" */
@@ -9379,13 +9640,13 @@ export type Spirits_Stream_Cursor_Input = {
 export type Spirits_Stream_Cursor_Value_Input = {
   alcohol_content_percentage?: InputMaybe<Scalars['numeric']['input']>;
   barcode_code?: InputMaybe<Scalars['String']['input']>;
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
+  country?: InputMaybe<Country_Enum>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
-  price?: InputMaybe<Scalars['money']['input']>;
   style?: InputMaybe<Scalars['String']['input']>;
   type?: InputMaybe<Spirit_Type_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -9396,13 +9657,11 @@ export type Spirits_Stream_Cursor_Value_Input = {
 export type Spirits_Sum_Fields = {
   __typename: 'spirits_sum_fields';
   alcohol_content_percentage?: Maybe<Scalars['numeric']['output']>;
-  price?: Maybe<Scalars['money']['output']>;
 };
 
 /** order by sum() on columns of table "spirits" */
 export type Spirits_Sum_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** update columns of table "spirits" */
@@ -9412,7 +9671,7 @@ export enum Spirits_Update_Column {
   /** column name */
   BarcodeCode = 'barcode_code',
   /** column name */
-  CellarId = 'cellar_id',
+  Country = 'country',
   /** column name */
   CreatedAt = 'created_at',
   /** column name */
@@ -9422,9 +9681,9 @@ export enum Spirits_Update_Column {
   /** column name */
   Id = 'id',
   /** column name */
-  Name = 'name',
+  ItemOnboardingId = 'item_onboarding_id',
   /** column name */
-  Price = 'price',
+  Name = 'name',
   /** column name */
   Style = 'style',
   /** column name */
@@ -9448,39 +9707,33 @@ export type Spirits_Updates = {
 export type Spirits_Var_Pop_Fields = {
   __typename: 'spirits_var_pop_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by var_pop() on columns of table "spirits" */
 export type Spirits_Var_Pop_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** aggregate var_samp on columns */
 export type Spirits_Var_Samp_Fields = {
   __typename: 'spirits_var_samp_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by var_samp() on columns of table "spirits" */
 export type Spirits_Var_Samp_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 /** aggregate variance on columns */
 export type Spirits_Variance_Fields = {
   __typename: 'spirits_variance_fields';
   alcohol_content_percentage?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by variance() on columns of table "spirits" */
 export type Spirits_Variance_Order_By = {
   alcohol_content_percentage?: InputMaybe<Order_By>;
-  price?: InputMaybe<Order_By>;
 };
 
 export type Subscription_Root = {
@@ -9597,6 +9850,14 @@ export type Subscription_Root = {
   cellar_beer_by_pk?: Maybe<Cellar_Beer>;
   /** fetch data from the table in a streaming manner: "cellar_beer" */
   cellar_beer_stream: Array<Cellar_Beer>;
+  /** fetch data from the table: "cellar_spirit" */
+  cellar_spirit: Array<Cellar_Spirit>;
+  /** fetch aggregated fields from the table: "cellar_spirit" */
+  cellar_spirit_aggregate: Cellar_Spirit_Aggregate;
+  /** fetch data from the table: "cellar_spirit" using primary key columns */
+  cellar_spirit_by_pk?: Maybe<Cellar_Spirit>;
+  /** fetch data from the table in a streaming manner: "cellar_spirit" */
+  cellar_spirit_stream: Array<Cellar_Spirit>;
   /** fetch data from the table: "cellar_user" */
   cellar_user: Array<Cellar_User>;
   /** fetch aggregated fields from the table: "cellar_user" */
@@ -10137,6 +10398,36 @@ export type Subscription_RootCellar_Beer_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<Cellar_Beer_Stream_Cursor_Input>>;
   where?: InputMaybe<Cellar_Beer_Bool_Exp>;
+};
+
+
+export type Subscription_RootCellar_SpiritArgs = {
+  distinct_on?: InputMaybe<Array<Cellar_Spirit_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Cellar_Spirit_Order_By>>;
+  where?: InputMaybe<Cellar_Spirit_Bool_Exp>;
+};
+
+
+export type Subscription_RootCellar_Spirit_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Cellar_Spirit_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Cellar_Spirit_Order_By>>;
+  where?: InputMaybe<Cellar_Spirit_Bool_Exp>;
+};
+
+
+export type Subscription_RootCellar_Spirit_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootCellar_Spirit_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Cellar_Spirit_Stream_Cursor_Input>>;
+  where?: InputMaybe<Cellar_Spirit_Bool_Exp>;
 };
 
 
@@ -11823,6 +12114,7 @@ export enum Wine_Variety_Enum {
   Gamay = 'GAMAY',
   Garganega = 'GARGANEGA',
   Grenache = 'GRENACHE',
+  Lambrusco = 'LAMBRUSCO',
   Malbec = 'MALBEC',
   Malvasia = 'MALVASIA',
   Marsanne = 'MARSANNE',

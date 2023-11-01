@@ -1,9 +1,9 @@
+import { NhostClient } from "@nhost/nextjs";
+import { Client } from "urql";
 import { BeerFormDefaultValues } from "@/components/beer/BeerForm";
 import { SpiritFormDefaultValues } from "@/components/spirit/SpiritForm";
 import { WineFormDefaultValues } from "@/components/wine/WineForm";
 import { Barcode, ItemType } from "@/constants";
-import { NhostClient } from "@nhost/nextjs";
-import { Client } from "urql";
 
 export type SearchByBarcodeInput = {
   barcode?: Barcode;
