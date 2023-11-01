@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.16.0](https://github.com/MrMint/cellar-assistant/compare/v0.15.0...v0.16.0) (2023-11-01)
+
+
+### Features
+
+* Adds beer to new onboarding experience ([8605d7a](https://github.com/MrMint/cellar-assistant/commit/8605d7ab32f98aad463fbf09ebb7ef1b3fb04290))
+* Adds spirits to new onboarding experience ([bbf9fd7](https://github.com/MrMint/cellar-assistant/commit/bbf9fd7df2803cda4168b0c089763ba62d896fe9))
+* Improves wine onboarding experience ([b1ca0ab](https://github.com/MrMint/cellar-assistant/commit/b1ca0abac2d6aebc9d33cbca99099fdc6883f70f))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.13 ([9f01d56](https://github.com/MrMint/cellar-assistant/commit/9f01d56205edd200d4956987f2eda85d55e06a3f))
+* **deps:** update dependency @types/node to v20.8.10 ([bb24a93](https://github.com/MrMint/cellar-assistant/commit/bb24a934a4b240eaed6449d129208349e3e2eb61))
+
 ## [0.15.0](https://github.com/MrMint/cellar-assistant/compare/v0.14.0...v0.15.0) (2023-10-28)
 
 
