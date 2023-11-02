@@ -14,12 +14,20 @@ const itemsSub = graphql(`
   query GetItemsQuery($cellarId: uuid!) {
     cellar_beer(where: { cellar_id: { _eq: $cellarId } }) {
       id
+      display_image {
+        file_id
+        placeholder
+      }
       beer {
         name
       }
     }
     cellar_wine(where: { cellar_id: { _eq: $cellarId } }) {
       id
+      display_image {
+        file_id
+        placeholder
+      }
       wine {
         name
         vintage
@@ -27,6 +35,10 @@ const itemsSub = graphql(`
     }
     cellar_spirit(where: { cellar_id: { _eq: $cellarId } }) {
       id
+      display_image {
+        file_id
+        placeholder
+      }
       spirit {
         name
         vintage
@@ -70,7 +82,12 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
           {res?.data?.cellar_beer.map((x) => (
             <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
               <ItemCard
-                item={{ id: x.id, name: x.beer.name }}
+                item={{
+                  id: x.id,
+                  name: x.beer.name,
+                  displayImageId: x.display_image?.file_id,
+                  placeholder: x.display_image?.placeholder,
+                }}
                 type={ItemType.Beer}
                 href={`${ItemType[ItemType.Beer].toLowerCase()}s/${x.id}`}
               />
@@ -79,7 +96,13 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
           {res?.data?.cellar_wine.map((x) => (
             <Grid key={x.id} xs={12} sm={6} md={4} lg={2}>
               <ItemCard
-                item={{ id: x.id, name: x.wine.name, vintage: x.wine.vintage }}
+                item={{
+                  id: x.id,
+                  name: x.wine.name,
+                  vintage: x.wine.vintage,
+                  displayImageId: x.display_image?.file_id,
+                  placeholder: x.display_image?.placeholder,
+                }}
                 type={ItemType.Wine}
                 href={`${ItemType[ItemType.Wine].toLowerCase()}s/${x.id}`}
               />
@@ -91,6 +114,8 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
                 item={{
                   id: x.id,
                   name: x.spirit.name,
+                  displayImageId: x.display_image?.file_id,
+                  placeholder: x.display_image?.placeholder,
                 }}
                 type={ItemType.Spirit}
                 href={`${ItemType[ItemType.Spirit].toLowerCase()}s/${x.id}`}

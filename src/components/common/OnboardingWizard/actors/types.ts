@@ -14,6 +14,7 @@ export type InsertCellarItemInput = {
   urqlClient: Client;
   itemId: string;
   cellarId: string;
+  displayImage?: string;
 };
 
 export type InsertCellarItemResult = {

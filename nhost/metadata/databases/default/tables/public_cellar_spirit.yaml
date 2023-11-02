@@ -8,6 +8,9 @@ object_relationships:
   - name: createdBy
     using:
       foreign_key_constraint_on: user_id
+  - name: display_image
+    using:
+      foreign_key_constraint_on: display_image_id
   - name: spirit
     using:
       foreign_key_constraint_on: spirit_id
@@ -22,17 +25,19 @@ insert_permissions:
         user_id: x-hasura-User-Id
       columns:
         - cellar_id
+        - display_image_id
         - spirit_id
     comment: ""
 select_permissions:
   - role: user
     permission:
       columns:
-        - created_at
-        - updated_at
         - cellar_id
+        - created_at
+        - display_image_id
         - id
         - spirit_id
+        - updated_at
         - user_id
       filter:
         cellar:
@@ -44,7 +49,7 @@ update_permissions:
   - role: user
     permission:
       columns:
-        - spirit_id
+        - display_image_id
       filter:
         user_id:
           _eq: X-Hasura-User-Id

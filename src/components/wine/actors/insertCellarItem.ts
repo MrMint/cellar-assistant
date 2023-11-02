@@ -1,29 +1,40 @@
+import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
+import { ItemType } from "@/gql/graphql";
+import { addItemImageMutation, addWineToCellarMutation } from "@/queries";
 import {
   InsertCellarItemInput,
   InsertCellarItemResult,
 } from "../../common/OnboardingWizard/actors/types";
-import { isNil } from "ramda";
-import { graphql } from "@/gql";
-
-const addWineMutation = graphql(`
-  mutation HeaderAddWineMutation($input: cellar_wine_insert_input!) {
-    insert_cellar_wine_one(object: $input) {
-      id
-      cellar_id
-    }
-  }
-`);
 
 export const insertCellarItem = fromPromise(
   async ({
-    input: { itemId, cellarId, urqlClient },
+    input: { itemId, cellarId, displayImage, urqlClient },
   }: {
     input: InsertCellarItemInput;
   }): Promise<InsertCellarItemResult> => {
-    const addResult = await urqlClient.mutation(addWineMutation, {
-      input: { wine_id: itemId, cellar_id: cellarId },
+    let imageId: string | undefined;
+    if (isNotNil(displayImage)) {
+      const addImageResult = await urqlClient.mutation(addItemImageMutation, {
+        input: {
+          item_id: itemId,
+          item_type: ItemType.Wine,
+          image: displayImage,
+        },
+      });
+
+      imageId = addImageResult.data?.item_image_upload?.id;
+      if (isNil(imageId) || isNotNil(addImageResult.error)) throw Error();
+    }
+
+    const addResult = await urqlClient.mutation(addWineToCellarMutation, {
+      input: {
+        wine_id: itemId,
+        cellar_id: cellarId,
+        display_image_id: imageId,
+      },
     });
+
     if (isNil(addResult.data?.insert_cellar_wine_one?.id)) throw Error();
     return { itemId: addResult.data?.insert_cellar_wine_one?.id ?? "" };
   },

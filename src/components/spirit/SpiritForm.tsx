@@ -14,16 +14,16 @@ import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useMutation } from "urql";
+import { CombinedError, useClient } from "urql";
 import { countryKeys } from "@/constants";
-import { graphql } from "@/gql";
 import {
   Barcodes_Constraint,
   Barcodes_Update_Column,
-  Cellar_Spirit_Insert_Input,
   Country_Enum,
   Spirit_Type_Enum,
+  Spirits_Insert_Input,
 } from "@/gql/graphql";
+import { addSpiritMutation, updateSpiritMutation } from "@/queries";
 import { formatVintage, getEnumKeys } from "@/utilities";
 
 const typeOptions = getEnumKeys(Spirit_Type_Enum);
@@ -52,59 +52,29 @@ export type SpiritFormDefaultValues = {
 type SpiritFormProps = {
   id?: string;
   itemOnboardingId?: string;
-  cellarId: string;
   defaultValues?: SpiritFormDefaultValues;
   onCreated: (createdId: string) => void;
 };
 
-const addSpiritMutation = graphql(`
-  mutation addSpirit($spirit: cellar_spirit_insert_input!) {
-    insert_cellar_spirit_one(object: $spirit) {
-      id
-    }
-  }
-`);
-
-const updateSpiritMutation = graphql(`
-  mutation updateSpirit($spiritId: uuid!, $spirit: spirits_set_input!) {
-    update_spirits_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {
-      id
-    }
-  }
-`);
 function mapFormValuesToInsertInput(
   values: ISpiritFormInput,
-  cellar_id: string,
-  spirit_id?: string,
   itemOnboardingId?: string,
-): Cellar_Spirit_Insert_Input {
-  if (isNotNil(spirit_id)) {
-    return {
-      cellar_id,
-      spirit_id,
-    };
-  }
-
+): Spirits_Insert_Input {
   const update = {
-    cellar_id,
-    spirit: {
-      data: {
-        name: values.name,
-        alcohol_content_percentage: values.alcohol_content_percentage,
-        description: values.description,
-        country: values.country,
-        style: values.style,
-        type: values.type,
-        vintage: isNotNil(values.vintage)
-          ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
-          : undefined,
-        item_onboarding_id: itemOnboardingId,
-      },
-    },
-  } as Cellar_Spirit_Insert_Input;
+    name: values.name,
+    alcohol_content_percentage: values.alcohol_content_percentage,
+    description: values.description,
+    country: values.country,
+    style: values.style,
+    type: values.type,
+    vintage: isNotNil(values.vintage)
+      ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
+      : undefined,
+    item_onboarding_id: itemOnboardingId,
+  } as Spirits_Insert_Input;
 
-  if (isNotNil(update.spirit) && isNotNil(values.barcode_code)) {
-    update.spirit.data.barcode = {
+  if (isNotNil(update) && isNotNil(values.barcode_code)) {
+    update.barcode = {
       data: {
         code: values.barcode_code,
         type: values.barcode_type,
@@ -120,29 +90,19 @@ function mapFormValuesToInsertInput(
 
 export const SpiritForm = ({
   id,
-  cellarId,
   defaultValues,
   itemOnboardingId,
   onCreated,
 }: SpiritFormProps) => {
-  const [
-    { fetching: fetchingAdd, error: errorAdd, operation: opAdd },
-    addSpirit,
-  ] = useMutation(addSpiritMutation);
-  const [
-    { fetching: featchingUpdate, error: errorUpdate, operation: opUpdate },
-    updateSpirit,
-  ] = useMutation(updateSpiritMutation);
-
-  const error = errorAdd || errorUpdate;
-  const fetching =
-    fetchingAdd ||
-    featchingUpdate ||
-    (error === undefined && (opAdd !== undefined || opUpdate !== undefined));
-
+  const client = useClient();
   const defaultVintage = formatVintage(defaultValues?.vintage);
 
-  const { control, handleSubmit, clearErrors } = useForm<ISpiritFormInput>({
+  const {
+    control,
+    handleSubmit,
+    setError,
+    formState: { isSubmitting, errors },
+  } = useForm<ISpiritFormInput>({
     defaultValues: {
       ...defaultValues,
       vintage:
@@ -153,20 +113,16 @@ export const SpiritForm = ({
   const onSubmit: SubmitHandler<ISpiritFormInput> = async (values) => {
     let errored: CombinedError | undefined;
     let createdId: string | undefined;
-    const update = mapFormValuesToInsertInput(
-      values,
-      cellarId,
-      id,
-      itemOnboardingId,
-    );
+    const update = mapFormValuesToInsertInput(values, itemOnboardingId);
+
     if (id == undefined) {
-      const result = await addSpirit({
+      const result = await client.mutation(addSpiritMutation, {
         spirit: update,
       });
       errored = result.error;
-      createdId = result.data?.insert_cellar_spirit_one?.id;
+      createdId = result.data?.insert_spirits_one?.id;
     } else {
-      const result = await updateSpirit({
+      const result = await client.mutation(updateSpiritMutation, {
         spiritId: id,
         spirit: update,
       });
@@ -175,6 +131,11 @@ export const SpiritForm = ({
     }
     if (isNil(errored) && isNotNil(createdId)) {
       onCreated(createdId);
+    } else {
+      setError("root.serverError", {
+        type: "custom",
+        message: "Something went wrong please try again...",
+      });
     }
   };
   return (
@@ -193,7 +154,7 @@ export const SpiritForm = ({
                 control={control}
                 rules={{ required: true }}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Input disabled={isSubmitting} type="text" {...field} />
                 )}
               />
             </FormControl>
@@ -226,7 +187,7 @@ export const SpiritForm = ({
                 name="description"
                 control={control}
                 render={({ field }) => (
-                  <Textarea disabled={fetching} minRows={2} {...field} />
+                  <Textarea disabled={isSubmitting} minRows={2} {...field} />
                 )}
               />
             </FormControl>
@@ -238,7 +199,7 @@ export const SpiritForm = ({
                 render={({ field }) => (
                   <Input
                     type="number"
-                    disabled={fetching}
+                    disabled={isSubmitting}
                     slotProps={{
                       input: {
                         min: "1900",
@@ -257,7 +218,7 @@ export const SpiritForm = ({
                 name="style"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Input disabled={isSubmitting} type="text" {...field} />
                 )}
               />
             </FormControl>
@@ -267,7 +228,7 @@ export const SpiritForm = ({
                 name="alcohol_content_percentage"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Input disabled={isSubmitting} type="number" {...field} />
                 )}
               />
             </FormControl>
@@ -299,15 +260,15 @@ export const SpiritForm = ({
                 name="barcode_code"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Input disabled={isSubmitting} type="number" {...field} />
                 )}
               />
             </FormControl>
           </Stack>
-          {error !== undefined && (
+          {errors.root !== undefined && (
             <Typography>Woah error encountered</Typography>
           )}
-          <Button loading={fetching} type="submit">
+          <Button loading={isSubmitting} type="submit">
             Add
           </Button>
         </Stack>

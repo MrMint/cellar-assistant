@@ -1,0 +1,24 @@
+table:
+  name: item_image
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - beer_id
+        - file_id
+        - id
+        - is_public
+        - placeholder
+        - spirit_id
+        - user_id
+        - wine_id
+      filter:
+        _or:
+          - is_public:
+              _eq: true
+          - user_id:
+              _eq: X-Hasura-User-Id
+      query_root_fields: []
+      subscription_root_fields: []
+    comment: ""
