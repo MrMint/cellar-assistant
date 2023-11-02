@@ -11,6 +11,9 @@ object_relationships:
   - name: created_by
     using:
       foreign_key_constraint_on: user_id
+  - name: display_image
+    using:
+      foreign_key_constraint_on: display_image_id
 insert_permissions:
   - role: user
     permission:
@@ -23,16 +26,18 @@ insert_permissions:
       columns:
         - beer_id
         - cellar_id
+        - display_image_id
     comment: ""
 select_permissions:
   - role: user
     permission:
       columns:
-        - created_at
-        - updated_at
         - beer_id
         - cellar_id
+        - created_at
+        - display_image_id
         - id
+        - updated_at
         - user_id
       filter:
         cellar:
@@ -45,6 +50,7 @@ update_permissions:
     permission:
       columns:
         - beer_id
+        - display_image_id
       filter:
         user_id:
           _eq: X-Hasura-User-Id

@@ -4,6 +4,12 @@ type Query {
   ): beer_defaults_result
 }
 
+type Mutation {
+  item_image_upload(
+    input: item_image_upload_input!
+  ): item_image_upload_result
+}
+
 type Query {
   spirit_defaults(
     hint: item_defaults_hint!
@@ -14,6 +20,12 @@ type Query {
   wine_defaults(
     hint: item_defaults_hint!
   ): wine_defaults_result
+}
+
+enum ItemType {
+  BEER
+  WINE
+  SPIRIT
 }
 
 input item_defaults_input {
@@ -28,6 +40,12 @@ input item_defaults_hint {
   barcodeType: String
   frontLabelFileId: uuid
   backLabelFileId: uuid
+}
+
+input item_image_upload_input {
+  image: String!
+  item_id: uuid!
+  item_type: ItemType!
 }
 
 type wine_defaults_result {
@@ -71,5 +89,9 @@ type spirit_defaults_result {
   type: String
   distillery: String
   item_onboarding_id: String!
+}
+
+type item_image_upload_result {
+  id: uuid!
 }
 

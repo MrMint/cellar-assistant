@@ -45,6 +45,7 @@ export const BeerOnboarding = ({ cellarId }: BeerOnboardingProps) => {
       barcode,
       frontLabelDataUrl,
       backLabelDataUrl,
+      displayImageDataUrl,
     }: OnboardingResult) => {
       send({
         type: "COMPLETE",
@@ -52,6 +53,7 @@ export const BeerOnboarding = ({ cellarId }: BeerOnboardingProps) => {
         frontLabel: frontLabelDataUrl,
         backLabel: backLabelDataUrl,
         existingItemId,
+        displayImageDataUrl,
       });
     },
     [send],
@@ -86,10 +88,9 @@ export const BeerOnboarding = ({ cellarId }: BeerOnboardingProps) => {
         {state.value === "form" && (
           <Grid xs={12} justifyContent="center">
             <BeerForm
-              cellarId={cellarId}
               itemOnboardingId={state.context.itemOnboardingId}
               defaultValues={state.context.defaults as BeerFormDefaultValues}
-              onCreated={() => send({ type: "CREATED" })}
+              onCreated={(itemId: string) => send({ type: "CREATED", itemId })}
             />
           </Grid>
         )}

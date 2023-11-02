@@ -48,7 +48,6 @@ const EditSpirit = ({
       {spirit !== undefined && (
         <SpiritForm
           id={itemId}
-          cellarId={cellarId}
           onCreated={() => {}}
           // returnUrl={`/cellars/${cellarId}/spirits/${itemId}`}
           defaultValues={{

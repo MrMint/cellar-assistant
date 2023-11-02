@@ -1,29 +1,40 @@
-import { isNil } from "ramda";
+import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
-import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
+import { addItemImageMutation, addSpiritToCellarMutation } from "@/queries";
 import {
   InsertCellarItemInput,
   InsertCellarItemResult,
 } from "../../common/OnboardingWizard/actors/types";
 
-const addSpiritMutation = graphql(`
-  mutation HeaderAddSpiritMutation($input: cellar_spirit_insert_input!) {
-    insert_cellar_spirit_one(object: $input) {
-      id
-      cellar_id
-    }
-  }
-`);
-
 export const insertCellarItem = fromPromise(
   async ({
-    input: { itemId, cellarId, urqlClient },
+    input: { itemId, cellarId, displayImage, urqlClient },
   }: {
     input: InsertCellarItemInput;
   }): Promise<InsertCellarItemResult> => {
-    const addResult = await urqlClient.mutation(addSpiritMutation, {
-      input: { spirit_id: itemId, cellar_id: cellarId },
+    let imageId: string | undefined;
+    if (isNotNil(displayImage)) {
+      const addImageResult = await urqlClient.mutation(addItemImageMutation, {
+        input: {
+          item_id: itemId,
+          item_type: ItemType.Spirit,
+          image: displayImage,
+        },
+      });
+
+      imageId = addImageResult.data?.item_image_upload?.id;
+      if (isNil(imageId) || isNotNil(addImageResult.error)) throw Error();
+    }
+
+    const addResult = await urqlClient.mutation(addSpiritToCellarMutation, {
+      spirit: {
+        spirit_id: itemId,
+        cellar_id: cellarId,
+        display_image_id: imageId,
+      },
     });
+
     if (isNil(addResult.data?.insert_cellar_spirit_one?.id)) throw Error();
     return { itemId: addResult.data?.insert_cellar_spirit_one?.id ?? "" };
   },

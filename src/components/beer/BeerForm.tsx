@@ -11,19 +11,19 @@ import {
   Typography,
 } from "@mui/joy";
 import { format } from "date-fns";
-import { useRouter } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useMutation } from "urql";
+import { CombinedError, useClient, useMutation } from "urql";
 import { beerStyleKeys, countryKeys } from "@/constants";
 import { graphql } from "@/gql";
 import {
   Barcodes_Constraint,
   Barcodes_Update_Column,
   Beer_Style_Enum,
-  Cellar_Beer_Insert_Input,
+  Beers_Insert_Input,
   Country_Enum,
 } from "@/gql/graphql";
+import { addBeerMutation } from "@/queries";
 import { formatVintage } from "@/utilities";
 
 type SharedFields = {
@@ -48,19 +48,10 @@ export type BeerFormDefaultValues = {
 
 export type BeerFormProps = {
   id?: string;
-  cellarId: string;
   itemOnboardingId?: string;
   defaultValues?: BeerFormDefaultValues;
   onCreated: (createdId: string) => void;
 };
-
-const addBeerMutation = graphql(`
-  mutation addBeer($beer: cellar_beer_insert_input!) {
-    insert_cellar_beer_one(object: $beer) {
-      id
-    }
-  }
-`);
 
 const updateBeerMutation = graphql(`
   mutation updateBeer($beerId: uuid!, $beer: beers_set_input!) {
@@ -71,37 +62,23 @@ const updateBeerMutation = graphql(`
 `);
 function mapFormValuesToInsertInput(
   values: IBeerFormInput,
-  cellar_id: string,
-  beer_id?: string,
   itemOnboardingId?: string,
-): Cellar_Beer_Insert_Input {
-  if (isNotNil(beer_id)) {
-    return {
-      cellar_id,
-      beer_id,
-    };
-  }
-
+): Beers_Insert_Input {
   const update = {
-    cellar_id,
-    beer: {
-      data: {
-        name: values.name,
-        alcohol_content_percentage: values.alcohol_content_percentage,
-        description: values.description,
-        country: values.country,
-        style: values.style,
-        vintage: isNotNil(values.vintage)
-          ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
-          : undefined,
-        item_onboarding_id: itemOnboardingId,
-        international_bitterness_unit: values.international_bitterness_unit,
-      },
-    },
-  } as Cellar_Beer_Insert_Input;
+    name: values.name,
+    alcohol_content_percentage: values.alcohol_content_percentage,
+    description: values.description,
+    country: values.country,
+    style: values.style,
+    vintage: isNotNil(values.vintage)
+      ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
+      : undefined,
+    item_onboarding_id: itemOnboardingId,
+    international_bitterness_unit: values.international_bitterness_unit,
+  } as Beers_Insert_Input;
 
-  if (isNotNil(update.beer) && isNotNil(values.barcode_code)) {
-    update.beer.data.barcode = {
+  if (isNotNil(update) && isNotNil(values.barcode_code)) {
+    update.barcode = {
       data: {
         code: values.barcode_code,
         type: values.barcode_type,
@@ -117,30 +94,19 @@ function mapFormValuesToInsertInput(
 
 export const BeerForm = ({
   id,
-  cellarId,
   defaultValues,
   itemOnboardingId,
   onCreated,
 }: BeerFormProps) => {
-  const router = useRouter();
-  const [
-    { fetching: fetchingAdd, error: errorAdd, operation: opAdd },
-    addBeer,
-  ] = useMutation(addBeerMutation);
-  const [
-    { fetching: featchingUpdate, error: errorUpdate, operation: opUpdate },
-    updateBeer,
-  ] = useMutation(updateBeerMutation);
-
-  const error = errorAdd || errorUpdate;
-  const fetching =
-    fetchingAdd ||
-    featchingUpdate ||
-    (error === undefined && (opAdd !== undefined || opUpdate !== undefined));
-
+  const client = useClient();
   const defaultVintage = formatVintage(defaultValues?.vintage);
 
-  const { control, handleSubmit, clearErrors } = useForm<IBeerFormInput>({
+  const {
+    control,
+    handleSubmit,
+    setError,
+    formState: { isSubmitting, errors },
+  } = useForm<IBeerFormInput>({
     defaultValues: {
       ...defaultValues,
       vintage:
@@ -151,21 +117,16 @@ export const BeerForm = ({
   const onSubmit: SubmitHandler<IBeerFormInput> = async (values) => {
     let errored: CombinedError | undefined;
     let createdId: string | undefined;
-    const update = mapFormValuesToInsertInput(
-      values,
-      cellarId,
-      id,
-      itemOnboardingId,
-    );
+    const update = mapFormValuesToInsertInput(values, itemOnboardingId);
 
-    if (id == undefined) {
-      const result = await addBeer({
+    if (isNil(id)) {
+      const result = await client.mutation(addBeerMutation, {
         beer: update,
       });
       errored = result.error;
-      createdId = result.data?.insert_cellar_beer_one?.id;
+      createdId = result.data?.insert_beers_one?.id;
     } else {
-      const result = await updateBeer({
+      const result = await client.mutation(updateBeerMutation, {
         beerId: id,
         beer: update,
       });
@@ -174,6 +135,11 @@ export const BeerForm = ({
     }
     if (isNil(errored) && isNotNil(createdId)) {
       onCreated(createdId);
+    } else {
+      setError("root.serverError", {
+        type: "custom",
+        message: "Something went wrong please try again...",
+      });
     }
   };
   return (
@@ -192,7 +158,7 @@ export const BeerForm = ({
                 control={control}
                 rules={{ required: true }}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Input disabled={isSubmitting} type="text" {...field} />
                 )}
               />
             </FormControl>
@@ -202,7 +168,7 @@ export const BeerForm = ({
                 name="description"
                 control={control}
                 render={({ field }) => (
-                  <Textarea disabled={fetching} minRows={2} {...field} />
+                  <Textarea disabled={isSubmitting} minRows={2} {...field} />
                 )}
               />
             </FormControl>
@@ -214,7 +180,7 @@ export const BeerForm = ({
                 render={({ field }) => (
                   <Input
                     type="number"
-                    disabled={fetching}
+                    disabled={isSubmitting}
                     slotProps={{
                       input: {
                         min: "1900",
@@ -277,7 +243,7 @@ export const BeerForm = ({
                 name="alcohol_content_percentage"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Input disabled={isSubmitting} type="number" {...field} />
                 )}
               />
             </FormControl>
@@ -287,7 +253,7 @@ export const BeerForm = ({
                 name="international_bitterness_unit"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Input disabled={isSubmitting} type="number" {...field} />
                 )}
               />
             </FormControl>
@@ -297,15 +263,15 @@ export const BeerForm = ({
                 name="barcode_code"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Input disabled={isSubmitting} type="text" {...field} />
                 )}
               />
             </FormControl>
           </Stack>
-          {error !== undefined && (
+          {errors.root !== undefined && (
             <Typography>Woah error encountered</Typography>
           )}
-          <Button loading={fetching} type="submit">
+          <Button loading={isSubmitting} type="submit">
             Add
           </Button>
         </Stack>

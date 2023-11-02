@@ -28,6 +28,21 @@ actions:
     permissions:
       - role: user
     comment: beer_defaults
+  - name: item_image_upload
+    definition:
+      kind: synchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/uploadItemImage'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      request_transform:
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
   - name: spirit_defaults
     definition:
       kind: ""
@@ -86,12 +101,25 @@ actions:
     permissions:
       - role: user
 custom_types:
-  enums: []
+  enums:
+    - name: ItemType
+      values:
+        - description: null
+          is_deprecated: null
+          value: BEER
+        - description: null
+          is_deprecated: null
+          value: WINE
+        - description: null
+          is_deprecated: null
+          value: SPIRIT
   input_objects:
     - name: item_defaults_input
     - name: item_defaults_hint
+    - name: item_image_upload_input
   objects:
     - name: wine_defaults_result
     - name: beer_defaults_result
     - name: spirit_defaults_result
+    - name: item_image_upload_result
   scalars: []

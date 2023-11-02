@@ -86,10 +86,9 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
         {state.value === "form" && (
           <Grid xs={12} justifyContent="center">
             <SpiritForm
-              cellarId={cellarId}
               itemOnboardingId={state.context.itemOnboardingId}
               defaultValues={state.context.defaults as SpiritFormDefaultValues}
-              onCreated={() => send({ type: "CREATED" })}
+              onCreated={(itemId: string) => send({ type: "CREATED", itemId })}
             />
           </Grid>
         )}
