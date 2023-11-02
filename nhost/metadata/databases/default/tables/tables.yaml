@@ -19,6 +19,7 @@
 - "!include public_country.yaml"
 - "!include public_image_analysis.yaml"
 - "!include public_image_analysis_text_blocks.yaml"
+- "!include public_item_image.yaml"
 - "!include public_item_onboardings.yaml"
 - "!include public_spirit_type.yaml"
 - "!include public_spirits.yaml"

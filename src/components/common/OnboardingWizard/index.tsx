@@ -4,7 +4,9 @@ import { isNotNil } from "ramda";
 import { useClient } from "urql";
 import { Barcode } from "@/constants";
 import { Analyzing } from "../Analyzing";
+import { Searching } from "../Searching";
 import { BarcodeStep } from "./BarcodeStep";
+import { DisplayPictureStep } from "./DisplayPictureStep";
 import { ExistingItems } from "./ExistingItems";
 import { PictureStep } from "./PictureStep";
 import { SearchingStep } from "./SearchingStep";
@@ -14,6 +16,7 @@ export type OnboardingResult = {
   barcode?: Barcode;
   frontLabelDataUrl?: string;
   backLabelDataUrl?: string;
+  displayImageDataUrl?: string;
   existingItemId?: string;
 };
 
@@ -32,6 +35,7 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
             barcode,
             backLabelDataUrl,
             frontLabelDataUrl,
+            displayImageDataUrl,
             existingItemId,
           },
         }) =>
@@ -39,6 +43,7 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
             barcode,
             frontLabelDataUrl,
             backLabelDataUrl,
+            displayImageDataUrl,
             existingItemId,
           }),
       },
@@ -75,11 +80,17 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
           onBack={() => send({ type: "BACK" })}
         />
       )}
-
       {state.value === "back" && (
         <PictureStep
           header="Lets take a picture of the back label"
           picture={state.context.backLabelDataUrl}
+          onCapture={(image) => send({ type: "CAPTURED", image })}
+          onSkip={() => send({ type: "SKIP" })}
+          onBack={() => send({ type: "BACK" })}
+        />
+      )}
+      {state.value === "display" && (
+        <DisplayPictureStep
           onCapture={(image) => send({ type: "CAPTURED", image })}
           onSkip={() => send({ type: "SKIP" })}
           onBack={() => send({ type: "BACK" })}

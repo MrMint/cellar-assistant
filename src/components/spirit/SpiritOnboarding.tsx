@@ -8,6 +8,7 @@ import { Analyzing } from "../common/Analyzing";
 import { OnboardingWizard, OnboardingResult } from "../common/OnboardingWizard";
 import { FinalPrompt } from "../common/OnboardingWizard/FinalPrompt";
 import { OnboardingMachine } from "../common/OnboardingWizard/machines";
+import { Searching } from "../common/Searching";
 import { SpiritForm, SpiritFormDefaultValues } from "./SpiritForm";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
@@ -45,6 +46,7 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
       barcode,
       frontLabelDataUrl,
       backLabelDataUrl,
+      displayImageDataUrl,
     }: OnboardingResult) => {
       send({
         type: "COMPLETE",
@@ -52,6 +54,7 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
         frontLabel: frontLabelDataUrl,
         backLabel: backLabelDataUrl,
         existingItemId,
+        displayImageDataUrl,
       });
     },
     [send],
@@ -68,9 +71,13 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
             </Box>
           </Grid>
         )}
-        {(state.value === "upload" ||
-          state.value === "analyze" ||
+        {(state.value === "addItemToCellar" ||
           state.value === "addExisting") && (
+          <Grid xs={12} sm={6}>
+            <Searching />
+          </Grid>
+        )}
+        {(state.value === "analyze" || state.value === "upload") && (
           <Grid xs={12} sm={6}>
             <Analyzing />
           </Grid>
@@ -86,10 +93,9 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
         {state.value === "form" && (
           <Grid xs={12} justifyContent="center">
             <SpiritForm
-              cellarId={cellarId}
               itemOnboardingId={state.context.itemOnboardingId}
               defaultValues={state.context.defaults as SpiritFormDefaultValues}
-              onCreated={() => send({ type: "CREATED" })}
+              onCreated={(itemId: string) => send({ type: "CREATED", itemId })}
             />
           </Grid>
         )}

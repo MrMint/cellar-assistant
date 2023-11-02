@@ -35,6 +35,7 @@ export const OnboardingMachine = createMachine(
         backLabel?: string;
         frontLabelFileId?: string;
         backLabelFileId?: string;
+        displayImageDataUrl?: string;
         itemOnboardingId: string;
         defaults?: DefaultValues;
         existingItemId?: string;
@@ -48,8 +49,9 @@ export const OnboardingMachine = createMachine(
             frontLabel?: string;
             backLabel?: string;
             existingItemId?: string;
+            displayImageDataUrl?: string;
           }
-        | { type: "CREATED" }
+        | { type: "CREATED"; itemId: string }
         | { type: "ADD_ANOTHER" }
         | { type: "DONE" };
       actors:
@@ -89,6 +91,7 @@ export const OnboardingMachine = createMachine(
                 barcode: ({ event }) => event.barcode,
                 frontLabel: ({ event }) => event.frontLabel,
                 backLabel: ({ event }) => event.backLabel,
+                displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
                 defaults: undefined,
               }),
               target: "upload",
@@ -97,8 +100,9 @@ export const OnboardingMachine = createMachine(
               guard: ({ event }) => isNotNil(event.existingItemId),
               actions: assign({
                 existingItemId: ({ event }) => event.existingItemId,
+                displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
               }),
-              target: "addExisting",
+              target: "addItemToCellar",
             },
           ],
         },
@@ -142,15 +146,30 @@ export const OnboardingMachine = createMachine(
         },
       },
       form: {
-        on: { CREATED: "finalPrompt" },
+        on: {
+          CREATED: {
+            actions: assign({
+              existingItemId: ({ event }) => event.itemId,
+            }),
+            target: "addItemToCellar",
+          },
+        },
       },
-      addExisting: {
+      addItemToCellar: {
         invoke: {
           src: "insertCellarItem",
-          input: ({ context: { existingItemId, cellarId, urqlClient } }) => ({
+          input: ({
+            context: {
+              existingItemId,
+              cellarId,
+              urqlClient,
+              displayImageDataUrl,
+            },
+          }) => ({
             itemId: existingItemId ?? "",
             cellarId,
             urqlClient,
+            displayImage: displayImageDataUrl,
           }),
           onDone: [
             {
@@ -197,6 +216,7 @@ export const pictureOnboardingMachine = createMachine(
         barcode?: Barcode;
         frontLabelDataUrl?: string;
         backLabelDataUrl?: string;
+        displayImageDataUrl?: string;
         existingItems?: BarcodeSearchResult[];
         existingItemId?: string;
         urqlClient: Client;
@@ -255,7 +275,7 @@ export const pictureOnboardingMachine = createMachine(
             actions: assign({
               existingItemId: ({ event }) => event.existingItemId,
             }),
-            target: "done",
+            target: "display",
           },
           SKIP: "back",
         },
@@ -284,9 +304,21 @@ export const pictureOnboardingMachine = createMachine(
             actions: assign({
               frontLabelDataUrl: ({ event }) => event.image,
             }),
-            target: "done",
+            target: "display",
           },
           BACK: "back",
+          SKIP: "display",
+        },
+      },
+      display: {
+        on: {
+          CAPTURED: {
+            actions: assign({
+              displayImageDataUrl: ({ event }) => event.image,
+            }),
+            target: "done",
+          },
+          BACK: "front",
           SKIP: "done",
         },
       },
