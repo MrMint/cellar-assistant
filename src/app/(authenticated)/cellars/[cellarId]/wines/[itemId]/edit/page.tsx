@@ -49,7 +49,6 @@ const EditWine = ({
       {wine !== undefined && (
         <WineForm
           id={itemId}
-          cellarId={cellarId}
           onCreated={() => {}}
           // returnUrl={`/cellars/${cellarId}/wines/${itemId}`}
           defaultValues={{

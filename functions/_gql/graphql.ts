@@ -51,6 +51,12 @@ export type Int_Comparison_Exp = {
   _nin?: InputMaybe<Array<Scalars['Int']['input']>>;
 };
 
+export enum ItemType {
+  Beer = 'BEER',
+  Spirit = 'SPIRIT',
+  Wine = 'WINE'
+}
+
 /** Boolean expression to compare columns of type "String". All fields are combined with logical 'AND'. */
 export type String_Comparison_Exp = {
   _eq?: InputMaybe<Scalars['String']['input']>;
@@ -2517,11 +2523,35 @@ export type Beers = {
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['uuid']['output'];
   international_bitterness_unit?: Maybe<Scalars['Int']['output']>;
+  /** An array relationship */
+  item_images: Array<Item_Image>;
+  /** An aggregate relationship */
+  item_images_aggregate: Item_Image_Aggregate;
   item_onboarding_id: Scalars['uuid']['output'];
   name: Scalars['String']['output'];
   style?: Maybe<Beer_Style_Enum>;
   updated_at: Scalars['timestamptz']['output'];
   vintage?: Maybe<Scalars['date']['output']>;
+};
+
+
+/** columns and relationships of "beers" */
+export type BeersItem_ImagesArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+/** columns and relationships of "beers" */
+export type BeersItem_Images_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
 };
 
 /** aggregated selection of "beers" */
@@ -2615,6 +2645,8 @@ export type Beers_Bool_Exp = {
   description?: InputMaybe<String_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
   international_bitterness_unit?: InputMaybe<Int_Comparison_Exp>;
+  item_images?: InputMaybe<Item_Image_Bool_Exp>;
+  item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Bool_Exp>;
   item_onboarding_id?: InputMaybe<Uuid_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
   style?: InputMaybe<Beer_Style_Enum_Comparison_Exp>;
@@ -2646,6 +2678,7 @@ export type Beers_Insert_Input = {
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   international_bitterness_unit?: InputMaybe<Scalars['Int']['input']>;
+  item_images?: InputMaybe<Item_Image_Arr_Rel_Insert_Input>;
   item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   style?: InputMaybe<Beer_Style_Enum>;
@@ -2750,6 +2783,7 @@ export type Beers_Order_By = {
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   international_bitterness_unit?: InputMaybe<Order_By>;
+  item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Order_By>;
   item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
   style?: InputMaybe<Order_By>;
@@ -3322,6 +3356,9 @@ export type Cellar_Beer = {
   created_at: Scalars['timestamptz']['output'];
   /** An object relationship */
   created_by: Users;
+  /** An object relationship */
+  display_image?: Maybe<Item_Image>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id: Scalars['uuid']['output'];
   updated_at: Scalars['timestamptz']['output'];
   user_id: Scalars['uuid']['output'];
@@ -3360,6 +3397,8 @@ export type Cellar_Beer_Bool_Exp = {
   cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   created_by?: InputMaybe<Users_Bool_Exp>;
+  display_image?: InputMaybe<Item_Image_Bool_Exp>;
+  display_image_id?: InputMaybe<Uuid_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   user_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -3379,6 +3418,8 @@ export type Cellar_Beer_Insert_Input = {
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  display_image?: InputMaybe<Item_Image_Obj_Rel_Insert_Input>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -3390,6 +3431,7 @@ export type Cellar_Beer_Max_Fields = {
   beer_id?: Maybe<Scalars['uuid']['output']>;
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
@@ -3401,6 +3443,7 @@ export type Cellar_Beer_Min_Fields = {
   beer_id?: Maybe<Scalars['uuid']['output']>;
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
@@ -3430,6 +3473,8 @@ export type Cellar_Beer_Order_By = {
   cellar_id?: InputMaybe<Order_By>;
   created_at?: InputMaybe<Order_By>;
   created_by?: InputMaybe<Users_Order_By>;
+  display_image?: InputMaybe<Item_Image_Order_By>;
+  display_image_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   user_id?: InputMaybe<Order_By>;
@@ -3449,6 +3494,8 @@ export enum Cellar_Beer_Select_Column {
   /** column name */
   CreatedAt = 'created_at',
   /** column name */
+  DisplayImageId = 'display_image_id',
+  /** column name */
   Id = 'id',
   /** column name */
   UpdatedAt = 'updated_at',
@@ -3461,6 +3508,7 @@ export type Cellar_Beer_Set_Input = {
   beer_id?: InputMaybe<Scalars['uuid']['input']>;
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -3479,6 +3527,7 @@ export type Cellar_Beer_Stream_Cursor_Value_Input = {
   beer_id?: InputMaybe<Scalars['uuid']['input']>;
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -3492,6 +3541,8 @@ export enum Cellar_Beer_Update_Column {
   CellarId = 'cellar_id',
   /** column name */
   CreatedAt = 'created_at',
+  /** column name */
+  DisplayImageId = 'display_image_id',
   /** column name */
   Id = 'id',
   /** column name */
@@ -3516,6 +3567,9 @@ export type Cellar_Spirit = {
   /** An object relationship */
   createdBy: Users;
   created_at: Scalars['timestamptz']['output'];
+  /** An object relationship */
+  display_image?: Maybe<Item_Image>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id: Scalars['uuid']['output'];
   /** An object relationship */
   spirit: Spirits;
@@ -3555,6 +3609,8 @@ export type Cellar_Spirit_Bool_Exp = {
   cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
   createdBy?: InputMaybe<Users_Bool_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  display_image?: InputMaybe<Item_Image_Bool_Exp>;
+  display_image_id?: InputMaybe<Uuid_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
   spirit?: InputMaybe<Spirits_Bool_Exp>;
   spirit_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -3574,6 +3630,8 @@ export type Cellar_Spirit_Insert_Input = {
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_image?: InputMaybe<Item_Image_Obj_Rel_Insert_Input>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   spirit?: InputMaybe<Spirits_Obj_Rel_Insert_Input>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -3586,6 +3644,7 @@ export type Cellar_Spirit_Max_Fields = {
   __typename: 'cellar_spirit_max_fields';
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
@@ -3597,6 +3656,7 @@ export type Cellar_Spirit_Min_Fields = {
   __typename: 'cellar_spirit_min_fields';
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
@@ -3625,6 +3685,8 @@ export type Cellar_Spirit_Order_By = {
   cellar_id?: InputMaybe<Order_By>;
   createdBy?: InputMaybe<Users_Order_By>;
   created_at?: InputMaybe<Order_By>;
+  display_image?: InputMaybe<Item_Image_Order_By>;
+  display_image_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   spirit?: InputMaybe<Spirits_Order_By>;
   spirit_id?: InputMaybe<Order_By>;
@@ -3644,6 +3706,8 @@ export enum Cellar_Spirit_Select_Column {
   /** column name */
   CreatedAt = 'created_at',
   /** column name */
+  DisplayImageId = 'display_image_id',
+  /** column name */
   Id = 'id',
   /** column name */
   SpiritId = 'spirit_id',
@@ -3657,6 +3721,7 @@ export enum Cellar_Spirit_Select_Column {
 export type Cellar_Spirit_Set_Input = {
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -3675,6 +3740,7 @@ export type Cellar_Spirit_Stream_Cursor_Input = {
 export type Cellar_Spirit_Stream_Cursor_Value_Input = {
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -3687,6 +3753,8 @@ export enum Cellar_Spirit_Update_Column {
   CellarId = 'cellar_id',
   /** column name */
   CreatedAt = 'created_at',
+  /** column name */
+  DisplayImageId = 'display_image_id',
   /** column name */
   Id = 'id',
   /** column name */
@@ -4008,6 +4076,9 @@ export type Cellar_Wine = {
   /** An object relationship */
   createdBy: Users;
   created_at: Scalars['timestamptz']['output'];
+  /** An object relationship */
+  display_image?: Maybe<Item_Image>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id: Scalars['uuid']['output'];
   updated_at: Scalars['timestamptz']['output'];
   user_id: Scalars['uuid']['output'];
@@ -4047,6 +4118,8 @@ export type Cellar_Wine_Bool_Exp = {
   cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
   createdBy?: InputMaybe<Users_Bool_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  display_image?: InputMaybe<Item_Image_Bool_Exp>;
+  display_image_id?: InputMaybe<Uuid_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   user_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -4066,6 +4139,8 @@ export type Cellar_Wine_Insert_Input = {
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   createdBy?: InputMaybe<Users_Obj_Rel_Insert_Input>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_image?: InputMaybe<Item_Image_Obj_Rel_Insert_Input>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -4078,6 +4153,7 @@ export type Cellar_Wine_Max_Fields = {
   __typename: 'cellar_wine_max_fields';
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
@@ -4089,6 +4165,7 @@ export type Cellar_Wine_Min_Fields = {
   __typename: 'cellar_wine_min_fields';
   cellar_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
+  display_image_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
@@ -4117,6 +4194,8 @@ export type Cellar_Wine_Order_By = {
   cellar_id?: InputMaybe<Order_By>;
   createdBy?: InputMaybe<Users_Order_By>;
   created_at?: InputMaybe<Order_By>;
+  display_image?: InputMaybe<Item_Image_Order_By>;
+  display_image_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   user_id?: InputMaybe<Order_By>;
@@ -4136,6 +4215,8 @@ export enum Cellar_Wine_Select_Column {
   /** column name */
   CreatedAt = 'created_at',
   /** column name */
+  DisplayImageId = 'display_image_id',
+  /** column name */
   Id = 'id',
   /** column name */
   UpdatedAt = 'updated_at',
@@ -4149,6 +4230,7 @@ export enum Cellar_Wine_Select_Column {
 export type Cellar_Wine_Set_Input = {
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -4167,6 +4249,7 @@ export type Cellar_Wine_Stream_Cursor_Input = {
 export type Cellar_Wine_Stream_Cursor_Value_Input = {
   cellar_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  display_image_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -4179,6 +4262,8 @@ export enum Cellar_Wine_Update_Column {
   CellarId = 'cellar_id',
   /** column name */
   CreatedAt = 'created_at',
+  /** column name */
+  DisplayImageId = 'display_image_id',
   /** column name */
   Id = 'id',
   /** column name */
@@ -5968,6 +6053,289 @@ export type Item_Defaults_Hint = {
   frontLabelFileId?: InputMaybe<Scalars['uuid']['input']>;
 };
 
+/** columns and relationships of "item_image" */
+export type Item_Image = {
+  __typename: 'item_image';
+  beer_id?: Maybe<Scalars['uuid']['output']>;
+  file_id: Scalars['uuid']['output'];
+  id: Scalars['uuid']['output'];
+  is_public: Scalars['Boolean']['output'];
+  spirit_id?: Maybe<Scalars['uuid']['output']>;
+  user_id: Scalars['uuid']['output'];
+  wine_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** aggregated selection of "item_image" */
+export type Item_Image_Aggregate = {
+  __typename: 'item_image_aggregate';
+  aggregate?: Maybe<Item_Image_Aggregate_Fields>;
+  nodes: Array<Item_Image>;
+};
+
+export type Item_Image_Aggregate_Bool_Exp = {
+  bool_and?: InputMaybe<Item_Image_Aggregate_Bool_Exp_Bool_And>;
+  bool_or?: InputMaybe<Item_Image_Aggregate_Bool_Exp_Bool_Or>;
+  count?: InputMaybe<Item_Image_Aggregate_Bool_Exp_Count>;
+};
+
+export type Item_Image_Aggregate_Bool_Exp_Bool_And = {
+  arguments: Item_Image_Select_Column_Item_Image_Aggregate_Bool_Exp_Bool_And_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Item_Image_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Item_Image_Aggregate_Bool_Exp_Bool_Or = {
+  arguments: Item_Image_Select_Column_Item_Image_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Item_Image_Bool_Exp>;
+  predicate: Boolean_Comparison_Exp;
+};
+
+export type Item_Image_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Item_Image_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Item_Image_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "item_image" */
+export type Item_Image_Aggregate_Fields = {
+  __typename: 'item_image_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Item_Image_Max_Fields>;
+  min?: Maybe<Item_Image_Min_Fields>;
+};
+
+
+/** aggregate fields of "item_image" */
+export type Item_Image_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Item_Image_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "item_image" */
+export type Item_Image_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Item_Image_Max_Order_By>;
+  min?: InputMaybe<Item_Image_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "item_image" */
+export type Item_Image_Arr_Rel_Insert_Input = {
+  data: Array<Item_Image_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Item_Image_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "item_image". All fields are combined with a logical 'AND'. */
+export type Item_Image_Bool_Exp = {
+  _and?: InputMaybe<Array<Item_Image_Bool_Exp>>;
+  _not?: InputMaybe<Item_Image_Bool_Exp>;
+  _or?: InputMaybe<Array<Item_Image_Bool_Exp>>;
+  beer_id?: InputMaybe<Uuid_Comparison_Exp>;
+  file_id?: InputMaybe<Uuid_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  is_public?: InputMaybe<Boolean_Comparison_Exp>;
+  spirit_id?: InputMaybe<Uuid_Comparison_Exp>;
+  user_id?: InputMaybe<Uuid_Comparison_Exp>;
+  wine_id?: InputMaybe<Uuid_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "item_image" */
+export enum Item_Image_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  ItemImagePkey = 'item_image_pkey'
+}
+
+/** input type for inserting data into table "item_image" */
+export type Item_Image_Insert_Input = {
+  beer_id?: InputMaybe<Scalars['uuid']['input']>;
+  file_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_public?: InputMaybe<Scalars['Boolean']['input']>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** aggregate max on columns */
+export type Item_Image_Max_Fields = {
+  __typename: 'item_image_max_fields';
+  beer_id?: Maybe<Scalars['uuid']['output']>;
+  file_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  spirit_id?: Maybe<Scalars['uuid']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+  wine_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** order by max() on columns of table "item_image" */
+export type Item_Image_Max_Order_By = {
+  beer_id?: InputMaybe<Order_By>;
+  file_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  spirit_id?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+  wine_id?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Item_Image_Min_Fields = {
+  __typename: 'item_image_min_fields';
+  beer_id?: Maybe<Scalars['uuid']['output']>;
+  file_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  spirit_id?: Maybe<Scalars['uuid']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+  wine_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** order by min() on columns of table "item_image" */
+export type Item_Image_Min_Order_By = {
+  beer_id?: InputMaybe<Order_By>;
+  file_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  spirit_id?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+  wine_id?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "item_image" */
+export type Item_Image_Mutation_Response = {
+  __typename: 'item_image_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Item_Image>;
+};
+
+/** input type for inserting object relation for remote table "item_image" */
+export type Item_Image_Obj_Rel_Insert_Input = {
+  data: Item_Image_Insert_Input;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Item_Image_On_Conflict>;
+};
+
+/** on_conflict condition type for table "item_image" */
+export type Item_Image_On_Conflict = {
+  constraint: Item_Image_Constraint;
+  update_columns?: Array<Item_Image_Update_Column>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "item_image". */
+export type Item_Image_Order_By = {
+  beer_id?: InputMaybe<Order_By>;
+  file_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  is_public?: InputMaybe<Order_By>;
+  spirit_id?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+  wine_id?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: item_image */
+export type Item_Image_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "item_image" */
+export enum Item_Image_Select_Column {
+  /** column name */
+  BeerId = 'beer_id',
+  /** column name */
+  FileId = 'file_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsPublic = 'is_public',
+  /** column name */
+  SpiritId = 'spirit_id',
+  /** column name */
+  UserId = 'user_id',
+  /** column name */
+  WineId = 'wine_id'
+}
+
+/** select "item_image_aggregate_bool_exp_bool_and_arguments_columns" columns of table "item_image" */
+export enum Item_Image_Select_Column_Item_Image_Aggregate_Bool_Exp_Bool_And_Arguments_Columns {
+  /** column name */
+  IsPublic = 'is_public'
+}
+
+/** select "item_image_aggregate_bool_exp_bool_or_arguments_columns" columns of table "item_image" */
+export enum Item_Image_Select_Column_Item_Image_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns {
+  /** column name */
+  IsPublic = 'is_public'
+}
+
+/** input type for updating data in table "item_image" */
+export type Item_Image_Set_Input = {
+  beer_id?: InputMaybe<Scalars['uuid']['input']>;
+  file_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_public?: InputMaybe<Scalars['Boolean']['input']>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** Streaming cursor of the table "item_image" */
+export type Item_Image_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Item_Image_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Item_Image_Stream_Cursor_Value_Input = {
+  beer_id?: InputMaybe<Scalars['uuid']['input']>;
+  file_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  is_public?: InputMaybe<Scalars['Boolean']['input']>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** update columns of table "item_image" */
+export enum Item_Image_Update_Column {
+  /** column name */
+  BeerId = 'beer_id',
+  /** column name */
+  FileId = 'file_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  IsPublic = 'is_public',
+  /** column name */
+  SpiritId = 'spirit_id',
+  /** column name */
+  UserId = 'user_id',
+  /** column name */
+  WineId = 'wine_id'
+}
+
+export type Item_Image_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Item_Image_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Item_Image_Bool_Exp;
+};
+
+export type Item_Image_Upload_Input = {
+  image: Scalars['String']['input'];
+  item_id: Scalars['uuid']['input'];
+  item_type: ItemType;
+};
+
+export type Item_Image_Upload_Result = {
+  __typename: 'item_image_upload_result';
+  id: Scalars['uuid']['output'];
+};
+
 /** columns and relationships of "item_onboardings" */
 export type Item_Onboardings = {
   __typename: 'item_onboardings';
@@ -6388,6 +6756,10 @@ export type Mutation_Root = {
   delete_image_analysis_text_blocks?: Maybe<Image_Analysis_Text_Blocks_Mutation_Response>;
   /** delete single row from the table: "image_analysis_text_blocks" */
   delete_image_analysis_text_blocks_by_pk?: Maybe<Image_Analysis_Text_Blocks>;
+  /** delete data from the table: "item_image" */
+  delete_item_image?: Maybe<Item_Image_Mutation_Response>;
+  /** delete single row from the table: "item_image" */
+  delete_item_image_by_pk?: Maybe<Item_Image>;
   /** delete data from the table: "item_onboardings" */
   delete_item_onboardings?: Maybe<Item_Onboardings_Mutation_Response>;
   /** delete single row from the table: "item_onboardings" */
@@ -6508,6 +6880,10 @@ export type Mutation_Root = {
   insert_image_analysis_text_blocks?: Maybe<Image_Analysis_Text_Blocks_Mutation_Response>;
   /** insert a single row into the table: "image_analysis_text_blocks" */
   insert_image_analysis_text_blocks_one?: Maybe<Image_Analysis_Text_Blocks>;
+  /** insert data into the table: "item_image" */
+  insert_item_image?: Maybe<Item_Image_Mutation_Response>;
+  /** insert a single row into the table: "item_image" */
+  insert_item_image_one?: Maybe<Item_Image>;
   /** insert data into the table: "item_onboardings" */
   insert_item_onboardings?: Maybe<Item_Onboardings_Mutation_Response>;
   /** insert a single row into the table: "item_onboardings" */
@@ -6532,6 +6908,7 @@ export type Mutation_Root = {
   insert_wines?: Maybe<Wines_Mutation_Response>;
   /** insert a single row into the table: "wines" */
   insert_wines_one?: Maybe<Wines>;
+  item_image_upload?: Maybe<Item_Image_Upload_Result>;
   /** update single row of the table: "auth.providers" */
   updateAuthProvider?: Maybe<AuthProviders>;
   /** update single row of the table: "auth.provider_requests" */
@@ -6672,6 +7049,12 @@ export type Mutation_Root = {
   update_image_analysis_text_blocks_by_pk?: Maybe<Image_Analysis_Text_Blocks>;
   /** update multiples rows of table: "image_analysis_text_blocks" */
   update_image_analysis_text_blocks_many?: Maybe<Array<Maybe<Image_Analysis_Text_Blocks_Mutation_Response>>>;
+  /** update data of the table: "item_image" */
+  update_item_image?: Maybe<Item_Image_Mutation_Response>;
+  /** update single row of the table: "item_image" */
+  update_item_image_by_pk?: Maybe<Item_Image>;
+  /** update multiples rows of table: "item_image" */
+  update_item_image_many?: Maybe<Array<Maybe<Item_Image_Mutation_Response>>>;
   /** update data of the table: "item_onboardings" */
   update_item_onboardings?: Maybe<Item_Onboardings_Mutation_Response>;
   /** update single row of the table: "item_onboardings" */
@@ -7000,6 +7383,18 @@ export type Mutation_RootDelete_Image_Analysis_Text_BlocksArgs = {
 /** mutation root */
 export type Mutation_RootDelete_Image_Analysis_Text_Blocks_By_PkArgs = {
   id: Scalars['Int']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Item_ImageArgs = {
+  where: Item_Image_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Item_Image_By_PkArgs = {
+  id: Scalars['uuid']['input'];
 };
 
 
@@ -7412,6 +7807,20 @@ export type Mutation_RootInsert_Image_Analysis_Text_Blocks_OneArgs = {
 
 
 /** mutation root */
+export type Mutation_RootInsert_Item_ImageArgs = {
+  objects: Array<Item_Image_Insert_Input>;
+  on_conflict?: InputMaybe<Item_Image_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Item_Image_OneArgs = {
+  object: Item_Image_Insert_Input;
+  on_conflict?: InputMaybe<Item_Image_On_Conflict>;
+};
+
+
+/** mutation root */
 export type Mutation_RootInsert_Item_OnboardingsArgs = {
   objects: Array<Item_Onboardings_Insert_Input>;
   on_conflict?: InputMaybe<Item_Onboardings_On_Conflict>;
@@ -7492,6 +7901,12 @@ export type Mutation_RootInsert_WinesArgs = {
 export type Mutation_RootInsert_Wines_OneArgs = {
   object: Wines_Insert_Input;
   on_conflict?: InputMaybe<Wines_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootItem_Image_UploadArgs = {
+  input: Item_Image_Upload_Input;
 };
 
 
@@ -8036,6 +8451,26 @@ export type Mutation_RootUpdate_Image_Analysis_Text_Blocks_ManyArgs = {
 
 
 /** mutation root */
+export type Mutation_RootUpdate_Item_ImageArgs = {
+  _set?: InputMaybe<Item_Image_Set_Input>;
+  where: Item_Image_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Item_Image_By_PkArgs = {
+  _set?: InputMaybe<Item_Image_Set_Input>;
+  pk_columns: Item_Image_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Item_Image_ManyArgs = {
+  updates: Array<Item_Image_Updates>;
+};
+
+
+/** mutation root */
 export type Mutation_RootUpdate_Item_OnboardingsArgs = {
   _append?: InputMaybe<Item_Onboardings_Append_Input>;
   _delete_at_path?: InputMaybe<Item_Onboardings_Delete_At_Path_Input>;
@@ -8358,6 +8793,12 @@ export type Query_Root = {
   image_analysis_text_blocks_aggregate: Image_Analysis_Text_Blocks_Aggregate;
   /** fetch data from the table: "image_analysis_text_blocks" using primary key columns */
   image_analysis_text_blocks_by_pk?: Maybe<Image_Analysis_Text_Blocks>;
+  /** fetch data from the table: "item_image" */
+  item_image: Array<Item_Image>;
+  /** fetch aggregated fields from the table: "item_image" */
+  item_image_aggregate: Item_Image_Aggregate;
+  /** fetch data from the table: "item_image" using primary key columns */
+  item_image_by_pk?: Maybe<Item_Image>;
   /** fetch data from the table: "item_onboardings" */
   item_onboardings: Array<Item_Onboardings>;
   /** fetch aggregated fields from the table: "item_onboardings" */
@@ -8923,6 +9364,29 @@ export type Query_RootImage_Analysis_Text_Blocks_By_PkArgs = {
 };
 
 
+export type Query_RootItem_ImageArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+export type Query_RootItem_Image_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+export type Query_RootItem_Image_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
 export type Query_RootItem_OnboardingsArgs = {
   distinct_on?: InputMaybe<Array<Item_Onboardings_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -9305,12 +9769,36 @@ export type Spirits = {
   created_by_id: Scalars['uuid']['output'];
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['uuid']['output'];
+  /** An array relationship */
+  item_images: Array<Item_Image>;
+  /** An aggregate relationship */
+  item_images_aggregate: Item_Image_Aggregate;
   item_onboarding_id: Scalars['uuid']['output'];
   name: Scalars['String']['output'];
   style?: Maybe<Scalars['String']['output']>;
   type: Spirit_Type_Enum;
   updated_at: Scalars['timestamptz']['output'];
   vintage?: Maybe<Scalars['date']['output']>;
+};
+
+
+/** columns and relationships of "spirits" */
+export type SpiritsItem_ImagesArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+/** columns and relationships of "spirits" */
+export type SpiritsItem_Images_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
 };
 
 /** aggregated selection of "spirits" */
@@ -9401,6 +9889,8 @@ export type Spirits_Bool_Exp = {
   created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
   description?: InputMaybe<String_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
+  item_images?: InputMaybe<Item_Image_Bool_Exp>;
+  item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Bool_Exp>;
   item_onboarding_id?: InputMaybe<Uuid_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
   style?: InputMaybe<String_Comparison_Exp>;
@@ -9431,6 +9921,7 @@ export type Spirits_Insert_Input = {
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  item_images?: InputMaybe<Item_Image_Arr_Rel_Insert_Input>;
   item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   style?: InputMaybe<Scalars['String']['input']>;
@@ -9535,6 +10026,7 @@ export type Spirits_Order_By = {
   created_by_id?: InputMaybe<Order_By>;
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Order_By>;
   item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
   style?: InputMaybe<Order_By>;
@@ -9914,6 +10406,14 @@ export type Subscription_Root = {
   image_analysis_text_blocks_by_pk?: Maybe<Image_Analysis_Text_Blocks>;
   /** fetch data from the table in a streaming manner: "image_analysis_text_blocks" */
   image_analysis_text_blocks_stream: Array<Image_Analysis_Text_Blocks>;
+  /** fetch data from the table: "item_image" */
+  item_image: Array<Item_Image>;
+  /** fetch aggregated fields from the table: "item_image" */
+  item_image_aggregate: Item_Image_Aggregate;
+  /** fetch data from the table: "item_image" using primary key columns */
+  item_image_by_pk?: Maybe<Item_Image>;
+  /** fetch data from the table in a streaming manner: "item_image" */
+  item_image_stream: Array<Item_Image>;
   /** fetch data from the table: "item_onboardings" */
   item_onboardings: Array<Item_Onboardings>;
   /** fetch aggregated fields from the table: "item_onboardings" */
@@ -10638,6 +11138,36 @@ export type Subscription_RootImage_Analysis_Text_Blocks_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<Image_Analysis_Text_Blocks_Stream_Cursor_Input>>;
   where?: InputMaybe<Image_Analysis_Text_Blocks_Bool_Exp>;
+};
+
+
+export type Subscription_RootItem_ImageArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+export type Subscription_RootItem_Image_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+export type Subscription_RootItem_Image_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootItem_Image_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Item_Image_Stream_Cursor_Input>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
 };
 
 
@@ -12255,6 +12785,10 @@ export type Wines = {
   created_by_id: Scalars['uuid']['output'];
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['uuid']['output'];
+  /** An array relationship */
+  item_images: Array<Item_Image>;
+  /** An aggregate relationship */
+  item_images_aggregate: Item_Image_Aggregate;
   item_onboarding_id: Scalars['uuid']['output'];
   name: Scalars['String']['output'];
   region?: Maybe<Scalars['String']['output']>;
@@ -12265,6 +12799,26 @@ export type Wines = {
   vineyard_designation?: Maybe<Scalars['String']['output']>;
   vintage: Scalars['date']['output'];
   winery_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+
+/** columns and relationships of "wines" */
+export type WinesItem_ImagesArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+/** columns and relationships of "wines" */
+export type WinesItem_Images_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Image_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Image_Order_By>>;
+  where?: InputMaybe<Item_Image_Bool_Exp>;
 };
 
 /** aggregated selection of "wines" */
@@ -12355,6 +12909,8 @@ export type Wines_Bool_Exp = {
   created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
   description?: InputMaybe<String_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
+  item_images?: InputMaybe<Item_Image_Bool_Exp>;
+  item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Bool_Exp>;
   item_onboarding_id?: InputMaybe<Uuid_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
   region?: InputMaybe<String_Comparison_Exp>;
@@ -12389,6 +12945,7 @@ export type Wines_Insert_Input = {
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  item_images?: InputMaybe<Item_Image_Arr_Rel_Insert_Input>;
   item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   region?: InputMaybe<Scalars['String']['input']>;
@@ -12509,6 +13066,7 @@ export type Wines_Order_By = {
   created_by_id?: InputMaybe<Order_By>;
   description?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Order_By>;
   item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
   region?: InputMaybe<Order_By>;
@@ -12766,8 +13324,16 @@ export type AddTextExtractionResultsMutationVariables = Exact<{
 
 export type AddTextExtractionResultsMutation = { __typename: 'mutation_root', insert_image_analysis_one?: { __typename: 'image_analysis', id: number } | null };
 
+export type AddItemImageMutationVariables = Exact<{
+  item: Item_Image_Insert_Input;
+}>;
+
+
+export type AddItemImageMutation = { __typename: 'mutation_root', insert_item_image_one?: { __typename: 'item_image', id: string } | null };
+
 
 export const GetCredentialDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCredential"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"admin_credentials_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"credentials"}}]}}]}}]} as unknown as DocumentNode<GetCredentialQuery, GetCredentialQueryVariables>;
 export const AddItemOnboardingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddItemOnboarding"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"onboarding"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"item_onboardings_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_item_onboardings_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"onboarding"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddItemOnboardingMutation, AddItemOnboardingMutationVariables>;
 export const GetFileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetFile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"file"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"bucket"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"mimeType"}},{"kind":"Field","name":{"kind":"Name","value":"size"}}]}}]}}]} as unknown as DocumentNode<GetFileQuery, GetFileQueryVariables>;
 export const AddTextExtractionResultsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddTextExtractionResults"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"analysis"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"image_analysis_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_image_analysis_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"analysis"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddTextExtractionResultsMutation, AddTextExtractionResultsMutationVariables>;
+export const AddItemImageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddItemImage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"item"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"item_image_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_item_image_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"item"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddItemImageMutation, AddItemImageMutationVariables>;

@@ -14,7 +14,7 @@ import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useMutation } from "urql";
+import { CombinedError, useClient, useMutation } from "urql";
 import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
 import { graphql } from "@/gql";
 import {
@@ -24,7 +24,9 @@ import {
   Cellar_Wine_Insert_Input,
   Country_Enum,
   Wine_Style_Enum,
+  Wines_Insert_Input,
 } from "@/gql/graphql";
+import { addWineMutation } from "@/queries";
 import { formatVintage } from "@/utilities";
 
 type SharedFields = {
@@ -54,19 +56,10 @@ export type WineFormDefaultValues = {
 
 type WineFormProps = {
   id?: string;
-  cellarId: string;
   itemOnboardingId?: string;
   defaultValues?: WineFormDefaultValues;
   onCreated: (createdId: string) => void;
 };
-
-const addWineMutation = graphql(`
-  mutation addWine($wine: cellar_wine_insert_input!) {
-    insert_cellar_wine_one(object: $wine) {
-      id
-    }
-  }
-`);
 
 const updateWineMutation = graphql(`
   mutation updateWine($wineId: uuid!, $wine: wines_set_input!) {
@@ -78,38 +71,24 @@ const updateWineMutation = graphql(`
 
 function mapFormValuesToInsertInput(
   values: IWineFormInput,
-  cellar_id: string,
-  wine_id?: string,
   itemOnboardingId?: string,
-): Cellar_Wine_Insert_Input {
-  if (isNotNil(wine_id)) {
-    return {
-      cellar_id,
-      wine_id,
-    };
-  }
-
+): Wines_Insert_Input {
   const update = {
-    cellar_id,
-    wine: {
-      data: {
-        name: values.name,
-        alcohol_content_percentage: values.alcohol_content_percentage,
-        description: values.description,
-        region: values.region,
-        country: values.country,
-        special_designation: values.special_designation,
-        vineyard_designation: values.vineyard_designation,
-        variety: values.variety,
-        style: values.style,
-        vintage: format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
-        item_onboarding_id: itemOnboardingId,
-      },
-    },
-  } as Cellar_Wine_Insert_Input;
+    name: values.name,
+    alcohol_content_percentage: values.alcohol_content_percentage,
+    description: values.description,
+    region: values.region,
+    country: values.country,
+    special_designation: values.special_designation,
+    vineyard_designation: values.vineyard_designation,
+    variety: values.variety,
+    style: values.style,
+    vintage: format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
+    item_onboarding_id: itemOnboardingId,
+  } as Wines_Insert_Input;
 
-  if (isNotNil(update.wine) && isNotNil(values.barcode_code)) {
-    update.wine.data.barcode = {
+  if (isNotNil(update) && isNotNil(values.barcode_code)) {
+    update.barcode = {
       data: {
         code: values.barcode_code,
         type: values.barcode_type,
@@ -125,30 +104,19 @@ function mapFormValuesToInsertInput(
 
 export const WineForm = ({
   id,
-  cellarId,
   defaultValues,
   itemOnboardingId,
   onCreated,
 }: WineFormProps) => {
-  const router = useRouter();
-  const [
-    { fetching: fetchingAdd, error: errorAdd, operation: opAdd },
-    addWine,
-  ] = useMutation(addWineMutation);
-  const [
-    { fetching: featchingUpdate, error: errorUpdate, operation: opUpdate },
-    updateWine,
-  ] = useMutation(updateWineMutation);
-
-  const error = errorAdd || errorUpdate;
-  const fetching =
-    fetchingAdd ||
-    featchingUpdate ||
-    (error === undefined && (opAdd !== undefined || opUpdate !== undefined));
-
+  const client = useClient();
   const defaultVintage = formatVintage(defaultValues?.vintage);
 
-  const { control, handleSubmit, clearErrors } = useForm<IWineFormInput>({
+  const {
+    control,
+    handleSubmit,
+    setError,
+    formState: { isSubmitting, errors },
+  } = useForm<IWineFormInput>({
     defaultValues: {
       ...defaultValues,
       vintage:
@@ -159,20 +127,16 @@ export const WineForm = ({
   const onSubmit: SubmitHandler<IWineFormInput> = async (values) => {
     let errored: CombinedError | undefined;
     let createdId: string | undefined;
-    const update = mapFormValuesToInsertInput(
-      values,
-      cellarId,
-      id,
-      itemOnboardingId,
-    );
+    const update = mapFormValuesToInsertInput(values, itemOnboardingId);
+
     if (id == undefined) {
-      const result = await addWine({
+      const result = await client.mutation(addWineMutation, {
         wine: update,
       });
       errored = result.error;
-      createdId = result.data?.insert_cellar_wine_one?.id;
+      createdId = result.data?.insert_wines_one?.id;
     } else {
-      const result = await updateWine({
+      const result = await client.mutation(updateWineMutation, {
         wineId: id,
         wine: update,
       });
@@ -181,6 +145,11 @@ export const WineForm = ({
     }
     if (isNil(errored) && isNotNil(createdId)) {
       onCreated(createdId);
+    } else {
+      setError("root.serverError", {
+        type: "custom",
+        message: "Something went wrong please try again...",
+      });
     }
   };
   return (
@@ -199,7 +168,7 @@ export const WineForm = ({
                 control={control}
                 rules={{ required: true }}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Input disabled={isSubmitting} type="text" {...field} />
                 )}
               />
             </FormControl>
@@ -212,7 +181,7 @@ export const WineForm = ({
                 render={({ field }) => (
                   <Input
                     type="number"
-                    disabled={fetching}
+                    disabled={isSubmitting}
                     slotProps={{
                       input: {
                         min: "1900",
@@ -231,7 +200,7 @@ export const WineForm = ({
                 name="description"
                 control={control}
                 render={({ field }) => (
-                  <Textarea disabled={fetching} minRows={2} {...field} />
+                  <Textarea disabled={isSubmitting} minRows={2} {...field} />
                 )}
               />
             </FormControl>
@@ -309,7 +278,7 @@ export const WineForm = ({
                 name="region"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Input disabled={isSubmitting} type="text" {...field} />
                 )}
               />
             </FormControl>
@@ -319,7 +288,7 @@ export const WineForm = ({
                 name="alcohol_content_percentage"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Input disabled={isSubmitting} type="number" {...field} />
                 )}
               />
             </FormControl>
@@ -329,7 +298,7 @@ export const WineForm = ({
                 name="vineyard_designation"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Input disabled={isSubmitting} type="text" {...field} />
                 )}
               />
             </FormControl>
@@ -339,7 +308,7 @@ export const WineForm = ({
                 name="special_designation"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="text" {...field} />
+                  <Input disabled={isSubmitting} type="text" {...field} />
                 )}
               />
             </FormControl>
@@ -349,15 +318,15 @@ export const WineForm = ({
                 name="barcode_code"
                 control={control}
                 render={({ field }) => (
-                  <Input disabled={fetching} type="number" {...field} />
+                  <Input disabled={isSubmitting} type="number" {...field} />
                 )}
               />
             </FormControl>
           </Stack>
-          {error !== undefined && (
+          {errors.root !== undefined && (
             <Typography>Woah error encountered</Typography>
           )}
-          <Button loading={fetching} type="submit">
+          <Button loading={isSubmitting} type="submit">
             Add
           </Button>
         </Stack>

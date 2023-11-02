@@ -1,5 +1,3 @@
-import TopNavigationBar from "@/components/common/HeaderBar";
-import { ItemType } from "@/constants";
 import {
   Button,
   DialogActions,
@@ -10,13 +8,15 @@ import {
   ModalDialog,
   Stack,
 } from "@mui/joy";
-import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
-import Link from "../common/Link";
-import { graphql } from "@/gql";
-import { useMutation } from "urql";
-import { useEffect, useState } from "react";
-import { isNil, isNotNil } from "ramda";
 import { useRouter } from "next/navigation";
+import { isNil, isNotNil } from "ramda";
+import { useEffect, useState } from "react";
+import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
+import { useMutation } from "urql";
+import TopNavigationBar from "@/components/common/HeaderBar";
+import { ItemType } from "@/constants";
+import { graphql } from "@/gql";
+import Link from "../common/Link";
 
 type CellarItemHeaderProps = {
   itemId: string;
@@ -122,6 +122,7 @@ export const CellarItemHeader = ({
             component={Link}
             href={`${itemId}/edit`}
             startDecorator={<MdEdit />}
+            disabled
           >
             Edit item
           </Button>
