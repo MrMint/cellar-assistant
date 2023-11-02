@@ -8,6 +8,7 @@ import { Analyzing } from "../common/Analyzing";
 import { OnboardingWizard, OnboardingResult } from "../common/OnboardingWizard";
 import { FinalPrompt } from "../common/OnboardingWizard/FinalPrompt";
 import { OnboardingMachine } from "../common/OnboardingWizard/machines";
+import { Searching } from "../common/Searching";
 import { BeerForm, BeerFormDefaultValues } from "./BeerForm";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
@@ -70,9 +71,13 @@ export const BeerOnboarding = ({ cellarId }: BeerOnboardingProps) => {
             </Box>
           </Grid>
         )}
-        {(state.value === "upload" ||
-          state.value === "analyze" ||
+        {(state.value === "addItemToCellar" ||
           state.value === "addExisting") && (
+          <Grid xs={12} sm={6}>
+            <Searching />
+          </Grid>
+        )}
+        {(state.value === "analyze" || state.value === "upload") && (
           <Grid xs={12} sm={6}>
             <Analyzing />
           </Grid>
