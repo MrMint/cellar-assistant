@@ -1,13 +1,14 @@
 import { NhostClient } from "@nhost/nhost-js";
 import { randomUUID } from "crypto";
 import { Request, Response } from "express";
+import { getPlaiceholder } from "plaiceholder";
 import { isNil, isNotNil } from "ramda";
 import {
   Item_Image_Insert_Input,
   Item_Image_Upload_Input,
   Item_Image_Upload_Result,
 } from "../_gql/graphql.js";
-import { dataUrlToFormData } from "../_utils/index.js";
+import { dataUrlToFormData, dataUrlToImageBuffer } from "../_utils/index.js";
 import { addItemImage } from "./_queries.js";
 
 const {
@@ -79,12 +80,17 @@ export default async function uploadItemImage(
     if (isNotNil(error)) throw new Error("Error uploading file");
 
     console.log(`Uploaded image to storage`);
+
+    const { base64 } = await getPlaiceholder(dataUrlToImageBuffer(image));
+    console.log("Generated image placeholder");
+
     const addItemImageResult = await nhostClient.graphql.request(addItemImage, {
       item: {
         ...item,
         user_id: userId,
         file_id: fileMetadata.processedFiles[0].id,
         is_public: true,
+        placeholder: base64,
       },
     });
 

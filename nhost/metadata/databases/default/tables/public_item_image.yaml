@@ -5,10 +5,11 @@ select_permissions:
   - role: user
     permission:
       columns:
-        - is_public
         - beer_id
         - file_id
         - id
+        - is_public
+        - placeholder
         - spirit_id
         - user_id
         - wine_id

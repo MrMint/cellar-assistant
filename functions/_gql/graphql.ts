@@ -6060,6 +6060,7 @@ export type Item_Image = {
   file_id: Scalars['uuid']['output'];
   id: Scalars['uuid']['output'];
   is_public: Scalars['Boolean']['output'];
+  placeholder: Scalars['String']['output'];
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   user_id: Scalars['uuid']['output'];
   wine_id?: Maybe<Scalars['uuid']['output']>;
@@ -6137,6 +6138,7 @@ export type Item_Image_Bool_Exp = {
   file_id?: InputMaybe<Uuid_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
   is_public?: InputMaybe<Boolean_Comparison_Exp>;
+  placeholder?: InputMaybe<String_Comparison_Exp>;
   spirit_id?: InputMaybe<Uuid_Comparison_Exp>;
   user_id?: InputMaybe<Uuid_Comparison_Exp>;
   wine_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -6154,6 +6156,7 @@ export type Item_Image_Insert_Input = {
   file_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   is_public?: InputMaybe<Scalars['Boolean']['input']>;
+  placeholder?: InputMaybe<Scalars['String']['input']>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
   wine_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -6165,6 +6168,7 @@ export type Item_Image_Max_Fields = {
   beer_id?: Maybe<Scalars['uuid']['output']>;
   file_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
+  placeholder?: Maybe<Scalars['String']['output']>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
   wine_id?: Maybe<Scalars['uuid']['output']>;
@@ -6175,6 +6179,7 @@ export type Item_Image_Max_Order_By = {
   beer_id?: InputMaybe<Order_By>;
   file_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  placeholder?: InputMaybe<Order_By>;
   spirit_id?: InputMaybe<Order_By>;
   user_id?: InputMaybe<Order_By>;
   wine_id?: InputMaybe<Order_By>;
@@ -6186,6 +6191,7 @@ export type Item_Image_Min_Fields = {
   beer_id?: Maybe<Scalars['uuid']['output']>;
   file_id?: Maybe<Scalars['uuid']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
+  placeholder?: Maybe<Scalars['String']['output']>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
   wine_id?: Maybe<Scalars['uuid']['output']>;
@@ -6196,6 +6202,7 @@ export type Item_Image_Min_Order_By = {
   beer_id?: InputMaybe<Order_By>;
   file_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  placeholder?: InputMaybe<Order_By>;
   spirit_id?: InputMaybe<Order_By>;
   user_id?: InputMaybe<Order_By>;
   wine_id?: InputMaybe<Order_By>;
@@ -6230,6 +6237,7 @@ export type Item_Image_Order_By = {
   file_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   is_public?: InputMaybe<Order_By>;
+  placeholder?: InputMaybe<Order_By>;
   spirit_id?: InputMaybe<Order_By>;
   user_id?: InputMaybe<Order_By>;
   wine_id?: InputMaybe<Order_By>;
@@ -6250,6 +6258,8 @@ export enum Item_Image_Select_Column {
   Id = 'id',
   /** column name */
   IsPublic = 'is_public',
+  /** column name */
+  Placeholder = 'placeholder',
   /** column name */
   SpiritId = 'spirit_id',
   /** column name */
@@ -6276,6 +6286,7 @@ export type Item_Image_Set_Input = {
   file_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   is_public?: InputMaybe<Scalars['Boolean']['input']>;
+  placeholder?: InputMaybe<Scalars['String']['input']>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
   wine_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -6295,6 +6306,7 @@ export type Item_Image_Stream_Cursor_Value_Input = {
   file_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
   is_public?: InputMaybe<Scalars['Boolean']['input']>;
+  placeholder?: InputMaybe<Scalars['String']['input']>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
   user_id?: InputMaybe<Scalars['uuid']['input']>;
   wine_id?: InputMaybe<Scalars['uuid']['input']>;
@@ -6310,6 +6322,8 @@ export enum Item_Image_Update_Column {
   Id = 'id',
   /** column name */
   IsPublic = 'is_public',
+  /** column name */
+  Placeholder = 'placeholder',
   /** column name */
   SpiritId = 'spirit_id',
   /** column name */

@@ -2,14 +2,18 @@
 
 import { AspectRatio, Grid, Sheet, Stack } from "@mui/joy";
 import Image from "next/image";
-import { isNotNil } from "ramda";
+import { isNil, isNotNil } from "ramda";
 import { useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
 import beer1 from "@/images/beer1.png";
-import { formatAsPercentage, formatVintage } from "@/utilities";
+import {
+  formatAsPercentage,
+  formatVintage,
+  nhostImageLoader,
+} from "@/utilities";
 
 const getBeerQuery = graphql(`
   query GetCellarBeer($itemId: uuid!) {
@@ -22,6 +26,10 @@ const getBeerQuery = graphql(`
         style
         description
         alcohol_content_percentage
+      }
+      display_image {
+        file_id
+        placeholder
       }
       cellar {
         name
@@ -43,6 +51,8 @@ const BeerDetails = ({
 
   let beer = undefined;
   let cellar = undefined;
+  const displayImage = data?.cellar_beer_by_pk?.display_image;
+
   if (
     isLoading === false &&
     isNotNil(data) &&
@@ -66,11 +76,24 @@ const BeerDetails = ({
         <Grid xs={12} sm={4}>
           <Stack>
             <AspectRatio ratio={1}>
-              <Image
-                src={beer1}
-                alt="A picture of a beer bottle"
-                placeholder="blur"
-              />
+              {isNotNil(displayImage) && (
+                <Image
+                  src={displayImage.file_id}
+                  alt="An picture of a beer bottle"
+                  height={300}
+                  width={300}
+                  loader={nhostImageLoader}
+                  placeholder={`data:image/${displayImage.placeholder}`}
+                />
+              )}
+              {isNil(displayImage) && (
+                <Image
+                  src={beer1}
+                  alt="A picture of a beer glass"
+                  placeholder="blur"
+                  fill
+                />
+              )}
             </AspectRatio>
           </Stack>
         </Grid>
