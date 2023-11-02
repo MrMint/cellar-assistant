@@ -14,8 +14,9 @@
     "@google-cloud/vision": "4.0.2",
     "@nhost/nhost-js": "2.2.17",
     "form-data": "4.0.0",
+    "fuzzball": "2.1.2",
+    "plaiceholder": "3.0.0",
     "p-limit": "5.0.0",
-    "ramda": "0.29.1",
-    "fuzzball": "2.1.2"
+    "ramda": "0.29.1"
   }
 }

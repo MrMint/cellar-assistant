@@ -45,6 +45,7 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
       barcode,
       frontLabelDataUrl,
       backLabelDataUrl,
+      displayImageDataUrl,
     }: OnboardingResult) => {
       send({
         type: "COMPLETE",
@@ -52,6 +53,7 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
         frontLabel: frontLabelDataUrl,
         backLabel: backLabelDataUrl,
         existingItemId,
+        displayImageDataUrl,
       });
     },
     [send],

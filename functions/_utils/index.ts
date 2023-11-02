@@ -23,6 +23,15 @@ export function getEnumValues<
   return Object.values(enumVariable) as Array<T>;
 }
 
+export function dataUrlToImageBuffer(dataUrl: string) {
+  const arr = dataUrl.split(",");
+  if (arr.length < 2) {
+    return undefined;
+  }
+
+  return Buffer.from(arr[1], "base64");
+}
+
 export function dataUrlToFormData(
   dataUrl: string,
   filename: string,

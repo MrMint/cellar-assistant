@@ -1,4 +1,5 @@
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
+import { ImageLoaderProps } from "next/image";
 import { isNil, isNotNil } from "ramda";
 
 // https://stackoverflow.com/a/76775845
@@ -79,3 +80,14 @@ export function dataUrlToFile(
 export function formatVintage(vintage: string | null | undefined) {
   return formatIsoDateString(vintage, "yyyy");
 }
+
+export const nhostImageLoader = ({ width, src, quality }: ImageLoaderProps) => {
+  if (isNil(process.env.NEXT_PUBLIC_NHOST_REGION)) {
+    return `https://${
+      process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN
+    }.storage.nhost.run/v1/files/${src}?w=${width}&q=${quality || 75}`;
+  }
+  return `https://${process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN}.storage.${
+    process.env.NEXT_PUBLIC_NHOST_REGION
+  }.nhost.run/v1/files/${src}?w=${width}&q=${quality || 75}`;
+};
