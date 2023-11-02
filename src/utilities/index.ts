@@ -91,3 +91,7 @@ export const nhostImageLoader = ({ width, src, quality }: ImageLoaderProps) => {
     process.env.NEXT_PUBLIC_NHOST_REGION
   }.nhost.run/v1/files/${src}?w=${width}&q=${quality || 75}`;
 };
+
+export function getRandomInt(max: number) {
+  return Math.floor(Math.random() * max);
+}

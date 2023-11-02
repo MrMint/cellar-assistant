@@ -7,13 +7,13 @@ import {
   Typography,
 } from "@mui/joy";
 import Image from "next/image";
-import bot4 from "@/images/bot4.png";
-import bot5 from "@/images/bot5.png";
+import bot3 from "@/images/bot3.png";
+import warehouse1 from "@/images/warehouse1.png";
 import { getRandomInt } from "@/utilities";
 
-const images = [bot4, bot5];
+const images = [bot3, warehouse1];
 
-export const Analyzing = () => (
+export const Searching = () => (
   <Card>
     <CardOverflow>
       <AspectRatio ratio="1">
@@ -27,7 +27,7 @@ export const Analyzing = () => (
     </CardOverflow>
     <Stack spacing={2}>
       <Typography level="title-lg" textAlign="center">
-        Analyzing...
+        Adding your item...
       </Typography>
       <LinearProgress />
     </Stack>

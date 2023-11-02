@@ -4,6 +4,7 @@ import { isNotNil } from "ramda";
 import { useClient } from "urql";
 import { Barcode } from "@/constants";
 import { Analyzing } from "../Analyzing";
+import { Searching } from "../Searching";
 import { BarcodeStep } from "./BarcodeStep";
 import { DisplayPictureStep } from "./DisplayPictureStep";
 import { ExistingItems } from "./ExistingItems";
