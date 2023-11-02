@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.17.0](https://github.com/MrMint/cellar-assistant/compare/v0.16.0...v0.17.0) (2023-11-02)
+
+
+### Features
+
+* Adds loading screens between new onboarding steps ([6dce821](https://github.com/MrMint/cellar-assistant/commit/6dce821093cd9a178b1ea80fe41debcc87154880))
+* Update cellar item and item detail pages to display user images ([5451ae8](https://github.com/MrMint/cellar-assistant/commit/5451ae84c15b75d652586aa102b28f6ff6dda833))
+* Updates onboarding to include display photo capture ([1847beb](https://github.com/MrMint/cellar-assistant/commit/1847bebd83024a7375bc775077edf07d40c20e5a))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/react to v18.2.34 ([e9f279c](https://github.com/MrMint/cellar-assistant/commit/e9f279c342467441be15b25f960a32ef85d07f24))
+* **deps:** update dependency p-limit to v5 ([3839a2d](https://github.com/MrMint/cellar-assistant/commit/3839a2d90ff79730f02adee9e92d7a51f5101370))
+* **deps:** update dependency xstate to v5.0.0-beta.39 ([7c49f43](https://github.com/MrMint/cellar-assistant/commit/7c49f43799d502216e35b3bf61e7912f59a7a1db))
+
 ## [0.16.0](https://github.com/MrMint/cellar-assistant/compare/v0.15.0...v0.16.0) (2023-11-01)
 
 
