@@ -5,7 +5,11 @@ import { ItemType } from "@/constants";
 import beer1 from "@/images/beer1.png";
 import spirit1 from "@/images/spirit1.png";
 import wine1 from "@/images/wine1.png";
-import { formatVintage, nhostImageLoader } from "@/utilities";
+import {
+  formatVintage,
+  getNextPlaceholder,
+  nhostImageLoader,
+} from "@/utilities";
 import InteractiveCard from "../common/InteractiveCard";
 import Link from "../common/Link";
 
@@ -15,15 +19,13 @@ export type ItemCardProps = {
     name: string;
     vintage?: string;
     displayImageId?: string;
-    placeholder?: string;
+    placeholder?: string | null;
   };
   href?: string;
   onClick?: (itemId: string) => void;
   type: ItemType;
 };
 export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
-  const placeholder = beer1;
-
   return (
     <InteractiveCard
       onClick={isNotNil(onClick) ? () => onClick(item.id) : undefined}
@@ -37,7 +39,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
               height={300}
               width={300}
               loader={nhostImageLoader}
-              placeholder={`data:image/${item.placeholder}`}
+              placeholder={getNextPlaceholder(item.placeholder)}
             />
           </AspectRatio>
         )}

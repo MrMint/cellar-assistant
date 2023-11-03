@@ -6060,7 +6060,7 @@ export type Item_Image = {
   file_id: Scalars['uuid']['output'];
   id: Scalars['uuid']['output'];
   is_public: Scalars['Boolean']['output'];
-  placeholder: Scalars['String']['output'];
+  placeholder?: Maybe<Scalars['String']['output']>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   user_id: Scalars['uuid']['output'];
   wine_id?: Maybe<Scalars['uuid']['output']>;
@@ -13322,7 +13322,7 @@ export type GetCellarBeerQueryVariables = Exact<{
 }>;
 
 
-export type GetCellarBeerQuery = { __typename: 'query_root', cellar_beer_by_pk?: { __typename: 'cellar_beer', beer: { __typename: 'beers', id: string, name: string, created_by_id: string, vintage?: string | null, style?: Beer_Style_Enum | null, description?: string | null, alcohol_content_percentage?: any | null }, display_image?: { __typename: 'item_image', file_id: string, placeholder: string } | null, cellar: { __typename: 'cellars', name: string } } | null };
+export type GetCellarBeerQuery = { __typename: 'query_root', cellar_beer_by_pk?: { __typename: 'cellar_beer', beer: { __typename: 'beers', id: string, name: string, created_by_id: string, vintage?: string | null, style?: Beer_Style_Enum | null, description?: string | null, alcohol_content_percentage?: any | null }, display_image?: { __typename: 'item_image', file_id: string, placeholder?: string | null } | null, cellar: { __typename: 'cellars', name: string } } | null };
 
 export type GetCellarQueryVariables = Exact<{
   cellarId: Scalars['uuid']['input'];
@@ -13336,7 +13336,7 @@ export type GetItemsQueryQueryVariables = Exact<{
 }>;
 
 
-export type GetItemsQueryQuery = { __typename: 'query_root', cellar_beer: Array<{ __typename: 'cellar_beer', id: string, display_image?: { __typename: 'item_image', file_id: string, placeholder: string } | null, beer: { __typename: 'beers', name: string } }>, cellar_wine: Array<{ __typename: 'cellar_wine', id: string, display_image?: { __typename: 'item_image', file_id: string, placeholder: string } | null, wine: { __typename: 'wines', name: string, vintage: string } }>, cellar_spirit: Array<{ __typename: 'cellar_spirit', id: string, display_image?: { __typename: 'item_image', file_id: string, placeholder: string } | null, spirit: { __typename: 'spirits', name: string, vintage?: string | null } }>, cellars_by_pk?: { __typename: 'cellars', id: string, name: string } | null };
+export type GetItemsQueryQuery = { __typename: 'query_root', cellar_beer: Array<{ __typename: 'cellar_beer', id: string, display_image?: { __typename: 'item_image', file_id: string, placeholder?: string | null } | null, beer: { __typename: 'beers', name: string } }>, cellar_wine: Array<{ __typename: 'cellar_wine', id: string, display_image?: { __typename: 'item_image', file_id: string, placeholder?: string | null } | null, wine: { __typename: 'wines', name: string, vintage: string } }>, cellar_spirit: Array<{ __typename: 'cellar_spirit', id: string, display_image?: { __typename: 'item_image', file_id: string, placeholder?: string | null } | null, spirit: { __typename: 'spirits', name: string, vintage?: string | null } }>, cellars_by_pk?: { __typename: 'cellars', id: string, name: string } | null };
 
 export type EditSpiritPageQueryQueryVariables = Exact<{
   itemId: Scalars['uuid']['input'];
@@ -13350,7 +13350,7 @@ export type GetSpiritQueryVariables = Exact<{
 }>;
 
 
-export type GetSpiritQuery = { __typename: 'query_root', cellar_spirit_by_pk?: { __typename: 'cellar_spirit', spirit: { __typename: 'spirits', id: string, name: string, created_by_id: string, vintage?: string | null, type: Spirit_Type_Enum, description?: string | null, alcohol_content_percentage?: any | null, style?: string | null, country?: Country_Enum | null }, display_image?: { __typename: 'item_image', file_id: string, placeholder: string } | null, cellar: { __typename: 'cellars', name: string } } | null };
+export type GetSpiritQuery = { __typename: 'query_root', cellar_spirit_by_pk?: { __typename: 'cellar_spirit', spirit: { __typename: 'spirits', id: string, name: string, created_by_id: string, vintage?: string | null, type: Spirit_Type_Enum, description?: string | null, alcohol_content_percentage?: any | null, style?: string | null, country?: Country_Enum | null }, display_image?: { __typename: 'item_image', file_id: string, placeholder?: string | null } | null, cellar: { __typename: 'cellars', name: string } } | null };
 
 export type EditWinePageQueryQueryVariables = Exact<{
   itemId: Scalars['uuid']['input'];
@@ -13364,7 +13364,7 @@ export type GetCellarWineQueryVariables = Exact<{
 }>;
 
 
-export type GetCellarWineQuery = { __typename: 'query_root', cellar_wine_by_pk?: { __typename: 'cellar_wine', wine: { __typename: 'wines', id: string, name: string, created_by_id: string, region?: string | null, variety: Wine_Variety_Enum, vintage: string, style: Wine_Style_Enum, country?: Country_Enum | null, description?: string | null, barcode_code?: string | null, alcohol_content_percentage?: any | null }, display_image?: { __typename: 'item_image', file_id: string, placeholder: string } | null, cellar: { __typename: 'cellars', name: string } } | null };
+export type GetCellarWineQuery = { __typename: 'query_root', cellar_wine_by_pk?: { __typename: 'cellar_wine', wine: { __typename: 'wines', id: string, name: string, created_by_id: string, region?: string | null, variety: Wine_Variety_Enum, vintage: string, style: Wine_Style_Enum, country?: Country_Enum | null, description?: string | null, barcode_code?: string | null, alcohol_content_percentage?: any | null }, display_image?: { __typename: 'item_image', file_id: string, placeholder?: string | null } | null, cellar: { __typename: 'cellars', name: string } } | null };
 
 export type AddCellarMutationVariables = Exact<{
   cellar: Cellars_Insert_Input;
