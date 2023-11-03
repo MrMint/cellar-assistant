@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.18.0](https://github.com/MrMint/cellar-assistant/compare/v0.17.1...v0.18.0) (2023-11-03)
+
+
+### Features
+
+* Updates delete to remove the cellar item ([4d975c4](https://github.com/MrMint/cellar-assistant/commit/4d975c413d06c779dda2705c042d3dac67972290))
+
 ## [0.17.1](https://github.com/MrMint/cellar-assistant/compare/v0.17.0...v0.17.1) (2023-11-03)
 
 
