@@ -12644,6 +12644,7 @@ export enum Wine_Variety_Enum {
   Asti = 'ASTI',
   Barbera = 'BARBERA',
   Blaufrankisch = 'BLAUFRANKISCH',
+  Blend = 'BLEND',
   CabernetFranc = 'CABERNET_FRANC',
   CabernetSauvignon = 'CABERNET_SAUVIGNON',
   Carignan = 'CARIGNAN',

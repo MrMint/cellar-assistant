@@ -28,9 +28,11 @@ const documents = {
     "\n  mutation updateBeer($beerId: uuid!, $beer: beers_set_input!) {\n    update_beers_by_pk(pk_columns: { id: $beerId }, _set: $beer) {\n      id\n    }\n  }\n": types.UpdateBeerDocument,
     "\n  query GetBeerDefaults($hint: item_defaults_hint!) {\n    beer_defaults(hint: $hint) {\n      name\n      description\n      alcohol_content_percentage\n      barcode_code\n      barcode_type\n      item_onboarding_id\n      country\n      vintage\n      style\n      international_bitterness_unit\n    }\n  }\n": types.GetBeerDefaultsDocument,
     "\n  query SearchByBarcode($code: String!) {\n    barcodes_by_pk(code: $code) {\n      wines {\n        id\n        name\n        vintage\n      }\n      beers {\n        id\n        name\n        vintage\n      }\n      spirits {\n        id\n        name\n        vintage\n      }\n    }\n  }\n": types.SearchByBarcodeDocument,
+    "\n  mutation DeleteCellarBeerMutation($itemId: uuid!) {\n    delete_cellar_beer_by_pk(id: $itemId) {\n      id\n    }\n  }\n": types.DeleteCellarBeerMutationDocument,
+    "\n  mutation DeleteCellarSpiritMutation($itemId: uuid!) {\n    delete_cellar_spirit_by_pk(id: $itemId) {\n      id\n    }\n  }\n": types.DeleteCellarSpiritMutationDocument,
+    "\n  mutation DeleteCellarWineMutation($itemId: uuid!) {\n    delete_cellar_wine_by_pk(id: $itemId) {\n      id\n    }\n  }\n": types.DeleteCellarWineMutationDocument,
     "\n  mutation DeleteBeerMutation($itemId: uuid!) {\n    delete_beers_by_pk(id: $itemId) {\n      id\n    }\n  }\n": types.DeleteBeerMutationDocument,
     "\n  mutation DeleteSpiritMutation($itemId: uuid!) {\n    delete_spirits_by_pk(id: $itemId) {\n      id\n    }\n  }\n": types.DeleteSpiritMutationDocument,
-    "\n  mutation DeleteWineMutation($itemId: uuid!) {\n    delete_cellar_wine_by_pk(id: $itemId) {\n      id\n    }\n  }\n": types.DeleteWineMutationDocument,
     "\n  mutation HeaderAddWineMutation($input: cellar_wine_insert_input!) {\n    insert_cellar_wine_one(object: $input) {\n      id\n      cellar_id\n    }\n  }\n": types.HeaderAddWineMutationDocument,
     "\n  query GetSpiritDefaults($hint: item_defaults_hint!) {\n    spirit_defaults(hint: $hint) {\n      name\n      description\n      alcohol_content_percentage\n      barcode_code\n      barcode_type\n      item_onboarding_id\n      country\n      vintage\n      style\n      type\n    }\n  }\n": types.GetSpiritDefaultsDocument,
     "\n  mutation updateWine($wineId: uuid!, $wine: wines_set_input!) {\n    update_wines_by_pk(pk_columns: { id: $wineId }, _set: $wine) {\n      id\n    }\n  }\n": types.UpdateWineDocument,
@@ -122,15 +124,23 @@ export function graphql(source: "\n  query SearchByBarcode($code: String!) {\n  
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
+export function graphql(source: "\n  mutation DeleteCellarBeerMutation($itemId: uuid!) {\n    delete_cellar_beer_by_pk(id: $itemId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteCellarBeerMutation($itemId: uuid!) {\n    delete_cellar_beer_by_pk(id: $itemId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteCellarSpiritMutation($itemId: uuid!) {\n    delete_cellar_spirit_by_pk(id: $itemId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteCellarSpiritMutation($itemId: uuid!) {\n    delete_cellar_spirit_by_pk(id: $itemId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteCellarWineMutation($itemId: uuid!) {\n    delete_cellar_wine_by_pk(id: $itemId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteCellarWineMutation($itemId: uuid!) {\n    delete_cellar_wine_by_pk(id: $itemId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
 export function graphql(source: "\n  mutation DeleteBeerMutation($itemId: uuid!) {\n    delete_beers_by_pk(id: $itemId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteBeerMutation($itemId: uuid!) {\n    delete_beers_by_pk(id: $itemId) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation DeleteSpiritMutation($itemId: uuid!) {\n    delete_spirits_by_pk(id: $itemId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteSpiritMutation($itemId: uuid!) {\n    delete_spirits_by_pk(id: $itemId) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation DeleteWineMutation($itemId: uuid!) {\n    delete_cellar_wine_by_pk(id: $itemId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteWineMutation($itemId: uuid!) {\n    delete_cellar_wine_by_pk(id: $itemId) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
