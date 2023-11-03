@@ -12,6 +12,7 @@ import beer1 from "@/images/beer1.png";
 import {
   formatAsPercentage,
   formatVintage,
+  getNextPlaceholder,
   nhostImageLoader,
 } from "@/utilities";
 
@@ -83,7 +84,7 @@ const BeerDetails = ({
                   height={300}
                   width={300}
                   loader={nhostImageLoader}
-                  placeholder={`data:image/${displayImage.placeholder}`}
+                  placeholder={getNextPlaceholder(displayImage.placeholder)}
                 />
               )}
               {isNil(displayImage) && (

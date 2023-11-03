@@ -6060,7 +6060,7 @@ export type Item_Image = {
   file_id: Scalars['uuid']['output'];
   id: Scalars['uuid']['output'];
   is_public: Scalars['Boolean']['output'];
-  placeholder: Scalars['String']['output'];
+  placeholder?: Maybe<Scalars['String']['output']>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   user_id: Scalars['uuid']['output'];
   wine_id?: Maybe<Scalars['uuid']['output']>;
