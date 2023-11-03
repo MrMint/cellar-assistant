@@ -1,14 +1,14 @@
-import { ImageAnnotatorClient, v1 } from "@google-cloud/vision";
-import { Request, Response } from "express";
-import { NhostClient } from "@nhost/nhost-js";
-import { addTextExtractionResultsMutation, getFileQuery } from "./_queries.js";
 import { PredictionServiceClient } from "@google-cloud/aiplatform";
-import { callPredict } from "../_utils/gcp.js";
+import { ImageAnnotatorClient, v1 } from "@google-cloud/vision";
+import { NhostClient } from "@nhost/nhost-js";
+import { Request, Response } from "express";
 import pLimit from "p-limit";
-import { isFulfilled } from "../_utils/index.js";
 import { isEmpty, isNil, not } from "ramda";
-import { ItemType } from "../getItemDefaults/_utils.js";
+import { callPredict } from "../_utils/gcp.js";
+import { isFulfilled } from "../_utils/index.js";
 import { getCredential } from "../_utils/queries.js";
+import { ItemType } from "../getItemDefaults/_utils.js";
+import { addTextExtractionResultsMutation, getFileQuery } from "./_queries.js";
 
 const {
   NHOST_ADMIN_SECRET,
