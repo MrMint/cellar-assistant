@@ -95,3 +95,10 @@ export const nhostImageLoader = ({ width, src, quality }: ImageLoaderProps) => {
 export function getRandomInt(max: number) {
   return Math.floor(Math.random() * max);
 }
+
+export const getNextPlaceholder = (
+  placeholderDataUrl: string | undefined | null,
+): `data:image/${string}` | undefined => {
+  if (isNil(placeholderDataUrl)) return undefined;
+  return `data:image/${placeholderDataUrl}`;
+};
