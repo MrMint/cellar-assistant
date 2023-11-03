@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.17.1](https://github.com/MrMint/cellar-assistant/compare/v0.17.0...v0.17.1) (2023-11-03)
+
+
+### Bug Fixes
+
+* Disables placeholder generation due to lambda compat issues ([339707a](https://github.com/MrMint/cellar-assistant/commit/339707a0d45f6caefde961c55b33527cb8d5b769))
+* Reverts p-limit to v4 ([047a6d8](https://github.com/MrMint/cellar-assistant/commit/047a6d8e46cc80b790d722bc5a3b5294e162dce5))
+
 ## [0.17.0](https://github.com/MrMint/cellar-assistant/compare/v0.16.0...v0.17.0) (2023-11-02)
 
 
