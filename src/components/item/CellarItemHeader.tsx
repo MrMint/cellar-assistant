@@ -27,23 +27,23 @@ type CellarItemHeaderProps = {
 };
 
 const deleteBeerMutation = graphql(`
-  mutation DeleteBeerMutation($itemId: uuid!) {
-    delete_beers_by_pk(id: $itemId) {
+  mutation DeleteCellarBeerMutation($itemId: uuid!) {
+    delete_cellar_beer_by_pk(id: $itemId) {
       id
     }
   }
 `);
 
 const deleteSpiritMutation = graphql(`
-  mutation DeleteSpiritMutation($itemId: uuid!) {
-    delete_spirits_by_pk(id: $itemId) {
+  mutation DeleteCellarSpiritMutation($itemId: uuid!) {
+    delete_cellar_spirit_by_pk(id: $itemId) {
       id
     }
   }
 `);
 
 const deleteWineMutation = graphql(`
-  mutation DeleteWineMutation($itemId: uuid!) {
+  mutation DeleteCellarWineMutation($itemId: uuid!) {
     delete_cellar_wine_by_pk(id: $itemId) {
       id
     }
@@ -142,7 +142,7 @@ export const CellarItemHeader = ({
               </DialogTitle>
               <Divider />
               <DialogContent>
-                Are you sure you want to delete {itemName}?
+                Are you sure you want to delete {itemName} from your cellar?
               </DialogContent>
               <DialogActions>
                 <Button
