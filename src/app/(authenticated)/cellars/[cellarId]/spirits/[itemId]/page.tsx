@@ -12,6 +12,7 @@ import spirit1 from "@/images/spirit1.png";
 import {
   formatAsPercentage,
   formatVintage,
+  getNextPlaceholder,
   nhostImageLoader,
 } from "@/utilities";
 
@@ -84,7 +85,7 @@ const SpiritDetails = ({
                   height={300}
                   width={300}
                   loader={nhostImageLoader}
-                  placeholder={`data:image/${displayImage.placeholder}`}
+                  placeholder={getNextPlaceholder(displayImage.placeholder)}
                 />
               )}
               {isNil(displayImage) && (
