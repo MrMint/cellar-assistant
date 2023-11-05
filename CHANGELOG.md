@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.19.0](https://github.com/MrMint/cellar-assistant/compare/v0.18.0...v0.19.0) (2023-11-05)
+
+
+### Features
+
+* Adds user item reviews ([0121283](https://github.com/MrMint/cellar-assistant/commit/0121283e4134195048ec351551f9400da4c0337e))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/react to v18.2.35 ([cc5896a](https://github.com/MrMint/cellar-assistant/commit/cc5896a1b87c8c55f7e662426dfeb9897283ced7))
+* **deps:** update dependency eslint to v8.53.0 ([25bf9fb](https://github.com/MrMint/cellar-assistant/commit/25bf9fb8782cf8d9b028570a3e45a3fd2cf81632))
+* **deps:** update dependency react-hook-form to v7.48.2 ([732262c](https://github.com/MrMint/cellar-assistant/commit/732262c7e76391d3e412eaf5233af177af1b9023))
+* **deps:** update dependency xstate to v5.0.0-beta.40 ([bf080d3](https://github.com/MrMint/cellar-assistant/commit/bf080d3466ac01b50fd304a5d8294e888d32b608))
+
 ## [0.18.0](https://github.com/MrMint/cellar-assistant/compare/v0.17.1...v0.18.0) (2023-11-03)
 
 
