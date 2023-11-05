@@ -56,6 +56,6 @@
     "ts-node": "10.9.1",
     "typescript": "5.2.2",
     "urql": "4.0.5",
-    "xstate": "5.0.0-beta.39"
+    "xstate": "5.0.0-beta.40"
   }
 }
