@@ -65,3 +65,20 @@ export const updateSpiritMutation = graphql(`
     }
   }
 `);
+
+export const addItemReview = graphql(`
+  mutation AddItemReview($review: item_reviews_insert_input!) {
+    insert_item_reviews_one(object: $review) {
+      id
+      beer {
+        id
+      }
+      wine {
+        id
+      }
+      spirit {
+        id
+      }
+    }
+  }
+`);

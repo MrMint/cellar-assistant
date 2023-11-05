@@ -1,8 +1,8 @@
 "use client";
 
-import { ReactNode } from "react";
-
 import { NhostClient, NhostProvider } from "@nhost/nextjs";
+import { ReactNode } from "react";
+import { IconContext } from "react-icons";
 import { NhostUrqlProvider } from "@/utilities/UrqlProvider";
 import ThemeRegistry from "./ThemeRegistry";
 
@@ -22,7 +22,19 @@ export default function NhostClientProvider({
   return (
     <NhostProvider nhost={nhost} initial={undefined}>
       <NhostUrqlProvider nhost={nhost}>
-        <ThemeRegistry>{children}</ThemeRegistry>
+        <IconContext.Provider
+          value={{
+            color: "var(--Icon-color)",
+            style: {
+              margin: "var(--Icon-margin)",
+              fontSize: "var(--Icon-fontSize, 20px)",
+              width: "0.75em",
+              height: "0.75em",
+            },
+          }}
+        >
+          <ThemeRegistry>{children}</ThemeRegistry>
+        </IconContext.Provider>
       </NhostUrqlProvider>
     </NhostProvider>
   );
