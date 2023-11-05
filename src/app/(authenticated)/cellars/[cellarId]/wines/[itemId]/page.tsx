@@ -1,20 +1,17 @@
 "use client";
 
-import { AspectRatio, Grid, Sheet, Stack } from "@mui/joy";
-import Image from "next/image";
-import { isNil, isNotNil } from "ramda";
+import { Card, Grid, Sheet, Stack } from "@mui/joy";
+import { isNotNil } from "ramda";
 import { useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
+import { ItemImage } from "@/components/item/ItemImage";
+import { ItemReviews } from "@/components/item/ItemReviews";
+import { AddReview } from "@/components/review/AddReview";
 import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
 import wine1 from "@/images/wine1.png";
-import {
-  formatAsPercentage,
-  formatVintage,
-  getNextPlaceholder,
-  nhostImageLoader,
-} from "@/utilities";
+import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getWineQuery = graphql(`
   query GetCellarWine($itemId: uuid!) {
@@ -31,6 +28,16 @@ const getWineQuery = graphql(`
         description
         barcode_code
         alcohol_content_percentage
+        reviews(limit: 10, order_by: { created_at: desc }) {
+          id
+          user {
+            avatarUrl
+            displayName
+          }
+          score
+          text
+          createdAt: created_at
+        }
       }
       display_image {
         file_id
@@ -79,46 +86,32 @@ const WineDetails = ({
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
-          <Stack>
-            <AspectRatio ratio={1}>
-              {isNotNil(displayImage) && (
-                <Image
-                  src={displayImage.file_id}
-                  alt="An picture of a wine bottle"
-                  height={300}
-                  width={300}
-                  loader={nhostImageLoader}
-                  placeholder={getNextPlaceholder(displayImage.placeholder)}
-                />
-              )}
-              {isNil(displayImage) && (
-                <Image
-                  src={wine1}
-                  alt="A picture of a wine bottle"
-                  placeholder="blur"
-                  fill
-                />
-              )}
-            </AspectRatio>
-          </Stack>
+          <ItemImage fileId={displayImage?.file_id} fallback={wine1} />
         </Grid>
-        <Grid xs={12} sm={8}>
-          <Sheet>
-            {isLoading === false && wine !== undefined && (
-              <ItemDetails
-                title={wine.name}
-                subTitlePhrases={[
-                  formatVintage(wine.vintage),
-                  wine.variety,
-                  wine.region,
-                  formatAsPercentage(wine.alcohol_content_percentage),
-                ]}
-                description={wine.description}
-              />
-            )}
-          </Sheet>
-        </Grid>
-        <Grid></Grid>
+        {isLoading === false && wine !== undefined && (
+          <Grid container xs={12} sm={8}>
+            <Grid xs={12} sm={12} lg={6}>
+              <Card>
+                <ItemDetails
+                  title={wine.name}
+                  subTitlePhrases={[
+                    formatVintage(wine.vintage),
+                    wine.variety,
+                    wine.region,
+                    formatAsPercentage(wine.alcohol_content_percentage),
+                  ]}
+                  description={wine.description}
+                />
+              </Card>
+            </Grid>
+            <Grid xs={12} sm={12} lg={6}>
+              <Stack spacing={2}>
+                <AddReview wineId={wine.id} />
+                <ItemReviews reviews={wine.reviews} />
+              </Stack>
+            </Grid>
+          </Grid>
+        )}
       </Grid>
     </Stack>
   );

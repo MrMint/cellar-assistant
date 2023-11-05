@@ -16,6 +16,13 @@ array_relationships:
         table:
           name: item_image
           schema: public
+  - name: reviews
+    using:
+      foreign_key_constraint_on:
+        column: beer_id
+        table:
+          name: item_reviews
+          schema: public
 insert_permissions:
   - role: user
     permission:

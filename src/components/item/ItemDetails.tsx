@@ -12,7 +12,7 @@ const ItemDetails = ({
   subTitlePhrases: Array<string | null | undefined>;
   description: string | null | undefined;
 }) => (
-  <Stack spacing={1} padding="1rem">
+  <Stack spacing={1}>
     <Typography level="h3">{title}</Typography>
     <Typography level="body-md">
       {without([null, undefined], subTitlePhrases).join(" - ")}
