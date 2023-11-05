@@ -18,10 +18,12 @@ export type Scalars = {
   bytea: { input: any; output: any; }
   citext: { input: any; output: any; }
   date: { input: string; output: string; }
+  json: { input: string; output: string; }
   jsonb: { input: any; output: any; }
   numeric: { input: any; output: any; }
   polygon: { input: any; output: any; }
-  timestamptz: { input: any; output: any; }
+  smallint: { input: number; output: number; }
+  timestamptz: { input: string; output: string; }
   uuid: { input: string; output: string; }
 };
 
@@ -2529,6 +2531,10 @@ export type Beers = {
   item_images_aggregate: Item_Image_Aggregate;
   item_onboarding_id: Scalars['uuid']['output'];
   name: Scalars['String']['output'];
+  /** An array relationship */
+  reviews: Array<Item_Reviews>;
+  /** An aggregate relationship */
+  reviews_aggregate: Item_Reviews_Aggregate;
   style?: Maybe<Beer_Style_Enum>;
   updated_at: Scalars['timestamptz']['output'];
   vintage?: Maybe<Scalars['date']['output']>;
@@ -2552,6 +2558,26 @@ export type BeersItem_Images_AggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Item_Image_Order_By>>;
   where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+/** columns and relationships of "beers" */
+export type BeersReviewsArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+
+/** columns and relationships of "beers" */
+export type BeersReviews_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
 };
 
 /** aggregated selection of "beers" */
@@ -2649,6 +2675,8 @@ export type Beers_Bool_Exp = {
   item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Bool_Exp>;
   item_onboarding_id?: InputMaybe<Uuid_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
+  reviews?: InputMaybe<Item_Reviews_Bool_Exp>;
+  reviews_aggregate?: InputMaybe<Item_Reviews_Aggregate_Bool_Exp>;
   style?: InputMaybe<Beer_Style_Enum_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   vintage?: InputMaybe<Date_Comparison_Exp>;
@@ -2681,6 +2709,7 @@ export type Beers_Insert_Input = {
   item_images?: InputMaybe<Item_Image_Arr_Rel_Insert_Input>;
   item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  reviews?: InputMaybe<Item_Reviews_Arr_Rel_Insert_Input>;
   style?: InputMaybe<Beer_Style_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
   vintage?: InputMaybe<Scalars['date']['input']>;
@@ -2786,6 +2815,7 @@ export type Beers_Order_By = {
   item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Order_By>;
   item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
+  reviews_aggregate?: InputMaybe<Item_Reviews_Aggregate_Order_By>;
   style?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
   vintage?: InputMaybe<Order_By>;
@@ -6643,6 +6673,421 @@ export type Item_Onboardings_Updates = {
   where: Item_Onboardings_Bool_Exp;
 };
 
+/** columns and relationships of "item_reviews" */
+export type Item_Reviews = {
+  __typename: 'item_reviews';
+  /** An object relationship */
+  beer?: Maybe<Beers>;
+  beer_id?: Maybe<Scalars['uuid']['output']>;
+  created_at: Scalars['timestamptz']['output'];
+  id: Scalars['uuid']['output'];
+  score: Scalars['smallint']['output'];
+  /** An object relationship */
+  spirit?: Maybe<Spirits>;
+  spirit_id?: Maybe<Scalars['uuid']['output']>;
+  text?: Maybe<Scalars['json']['output']>;
+  updated_at: Scalars['timestamptz']['output'];
+  /** An object relationship */
+  user: Users;
+  user_id: Scalars['uuid']['output'];
+  /** An object relationship */
+  wine?: Maybe<Wines>;
+  wine_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+
+/** columns and relationships of "item_reviews" */
+export type Item_ReviewsTextArgs = {
+  path?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregated selection of "item_reviews" */
+export type Item_Reviews_Aggregate = {
+  __typename: 'item_reviews_aggregate';
+  aggregate?: Maybe<Item_Reviews_Aggregate_Fields>;
+  nodes: Array<Item_Reviews>;
+};
+
+export type Item_Reviews_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Item_Reviews_Aggregate_Bool_Exp_Count>;
+};
+
+export type Item_Reviews_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Item_Reviews_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "item_reviews" */
+export type Item_Reviews_Aggregate_Fields = {
+  __typename: 'item_reviews_aggregate_fields';
+  avg?: Maybe<Item_Reviews_Avg_Fields>;
+  count: Scalars['Int']['output'];
+  max?: Maybe<Item_Reviews_Max_Fields>;
+  min?: Maybe<Item_Reviews_Min_Fields>;
+  stddev?: Maybe<Item_Reviews_Stddev_Fields>;
+  stddev_pop?: Maybe<Item_Reviews_Stddev_Pop_Fields>;
+  stddev_samp?: Maybe<Item_Reviews_Stddev_Samp_Fields>;
+  sum?: Maybe<Item_Reviews_Sum_Fields>;
+  var_pop?: Maybe<Item_Reviews_Var_Pop_Fields>;
+  var_samp?: Maybe<Item_Reviews_Var_Samp_Fields>;
+  variance?: Maybe<Item_Reviews_Variance_Fields>;
+};
+
+
+/** aggregate fields of "item_reviews" */
+export type Item_Reviews_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "item_reviews" */
+export type Item_Reviews_Aggregate_Order_By = {
+  avg?: InputMaybe<Item_Reviews_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Item_Reviews_Max_Order_By>;
+  min?: InputMaybe<Item_Reviews_Min_Order_By>;
+  stddev?: InputMaybe<Item_Reviews_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Item_Reviews_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Item_Reviews_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Item_Reviews_Sum_Order_By>;
+  var_pop?: InputMaybe<Item_Reviews_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Item_Reviews_Var_Samp_Order_By>;
+  variance?: InputMaybe<Item_Reviews_Variance_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "item_reviews" */
+export type Item_Reviews_Arr_Rel_Insert_Input = {
+  data: Array<Item_Reviews_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Item_Reviews_On_Conflict>;
+};
+
+/** aggregate avg on columns */
+export type Item_Reviews_Avg_Fields = {
+  __typename: 'item_reviews_avg_fields';
+  score?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by avg() on columns of table "item_reviews" */
+export type Item_Reviews_Avg_Order_By = {
+  score?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "item_reviews". All fields are combined with a logical 'AND'. */
+export type Item_Reviews_Bool_Exp = {
+  _and?: InputMaybe<Array<Item_Reviews_Bool_Exp>>;
+  _not?: InputMaybe<Item_Reviews_Bool_Exp>;
+  _or?: InputMaybe<Array<Item_Reviews_Bool_Exp>>;
+  beer?: InputMaybe<Beers_Bool_Exp>;
+  beer_id?: InputMaybe<Uuid_Comparison_Exp>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  score?: InputMaybe<Smallint_Comparison_Exp>;
+  spirit?: InputMaybe<Spirits_Bool_Exp>;
+  spirit_id?: InputMaybe<Uuid_Comparison_Exp>;
+  text?: InputMaybe<Json_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  user?: InputMaybe<Users_Bool_Exp>;
+  user_id?: InputMaybe<Uuid_Comparison_Exp>;
+  wine?: InputMaybe<Wines_Bool_Exp>;
+  wine_id?: InputMaybe<Uuid_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "item_reviews" */
+export enum Item_Reviews_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  ItemReviewsPkey = 'item_reviews_pkey'
+}
+
+/** input type for incrementing numeric columns in table "item_reviews" */
+export type Item_Reviews_Inc_Input = {
+  score?: InputMaybe<Scalars['smallint']['input']>;
+};
+
+/** input type for inserting data into table "item_reviews" */
+export type Item_Reviews_Insert_Input = {
+  beer?: InputMaybe<Beers_Obj_Rel_Insert_Input>;
+  beer_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  score?: InputMaybe<Scalars['smallint']['input']>;
+  spirit?: InputMaybe<Spirits_Obj_Rel_Insert_Input>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  text?: InputMaybe<Scalars['json']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine?: InputMaybe<Wines_Obj_Rel_Insert_Input>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** aggregate max on columns */
+export type Item_Reviews_Max_Fields = {
+  __typename: 'item_reviews_max_fields';
+  beer_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  score?: Maybe<Scalars['smallint']['output']>;
+  spirit_id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+  wine_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** order by max() on columns of table "item_reviews" */
+export type Item_Reviews_Max_Order_By = {
+  beer_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  score?: InputMaybe<Order_By>;
+  spirit_id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+  wine_id?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Item_Reviews_Min_Fields = {
+  __typename: 'item_reviews_min_fields';
+  beer_id?: Maybe<Scalars['uuid']['output']>;
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  score?: Maybe<Scalars['smallint']['output']>;
+  spirit_id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+  wine_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** order by min() on columns of table "item_reviews" */
+export type Item_Reviews_Min_Order_By = {
+  beer_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  score?: InputMaybe<Order_By>;
+  spirit_id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+  wine_id?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "item_reviews" */
+export type Item_Reviews_Mutation_Response = {
+  __typename: 'item_reviews_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Item_Reviews>;
+};
+
+/** on_conflict condition type for table "item_reviews" */
+export type Item_Reviews_On_Conflict = {
+  constraint: Item_Reviews_Constraint;
+  update_columns?: Array<Item_Reviews_Update_Column>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "item_reviews". */
+export type Item_Reviews_Order_By = {
+  beer?: InputMaybe<Beers_Order_By>;
+  beer_id?: InputMaybe<Order_By>;
+  created_at?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  score?: InputMaybe<Order_By>;
+  spirit?: InputMaybe<Spirits_Order_By>;
+  spirit_id?: InputMaybe<Order_By>;
+  text?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  user?: InputMaybe<Users_Order_By>;
+  user_id?: InputMaybe<Order_By>;
+  wine?: InputMaybe<Wines_Order_By>;
+  wine_id?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: item_reviews */
+export type Item_Reviews_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "item_reviews" */
+export enum Item_Reviews_Select_Column {
+  /** column name */
+  BeerId = 'beer_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Score = 'score',
+  /** column name */
+  SpiritId = 'spirit_id',
+  /** column name */
+  Text = 'text',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  UserId = 'user_id',
+  /** column name */
+  WineId = 'wine_id'
+}
+
+/** input type for updating data in table "item_reviews" */
+export type Item_Reviews_Set_Input = {
+  beer_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  score?: InputMaybe<Scalars['smallint']['input']>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  text?: InputMaybe<Scalars['json']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** aggregate stddev on columns */
+export type Item_Reviews_Stddev_Fields = {
+  __typename: 'item_reviews_stddev_fields';
+  score?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev() on columns of table "item_reviews" */
+export type Item_Reviews_Stddev_Order_By = {
+  score?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_pop on columns */
+export type Item_Reviews_Stddev_Pop_Fields = {
+  __typename: 'item_reviews_stddev_pop_fields';
+  score?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_pop() on columns of table "item_reviews" */
+export type Item_Reviews_Stddev_Pop_Order_By = {
+  score?: InputMaybe<Order_By>;
+};
+
+/** aggregate stddev_samp on columns */
+export type Item_Reviews_Stddev_Samp_Fields = {
+  __typename: 'item_reviews_stddev_samp_fields';
+  score?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by stddev_samp() on columns of table "item_reviews" */
+export type Item_Reviews_Stddev_Samp_Order_By = {
+  score?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "item_reviews" */
+export type Item_Reviews_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Item_Reviews_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Item_Reviews_Stream_Cursor_Value_Input = {
+  beer_id?: InputMaybe<Scalars['uuid']['input']>;
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  score?: InputMaybe<Scalars['smallint']['input']>;
+  spirit_id?: InputMaybe<Scalars['uuid']['input']>;
+  text?: InputMaybe<Scalars['json']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+  wine_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** aggregate sum on columns */
+export type Item_Reviews_Sum_Fields = {
+  __typename: 'item_reviews_sum_fields';
+  score?: Maybe<Scalars['smallint']['output']>;
+};
+
+/** order by sum() on columns of table "item_reviews" */
+export type Item_Reviews_Sum_Order_By = {
+  score?: InputMaybe<Order_By>;
+};
+
+/** update columns of table "item_reviews" */
+export enum Item_Reviews_Update_Column {
+  /** column name */
+  BeerId = 'beer_id',
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Score = 'score',
+  /** column name */
+  SpiritId = 'spirit_id',
+  /** column name */
+  Text = 'text',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  UserId = 'user_id',
+  /** column name */
+  WineId = 'wine_id'
+}
+
+export type Item_Reviews_Updates = {
+  /** increments the numeric columns with given value of the filtered values */
+  _inc?: InputMaybe<Item_Reviews_Inc_Input>;
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Item_Reviews_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Item_Reviews_Bool_Exp;
+};
+
+/** aggregate var_pop on columns */
+export type Item_Reviews_Var_Pop_Fields = {
+  __typename: 'item_reviews_var_pop_fields';
+  score?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_pop() on columns of table "item_reviews" */
+export type Item_Reviews_Var_Pop_Order_By = {
+  score?: InputMaybe<Order_By>;
+};
+
+/** aggregate var_samp on columns */
+export type Item_Reviews_Var_Samp_Fields = {
+  __typename: 'item_reviews_var_samp_fields';
+  score?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by var_samp() on columns of table "item_reviews" */
+export type Item_Reviews_Var_Samp_Order_By = {
+  score?: InputMaybe<Order_By>;
+};
+
+/** aggregate variance on columns */
+export type Item_Reviews_Variance_Fields = {
+  __typename: 'item_reviews_variance_fields';
+  score?: Maybe<Scalars['Float']['output']>;
+};
+
+/** order by variance() on columns of table "item_reviews" */
+export type Item_Reviews_Variance_Order_By = {
+  score?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to compare columns of type "json". All fields are combined with logical 'AND'. */
+export type Json_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['json']['input']>;
+  _gt?: InputMaybe<Scalars['json']['input']>;
+  _gte?: InputMaybe<Scalars['json']['input']>;
+  _in?: InputMaybe<Array<Scalars['json']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['json']['input']>;
+  _lte?: InputMaybe<Scalars['json']['input']>;
+  _neq?: InputMaybe<Scalars['json']['input']>;
+  _nin?: InputMaybe<Array<Scalars['json']['input']>>;
+};
+
 export type Jsonb_Cast_Exp = {
   String?: InputMaybe<String_Comparison_Exp>;
 };
@@ -6778,6 +7223,10 @@ export type Mutation_Root = {
   delete_item_onboardings?: Maybe<Item_Onboardings_Mutation_Response>;
   /** delete single row from the table: "item_onboardings" */
   delete_item_onboardings_by_pk?: Maybe<Item_Onboardings>;
+  /** delete data from the table: "item_reviews" */
+  delete_item_reviews?: Maybe<Item_Reviews_Mutation_Response>;
+  /** delete single row from the table: "item_reviews" */
+  delete_item_reviews_by_pk?: Maybe<Item_Reviews>;
   /** delete data from the table: "spirit_type" */
   delete_spirit_type?: Maybe<Spirit_Type_Mutation_Response>;
   /** delete single row from the table: "spirit_type" */
@@ -6902,6 +7351,10 @@ export type Mutation_Root = {
   insert_item_onboardings?: Maybe<Item_Onboardings_Mutation_Response>;
   /** insert a single row into the table: "item_onboardings" */
   insert_item_onboardings_one?: Maybe<Item_Onboardings>;
+  /** insert data into the table: "item_reviews" */
+  insert_item_reviews?: Maybe<Item_Reviews_Mutation_Response>;
+  /** insert a single row into the table: "item_reviews" */
+  insert_item_reviews_one?: Maybe<Item_Reviews>;
   /** insert data into the table: "spirit_type" */
   insert_spirit_type?: Maybe<Spirit_Type_Mutation_Response>;
   /** insert a single row into the table: "spirit_type" */
@@ -7075,6 +7528,12 @@ export type Mutation_Root = {
   update_item_onboardings_by_pk?: Maybe<Item_Onboardings>;
   /** update multiples rows of table: "item_onboardings" */
   update_item_onboardings_many?: Maybe<Array<Maybe<Item_Onboardings_Mutation_Response>>>;
+  /** update data of the table: "item_reviews" */
+  update_item_reviews?: Maybe<Item_Reviews_Mutation_Response>;
+  /** update single row of the table: "item_reviews" */
+  update_item_reviews_by_pk?: Maybe<Item_Reviews>;
+  /** update multiples rows of table: "item_reviews" */
+  update_item_reviews_many?: Maybe<Array<Maybe<Item_Reviews_Mutation_Response>>>;
   /** update data of the table: "spirit_type" */
   update_spirit_type?: Maybe<Spirit_Type_Mutation_Response>;
   /** update single row of the table: "spirit_type" */
@@ -7420,6 +7879,18 @@ export type Mutation_RootDelete_Item_OnboardingsArgs = {
 
 /** mutation root */
 export type Mutation_RootDelete_Item_Onboardings_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Item_ReviewsArgs = {
+  where: Item_Reviews_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Item_Reviews_By_PkArgs = {
   id: Scalars['uuid']['input'];
 };
 
@@ -7845,6 +8316,20 @@ export type Mutation_RootInsert_Item_OnboardingsArgs = {
 export type Mutation_RootInsert_Item_Onboardings_OneArgs = {
   object: Item_Onboardings_Insert_Input;
   on_conflict?: InputMaybe<Item_Onboardings_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Item_ReviewsArgs = {
+  objects: Array<Item_Reviews_Insert_Input>;
+  on_conflict?: InputMaybe<Item_Reviews_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Item_Reviews_OneArgs = {
+  object: Item_Reviews_Insert_Input;
+  on_conflict?: InputMaybe<Item_Reviews_On_Conflict>;
 };
 
 
@@ -8515,6 +9000,28 @@ export type Mutation_RootUpdate_Item_Onboardings_ManyArgs = {
 
 
 /** mutation root */
+export type Mutation_RootUpdate_Item_ReviewsArgs = {
+  _inc?: InputMaybe<Item_Reviews_Inc_Input>;
+  _set?: InputMaybe<Item_Reviews_Set_Input>;
+  where: Item_Reviews_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Item_Reviews_By_PkArgs = {
+  _inc?: InputMaybe<Item_Reviews_Inc_Input>;
+  _set?: InputMaybe<Item_Reviews_Set_Input>;
+  pk_columns: Item_Reviews_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Item_Reviews_ManyArgs = {
+  updates: Array<Item_Reviews_Updates>;
+};
+
+
+/** mutation root */
 export type Mutation_RootUpdate_Spirit_TypeArgs = {
   _set?: InputMaybe<Spirit_Type_Set_Input>;
   where: Spirit_Type_Bool_Exp;
@@ -8819,6 +9326,12 @@ export type Query_Root = {
   item_onboardings_aggregate: Item_Onboardings_Aggregate;
   /** fetch data from the table: "item_onboardings" using primary key columns */
   item_onboardings_by_pk?: Maybe<Item_Onboardings>;
+  /** fetch data from the table: "item_reviews" */
+  item_reviews: Array<Item_Reviews>;
+  /** fetch aggregated fields from the table: "item_reviews" */
+  item_reviews_aggregate: Item_Reviews_Aggregate;
+  /** fetch data from the table: "item_reviews" using primary key columns */
+  item_reviews_by_pk?: Maybe<Item_Reviews>;
   /** spirit_defaults */
   spirit_defaults?: Maybe<Spirit_Defaults_Result>;
   /** fetch data from the table: "spirit_type" */
@@ -9424,6 +9937,29 @@ export type Query_RootItem_Onboardings_By_PkArgs = {
 };
 
 
+export type Query_RootItem_ReviewsArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+
+export type Query_RootItem_Reviews_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+
+export type Query_RootItem_Reviews_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
 export type Query_RootSpirit_DefaultsArgs = {
   hint: Item_Defaults_Hint;
 };
@@ -9592,6 +10128,19 @@ export type Query_RootWines_AggregateArgs = {
 
 export type Query_RootWines_By_PkArgs = {
   id: Scalars['uuid']['input'];
+};
+
+/** Boolean expression to compare columns of type "smallint". All fields are combined with logical 'AND'. */
+export type Smallint_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['smallint']['input']>;
+  _gt?: InputMaybe<Scalars['smallint']['input']>;
+  _gte?: InputMaybe<Scalars['smallint']['input']>;
+  _in?: InputMaybe<Array<Scalars['smallint']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['smallint']['input']>;
+  _lte?: InputMaybe<Scalars['smallint']['input']>;
+  _neq?: InputMaybe<Scalars['smallint']['input']>;
+  _nin?: InputMaybe<Array<Scalars['smallint']['input']>>;
 };
 
 export type Spirit_Defaults_Result = {
@@ -9789,6 +10338,10 @@ export type Spirits = {
   item_images_aggregate: Item_Image_Aggregate;
   item_onboarding_id: Scalars['uuid']['output'];
   name: Scalars['String']['output'];
+  /** An array relationship */
+  reviews: Array<Item_Reviews>;
+  /** An aggregate relationship */
+  reviews_aggregate: Item_Reviews_Aggregate;
   style?: Maybe<Scalars['String']['output']>;
   type: Spirit_Type_Enum;
   updated_at: Scalars['timestamptz']['output'];
@@ -9813,6 +10366,26 @@ export type SpiritsItem_Images_AggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Item_Image_Order_By>>;
   where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+/** columns and relationships of "spirits" */
+export type SpiritsReviewsArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+
+/** columns and relationships of "spirits" */
+export type SpiritsReviews_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
 };
 
 /** aggregated selection of "spirits" */
@@ -9907,6 +10480,8 @@ export type Spirits_Bool_Exp = {
   item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Bool_Exp>;
   item_onboarding_id?: InputMaybe<Uuid_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
+  reviews?: InputMaybe<Item_Reviews_Bool_Exp>;
+  reviews_aggregate?: InputMaybe<Item_Reviews_Aggregate_Bool_Exp>;
   style?: InputMaybe<String_Comparison_Exp>;
   type?: InputMaybe<Spirit_Type_Enum_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
@@ -9938,6 +10513,7 @@ export type Spirits_Insert_Input = {
   item_images?: InputMaybe<Item_Image_Arr_Rel_Insert_Input>;
   item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  reviews?: InputMaybe<Item_Reviews_Arr_Rel_Insert_Input>;
   style?: InputMaybe<Scalars['String']['input']>;
   type?: InputMaybe<Spirit_Type_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -10043,6 +10619,7 @@ export type Spirits_Order_By = {
   item_images_aggregate?: InputMaybe<Item_Image_Aggregate_Order_By>;
   item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
+  reviews_aggregate?: InputMaybe<Item_Reviews_Aggregate_Order_By>;
   style?: InputMaybe<Order_By>;
   type?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
@@ -10436,6 +11013,14 @@ export type Subscription_Root = {
   item_onboardings_by_pk?: Maybe<Item_Onboardings>;
   /** fetch data from the table in a streaming manner: "item_onboardings" */
   item_onboardings_stream: Array<Item_Onboardings>;
+  /** fetch data from the table: "item_reviews" */
+  item_reviews: Array<Item_Reviews>;
+  /** fetch aggregated fields from the table: "item_reviews" */
+  item_reviews_aggregate: Item_Reviews_Aggregate;
+  /** fetch data from the table: "item_reviews" using primary key columns */
+  item_reviews_by_pk?: Maybe<Item_Reviews>;
+  /** fetch data from the table in a streaming manner: "item_reviews" */
+  item_reviews_stream: Array<Item_Reviews>;
   /** fetch data from the table: "spirit_type" */
   spirit_type: Array<Spirit_Type>;
   /** fetch aggregated fields from the table: "spirit_type" */
@@ -11212,6 +11797,36 @@ export type Subscription_RootItem_Onboardings_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<Item_Onboardings_Stream_Cursor_Input>>;
   where?: InputMaybe<Item_Onboardings_Bool_Exp>;
+};
+
+
+export type Subscription_RootItem_ReviewsArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+
+export type Subscription_RootItem_Reviews_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+
+export type Subscription_RootItem_Reviews_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootItem_Reviews_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Item_Reviews_Stream_Cursor_Input>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
 };
 
 
@@ -12807,6 +13422,10 @@ export type Wines = {
   item_onboarding_id: Scalars['uuid']['output'];
   name: Scalars['String']['output'];
   region?: Maybe<Scalars['String']['output']>;
+  /** An array relationship */
+  reviews: Array<Item_Reviews>;
+  /** An aggregate relationship */
+  reviews_aggregate: Item_Reviews_Aggregate;
   special_designation?: Maybe<Scalars['String']['output']>;
   style: Wine_Style_Enum;
   updated_at: Scalars['timestamptz']['output'];
@@ -12834,6 +13453,26 @@ export type WinesItem_Images_AggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Item_Image_Order_By>>;
   where?: InputMaybe<Item_Image_Bool_Exp>;
+};
+
+
+/** columns and relationships of "wines" */
+export type WinesReviewsArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+
+/** columns and relationships of "wines" */
+export type WinesReviews_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Item_Reviews_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Item_Reviews_Order_By>>;
+  where?: InputMaybe<Item_Reviews_Bool_Exp>;
 };
 
 /** aggregated selection of "wines" */
@@ -12929,6 +13568,8 @@ export type Wines_Bool_Exp = {
   item_onboarding_id?: InputMaybe<Uuid_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
   region?: InputMaybe<String_Comparison_Exp>;
+  reviews?: InputMaybe<Item_Reviews_Bool_Exp>;
+  reviews_aggregate?: InputMaybe<Item_Reviews_Aggregate_Bool_Exp>;
   special_designation?: InputMaybe<String_Comparison_Exp>;
   style?: InputMaybe<Wine_Style_Enum_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
@@ -12964,6 +13605,7 @@ export type Wines_Insert_Input = {
   item_onboarding_id?: InputMaybe<Scalars['uuid']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   region?: InputMaybe<Scalars['String']['input']>;
+  reviews?: InputMaybe<Item_Reviews_Arr_Rel_Insert_Input>;
   special_designation?: InputMaybe<Scalars['String']['input']>;
   style?: InputMaybe<Wine_Style_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -13085,6 +13727,7 @@ export type Wines_Order_By = {
   item_onboarding_id?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
   region?: InputMaybe<Order_By>;
+  reviews_aggregate?: InputMaybe<Item_Reviews_Aggregate_Order_By>;
   special_designation?: InputMaybe<Order_By>;
   style?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;

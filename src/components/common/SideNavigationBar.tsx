@@ -13,7 +13,7 @@ import { useSignOut, useUserAvatarUrl } from "@nhost/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
-import { MdSettings, MdWarehouse } from "react-icons/md";
+import { MdWarehouse } from "react-icons/md";
 import { useMediaQuery } from "react-responsive";
 
 const NavLinkIconButton = styled(IconButton)(({ theme }) => ({
@@ -60,6 +60,7 @@ const SideNavigationBar = () => {
 
   return (
     <Sheet
+      variant="outlined"
       sx={(theme) => ({
         display: "flex",
         flexDirection: { xs: "row", sm: "column" },
