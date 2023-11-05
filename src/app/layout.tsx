@@ -1,8 +1,8 @@
 import "@fontsource/inter";
+import { Box } from "@mui/joy";
+import { Analytics } from "@vercel/analytics/react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Box, GlobalStyles } from "@mui/joy";
-import { Analytics } from "@vercel/analytics/react";
 import NhostClientProvider from "@/components/providers/NhostClientProvider";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -20,17 +20,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <GlobalStyles
-          styles={{
-            svg: {
-              color: "var(--Icon-color)",
-              margin: "var(--Icon-margin)",
-              fontSize: "var(--Icon-fontSize, 20px)",
-              width: "0.75em",
-              height: "0.75em",
-            },
-          }}
-        />
         <NhostClientProvider>
           <Box
             sx={{

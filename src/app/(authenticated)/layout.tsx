@@ -1,11 +1,11 @@
 "use client";
 
-import SideNavigationBar from "@/components/common/SideNavigationBar";
-import withAuth from "@/hocs/withAuth";
 import { Box, styled } from "@mui/joy";
 import Image from "next/image";
-import bot1 from "@/images/bot2.png";
 import { InstallPwaDialog } from "@/components/common/InstallPwaDialog";
+import SideNavigationBar from "@/components/common/SideNavigationBar";
+import withAuth from "@/hocs/withAuth";
+import bot1 from "@/images/bot2.png";
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -28,24 +28,6 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
         }}
       >
         {children}
-      </Box>
-      <Box
-        sx={{
-          position: "absolute",
-          right: "0",
-          bottom: "0",
-          zIndex: -10,
-          opacity: 0.1,
-          userSelect: "none",
-        }}
-      >
-        <Image
-          src={bot1}
-          height={300}
-          width={300}
-          alt="A cute robot assistant"
-          placeholder="blur"
-        />
       </Box>
     </Box>
   );

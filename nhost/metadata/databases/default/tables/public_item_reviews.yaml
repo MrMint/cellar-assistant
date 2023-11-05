@@ -1,0 +1,66 @@
+table:
+  name: item_reviews
+  schema: public
+object_relationships:
+  - name: beer
+    using:
+      foreign_key_constraint_on: beer_id
+  - name: spirit
+    using:
+      foreign_key_constraint_on: spirit_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+  - name: wine
+    using:
+      foreign_key_constraint_on: wine_id
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      set:
+        user_id: x-hasura-User-Id
+      columns:
+        - beer_id
+        - score
+        - spirit_id
+        - text
+        - wine_id
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - text
+        - score
+        - created_at
+        - updated_at
+        - beer_id
+        - id
+        - spirit_id
+        - user_id
+        - wine_id
+      filter: {}
+      query_root_fields:
+        - select_by_pk
+      subscription_root_fields:
+        - select_by_pk
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - score
+        - text
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: null
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+    comment: ""
