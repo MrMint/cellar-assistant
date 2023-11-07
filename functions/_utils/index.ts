@@ -58,3 +58,9 @@ export function dataUrlToFormData(
   });
   return data;
 }
+
+export const toDataUrl = async (response: Response) => {
+  const contentType = response.headers.get("Content-Type");
+  const blob = await response.arrayBuffer();
+  return `data:${contentType};base64,${Buffer.from(blob).toString("base64")}`;
+};
