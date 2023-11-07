@@ -15,6 +15,8 @@ export enum ItemType {
 export enum BarcodeType {
   UPC_A = "UPC_A",
   EAN_13 = "EAN_13",
+  UPC_E = "UPC_E",
+  EAN_8 = "EAN_8",
 }
 
 export type Barcode = {
