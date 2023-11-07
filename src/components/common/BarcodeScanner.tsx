@@ -1,4 +1,3 @@
-import { Barcode, BarcodeType } from "@/constants";
 import {
   Button,
   Card,
@@ -8,14 +7,20 @@ import {
   Typography,
   styled,
 } from "@mui/joy";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { useEffect, useState } from "react";
 import { Result, useZxing } from "react-zxing";
-import { BarcodeFormat, DecodeHintType } from "@zxing/library";
+import { Barcode, BarcodeType } from "@/constants";
 
 const hints = new Map<DecodeHintType, any>([
   [
     DecodeHintType.POSSIBLE_FORMATS,
-    [BarcodeFormat.EAN_13, BarcodeFormat.UPC_A],
+    [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_E,
+    ],
   ],
 ]);
 
@@ -55,8 +60,14 @@ export const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
         case BarcodeFormat.UPC_A:
           type = BarcodeType.UPC_A;
           break;
+        case BarcodeFormat.UPC_E:
+          type = BarcodeType.UPC_E;
+          break;
         case BarcodeFormat.EAN_13:
           type = BarcodeType.EAN_13;
+          break;
+        case BarcodeFormat.EAN_8:
+          type = BarcodeType.EAN_8;
           break;
         default:
           break;

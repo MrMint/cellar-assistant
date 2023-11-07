@@ -22,3 +22,22 @@ select_permissions:
       query_root_fields: []
       subscription_root_fields: []
     comment: ""
+event_triggers:
+  - name: generate_placeholder
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+    retry_conf:
+      interval_sec: 10
+      num_retries: 5
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/generatePlaceholder'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET
+    request_transform:
+      method: POST
+      query_params: {}
+      template_engine: Kriti
+      version: 2
