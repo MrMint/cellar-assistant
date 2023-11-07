@@ -5,7 +5,7 @@ import { getNextPlaceholder, nhostImageLoader } from "@/utilities";
 
 export type ItemImageProps = {
   fileId?: string;
-  placeholder?: string;
+  placeholder?: string | null;
   fallback: StaticImageData;
 };
 
