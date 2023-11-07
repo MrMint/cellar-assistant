@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.20.0](https://github.com/MrMint/cellar-assistant/compare/v0.19.0...v0.20.0) (2023-11-07)
+
+
+### Features
+
+* adds async placeholder image generation for user uploads ([93bea3b](https://github.com/MrMint/cellar-assistant/commit/93bea3b605f556c3df9beb539453456fe22558c6))
+* Adds placeholder usage to item detail pages ([f612504](https://github.com/MrMint/cellar-assistant/commit/f612504e9c81c6c0a920dee3d4449c60dc5ee629))
+* Adds support for EAN_8 and UPC_E barcodes ([cf59813](https://github.com/MrMint/cellar-assistant/commit/cf598130e56ae86ab3c61668cabc3de3b66fed93))
+* Makes wine varietal optional ([909715f](https://github.com/MrMint/cellar-assistant/commit/909715fcecce7d2cc5b0e5b9dc8df86699e580b6))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/aiplatform to v3.5.0 ([6322199](https://github.com/MrMint/cellar-assistant/commit/63221995cbe4cdb6a25ea10e3238e9c5d2b1f5b1))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.14 ([6eca75c](https://github.com/MrMint/cellar-assistant/commit/6eca75c8e6624e052c999f43cc06c2f04c61039f))
+* **deps:** update dependency @types/react to v18.2.36 ([dcdec38](https://github.com/MrMint/cellar-assistant/commit/dcdec38d2859c9659bcc75a6c2a5e9ac49216080))
+
 ## [0.19.0](https://github.com/MrMint/cellar-assistant/compare/v0.18.0...v0.19.0) (2023-11-05)
 
 
