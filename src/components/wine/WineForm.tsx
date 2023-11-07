@@ -145,7 +145,7 @@ export const WineForm = ({
     if (isNil(errored) && isNotNil(createdId)) {
       onCreated(createdId);
     } else {
-      setError("root.serverError", {
+      setError("root", {
         type: "custom",
         message: "Something went wrong please try again...",
       });
@@ -322,7 +322,7 @@ export const WineForm = ({
             </FormControl>
           </Stack>
           {errors.root !== undefined && (
-            <Typography>Woah error encountered</Typography>
+            <Typography>{errors.root.message}</Typography>
           )}
           <Button loading={isSubmitting} type="submit">
             Add
