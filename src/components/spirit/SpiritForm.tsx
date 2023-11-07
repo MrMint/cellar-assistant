@@ -132,7 +132,7 @@ export const SpiritForm = ({
     if (isNil(errored) && isNotNil(createdId)) {
       onCreated(createdId);
     } else {
-      setError("root.serverError", {
+      setError("root", {
         type: "custom",
         message: "Something went wrong please try again...",
       });
@@ -266,7 +266,7 @@ export const SpiritForm = ({
             </FormControl>
           </Stack>
           {errors.root !== undefined && (
-            <Typography>Woah error encountered</Typography>
+            <Typography>{errors.root.message}</Typography>
           )}
           <Button loading={isSubmitting} type="submit">
             Add

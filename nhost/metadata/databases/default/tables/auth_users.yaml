@@ -135,13 +135,34 @@ array_relationships:
           name: user_providers
           schema: auth
 select_permissions:
+  - role: me
+    permission:
+      columns:
+        - avatar_url
+        - display_name
+        - email
+        - id
+      filter:
+        id:
+          _eq: X-Hasura-User-Id
+    comment: ""
   - role: user
     permission:
       columns:
         - avatar_url
         - display_name
         - id
+      filter: {}
+    comment: ""
+update_permissions:
+  - role: me
+    permission:
+      columns:
+        - avatar_url
+        - display_name
+        - phone_number
       filter:
         id:
           _eq: X-Hasura-User-Id
+      check: null
     comment: ""
