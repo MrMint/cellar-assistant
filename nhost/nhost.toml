@@ -1,6 +1,10 @@
 [global]
 
 [[global.environment]]
+name = 'PLACEHOLDER_API_URL'
+value = '{{ secrets.PLACEHOLDER_API_URL }}'
+
+[[global.environment]]
 name = 'CREDENTIALS_GCP_ID'
 value = '{{ secrets.CREDENTIALS_GCP_ID }}'
 
