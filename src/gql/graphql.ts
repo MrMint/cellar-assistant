@@ -13429,7 +13429,7 @@ export type Wines = {
   special_designation?: Maybe<Scalars['String']['output']>;
   style: Wine_Style_Enum;
   updated_at: Scalars['timestamptz']['output'];
-  variety: Wine_Variety_Enum;
+  variety?: Maybe<Wine_Variety_Enum>;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
   vintage: Scalars['date']['output'];
   winery_id?: Maybe<Scalars['uuid']['output']>;
@@ -14001,14 +14001,14 @@ export type EditWinePageQueryQueryVariables = Exact<{
 }>;
 
 
-export type EditWinePageQueryQuery = { __typename: 'query_root', wines_by_pk?: { __typename: 'wines', id: string, name: string, description?: string | null, created_by_id: string, vintage: string, alcohol_content_percentage?: any | null, barcode_code?: string | null, special_designation?: string | null, vineyard_designation?: string | null, variety: Wine_Variety_Enum, region?: string | null, style: Wine_Style_Enum, country?: Country_Enum | null } | null };
+export type EditWinePageQueryQuery = { __typename: 'query_root', wines_by_pk?: { __typename: 'wines', id: string, name: string, description?: string | null, created_by_id: string, vintage: string, alcohol_content_percentage?: any | null, barcode_code?: string | null, special_designation?: string | null, vineyard_designation?: string | null, variety?: Wine_Variety_Enum | null, region?: string | null, style: Wine_Style_Enum, country?: Country_Enum | null } | null };
 
 export type GetCellarWineQueryVariables = Exact<{
   itemId: Scalars['uuid']['input'];
 }>;
 
 
-export type GetCellarWineQuery = { __typename: 'query_root', cellar_wine_by_pk?: { __typename: 'cellar_wine', wine: { __typename: 'wines', id: string, name: string, created_by_id: string, region?: string | null, variety: Wine_Variety_Enum, vintage: string, style: Wine_Style_Enum, country?: Country_Enum | null, description?: string | null, barcode_code?: string | null, alcohol_content_percentage?: any | null, reviews: Array<{ __typename: 'item_reviews', id: string, score: number, text?: string | null, createdAt: string, user: { __typename: 'users', avatarUrl: string, displayName: string } }> }, display_image?: { __typename: 'item_image', file_id: string, placeholder?: string | null } | null, cellar: { __typename: 'cellars', name: string } } | null };
+export type GetCellarWineQuery = { __typename: 'query_root', cellar_wine_by_pk?: { __typename: 'cellar_wine', wine: { __typename: 'wines', id: string, name: string, created_by_id: string, region?: string | null, variety?: Wine_Variety_Enum | null, vintage: string, style: Wine_Style_Enum, country?: Country_Enum | null, description?: string | null, barcode_code?: string | null, alcohol_content_percentage?: any | null, reviews: Array<{ __typename: 'item_reviews', id: string, score: number, text?: string | null, createdAt: string, user: { __typename: 'users', avatarUrl: string, displayName: string } }> }, display_image?: { __typename: 'item_image', file_id: string, placeholder?: string | null } | null, cellar: { __typename: 'cellars', name: string } } | null };
 
 export type AddCellarMutationVariables = Exact<{
   cellar: Cellars_Insert_Input;
@@ -14034,7 +14034,7 @@ export type GetWinePageQueryQueryVariables = Exact<{
 }>;
 
 
-export type GetWinePageQueryQuery = { __typename: 'query_root', wines_by_pk?: { __typename: 'wines', id: string, name: string, created_by_id: string, region?: string | null, variety: Wine_Variety_Enum, style: Wine_Style_Enum, vintage: string, description?: string | null, barcode_code?: string | null, alcohol_content_percentage?: any | null } | null, cellars: Array<{ __typename: 'cellars', id: string, name: string }> };
+export type GetWinePageQueryQuery = { __typename: 'query_root', wines_by_pk?: { __typename: 'wines', id: string, name: string, created_by_id: string, region?: string | null, variety?: Wine_Variety_Enum | null, style: Wine_Style_Enum, vintage: string, description?: string | null, barcode_code?: string | null, alcohol_content_percentage?: any | null } | null, cellars: Array<{ __typename: 'cellars', id: string, name: string }> };
 
 export type UpdateBeerMutationVariables = Exact<{
   beerId: Scalars['uuid']['input'];

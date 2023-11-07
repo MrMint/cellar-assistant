@@ -38,19 +38,18 @@ type SharedFields = {
   barcode_code?: string;
   barcode_type?: string;
   country?: Country_Enum;
+  variety?: Wine_Variety_Enum;
 };
 
 type IWineFormInput = {
   name: string;
   vintage: number;
-  variety: Wine_Variety_Enum;
   style: Wine_Style_Enum;
 } & SharedFields;
 
 export type WineFormDefaultValues = {
   name?: string;
   vintage?: string;
-  variety?: Wine_Variety_Enum;
   style?: Wine_Style_Enum;
 } & SharedFields;
 
@@ -227,12 +226,11 @@ export const WineForm = ({
                 )}
               />
             </FormControl>
-            <FormControl required>
+            <FormControl>
               <FormLabel>Variety</FormLabel>
               <Controller
                 name="variety"
                 control={control}
-                rules={{ required: true }}
                 render={({ field }) => (
                   <Select
                     placeholder="Choose one…"
