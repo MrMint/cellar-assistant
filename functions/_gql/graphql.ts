@@ -13429,7 +13429,7 @@ export type Wines = {
   special_designation?: Maybe<Scalars['String']['output']>;
   style: Wine_Style_Enum;
   updated_at: Scalars['timestamptz']['output'];
-  variety: Wine_Variety_Enum;
+  variety?: Maybe<Wine_Variety_Enum>;
   vineyard_designation?: Maybe<Scalars['String']['output']>;
   vintage: Scalars['date']['output'];
   winery_id?: Maybe<Scalars['uuid']['output']>;
