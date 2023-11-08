@@ -6,14 +6,13 @@ import {
   CircularProgress,
   IconButton,
 } from "@mui/joy";
-import { isNil } from "ramda";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { BsCamera } from "react-icons/bs";
 import Webcam from "react-webcam";
 
 const videoConstraints = {
-  width: 1080,
-  height: 1920,
+  width: 1920,
+  aspectRatio: 1,
   facingMode: "environment",
 };
 
@@ -34,7 +33,7 @@ export const CameraCapture = ({
     }
   }, [webcamRef, onCapture]);
   return (
-    <Card sx={{ aspectRatio: "10/16", maxHeight: "600px" }}>
+    <Card sx={{ aspectRatio: "1", maxHeight: "600px" }}>
       {!isVideoLoaded && (
         <CardCover>
           <CircularProgress />
@@ -46,7 +45,7 @@ export const CameraCapture = ({
           audio={false}
           forceScreenshotSourceSize={true}
           screenshotQuality={1}
-          screenshotFormat="image/png"
+          screenshotFormat="image/jpeg"
           videoConstraints={videoConstraints}
           onUserMedia={() => setIsVideoLoaded(true)}
         />

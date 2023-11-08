@@ -83,13 +83,15 @@ const SpiritDetails = ({
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
-          <ItemImage
-            fileId={displayImage?.file_id}
-            placeholder={displayImage?.placeholder}
-            fallback={spirit1}
-          />
+          {!isLoading && (
+            <ItemImage
+              fileId={displayImage?.file_id}
+              placeholder={displayImage?.placeholder}
+              fallback={spirit1}
+            />
+          )}
         </Grid>
-        {isLoading === false && spirit !== undefined && (
+        {!isLoading && isNotNil(spirit) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
               <Card>

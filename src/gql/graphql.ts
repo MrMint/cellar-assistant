@@ -13255,6 +13255,7 @@ export enum Wine_Variety_Constraint {
 
 export enum Wine_Variety_Enum {
   Aglianico = 'AGLIANICO',
+  AlbarinoAlvarinho = 'ALBARINO_ALVARINHO',
   Arneis = 'ARNEIS',
   Asti = 'ASTI',
   Barbera = 'BARBERA',
@@ -13263,32 +13264,40 @@ export enum Wine_Variety_Enum {
   CabernetFranc = 'CABERNET_FRANC',
   CabernetSauvignon = 'CABERNET_SAUVIGNON',
   Carignan = 'CARIGNAN',
+  Carmenere = 'CARMENERE',
   Cava = 'CAVA',
   Champagne = 'CHAMPAGNE',
   Chardonnay = 'CHARDONNAY',
   CheninBlanc = 'CHENIN_BLANC',
   Cinsault = 'CINSAULT',
   Corvina = 'CORVINA',
+  Cremant = 'CREMANT',
   Dolcetto = 'DOLCETTO',
   Furmint = 'FURMINT',
   Gamay = 'GAMAY',
   Garganega = 'GARGANEGA',
+  Gewurztraminer = 'GEWURZTRAMINER',
   Grenache = 'GRENACHE',
+  GrunerVeltliner = 'GRUNER_VELTLINER',
   Lambrusco = 'LAMBRUSCO',
   Malbec = 'MALBEC',
   Malvasia = 'MALVASIA',
   Marsanne = 'MARSANNE',
   Merlot = 'MERLOT',
   MourvedreMonastrell = 'MOURVEDRE_MONASTRELL',
+  MullerThurgau = 'MULLER_THURGAU',
   Muscadet = 'MUSCADET',
   Nebbiolo = 'NEBBIOLO',
   PetiteSirah = 'PETITE_SIRAH',
   PetitVerdot = 'PETIT_VERDOT',
   Pinotage = 'PINOTAGE',
   PinotBlanc = 'PINOT_BLANC',
+  PinotGrigioPinotGris = 'PINOT_GRIGIO_PINOT_GRIS',
   PinotNoir = 'PINOT_NOIR',
   Primitivo = 'PRIMITIVO',
   Prosecco = 'PROSECCO',
+  RedBlend = 'RED_BLEND',
+  RhoneBlends = 'RHONE_BLENDS',
   Riesling = 'RIESLING',
   Roussanne = 'ROUSSANNE',
   Sangiovese = 'SANGIOVESE',
@@ -14029,6 +14038,21 @@ export type GetCellarsQueryVariables = Exact<{ [key: string]: never; }>;
 
 export type GetCellarsQuery = { __typename: 'query_root', cellars: Array<{ __typename: 'cellars', id: string, name: string, createdBy: { __typename: 'users', displayName: string, avatarUrl: string } }> };
 
+export type GetUserQueryVariables = Exact<{
+  userId: Scalars['uuid']['input'];
+}>;
+
+
+export type GetUserQuery = { __typename: 'query_root', user?: { __typename: 'users', id: string, displayName: string, avatarUrl: string } | null };
+
+export type UpdateUserMutationVariables = Exact<{
+  userId: Scalars['uuid']['input'];
+  displayName: Scalars['String']['input'];
+}>;
+
+
+export type UpdateUserMutation = { __typename: 'mutation_root', updateUser?: { __typename: 'users', id: string } | null };
+
 export type GetWinePageQueryQueryVariables = Exact<{
   itemId: Scalars['uuid']['input'];
 }>;
@@ -14198,6 +14222,8 @@ export const GetCellarWineDocument = {"kind":"Document","definitions":[{"kind":"
 export const AddCellarDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addCellar"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellar"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"cellars_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_cellars_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellar"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddCellarMutation, AddCellarMutationVariables>;
 export const AddUserToCellarUsersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"addUserToCellarUsers"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cellarUser"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"cellar_user_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_cellar_user_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cellarUser"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddUserToCellarUsersMutation, AddUserToCellarUsersMutationVariables>;
 export const GetCellarsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}}]}}]}}]} as unknown as DocumentNode<GetCellarsQuery, GetCellarsQueryVariables>;
+export const GetUserDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetUser"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"userId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"userId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}}]}}]} as unknown as DocumentNode<GetUserQuery, GetUserQueryVariables>;
+export const UpdateUserDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateUser"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"userId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"displayName"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateUser"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"pk_columns"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"userId"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"_set"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"displayName"},"value":{"kind":"Variable","name":{"kind":"Name","value":"displayName"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateUserMutation, UpdateUserMutationVariables>;
 export const GetWinePageQueryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetWinePageQuery"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"wines_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"created_by_id"}},{"kind":"Field","name":{"kind":"Name","value":"region"}},{"kind":"Field","name":{"kind":"Name","value":"variety"}},{"kind":"Field","name":{"kind":"Name","value":"style"}},{"kind":"Field","name":{"kind":"Name","value":"vintage"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"barcode_code"}},{"kind":"Field","name":{"kind":"Name","value":"alcohol_content_percentage"}}]}},{"kind":"Field","name":{"kind":"Name","value":"cellars"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<GetWinePageQueryQuery, GetWinePageQueryQueryVariables>;
 export const UpdateBeerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"updateBeer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beerId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"beer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"beers_set_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"update_beers_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"pk_columns"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beerId"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"_set"},"value":{"kind":"Variable","name":{"kind":"Name","value":"beer"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateBeerMutation, UpdateBeerMutationVariables>;
 export const GetBeerDefaultsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetBeerDefaults"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"hint"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"item_defaults_hint"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"beer_defaults"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"hint"},"value":{"kind":"Variable","name":{"kind":"Name","value":"hint"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"alcohol_content_percentage"}},{"kind":"Field","name":{"kind":"Name","value":"barcode_code"}},{"kind":"Field","name":{"kind":"Name","value":"barcode_type"}},{"kind":"Field","name":{"kind":"Name","value":"item_onboarding_id"}},{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"vintage"}},{"kind":"Field","name":{"kind":"Name","value":"style"}},{"kind":"Field","name":{"kind":"Name","value":"international_bitterness_unit"}}]}}]}}]} as unknown as DocumentNode<GetBeerDefaultsQuery, GetBeerDefaultsQueryVariables>;

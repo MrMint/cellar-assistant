@@ -36,8 +36,8 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             <Image
               src={item.displayImageId}
               alt="An image of a beer glass"
-              height={300}
-              width={300}
+              height={400}
+              width={400}
               loader={nhostImageLoader}
               placeholder={getNextPlaceholder(item.placeholder)}
             />

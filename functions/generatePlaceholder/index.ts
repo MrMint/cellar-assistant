@@ -45,7 +45,11 @@ export default async function uploadItemImage(
 
     console.log(`Received request`);
 
-    const url = nhostClient.storage.getPublicUrl({ fileId: file_id });
+    const url = nhostClient.storage.getPublicUrl({
+      fileId: file_id,
+      width: 1000,
+      quality: 90,
+    });
 
     const imageDownloadResponse = await fetch(url);
     if (imageDownloadResponse.ok === false) return res.status(500).send();

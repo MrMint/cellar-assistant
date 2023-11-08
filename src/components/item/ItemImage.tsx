@@ -21,7 +21,8 @@ export const ItemImage = ({
           <Image
             src={fileId}
             alt="A picture of a glass"
-            fill
+            height={500}
+            width={500}
             loader={nhostImageLoader}
             placeholder={getNextPlaceholder(placeholder)}
           />

@@ -24,6 +24,8 @@ const documents = {
     "\n  mutation addCellar($cellar: cellars_insert_input!) {\n    insert_cellars_one(object: $cellar) {\n      id\n    }\n  }\n": types.AddCellarDocument,
     "\n  mutation addUserToCellarUsers($cellarUser: cellar_user_insert_input!) {\n    insert_cellar_user_one(object: $cellarUser) {\n      id\n    }\n  }\n": types.AddUserToCellarUsersDocument,
     "\n  query GetCellars {\n    cellars {\n      id\n      name\n      createdBy {\n        displayName\n        avatarUrl\n      }\n    }\n  }\n": types.GetCellarsDocument,
+    "\n  query GetUser($userId: uuid!) {\n    user(id: $userId) {\n      id\n      displayName\n      avatarUrl\n    }\n  }\n": types.GetUserDocument,
+    "\n  mutation UpdateUser($userId: uuid!, $displayName: String!) {\n    updateUser(\n      pk_columns: { id: $userId }\n      _set: { displayName: $displayName }\n    ) {\n      id\n    }\n  }\n": types.UpdateUserDocument,
     "\n  query GetWinePageQuery($itemId: uuid!) {\n    wines_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      region\n      variety\n      style\n      vintage\n      description\n      barcode_code\n      alcohol_content_percentage\n    }\n    cellars {\n      id\n      name\n    }\n  }\n": types.GetWinePageQueryDocument,
     "\n  mutation updateBeer($beerId: uuid!, $beer: beers_set_input!) {\n    update_beers_by_pk(pk_columns: { id: $beerId }, _set: $beer) {\n      id\n    }\n  }\n": types.UpdateBeerDocument,
     "\n  query GetBeerDefaults($hint: item_defaults_hint!) {\n    beer_defaults(hint: $hint) {\n      name\n      description\n      alcohol_content_percentage\n      barcode_code\n      barcode_type\n      item_onboarding_id\n      country\n      vintage\n      style\n      international_bitterness_unit\n    }\n  }\n": types.GetBeerDefaultsDocument,
@@ -106,6 +108,14 @@ export function graphql(source: "\n  mutation addUserToCellarUsers($cellarUser: 
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query GetCellars {\n    cellars {\n      id\n      name\n      createdBy {\n        displayName\n        avatarUrl\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetCellars {\n    cellars {\n      id\n      name\n      createdBy {\n        displayName\n        avatarUrl\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query GetUser($userId: uuid!) {\n    user(id: $userId) {\n      id\n      displayName\n      avatarUrl\n    }\n  }\n"): (typeof documents)["\n  query GetUser($userId: uuid!) {\n    user(id: $userId) {\n      id\n      displayName\n      avatarUrl\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation UpdateUser($userId: uuid!, $displayName: String!) {\n    updateUser(\n      pk_columns: { id: $userId }\n      _set: { displayName: $displayName }\n    ) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateUser($userId: uuid!, $displayName: String!) {\n    updateUser(\n      pk_columns: { id: $userId }\n      _set: { displayName: $displayName }\n    ) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

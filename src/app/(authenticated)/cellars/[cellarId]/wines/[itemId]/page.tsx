@@ -86,13 +86,15 @@ const WineDetails = ({
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
-          <ItemImage
-            fileId={displayImage?.file_id}
-            placeholder={displayImage?.placeholder}
-            fallback={wine1}
-          />
+          {!isLoading && (
+            <ItemImage
+              fileId={displayImage?.file_id}
+              placeholder={displayImage?.placeholder}
+              fallback={wine1}
+            />
+          )}
         </Grid>
-        {isLoading === false && wine !== undefined && (
+        {!isLoading && isNotNil(wine) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
               <Card>
