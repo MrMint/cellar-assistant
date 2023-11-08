@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.21.0](https://github.com/MrMint/cellar-assistant/compare/v0.20.0...v0.21.0) (2023-11-08)
+
+
+### Features
+
+* Adds user edit page ([0dd738d](https://github.com/MrMint/cellar-assistant/commit/0dd738df4226847c00f5b64788c498592e1d11b4))
+* Improves image sizing along with aspect ratios for capture/display ([4d68616](https://github.com/MrMint/cellar-assistant/commit/4d68616c6e354e027405811c84bb398fcbfcee15))
+* Updates user icon to allow for profile edits/sign out ([aef3a75](https://github.com/MrMint/cellar-assistant/commit/aef3a752661ab16d824aa55b08857fa14e329cdd))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v20.9.0 ([64ef895](https://github.com/MrMint/cellar-assistant/commit/64ef8951febf6a991e0b8052f27088dc08fe3ca1))
+* **deps:** update dependency @types/ramda to v0.29.8 ([635b8de](https://github.com/MrMint/cellar-assistant/commit/635b8de76d32d63364d35062b76234f9891bba0d))
+* **deps:** update react monorepo ([4015e29](https://github.com/MrMint/cellar-assistant/commit/4015e2996d2ed46b6c8b57e17d20e64ac0f76e90))
+
 ## [0.20.0](https://github.com/MrMint/cellar-assistant/compare/v0.19.0...v0.20.0) (2023-11-07)
 
 
