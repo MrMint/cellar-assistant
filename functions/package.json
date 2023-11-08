@@ -7,7 +7,7 @@
   },
   "author": "",
   "devDependencies": {
-    "@types/express": "4.17.20"
+    "@types/express": "4.17.21"
   },
   "dependencies": {
     "@google-cloud/aiplatform": "3.5.0",
