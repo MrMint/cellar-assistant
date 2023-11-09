@@ -8,6 +8,7 @@ import {
   ModalDialog,
   Stack,
 } from "@mui/joy";
+import { useUserId } from "@nhost/nextjs";
 import { useRouter } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { useEffect, useState } from "react";
@@ -24,6 +25,7 @@ type CellarItemHeaderProps = {
   itemType: ItemType;
   cellarId: string;
   cellarName: string | undefined;
+  cellarCreatedById: string | undefined;
 };
 
 const deleteBeerMutation = graphql(`
@@ -56,8 +58,12 @@ export const CellarItemHeader = ({
   itemName,
   cellarId,
   cellarName,
+  cellarCreatedById,
 }: CellarItemHeaderProps) => {
   const router = useRouter();
+  const userId = useUserId();
+  if (isNil(userId)) throw Error("UserId not found");
+
   const [open, setOpen] = useState(false);
   const [beerResponse, deleteBeer] = useMutation(deleteBeerMutation);
   const [spiritResponse, deleteSpirit] = useMutation(deleteSpiritMutation);
@@ -129,6 +135,7 @@ export const CellarItemHeader = ({
           <Button
             variant="outlined"
             color="danger"
+            disabled={userId !== cellarCreatedById}
             onClick={() => setOpen(true)}
             startDecorator={<MdDelete />}
           >
