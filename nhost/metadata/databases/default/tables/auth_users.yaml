@@ -106,6 +106,27 @@ array_relationships:
         table:
           name: cellar_user
           schema: public
+  - name: friends
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: friends
+          schema: public
+  - name: incomingFriendRequests
+    using:
+      foreign_key_constraint_on:
+        column: friend_id
+        table:
+          name: friend_requests
+          schema: public
+  - name: outgoingFriendRequests
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: friend_requests
+          schema: public
   - name: refreshTokens
     using:
       foreign_key_constraint_on:

@@ -1,0 +1,91 @@
+table:
+  name: friend_requests
+  schema: public
+object_relationships:
+  - name: friend
+    using:
+      foreign_key_constraint_on: friend_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        _and:
+          - _not:
+              friend:
+                friends:
+                  friend_id:
+                    _eq: X-Hasura-User-Id
+          - _not:
+              friend:
+                incomingFriendRequests:
+                  user_id:
+                    _eq: X-Hasura-User-Id
+          - _not:
+              friend:
+                outgoingFriendRequests:
+                  friend_id:
+                    _eq: X-Hasura-User-Id
+          - friend_id:
+              _neq: X-Hasura-User-Id
+      set:
+        status: PENDING
+        user_id: x-hasura-User-Id
+      columns:
+        - friend_id
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - friend_id
+        - id
+        - status
+        - user_id
+      filter:
+        _or:
+          - user_id:
+              _eq: X-Hasura-User-Id
+          - friend_id:
+              _eq: X-Hasura-User-Id
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - status
+      filter:
+        _and:
+          - status:
+              _eq: PENDING
+          - friend_id:
+              _eq: X-Hasura-User-Id
+      check: null
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        _or:
+          - user_id:
+              _eq: X-Hasura-User-Id
+          - friend_id:
+              _eq: X-Hasura-User-Id
+    comment: ""
+event_triggers:
+  - name: friend_request
+    definition:
+      enable_manual: false
+      update:
+        columns:
+          - status
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/friendManager'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET

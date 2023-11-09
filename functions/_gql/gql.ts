@@ -14,6 +14,7 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  */
 const documents = {
     "\n  query GetCredential($id: String!) {\n    admin_credentials_by_pk(id: $id) {\n      id\n      credentials\n    }\n  }\n": types.GetCredentialDocument,
+    "\n  mutation InsertFriends(\n    $friends: [friends_insert_input!]!\n    $requestId: uuid!\n  ) {\n    insert_friends(objects: $friends) {\n      affected_rows\n    }\n\n    delete_friend_requests_by_pk(id: $requestId) {\n      id\n    }\n  }\n": types.InsertFriendsDocument,
     "\n  mutation UpdateItemImage($itemId: uuid!, $item: item_image_set_input!) {\n    update_item_image_by_pk(pk_columns: { id: $itemId }, _set: $item) {\n      id\n    }\n  }\n": types.UpdateItemImageDocument,
     "\n  mutation AddItemOnboarding($onboarding: item_onboardings_insert_input!) {\n    insert_item_onboardings_one(object: $onboarding) {\n      id\n    }\n  }\n": types.AddItemOnboardingDocument,
     "\n  query GetFile($id: uuid!) {\n    file(id: $id) {\n      id\n      bucket {\n        id\n      }\n      mimeType\n      size\n    }\n  }\n": types.GetFileDocument,
@@ -39,6 +40,10 @@ export function graphql(source: string): unknown;
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query GetCredential($id: String!) {\n    admin_credentials_by_pk(id: $id) {\n      id\n      credentials\n    }\n  }\n"): (typeof documents)["\n  query GetCredential($id: String!) {\n    admin_credentials_by_pk(id: $id) {\n      id\n      credentials\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation InsertFriends(\n    $friends: [friends_insert_input!]!\n    $requestId: uuid!\n  ) {\n    insert_friends(objects: $friends) {\n      affected_rows\n    }\n\n    delete_friend_requests_by_pk(id: $requestId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation InsertFriends(\n    $friends: [friends_insert_input!]!\n    $requestId: uuid!\n  ) {\n    insert_friends(objects: $friends) {\n      affected_rows\n    }\n\n    delete_friend_requests_by_pk(id: $requestId) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
