@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.22.0](https://github.com/MrMint/cellar-assistant/compare/v0.21.0...v0.22.0) (2023-11-09)
+
+
+### Features
+
+* Adds cellar editing and supports sharing with friends ([5d86f37](https://github.com/MrMint/cellar-assistant/commit/5d86f37c8a3c121fd47e20733a044eb159a16107))
+* Adds friends feature ([4aa6a0d](https://github.com/MrMint/cellar-assistant/commit/4aa6a0d36ecf70071ec48f4218f12bb3c548a336))
+
+
+### Bug Fixes
+
+* **deps:** update xstate monorepo ([0b681e8](https://github.com/MrMint/cellar-assistant/commit/0b681e885483dfa5a1e371d93ca78c9c5050fa26))
+
 ## [0.21.0](https://github.com/MrMint/cellar-assistant/compare/v0.20.0...v0.21.0) (2023-11-08)
 
 
