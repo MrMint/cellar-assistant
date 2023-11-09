@@ -41,6 +41,7 @@ const getBeerQuery = graphql(`
       }
       cellar {
         name
+        created_by_id
       }
     }
   }
@@ -79,6 +80,7 @@ const BeerDetails = ({
         itemName={beer?.name}
         cellarId={cellarId}
         cellarName={cellar?.name}
+        cellarCreatedById={cellar?.created_by_id}
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>

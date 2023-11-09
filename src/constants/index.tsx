@@ -1,6 +1,7 @@
 import {
   Beer_Style_Enum,
   Country_Enum,
+  Permission_Type_Enum,
   Wine_Style_Enum,
   Wine_Variety_Enum,
 } from "@/gql/graphql";
@@ -47,3 +48,4 @@ export const beerStyleKeys = getEnumKeys(Beer_Style_Enum);
 export const wineStyleKeys = getEnumKeys(Wine_Style_Enum);
 export const wineVarietyKeys = getEnumKeys(Wine_Variety_Enum);
 export const countryKeys = getEnumKeys(Country_Enum);
+export const permissionKeys = getEnumKeys(Permission_Type_Enum);

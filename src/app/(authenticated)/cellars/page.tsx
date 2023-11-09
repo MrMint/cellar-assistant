@@ -1,12 +1,16 @@
 "use client";
 
-import { graphql } from "@/gql";
-import withAuth from "@/hocs/withAuth";
 import { Box, Button, Grid, Link, Stack } from "@mui/joy";
+import { useUserId } from "@nhost/nextjs";
+import { useRouter } from "next/navigation";
+import { isNil } from "ramda";
+import { useCallback } from "react";
 import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
-import TopNavigationBar from "@/components/common/HeaderBar";
 import { CellarCard } from "@/components/cellar/CellarCard";
+import TopNavigationBar from "@/components/common/HeaderBar";
+import { graphql } from "@/gql";
+import withAuth from "@/hocs/withAuth";
 
 const cellarsQuery = graphql(`
   query GetCellars {
@@ -14,6 +18,7 @@ const cellarsQuery = graphql(`
       id
       name
       createdBy {
+        id
         displayName
         avatarUrl
       }
@@ -23,6 +28,14 @@ const cellarsQuery = graphql(`
 
 const Cellars = () => {
   const [{ data }] = useQuery({ query: cellarsQuery });
+  const userId = useUserId();
+  const router = useRouter();
+  if (isNil(userId)) throw new Error("Nil UserId");
+
+  const handleEditClick = useCallback(
+    (cellarId: string) => router.push(`/cellars/${cellarId}/edit`),
+    [router],
+  );
 
   return (
     <Box>
@@ -42,7 +55,12 @@ const Cellars = () => {
         <Grid container spacing={2} sx={{ flexGrow: 1 }}>
           {data?.cellars.map((x, i) => (
             <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
-              <CellarCard cellar={x} index={i} />
+              <CellarCard
+                userId={userId}
+                cellar={x}
+                index={i}
+                onEditClick={handleEditClick}
+              />
             </Grid>
           ))}
         </Grid>

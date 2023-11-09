@@ -99,13 +99,6 @@ array_relationships:
         table:
           name: cellars
           schema: public
-  - name: cellarsShared
-    using:
-      foreign_key_constraint_on:
-        column: user_id
-        table:
-          name: cellar_user
-          schema: public
   - name: friends
     using:
       foreign_key_constraint_on:

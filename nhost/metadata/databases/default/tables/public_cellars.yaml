@@ -5,14 +5,6 @@ object_relationships:
   - name: createdBy
     using:
       foreign_key_constraint_on: created_by_id
-array_relationships:
-  - name: users
-    using:
-      foreign_key_constraint_on:
-        column: cellar_id
-        table:
-          name: cellar_user
-          schema: public
 insert_permissions:
   - role: user
     permission:
@@ -20,30 +12,39 @@ insert_permissions:
       set:
         created_by_id: x-hasura-User-Id
       columns:
-        - is_public
         - name
+        - privacy
     comment: ""
 select_permissions:
   - role: user
     permission:
       columns:
-        - is_public
-        - name
         - created_at
-        - updated_at
         - created_by_id
         - id
+        - name
+        - privacy
+        - updated_at
       filter:
-        users:
-          user_id:
-            _eq: X-Hasura-User-Id
+        _or:
+          - privacy:
+              _eq: PUBLIC
+          - _and:
+              - privacy:
+                  _eq: FRIENDS
+              - createdBy:
+                  friends:
+                    friend_id:
+                      _eq: X-Hasura-User-Id
+          - created_by_id:
+              _eq: X-Hasura-User-Id
     comment: ""
 update_permissions:
   - role: user
     permission:
       columns:
-        - is_public
         - name
+        - privacy
       filter:
         created_by_id:
           _eq: X-Hasura-User-Id
