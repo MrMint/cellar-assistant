@@ -46,7 +46,6 @@ const EditBeer = ({
         <BeerForm
           id={itemId}
           onCreated={() => {}}
-          // returnUrl={`/cellars/${cellarId}/beers/${itemId}`}
           defaultValues={{
             name: beer.name,
             description: beer.description,

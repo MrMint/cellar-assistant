@@ -1,6 +1,7 @@
 "use client";
-import { CssVarsProvider, extendTheme } from "@mui/joy/styles";
+
 import CssBaseline from "@mui/joy/CssBaseline";
+import { CssVarsProvider, extendTheme } from "@mui/joy/styles";
 import EmotionCacheProvider from "./EmotionCacheProvider";
 
 const theme = extendTheme({
@@ -8,23 +9,18 @@ const theme = extendTheme({
     dark: {
       palette: {
         neutral: {
-          "100": "#e4e2e9",
-          "200": "#c9c5d3",
-          "300": "#aea8bd",
-          "400": "#938ba7",
-          "500": "#786e91",
-          "600": "#605874",
-          "700": "#484257",
-          "800": "#302c3a",
-          "900": "#18161d",
+          "100": "#ECEAEF",
+          "200": "#C5C1D0",
+          "300": "#9E97B1",
+          "400": "#786E91",
+          "500": "#675E7D",
+          "600": "#564E68",
+          "700": "#443F53",
+          "800": "#332F3E",
+          "900": "#221F2A",
         },
         background: {
-          body: "var(--joy-palette-neutral-900)",
-          surface: "var(--joy-palette-neutral-800)",
-          level1: "var(--joy-palette-neutral-700)",
-          level2: "var(--joy-palette-neutral-600)",
-          level3: "var(--joy-palette-neutral-500)",
-          tooltip: "var(--joy-palette-neutral-500)",
+          body: "#111015",
         },
         primary: {
           "100": "#eff5f5",

@@ -3802,301 +3802,6 @@ export type Cellar_Spirit_Updates = {
   where: Cellar_Spirit_Bool_Exp;
 };
 
-/** columns and relationships of "cellar_user" */
-export type Cellar_User = {
-  __typename: 'cellar_user';
-  /** An object relationship */
-  cellar: Cellars;
-  cellar_id: Scalars['uuid']['output'];
-  id: Scalars['Int']['output'];
-  /** An object relationship */
-  user: Users;
-  user_id: Scalars['uuid']['output'];
-};
-
-/** aggregated selection of "cellar_user" */
-export type Cellar_User_Aggregate = {
-  __typename: 'cellar_user_aggregate';
-  aggregate?: Maybe<Cellar_User_Aggregate_Fields>;
-  nodes: Array<Cellar_User>;
-};
-
-export type Cellar_User_Aggregate_Bool_Exp = {
-  count?: InputMaybe<Cellar_User_Aggregate_Bool_Exp_Count>;
-};
-
-export type Cellar_User_Aggregate_Bool_Exp_Count = {
-  arguments?: InputMaybe<Array<Cellar_User_Select_Column>>;
-  distinct?: InputMaybe<Scalars['Boolean']['input']>;
-  filter?: InputMaybe<Cellar_User_Bool_Exp>;
-  predicate: Int_Comparison_Exp;
-};
-
-/** aggregate fields of "cellar_user" */
-export type Cellar_User_Aggregate_Fields = {
-  __typename: 'cellar_user_aggregate_fields';
-  avg?: Maybe<Cellar_User_Avg_Fields>;
-  count: Scalars['Int']['output'];
-  max?: Maybe<Cellar_User_Max_Fields>;
-  min?: Maybe<Cellar_User_Min_Fields>;
-  stddev?: Maybe<Cellar_User_Stddev_Fields>;
-  stddev_pop?: Maybe<Cellar_User_Stddev_Pop_Fields>;
-  stddev_samp?: Maybe<Cellar_User_Stddev_Samp_Fields>;
-  sum?: Maybe<Cellar_User_Sum_Fields>;
-  var_pop?: Maybe<Cellar_User_Var_Pop_Fields>;
-  var_samp?: Maybe<Cellar_User_Var_Samp_Fields>;
-  variance?: Maybe<Cellar_User_Variance_Fields>;
-};
-
-
-/** aggregate fields of "cellar_user" */
-export type Cellar_User_Aggregate_FieldsCountArgs = {
-  columns?: InputMaybe<Array<Cellar_User_Select_Column>>;
-  distinct?: InputMaybe<Scalars['Boolean']['input']>;
-};
-
-/** order by aggregate values of table "cellar_user" */
-export type Cellar_User_Aggregate_Order_By = {
-  avg?: InputMaybe<Cellar_User_Avg_Order_By>;
-  count?: InputMaybe<Order_By>;
-  max?: InputMaybe<Cellar_User_Max_Order_By>;
-  min?: InputMaybe<Cellar_User_Min_Order_By>;
-  stddev?: InputMaybe<Cellar_User_Stddev_Order_By>;
-  stddev_pop?: InputMaybe<Cellar_User_Stddev_Pop_Order_By>;
-  stddev_samp?: InputMaybe<Cellar_User_Stddev_Samp_Order_By>;
-  sum?: InputMaybe<Cellar_User_Sum_Order_By>;
-  var_pop?: InputMaybe<Cellar_User_Var_Pop_Order_By>;
-  var_samp?: InputMaybe<Cellar_User_Var_Samp_Order_By>;
-  variance?: InputMaybe<Cellar_User_Variance_Order_By>;
-};
-
-/** input type for inserting array relation for remote table "cellar_user" */
-export type Cellar_User_Arr_Rel_Insert_Input = {
-  data: Array<Cellar_User_Insert_Input>;
-  /** upsert condition */
-  on_conflict?: InputMaybe<Cellar_User_On_Conflict>;
-};
-
-/** aggregate avg on columns */
-export type Cellar_User_Avg_Fields = {
-  __typename: 'cellar_user_avg_fields';
-  id?: Maybe<Scalars['Float']['output']>;
-};
-
-/** order by avg() on columns of table "cellar_user" */
-export type Cellar_User_Avg_Order_By = {
-  id?: InputMaybe<Order_By>;
-};
-
-/** Boolean expression to filter rows from the table "cellar_user". All fields are combined with a logical 'AND'. */
-export type Cellar_User_Bool_Exp = {
-  _and?: InputMaybe<Array<Cellar_User_Bool_Exp>>;
-  _not?: InputMaybe<Cellar_User_Bool_Exp>;
-  _or?: InputMaybe<Array<Cellar_User_Bool_Exp>>;
-  cellar?: InputMaybe<Cellars_Bool_Exp>;
-  cellar_id?: InputMaybe<Uuid_Comparison_Exp>;
-  id?: InputMaybe<Int_Comparison_Exp>;
-  user?: InputMaybe<Users_Bool_Exp>;
-  user_id?: InputMaybe<Uuid_Comparison_Exp>;
-};
-
-/** unique or primary key constraints on table "cellar_user" */
-export enum Cellar_User_Constraint {
-  /** unique or primary key constraint on columns "id" */
-  CellarUserPkey = 'cellar_user_pkey'
-}
-
-/** input type for inserting data into table "cellar_user" */
-export type Cellar_User_Insert_Input = {
-  cellar?: InputMaybe<Cellars_Obj_Rel_Insert_Input>;
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
-  user?: InputMaybe<Users_Obj_Rel_Insert_Input>;
-  user_id?: InputMaybe<Scalars['uuid']['input']>;
-};
-
-/** aggregate max on columns */
-export type Cellar_User_Max_Fields = {
-  __typename: 'cellar_user_max_fields';
-  cellar_id?: Maybe<Scalars['uuid']['output']>;
-  id?: Maybe<Scalars['Int']['output']>;
-  user_id?: Maybe<Scalars['uuid']['output']>;
-};
-
-/** order by max() on columns of table "cellar_user" */
-export type Cellar_User_Max_Order_By = {
-  cellar_id?: InputMaybe<Order_By>;
-  id?: InputMaybe<Order_By>;
-  user_id?: InputMaybe<Order_By>;
-};
-
-/** aggregate min on columns */
-export type Cellar_User_Min_Fields = {
-  __typename: 'cellar_user_min_fields';
-  cellar_id?: Maybe<Scalars['uuid']['output']>;
-  id?: Maybe<Scalars['Int']['output']>;
-  user_id?: Maybe<Scalars['uuid']['output']>;
-};
-
-/** order by min() on columns of table "cellar_user" */
-export type Cellar_User_Min_Order_By = {
-  cellar_id?: InputMaybe<Order_By>;
-  id?: InputMaybe<Order_By>;
-  user_id?: InputMaybe<Order_By>;
-};
-
-/** response of any mutation on the table "cellar_user" */
-export type Cellar_User_Mutation_Response = {
-  __typename: 'cellar_user_mutation_response';
-  /** number of rows affected by the mutation */
-  affected_rows: Scalars['Int']['output'];
-  /** data from the rows affected by the mutation */
-  returning: Array<Cellar_User>;
-};
-
-/** on_conflict condition type for table "cellar_user" */
-export type Cellar_User_On_Conflict = {
-  constraint: Cellar_User_Constraint;
-  update_columns?: Array<Cellar_User_Update_Column>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
-};
-
-/** Ordering options when selecting data from "cellar_user". */
-export type Cellar_User_Order_By = {
-  cellar?: InputMaybe<Cellars_Order_By>;
-  cellar_id?: InputMaybe<Order_By>;
-  id?: InputMaybe<Order_By>;
-  user?: InputMaybe<Users_Order_By>;
-  user_id?: InputMaybe<Order_By>;
-};
-
-/** primary key columns input for table: cellar_user */
-export type Cellar_User_Pk_Columns_Input = {
-  id: Scalars['Int']['input'];
-};
-
-/** select columns of table "cellar_user" */
-export enum Cellar_User_Select_Column {
-  /** column name */
-  CellarId = 'cellar_id',
-  /** column name */
-  Id = 'id',
-  /** column name */
-  UserId = 'user_id'
-}
-
-/** input type for updating data in table "cellar_user" */
-export type Cellar_User_Set_Input = {
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
-  user_id?: InputMaybe<Scalars['uuid']['input']>;
-};
-
-/** aggregate stddev on columns */
-export type Cellar_User_Stddev_Fields = {
-  __typename: 'cellar_user_stddev_fields';
-  id?: Maybe<Scalars['Float']['output']>;
-};
-
-/** order by stddev() on columns of table "cellar_user" */
-export type Cellar_User_Stddev_Order_By = {
-  id?: InputMaybe<Order_By>;
-};
-
-/** aggregate stddev_pop on columns */
-export type Cellar_User_Stddev_Pop_Fields = {
-  __typename: 'cellar_user_stddev_pop_fields';
-  id?: Maybe<Scalars['Float']['output']>;
-};
-
-/** order by stddev_pop() on columns of table "cellar_user" */
-export type Cellar_User_Stddev_Pop_Order_By = {
-  id?: InputMaybe<Order_By>;
-};
-
-/** aggregate stddev_samp on columns */
-export type Cellar_User_Stddev_Samp_Fields = {
-  __typename: 'cellar_user_stddev_samp_fields';
-  id?: Maybe<Scalars['Float']['output']>;
-};
-
-/** order by stddev_samp() on columns of table "cellar_user" */
-export type Cellar_User_Stddev_Samp_Order_By = {
-  id?: InputMaybe<Order_By>;
-};
-
-/** Streaming cursor of the table "cellar_user" */
-export type Cellar_User_Stream_Cursor_Input = {
-  /** Stream column input with initial value */
-  initial_value: Cellar_User_Stream_Cursor_Value_Input;
-  /** cursor ordering */
-  ordering?: InputMaybe<Cursor_Ordering>;
-};
-
-/** Initial value of the column from where the streaming should start */
-export type Cellar_User_Stream_Cursor_Value_Input = {
-  cellar_id?: InputMaybe<Scalars['uuid']['input']>;
-  id?: InputMaybe<Scalars['Int']['input']>;
-  user_id?: InputMaybe<Scalars['uuid']['input']>;
-};
-
-/** aggregate sum on columns */
-export type Cellar_User_Sum_Fields = {
-  __typename: 'cellar_user_sum_fields';
-  id?: Maybe<Scalars['Int']['output']>;
-};
-
-/** order by sum() on columns of table "cellar_user" */
-export type Cellar_User_Sum_Order_By = {
-  id?: InputMaybe<Order_By>;
-};
-
-/** update columns of table "cellar_user" */
-export enum Cellar_User_Update_Column {
-  /** column name */
-  CellarId = 'cellar_id',
-  /** column name */
-  UserId = 'user_id'
-}
-
-export type Cellar_User_Updates = {
-  /** sets the columns of the filtered rows to the given values */
-  _set?: InputMaybe<Cellar_User_Set_Input>;
-  /** filter the rows which have to be updated */
-  where: Cellar_User_Bool_Exp;
-};
-
-/** aggregate var_pop on columns */
-export type Cellar_User_Var_Pop_Fields = {
-  __typename: 'cellar_user_var_pop_fields';
-  id?: Maybe<Scalars['Float']['output']>;
-};
-
-/** order by var_pop() on columns of table "cellar_user" */
-export type Cellar_User_Var_Pop_Order_By = {
-  id?: InputMaybe<Order_By>;
-};
-
-/** aggregate var_samp on columns */
-export type Cellar_User_Var_Samp_Fields = {
-  __typename: 'cellar_user_var_samp_fields';
-  id?: Maybe<Scalars['Float']['output']>;
-};
-
-/** order by var_samp() on columns of table "cellar_user" */
-export type Cellar_User_Var_Samp_Order_By = {
-  id?: InputMaybe<Order_By>;
-};
-
-/** aggregate variance on columns */
-export type Cellar_User_Variance_Fields = {
-  __typename: 'cellar_user_variance_fields';
-  id?: Maybe<Scalars['Float']['output']>;
-};
-
-/** order by variance() on columns of table "cellar_user" */
-export type Cellar_User_Variance_Order_By = {
-  id?: InputMaybe<Order_By>;
-};
-
 /** columns and relationships of "cellar_wine" */
 export type Cellar_Wine = {
   __typename: 'cellar_wine';
@@ -4319,33 +4024,9 @@ export type Cellars = {
   created_at: Scalars['timestamptz']['output'];
   created_by_id: Scalars['uuid']['output'];
   id: Scalars['uuid']['output'];
-  is_public: Scalars['Boolean']['output'];
   name: Scalars['String']['output'];
+  privacy: Permission_Type_Enum;
   updated_at: Scalars['timestamptz']['output'];
-  /** An array relationship */
-  users: Array<Cellar_User>;
-  /** An aggregate relationship */
-  users_aggregate: Cellar_User_Aggregate;
-};
-
-
-/** columns and relationships of "cellars" */
-export type CellarsUsersArgs = {
-  distinct_on?: InputMaybe<Array<Cellar_User_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
-};
-
-
-/** columns and relationships of "cellars" */
-export type CellarsUsers_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Cellar_User_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
 };
 
 /** aggregated selection of "cellars" */
@@ -4356,23 +4037,7 @@ export type Cellars_Aggregate = {
 };
 
 export type Cellars_Aggregate_Bool_Exp = {
-  bool_and?: InputMaybe<Cellars_Aggregate_Bool_Exp_Bool_And>;
-  bool_or?: InputMaybe<Cellars_Aggregate_Bool_Exp_Bool_Or>;
   count?: InputMaybe<Cellars_Aggregate_Bool_Exp_Count>;
-};
-
-export type Cellars_Aggregate_Bool_Exp_Bool_And = {
-  arguments: Cellars_Select_Column_Cellars_Aggregate_Bool_Exp_Bool_And_Arguments_Columns;
-  distinct?: InputMaybe<Scalars['Boolean']['input']>;
-  filter?: InputMaybe<Cellars_Bool_Exp>;
-  predicate: Boolean_Comparison_Exp;
-};
-
-export type Cellars_Aggregate_Bool_Exp_Bool_Or = {
-  arguments: Cellars_Select_Column_Cellars_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns;
-  distinct?: InputMaybe<Scalars['Boolean']['input']>;
-  filter?: InputMaybe<Cellars_Bool_Exp>;
-  predicate: Boolean_Comparison_Exp;
 };
 
 export type Cellars_Aggregate_Bool_Exp_Count = {
@@ -4420,11 +4085,9 @@ export type Cellars_Bool_Exp = {
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   created_by_id?: InputMaybe<Uuid_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
-  is_public?: InputMaybe<Boolean_Comparison_Exp>;
   name?: InputMaybe<String_Comparison_Exp>;
+  privacy?: InputMaybe<Permission_Type_Enum_Comparison_Exp>;
   updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
-  users?: InputMaybe<Cellar_User_Bool_Exp>;
-  users_aggregate?: InputMaybe<Cellar_User_Aggregate_Bool_Exp>;
 };
 
 /** unique or primary key constraints on table "cellars" */
@@ -4439,10 +4102,9 @@ export type Cellars_Insert_Input = {
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  is_public?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  privacy?: InputMaybe<Permission_Type_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
-  users?: InputMaybe<Cellar_User_Arr_Rel_Insert_Input>;
 };
 
 /** aggregate max on columns */
@@ -4512,10 +4174,9 @@ export type Cellars_Order_By = {
   created_at?: InputMaybe<Order_By>;
   created_by_id?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
-  is_public?: InputMaybe<Order_By>;
   name?: InputMaybe<Order_By>;
+  privacy?: InputMaybe<Order_By>;
   updated_at?: InputMaybe<Order_By>;
-  users_aggregate?: InputMaybe<Cellar_User_Aggregate_Order_By>;
 };
 
 /** primary key columns input for table: cellars */
@@ -4532,23 +4193,11 @@ export enum Cellars_Select_Column {
   /** column name */
   Id = 'id',
   /** column name */
-  IsPublic = 'is_public',
-  /** column name */
   Name = 'name',
   /** column name */
+  Privacy = 'privacy',
+  /** column name */
   UpdatedAt = 'updated_at'
-}
-
-/** select "cellars_aggregate_bool_exp_bool_and_arguments_columns" columns of table "cellars" */
-export enum Cellars_Select_Column_Cellars_Aggregate_Bool_Exp_Bool_And_Arguments_Columns {
-  /** column name */
-  IsPublic = 'is_public'
-}
-
-/** select "cellars_aggregate_bool_exp_bool_or_arguments_columns" columns of table "cellars" */
-export enum Cellars_Select_Column_Cellars_Aggregate_Bool_Exp_Bool_Or_Arguments_Columns {
-  /** column name */
-  IsPublic = 'is_public'
 }
 
 /** input type for updating data in table "cellars" */
@@ -4556,8 +4205,8 @@ export type Cellars_Set_Input = {
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  is_public?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  privacy?: InputMaybe<Permission_Type_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
 };
 
@@ -4574,8 +4223,8 @@ export type Cellars_Stream_Cursor_Value_Input = {
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   created_by_id?: InputMaybe<Scalars['uuid']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  is_public?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  privacy?: InputMaybe<Permission_Type_Enum>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
 };
 
@@ -4588,9 +4237,9 @@ export enum Cellars_Update_Column {
   /** column name */
   Id = 'id',
   /** column name */
-  IsPublic = 'is_public',
-  /** column name */
   Name = 'name',
+  /** column name */
+  Privacy = 'privacy',
   /** column name */
   UpdatedAt = 'updated_at'
 }
@@ -5476,6 +5125,566 @@ export type Files_Variance_Fields = {
 /** order by variance() on columns of table "storage.files" */
 export type Files_Variance_Order_By = {
   size?: InputMaybe<Order_By>;
+};
+
+/** columns and relationships of "friend_request_status" */
+export type Friend_Request_Status = {
+  __typename: 'friend_request_status';
+  comment?: Maybe<Scalars['String']['output']>;
+  text: Scalars['String']['output'];
+};
+
+/** aggregated selection of "friend_request_status" */
+export type Friend_Request_Status_Aggregate = {
+  __typename: 'friend_request_status_aggregate';
+  aggregate?: Maybe<Friend_Request_Status_Aggregate_Fields>;
+  nodes: Array<Friend_Request_Status>;
+};
+
+/** aggregate fields of "friend_request_status" */
+export type Friend_Request_Status_Aggregate_Fields = {
+  __typename: 'friend_request_status_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Friend_Request_Status_Max_Fields>;
+  min?: Maybe<Friend_Request_Status_Min_Fields>;
+};
+
+
+/** aggregate fields of "friend_request_status" */
+export type Friend_Request_Status_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Friend_Request_Status_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "friend_request_status". All fields are combined with a logical 'AND'. */
+export type Friend_Request_Status_Bool_Exp = {
+  _and?: InputMaybe<Array<Friend_Request_Status_Bool_Exp>>;
+  _not?: InputMaybe<Friend_Request_Status_Bool_Exp>;
+  _or?: InputMaybe<Array<Friend_Request_Status_Bool_Exp>>;
+  comment?: InputMaybe<String_Comparison_Exp>;
+  text?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "friend_request_status" */
+export enum Friend_Request_Status_Constraint {
+  /** unique or primary key constraint on columns "text" */
+  FriendRequestStatusPkey = 'friend_request_status_pkey'
+}
+
+export enum Friend_Request_Status_Enum {
+  Accepted = 'ACCEPTED',
+  Pending = 'PENDING'
+}
+
+/** Boolean expression to compare columns of type "friend_request_status_enum". All fields are combined with logical 'AND'. */
+export type Friend_Request_Status_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Friend_Request_Status_Enum>;
+  _in?: InputMaybe<Array<Friend_Request_Status_Enum>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _neq?: InputMaybe<Friend_Request_Status_Enum>;
+  _nin?: InputMaybe<Array<Friend_Request_Status_Enum>>;
+};
+
+/** input type for inserting data into table "friend_request_status" */
+export type Friend_Request_Status_Insert_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregate max on columns */
+export type Friend_Request_Status_Max_Fields = {
+  __typename: 'friend_request_status_max_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** aggregate min on columns */
+export type Friend_Request_Status_Min_Fields = {
+  __typename: 'friend_request_status_min_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** response of any mutation on the table "friend_request_status" */
+export type Friend_Request_Status_Mutation_Response = {
+  __typename: 'friend_request_status_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Friend_Request_Status>;
+};
+
+/** on_conflict condition type for table "friend_request_status" */
+export type Friend_Request_Status_On_Conflict = {
+  constraint: Friend_Request_Status_Constraint;
+  update_columns?: Array<Friend_Request_Status_Update_Column>;
+  where?: InputMaybe<Friend_Request_Status_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "friend_request_status". */
+export type Friend_Request_Status_Order_By = {
+  comment?: InputMaybe<Order_By>;
+  text?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: friend_request_status */
+export type Friend_Request_Status_Pk_Columns_Input = {
+  text: Scalars['String']['input'];
+};
+
+/** select columns of table "friend_request_status" */
+export enum Friend_Request_Status_Select_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+/** input type for updating data in table "friend_request_status" */
+export type Friend_Request_Status_Set_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** Streaming cursor of the table "friend_request_status" */
+export type Friend_Request_Status_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Friend_Request_Status_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Friend_Request_Status_Stream_Cursor_Value_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** update columns of table "friend_request_status" */
+export enum Friend_Request_Status_Update_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+export type Friend_Request_Status_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Friend_Request_Status_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Friend_Request_Status_Bool_Exp;
+};
+
+/** columns and relationships of "friend_requests" */
+export type Friend_Requests = {
+  __typename: 'friend_requests';
+  /** An object relationship */
+  friend: Users;
+  friend_id: Scalars['uuid']['output'];
+  id: Scalars['uuid']['output'];
+  status: Friend_Request_Status_Enum;
+  /** An object relationship */
+  user: Users;
+  user_id: Scalars['uuid']['output'];
+};
+
+/** aggregated selection of "friend_requests" */
+export type Friend_Requests_Aggregate = {
+  __typename: 'friend_requests_aggregate';
+  aggregate?: Maybe<Friend_Requests_Aggregate_Fields>;
+  nodes: Array<Friend_Requests>;
+};
+
+export type Friend_Requests_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Friend_Requests_Aggregate_Bool_Exp_Count>;
+};
+
+export type Friend_Requests_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Friend_Requests_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "friend_requests" */
+export type Friend_Requests_Aggregate_Fields = {
+  __typename: 'friend_requests_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Friend_Requests_Max_Fields>;
+  min?: Maybe<Friend_Requests_Min_Fields>;
+};
+
+
+/** aggregate fields of "friend_requests" */
+export type Friend_Requests_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "friend_requests" */
+export type Friend_Requests_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Friend_Requests_Max_Order_By>;
+  min?: InputMaybe<Friend_Requests_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "friend_requests" */
+export type Friend_Requests_Arr_Rel_Insert_Input = {
+  data: Array<Friend_Requests_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Friend_Requests_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "friend_requests". All fields are combined with a logical 'AND'. */
+export type Friend_Requests_Bool_Exp = {
+  _and?: InputMaybe<Array<Friend_Requests_Bool_Exp>>;
+  _not?: InputMaybe<Friend_Requests_Bool_Exp>;
+  _or?: InputMaybe<Array<Friend_Requests_Bool_Exp>>;
+  friend?: InputMaybe<Users_Bool_Exp>;
+  friend_id?: InputMaybe<Uuid_Comparison_Exp>;
+  id?: InputMaybe<Uuid_Comparison_Exp>;
+  status?: InputMaybe<Friend_Request_Status_Enum_Comparison_Exp>;
+  user?: InputMaybe<Users_Bool_Exp>;
+  user_id?: InputMaybe<Uuid_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "friend_requests" */
+export enum Friend_Requests_Constraint {
+  /** unique or primary key constraint on columns "id" */
+  FriendRequestsPkey = 'friend_requests_pkey',
+  /** unique or primary key constraint on columns "user_id", "friend_id" */
+  FriendRequestsUserIdFriendIdKey = 'friend_requests_user_id_friend_id_key'
+}
+
+/** input type for inserting data into table "friend_requests" */
+export type Friend_Requests_Insert_Input = {
+  friend?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  friend_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Friend_Request_Status_Enum>;
+  user?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** aggregate max on columns */
+export type Friend_Requests_Max_Fields = {
+  __typename: 'friend_requests_max_fields';
+  friend_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** order by max() on columns of table "friend_requests" */
+export type Friend_Requests_Max_Order_By = {
+  friend_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Friend_Requests_Min_Fields = {
+  __typename: 'friend_requests_min_fields';
+  friend_id?: Maybe<Scalars['uuid']['output']>;
+  id?: Maybe<Scalars['uuid']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** order by min() on columns of table "friend_requests" */
+export type Friend_Requests_Min_Order_By = {
+  friend_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "friend_requests" */
+export type Friend_Requests_Mutation_Response = {
+  __typename: 'friend_requests_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Friend_Requests>;
+};
+
+/** on_conflict condition type for table "friend_requests" */
+export type Friend_Requests_On_Conflict = {
+  constraint: Friend_Requests_Constraint;
+  update_columns?: Array<Friend_Requests_Update_Column>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "friend_requests". */
+export type Friend_Requests_Order_By = {
+  friend?: InputMaybe<Users_Order_By>;
+  friend_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  status?: InputMaybe<Order_By>;
+  user?: InputMaybe<Users_Order_By>;
+  user_id?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: friend_requests */
+export type Friend_Requests_Pk_Columns_Input = {
+  id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "friend_requests" */
+export enum Friend_Requests_Select_Column {
+  /** column name */
+  FriendId = 'friend_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  UserId = 'user_id'
+}
+
+/** input type for updating data in table "friend_requests" */
+export type Friend_Requests_Set_Input = {
+  friend_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Friend_Request_Status_Enum>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** Streaming cursor of the table "friend_requests" */
+export type Friend_Requests_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Friend_Requests_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Friend_Requests_Stream_Cursor_Value_Input = {
+  friend_id?: InputMaybe<Scalars['uuid']['input']>;
+  id?: InputMaybe<Scalars['uuid']['input']>;
+  status?: InputMaybe<Friend_Request_Status_Enum>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** update columns of table "friend_requests" */
+export enum Friend_Requests_Update_Column {
+  /** column name */
+  FriendId = 'friend_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Status = 'status',
+  /** column name */
+  UserId = 'user_id'
+}
+
+export type Friend_Requests_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Friend_Requests_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Friend_Requests_Bool_Exp;
+};
+
+/** columns and relationships of "friends" */
+export type Friends = {
+  __typename: 'friends';
+  created_at: Scalars['timestamptz']['output'];
+  /** An object relationship */
+  friend: Users;
+  friend_id: Scalars['uuid']['output'];
+  updated_at: Scalars['timestamptz']['output'];
+  user_id: Scalars['uuid']['output'];
+};
+
+/** aggregated selection of "friends" */
+export type Friends_Aggregate = {
+  __typename: 'friends_aggregate';
+  aggregate?: Maybe<Friends_Aggregate_Fields>;
+  nodes: Array<Friends>;
+};
+
+export type Friends_Aggregate_Bool_Exp = {
+  count?: InputMaybe<Friends_Aggregate_Bool_Exp_Count>;
+};
+
+export type Friends_Aggregate_Bool_Exp_Count = {
+  arguments?: InputMaybe<Array<Friends_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+  filter?: InputMaybe<Friends_Bool_Exp>;
+  predicate: Int_Comparison_Exp;
+};
+
+/** aggregate fields of "friends" */
+export type Friends_Aggregate_Fields = {
+  __typename: 'friends_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Friends_Max_Fields>;
+  min?: Maybe<Friends_Min_Fields>;
+};
+
+
+/** aggregate fields of "friends" */
+export type Friends_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Friends_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** order by aggregate values of table "friends" */
+export type Friends_Aggregate_Order_By = {
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Friends_Max_Order_By>;
+  min?: InputMaybe<Friends_Min_Order_By>;
+};
+
+/** input type for inserting array relation for remote table "friends" */
+export type Friends_Arr_Rel_Insert_Input = {
+  data: Array<Friends_Insert_Input>;
+  /** upsert condition */
+  on_conflict?: InputMaybe<Friends_On_Conflict>;
+};
+
+/** Boolean expression to filter rows from the table "friends". All fields are combined with a logical 'AND'. */
+export type Friends_Bool_Exp = {
+  _and?: InputMaybe<Array<Friends_Bool_Exp>>;
+  _not?: InputMaybe<Friends_Bool_Exp>;
+  _or?: InputMaybe<Array<Friends_Bool_Exp>>;
+  created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  friend?: InputMaybe<Users_Bool_Exp>;
+  friend_id?: InputMaybe<Uuid_Comparison_Exp>;
+  updated_at?: InputMaybe<Timestamptz_Comparison_Exp>;
+  user_id?: InputMaybe<Uuid_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "friends" */
+export enum Friends_Constraint {
+  /** unique or primary key constraint on columns "user_id", "friend_id" */
+  FriendsPkey = 'friends_pkey'
+}
+
+/** input type for inserting data into table "friends" */
+export type Friends_Insert_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  friend?: InputMaybe<Users_Obj_Rel_Insert_Input>;
+  friend_id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** aggregate max on columns */
+export type Friends_Max_Fields = {
+  __typename: 'friends_max_fields';
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  friend_id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** order by max() on columns of table "friends" */
+export type Friends_Max_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  friend_id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+};
+
+/** aggregate min on columns */
+export type Friends_Min_Fields = {
+  __typename: 'friends_min_fields';
+  created_at?: Maybe<Scalars['timestamptz']['output']>;
+  friend_id?: Maybe<Scalars['uuid']['output']>;
+  updated_at?: Maybe<Scalars['timestamptz']['output']>;
+  user_id?: Maybe<Scalars['uuid']['output']>;
+};
+
+/** order by min() on columns of table "friends" */
+export type Friends_Min_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  friend_id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+};
+
+/** response of any mutation on the table "friends" */
+export type Friends_Mutation_Response = {
+  __typename: 'friends_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Friends>;
+};
+
+/** on_conflict condition type for table "friends" */
+export type Friends_On_Conflict = {
+  constraint: Friends_Constraint;
+  update_columns?: Array<Friends_Update_Column>;
+  where?: InputMaybe<Friends_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "friends". */
+export type Friends_Order_By = {
+  created_at?: InputMaybe<Order_By>;
+  friend?: InputMaybe<Users_Order_By>;
+  friend_id?: InputMaybe<Order_By>;
+  updated_at?: InputMaybe<Order_By>;
+  user_id?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: friends */
+export type Friends_Pk_Columns_Input = {
+  friend_id: Scalars['uuid']['input'];
+  user_id: Scalars['uuid']['input'];
+};
+
+/** select columns of table "friends" */
+export enum Friends_Select_Column {
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  FriendId = 'friend_id',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  UserId = 'user_id'
+}
+
+/** input type for updating data in table "friends" */
+export type Friends_Set_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  friend_id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** Streaming cursor of the table "friends" */
+export type Friends_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Friends_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Friends_Stream_Cursor_Value_Input = {
+  created_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  friend_id?: InputMaybe<Scalars['uuid']['input']>;
+  updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
+  user_id?: InputMaybe<Scalars['uuid']['input']>;
+};
+
+/** update columns of table "friends" */
+export enum Friends_Update_Column {
+  /** column name */
+  CreatedAt = 'created_at',
+  /** column name */
+  FriendId = 'friend_id',
+  /** column name */
+  UpdatedAt = 'updated_at',
+  /** column name */
+  UserId = 'user_id'
+}
+
+export type Friends_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Friends_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Friends_Bool_Exp;
 };
 
 /** columns and relationships of "image_analysis" */
@@ -7191,10 +7400,6 @@ export type Mutation_Root = {
   delete_cellar_spirit?: Maybe<Cellar_Spirit_Mutation_Response>;
   /** delete single row from the table: "cellar_spirit" */
   delete_cellar_spirit_by_pk?: Maybe<Cellar_Spirit>;
-  /** delete data from the table: "cellar_user" */
-  delete_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
-  /** delete single row from the table: "cellar_user" */
-  delete_cellar_user_by_pk?: Maybe<Cellar_User>;
   /** delete data from the table: "cellar_wine" */
   delete_cellar_wine?: Maybe<Cellar_Wine_Mutation_Response>;
   /** delete single row from the table: "cellar_wine" */
@@ -7207,6 +7412,18 @@ export type Mutation_Root = {
   delete_country?: Maybe<Country_Mutation_Response>;
   /** delete single row from the table: "country" */
   delete_country_by_pk?: Maybe<Country>;
+  /** delete data from the table: "friend_request_status" */
+  delete_friend_request_status?: Maybe<Friend_Request_Status_Mutation_Response>;
+  /** delete single row from the table: "friend_request_status" */
+  delete_friend_request_status_by_pk?: Maybe<Friend_Request_Status>;
+  /** delete data from the table: "friend_requests" */
+  delete_friend_requests?: Maybe<Friend_Requests_Mutation_Response>;
+  /** delete single row from the table: "friend_requests" */
+  delete_friend_requests_by_pk?: Maybe<Friend_Requests>;
+  /** delete data from the table: "friends" */
+  delete_friends?: Maybe<Friends_Mutation_Response>;
+  /** delete single row from the table: "friends" */
+  delete_friends_by_pk?: Maybe<Friends>;
   /** delete data from the table: "image_analysis" */
   delete_image_analysis?: Maybe<Image_Analysis_Mutation_Response>;
   /** delete single row from the table: "image_analysis" */
@@ -7227,6 +7444,10 @@ export type Mutation_Root = {
   delete_item_reviews?: Maybe<Item_Reviews_Mutation_Response>;
   /** delete single row from the table: "item_reviews" */
   delete_item_reviews_by_pk?: Maybe<Item_Reviews>;
+  /** delete data from the table: "permission_type" */
+  delete_permission_type?: Maybe<Permission_Type_Mutation_Response>;
+  /** delete single row from the table: "permission_type" */
+  delete_permission_type_by_pk?: Maybe<Permission_Type>;
   /** delete data from the table: "spirit_type" */
   delete_spirit_type?: Maybe<Spirit_Type_Mutation_Response>;
   /** delete single row from the table: "spirit_type" */
@@ -7319,10 +7540,6 @@ export type Mutation_Root = {
   insert_cellar_spirit?: Maybe<Cellar_Spirit_Mutation_Response>;
   /** insert a single row into the table: "cellar_spirit" */
   insert_cellar_spirit_one?: Maybe<Cellar_Spirit>;
-  /** insert data into the table: "cellar_user" */
-  insert_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
-  /** insert a single row into the table: "cellar_user" */
-  insert_cellar_user_one?: Maybe<Cellar_User>;
   /** insert data into the table: "cellar_wine" */
   insert_cellar_wine?: Maybe<Cellar_Wine_Mutation_Response>;
   /** insert a single row into the table: "cellar_wine" */
@@ -7335,6 +7552,18 @@ export type Mutation_Root = {
   insert_country?: Maybe<Country_Mutation_Response>;
   /** insert a single row into the table: "country" */
   insert_country_one?: Maybe<Country>;
+  /** insert data into the table: "friend_request_status" */
+  insert_friend_request_status?: Maybe<Friend_Request_Status_Mutation_Response>;
+  /** insert a single row into the table: "friend_request_status" */
+  insert_friend_request_status_one?: Maybe<Friend_Request_Status>;
+  /** insert data into the table: "friend_requests" */
+  insert_friend_requests?: Maybe<Friend_Requests_Mutation_Response>;
+  /** insert a single row into the table: "friend_requests" */
+  insert_friend_requests_one?: Maybe<Friend_Requests>;
+  /** insert data into the table: "friends" */
+  insert_friends?: Maybe<Friends_Mutation_Response>;
+  /** insert a single row into the table: "friends" */
+  insert_friends_one?: Maybe<Friends>;
   /** insert data into the table: "image_analysis" */
   insert_image_analysis?: Maybe<Image_Analysis_Mutation_Response>;
   /** insert a single row into the table: "image_analysis" */
@@ -7355,6 +7584,10 @@ export type Mutation_Root = {
   insert_item_reviews?: Maybe<Item_Reviews_Mutation_Response>;
   /** insert a single row into the table: "item_reviews" */
   insert_item_reviews_one?: Maybe<Item_Reviews>;
+  /** insert data into the table: "permission_type" */
+  insert_permission_type?: Maybe<Permission_Type_Mutation_Response>;
+  /** insert a single row into the table: "permission_type" */
+  insert_permission_type_one?: Maybe<Permission_Type>;
   /** insert data into the table: "spirit_type" */
   insert_spirit_type?: Maybe<Spirit_Type_Mutation_Response>;
   /** insert a single row into the table: "spirit_type" */
@@ -7478,12 +7711,6 @@ export type Mutation_Root = {
   update_cellar_spirit_by_pk?: Maybe<Cellar_Spirit>;
   /** update multiples rows of table: "cellar_spirit" */
   update_cellar_spirit_many?: Maybe<Array<Maybe<Cellar_Spirit_Mutation_Response>>>;
-  /** update data of the table: "cellar_user" */
-  update_cellar_user?: Maybe<Cellar_User_Mutation_Response>;
-  /** update single row of the table: "cellar_user" */
-  update_cellar_user_by_pk?: Maybe<Cellar_User>;
-  /** update multiples rows of table: "cellar_user" */
-  update_cellar_user_many?: Maybe<Array<Maybe<Cellar_User_Mutation_Response>>>;
   /** update data of the table: "cellar_wine" */
   update_cellar_wine?: Maybe<Cellar_Wine_Mutation_Response>;
   /** update single row of the table: "cellar_wine" */
@@ -7504,6 +7731,24 @@ export type Mutation_Root = {
   update_country_many?: Maybe<Array<Maybe<Country_Mutation_Response>>>;
   /** update multiples rows of table: "storage.files" */
   update_files_many?: Maybe<Array<Maybe<Files_Mutation_Response>>>;
+  /** update data of the table: "friend_request_status" */
+  update_friend_request_status?: Maybe<Friend_Request_Status_Mutation_Response>;
+  /** update single row of the table: "friend_request_status" */
+  update_friend_request_status_by_pk?: Maybe<Friend_Request_Status>;
+  /** update multiples rows of table: "friend_request_status" */
+  update_friend_request_status_many?: Maybe<Array<Maybe<Friend_Request_Status_Mutation_Response>>>;
+  /** update data of the table: "friend_requests" */
+  update_friend_requests?: Maybe<Friend_Requests_Mutation_Response>;
+  /** update single row of the table: "friend_requests" */
+  update_friend_requests_by_pk?: Maybe<Friend_Requests>;
+  /** update multiples rows of table: "friend_requests" */
+  update_friend_requests_many?: Maybe<Array<Maybe<Friend_Requests_Mutation_Response>>>;
+  /** update data of the table: "friends" */
+  update_friends?: Maybe<Friends_Mutation_Response>;
+  /** update single row of the table: "friends" */
+  update_friends_by_pk?: Maybe<Friends>;
+  /** update multiples rows of table: "friends" */
+  update_friends_many?: Maybe<Array<Maybe<Friends_Mutation_Response>>>;
   /** update data of the table: "image_analysis" */
   update_image_analysis?: Maybe<Image_Analysis_Mutation_Response>;
   /** update single row of the table: "image_analysis" */
@@ -7534,6 +7779,12 @@ export type Mutation_Root = {
   update_item_reviews_by_pk?: Maybe<Item_Reviews>;
   /** update multiples rows of table: "item_reviews" */
   update_item_reviews_many?: Maybe<Array<Maybe<Item_Reviews_Mutation_Response>>>;
+  /** update data of the table: "permission_type" */
+  update_permission_type?: Maybe<Permission_Type_Mutation_Response>;
+  /** update single row of the table: "permission_type" */
+  update_permission_type_by_pk?: Maybe<Permission_Type>;
+  /** update multiples rows of table: "permission_type" */
+  update_permission_type_many?: Maybe<Array<Maybe<Permission_Type_Mutation_Response>>>;
   /** update data of the table: "spirit_type" */
   update_spirit_type?: Maybe<Spirit_Type_Mutation_Response>;
   /** update single row of the table: "spirit_type" */
@@ -7788,18 +8039,6 @@ export type Mutation_RootDelete_Cellar_Spirit_By_PkArgs = {
 
 
 /** mutation root */
-export type Mutation_RootDelete_Cellar_UserArgs = {
-  where: Cellar_User_Bool_Exp;
-};
-
-
-/** mutation root */
-export type Mutation_RootDelete_Cellar_User_By_PkArgs = {
-  id: Scalars['Int']['input'];
-};
-
-
-/** mutation root */
 export type Mutation_RootDelete_Cellar_WineArgs = {
   where: Cellar_Wine_Bool_Exp;
 };
@@ -7832,6 +8071,43 @@ export type Mutation_RootDelete_CountryArgs = {
 /** mutation root */
 export type Mutation_RootDelete_Country_By_PkArgs = {
   text: Scalars['String']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Friend_Request_StatusArgs = {
+  where: Friend_Request_Status_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Friend_Request_Status_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Friend_RequestsArgs = {
+  where: Friend_Requests_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Friend_Requests_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_FriendsArgs = {
+  where: Friends_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Friends_By_PkArgs = {
+  friend_id: Scalars['uuid']['input'];
+  user_id: Scalars['uuid']['input'];
 };
 
 
@@ -7892,6 +8168,18 @@ export type Mutation_RootDelete_Item_ReviewsArgs = {
 /** mutation root */
 export type Mutation_RootDelete_Item_Reviews_By_PkArgs = {
   id: Scalars['uuid']['input'];
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Permission_TypeArgs = {
+  where: Permission_Type_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootDelete_Permission_Type_By_PkArgs = {
+  text: Scalars['String']['input'];
 };
 
 
@@ -8208,20 +8496,6 @@ export type Mutation_RootInsert_Cellar_Spirit_OneArgs = {
 
 
 /** mutation root */
-export type Mutation_RootInsert_Cellar_UserArgs = {
-  objects: Array<Cellar_User_Insert_Input>;
-  on_conflict?: InputMaybe<Cellar_User_On_Conflict>;
-};
-
-
-/** mutation root */
-export type Mutation_RootInsert_Cellar_User_OneArgs = {
-  object: Cellar_User_Insert_Input;
-  on_conflict?: InputMaybe<Cellar_User_On_Conflict>;
-};
-
-
-/** mutation root */
 export type Mutation_RootInsert_Cellar_WineArgs = {
   objects: Array<Cellar_Wine_Insert_Input>;
   on_conflict?: InputMaybe<Cellar_Wine_On_Conflict>;
@@ -8260,6 +8534,48 @@ export type Mutation_RootInsert_CountryArgs = {
 export type Mutation_RootInsert_Country_OneArgs = {
   object: Country_Insert_Input;
   on_conflict?: InputMaybe<Country_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Friend_Request_StatusArgs = {
+  objects: Array<Friend_Request_Status_Insert_Input>;
+  on_conflict?: InputMaybe<Friend_Request_Status_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Friend_Request_Status_OneArgs = {
+  object: Friend_Request_Status_Insert_Input;
+  on_conflict?: InputMaybe<Friend_Request_Status_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Friend_RequestsArgs = {
+  objects: Array<Friend_Requests_Insert_Input>;
+  on_conflict?: InputMaybe<Friend_Requests_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Friend_Requests_OneArgs = {
+  object: Friend_Requests_Insert_Input;
+  on_conflict?: InputMaybe<Friend_Requests_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_FriendsArgs = {
+  objects: Array<Friends_Insert_Input>;
+  on_conflict?: InputMaybe<Friends_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Friends_OneArgs = {
+  object: Friends_Insert_Input;
+  on_conflict?: InputMaybe<Friends_On_Conflict>;
 };
 
 
@@ -8330,6 +8646,20 @@ export type Mutation_RootInsert_Item_ReviewsArgs = {
 export type Mutation_RootInsert_Item_Reviews_OneArgs = {
   object: Item_Reviews_Insert_Input;
   on_conflict?: InputMaybe<Item_Reviews_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Permission_TypeArgs = {
+  objects: Array<Permission_Type_Insert_Input>;
+  on_conflict?: InputMaybe<Permission_Type_On_Conflict>;
+};
+
+
+/** mutation root */
+export type Mutation_RootInsert_Permission_Type_OneArgs = {
+  object: Permission_Type_Insert_Input;
+  on_conflict?: InputMaybe<Permission_Type_On_Conflict>;
 };
 
 
@@ -8820,26 +9150,6 @@ export type Mutation_RootUpdate_Cellar_Spirit_ManyArgs = {
 
 
 /** mutation root */
-export type Mutation_RootUpdate_Cellar_UserArgs = {
-  _set?: InputMaybe<Cellar_User_Set_Input>;
-  where: Cellar_User_Bool_Exp;
-};
-
-
-/** mutation root */
-export type Mutation_RootUpdate_Cellar_User_By_PkArgs = {
-  _set?: InputMaybe<Cellar_User_Set_Input>;
-  pk_columns: Cellar_User_Pk_Columns_Input;
-};
-
-
-/** mutation root */
-export type Mutation_RootUpdate_Cellar_User_ManyArgs = {
-  updates: Array<Cellar_User_Updates>;
-};
-
-
-/** mutation root */
 export type Mutation_RootUpdate_Cellar_WineArgs = {
   _set?: InputMaybe<Cellar_Wine_Set_Input>;
   where: Cellar_Wine_Bool_Exp;
@@ -8902,6 +9212,66 @@ export type Mutation_RootUpdate_Country_ManyArgs = {
 /** mutation root */
 export type Mutation_RootUpdate_Files_ManyArgs = {
   updates: Array<Files_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Friend_Request_StatusArgs = {
+  _set?: InputMaybe<Friend_Request_Status_Set_Input>;
+  where: Friend_Request_Status_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Friend_Request_Status_By_PkArgs = {
+  _set?: InputMaybe<Friend_Request_Status_Set_Input>;
+  pk_columns: Friend_Request_Status_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Friend_Request_Status_ManyArgs = {
+  updates: Array<Friend_Request_Status_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Friend_RequestsArgs = {
+  _set?: InputMaybe<Friend_Requests_Set_Input>;
+  where: Friend_Requests_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Friend_Requests_By_PkArgs = {
+  _set?: InputMaybe<Friend_Requests_Set_Input>;
+  pk_columns: Friend_Requests_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Friend_Requests_ManyArgs = {
+  updates: Array<Friend_Requests_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_FriendsArgs = {
+  _set?: InputMaybe<Friends_Set_Input>;
+  where: Friends_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Friends_By_PkArgs = {
+  _set?: InputMaybe<Friends_Set_Input>;
+  pk_columns: Friends_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Friends_ManyArgs = {
+  updates: Array<Friends_Updates>;
 };
 
 
@@ -9018,6 +9388,26 @@ export type Mutation_RootUpdate_Item_Reviews_By_PkArgs = {
 /** mutation root */
 export type Mutation_RootUpdate_Item_Reviews_ManyArgs = {
   updates: Array<Item_Reviews_Updates>;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Permission_TypeArgs = {
+  _set?: InputMaybe<Permission_Type_Set_Input>;
+  where: Permission_Type_Bool_Exp;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Permission_Type_By_PkArgs = {
+  _set?: InputMaybe<Permission_Type_Set_Input>;
+  pk_columns: Permission_Type_Pk_Columns_Input;
+};
+
+
+/** mutation root */
+export type Mutation_RootUpdate_Permission_Type_ManyArgs = {
+  updates: Array<Permission_Type_Updates>;
 };
 
 
@@ -9165,6 +9555,155 @@ export enum Order_By {
   DescNullsLast = 'desc_nulls_last'
 }
 
+/** columns and relationships of "permission_type" */
+export type Permission_Type = {
+  __typename: 'permission_type';
+  comment?: Maybe<Scalars['String']['output']>;
+  text: Scalars['String']['output'];
+};
+
+/** aggregated selection of "permission_type" */
+export type Permission_Type_Aggregate = {
+  __typename: 'permission_type_aggregate';
+  aggregate?: Maybe<Permission_Type_Aggregate_Fields>;
+  nodes: Array<Permission_Type>;
+};
+
+/** aggregate fields of "permission_type" */
+export type Permission_Type_Aggregate_Fields = {
+  __typename: 'permission_type_aggregate_fields';
+  count: Scalars['Int']['output'];
+  max?: Maybe<Permission_Type_Max_Fields>;
+  min?: Maybe<Permission_Type_Min_Fields>;
+};
+
+
+/** aggregate fields of "permission_type" */
+export type Permission_Type_Aggregate_FieldsCountArgs = {
+  columns?: InputMaybe<Array<Permission_Type_Select_Column>>;
+  distinct?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+/** Boolean expression to filter rows from the table "permission_type". All fields are combined with a logical 'AND'. */
+export type Permission_Type_Bool_Exp = {
+  _and?: InputMaybe<Array<Permission_Type_Bool_Exp>>;
+  _not?: InputMaybe<Permission_Type_Bool_Exp>;
+  _or?: InputMaybe<Array<Permission_Type_Bool_Exp>>;
+  comment?: InputMaybe<String_Comparison_Exp>;
+  text?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** unique or primary key constraints on table "permission_type" */
+export enum Permission_Type_Constraint {
+  /** unique or primary key constraint on columns "text" */
+  PermissionTypePkey = 'permission_type_pkey'
+}
+
+export enum Permission_Type_Enum {
+  Friends = 'FRIENDS',
+  Private = 'PRIVATE',
+  Public = 'PUBLIC'
+}
+
+/** Boolean expression to compare columns of type "permission_type_enum". All fields are combined with logical 'AND'. */
+export type Permission_Type_Enum_Comparison_Exp = {
+  _eq?: InputMaybe<Permission_Type_Enum>;
+  _in?: InputMaybe<Array<Permission_Type_Enum>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _neq?: InputMaybe<Permission_Type_Enum>;
+  _nin?: InputMaybe<Array<Permission_Type_Enum>>;
+};
+
+/** input type for inserting data into table "permission_type" */
+export type Permission_Type_Insert_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** aggregate max on columns */
+export type Permission_Type_Max_Fields = {
+  __typename: 'permission_type_max_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** aggregate min on columns */
+export type Permission_Type_Min_Fields = {
+  __typename: 'permission_type_min_fields';
+  comment?: Maybe<Scalars['String']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+};
+
+/** response of any mutation on the table "permission_type" */
+export type Permission_Type_Mutation_Response = {
+  __typename: 'permission_type_mutation_response';
+  /** number of rows affected by the mutation */
+  affected_rows: Scalars['Int']['output'];
+  /** data from the rows affected by the mutation */
+  returning: Array<Permission_Type>;
+};
+
+/** on_conflict condition type for table "permission_type" */
+export type Permission_Type_On_Conflict = {
+  constraint: Permission_Type_Constraint;
+  update_columns?: Array<Permission_Type_Update_Column>;
+  where?: InputMaybe<Permission_Type_Bool_Exp>;
+};
+
+/** Ordering options when selecting data from "permission_type". */
+export type Permission_Type_Order_By = {
+  comment?: InputMaybe<Order_By>;
+  text?: InputMaybe<Order_By>;
+};
+
+/** primary key columns input for table: permission_type */
+export type Permission_Type_Pk_Columns_Input = {
+  text: Scalars['String']['input'];
+};
+
+/** select columns of table "permission_type" */
+export enum Permission_Type_Select_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+/** input type for updating data in table "permission_type" */
+export type Permission_Type_Set_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** Streaming cursor of the table "permission_type" */
+export type Permission_Type_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Permission_Type_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Permission_Type_Stream_Cursor_Value_Input = {
+  comment?: InputMaybe<Scalars['String']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** update columns of table "permission_type" */
+export enum Permission_Type_Update_Column {
+  /** column name */
+  Comment = 'comment',
+  /** column name */
+  Text = 'text'
+}
+
+export type Permission_Type_Updates = {
+  /** sets the columns of the filtered rows to the given values */
+  _set?: InputMaybe<Permission_Type_Set_Input>;
+  /** filter the rows which have to be updated */
+  where: Permission_Type_Bool_Exp;
+};
+
 /** Boolean expression to compare columns of type "polygon". All fields are combined with logical 'AND'. */
 export type Polygon_Comparison_Exp = {
   _eq?: InputMaybe<Scalars['polygon']['input']>;
@@ -9272,12 +9811,6 @@ export type Query_Root = {
   cellar_spirit_aggregate: Cellar_Spirit_Aggregate;
   /** fetch data from the table: "cellar_spirit" using primary key columns */
   cellar_spirit_by_pk?: Maybe<Cellar_Spirit>;
-  /** fetch data from the table: "cellar_user" */
-  cellar_user: Array<Cellar_User>;
-  /** fetch aggregated fields from the table: "cellar_user" */
-  cellar_user_aggregate: Cellar_User_Aggregate;
-  /** fetch data from the table: "cellar_user" using primary key columns */
-  cellar_user_by_pk?: Maybe<Cellar_User>;
   /** fetch data from the table: "cellar_wine" */
   cellar_wine: Array<Cellar_Wine>;
   /** fetch aggregated fields from the table: "cellar_wine" */
@@ -9302,6 +9835,24 @@ export type Query_Root = {
   files: Array<Files>;
   /** fetch aggregated fields from the table: "storage.files" */
   filesAggregate: Files_Aggregate;
+  /** fetch data from the table: "friend_request_status" */
+  friend_request_status: Array<Friend_Request_Status>;
+  /** fetch aggregated fields from the table: "friend_request_status" */
+  friend_request_status_aggregate: Friend_Request_Status_Aggregate;
+  /** fetch data from the table: "friend_request_status" using primary key columns */
+  friend_request_status_by_pk?: Maybe<Friend_Request_Status>;
+  /** fetch data from the table: "friend_requests" */
+  friend_requests: Array<Friend_Requests>;
+  /** fetch aggregated fields from the table: "friend_requests" */
+  friend_requests_aggregate: Friend_Requests_Aggregate;
+  /** fetch data from the table: "friend_requests" using primary key columns */
+  friend_requests_by_pk?: Maybe<Friend_Requests>;
+  /** An array relationship */
+  friends: Array<Friends>;
+  /** An aggregate relationship */
+  friends_aggregate: Friends_Aggregate;
+  /** fetch data from the table: "friends" using primary key columns */
+  friends_by_pk?: Maybe<Friends>;
   /** fetch data from the table: "image_analysis" */
   image_analysis: Array<Image_Analysis>;
   /** fetch aggregated fields from the table: "image_analysis" */
@@ -9332,6 +9883,12 @@ export type Query_Root = {
   item_reviews_aggregate: Item_Reviews_Aggregate;
   /** fetch data from the table: "item_reviews" using primary key columns */
   item_reviews_by_pk?: Maybe<Item_Reviews>;
+  /** fetch data from the table: "permission_type" */
+  permission_type: Array<Permission_Type>;
+  /** fetch aggregated fields from the table: "permission_type" */
+  permission_type_aggregate: Permission_Type_Aggregate;
+  /** fetch data from the table: "permission_type" using primary key columns */
+  permission_type_by_pk?: Maybe<Permission_Type>;
   /** spirit_defaults */
   spirit_defaults?: Maybe<Spirit_Defaults_Result>;
   /** fetch data from the table: "spirit_type" */
@@ -9730,29 +10287,6 @@ export type Query_RootCellar_Spirit_By_PkArgs = {
 };
 
 
-export type Query_RootCellar_UserArgs = {
-  distinct_on?: InputMaybe<Array<Cellar_User_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
-};
-
-
-export type Query_RootCellar_User_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Cellar_User_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
-};
-
-
-export type Query_RootCellar_User_By_PkArgs = {
-  id: Scalars['Int']['input'];
-};
-
-
 export type Query_RootCellar_WineArgs = {
   distinct_on?: InputMaybe<Array<Cellar_Wine_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -9842,6 +10376,76 @@ export type Query_RootFilesAggregateArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Files_Order_By>>;
   where?: InputMaybe<Files_Bool_Exp>;
+};
+
+
+export type Query_RootFriend_Request_StatusArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Request_Status_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Request_Status_Order_By>>;
+  where?: InputMaybe<Friend_Request_Status_Bool_Exp>;
+};
+
+
+export type Query_RootFriend_Request_Status_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Request_Status_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Request_Status_Order_By>>;
+  where?: InputMaybe<Friend_Request_Status_Bool_Exp>;
+};
+
+
+export type Query_RootFriend_Request_Status_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+export type Query_RootFriend_RequestsArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Requests_Order_By>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
+};
+
+
+export type Query_RootFriend_Requests_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Requests_Order_By>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
+};
+
+
+export type Query_RootFriend_Requests_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootFriendsArgs = {
+  distinct_on?: InputMaybe<Array<Friends_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friends_Order_By>>;
+  where?: InputMaybe<Friends_Bool_Exp>;
+};
+
+
+export type Query_RootFriends_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friends_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friends_Order_By>>;
+  where?: InputMaybe<Friends_Bool_Exp>;
+};
+
+
+export type Query_RootFriends_By_PkArgs = {
+  friend_id: Scalars['uuid']['input'];
+  user_id: Scalars['uuid']['input'];
 };
 
 
@@ -9957,6 +10561,29 @@ export type Query_RootItem_Reviews_AggregateArgs = {
 
 export type Query_RootItem_Reviews_By_PkArgs = {
   id: Scalars['uuid']['input'];
+};
+
+
+export type Query_RootPermission_TypeArgs = {
+  distinct_on?: InputMaybe<Array<Permission_Type_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Permission_Type_Order_By>>;
+  where?: InputMaybe<Permission_Type_Bool_Exp>;
+};
+
+
+export type Query_RootPermission_Type_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Permission_Type_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Permission_Type_Order_By>>;
+  where?: InputMaybe<Permission_Type_Bool_Exp>;
+};
+
+
+export type Query_RootPermission_Type_By_PkArgs = {
+  text: Scalars['String']['input'];
 };
 
 
@@ -10941,14 +11568,6 @@ export type Subscription_Root = {
   cellar_spirit_by_pk?: Maybe<Cellar_Spirit>;
   /** fetch data from the table in a streaming manner: "cellar_spirit" */
   cellar_spirit_stream: Array<Cellar_Spirit>;
-  /** fetch data from the table: "cellar_user" */
-  cellar_user: Array<Cellar_User>;
-  /** fetch aggregated fields from the table: "cellar_user" */
-  cellar_user_aggregate: Cellar_User_Aggregate;
-  /** fetch data from the table: "cellar_user" using primary key columns */
-  cellar_user_by_pk?: Maybe<Cellar_User>;
-  /** fetch data from the table in a streaming manner: "cellar_user" */
-  cellar_user_stream: Array<Cellar_User>;
   /** fetch data from the table: "cellar_wine" */
   cellar_wine: Array<Cellar_Wine>;
   /** fetch aggregated fields from the table: "cellar_wine" */
@@ -10981,6 +11600,30 @@ export type Subscription_Root = {
   filesAggregate: Files_Aggregate;
   /** fetch data from the table in a streaming manner: "storage.files" */
   files_stream: Array<Files>;
+  /** fetch data from the table: "friend_request_status" */
+  friend_request_status: Array<Friend_Request_Status>;
+  /** fetch aggregated fields from the table: "friend_request_status" */
+  friend_request_status_aggregate: Friend_Request_Status_Aggregate;
+  /** fetch data from the table: "friend_request_status" using primary key columns */
+  friend_request_status_by_pk?: Maybe<Friend_Request_Status>;
+  /** fetch data from the table in a streaming manner: "friend_request_status" */
+  friend_request_status_stream: Array<Friend_Request_Status>;
+  /** fetch data from the table: "friend_requests" */
+  friend_requests: Array<Friend_Requests>;
+  /** fetch aggregated fields from the table: "friend_requests" */
+  friend_requests_aggregate: Friend_Requests_Aggregate;
+  /** fetch data from the table: "friend_requests" using primary key columns */
+  friend_requests_by_pk?: Maybe<Friend_Requests>;
+  /** fetch data from the table in a streaming manner: "friend_requests" */
+  friend_requests_stream: Array<Friend_Requests>;
+  /** An array relationship */
+  friends: Array<Friends>;
+  /** An aggregate relationship */
+  friends_aggregate: Friends_Aggregate;
+  /** fetch data from the table: "friends" using primary key columns */
+  friends_by_pk?: Maybe<Friends>;
+  /** fetch data from the table in a streaming manner: "friends" */
+  friends_stream: Array<Friends>;
   /** fetch data from the table: "image_analysis" */
   image_analysis: Array<Image_Analysis>;
   /** fetch aggregated fields from the table: "image_analysis" */
@@ -11021,6 +11664,14 @@ export type Subscription_Root = {
   item_reviews_by_pk?: Maybe<Item_Reviews>;
   /** fetch data from the table in a streaming manner: "item_reviews" */
   item_reviews_stream: Array<Item_Reviews>;
+  /** fetch data from the table: "permission_type" */
+  permission_type: Array<Permission_Type>;
+  /** fetch aggregated fields from the table: "permission_type" */
+  permission_type_aggregate: Permission_Type_Aggregate;
+  /** fetch data from the table: "permission_type" using primary key columns */
+  permission_type_by_pk?: Maybe<Permission_Type>;
+  /** fetch data from the table in a streaming manner: "permission_type" */
+  permission_type_stream: Array<Permission_Type>;
   /** fetch data from the table: "spirit_type" */
   spirit_type: Array<Spirit_Type>;
   /** fetch aggregated fields from the table: "spirit_type" */
@@ -11530,36 +12181,6 @@ export type Subscription_RootCellar_Spirit_StreamArgs = {
 };
 
 
-export type Subscription_RootCellar_UserArgs = {
-  distinct_on?: InputMaybe<Array<Cellar_User_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
-};
-
-
-export type Subscription_RootCellar_User_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Cellar_User_Select_Column>>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
-};
-
-
-export type Subscription_RootCellar_User_By_PkArgs = {
-  id: Scalars['Int']['input'];
-};
-
-
-export type Subscription_RootCellar_User_StreamArgs = {
-  batch_size: Scalars['Int']['input'];
-  cursor: Array<InputMaybe<Cellar_User_Stream_Cursor_Input>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
-};
-
-
 export type Subscription_RootCellar_WineArgs = {
   distinct_on?: InputMaybe<Array<Cellar_Wine_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -11677,6 +12298,97 @@ export type Subscription_RootFiles_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<Files_Stream_Cursor_Input>>;
   where?: InputMaybe<Files_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriend_Request_StatusArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Request_Status_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Request_Status_Order_By>>;
+  where?: InputMaybe<Friend_Request_Status_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriend_Request_Status_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Request_Status_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Request_Status_Order_By>>;
+  where?: InputMaybe<Friend_Request_Status_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriend_Request_Status_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootFriend_Request_Status_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Friend_Request_Status_Stream_Cursor_Input>>;
+  where?: InputMaybe<Friend_Request_Status_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriend_RequestsArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Requests_Order_By>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriend_Requests_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Requests_Order_By>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriend_Requests_By_PkArgs = {
+  id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootFriend_Requests_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Friend_Requests_Stream_Cursor_Input>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriendsArgs = {
+  distinct_on?: InputMaybe<Array<Friends_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friends_Order_By>>;
+  where?: InputMaybe<Friends_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriends_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friends_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friends_Order_By>>;
+  where?: InputMaybe<Friends_Bool_Exp>;
+};
+
+
+export type Subscription_RootFriends_By_PkArgs = {
+  friend_id: Scalars['uuid']['input'];
+  user_id: Scalars['uuid']['input'];
+};
+
+
+export type Subscription_RootFriends_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Friends_Stream_Cursor_Input>>;
+  where?: InputMaybe<Friends_Bool_Exp>;
 };
 
 
@@ -11827,6 +12539,36 @@ export type Subscription_RootItem_Reviews_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<Item_Reviews_Stream_Cursor_Input>>;
   where?: InputMaybe<Item_Reviews_Bool_Exp>;
+};
+
+
+export type Subscription_RootPermission_TypeArgs = {
+  distinct_on?: InputMaybe<Array<Permission_Type_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Permission_Type_Order_By>>;
+  where?: InputMaybe<Permission_Type_Bool_Exp>;
+};
+
+
+export type Subscription_RootPermission_Type_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Permission_Type_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Permission_Type_Order_By>>;
+  where?: InputMaybe<Permission_Type_Bool_Exp>;
+};
+
+
+export type Subscription_RootPermission_Type_By_PkArgs = {
+  text: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootPermission_Type_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Permission_Type_Stream_Cursor_Input>>;
+  where?: InputMaybe<Permission_Type_Bool_Exp>;
 };
 
 
@@ -12061,10 +12803,6 @@ export type Users = {
   cellarsOwned: Array<Cellars>;
   /** An aggregate relationship */
   cellarsOwned_aggregate: Cellars_Aggregate;
-  /** An array relationship */
-  cellarsShared: Array<Cellar_User>;
-  /** An aggregate relationship */
-  cellarsShared_aggregate: Cellar_User_Aggregate;
   createdAt: Scalars['timestamptz']['output'];
   currentChallenge?: Maybe<Scalars['String']['output']>;
   defaultRole: Scalars['String']['output'];
@@ -12074,7 +12812,15 @@ export type Users = {
   displayName: Scalars['String']['output'];
   email?: Maybe<Scalars['citext']['output']>;
   emailVerified: Scalars['Boolean']['output'];
+  /** An array relationship */
+  friends: Array<Friends>;
+  /** An aggregate relationship */
+  friends_aggregate: Friends_Aggregate;
   id: Scalars['uuid']['output'];
+  /** An array relationship */
+  incomingFriendRequests: Array<Friend_Requests>;
+  /** An aggregate relationship */
+  incomingFriendRequests_aggregate: Friend_Requests_Aggregate;
   isAnonymous: Scalars['Boolean']['output'];
   lastSeen?: Maybe<Scalars['timestamptz']['output']>;
   locale: Scalars['String']['output'];
@@ -12083,6 +12829,10 @@ export type Users = {
   otpHash?: Maybe<Scalars['String']['output']>;
   otpHashExpiresAt: Scalars['timestamptz']['output'];
   otpMethodLastUsed?: Maybe<Scalars['String']['output']>;
+  /** An array relationship */
+  outgoingFriendRequests: Array<Friend_Requests>;
+  /** An aggregate relationship */
+  outgoingFriendRequests_aggregate: Friend_Requests_Aggregate;
   passwordHash?: Maybe<Scalars['String']['output']>;
   phoneNumber?: Maybe<Scalars['String']['output']>;
   phoneNumberVerified: Scalars['Boolean']['output'];
@@ -12130,28 +12880,68 @@ export type UsersCellarsOwned_AggregateArgs = {
 
 
 /** User account information. Don't modify its structure as Hasura Auth relies on it to function properly. */
-export type UsersCellarsSharedArgs = {
-  distinct_on?: InputMaybe<Array<Cellar_User_Select_Column>>;
+export type UsersFriendsArgs = {
+  distinct_on?: InputMaybe<Array<Friends_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
+  order_by?: InputMaybe<Array<Friends_Order_By>>;
+  where?: InputMaybe<Friends_Bool_Exp>;
 };
 
 
 /** User account information. Don't modify its structure as Hasura Auth relies on it to function properly. */
-export type UsersCellarsShared_AggregateArgs = {
-  distinct_on?: InputMaybe<Array<Cellar_User_Select_Column>>;
+export type UsersFriends_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friends_Select_Column>>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  order_by?: InputMaybe<Array<Cellar_User_Order_By>>;
-  where?: InputMaybe<Cellar_User_Bool_Exp>;
+  order_by?: InputMaybe<Array<Friends_Order_By>>;
+  where?: InputMaybe<Friends_Bool_Exp>;
+};
+
+
+/** User account information. Don't modify its structure as Hasura Auth relies on it to function properly. */
+export type UsersIncomingFriendRequestsArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Requests_Order_By>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
+};
+
+
+/** User account information. Don't modify its structure as Hasura Auth relies on it to function properly. */
+export type UsersIncomingFriendRequests_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Requests_Order_By>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
 };
 
 
 /** User account information. Don't modify its structure as Hasura Auth relies on it to function properly. */
 export type UsersMetadataArgs = {
   path?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** User account information. Don't modify its structure as Hasura Auth relies on it to function properly. */
+export type UsersOutgoingFriendRequestsArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Requests_Order_By>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
+};
+
+
+/** User account information. Don't modify its structure as Hasura Auth relies on it to function properly. */
+export type UsersOutgoingFriendRequests_AggregateArgs = {
+  distinct_on?: InputMaybe<Array<Friend_Requests_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Friend_Requests_Order_By>>;
+  where?: InputMaybe<Friend_Requests_Bool_Exp>;
 };
 
 
@@ -12311,8 +13101,6 @@ export type Users_Bool_Exp = {
   avatarUrl?: InputMaybe<String_Comparison_Exp>;
   cellarsOwned?: InputMaybe<Cellars_Bool_Exp>;
   cellarsOwned_aggregate?: InputMaybe<Cellars_Aggregate_Bool_Exp>;
-  cellarsShared?: InputMaybe<Cellar_User_Bool_Exp>;
-  cellarsShared_aggregate?: InputMaybe<Cellar_User_Aggregate_Bool_Exp>;
   createdAt?: InputMaybe<Timestamptz_Comparison_Exp>;
   currentChallenge?: InputMaybe<String_Comparison_Exp>;
   defaultRole?: InputMaybe<String_Comparison_Exp>;
@@ -12321,7 +13109,11 @@ export type Users_Bool_Exp = {
   displayName?: InputMaybe<String_Comparison_Exp>;
   email?: InputMaybe<Citext_Comparison_Exp>;
   emailVerified?: InputMaybe<Boolean_Comparison_Exp>;
+  friends?: InputMaybe<Friends_Bool_Exp>;
+  friends_aggregate?: InputMaybe<Friends_Aggregate_Bool_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
+  incomingFriendRequests?: InputMaybe<Friend_Requests_Bool_Exp>;
+  incomingFriendRequests_aggregate?: InputMaybe<Friend_Requests_Aggregate_Bool_Exp>;
   isAnonymous?: InputMaybe<Boolean_Comparison_Exp>;
   lastSeen?: InputMaybe<Timestamptz_Comparison_Exp>;
   locale?: InputMaybe<String_Comparison_Exp>;
@@ -12330,6 +13122,8 @@ export type Users_Bool_Exp = {
   otpHash?: InputMaybe<String_Comparison_Exp>;
   otpHashExpiresAt?: InputMaybe<Timestamptz_Comparison_Exp>;
   otpMethodLastUsed?: InputMaybe<String_Comparison_Exp>;
+  outgoingFriendRequests?: InputMaybe<Friend_Requests_Bool_Exp>;
+  outgoingFriendRequests_aggregate?: InputMaybe<Friend_Requests_Aggregate_Bool_Exp>;
   passwordHash?: InputMaybe<String_Comparison_Exp>;
   phoneNumber?: InputMaybe<String_Comparison_Exp>;
   phoneNumberVerified?: InputMaybe<Boolean_Comparison_Exp>;
@@ -12377,7 +13171,6 @@ export type Users_Insert_Input = {
   activeMfaType?: InputMaybe<Scalars['String']['input']>;
   avatarUrl?: InputMaybe<Scalars['String']['input']>;
   cellarsOwned?: InputMaybe<Cellars_Arr_Rel_Insert_Input>;
-  cellarsShared?: InputMaybe<Cellar_User_Arr_Rel_Insert_Input>;
   createdAt?: InputMaybe<Scalars['timestamptz']['input']>;
   currentChallenge?: InputMaybe<Scalars['String']['input']>;
   defaultRole?: InputMaybe<Scalars['String']['input']>;
@@ -12386,7 +13179,9 @@ export type Users_Insert_Input = {
   displayName?: InputMaybe<Scalars['String']['input']>;
   email?: InputMaybe<Scalars['citext']['input']>;
   emailVerified?: InputMaybe<Scalars['Boolean']['input']>;
+  friends?: InputMaybe<Friends_Arr_Rel_Insert_Input>;
   id?: InputMaybe<Scalars['uuid']['input']>;
+  incomingFriendRequests?: InputMaybe<Friend_Requests_Arr_Rel_Insert_Input>;
   isAnonymous?: InputMaybe<Scalars['Boolean']['input']>;
   lastSeen?: InputMaybe<Scalars['timestamptz']['input']>;
   locale?: InputMaybe<Scalars['String']['input']>;
@@ -12395,6 +13190,7 @@ export type Users_Insert_Input = {
   otpHash?: InputMaybe<Scalars['String']['input']>;
   otpHashExpiresAt?: InputMaybe<Scalars['timestamptz']['input']>;
   otpMethodLastUsed?: InputMaybe<Scalars['String']['input']>;
+  outgoingFriendRequests?: InputMaybe<Friend_Requests_Arr_Rel_Insert_Input>;
   passwordHash?: InputMaybe<Scalars['String']['input']>;
   phoneNumber?: InputMaybe<Scalars['String']['input']>;
   phoneNumberVerified?: InputMaybe<Scalars['Boolean']['input']>;
@@ -12534,7 +13330,6 @@ export type Users_Order_By = {
   activeMfaType?: InputMaybe<Order_By>;
   avatarUrl?: InputMaybe<Order_By>;
   cellarsOwned_aggregate?: InputMaybe<Cellars_Aggregate_Order_By>;
-  cellarsShared_aggregate?: InputMaybe<Cellar_User_Aggregate_Order_By>;
   createdAt?: InputMaybe<Order_By>;
   currentChallenge?: InputMaybe<Order_By>;
   defaultRole?: InputMaybe<Order_By>;
@@ -12543,7 +13338,9 @@ export type Users_Order_By = {
   displayName?: InputMaybe<Order_By>;
   email?: InputMaybe<Order_By>;
   emailVerified?: InputMaybe<Order_By>;
+  friends_aggregate?: InputMaybe<Friends_Aggregate_Order_By>;
   id?: InputMaybe<Order_By>;
+  incomingFriendRequests_aggregate?: InputMaybe<Friend_Requests_Aggregate_Order_By>;
   isAnonymous?: InputMaybe<Order_By>;
   lastSeen?: InputMaybe<Order_By>;
   locale?: InputMaybe<Order_By>;
@@ -12552,6 +13349,7 @@ export type Users_Order_By = {
   otpHash?: InputMaybe<Order_By>;
   otpHashExpiresAt?: InputMaybe<Order_By>;
   otpMethodLastUsed?: InputMaybe<Order_By>;
+  outgoingFriendRequests_aggregate?: InputMaybe<Friend_Requests_Aggregate_Order_By>;
   passwordHash?: InputMaybe<Order_By>;
   phoneNumber?: InputMaybe<Order_By>;
   phoneNumberVerified?: InputMaybe<Order_By>;
@@ -13970,6 +14768,14 @@ export type GetCredentialQueryVariables = Exact<{
 
 export type GetCredentialQuery = { __typename: 'query_root', admin_credentials_by_pk?: { __typename: 'admin_credentials', id: string, credentials: any } | null };
 
+export type InsertFriendsMutationVariables = Exact<{
+  friends: Array<Friends_Insert_Input> | Friends_Insert_Input;
+  requestId: Scalars['uuid']['input'];
+}>;
+
+
+export type InsertFriendsMutation = { __typename: 'mutation_root', insert_friends?: { __typename: 'friends_mutation_response', affected_rows: number } | null, delete_friend_requests_by_pk?: { __typename: 'friend_requests', id: string } | null };
+
 export type UpdateItemImageMutationVariables = Exact<{
   itemId: Scalars['uuid']['input'];
   item: Item_Image_Set_Input;
@@ -14008,6 +14814,7 @@ export type AddItemImageMutation = { __typename: 'mutation_root', insert_item_im
 
 
 export const GetCredentialDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCredential"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"admin_credentials_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"credentials"}}]}}]}}]} as unknown as DocumentNode<GetCredentialQuery, GetCredentialQueryVariables>;
+export const InsertFriendsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"InsertFriends"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"friends"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"friends_insert_input"}}}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"requestId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_friends"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"objects"},"value":{"kind":"Variable","name":{"kind":"Name","value":"friends"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"affected_rows"}}]}},{"kind":"Field","name":{"kind":"Name","value":"delete_friend_requests_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"requestId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<InsertFriendsMutation, InsertFriendsMutationVariables>;
 export const UpdateItemImageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateItemImage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"item"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"item_image_set_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"update_item_image_by_pk"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"pk_columns"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"itemId"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"_set"},"value":{"kind":"Variable","name":{"kind":"Name","value":"item"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateItemImageMutation, UpdateItemImageMutationVariables>;
 export const AddItemOnboardingDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddItemOnboarding"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"onboarding"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"item_onboardings_insert_input"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"insert_item_onboardings_one"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"object"},"value":{"kind":"Variable","name":{"kind":"Name","value":"onboarding"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<AddItemOnboardingMutation, AddItemOnboardingMutationVariables>;
 export const GetFileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetFile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"uuid"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"file"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"bucket"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"mimeType"}},{"kind":"Field","name":{"kind":"Name","value":"size"}}]}}]}}]} as unknown as DocumentNode<GetFileQuery, GetFileQueryVariables>;

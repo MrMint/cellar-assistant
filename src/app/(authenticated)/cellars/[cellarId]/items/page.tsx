@@ -1,6 +1,7 @@
 "use client";
 
 import { Box, Button, Grid, Stack } from "@mui/joy";
+import { useUserId } from "@nhost/nextjs";
 import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
 import TopNavigationBar from "@/components/common/HeaderBar";
@@ -47,11 +48,14 @@ const itemsSub = graphql(`
     cellars_by_pk(id: $cellarId) {
       id
       name
+      created_by_id
     }
   }
 `);
 
 const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
+  const userId = useUserId();
+
   const [res] = useQuery({
     query: itemsSub,
     variables: { cellarId },
@@ -73,6 +77,7 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
               component={Link}
               href={"items/add"}
               startDecorator={<MdAdd />}
+              disabled={userId !== res.data?.cellars_by_pk?.created_by_id}
             >
               Add item
             </Button>
