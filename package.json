@@ -40,7 +40,7 @@
     "graphql": "16.8.1",
     "graphql-config": "5.0.3",
     "graphql-ws": "5.14.2",
-    "next": "13.5.6",
+    "next": "14.0.2",
     "npm-run-all2": "6.1.1",
     "prettier": "3.0.3",
     "ramda": "0.29.1",
@@ -57,5 +57,8 @@
     "typescript": "5.2.2",
     "urql": "4.0.5",
     "xstate": "5.0.0-beta.41"
+  },
+  "overrides": {
+    "next": "14.0.2"
   }
 }
