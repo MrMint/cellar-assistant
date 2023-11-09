@@ -1,0 +1,4 @@
+table:
+  name: friend_request_status
+  schema: public
+is_enum: true

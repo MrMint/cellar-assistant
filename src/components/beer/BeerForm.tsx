@@ -13,7 +13,7 @@ import {
 import { format } from "date-fns";
 import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient, useMutation } from "urql";
+import { CombinedError, useClient } from "urql";
 import { beerStyleKeys, countryKeys } from "@/constants";
 import { graphql } from "@/gql";
 import {

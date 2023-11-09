@@ -16,14 +16,14 @@ import {
 import { useSignOut, useUserAvatarUrl } from "@nhost/nextjs";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
-import { MdWarehouse } from "react-icons/md";
+import { MdGroup, MdWarehouse } from "react-icons/md";
 import { useMediaQuery } from "react-responsive";
 import Link from "./Link";
 
 const NavLinkIconButton = styled(IconButton)(({ theme }) => ({
   color: theme.palette.text.secondary,
   "&.active > *": {
-    color: theme.palette.text.primary,
+    color: `${theme.palette.text.primary} !important`,
   },
 }));
 
@@ -55,16 +55,11 @@ const SideNavigationBar = () => {
     maxWidth: theme.breakpoints.values["sm"],
   });
 
-  const handleSignOutClick = async () => {
-    await signOut();
-  };
-
   const orientation = isMobile ? "horizontal" : "vertical";
   const placement = isMobile ? "top" : "right";
 
   return (
     <Sheet
-      variant="outlined"
       sx={(theme) => ({
         display: "flex",
         flexDirection: { xs: "row", sm: "column" },
@@ -87,6 +82,18 @@ const SideNavigationBar = () => {
             </ListItem>
           </Tooltip>
         </Box>
+        <Box>
+          <Tooltip title="Friends" arrow placement={placement}>
+            <ListItem>
+              <NavLinkButton
+                href="/friends"
+                pathname={pathname}
+                icon={<MdGroup />}
+              />
+            </ListItem>
+          </Tooltip>
+        </Box>
+        <Box flexGrow={1} />
         <ListItem>
           <Dropdown>
             <MenuButton slots={{ root: IconButton }}>

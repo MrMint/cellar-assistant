@@ -40,10 +40,19 @@ select_permissions:
         - updated_at
         - user_id
       filter:
-        cellar:
-          users:
-            user_id:
-              _eq: X-Hasura-User-Id
+        _or:
+          - cellar:
+              created_by_id:
+                _eq: X-Hasura-User-Id
+          - _and:
+              - cellar:
+                  privacy:
+                    _eq: FRIENDS
+              - cellar:
+                  createdBy:
+                    friends:
+                      friend_id:
+                        _eq: X-Hasura-User-Id
     comment: ""
 update_permissions:
   - role: user

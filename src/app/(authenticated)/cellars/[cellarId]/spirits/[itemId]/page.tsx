@@ -43,6 +43,7 @@ const getSpiritQuery = graphql(`
       }
       cellar {
         name
+        created_by_id
       }
     }
   }
@@ -80,6 +81,7 @@ const SpiritDetails = ({
         itemType={ItemType.Spirit}
         cellarId={cellarId}
         cellarName={cellar?.name}
+        cellarCreatedById={cellar?.created_by_id}
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
