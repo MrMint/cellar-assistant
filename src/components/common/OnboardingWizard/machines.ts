@@ -41,6 +41,7 @@ export const OnboardingMachine = createMachine(
         existingItemId?: string;
         cellarId: string;
         router: AppRouterInstance;
+        retryCount: number;
       };
       events:
         | {
@@ -80,6 +81,7 @@ export const OnboardingMachine = createMachine(
       urqlClient: input.urqlClient,
       cellarId: input.cellarId,
       router: input.router,
+      retryCount: 0,
     }),
     states: {
       wizard: {
@@ -125,6 +127,25 @@ export const OnboardingMachine = createMachine(
           },
         },
       },
+      retryAnalyze: {
+        after: {
+          100: [
+            {
+              guard: ({ context }) => context.retryCount < 2,
+              target: "analyze",
+              actions: assign({
+                retryCount: ({ context }) => context.retryCount + 1,
+              }),
+            },
+            {
+              actions: assign({
+                defaults: () => ({}),
+              }),
+              target: "form",
+            },
+          ],
+        },
+      },
       analyze: {
         invoke: {
           src: "fetchDefaults",
@@ -136,6 +157,9 @@ export const OnboardingMachine = createMachine(
             backLabelFileId,
             frontLabelFileId,
           }),
+          onError: {
+            target: "retryAnalyze",
+          },
           onDone: {
             target: "form",
             actions: assign({
