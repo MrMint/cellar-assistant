@@ -3,15 +3,17 @@
 import { Stack, Typography } from "@mui/joy";
 import { without } from "ramda";
 
+export type ItemDetailsProp = {
+  title: string;
+  subTitlePhrases: Array<string | null | undefined>;
+  description: string | null | undefined;
+};
+
 const ItemDetails = ({
   title,
   subTitlePhrases,
   description,
-}: {
-  title: string;
-  subTitlePhrases: Array<string | null | undefined>;
-  description: string | null | undefined;
-}) => (
+}: ItemDetailsProp) => (
   <Stack spacing={1}>
     <Typography level="h3">{title}</Typography>
     <Typography level="body-md">
