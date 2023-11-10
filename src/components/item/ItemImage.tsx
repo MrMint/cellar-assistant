@@ -1,7 +1,7 @@
 import { Card, CardActions, CardCover, IconButton } from "@mui/joy";
 import Image, { type StaticImageData } from "next/image";
 import { isNil, isNotNil } from "ramda";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { MdEdit } from "react-icons/md";
 import { getNextPlaceholder, nhostImageLoader } from "@/utilities";
 import { AddPhotoModal } from "./AddPhoto";
@@ -10,7 +10,7 @@ export type ItemImageProps = {
   fileId?: string;
   placeholder?: string | null;
   fallback: StaticImageData;
-  onCaptureImage: (imageDataUrl: string) => Promise<void>;
+  onCaptureImage?: (imageDataUrl: string) => Promise<void>;
 };
 
 export const ItemImage = ({
@@ -21,10 +21,15 @@ export const ItemImage = ({
 }: ItemImageProps) => {
   const [open, setOpen] = useState(false);
 
-  const handleEdit = async (image: string) => {
-    await onCaptureImage(image);
-    setOpen(false);
-  };
+  const handleEdit = useCallback(
+    async (image: string) => {
+      if (isNotNil(onCaptureImage)) {
+        await onCaptureImage(image);
+        setOpen(false);
+      }
+    },
+    [onCaptureImage, setOpen],
+  );
 
   return (
     <>
@@ -49,15 +54,17 @@ export const ItemImage = ({
             />
           )}
         </CardCover>
-        <CardActions sx={{ alignSelf: "end" }}>
-          <IconButton
-            variant="outlined"
-            size="lg"
-            onClick={() => setOpen(true)}
-          >
-            <MdEdit />
-          </IconButton>
-        </CardActions>
+        {isNotNil(onCaptureImage) && (
+          <CardActions sx={{ alignSelf: "end" }}>
+            <IconButton
+              variant="outlined"
+              size="lg"
+              onClick={() => setOpen(true)}
+            >
+              <MdEdit />
+            </IconButton>
+          </CardActions>
+        )}
       </Card>
       <AddPhotoModal
         open={open}
