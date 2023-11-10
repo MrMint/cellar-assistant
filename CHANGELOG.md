@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.25.1](https://github.com/MrMint/cellar-assistant/compare/v0.25.0...v0.25.1) (2023-11-10)
+
+
+### Bug Fixes
+
+* Fixes beer selection permissions for country column ([74079d0](https://github.com/MrMint/cellar-assistant/commit/74079d088d067233ec8a4550bcf55b546babc9d3))
+
 ## [0.25.0](https://github.com/MrMint/cellar-assistant/compare/v0.24.0...v0.25.0) (2023-11-10)
 
 
