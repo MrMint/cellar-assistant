@@ -1,6 +1,13 @@
-import { AspectRatio, CardOverflow, Typography } from "@mui/joy";
+import {
+  CardContent,
+  CardOverflow,
+  Divider,
+  Tooltip,
+  Typography,
+} from "@mui/joy";
 import Image from "next/image";
-import { isNil, isNotNil } from "ramda";
+import { always, cond, equals, isNil, isNotNil } from "ramda";
+import { MdOutlineComment, MdStar } from "react-icons/md";
 import { ItemType } from "@/gql/graphql";
 import beer1 from "@/images/beer1.png";
 import spirit1 from "@/images/spirit1.png";
@@ -21,83 +28,107 @@ export type ItemCardProps = {
     vintage?: string;
     displayImageId?: string;
     placeholder?: string | null;
+    score?: number | null;
+    reviewCount?: number | null;
   };
   href?: string;
   onClick?: (itemId: string) => void;
   type: ItemType;
 };
 export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
+  const fallback = cond([
+    [equals(ItemType.Beer), always({ image: beer1, alt: "A beer glass" })],
+    [equals(ItemType.Wine), always({ image: wine1, alt: "A wine bottle" })],
+    [
+      equals(ItemType.Spirit),
+      always({ image: spirit1, alt: "A bottle of spirits" }),
+    ],
+  ])(type);
+
   return (
     <InteractiveCard
       onClick={isNotNil(onClick) ? () => onClick(item.id) : undefined}
     >
-      <CardOverflow>
+      <CardOverflow
+        sx={{ aspectRatio: { xs: 1.2, sm: 1 }, padding: 0, overflow: "hidden" }}
+      >
         {isNotNil(item.displayImageId) && (
-          <AspectRatio ratio="1" maxHeight={300}>
-            <Image
-              src={item.displayImageId}
-              alt="An image of a beer glass"
-              height={400}
-              width={400}
-              loader={nhostImageLoader}
-              placeholder={getNextPlaceholder(item.placeholder)}
-            />
-          </AspectRatio>
+          <Image
+            style={{
+              aspectRatio: "1",
+              objectFit: "cover",
+              height: "auto",
+              width: "auto",
+            }}
+            src={item.displayImageId}
+            alt={fallback.alt}
+            height={400}
+            width={400}
+            loader={nhostImageLoader}
+            placeholder={getNextPlaceholder(item.placeholder)}
+          />
         )}
         {isNil(item.displayImageId) && (
-          <>
-            {type === ItemType.Beer && (
-              <AspectRatio ratio="1" maxHeight={300}>
-                <Image
-                  src={beer1}
-                  alt="An image of a beer glass"
-                  fill
-                  placeholder="blur"
-                />
-              </AspectRatio>
-            )}
-            {type === ItemType.Wine && (
-              <AspectRatio ratio="1" maxHeight={300}>
-                <Image
-                  src={wine1}
-                  alt="An image of a wine bottle"
-                  fill
-                  placeholder="blur"
-                />
-              </AspectRatio>
-            )}
-            {type === ItemType.Spirit && (
-              <AspectRatio ratio="1" maxHeight={300}>
-                <Image
-                  src={spirit1}
-                  alt="An image of a liquor bottle"
-                  fill
-                  placeholder="blur"
-                />
-              </AspectRatio>
-            )}
-          </>
+          <Image
+            src={fallback.image}
+            alt={fallback.alt}
+            fill
+            placeholder="blur"
+          />
         )}
       </CardOverflow>
       {isNotNil(href) && (
-        <Link
-          overlay
-          href={`${formatItemType(type).toLowerCase()}s/${item.id}`}
-        >
-          <Typography level="title-md">
-            {type === ItemType.Wine &&
-              `${formatVintage(item.vintage)} ${item.name}`}
-            {type !== ItemType.Wine && item.name}
-          </Typography>
-        </Link>
+        <CardContent>
+          <Link
+            overlay
+            href={`${formatItemType(type).toLowerCase()}s/${item.id}`}
+          >
+            <Typography level="title-md" noWrap>
+              {type === ItemType.Wine &&
+                `${formatVintage(item.vintage)} ${item.name}`}
+              {type !== ItemType.Wine && item.name}
+            </Typography>
+          </Link>
+        </CardContent>
       )}
       {isNotNil(onClick) && (
-        <Typography level="title-md">
+        <Typography level="title-md" noWrap>
           {type === ItemType.Wine &&
             `${formatVintage(item.vintage)} ${item.name}`}
           {type !== ItemType.Wine && item.name}
         </Typography>
       )}
+      <CardOverflow
+        variant="soft"
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          gap: 1,
+          justifyContent: "space-around",
+          py: 1,
+          borderTop: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        {isNil(item.reviewCount) && <Typography>No Reviews</Typography>}
+        {isNotNil(item.reviewCount) && (
+          <Typography endDecorator={<MdOutlineComment />} level="title-md">
+            {item.reviewCount}
+          </Typography>
+        )}
+        <Divider orientation="vertical" />
+        {isNil(item.score) && <Typography>No Scores</Typography>}
+        {isNotNil(item.score) && (
+          <Typography
+            endDecorator={
+              <MdStar style={{ color: "#ffba26", fontSize: "2rem" }} />
+            }
+            level="title-md"
+          >
+            {item.score.toFixed(2)}
+          </Typography>
+        )}
+      </CardOverflow>
     </InteractiveCard>
   );
 };

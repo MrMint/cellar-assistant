@@ -1,7 +1,7 @@
 import { Card, CardActions, CardCover, IconButton } from "@mui/joy";
 import Image, { type StaticImageData } from "next/image";
 import { isNil, isNotNil } from "ramda";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { MdEdit } from "react-icons/md";
 import { getNextPlaceholder, nhostImageLoader } from "@/utilities";
 import { AddPhotoModal } from "./AddPhoto";
@@ -21,10 +21,15 @@ export const ItemImage = ({
 }: ItemImageProps) => {
   const [open, setOpen] = useState(false);
 
-  const handleEdit = async (image: string) => {
-    await onCaptureImage(image);
-    setOpen(false);
-  };
+  const handleEdit = useCallback(
+    async (image: string) => {
+      if (isNotNil(onCaptureImage)) {
+        await onCaptureImage(image);
+        setOpen(false);
+      }
+    },
+    [onCaptureImage, setOpen],
+  );
 
   return (
     <>
