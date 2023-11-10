@@ -7,12 +7,6 @@ import {
 } from "@/gql/graphql";
 import { getEnumKeys } from "@/utilities";
 
-export enum ItemType {
-  Beer,
-  Wine,
-  Spirit,
-}
-
 export enum BarcodeType {
   UPC_A = "UPC_A",
   EAN_13 = "EAN_13",

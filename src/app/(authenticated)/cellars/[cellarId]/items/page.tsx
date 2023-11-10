@@ -7,9 +7,10 @@ import { useQuery } from "urql";
 import TopNavigationBar from "@/components/common/HeaderBar";
 import Link from "@/components/common/Link";
 import { ItemCard } from "@/components/item/ItemCard";
-import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
 import withAuth from "@/hocs/withAuth";
+import { formatItemType } from "@/utilities";
 
 const itemsSub = graphql(`
   query GetItemsQuery($cellarId: uuid!) {
@@ -94,7 +95,7 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
                   placeholder: x.display_image?.placeholder,
                 }}
                 type={ItemType.Beer}
-                href={`${ItemType[ItemType.Beer].toLowerCase()}s/${x.id}`}
+                href={`${formatItemType(ItemType.Beer).toLowerCase()}s/${x.id}`}
               />
             </Grid>
           ))}
@@ -109,7 +110,7 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
                   placeholder: x.display_image?.placeholder,
                 }}
                 type={ItemType.Wine}
-                href={`${ItemType[ItemType.Wine].toLowerCase()}s/${x.id}`}
+                href={`${formatItemType(ItemType.Wine).toLowerCase()}s/${x.id}`}
               />
             </Grid>
           ))}
@@ -123,7 +124,9 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
                   placeholder: x.display_image?.placeholder,
                 }}
                 type={ItemType.Spirit}
-                href={`${ItemType[ItemType.Spirit].toLowerCase()}s/${x.id}`}
+                href={`${formatItemType(ItemType.Spirit).toLowerCase()}s/${
+                  x.id
+                }`}
               />
             </Grid>
           ))}

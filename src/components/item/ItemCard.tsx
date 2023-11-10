@@ -1,11 +1,12 @@
 import { AspectRatio, CardOverflow, Typography } from "@mui/joy";
 import Image from "next/image";
 import { isNil, isNotNil } from "ramda";
-import { ItemType } from "@/constants";
+import { ItemType } from "@/gql/graphql";
 import beer1 from "@/images/beer1.png";
 import spirit1 from "@/images/spirit1.png";
 import wine1 from "@/images/wine1.png";
 import {
+  formatItemType,
   formatVintage,
   getNextPlaceholder,
   nhostImageLoader,
@@ -79,7 +80,10 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         )}
       </CardOverflow>
       {isNotNil(href) && (
-        <Link overlay href={`${ItemType[type].toLowerCase()}s/${item.id}`}>
+        <Link
+          overlay
+          href={`${formatItemType(type).toLowerCase()}s/${item.id}`}
+        >
           <Typography level="title-md">
             {type === ItemType.Wine &&
               `${formatVintage(item.vintage)} ${item.name}`}

@@ -3,7 +3,8 @@ import { Client } from "urql";
 import { BeerFormDefaultValues } from "@/components/beer/BeerForm";
 import { SpiritFormDefaultValues } from "@/components/spirit/SpiritForm";
 import { WineFormDefaultValues } from "@/components/wine/WineForm";
-import { Barcode, ItemType } from "@/constants";
+import { Barcode } from "@/constants";
+import { ItemType } from "@/gql/graphql";
 
 export type SearchByBarcodeInput = {
   barcode?: Barcode;
