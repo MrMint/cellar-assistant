@@ -1,7 +1,7 @@
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
-import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
 import { BarcodeSearchResult, SearchByBarcodeInput } from "./types";
 
 const searchByBarcodeQuery = graphql(`

@@ -1,16 +1,18 @@
 "use client";
 
-import { Card, Grid, Sheet, Stack } from "@mui/joy";
-import { isNotNil } from "ramda";
-import { useQuery } from "urql";
+import { Card, Grid, Stack } from "@mui/joy";
+import { isNil, isNotNil } from "ramda";
+import { useCallback } from "react";
+import { useClient, useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { AddReview } from "@/components/review/AddReview";
-import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
 import wine1 from "@/images/wine1.png";
+import { addItemImageMutation, updateCellarWineMutation } from "@/queries";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getWineQuery = graphql(`
@@ -56,25 +58,39 @@ const WineDetails = ({
 }: {
   params: { itemId: string; cellarId: string };
 }) => {
+  const client = useClient();
   const [{ data, fetching, operation }] = useQuery({
     query: getWineQuery,
     variables: { itemId },
   });
+
   const isLoading = fetching || operation === undefined;
 
-  let wine = undefined;
-  let cellar = undefined;
+  const wine = data?.cellar_wine_by_pk?.wine;
+  const cellar = data?.cellar_wine_by_pk?.cellar;
   const displayImage = data?.cellar_wine_by_pk?.display_image;
 
-  if (
-    isLoading === false &&
-    isNotNil(data) &&
-    isNotNil(data.cellar_wine_by_pk) &&
-    isNotNil(data.cellar_wine_by_pk.wine)
-  ) {
-    cellar = data.cellar_wine_by_pk.cellar;
-    wine = data.cellar_wine_by_pk.wine;
-  }
+  const handleCaptureImage = useCallback(
+    async (image: string) => {
+      if (isNotNil(wine)) {
+        const addImageResult = await client.mutation(addItemImageMutation, {
+          input: { image, item_id: wine.id, item_type: ItemType.Wine },
+        });
+        if (isNil(addImageResult.error)) {
+          const updateItemResult = await client.mutation(
+            updateCellarWineMutation,
+            {
+              wineId: itemId,
+              wine: {
+                display_image_id: addImageResult.data?.item_image_upload?.id,
+              },
+            },
+          );
+        }
+      }
+    },
+    [client, wine, itemId],
+  );
 
   return (
     <Stack spacing={2}>
@@ -93,6 +109,7 @@ const WineDetails = ({
               fileId={displayImage?.file_id}
               placeholder={displayImage?.placeholder}
               fallback={wine1}
+              onCaptureImage={handleCaptureImage}
             />
           )}
         </Grid>

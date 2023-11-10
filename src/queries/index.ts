@@ -25,6 +25,22 @@ export const addBeerMutation = graphql(`
   }
 `);
 
+export const updateBeerMutation = graphql(`
+  mutation UpdateBeer($beerId: uuid!, $beer: beers_set_input!) {
+    update_beers_by_pk(pk_columns: { id: $beerId }, _set: $beer) {
+      id
+    }
+  }
+`);
+
+export const updateCellarBeerMutation = graphql(`
+  mutation UpdateCellarBeer($beerId: uuid!, $beer: cellar_beer_set_input!) {
+    update_cellar_beer_by_pk(pk_columns: { id: $beerId }, _set: $beer) {
+      id
+    }
+  }
+`);
+
 export const addWineMutation = graphql(`
   mutation AddWine($wine: wines_insert_input!) {
     insert_wines_one(object: $wine) {
@@ -38,6 +54,22 @@ export const addWineToCellarMutation = graphql(`
     insert_cellar_wine_one(object: $input) {
       id
       cellar_id
+    }
+  }
+`);
+
+export const updateWineMutation = graphql(`
+  mutation UpdateWine($wineId: uuid!, $wine: wines_set_input!) {
+    update_wines_by_pk(pk_columns: { id: $wineId }, _set: $wine) {
+      id
+    }
+  }
+`);
+
+export const updateCellarWineMutation = graphql(`
+  mutation UpdateCellarWine($wineId: uuid!, $wine: cellar_wine_set_input!) {
+    update_cellar_wine_by_pk(pk_columns: { id: $wineId }, _set: $wine) {
+      id
     }
   }
 `);
@@ -61,6 +93,17 @@ export const addSpiritToCellarMutation = graphql(`
 export const updateSpiritMutation = graphql(`
   mutation UpdateSpirit($spiritId: uuid!, $spirit: spirits_set_input!) {
     update_spirits_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {
+      id
+    }
+  }
+`);
+
+export const updateCellarSpiritMutation = graphql(`
+  mutation UpdateCellarSpirit(
+    $spiritId: uuid!
+    $spirit: cellar_spirit_set_input!
+  ) {
+    update_cellar_spirit_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {
       id
     }
   }

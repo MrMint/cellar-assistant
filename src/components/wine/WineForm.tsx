@@ -26,7 +26,7 @@ import {
   Wine_Style_Enum,
   Wines_Insert_Input,
 } from "@/gql/graphql";
-import { addWineMutation } from "@/queries";
+import { addWineMutation, updateWineMutation } from "@/queries";
 import { formatVintage } from "@/utilities";
 
 type SharedFields = {
@@ -59,14 +59,6 @@ type WineFormProps = {
   defaultValues?: WineFormDefaultValues;
   onCreated: (createdId: string) => void;
 };
-
-const updateWineMutation = graphql(`
-  mutation updateWine($wineId: uuid!, $wine: wines_set_input!) {
-    update_wines_by_pk(pk_columns: { id: $wineId }, _set: $wine) {
-      id
-    }
-  }
-`);
 
 function mapFormValuesToInsertInput(
   values: IWineFormInput,

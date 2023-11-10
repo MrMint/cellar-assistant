@@ -23,7 +23,7 @@ import {
   Beers_Insert_Input,
   Country_Enum,
 } from "@/gql/graphql";
-import { addBeerMutation } from "@/queries";
+import { addBeerMutation, updateBeerMutation } from "@/queries";
 import { formatVintage } from "@/utilities";
 
 type SharedFields = {
@@ -53,13 +53,6 @@ export type BeerFormProps = {
   onCreated: (createdId: string) => void;
 };
 
-const updateBeerMutation = graphql(`
-  mutation updateBeer($beerId: uuid!, $beer: beers_set_input!) {
-    update_beers_by_pk(pk_columns: { id: $beerId }, _set: $beer) {
-      id
-    }
-  }
-`);
 function mapFormValuesToInsertInput(
   values: IBeerFormInput,
   itemOnboardingId?: string,
