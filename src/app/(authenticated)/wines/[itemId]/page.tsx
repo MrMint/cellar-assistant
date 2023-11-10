@@ -6,8 +6,8 @@ import { isNotNil } from "ramda";
 import { useQuery } from "urql";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemHeader } from "@/components/item/ItemHeader";
-import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
 import wine1 from "@/images/wine1.png";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 

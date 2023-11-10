@@ -1,6 +1,7 @@
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
 import { ImageLoaderProps } from "next/image";
 import { isNil, isNotNil } from "ramda";
+import { ItemType } from "@/gql/graphql";
 
 // https://stackoverflow.com/a/76775845
 export function getEnums<T extends { [key: string]: number | string }>(
@@ -101,4 +102,17 @@ export const getNextPlaceholder = (
 ): `data:image/${string}` | undefined => {
   if (isNil(placeholderDataUrl)) return undefined;
   return `data:image/${placeholderDataUrl}`;
+};
+
+export const formatItemType = (type: ItemType) => {
+  switch (type) {
+    case ItemType.Beer:
+      return "Beer";
+    case ItemType.Wine:
+      return "Wine";
+    case ItemType.Spirit:
+      return "Spirit";
+    default:
+      throw new Error("Unsupported item type");
+  }
 };

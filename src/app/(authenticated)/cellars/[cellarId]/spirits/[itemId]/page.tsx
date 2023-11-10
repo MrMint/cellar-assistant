@@ -1,16 +1,18 @@
 "use client";
 
 import { Card, Grid, Sheet, Stack } from "@mui/joy";
-import { isNotNil } from "ramda";
-import { useQuery } from "urql";
+import { isNil, isNotNil } from "ramda";
+import { useCallback } from "react";
+import { useClient, useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { AddReview } from "@/components/review/AddReview";
-import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
 import spirit1 from "@/images/spirit1.png";
+import { addItemImageMutation, updateCellarSpiritMutation } from "@/queries";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getSpiritQuery = graphql(`
@@ -53,25 +55,38 @@ const SpiritDetails = ({
 }: {
   params: { itemId: string; cellarId: string };
 }) => {
+  const client = useClient();
   const [{ data, fetching, operation }] = useQuery({
     query: getSpiritQuery,
     variables: { itemId },
   });
   const isLoading = fetching || operation === undefined;
 
-  let spirit = undefined;
-  let cellar = undefined;
+  const spirit = data?.cellar_spirit_by_pk?.spirit;
+  const cellar = data?.cellar_spirit_by_pk?.cellar;
   const displayImage = data?.cellar_spirit_by_pk?.display_image;
 
-  if (
-    isLoading === false &&
-    isNotNil(data) &&
-    isNotNil(data.cellar_spirit_by_pk) &&
-    isNotNil(data.cellar_spirit_by_pk.spirit)
-  ) {
-    cellar = data.cellar_spirit_by_pk.cellar;
-    spirit = data.cellar_spirit_by_pk.spirit;
-  }
+  const handleCaptureImage = useCallback(
+    async (image: string) => {
+      if (isNotNil(spirit)) {
+        const addImageResult = await client.mutation(addItemImageMutation, {
+          input: { image, item_id: spirit.id, item_type: ItemType.Spirit },
+        });
+        if (isNil(addImageResult.error)) {
+          const updateItemResult = await client.mutation(
+            updateCellarSpiritMutation,
+            {
+              spiritId: itemId,
+              spirit: {
+                display_image_id: addImageResult.data?.item_image_upload?.id,
+              },
+            },
+          );
+        }
+      }
+    },
+    [client, spirit, itemId],
+  );
 
   return (
     <Stack spacing={2}>
@@ -90,6 +105,7 @@ const SpiritDetails = ({
               fileId={displayImage?.file_id}
               placeholder={displayImage?.placeholder}
               fallback={spirit1}
+              onCaptureImage={handleCaptureImage}
             />
           )}
         </Grid>

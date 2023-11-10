@@ -1,16 +1,18 @@
 "use client";
 
 import { Card, Grid, Stack } from "@mui/joy";
-import { isNotNil } from "ramda";
-import { useQuery } from "urql";
+import { isNil, isNotNil } from "ramda";
+import { useCallback } from "react";
+import { useClient, useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { AddReview } from "@/components/review/AddReview";
-import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
 import beer1 from "@/images/beer1.png";
+import { addItemImageMutation, updateCellarBeerMutation } from "@/queries";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getBeerQuery = graphql(`
@@ -52,25 +54,38 @@ const BeerDetails = ({
 }: {
   params: { itemId: string; cellarId: string };
 }) => {
+  const client = useClient();
   const [{ data, fetching, operation }] = useQuery({
     query: getBeerQuery,
     variables: { itemId },
   });
   const isLoading = fetching || operation === undefined;
 
-  let beer = undefined;
-  let cellar = undefined;
+  const beer = data?.cellar_beer_by_pk?.beer;
+  const cellar = data?.cellar_beer_by_pk?.cellar;
   const displayImage = data?.cellar_beer_by_pk?.display_image;
 
-  if (
-    isLoading === false &&
-    isNotNil(data) &&
-    isNotNil(data.cellar_beer_by_pk) &&
-    isNotNil(data.cellar_beer_by_pk.beer)
-  ) {
-    cellar = data.cellar_beer_by_pk.cellar;
-    beer = data.cellar_beer_by_pk.beer;
-  }
+  const handleCaptureImage = useCallback(
+    async (image: string) => {
+      if (isNotNil(beer)) {
+        const addImageResult = await client.mutation(addItemImageMutation, {
+          input: { image, item_id: beer.id, item_type: ItemType.Beer },
+        });
+        if (isNil(addImageResult.error)) {
+          const updateItemResult = await client.mutation(
+            updateCellarBeerMutation,
+            {
+              beerId: itemId,
+              beer: {
+                display_image_id: addImageResult.data?.item_image_upload?.id,
+              },
+            },
+          );
+        }
+      }
+    },
+    [client, beer, itemId],
+  );
 
   return (
     <Stack spacing={2}>
@@ -89,6 +104,7 @@ const BeerDetails = ({
               fileId={displayImage?.file_id}
               placeholder={displayImage?.placeholder}
               fallback={beer1}
+              onCaptureImage={handleCaptureImage}
             />
           )}
         </Grid>

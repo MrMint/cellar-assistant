@@ -15,8 +15,9 @@ import { useEffect, useState } from "react";
 import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
 import { useMutation } from "urql";
 import TopNavigationBar from "@/components/common/HeaderBar";
-import { ItemType } from "@/constants";
 import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
+import { formatItemType } from "@/utilities";
 import Link from "../common/Link";
 
 type CellarItemHeaderProps = {
@@ -158,7 +159,7 @@ export const CellarItemHeader = ({
                   disabled={isDisabled}
                   onClick={handleDeleteClick}
                 >
-                  Delete {ItemType[itemType]}
+                  Delete {formatItemType(itemType)}
                 </Button>
                 <Button
                   variant="plain"

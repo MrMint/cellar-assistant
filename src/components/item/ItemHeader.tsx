@@ -1,5 +1,3 @@
-import TopNavigationBar from "@/components/common/HeaderBar";
-import { ItemType } from "@/constants";
 import {
   Button,
   ButtonGroup,
@@ -9,12 +7,15 @@ import {
   MenuItem,
   Stack,
 } from "@mui/joy";
+import { useRouter, useSearchParams } from "next/navigation";
+import { gt, isNil, isNotNil, length } from "ramda";
+import { useState } from "react";
 import { MdAdd, MdArrowDownward } from "react-icons/md";
-import { graphql } from "@/gql";
 import { useMutation } from "urql";
-import { useEffect, useState } from "react";
-import { count, gt, isNil, isNotNil, length } from "ramda";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import TopNavigationBar from "@/components/common/HeaderBar";
+import { graphql } from "@/gql";
+import { ItemType } from "@/gql/graphql";
+import { formatItemType } from "@/utilities";
 
 type ItemHeaderProps = {
   itemId: string;
@@ -109,7 +110,10 @@ export const ItemHeader = ({
   return (
     <TopNavigationBar
       breadcrumbs={[
-        { url: `/${ItemType[itemType]}s`, text: `${ItemType[itemType]}s` },
+        {
+          url: `/${formatItemType(itemType)}s`,
+          text: `${formatItemType(itemType)}s`,
+        },
         {
           url: `/${itemType}s/${itemId}`,
           text: itemName ?? "loading...",
