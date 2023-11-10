@@ -2,6 +2,7 @@ import { Box, Grid, Stack, Typography } from "@mui/joy";
 import { useNhostClient } from "@nhost/nextjs";
 import { useActor } from "@xstate/react";
 import { useRouter } from "next/navigation";
+import { includes } from "ramda";
 import { useCallback } from "react";
 import { useClient } from "urql";
 import { Analyzing } from "../common/Analyzing";
@@ -77,7 +78,7 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
             <Searching />
           </Grid>
         )}
-        {(state.value === "analyze" || state.value === "upload") && (
+        {includes(state.value, ["analyze", "retryAnalyze", "upload"]) && (
           <Grid xs={12} sm={6}>
             <Analyzing />
           </Grid>
