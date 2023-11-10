@@ -1,13 +1,16 @@
 "use client";
 
-import { Card, Grid, Stack } from "@mui/joy";
+import { Button, Card, Grid, Modal, Stack } from "@mui/joy";
+import { usePathname } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
+import QRCode from "react-qr-code";
 import { useClient, useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
+import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
 import { graphql } from "@/gql";
 import { ItemType } from "@/gql/graphql";
@@ -104,30 +107,32 @@ const WineDetails = ({
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
-          {!isLoading && (
-            <ItemImage
-              fileId={displayImage?.file_id}
-              placeholder={displayImage?.placeholder}
-              fallback={wine1}
-              onCaptureImage={handleCaptureImage}
-            />
+          {!isLoading && isNotNil(wine) && (
+            <Stack spacing={1}>
+              <ItemImage
+                fileId={displayImage?.file_id}
+                placeholder={displayImage?.placeholder}
+                fallback={wine1}
+                onCaptureImage={handleCaptureImage}
+              />
+              <ItemShare itemId={wine.id} itemType={ItemType.Wine} />
+            </Stack>
           )}
         </Grid>
         {!isLoading && isNotNil(wine) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
-              <Card>
-                <ItemDetails
-                  title={wine.name}
-                  subTitlePhrases={[
-                    formatVintage(wine.vintage),
-                    wine.variety,
-                    wine.region,
-                    formatAsPercentage(wine.alcohol_content_percentage),
-                  ]}
-                  description={wine.description}
-                />
-              </Card>
+              <ItemDetails
+                title={wine.name}
+                subTitlePhrases={[
+                  formatVintage(wine.vintage),
+                  wine.variety,
+                  wine.region,
+                  wine.country,
+                  formatAsPercentage(wine.alcohol_content_percentage),
+                ]}
+                description={wine.description}
+              />
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>

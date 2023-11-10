@@ -1,6 +1,6 @@
 "use client";
 
-import { Stack, Typography } from "@mui/joy";
+import { Card, Stack, Typography } from "@mui/joy";
 import { without } from "ramda";
 
 export type ItemDetailsProp = {
@@ -14,13 +14,15 @@ const ItemDetails = ({
   subTitlePhrases,
   description,
 }: ItemDetailsProp) => (
-  <Stack spacing={1}>
-    <Typography level="h3">{title}</Typography>
-    <Typography level="body-md">
-      {without([null, undefined], subTitlePhrases).join(" - ")}
-    </Typography>
-    <Typography level="body-sm">{description}</Typography>
-  </Stack>
+  <Card>
+    <Stack spacing={1}>
+      <Typography level="h3">{title}</Typography>
+      <Typography level="body-md">
+        {without([null, undefined], subTitlePhrases).join(" - ")}
+      </Typography>
+      <Typography level="body-sm">{description}</Typography>
+    </Stack>
+  </Card>
 );
 
 export default ItemDetails;
