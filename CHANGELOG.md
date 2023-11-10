@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.24.0](https://github.com/MrMint/cellar-assistant/compare/v0.23.0...v0.24.0) (2023-11-10)
+
+
+### Features
+
+* Adds cellar item image changing ([4b2409c](https://github.com/MrMint/cellar-assistant/commit/4b2409cdb71266d2594293a06f07661d1493383b))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @trivago/prettier-plugin-sort-imports to v4.3.0 ([3034dc8](https://github.com/MrMint/cellar-assistant/commit/3034dc82765492cf522973e451c187b2fbae8fba))
+* **deps:** update dependency xstate to v5.0.0-beta.42 ([cb2bb42](https://github.com/MrMint/cellar-assistant/commit/cb2bb42fe49112347e35a48e2b97b89b5c1211be))
+
 ## [0.23.0](https://github.com/MrMint/cellar-assistant/compare/v0.22.0...v0.23.0) (2023-11-10)
 
 
