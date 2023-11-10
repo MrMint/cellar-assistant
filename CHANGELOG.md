@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.25.0](https://github.com/MrMint/cellar-assistant/compare/v0.24.0...v0.25.0) (2023-11-10)
+
+
+### Features
+
+* Adds QR share code and top level item pages ([eadf7ee](https://github.com/MrMint/cellar-assistant/commit/eadf7eeff21dcc4528e95a11e9449d36ce1ed06e))
+* Adds review and score aggregates to item view ([ee6cdad](https://github.com/MrMint/cellar-assistant/commit/ee6cdade8c3d9d38a9c26d3b545347d0d6096348))
+
 ## [0.24.0](https://github.com/MrMint/cellar-assistant/compare/v0.23.0...v0.24.0) (2023-11-10)
 
 
