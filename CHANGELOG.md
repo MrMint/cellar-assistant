@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.23.0](https://github.com/MrMint/cellar-assistant/compare/v0.22.0...v0.23.0) (2023-11-10)
+
+
+### Features
+
+* Adds retry logic during analyze onboarding step ([7d0f065](https://github.com/MrMint/cellar-assistant/commit/7d0f0654617dd68a0ebffd651850cd77f5396681))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/aiplatform to v3.6.0 ([7516d08](https://github.com/MrMint/cellar-assistant/commit/7516d0876d1b185267f386ce5ea31f9d9c1c4bd3))
+
 ## [0.22.0](https://github.com/MrMint/cellar-assistant/compare/v0.21.0...v0.22.0) (2023-11-09)
 
 
