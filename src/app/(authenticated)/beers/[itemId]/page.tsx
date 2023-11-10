@@ -1,11 +1,12 @@
 "use client";
 
-import { Card, Grid, Stack } from "@mui/joy";
-import { isNil, isNotNil } from "ramda";
-import { useCallback } from "react";
-import { useClient, useQuery } from "urql";
-import { CellarItemHeader } from "@/components/item/CellarItemHeader";
+import { Grid, Stack } from "@mui/joy";
+import { useUserId } from "@nhost/nextjs";
+import { notFound } from "next/navigation";
+import { isNil, isNotNil, nth } from "ramda";
+import { useQuery } from "urql";
 import ItemDetails from "@/components/item/ItemDetails";
+import { ItemHeader } from "@/components/item/ItemHeader";
 import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
@@ -13,91 +14,70 @@ import { AddReview } from "@/components/review/AddReview";
 import { graphql } from "@/gql";
 import { ItemType } from "@/gql/graphql";
 import beer1 from "@/images/beer1.png";
-import { addItemImageMutation, updateCellarBeerMutation } from "@/queries";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getBeerQuery = graphql(`
-  query GetCellarBeer($itemId: uuid!) {
-    cellar_beer_by_pk(id: $itemId) {
-      beer {
+  query GetBeerPageQuery($itemId: uuid!, $userId: uuid!) {
+    beers_by_pk(id: $itemId) {
+      id
+      name
+      created_by_id
+      style
+      vintage
+      description
+      alcohol_content_percentage
+      country
+      reviews(limit: 10, order_by: { created_at: desc }) {
         id
-        name
-        created_by_id
-        vintage
-        style
-        description
-        alcohol_content_percentage
-        country
-        reviews(limit: 10, order_by: { created_at: desc }) {
-          id
-          user {
-            avatarUrl
-            displayName
-          }
-          score
-          text
-          createdAt: created_at
+        user {
+          avatarUrl
+          displayName
         }
+        score
+        text
+        createdAt: created_at
       }
-      display_image {
+      item_images(limit: 1) {
         file_id
         placeholder
       }
-      cellar {
-        name
-        created_by_id
-      }
+    }
+    cellars(where: { created_by_id: { _eq: $userId } }) {
+      id
+      name
     }
   }
 `);
 
 const BeerDetails = ({
-  params: { itemId, cellarId },
+  params: { itemId },
 }: {
   params: { itemId: string; cellarId: string };
 }) => {
-  const client = useClient();
+  const userId = useUserId();
+  if (isNil(userId)) throw new Error("Bad UserId");
+
   const [{ data, fetching, operation }] = useQuery({
     query: getBeerQuery,
-    variables: { itemId },
+    variables: { itemId, userId },
   });
+
   const isLoading = fetching || operation === undefined;
 
-  const beer = data?.cellar_beer_by_pk?.beer;
-  const cellar = data?.cellar_beer_by_pk?.cellar;
-  const displayImage = data?.cellar_beer_by_pk?.display_image;
-
-  const handleCaptureImage = useCallback(
-    async (image: string) => {
-      if (isNotNil(beer)) {
-        const addImageResult = await client.mutation(addItemImageMutation, {
-          input: { image, item_id: beer.id, item_type: ItemType.Beer },
-        });
-        if (isNil(addImageResult.error)) {
-          const updateItemResult = await client.mutation(
-            updateCellarBeerMutation,
-            {
-              beerId: itemId,
-              beer: {
-                display_image_id: addImageResult.data?.item_image_upload?.id,
-              },
-            },
-          );
-        }
-      }
-    },
-    [client, beer, itemId],
-  );
+  const beer = data?.beers_by_pk;
+  const cellars = data?.cellars;
+  const displayImage = nth(0, beer?.item_images ?? []);
+  if (isLoading === false && isNotNil(operation) && isNil(beer)) {
+    notFound();
+  }
 
   return (
     <Stack spacing={2}>
-      <CellarItemHeader
-        itemType={ItemType.Beer}
+      <ItemHeader
         itemId={itemId}
         itemName={beer?.name}
-        cellarId={cellarId}
-        cellarName={cellar?.name}
-        cellarCreatedById={cellar?.created_by_id}
+        itemType={ItemType.Beer}
+        cellars={cellars}
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
@@ -107,7 +87,6 @@ const BeerDetails = ({
                 fileId={displayImage?.file_id}
                 placeholder={displayImage?.placeholder}
                 fallback={beer1}
-                onCaptureImage={handleCaptureImage}
               />
               <ItemShare itemId={beer.id} itemType={ItemType.Beer} />
             </Stack>

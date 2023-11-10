@@ -10,7 +10,7 @@ export type ItemImageProps = {
   fileId?: string;
   placeholder?: string | null;
   fallback: StaticImageData;
-  onCaptureImage: (imageDataUrl: string) => Promise<void>;
+  onCaptureImage?: (imageDataUrl: string) => Promise<void>;
 };
 
 export const ItemImage = ({
@@ -49,15 +49,17 @@ export const ItemImage = ({
             />
           )}
         </CardCover>
-        <CardActions sx={{ alignSelf: "end" }}>
-          <IconButton
-            variant="outlined"
-            size="lg"
-            onClick={() => setOpen(true)}
-          >
-            <MdEdit />
-          </IconButton>
-        </CardActions>
+        {isNotNil(onCaptureImage) && (
+          <CardActions sx={{ alignSelf: "end" }}>
+            <IconButton
+              variant="outlined"
+              size="lg"
+              onClick={() => setOpen(true)}
+            >
+              <MdEdit />
+            </IconButton>
+          </CardActions>
+        )}
       </Card>
       <AddPhotoModal
         open={open}
