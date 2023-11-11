@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.26.0](https://github.com/MrMint/cellar-assistant/compare/v0.25.1...v0.26.0) (2023-11-11)
+
+
+### Features
+
+* Adds scroll restoration ([dcff1fa](https://github.com/MrMint/cellar-assistant/commit/dcff1fa1adfb2096e93e89713422e74cdebe1938))
+
 ## [0.25.1](https://github.com/MrMint/cellar-assistant/compare/v0.25.0...v0.25.1) (2023-11-10)
 
 
