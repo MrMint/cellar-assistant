@@ -25,7 +25,7 @@
     "@parcel/watcher": "2.3.0",
     "@trivago/prettier-plugin-sort-imports": "4.3.0",
     "@types/node": "20.9.0",
-    "@types/ramda": "0.29.8",
+    "@types/ramda": "0.29.9",
     "@types/react": "18.2.37",
     "@types/react-dom": "18.2.15",
     "@urql/devtools": "2.0.3",
