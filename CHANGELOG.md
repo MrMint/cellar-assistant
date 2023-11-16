@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.27.0](https://github.com/MrMint/cellar-assistant/compare/v0.26.0...v0.27.0) (2023-11-16)
+
+
+### Features
+
+* Adds semantic search to cellar items page ([253a733](https://github.com/MrMint/cellar-assistant/commit/253a733aa6a827e90edea0f7fd25bd76a398dcff))
+* Updates all item enums to display nice ([6a9f56c](https://github.com/MrMint/cellar-assistant/commit/6a9f56cf93a51f5f54236cbbb5aee379917ac8c6))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.15 ([4d3f457](https://github.com/MrMint/cellar-assistant/commit/4d3f457685e26ea8f8563d009ae1cbb3a37924a5))
+* **deps:** update dependency @nhost/nextjs to v1.13.40 ([ab5cdff](https://github.com/MrMint/cellar-assistant/commit/ab5cdff670a231c9784513819f57c562e875ba5a))
+* **deps:** update dependency @nhost/nhost-js to v2.2.18 ([55bfefe](https://github.com/MrMint/cellar-assistant/commit/55bfefe0503827e5c31c4e114d7dd3197ad9fc48))
+* **deps:** update dependency @types/ramda to v0.29.9 ([ff10aa6](https://github.com/MrMint/cellar-assistant/commit/ff10aa6c973eb4af93b3b6f9e56406138d406110))
+* **deps:** update dependency prettier to v3.1.0 ([d675b60](https://github.com/MrMint/cellar-assistant/commit/d675b601c9a8874ff97d8e7985c54619672c1578))
+* **deps:** update dependency react-icons to v4.12.0 ([531ee16](https://github.com/MrMint/cellar-assistant/commit/531ee160ab577555818e096313798c31fc24c0a2))
+* **deps:** update dependency urql to v4.0.6 ([c49a8f0](https://github.com/MrMint/cellar-assistant/commit/c49a8f0d5e4488880c38ece0970aea844062abed))
+* **deps:** update dependency xstate to v5.0.0-beta.44 ([45867f2](https://github.com/MrMint/cellar-assistant/commit/45867f26b582b0131e0febc9d22da3a7ef136b08))
+
 ## [0.26.0](https://github.com/MrMint/cellar-assistant/compare/v0.25.1...v0.26.0) (2023-11-11)
 
 
