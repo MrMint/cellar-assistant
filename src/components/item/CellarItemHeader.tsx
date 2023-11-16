@@ -27,6 +27,7 @@ type CellarItemHeaderProps = {
   cellarId: string;
   cellarName: string | undefined;
   cellarCreatedById: string | undefined;
+  cellarCoOwners: string[] | undefined;
 };
 
 const deleteBeerMutation = graphql(`
@@ -60,6 +61,7 @@ export const CellarItemHeader = ({
   cellarId,
   cellarName,
   cellarCreatedById,
+  cellarCoOwners,
 }: CellarItemHeaderProps) => {
   const router = useRouter();
   const userId = useUserId();
@@ -110,6 +112,9 @@ export const CellarItemHeader = ({
     }
   }, [cellarId, isFetching, hasFetched, isErrored, router]);
 
+  const isOwner =
+    cellarCreatedById === userId || cellarCoOwners?.includes(userId) === true;
+
   return (
     <TopNavigationBar
       breadcrumbs={[
@@ -136,7 +141,7 @@ export const CellarItemHeader = ({
           <Button
             variant="outlined"
             color="danger"
-            disabled={userId !== cellarCreatedById}
+            disabled={!isOwner}
             onClick={() => setOpen(true)}
             startDecorator={<MdDelete />}
           >

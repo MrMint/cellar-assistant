@@ -75,6 +75,9 @@ const getCellarQuery = graphql(`
       id
       name
       created_by_id
+      co_owners {
+        user_id
+      }
     }
   }
 `);
@@ -88,13 +91,16 @@ const Add = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
     variables: { cellarId },
   });
 
+  const cellar = data?.cellars_by_pk;
+  const canAdd =
+    cellar?.created_by_id === userId ||
+    cellar?.co_owners?.map((x) => x.user_id).includes(userId) === true;
+
   return (
     <Box>
       <Stack spacing={4}>
-        <Typography level="h2">
-          Add an item to {data?.cellars_by_pk?.name}
-        </Typography>
-        {!fetching && data?.cellars_by_pk?.created_by_id !== userId && (
+        <Typography level="h2">Add an item to {cellar?.name}</Typography>
+        {!fetching && !canAdd && (
           <Typography level="body-md">
             You do not have permission to add items to this cellar.
           </Typography>
