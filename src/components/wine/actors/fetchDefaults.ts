@@ -1,18 +1,18 @@
+import { graphql } from "@shared/gql";
+import {
+  Country_Enum,
+  Wine_Style_Enum,
+  Wine_Variety_Enum,
+} from "@shared/gql/graphql";
+import { isNil, isNotNil } from "ramda";
+import { fromPromise } from "xstate";
 import {
   DefaultValues,
   DefaultValuesResult,
   FetchDefaultsInput,
 } from "@/components/common/OnboardingWizard/actors/types";
-import {
-  Country_Enum,
-  Wine_Style_Enum,
-  Wine_Variety_Enum,
-} from "@/gql/graphql";
 import { nullsToUndefined } from "@/utilities";
-import { isNil, isNotNil } from "ramda";
-import { fromPromise } from "xstate";
 import { WineFormDefaultValues } from "../WineForm";
-import { graphql } from "@/gql";
 
 const getDefaultsQuery = graphql(`
   query GetWineDefaults($hint: item_defaults_hint!) {

@@ -13,11 +13,11 @@ import {
   Typography,
 } from "@mui/joy";
 import { useAccessToken, useUserId } from "@nhost/nextjs";
+import { graphql } from "@shared/gql";
 import { isNil, isNotNil } from "ramda";
 import { useEffect } from "react";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { useClient, useMutation, useQuery } from "urql";
-import { graphql } from "@/gql";
 
 interface IFormInput {
   displayName: string;

@@ -5,10 +5,10 @@ import {
   Tooltip,
   Typography,
 } from "@mui/joy";
+import { ItemType } from "@shared/gql/graphql";
 import Image from "next/image";
 import { always, cond, equals, isNil, isNotNil } from "ramda";
 import { MdOutlineComment, MdStar } from "react-icons/md";
-import { ItemType } from "@/gql/graphql";
 import beer1 from "@/images/beer1.png";
 import spirit1 from "@/images/spirit1.png";
 import wine1 from "@/images/wine1.png";

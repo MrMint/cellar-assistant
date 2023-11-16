@@ -9,14 +9,14 @@ import {
   Stack,
 } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
+import { graphql } from "@shared/gql";
+import { ItemType } from "@shared/gql/graphql";
 import { useRouter } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { useEffect, useState } from "react";
 import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
 import { useMutation } from "urql";
 import TopNavigationBar from "@/components/common/HeaderBar";
-import { graphql } from "@/gql";
-import { ItemType } from "@/gql/graphql";
 import { formatItemType } from "@/utilities";
 import Link from "../common/Link";
 

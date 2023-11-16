@@ -1,6 +1,12 @@
 "use client";
 
 import { Card, Grid, Sheet, Stack } from "@mui/joy";
+import { graphql } from "@shared/gql";
+import { ItemType } from "@shared/gql/graphql";
+import {
+  addItemImageMutation,
+  updateCellarSpiritMutation,
+} from "@shared/queries";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
 import { useClient, useQuery } from "urql";
@@ -10,10 +16,7 @@ import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
-import { graphql } from "@/gql";
-import { ItemType } from "@/gql/graphql";
 import spirit1 from "@/images/spirit1.png";
-import { addItemImageMutation, updateCellarSpiritMutation } from "@/queries";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getSpiritQuery = graphql(`

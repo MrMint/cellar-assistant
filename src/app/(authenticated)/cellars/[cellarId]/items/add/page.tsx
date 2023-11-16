@@ -10,15 +10,15 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
-import { graphql } from "@/gql";
-import { useQuery } from "urql";
 import { useUserId } from "@nhost/nextjs";
-import InteractiveCard from "@/components/common/InteractiveCard";
-import beer1 from "@/images/beer1.png";
-import wine1 from "@/images/wine1.png";
-import spirit1 from "@/images/spirit1.png";
+import { graphql } from "@shared/gql";
 import Image from "next/image";
 import NextLink from "next/link";
+import { useQuery } from "urql";
+import InteractiveCard from "@/components/common/InteractiveCard";
+import beer1 from "@/images/beer1.png";
+import spirit1 from "@/images/spirit1.png";
+import wine1 from "@/images/wine1.png";
 
 type ItemType = "Beer" | "Wine" | "Spirit";
 

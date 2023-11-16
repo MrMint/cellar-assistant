@@ -11,12 +11,12 @@ import {
   Typography,
 } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
+import { graphql } from "@shared/gql";
 import { concat, isNil, without } from "ramda";
 import { useState } from "react";
 import { MdDelete } from "react-icons/md";
 import { useClient, useQuery, useSubscription } from "urql";
 import { DebounceInput } from "@/components/common/DebouncedInput";
-import { graphql } from "@/gql";
 
 const searchUsersQuery = graphql(`
   query SearchUsers($search: String, $userId: uuid!) {

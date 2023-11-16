@@ -1,7 +1,7 @@
+import { ItemType } from "@shared/gql/graphql";
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
 import { ImageLoaderProps } from "next/image";
 import { isNil, isNotNil } from "ramda";
-import { ItemType } from "@/gql/graphql";
 
 // https://stackoverflow.com/a/76775845
 export function getEnums<T extends { [key: string]: number | string }>(

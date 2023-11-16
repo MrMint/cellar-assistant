@@ -10,20 +10,20 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
-import { format } from "date-fns";
-import { useRouter } from "next/navigation";
-import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient } from "urql";
-import { countryKeys } from "@/constants";
 import {
   Barcodes_Constraint,
   Barcodes_Update_Column,
   Country_Enum,
   Spirit_Type_Enum,
   Spirits_Insert_Input,
-} from "@/gql/graphql";
-import { addSpiritMutation, updateSpiritMutation } from "@/queries";
+} from "@shared/gql/graphql";
+import { addSpiritMutation, updateSpiritMutation } from "@shared/queries";
+import { format } from "date-fns";
+import { useRouter } from "next/navigation";
+import { isNil, isNotNil } from "ramda";
+import { Controller, SubmitHandler, useForm } from "react-hook-form";
+import { CombinedError, useClient } from "urql";
+import { countryKeys } from "@/constants";
 import { formatVintage, getEnumKeys } from "@/utilities";
 
 const typeOptions = getEnumKeys(Spirit_Type_Enum);

@@ -1,9 +1,9 @@
 "use client";
 
+import { graphql } from "@shared/gql";
 import { isNotNil, omit } from "ramda";
 import { useQuery } from "urql";
 import { SpiritForm } from "@/components/spirit/SpiritForm";
-import { graphql } from "@/gql";
 import { nullsToUndefined } from "@/utilities";
 
 const editSpiritPageQuery = graphql(`

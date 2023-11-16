@@ -1,0 +1,19 @@
+table:
+  name: item_vectors
+  schema: public
+computed_fields:
+  - name: distance
+    definition:
+      function:
+        name: calculate_vector_distance
+        schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns: []
+      computed_fields:
+        - distance
+      filter: {}
+      query_root_fields: []
+      subscription_root_fields: []
+    comment: ""

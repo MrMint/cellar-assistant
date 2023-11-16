@@ -1,7 +1,7 @@
 import { NhostClient } from "@nhost/nhost-js";
+import { Friend_Requests } from "@shared/gql/graphql.js";
 import { Request, Response } from "express";
 import { isNotNil } from "ramda";
-import { Friend_Requests } from "../_gql/graphql.js";
 import { insertFriendsAndDeleteRequest } from "./_queries.js";
 
 const {
@@ -17,14 +17,12 @@ const nhostClient = new NhostClient({
   adminSecret: NHOST_ADMIN_SECRET,
 });
 
+type input = {
+  event: { data: { new: Friend_Requests; old?: Friend_Requests } };
+};
+
 export default async function uploadItemImage(
-  req: Request<
-    any,
-    any,
-    {
-      event: { data: { new: Friend_Requests; old?: Friend_Requests } };
-    }
-  >,
+  req: Request<any, any, input>,
   res: Response,
 ) {
   try {
