@@ -19,8 +19,12 @@ insert_permissions:
     permission:
       check:
         cellar:
-          created_by_id:
-            _eq: X-Hasura-User-Id
+          _or:
+            - created_by_id:
+                _eq: X-Hasura-User-Id
+            - co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
       set:
         user_id: x-hasura-User-Id
       columns:
@@ -52,6 +56,13 @@ select_permissions:
                     friends:
                       friend_id:
                         _eq: X-Hasura-User-Id
+          - cellar:
+              co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
+          - cellar:
+              privacy:
+                _eq: PUBLIC
     comment: ""
 update_permissions:
   - role: user
@@ -59,14 +70,24 @@ update_permissions:
       columns:
         - display_image_id
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        cellar:
+          _or:
+            - created_by_id:
+                _eq: X-Hasura-User-Id
+            - co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
       check: null
     comment: ""
 delete_permissions:
   - role: user
     permission:
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        cellar:
+          _or:
+            - created_by_id:
+                _eq: X-Hasura-User-Id
+            - co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
     comment: ""

@@ -1,6 +1,7 @@
 import {
   AspectRatio,
   Avatar,
+  AvatarGroup,
   Box,
   CardOverflow,
   IconButton,
@@ -20,16 +21,18 @@ import InteractiveCard from "../common/InteractiveCard";
 import Link from "../common/Link";
 
 const cellarImages = [cellar1, cellar2, cellar3, cellar4, cellar5];
+type user = {
+  id: string;
+  displayName: string;
+  avatarUrl: string;
+};
 
 type CellarCardProps = {
   cellar: {
     id: string;
     name: string;
-    createdBy: {
-      id: string;
-      displayName: string;
-      avatarUrl: string;
-    };
+    createdBy: user;
+    coOwners: user[];
   };
   index: number;
   userId: string;
@@ -65,16 +68,24 @@ export const CellarCard = ({
         <Typography level="title-lg">{cellar.name}</Typography>
       )}
       <Stack direction="row" spacing={1}>
-        {userId === cellar.createdBy.id && (
+        {(userId === cellar.createdBy.id ||
+          cellar.coOwners.map((x) => x.id).includes(userId)) && (
           <Tooltip title="Edit Cellar">
             <IconButton onClick={() => onEditClick(cellar.id)}>
               <MdEdit />
             </IconButton>
           </Tooltip>
         )}
-        <Tooltip title={cellar.createdBy.displayName}>
-          <Avatar src={cellar.createdBy.avatarUrl} size="sm" />
-        </Tooltip>
+        <AvatarGroup>
+          <Tooltip title={cellar.createdBy.displayName}>
+            <Avatar src={cellar.createdBy.avatarUrl} size="sm" />
+          </Tooltip>
+          {cellar.coOwners.map((x) => (
+            <Tooltip key={x.id} title={x.displayName}>
+              <Avatar src={x.avatarUrl} alt={x.displayName} size="sm" />
+            </Tooltip>
+          ))}
+        </AvatarGroup>
       </Stack>
     </Stack>
   </InteractiveCard>
