@@ -7,6 +7,7 @@ import {
   addItemImageMutation,
   updateCellarSpiritMutation,
 } from "@shared/queries";
+import { formatCountry, formatSpiritType } from "@shared/utility";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
 import { useClient, useQuery } from "urql";
@@ -123,9 +124,9 @@ const SpiritDetails = ({
                 title={spirit.name}
                 subTitlePhrases={[
                   formatVintage(spirit.vintage),
-                  spirit.type,
+                  formatSpiritType(spirit.type),
                   spirit.style,
-                  spirit.country,
+                  formatCountry(spirit.country),
                   formatAsPercentage(spirit.alcohol_content_percentage),
                 ]}
                 description={spirit.description}

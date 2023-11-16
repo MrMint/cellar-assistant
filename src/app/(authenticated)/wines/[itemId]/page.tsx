@@ -4,6 +4,7 @@ import { AspectRatio, Card, Grid, Sheet, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
+import { formatCountry, formatWineVariety } from "@shared/utility";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
@@ -103,8 +104,8 @@ const WineDetails = ({
                 title={wine.name}
                 subTitlePhrases={[
                   formatVintage(wine.vintage),
-                  wine.variety,
-                  wine.country,
+                  formatWineVariety(wine.variety),
+                  formatCountry(wine.country),
                   wine.region,
                   formatAsPercentage(wine.alcohol_content_percentage),
                 ]}

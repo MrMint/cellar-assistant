@@ -19,6 +19,7 @@ import {
   Country_Enum,
 } from "@shared/gql/graphql";
 import { addBeerMutation, updateBeerMutation } from "@shared/queries";
+import { formatBeerStyle, formatCountry } from "@shared/utility";
 import { format } from "date-fns";
 import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
@@ -59,10 +60,7 @@ function mapFormValuesToInsertInput(
 ): Beers_Insert_Input {
   const update = {
     name: values.name,
-    alcohol_content_percentage:
-      values.alcohol_content_percentage !== ""
-        ? values.alcohol_content_percentage
-        : undefined,
+    alcohol_content_percentage: values.alcohol_content_percentage,
     description: values.description,
     country: values.country,
     style: values.style,
@@ -152,7 +150,7 @@ export const BeerForm = ({
               <Controller
                 name="name"
                 control={control}
-                rules={{ required: true, va }}
+                rules={{ required: true }}
                 render={({ field }) => (
                   <Input disabled={isSubmitting} type="text" {...field} />
                 )}
@@ -204,7 +202,7 @@ export const BeerForm = ({
                   >
                     {beerStyleKeys.map((x) => (
                       <Option key={x} value={Beer_Style_Enum[x]}>
-                        {x}
+                        {formatBeerStyle(Beer_Style_Enum[x])}
                       </Option>
                     ))}
                   </Select>
@@ -226,7 +224,7 @@ export const BeerForm = ({
                   >
                     {countryKeys.map((x) => (
                       <Option key={x} value={Country_Enum[x]}>
-                        {x}
+                        {formatCountry(Country_Enum[x])}
                       </Option>
                     ))}
                   </Select>

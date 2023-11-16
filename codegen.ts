@@ -27,6 +27,7 @@ const config: CodegenConfig = {
       documents: [
         "./src/**/*.(ts|tsx)",
         "./functions/{*.ts,!(node_modules)/**/*.ts}",
+        "./shared/{*.ts,!(gql)/**/*.ts}",
       ],
       preset: "client",
       plugins: [],
