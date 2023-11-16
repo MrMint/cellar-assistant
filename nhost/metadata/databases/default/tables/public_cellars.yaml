@@ -5,6 +5,28 @@ object_relationships:
   - name: createdBy
     using:
       foreign_key_constraint_on: created_by_id
+array_relationships:
+  - name: beers
+    using:
+      foreign_key_constraint_on:
+        column: cellar_id
+        table:
+          name: cellar_beer
+          schema: public
+  - name: spirits
+    using:
+      foreign_key_constraint_on:
+        column: cellar_id
+        table:
+          name: cellar_spirit
+          schema: public
+  - name: wines
+    using:
+      foreign_key_constraint_on:
+        column: cellar_id
+        table:
+          name: cellar_wine
+          schema: public
 insert_permissions:
   - role: user
     permission:

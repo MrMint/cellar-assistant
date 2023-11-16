@@ -10,20 +10,20 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
-import { format } from "date-fns";
-import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient } from "urql";
-import { beerStyleKeys, countryKeys } from "@/constants";
-import { graphql } from "@/gql";
+import { graphql } from "@shared/gql";
 import {
   Barcodes_Constraint,
   Barcodes_Update_Column,
   Beer_Style_Enum,
   Beers_Insert_Input,
   Country_Enum,
-} from "@/gql/graphql";
-import { addBeerMutation, updateBeerMutation } from "@/queries";
+} from "@shared/gql/graphql";
+import { addBeerMutation, updateBeerMutation } from "@shared/queries";
+import { format } from "date-fns";
+import { isNil, isNotNil } from "ramda";
+import { Controller, SubmitHandler, useForm } from "react-hook-form";
+import { CombinedError, useClient } from "urql";
+import { beerStyleKeys, countryKeys } from "@/constants";
 import { formatVintage } from "@/utilities";
 
 type SharedFields = {
@@ -59,7 +59,10 @@ function mapFormValuesToInsertInput(
 ): Beers_Insert_Input {
   const update = {
     name: values.name,
-    alcohol_content_percentage: values.alcohol_content_percentage,
+    alcohol_content_percentage:
+      values.alcohol_content_percentage !== ""
+        ? values.alcohol_content_percentage
+        : undefined,
     description: values.description,
     country: values.country,
     style: values.style,
@@ -149,7 +152,7 @@ export const BeerForm = ({
               <Controller
                 name="name"
                 control={control}
-                rules={{ required: true }}
+                rules={{ required: true, va }}
                 render={({ field }) => (
                   <Input disabled={isSubmitting} type="text" {...field} />
                 )}

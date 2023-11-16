@@ -1,5 +1,16 @@
 import { CodegenConfig } from "@graphql-codegen/cli";
 
+const scalars = {
+  date: "string",
+  money: "number",
+  float8: "number",
+  bigint: "number",
+  uuid: "string",
+  smallint: "number",
+  json: "string",
+  timestamptz: "string",
+};
+
 const config: CodegenConfig = {
   schema: [
     {
@@ -12,37 +23,15 @@ const config: CodegenConfig = {
   ],
   ignoreNoDocuments: true,
   generates: {
-    "./src/gql/": {
-      documents: ["./src/**/*.(ts|tsx)"],
+    "./shared/gql/": {
+      documents: [
+        "./src/**/*.(ts|tsx)",
+        "./functions/{*.ts,!(node_modules)/**/*.ts}",
+      ],
       preset: "client",
       plugins: [],
       config: {
-        scalars: {
-          date: "string",
-          money: "number",
-          bigint: "number",
-          uuid: "string",
-          smallint: "number",
-          json: "string",
-          timestamptz: "string",
-        },
-        nonOptionalTypename: true,
-      },
-    },
-    "./functions/_gql/": {
-      documents: ["./functions/{*.ts,!(node_modules)/**/*.ts}"],
-      preset: "client",
-      plugins: [],
-      config: {
-        scalars: {
-          date: "string",
-          money: "number",
-          bigint: "number",
-          uuid: "string",
-          smallint: "number",
-          json: "string",
-          timestamptz: "string",
-        },
+        scalars,
         nonOptionalTypename: true,
       },
     },

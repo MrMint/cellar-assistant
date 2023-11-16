@@ -1,4 +1,4 @@
-import { graphql } from "../_gql";
+import { graphql } from "@shared/gql";
 
 export const addItemOnboarding = graphql(`
   mutation AddItemOnboarding($onboarding: item_onboardings_insert_input!) {

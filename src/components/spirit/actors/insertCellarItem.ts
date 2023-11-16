@@ -1,7 +1,10 @@
+import { ItemType } from "@shared/gql/graphql";
+import {
+  addItemImageMutation,
+  addSpiritToCellarMutation,
+} from "@shared/queries";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
-import { ItemType } from "@/gql/graphql";
-import { addItemImageMutation, addSpiritToCellarMutation } from "@/queries";
 import {
   InsertCellarItemInput,
   InsertCellarItemResult,

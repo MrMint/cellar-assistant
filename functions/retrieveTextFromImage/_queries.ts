@@ -1,4 +1,4 @@
-import { graphql } from "../_gql";
+import { graphql } from "@shared/gql";
 
 export const getFileQuery = graphql(`
   query GetFile($id: uuid!) {

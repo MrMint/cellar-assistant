@@ -1,0 +1,4 @@
+-- Could not auto-generate a down migration.
+-- Please write an appropriate down migration for the SQL below:
+-- Set role postgres;
+-- CREATE EXTENSION if not exists vector;

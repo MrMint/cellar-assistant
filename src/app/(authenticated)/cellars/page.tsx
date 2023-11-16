@@ -2,6 +2,7 @@
 
 import { Box, Button, Grid, Link, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
+import { graphql } from "@shared/gql";
 import { useRouter } from "next/navigation";
 import { isNil } from "ramda";
 import { useCallback } from "react";
@@ -9,7 +10,6 @@ import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
 import { CellarCard } from "@/components/cellar/CellarCard";
 import TopNavigationBar from "@/components/common/HeaderBar";
-import { graphql } from "@/gql";
 import withAuth from "@/hocs/withAuth";
 
 const cellarsQuery = graphql(`

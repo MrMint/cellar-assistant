@@ -1,7 +1,7 @@
 import { NhostClient } from "@nhost/nhost-js";
+import { Item_Image } from "@shared/gql/graphql.js";
 import { Request, Response } from "express";
 import { isNil, isNotNil } from "ramda";
-import { Item_Image } from "../_gql/graphql.js";
 import { toDataUrl } from "../_utils/index.js";
 import { updateItemImageMutation } from "./_queries.js";
 

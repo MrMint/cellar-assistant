@@ -10,13 +10,7 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
-import { format } from "date-fns";
-import { useRouter } from "next/navigation";
-import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient, useMutation } from "urql";
-import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
-import { graphql } from "@/gql";
+import { graphql } from "@shared/gql";
 import {
   Barcodes_Constraint,
   Wine_Variety_Enum,
@@ -25,8 +19,14 @@ import {
   Country_Enum,
   Wine_Style_Enum,
   Wines_Insert_Input,
-} from "@/gql/graphql";
-import { addWineMutation, updateWineMutation } from "@/queries";
+} from "@shared/gql/graphql";
+import { addWineMutation, updateWineMutation } from "@shared/queries";
+import { format } from "date-fns";
+import { useRouter } from "next/navigation";
+import { isNil, isNotNil } from "ramda";
+import { Controller, SubmitHandler, useForm } from "react-hook-form";
+import { CombinedError, useClient, useMutation } from "urql";
+import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
 import { formatVintage } from "@/utilities";
 
 type SharedFields = {

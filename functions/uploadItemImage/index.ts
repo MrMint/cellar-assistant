@@ -1,14 +1,14 @@
 import { NhostClient } from "@nhost/nhost-js";
-import { randomUUID } from "crypto";
-import { Request, Response } from "express";
-import { isNil, isNotNil } from "ramda";
 import {
   Item_Image_Insert_Input,
   Item_Image_Upload_Input,
   Item_Image_Upload_Result,
-} from "../_gql/graphql.js";
-import { dataUrlToFormData, dataUrlToImageBuffer } from "../_utils/index.js";
-import { addItemImage } from "./_queries.js";
+} from "@shared/gql/graphql.js";
+import { addItemImageMutation } from "@shared/queries/index.js";
+import { randomUUID } from "crypto";
+import { Request, Response } from "express";
+import { isNil, isNotNil } from "ramda";
+import { dataUrlToFormData } from "../_utils/index.js";
 
 const {
   NHOST_ADMIN_SECRET,
@@ -80,14 +80,17 @@ export default async function uploadItemImage(
 
     console.log(`Uploaded image to storage`);
 
-    const addItemImageResult = await nhostClient.graphql.request(addItemImage, {
-      item: {
-        ...item,
-        user_id: userId,
-        file_id: fileMetadata.processedFiles[0].id,
-        is_public: true,
+    const addItemImageResult = await nhostClient.graphql.request(
+      addItemImageMutation,
+      {
+        item: {
+          ...item,
+          user_id: userId,
+          file_id: fileMetadata.processedFiles[0].id,
+          is_public: true,
+        },
       },
-    });
+    );
 
     if (
       isNotNil(addItemImageResult.error) ||

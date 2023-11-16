@@ -1,6 +1,13 @@
 "use client";
 
 import { Card, Grid, Stack } from "@mui/joy";
+import { graphql } from "@shared/gql";
+import { ItemType } from "@shared/gql/graphql";
+import {
+  addItemImageMutation,
+  updateCellarBeerMutation,
+} from "@shared/queries";
+import { formatBeerStyle } from "@shared/utility";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
 import { useClient, useQuery } from "urql";
@@ -10,10 +17,7 @@ import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
-import { graphql } from "@/gql";
-import { ItemType } from "@/gql/graphql";
 import beer1 from "@/images/beer1.png";
-import { addItemImageMutation, updateCellarBeerMutation } from "@/queries";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getBeerQuery = graphql(`
@@ -120,8 +124,8 @@ const BeerDetails = ({
                 title={beer.name}
                 subTitlePhrases={[
                   formatVintage(beer.vintage),
+                  formatBeerStyle(beer.style),
                   beer.country,
-                  beer.style,
                   formatAsPercentage(beer.alcohol_content_percentage),
                 ]}
                 description={beer.description}

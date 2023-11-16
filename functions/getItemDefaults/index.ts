@@ -1,23 +1,23 @@
-import { Request, Response } from "express";
-import { NhostClient } from "@nhost/nhost-js";
-import {
-  RetrieveTextFromImageBody,
-  RetrieveTextFromImageData,
-} from "../retrieveTextFromImage/index.js";
-import { NhostFunctionCallResponse } from "@nhost/nhost-js/dist/clients/functions/types";
 import { PredictionServiceClient } from "@google-cloud/aiplatform";
-import { callPredict, convertPredictionToJson } from "../_utils/gcp";
-import { isFulfilled, isRejected } from "../_utils";
-import { isEmpty, isNil, isNotNil, not } from "ramda";
+import { NhostClient } from "@nhost/nhost-js";
+import { NhostFunctionCallResponse } from "@nhost/nhost-js/dist/clients/functions/types";
 import {
   Beer_Defaults_Result,
   Query_RootWine_DefaultsArgs,
   Spirit_Defaults_Result,
   Wine_Defaults_Result,
-} from "../_gql/graphql.js";
-import { generateDefaultsPrompt, mapJsonToReturnType } from "./_utils.js";
-import { addItemOnboarding } from "./_queries.js";
+} from "@shared/gql/graphql.js";
+import { Request, Response } from "express";
+import { isEmpty, isNil, isNotNil, not } from "ramda";
+import { isFulfilled, isRejected } from "../_utils";
+import { callPredict, convertPredictionToJson } from "../_utils/gcp";
 import { getCredential } from "../_utils/queries.js";
+import {
+  RetrieveTextFromImageBody,
+  RetrieveTextFromImageData,
+} from "../retrieveTextFromImage/index.js";
+import { addItemOnboarding } from "./_queries.js";
+import { generateDefaultsPrompt, mapJsonToReturnType } from "./_utils.js";
 
 const {
   NHOST_ADMIN_SECRET,

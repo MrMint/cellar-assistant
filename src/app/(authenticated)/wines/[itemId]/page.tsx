@@ -2,6 +2,8 @@
 
 import { AspectRatio, Card, Grid, Sheet, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
+import { graphql } from "@shared/gql";
+import { ItemType } from "@shared/gql/graphql";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
@@ -12,8 +14,6 @@ import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
-import { graphql } from "@/gql";
-import { ItemType } from "@/gql/graphql";
 import wine1 from "@/images/wine1.png";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 

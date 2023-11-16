@@ -1,3 +1,5 @@
+import { graphql } from "@shared/gql";
+import { Country_Enum, Beer_Style_Enum } from "@shared/gql/graphql";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
 import {
@@ -5,8 +7,6 @@ import {
   DefaultValuesResult,
   FetchDefaultsInput,
 } from "@/components/common/OnboardingWizard/actors/types";
-import { graphql } from "@/gql";
-import { Country_Enum, Beer_Style_Enum } from "@/gql/graphql";
 import { nullsToUndefined } from "@/utilities";
 import { BeerFormDefaultValues } from "../BeerForm";
 

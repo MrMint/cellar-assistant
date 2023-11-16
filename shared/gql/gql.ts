@@ -13,12 +13,21 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  * Therefore it is highly recommended to use the babel or swc plugin for production.
  */
 const documents = {
+    "\n  query GetCredential($id: String!) {\n    admin_credentials_by_pk(id: $id) {\n      id\n      credentials\n    }\n  }\n": types.GetCredentialDocument,
+    "\n  mutation InsertFriends(\n    $friends: [friends_insert_input!]!\n    $requestId: uuid!\n  ) {\n    insert_friends(objects: $friends) {\n      affected_rows\n    }\n\n    delete_friend_requests_by_pk(id: $requestId) {\n      id\n    }\n  }\n": types.InsertFriendsDocument,
+    "\n  mutation UpdateItemImage($itemId: uuid!, $item: item_image_set_input!) {\n    update_item_image_by_pk(pk_columns: { id: $itemId }, _set: $item) {\n      id\n    }\n  }\n": types.UpdateItemImageDocument,
+    "\n  mutation InsertVector($vector: item_vectors_insert_input!) {\n    insert_item_vectors_one(object: $vector) {\n      id\n    }\n  }\n": types.InsertVectorDocument,
+    "\n  mutation DeleteVectors($where: item_vectors_bool_exp!) {\n    delete_item_vectors(where: $where) {\n      affected_rows\n    }\n  }\n": types.DeleteVectorsDocument,
+    "\n  mutation AddItemOnboarding($onboarding: item_onboardings_insert_input!) {\n    insert_item_onboardings_one(object: $onboarding) {\n      id\n    }\n  }\n": types.AddItemOnboardingDocument,
+    "\n  query GetFile($id: uuid!) {\n    file(id: $id) {\n      id\n      bucket {\n        id\n      }\n      mimeType\n      size\n    }\n  }\n": types.GetFileDocument,
+    "\n  mutation AddTextExtractionResults($analysis: image_analysis_insert_input!) {\n    insert_image_analysis_one(object: $analysis) {\n      id\n    }\n  }\n": types.AddTextExtractionResultsDocument,
     "\n  query GetBeerPageQuery($itemId: uuid!, $userId: uuid!) {\n    beers_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      style\n      vintage\n      description\n      alcohol_content_percentage\n      country\n      reviews(limit: 10, order_by: { created_at: desc }) {\n        id\n        user {\n          avatarUrl\n          displayName\n        }\n        score\n        text\n        createdAt: created_at\n      }\n      item_images(limit: 1) {\n        file_id\n        placeholder\n      }\n    }\n    cellars(where: { created_by_id: { _eq: $userId } }) {\n      id\n      name\n    }\n  }\n": types.GetBeerPageQueryDocument,
     "\n  query EditBeerPageQuery($itemId: uuid!) {\n    beers_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      vintage\n      style\n      description\n      alcohol_content_percentage\n      barcode_code\n      international_bitterness_unit\n      country\n    }\n  }\n": types.EditBeerPageQueryDocument,
     "\n  query GetCellarBeer($itemId: uuid!) {\n    cellar_beer_by_pk(id: $itemId) {\n      beer {\n        id\n        name\n        created_by_id\n        vintage\n        style\n        description\n        alcohol_content_percentage\n        country\n        reviews(limit: 10, order_by: { created_at: desc }) {\n          id\n          user {\n            avatarUrl\n            displayName\n          }\n          score\n          text\n          createdAt: created_at\n        }\n      }\n      display_image {\n        file_id\n        placeholder\n      }\n      cellar {\n        name\n        created_by_id\n      }\n    }\n  }\n": types.GetCellarBeerDocument,
     "\n  query EditCellarQuery($id: uuid!) {\n    cellars_by_pk(id: $id) {\n      id\n      name\n      privacy\n    }\n  }\n": types.EditCellarQueryDocument,
     "\n  query GetCellar($cellarId: uuid!) {\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n    }\n  }\n": types.GetCellarDocument,
-    "\n  query GetItemsQuery($cellarId: uuid!) {\n    cellar_beer(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      beer {\n        name\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellar_wine(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      wine {\n        name\n        vintage\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellar_spirit(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      spirit {\n        name\n        vintage\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n    }\n  }\n": types.GetItemsQueryDocument,
+    "\n  query GetCellarItemsQuery($cellarId: uuid!, $search: vector) {\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n      spirits {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        spirit {\n          name\n          vintage\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n      wines {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        wine {\n          name\n          vintage\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n      beers {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        beer {\n          name\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n": types.GetCellarItemsQueryDocument,
+    "\n  query GetSearchVectorQuery($search: String!) {\n    create_search_vector(search: $search)\n  }\n": types.GetSearchVectorQueryDocument,
     "\n  query EditSpiritPageQuery($itemId: uuid!) {\n    spirits_by_pk(id: $itemId) {\n      id\n      name\n      created_by_id\n      vintage\n      type\n      style\n      description\n      alcohol_content_percentage\n      barcode_code\n      country\n    }\n  }\n": types.EditSpiritPageQueryDocument,
     "\n  query GetSpirit($itemId: uuid!) {\n    cellar_spirit_by_pk(id: $itemId) {\n      spirit {\n        id\n        name\n        created_by_id\n        vintage\n        type\n        description\n        alcohol_content_percentage\n        style\n        country\n        reviews(limit: 10, order_by: { created_at: desc }) {\n          id\n          user {\n            avatarUrl\n            displayName\n          }\n          score\n          text\n          createdAt: created_at\n        }\n      }\n      display_image {\n        file_id\n        placeholder\n      }\n      cellar {\n        name\n        created_by_id\n      }\n    }\n  }\n": types.GetSpiritDocument,
     "\n  query EditWinePageQuery($itemId: uuid!) {\n    wines_by_pk(id: $itemId) {\n      id\n      name\n      description\n      created_by_id\n      vintage\n      description\n      alcohol_content_percentage\n      barcode_code\n      special_designation\n      vineyard_designation\n      variety\n      region\n      style\n      country\n    }\n  }\n": types.EditWinePageQueryDocument,
@@ -46,20 +55,6 @@ const documents = {
     "\n  mutation HeaderAddWineMutation($input: cellar_wine_insert_input!) {\n    insert_cellar_wine_one(object: $input) {\n      id\n      cellar_id\n    }\n  }\n": types.HeaderAddWineMutationDocument,
     "\n  query GetSpiritDefaults($hint: item_defaults_hint!) {\n    spirit_defaults(hint: $hint) {\n      name\n      description\n      alcohol_content_percentage\n      barcode_code\n      barcode_type\n      item_onboarding_id\n      country\n      vintage\n      style\n      type\n    }\n  }\n": types.GetSpiritDefaultsDocument,
     "\n  query GetWineDefaults($hint: item_defaults_hint!) {\n    wine_defaults(hint: $hint) {\n      name\n      description\n      alcohol_content_percentage\n      barcode_code\n      barcode_type\n      item_onboarding_id\n      region\n      country\n      special_designation\n      variety\n      vineyard_designation\n      vintage\n      style\n    }\n  }\n": types.GetWineDefaultsDocument,
-    "\n  mutation AddItemImage($input: item_image_upload_input!) {\n    item_image_upload(input: $input) {\n      id\n    }\n  }\n": types.AddItemImageDocument,
-    "\n  mutation AddBeerToCellar($beer: cellar_beer_insert_input!) {\n    insert_cellar_beer_one(object: $beer) {\n      id\n      cellar_id\n    }\n  }\n": types.AddBeerToCellarDocument,
-    "\n  mutation AddBeer($beer: beers_insert_input!) {\n    insert_beers_one(object: $beer) {\n      id\n    }\n  }\n": types.AddBeerDocument,
-    "\n  mutation UpdateBeer($beerId: uuid!, $beer: beers_set_input!) {\n    update_beers_by_pk(pk_columns: { id: $beerId }, _set: $beer) {\n      id\n    }\n  }\n": types.UpdateBeerDocument,
-    "\n  mutation UpdateCellarBeer($beerId: uuid!, $beer: cellar_beer_set_input!) {\n    update_cellar_beer_by_pk(pk_columns: { id: $beerId }, _set: $beer) {\n      id\n    }\n  }\n": types.UpdateCellarBeerDocument,
-    "\n  mutation AddWine($wine: wines_insert_input!) {\n    insert_wines_one(object: $wine) {\n      id\n    }\n  }\n": types.AddWineDocument,
-    "\n  mutation AddWineToCellar($input: cellar_wine_insert_input!) {\n    insert_cellar_wine_one(object: $input) {\n      id\n      cellar_id\n    }\n  }\n": types.AddWineToCellarDocument,
-    "\n  mutation UpdateWine($wineId: uuid!, $wine: wines_set_input!) {\n    update_wines_by_pk(pk_columns: { id: $wineId }, _set: $wine) {\n      id\n    }\n  }\n": types.UpdateWineDocument,
-    "\n  mutation UpdateCellarWine($wineId: uuid!, $wine: cellar_wine_set_input!) {\n    update_cellar_wine_by_pk(pk_columns: { id: $wineId }, _set: $wine) {\n      id\n    }\n  }\n": types.UpdateCellarWineDocument,
-    "\n  mutation AddSpirit($spirit: spirits_insert_input!) {\n    insert_spirits_one(object: $spirit) {\n      id\n    }\n  }\n": types.AddSpiritDocument,
-    "\n  mutation AddSpiritToCellar($spirit: cellar_spirit_insert_input!) {\n    insert_cellar_spirit_one(object: $spirit) {\n      id\n    }\n  }\n": types.AddSpiritToCellarDocument,
-    "\n  mutation UpdateSpirit($spiritId: uuid!, $spirit: spirits_set_input!) {\n    update_spirits_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {\n      id\n    }\n  }\n": types.UpdateSpiritDocument,
-    "\n  mutation UpdateCellarSpirit(\n    $spiritId: uuid!\n    $spirit: cellar_spirit_set_input!\n  ) {\n    update_cellar_spirit_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {\n      id\n    }\n  }\n": types.UpdateCellarSpiritDocument,
-    "\n  mutation AddItemReview($review: item_reviews_insert_input!) {\n    insert_item_reviews_one(object: $review) {\n      id\n      beer {\n        id\n      }\n      wine {\n        id\n      }\n      spirit {\n        id\n      }\n    }\n  }\n": types.AddItemReviewDocument,
 };
 
 /**
@@ -76,6 +71,38 @@ const documents = {
  */
 export function graphql(source: string): unknown;
 
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query GetCredential($id: String!) {\n    admin_credentials_by_pk(id: $id) {\n      id\n      credentials\n    }\n  }\n"): (typeof documents)["\n  query GetCredential($id: String!) {\n    admin_credentials_by_pk(id: $id) {\n      id\n      credentials\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation InsertFriends(\n    $friends: [friends_insert_input!]!\n    $requestId: uuid!\n  ) {\n    insert_friends(objects: $friends) {\n      affected_rows\n    }\n\n    delete_friend_requests_by_pk(id: $requestId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation InsertFriends(\n    $friends: [friends_insert_input!]!\n    $requestId: uuid!\n  ) {\n    insert_friends(objects: $friends) {\n      affected_rows\n    }\n\n    delete_friend_requests_by_pk(id: $requestId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation UpdateItemImage($itemId: uuid!, $item: item_image_set_input!) {\n    update_item_image_by_pk(pk_columns: { id: $itemId }, _set: $item) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateItemImage($itemId: uuid!, $item: item_image_set_input!) {\n    update_item_image_by_pk(pk_columns: { id: $itemId }, _set: $item) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation InsertVector($vector: item_vectors_insert_input!) {\n    insert_item_vectors_one(object: $vector) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation InsertVector($vector: item_vectors_insert_input!) {\n    insert_item_vectors_one(object: $vector) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteVectors($where: item_vectors_bool_exp!) {\n    delete_item_vectors(where: $where) {\n      affected_rows\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteVectors($where: item_vectors_bool_exp!) {\n    delete_item_vectors(where: $where) {\n      affected_rows\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation AddItemOnboarding($onboarding: item_onboardings_insert_input!) {\n    insert_item_onboardings_one(object: $onboarding) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation AddItemOnboarding($onboarding: item_onboardings_insert_input!) {\n    insert_item_onboardings_one(object: $onboarding) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query GetFile($id: uuid!) {\n    file(id: $id) {\n      id\n      bucket {\n        id\n      }\n      mimeType\n      size\n    }\n  }\n"): (typeof documents)["\n  query GetFile($id: uuid!) {\n    file(id: $id) {\n      id\n      bucket {\n        id\n      }\n      mimeType\n      size\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation AddTextExtractionResults($analysis: image_analysis_insert_input!) {\n    insert_image_analysis_one(object: $analysis) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation AddTextExtractionResults($analysis: image_analysis_insert_input!) {\n    insert_image_analysis_one(object: $analysis) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -99,7 +126,11 @@ export function graphql(source: "\n  query GetCellar($cellarId: uuid!) {\n    ce
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query GetItemsQuery($cellarId: uuid!) {\n    cellar_beer(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      beer {\n        name\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellar_wine(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      wine {\n        name\n        vintage\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellar_spirit(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      spirit {\n        name\n        vintage\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n    }\n  }\n"): (typeof documents)["\n  query GetItemsQuery($cellarId: uuid!) {\n    cellar_beer(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      beer {\n        name\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellar_wine(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      wine {\n        name\n        vintage\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellar_spirit(where: { cellar_id: { _eq: $cellarId } }) {\n      id\n      display_image {\n        file_id\n        placeholder\n      }\n      spirit {\n        name\n        vintage\n        reviews_aggregate {\n          aggregate {\n            count\n            avg {\n              score\n            }\n          }\n        }\n      }\n    }\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n    }\n  }\n"];
+export function graphql(source: "\n  query GetCellarItemsQuery($cellarId: uuid!, $search: vector) {\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n      spirits {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        spirit {\n          name\n          vintage\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n      wines {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        wine {\n          name\n          vintage\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n      beers {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        beer {\n          name\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetCellarItemsQuery($cellarId: uuid!, $search: vector) {\n    cellars_by_pk(id: $cellarId) {\n      id\n      name\n      created_by_id\n      spirits {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        spirit {\n          name\n          vintage\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n      wines {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        wine {\n          name\n          vintage\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n      beers {\n        id\n        display_image {\n          file_id\n          placeholder\n        }\n        beer {\n          name\n          item_vectors {\n            distance(args: { search: $search })\n          }\n          reviews_aggregate {\n            aggregate {\n              count\n              avg {\n                score\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query GetSearchVectorQuery($search: String!) {\n    create_search_vector(search: $search)\n  }\n"): (typeof documents)["\n  query GetSearchVectorQuery($search: String!) {\n    create_search_vector(search: $search)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -208,62 +239,6 @@ export function graphql(source: "\n  query GetSpiritDefaults($hint: item_default
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query GetWineDefaults($hint: item_defaults_hint!) {\n    wine_defaults(hint: $hint) {\n      name\n      description\n      alcohol_content_percentage\n      barcode_code\n      barcode_type\n      item_onboarding_id\n      region\n      country\n      special_designation\n      variety\n      vineyard_designation\n      vintage\n      style\n    }\n  }\n"): (typeof documents)["\n  query GetWineDefaults($hint: item_defaults_hint!) {\n    wine_defaults(hint: $hint) {\n      name\n      description\n      alcohol_content_percentage\n      barcode_code\n      barcode_type\n      item_onboarding_id\n      region\n      country\n      special_designation\n      variety\n      vineyard_designation\n      vintage\n      style\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation AddItemImage($input: item_image_upload_input!) {\n    item_image_upload(input: $input) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation AddItemImage($input: item_image_upload_input!) {\n    item_image_upload(input: $input) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation AddBeerToCellar($beer: cellar_beer_insert_input!) {\n    insert_cellar_beer_one(object: $beer) {\n      id\n      cellar_id\n    }\n  }\n"): (typeof documents)["\n  mutation AddBeerToCellar($beer: cellar_beer_insert_input!) {\n    insert_cellar_beer_one(object: $beer) {\n      id\n      cellar_id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation AddBeer($beer: beers_insert_input!) {\n    insert_beers_one(object: $beer) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation AddBeer($beer: beers_insert_input!) {\n    insert_beers_one(object: $beer) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation UpdateBeer($beerId: uuid!, $beer: beers_set_input!) {\n    update_beers_by_pk(pk_columns: { id: $beerId }, _set: $beer) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateBeer($beerId: uuid!, $beer: beers_set_input!) {\n    update_beers_by_pk(pk_columns: { id: $beerId }, _set: $beer) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation UpdateCellarBeer($beerId: uuid!, $beer: cellar_beer_set_input!) {\n    update_cellar_beer_by_pk(pk_columns: { id: $beerId }, _set: $beer) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateCellarBeer($beerId: uuid!, $beer: cellar_beer_set_input!) {\n    update_cellar_beer_by_pk(pk_columns: { id: $beerId }, _set: $beer) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation AddWine($wine: wines_insert_input!) {\n    insert_wines_one(object: $wine) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation AddWine($wine: wines_insert_input!) {\n    insert_wines_one(object: $wine) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation AddWineToCellar($input: cellar_wine_insert_input!) {\n    insert_cellar_wine_one(object: $input) {\n      id\n      cellar_id\n    }\n  }\n"): (typeof documents)["\n  mutation AddWineToCellar($input: cellar_wine_insert_input!) {\n    insert_cellar_wine_one(object: $input) {\n      id\n      cellar_id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation UpdateWine($wineId: uuid!, $wine: wines_set_input!) {\n    update_wines_by_pk(pk_columns: { id: $wineId }, _set: $wine) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateWine($wineId: uuid!, $wine: wines_set_input!) {\n    update_wines_by_pk(pk_columns: { id: $wineId }, _set: $wine) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation UpdateCellarWine($wineId: uuid!, $wine: cellar_wine_set_input!) {\n    update_cellar_wine_by_pk(pk_columns: { id: $wineId }, _set: $wine) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateCellarWine($wineId: uuid!, $wine: cellar_wine_set_input!) {\n    update_cellar_wine_by_pk(pk_columns: { id: $wineId }, _set: $wine) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation AddSpirit($spirit: spirits_insert_input!) {\n    insert_spirits_one(object: $spirit) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation AddSpirit($spirit: spirits_insert_input!) {\n    insert_spirits_one(object: $spirit) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation AddSpiritToCellar($spirit: cellar_spirit_insert_input!) {\n    insert_cellar_spirit_one(object: $spirit) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation AddSpiritToCellar($spirit: cellar_spirit_insert_input!) {\n    insert_cellar_spirit_one(object: $spirit) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation UpdateSpirit($spiritId: uuid!, $spirit: spirits_set_input!) {\n    update_spirits_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateSpirit($spiritId: uuid!, $spirit: spirits_set_input!) {\n    update_spirits_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation UpdateCellarSpirit(\n    $spiritId: uuid!\n    $spirit: cellar_spirit_set_input!\n  ) {\n    update_cellar_spirit_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateCellarSpirit(\n    $spiritId: uuid!\n    $spirit: cellar_spirit_set_input!\n  ) {\n    update_cellar_spirit_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {\n      id\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation AddItemReview($review: item_reviews_insert_input!) {\n    insert_item_reviews_one(object: $review) {\n      id\n      beer {\n        id\n      }\n      wine {\n        id\n      }\n      spirit {\n        id\n      }\n    }\n  }\n"): (typeof documents)["\n  mutation AddItemReview($review: item_reviews_insert_input!) {\n    insert_item_reviews_one(object: $review) {\n      id\n      beer {\n        id\n      }\n      wine {\n        id\n      }\n      spirit {\n        id\n      }\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};
