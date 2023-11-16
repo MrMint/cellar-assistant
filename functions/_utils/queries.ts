@@ -1,4 +1,4 @@
-import { graphql } from "../_gql/gql.js";
+import { graphql } from "@shared/gql/gql.js";
 
 export const getCredential = graphql(`
   query GetCredential($id: String!) {

@@ -28,6 +28,16 @@ actions:
     permissions:
       - role: user
     comment: beer_defaults
+  - name: create_search_vector
+    definition:
+      kind: ""
+      handler: '{{NHOST_FUNCTIONS_URL}}/getVectorForString'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+    permissions:
+      - role: user
   - name: item_image_upload
     definition:
       kind: synchronous

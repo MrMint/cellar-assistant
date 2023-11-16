@@ -1,10 +1,10 @@
 "use client";
 
 import { Box } from "@mui/joy";
+import { graphql } from "@shared/gql";
 import { isNotNil, omit } from "ramda";
 import { useQuery } from "urql";
 import { WineForm } from "@/components/wine/WineForm";
-import { graphql } from "@/gql";
 import { nullsToUndefined } from "@/utilities";
 
 const editWinePageQuery = graphql(`

@@ -6,9 +6,9 @@ import {
   ModalDialog,
   Typography,
 } from "@mui/joy";
+import { ItemType } from "@shared/gql/graphql";
 import { useState } from "react";
 import QRCode from "react-qr-code";
-import { ItemType } from "@/gql/graphql";
 import { formatItemType } from "@/utilities";
 
 export type ItemShareProps = {

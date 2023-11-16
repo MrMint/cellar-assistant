@@ -1,13 +1,13 @@
 "use client";
 
 import { CircularProgress } from "@mui/joy";
+import { graphql } from "@shared/gql";
 import { useRouter } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
 import { useQuery } from "urql";
 import { CellarForm } from "@/components/cellar/CellarForm";
 import { PageLoading } from "@/components/common/PageLoading";
-import { graphql } from "@/gql";
 import { nullsToUndefined } from "@/utilities";
 
 const editCellarQuery = graphql(`

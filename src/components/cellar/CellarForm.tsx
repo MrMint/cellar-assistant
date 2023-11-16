@@ -11,12 +11,12 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import { graphql } from "@shared/gql";
+import { Permission_Type_Enum } from "@shared/gql/graphql";
 import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useClient } from "urql";
 import { permissionKeys } from "@/constants";
-import { graphql } from "@/gql";
-import { Permission_Type_Enum } from "@/gql/graphql";
 
 interface IFormInput {
   name: string;

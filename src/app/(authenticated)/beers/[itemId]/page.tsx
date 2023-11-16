@@ -2,6 +2,9 @@
 
 import { Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
+import { graphql } from "@shared/gql";
+import { ItemType } from "@shared/gql/graphql";
+import { formatBeerStyle, formatCountry } from "@shared/utility";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { useQuery } from "urql";
@@ -11,8 +14,6 @@ import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
-import { graphql } from "@/gql";
-import { ItemType } from "@/gql/graphql";
 import beer1 from "@/images/beer1.png";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
@@ -99,8 +100,8 @@ const BeerDetails = ({
                 title={beer.name}
                 subTitlePhrases={[
                   formatVintage(beer.vintage),
-                  beer.country,
-                  beer.style,
+                  formatCountry(beer.country),
+                  formatBeerStyle(beer.style),
                   formatAsPercentage(beer.alcohol_content_percentage),
                 ]}
                 description={beer.description}

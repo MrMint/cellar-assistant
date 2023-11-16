@@ -1,4 +1,4 @@
-import { graphql } from "@/gql";
+import { graphql } from "@shared/gql";
 
 export const addItemImageMutation = graphql(`
   mutation AddItemImage($input: item_image_upload_input!) {

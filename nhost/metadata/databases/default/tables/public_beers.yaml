@@ -16,6 +16,13 @@ array_relationships:
         table:
           name: item_image
           schema: public
+  - name: item_vectors
+    using:
+      foreign_key_constraint_on:
+        column: beer_id
+        table:
+          name: item_vectors
+          schema: public
   - name: reviews
     using:
       foreign_key_constraint_on:
@@ -79,3 +86,19 @@ update_permissions:
           _eq: X-Hasura-User-Id
       check: {}
     comment: ""
+event_triggers:
+  - name: generate_vector
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+      update:
+        columns: '*'
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/generateVector'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET

@@ -4,7 +4,7 @@ import {
   Permission_Type_Enum,
   Wine_Style_Enum,
   Wine_Variety_Enum,
-} from "@/gql/graphql";
+} from "@shared/gql/graphql";
 import { getEnumKeys } from "@/utilities";
 
 export enum BarcodeType {

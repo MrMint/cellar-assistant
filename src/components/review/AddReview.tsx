@@ -8,11 +8,11 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import { addItemReview } from "@shared/queries";
 import { isNotNil } from "ramda";
 import { useState } from "react";
 import { Rating } from "react-simple-star-rating";
 import { useMutation } from "urql";
-import { addItemReview } from "@/queries";
 import { RichTextEditor } from "../common/RichTextEditor";
 
 export type AddReviewResult = {

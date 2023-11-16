@@ -10,20 +10,21 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
-import { format } from "date-fns";
-import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient } from "urql";
-import { beerStyleKeys, countryKeys } from "@/constants";
-import { graphql } from "@/gql";
+import { graphql } from "@shared/gql";
 import {
   Barcodes_Constraint,
   Barcodes_Update_Column,
   Beer_Style_Enum,
   Beers_Insert_Input,
   Country_Enum,
-} from "@/gql/graphql";
-import { addBeerMutation, updateBeerMutation } from "@/queries";
+} from "@shared/gql/graphql";
+import { addBeerMutation, updateBeerMutation } from "@shared/queries";
+import { formatBeerStyle, formatCountry } from "@shared/utility";
+import { format } from "date-fns";
+import { isNil, isNotNil } from "ramda";
+import { Controller, SubmitHandler, useForm } from "react-hook-form";
+import { CombinedError, useClient } from "urql";
+import { beerStyleKeys, countryKeys } from "@/constants";
 import { formatVintage } from "@/utilities";
 
 type SharedFields = {
@@ -201,7 +202,7 @@ export const BeerForm = ({
                   >
                     {beerStyleKeys.map((x) => (
                       <Option key={x} value={Beer_Style_Enum[x]}>
-                        {x}
+                        {formatBeerStyle(Beer_Style_Enum[x])}
                       </Option>
                     ))}
                   </Select>
@@ -223,7 +224,7 @@ export const BeerForm = ({
                   >
                     {countryKeys.map((x) => (
                       <Option key={x} value={Country_Enum[x]}>
-                        {x}
+                        {formatCountry(Country_Enum[x])}
                       </Option>
                     ))}
                   </Select>

@@ -1,5 +1,3 @@
-import { extract } from "fuzzball";
-import { defaultTo, filter, is, isNotNil, nth, pipe } from "ramda";
 import {
   Beer_Defaults_Result,
   Country_Enum,
@@ -9,7 +7,9 @@ import {
   Wine_Style_Enum,
   Wine_Variety_Enum,
   Beer_Style_Enum,
-} from "../_gql/graphql";
+} from "@shared/gql/graphql";
+import { extract } from "fuzzball";
+import { defaultTo, filter, is, isNotNil, nth, pipe } from "ramda";
 import { getEnumValues } from "../_utils";
 
 export const beerStyleValues = getEnumValues(Beer_Style_Enum);
