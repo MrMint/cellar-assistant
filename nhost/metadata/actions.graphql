@@ -4,6 +4,12 @@ type Query {
   ): beer_defaults_result
 }
 
+type Query {
+  create_search_vector(
+    search: String!
+  ): vector!
+}
+
 type Mutation {
   item_image_upload(
     input: item_image_upload_input!

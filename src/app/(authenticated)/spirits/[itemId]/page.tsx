@@ -2,6 +2,9 @@
 
 import { Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
+import { graphql } from "@shared/gql";
+import { ItemType } from "@shared/gql/graphql";
+import { formatCountry, formatSpiritType } from "@shared/utility";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { useQuery } from "urql";
@@ -11,8 +14,6 @@ import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
-import { graphql } from "@/gql";
-import { ItemType } from "@/gql/graphql";
 import spirit1 from "@/images/spirit1.png";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
@@ -100,9 +101,9 @@ const SpiritDetails = ({
                 title={spirit.name}
                 subTitlePhrases={[
                   formatVintage(spirit.vintage),
-                  spirit.type,
+                  formatSpiritType(spirit.type),
                   spirit.style,
-                  spirit.country,
+                  formatCountry(spirit.country),
                   formatAsPercentage(spirit.alcohol_content_percentage),
                 ]}
                 description={spirit.description}

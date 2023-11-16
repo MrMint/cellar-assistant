@@ -10,23 +10,25 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
-import { format } from "date-fns";
-import { useRouter } from "next/navigation";
-import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient, useMutation } from "urql";
-import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
-import { graphql } from "@/gql";
 import {
   Barcodes_Constraint,
   Wine_Variety_Enum,
   Barcodes_Update_Column,
-  Cellar_Wine_Insert_Input,
   Country_Enum,
   Wine_Style_Enum,
   Wines_Insert_Input,
-} from "@/gql/graphql";
-import { addWineMutation, updateWineMutation } from "@/queries";
+} from "@shared/gql/graphql";
+import { addWineMutation, updateWineMutation } from "@shared/queries";
+import {
+  formatCountry,
+  formatWineStyle,
+  formatWineVariety,
+} from "@shared/utility";
+import { format } from "date-fns";
+import { isNil, isNotNil } from "ramda";
+import { Controller, SubmitHandler, useForm } from "react-hook-form";
+import { CombinedError, useClient, useMutation } from "urql";
+import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
 import { formatVintage } from "@/utilities";
 
 type SharedFields = {
@@ -211,7 +213,7 @@ export const WineForm = ({
                   >
                     {wineStyleKeys.map((x) => (
                       <Option key={x} value={Wine_Style_Enum[x]}>
-                        {x}
+                        {formatWineStyle(Wine_Style_Enum[x])}
                       </Option>
                     ))}
                   </Select>
@@ -233,7 +235,7 @@ export const WineForm = ({
                   >
                     {wineVarietyKeys.map((x) => (
                       <Option key={x} value={Wine_Variety_Enum[x]}>
-                        {x}
+                        {formatWineVariety(Wine_Variety_Enum[x])}
                       </Option>
                     ))}
                   </Select>
@@ -255,7 +257,7 @@ export const WineForm = ({
                   >
                     {countryKeys.map((x) => (
                       <Option key={x} value={Country_Enum[x]}>
-                        {x}
+                        {formatCountry(Country_Enum[x])}
                       </Option>
                     ))}
                   </Select>

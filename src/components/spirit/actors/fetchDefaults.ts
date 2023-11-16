@@ -1,3 +1,5 @@
+import { graphql } from "@shared/gql";
+import { Country_Enum, Spirit_Type_Enum } from "@shared/gql/graphql";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
 import {
@@ -5,8 +7,6 @@ import {
   DefaultValuesResult,
   FetchDefaultsInput,
 } from "@/components/common/OnboardingWizard/actors/types";
-import { graphql } from "@/gql";
-import { Country_Enum, Spirit_Type_Enum } from "@/gql/graphql";
 import { nullsToUndefined } from "@/utilities";
 import { SpiritFormDefaultValues } from "../SpiritForm";
 

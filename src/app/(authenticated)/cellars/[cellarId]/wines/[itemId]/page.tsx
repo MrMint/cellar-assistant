@@ -1,6 +1,17 @@
 "use client";
 
 import { Button, Card, Grid, Modal, Stack } from "@mui/joy";
+import { graphql } from "@shared/gql";
+import { ItemType } from "@shared/gql/graphql";
+import {
+  addItemImageMutation,
+  updateCellarWineMutation,
+} from "@shared/queries";
+import {
+  formatCountry,
+  formatWineStyle,
+  formatWineVariety,
+} from "@shared/utility";
 import { usePathname } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
@@ -12,10 +23,7 @@ import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
-import { graphql } from "@/gql";
-import { ItemType } from "@/gql/graphql";
 import wine1 from "@/images/wine1.png";
-import { addItemImageMutation, updateCellarWineMutation } from "@/queries";
 import { formatAsPercentage, formatVintage } from "@/utilities";
 
 const getWineQuery = graphql(`
@@ -126,9 +134,10 @@ const WineDetails = ({
                 title={wine.name}
                 subTitlePhrases={[
                   formatVintage(wine.vintage),
-                  wine.variety,
+                  formatWineStyle(wine.style),
+                  formatWineVariety(wine.variety),
+                  formatCountry(wine.country),
                   wine.region,
-                  wine.country,
                   formatAsPercentage(wine.alcohol_content_percentage),
                 ]}
                 description={wine.description}
