@@ -4,6 +4,7 @@ import { Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
+import { formatBeerStyle, formatCountry } from "@shared/utility";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { useQuery } from "urql";
@@ -99,8 +100,8 @@ const BeerDetails = ({
                 title={beer.name}
                 subTitlePhrases={[
                   formatVintage(beer.vintage),
-                  beer.country,
-                  beer.style,
+                  formatCountry(beer.country),
+                  formatBeerStyle(beer.style),
                   formatAsPercentage(beer.alcohol_content_percentage),
                 ]}
                 description={beer.description}

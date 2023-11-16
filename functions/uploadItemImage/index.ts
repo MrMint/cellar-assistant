@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 import { Request, Response } from "express";
 import { isNil, isNotNil } from "ramda";
 import { dataUrlToFormData } from "../_utils/index.js";
+import { insertItemImage } from "./_queries.js";
 
 const {
   NHOST_ADMIN_SECRET,
@@ -81,7 +82,7 @@ export default async function uploadItemImage(
     console.log(`Uploaded image to storage`);
 
     const addItemImageResult = await nhostClient.graphql.request(
-      addItemImageMutation,
+      insertItemImage,
       {
         item: {
           ...item,

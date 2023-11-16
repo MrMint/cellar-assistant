@@ -18,6 +18,7 @@ import {
   Spirits_Insert_Input,
 } from "@shared/gql/graphql";
 import { addSpiritMutation, updateSpiritMutation } from "@shared/queries";
+import { formatCountry, formatSpiritType } from "@shared/utility";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
@@ -174,7 +175,7 @@ export const SpiritForm = ({
                   >
                     {typeOptions.map((x) => (
                       <Option key={x} value={Spirit_Type_Enum[x]}>
-                        {x}
+                        {formatSpiritType(Spirit_Type_Enum[x])}
                       </Option>
                     ))}
                   </Select>
@@ -247,7 +248,7 @@ export const SpiritForm = ({
                   >
                     {countryKeys.map((x) => (
                       <Option key={x} value={Country_Enum[x]}>
-                        {x}
+                        {formatCountry(Country_Enum[x])}
                       </Option>
                     ))}
                   </Select>

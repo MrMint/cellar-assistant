@@ -5,7 +5,11 @@ import {
   Wine_Style_Enum,
   Wine_Variety_Enum,
 } from "@shared/gql/graphql";
-import { isNil } from "ramda";
+
+// importing anything from node_modules causes lambda build to fail due to unresolved dep
+// TODO investigate monorepo solution
+const isNil = (value: any): value is null | undefined =>
+  value === null || value === undefined;
 
 export const formatCountry = (type: Country_Enum | null | undefined) => {
   if (isNil(type)) return undefined;

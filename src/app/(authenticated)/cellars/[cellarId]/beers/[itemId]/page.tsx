@@ -7,7 +7,7 @@ import {
   addItemImageMutation,
   updateCellarBeerMutation,
 } from "@shared/queries";
-import { formatBeerStyle } from "@shared/utility";
+import { formatBeerStyle, formatCountry } from "@shared/utility";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
 import { useClient, useQuery } from "urql";
@@ -125,7 +125,7 @@ const BeerDetails = ({
                 subTitlePhrases={[
                   formatVintage(beer.vintage),
                   formatBeerStyle(beer.style),
-                  beer.country,
+                  formatCountry(beer.country),
                   formatAsPercentage(beer.alcohol_content_percentage),
                 ]}
                 description={beer.description}

@@ -7,7 +7,11 @@ import {
   addItemImageMutation,
   updateCellarWineMutation,
 } from "@shared/queries";
-import { formatWineStyle, formatWineVariety } from "@shared/utility";
+import {
+  formatCountry,
+  formatWineStyle,
+  formatWineVariety,
+} from "@shared/utility";
 import { usePathname } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
@@ -132,7 +136,7 @@ const WineDetails = ({
                   formatVintage(wine.vintage),
                   formatWineStyle(wine.style),
                   formatWineVariety(wine.variety),
-                  wine.country,
+                  formatCountry(wine.country),
                   wine.region,
                   formatAsPercentage(wine.alcohol_content_percentage),
                 ]}
