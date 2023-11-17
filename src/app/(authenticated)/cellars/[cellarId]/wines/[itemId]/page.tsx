@@ -59,6 +59,9 @@ const getWineQuery = graphql(`
       cellar {
         name
         created_by_id
+        co_owners {
+          user_id
+        }
       }
     }
   }
@@ -111,6 +114,7 @@ const WineDetails = ({
         itemType={ItemType.Wine}
         cellarId={cellarId}
         cellarName={cellar?.name}
+        cellarCoOwners={cellar?.co_owners.map((x) => x.user_id)}
         cellarCreatedById={cellar?.created_by_id}
       />
       <Grid container spacing={2}>

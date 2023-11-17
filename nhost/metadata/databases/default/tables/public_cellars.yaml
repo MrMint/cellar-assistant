@@ -13,6 +13,13 @@ array_relationships:
         table:
           name: cellar_beer
           schema: public
+  - name: co_owners
+    using:
+      foreign_key_constraint_on:
+        column: cellar_id
+        table:
+          name: cellar_owners
+          schema: public
   - name: spirits
     using:
       foreign_key_constraint_on:
@@ -60,6 +67,9 @@ select_permissions:
                       _eq: X-Hasura-User-Id
           - created_by_id:
               _eq: X-Hasura-User-Id
+          - co_owners:
+              user_id:
+                _eq: X-Hasura-User-Id
     comment: ""
 update_permissions:
   - role: user
@@ -68,7 +78,11 @@ update_permissions:
         - name
         - privacy
       filter:
-        created_by_id:
-          _eq: X-Hasura-User-Id
+        _or:
+          - created_by_id:
+              _eq: X-Hasura-User-Id
+          - co_owners:
+              user_id:
+                _eq: X-Hasura-User-Id
       check: null
     comment: ""

@@ -8,6 +8,7 @@ import {
   ascend,
   descend,
   isEmpty,
+  isNil,
   isNotNil,
   not,
   prop,
@@ -29,6 +30,9 @@ const cellarQuery = graphql(`
       id
       name
       created_by_id
+      co_owners {
+        user_id
+      }
       spirits {
         id
         display_image {
@@ -106,6 +110,8 @@ const getSearchVectorQuery = graphql(`
 
 const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
   const userId = useUserId();
+  if (isNil(userId)) throw new Error("Invalid user id");
+
   const [searchString, setSearchString] = useState("");
   const [searchVectorResponse] = useQuery({
     query: getSearchVectorQuery,
@@ -122,6 +128,11 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
     },
   });
   const isSearching = searchVectorResponse.fetching || res.fetching;
+  const canAdd =
+    res?.data?.cellars_by_pk?.created_by_id === userId ||
+    res?.data?.cellars_by_pk?.co_owners
+      ?.map((x) => x.user_id)
+      .includes(userId) === true;
 
   const items =
     res.data?.cellars_by_pk?.wines
@@ -187,7 +198,7 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
               component={Link}
               href={"items/add"}
               startDecorator={<MdAdd />}
-              disabled={userId !== res.data?.cellars_by_pk?.created_by_id}
+              disabled={not(canAdd)}
             >
               Add item
             </Button>

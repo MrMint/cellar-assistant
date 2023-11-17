@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  Avatar,
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
+  ListItemDecorator,
   Option,
   Select,
   Stack,
@@ -21,6 +23,7 @@ import { permissionKeys } from "@/constants";
 interface IFormInput {
   name: string;
   privacy: Permission_Type_Enum;
+  co_owners: string[];
 }
 
 export type CellarFormProps = {
@@ -29,7 +32,9 @@ export type CellarFormProps = {
   defaults?: {
     name?: string;
     privacy?: Permission_Type_Enum;
+    co_owners?: string[];
   };
+  friends: { id: string; displayName: string; avatarUrl: string }[];
 };
 
 const addCellarMutation = graphql(`
@@ -41,9 +46,19 @@ const addCellarMutation = graphql(`
 `);
 
 const editCellarMutation = graphql(`
-  mutation EditCellar($id: uuid!, $cellar: cellars_set_input!) {
+  mutation EditCellar(
+    $id: uuid!
+    $cellar: cellars_set_input!
+    $co_owners: [cellar_owners_insert_input!]!
+  ) {
     update_cellars_by_pk(pk_columns: { id: $id }, _set: $cellar) {
       id
+    }
+    delete_cellar_owners(where: { cellar_id: { _eq: $id } }) {
+      affected_rows
+    }
+    insert_cellar_owners(objects: $co_owners) {
+      affected_rows
     }
   }
 `);
@@ -51,6 +66,7 @@ const editCellarMutation = graphql(`
 export const CellarForm = ({
   id,
   onSubmitted,
+  friends,
   defaults = {},
 }: CellarFormProps) => {
   const client = useClient();
@@ -62,20 +78,32 @@ export const CellarForm = ({
     formState: { isSubmitting, errors, isSubmitted },
   } = useForm<IFormInput>({ defaultValues: defaults });
 
-  const onSubmit: SubmitHandler<IFormInput> = async ({ name, privacy }) => {
+  const onSubmit: SubmitHandler<IFormInput> = async ({
+    name,
+    privacy,
+    co_owners,
+  }) => {
     let errored: CombinedError | undefined;
     let createdId: string | undefined;
 
     if (isNil(id)) {
       const result = await client.mutation(addCellarMutation, {
-        cellar: { name, privacy },
+        cellar: {
+          name,
+          privacy,
+          co_owners: { data: co_owners.map((x) => ({ user_id: x })) },
+        },
       });
       errored = result.error;
       createdId = result.data?.insert_cellars_one?.id;
     } else {
       const result = await client.mutation(editCellarMutation, {
         id,
-        cellar: { name, privacy },
+        cellar: {
+          name,
+          privacy,
+        },
+        co_owners: co_owners.map((x) => ({ user_id: x, cellar_id: id })),
       });
       errored = result.error;
       createdId = result.data?.update_cellars_by_pk?.id;
@@ -125,6 +153,32 @@ export const CellarForm = ({
                   {permissionKeys.map((x) => (
                     <Option key={x} value={Permission_Type_Enum[x]}>
                       {x}
+                    </Option>
+                  ))}
+                </Select>
+              )}
+            />
+          </FormControl>
+          <FormControl>
+            <FormLabel>Co-Owners</FormLabel>
+            <Controller
+              name="co_owners"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  multiple
+                  placeholder="Choose some..."
+                  {...field}
+                  onChange={(_, value) => {
+                    field.onChange(value);
+                  }}
+                >
+                  {friends.map((x) => (
+                    <Option key={x.id} value={x.id}>
+                      <ListItemDecorator>
+                        <Avatar size="sm" src={x.avatarUrl} />
+                      </ListItemDecorator>
+                      {x.displayName}
                     </Option>
                   ))}
                 </Select>

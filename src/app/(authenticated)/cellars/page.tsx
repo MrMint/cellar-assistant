@@ -22,6 +22,13 @@ const cellarsQuery = graphql(`
         displayName
         avatarUrl
       }
+      coOwners: co_owners {
+        user {
+          id
+          displayName
+          avatarUrl
+        }
+      }
     }
   }
 `);
@@ -57,7 +64,7 @@ const Cellars = () => {
             <Grid key={x.id} xs={12} sm={6} md={4} lg={3}>
               <CellarCard
                 userId={userId}
-                cellar={x}
+                cellar={{ ...x, coOwners: x.coOwners.map((y) => y.user) }}
                 index={i}
                 onEditClick={handleEditClick}
               />
