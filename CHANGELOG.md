@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.29.0](https://github.com/MrMint/cellar-assistant/compare/v0.28.1...v0.29.0) (2023-11-17)
+
+
+### Features
+
+* Updates PWA install dialog for ios users ([255a90f](https://github.com/MrMint/cellar-assistant/commit/255a90f10dd8c1a3b20acbfa45c7160760320bc3))
+
 ## [0.28.1](https://github.com/MrMint/cellar-assistant/compare/v0.28.0...v0.28.1) (2023-11-17)
 
 
