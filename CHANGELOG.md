@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.28.1](https://github.com/MrMint/cellar-assistant/compare/v0.28.0...v0.28.1) (2023-11-17)
+
+
+### Bug Fixes
+
+* Fixes error when creating a cellar with no co-owners ([9693700](https://github.com/MrMint/cellar-assistant/commit/969370030570de1476515bf88928b9486572b6d8))
+
 ## [0.28.0](https://github.com/MrMint/cellar-assistant/compare/v0.27.0...v0.28.0) (2023-11-17)
 
 
