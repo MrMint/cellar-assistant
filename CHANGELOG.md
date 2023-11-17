@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.28.0](https://github.com/MrMint/cellar-assistant/compare/v0.27.0...v0.28.0) (2023-11-17)
+
+
+### Features
+
+* Adds cellar co-owners ([bd9d298](https://github.com/MrMint/cellar-assistant/commit/bd9d298c8b088b87418acc080072eaf0e5e58acd))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/aiplatform to v3.7.0 ([85b3572](https://github.com/MrMint/cellar-assistant/commit/85b357264d9221dee0211975049de2dae6466541))
+* **deps:** update dependency @types/node to v20.9.1 ([4c38e03](https://github.com/MrMint/cellar-assistant/commit/4c38e03d97f986b5d5f13da785c7590903eddd30))
+
 ## [0.27.0](https://github.com/MrMint/cellar-assistant/compare/v0.26.0...v0.27.0) (2023-11-16)
 
 
