@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   FormControl,
+  FormHelperText,
   FormLabel,
   Input,
   ListItemDecorator,
@@ -67,7 +68,7 @@ export const CellarForm = ({
   id,
   onSubmitted,
   friends,
-  defaults = {},
+  defaults = { name: "", privacy: Permission_Type_Enum.Friends, co_owners: [] },
 }: CellarFormProps) => {
   const client = useClient();
 
@@ -137,11 +138,12 @@ export const CellarForm = ({
               )}
             />
           </FormControl>
-          <FormControl>
+          <FormControl required>
             <FormLabel>Privacy</FormLabel>
             <Controller
               name="privacy"
               control={control}
+              rules={{ required: true }}
               render={({ field }) => (
                 <Select
                   placeholder="Choose one…"
@@ -167,7 +169,7 @@ export const CellarForm = ({
               render={({ field }) => (
                 <Select
                   multiple
-                  placeholder="Choose some..."
+                  placeholder="Choose friends..."
                   {...field}
                   onChange={(_, value) => {
                     field.onChange(value);
@@ -184,6 +186,9 @@ export const CellarForm = ({
                 </Select>
               )}
             />
+            <FormHelperText>
+              These users will be treated as owners of the cellar.
+            </FormHelperText>
           </FormControl>
           {errors.root !== undefined && (
             <Typography color="danger">{errors.root.message}</Typography>
