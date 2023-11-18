@@ -216,7 +216,14 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
             [ascend(prop("distance")), ascend((x) => x.item.name)],
             items,
           ).map((x) => (
-            <Grid key={x.item.id} xs={12} sm={6} md={4} lg={3} xl={2}>
+            <Grid
+              key={x.item.id}
+              xs={items.length > 6 ? 6 : 12}
+              sm={6}
+              md={4}
+              lg={3}
+              xl={2}
+            >
               <ItemCard
                 item={x.item}
                 type={x.type}
