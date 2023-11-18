@@ -29,14 +29,14 @@ import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useClient, useMutation } from "urql";
 import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
-import { formatVintage } from "@/utilities";
+import { formatVintage, parseNumber } from "@/utilities";
 
 type SharedFields = {
   description?: string;
   region?: string;
   special_designation?: string;
   vineyard_designation?: string;
-  alcohol_content_percentage?: number;
+  alcohol_content_percentage?: string;
   barcode_code?: string;
   barcode_type?: string;
   country?: Country_Enum;
@@ -68,7 +68,7 @@ function mapFormValuesToInsertInput(
 ): Wines_Insert_Input {
   const update = {
     name: values.name,
-    alcohol_content_percentage: values.alcohol_content_percentage,
+    alcohol_content_percentage: parseNumber(values.alcohol_content_percentage),
     description: values.description,
     region: values.region,
     country: values.country,

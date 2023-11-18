@@ -25,13 +25,13 @@ import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useClient } from "urql";
 import { countryKeys } from "@/constants";
-import { formatVintage, getEnumKeys } from "@/utilities";
+import { formatVintage, getEnumKeys, parseNumber } from "@/utilities";
 
 const typeOptions = getEnumKeys(Spirit_Type_Enum);
 
 type SharedFields = {
   description?: string;
-  alcohol_content_percentage?: number;
+  alcohol_content_percentage?: string;
   barcode_code?: string;
   barcode_type?: string;
   style?: string;
@@ -63,7 +63,7 @@ function mapFormValuesToInsertInput(
 ): Spirits_Insert_Input {
   const update = {
     name: values.name,
-    alcohol_content_percentage: values.alcohol_content_percentage,
+    alcohol_content_percentage: parseNumber(values.alcohol_content_percentage),
     description: values.description,
     country: values.country,
     style: values.style,

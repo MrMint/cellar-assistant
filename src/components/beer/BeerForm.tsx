@@ -25,16 +25,16 @@ import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useClient } from "urql";
 import { beerStyleKeys, countryKeys } from "@/constants";
-import { formatVintage } from "@/utilities";
+import { formatVintage, parseNumber } from "@/utilities";
 
 type SharedFields = {
   description?: string;
-  alcohol_content_percentage?: number;
   barcode_code?: string;
   barcode_type?: string;
-  international_bitterness_unit?: number;
   style?: Beer_Style_Enum;
   country?: Country_Enum;
+  alcohol_content_percentage?: string;
+  international_bitterness_unit?: string;
 };
 
 type IBeerFormInput = {
@@ -60,7 +60,7 @@ function mapFormValuesToInsertInput(
 ): Beers_Insert_Input {
   const update = {
     name: values.name,
-    alcohol_content_percentage: values.alcohol_content_percentage,
+    alcohol_content_percentage: parseNumber(values.alcohol_content_percentage),
     description: values.description,
     country: values.country,
     style: values.style,
@@ -68,7 +68,9 @@ function mapFormValuesToInsertInput(
       ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
       : undefined,
     item_onboarding_id: itemOnboardingId,
-    international_bitterness_unit: values.international_bitterness_unit,
+    international_bitterness_unit: parseNumber(
+      values.international_bitterness_unit,
+    ),
   } as Beers_Insert_Input;
 
   if (isNotNil(update) && isNotNil(values.barcode_code)) {
