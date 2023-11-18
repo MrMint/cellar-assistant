@@ -177,7 +177,7 @@ const EditProfile = () => {
                   <Button
                     startDecorator={<MdDelete />}
                     color="danger"
-                    variant="solid"
+                    variant="outlined"
                     loading={fetching.includes(x.id)}
                     onClick={() => handleDeleteFriend(x.id)}
                   >
