@@ -52,7 +52,6 @@ export default async function generateVector(
     const {
       input: { search },
     } = req.body;
-    console.log(search);
     if (isNil(search)) return res.status(400).send();
     console.log(`Received request`);
     const result = await createSearchEmbeddingAsync(
