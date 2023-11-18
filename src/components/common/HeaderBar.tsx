@@ -1,4 +1,5 @@
 import { Breadcrumbs, CircularProgress, Stack } from "@mui/joy";
+import { isNil, isNotNil } from "ramda";
 import { ReactNode } from "react";
 import { MdSearch } from "react-icons/md";
 import { DebounceInput } from "./DebouncedInput";
@@ -15,7 +16,7 @@ const HeaderBar = ({
   breadcrumbs = [],
   endComponent,
   isSearching = false,
-  onSearchChange = () => {},
+  onSearchChange,
 }: HeaderBarProps) => {
   return (
     <Stack
@@ -31,14 +32,16 @@ const HeaderBar = ({
         ))}
       </Breadcrumbs>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        <DebounceInput
-          debounceTimeout={300}
-          startDecorator={
-            !isSearching ? <MdSearch /> : <CircularProgress size="sm" />
-          }
-          placeholder="Search"
-          handleDebounce={onSearchChange}
-        />
+        {isNotNil(onSearchChange) && (
+          <DebounceInput
+            debounceTimeout={300}
+            startDecorator={
+              !isSearching ? <MdSearch /> : <CircularProgress size="sm" />
+            }
+            placeholder="Search"
+            handleDebounce={onSearchChange}
+          />
+        )}
         {endComponent}
       </Stack>
     </Stack>

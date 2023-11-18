@@ -7,11 +7,10 @@ import {
   MenuItem,
   Stack,
 } from "@mui/joy";
-import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
-import { useRouter, useSearchParams } from "next/navigation";
+import { addCellarItemMutation } from "@shared/queries";
+import { useSearchParams } from "next/navigation";
 import { gt, isNil, isNotNil, length } from "ramda";
-import { useState } from "react";
 import { MdAdd, MdArrowDownward } from "react-icons/md";
 import { useMutation } from "urql";
 import TopNavigationBar from "@/components/common/HeaderBar";
@@ -27,71 +26,31 @@ type ItemHeaderProps = {
   }[];
 };
 
-const deleteBeerMutation = graphql(`
-  mutation DeleteBeerMutation($itemId: uuid!) {
-    delete_beers_by_pk(id: $itemId) {
-      id
-    }
-  }
-`);
-
-const deleteSpiritMutation = graphql(`
-  mutation DeleteSpiritMutation($itemId: uuid!) {
-    delete_spirits_by_pk(id: $itemId) {
-      id
-    }
-  }
-`);
-
-const addWineMutation = graphql(`
-  mutation HeaderAddWineMutation($input: cellar_wine_insert_input!) {
-    insert_cellar_wine_one(object: $input) {
-      id
-      cellar_id
-    }
-  }
-`);
-
 export const ItemHeader = ({
   itemType,
   itemId,
   itemName,
   cellars,
 }: ItemHeaderProps) => {
-  const router = useRouter();
   const { get } = useSearchParams();
   const defaultCellar = get("defaultCellar");
-  const [open, setOpen] = useState(false);
-  const [beerResponse, deleteBeer] = useMutation(deleteBeerMutation);
-  const [spiritResponse, deleteSpirit] = useMutation(deleteSpiritMutation);
-  const [wineResponse, addWine] = useMutation(addWineMutation);
+  const [{ fetching, error, operation }, addItem] = useMutation(
+    addCellarItemMutation,
+  );
 
-  const isFetching =
-    beerResponse.fetching || spiritResponse.fetching || wineResponse.fetching;
-
-  const isErrored =
-    isNotNil(beerResponse.error) ||
-    isNotNil(spiritResponse.error) ||
-    isNotNil(wineResponse.error);
-
-  const hasFetched =
-    isNotNil(beerResponse.operation) ||
-    isNotNil(spiritResponse.operation) ||
-    isNotNil(wineResponse.operation);
-
-  const isLoading = isNil(cellars) || isFetching;
+  const isLoading = isNil(cellars) || fetching;
   const isDisabled = isNil(cellars);
 
   const handleAddClick = async (cellarId: string) => {
     switch (itemType) {
       case ItemType.Beer:
-        await deleteBeer({ itemId });
+        await addItem({ item: { cellar_id: cellarId, beer_id: itemId } });
         break;
       case ItemType.Spirit:
-        await deleteSpirit({ itemId });
+        await addItem({ item: { cellar_id: cellarId, spirit_id: itemId } });
         break;
       case ItemType.Wine:
-        await addWine({ input: { cellar_id: cellarId, wine_id: itemId } });
+        await addItem({ item: { cellar_id: cellarId, wine_id: itemId } });
         break;
 
       default:
@@ -100,12 +59,6 @@ export const ItemHeader = ({
         );
     }
   };
-
-  // useEffect(() => {
-  //   if (!isFetching && hasFetched && !isErrored) {
-  //     router.replace(`/cellars/${cellarId}/items`);
-  //   }
-  // }, [isFetching, hasFetched, isErrored, router]);
 
   return (
     <TopNavigationBar

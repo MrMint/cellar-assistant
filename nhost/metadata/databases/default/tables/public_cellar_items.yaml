@@ -1,0 +1,122 @@
+table:
+  name: cellar_items
+  schema: public
+object_relationships:
+  - name: beer
+    using:
+      foreign_key_constraint_on: beer_id
+  - name: cellar
+    using:
+      foreign_key_constraint_on: cellar_id
+  - name: createdBy
+    using:
+      foreign_key_constraint_on: created_by
+  - name: display_image
+    using:
+      foreign_key_constraint_on: display_image_id
+  - name: spirit
+    using:
+      foreign_key_constraint_on: spirit_id
+  - name: wine
+    using:
+      foreign_key_constraint_on: wine_id
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        cellar:
+          _or:
+            - created_by_id:
+                _eq: X-Hasura-User-Id
+            - co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
+      set:
+        created_by: x-hasura-User-Id
+      columns:
+        - beer_id
+        - cellar_id
+        - display_image_id
+        - empty_at
+        - id
+        - open_at
+        - percentage_remaining
+        - spirit_id
+        - wine_id
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - beer_id
+        - cellar_id
+        - created_at
+        - created_by
+        - display_image_id
+        - empty_at
+        - id
+        - open_at
+        - percentage_remaining
+        - spirit_id
+        - type
+        - updated_at
+        - wine_id
+      filter:
+        _or:
+          - cellar:
+              privacy:
+                _eq: PUBLIC
+          - _and:
+              - cellar:
+                  privacy:
+                    _eq: FRIENDS
+              - cellar:
+                  createdBy:
+                    friends:
+                      friend_id:
+                        _eq: X-Hasura-User-Id
+          - cellar:
+              co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
+          - cellar:
+              created_by_id:
+                _eq: X-Hasura-User-Id
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - display_image_id
+        - empty_at
+        - open_at
+        - percentage_remaining
+      filter:
+        cellar:
+          _or:
+            - created_by_id:
+                _eq: X-Hasura-User-Id
+            - co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
+      check:
+        cellar:
+          _or:
+            - created_by_id:
+                _eq: X-Hasura-User-Id
+            - co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        cellar:
+          _or:
+            - created_by_id:
+                _eq: X-Hasura-User-Id
+            - co_owners:
+                user_id:
+                  _eq: X-Hasura-User-Id
+    comment: ""
