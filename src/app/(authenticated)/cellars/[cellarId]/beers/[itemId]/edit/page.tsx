@@ -53,7 +53,8 @@ const EditBeer = ({
             vintage: beer.vintage,
             alcohol_content_percentage: beer.alcohol_content_percentage,
             barcode_code: beer.barcode_code,
-            international_bitterness_unit: beer.international_bitterness_unit,
+            international_bitterness_unit:
+              beer.international_bitterness_unit?.toString(),
           }}
         />
       )}

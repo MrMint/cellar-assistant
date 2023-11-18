@@ -4592,6 +4592,7 @@ export enum Country_Enum {
   SanMarino = 'SAN_MARINO',
   SaoTomeAndPrincipe = 'SAO_TOME_AND_PRINCIPE',
   SaudiArabia = 'SAUDI_ARABIA',
+  Scotland = 'SCOTLAND',
   Senegal = 'SENEGAL',
   Serbia = 'SERBIA',
   Seychelles = 'SEYCHELLES',
@@ -4633,6 +4634,7 @@ export enum Country_Enum {
   VaticanCity = 'VATICAN_CITY',
   Venezuela = 'VENEZUELA',
   Vietnam = 'VIETNAM',
+  Wales = 'WALES',
   Yemen = 'YEMEN',
   Zambia = 'ZAMBIA',
   Zimbabwe = 'ZIMBABWE'
