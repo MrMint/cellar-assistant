@@ -1,11 +1,11 @@
 "use client";
 
-import { Card, Grid, Sheet, Stack } from "@mui/joy";
+import { Grid, Stack } from "@mui/joy";
 import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
 import {
   addItemImageMutation,
-  updateCellarSpiritMutation,
+  updateCellarItemMutation,
 } from "@shared/queries";
 import { formatCountry, formatSpiritType } from "@shared/utility";
 import { isNil, isNotNil } from "ramda";
@@ -14,15 +14,19 @@ import { useClient, useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImage } from "@/components/item/ItemImage";
+import { ItemRemainingSlider } from "@/components/item/ItemRemainingSlider";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
 import spirit1 from "@/images/spirit1.png";
-import { formatAsPercentage, formatVintage } from "@/utilities";
+import { formatAsPercentage, formatVintage, parseDate } from "@/utilities";
 
 const getSpiritQuery = graphql(`
   query GetSpirit($itemId: uuid!) {
-    cellar_spirit_by_pk(id: $itemId) {
+    cellar_items_by_pk(id: $itemId) {
+      open_at
+      empty_at
+      percentage_remaining
       spirit {
         id
         name
@@ -70,9 +74,10 @@ const SpiritDetails = ({
   });
   const isLoading = fetching || operation === undefined;
 
-  const spirit = data?.cellar_spirit_by_pk?.spirit;
-  const cellar = data?.cellar_spirit_by_pk?.cellar;
-  const displayImage = data?.cellar_spirit_by_pk?.display_image;
+  const item = data?.cellar_items_by_pk;
+  const spirit = data?.cellar_items_by_pk?.spirit;
+  const cellar = data?.cellar_items_by_pk?.cellar;
+  const displayImage = data?.cellar_items_by_pk?.display_image;
 
   const handleCaptureImage = useCallback(
     async (image: string) => {
@@ -82,10 +87,10 @@ const SpiritDetails = ({
         });
         if (isNil(addImageResult.error)) {
           const updateItemResult = await client.mutation(
-            updateCellarSpiritMutation,
+            updateCellarItemMutation,
             {
-              spiritId: itemId,
-              spirit: {
+              id: itemId,
+              item: {
                 display_image_id: addImageResult.data?.item_image_upload?.id,
               },
             },
@@ -121,20 +126,29 @@ const SpiritDetails = ({
             </Stack>
           )}
         </Grid>
-        {!isLoading && isNotNil(spirit) && (
+        {!isLoading && isNotNil(item) && isNotNil(spirit) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
-              <ItemDetails
-                title={spirit.name}
-                subTitlePhrases={[
-                  formatVintage(spirit.vintage),
-                  formatSpiritType(spirit.type),
-                  spirit.style,
-                  formatCountry(spirit.country),
-                  formatAsPercentage(spirit.alcohol_content_percentage),
-                ]}
-                description={spirit.description}
-              />
+              <Stack spacing={1}>
+                <ItemDetails
+                  title={spirit.name}
+                  subTitlePhrases={[
+                    formatVintage(spirit.vintage),
+                    formatSpiritType(spirit.type),
+                    spirit.style,
+                    formatCountry(spirit.country),
+                    formatAsPercentage(spirit.alcohol_content_percentage),
+                  ]}
+                  description={spirit.description}
+                />
+                <ItemRemainingSlider
+                  itemId={itemId}
+                  percentageRemaining={item.percentage_remaining}
+                  opened={parseDate(item.open_at)}
+                  emptied={parseDate(item.empty_at)}
+                />
+                <ItemShare itemId={spirit.id} itemType={ItemType.Beer} />
+              </Stack>
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>

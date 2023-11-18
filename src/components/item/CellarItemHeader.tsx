@@ -30,25 +30,9 @@ type CellarItemHeaderProps = {
   cellarCoOwners: string[] | undefined;
 };
 
-const deleteBeerMutation = graphql(`
-  mutation DeleteCellarBeerMutation($itemId: uuid!) {
-    delete_cellar_beer_by_pk(id: $itemId) {
-      id
-    }
-  }
-`);
-
-const deleteSpiritMutation = graphql(`
-  mutation DeleteCellarSpiritMutation($itemId: uuid!) {
-    delete_cellar_spirit_by_pk(id: $itemId) {
-      id
-    }
-  }
-`);
-
-const deleteWineMutation = graphql(`
-  mutation DeleteCellarWineMutation($itemId: uuid!) {
-    delete_cellar_wine_by_pk(id: $itemId) {
+const deleteCellarItem = graphql(`
+  mutation DeleteCellarItem($itemId: uuid!) {
+    delete_cellar_items_by_pk(id: $itemId) {
       id
     }
   }
@@ -68,49 +52,23 @@ export const CellarItemHeader = ({
   if (isNil(userId)) throw Error("UserId not found");
 
   const [open, setOpen] = useState(false);
-  const [beerResponse, deleteBeer] = useMutation(deleteBeerMutation);
-  const [spiritResponse, deleteSpirit] = useMutation(deleteSpiritMutation);
-  const [wineResponse, deleteWine] = useMutation(deleteWineMutation);
+  const [{ fetching, error, operation }, deleteItem] =
+    useMutation(deleteCellarItem);
 
-  const isFetching =
-    beerResponse.fetching || spiritResponse.fetching || wineResponse.fetching;
+  const isErrored = isNotNil(error);
+  const hasFetched = isNotNil(operation);
 
-  const isErrored =
-    isNotNil(beerResponse.error) ||
-    isNotNil(spiritResponse.error) ||
-    isNotNil(wineResponse.error);
-
-  const hasFetched =
-    isNotNil(beerResponse.operation) ||
-    isNotNil(spiritResponse.operation) ||
-    isNotNil(wineResponse.operation);
-
-  const isDisabled = isFetching || (hasFetched && !isErrored);
+  const isDisabled = fetching || (hasFetched && !isErrored);
 
   const handleDeleteClick = async () => {
-    switch (itemType) {
-      case ItemType.Beer:
-        await deleteBeer({ itemId });
-        break;
-      case ItemType.Spirit:
-        await deleteSpirit({ itemId });
-        break;
-      case ItemType.Wine:
-        await deleteWine({ itemId });
-        break;
-
-      default:
-        throw new Error(
-          `Unsupported type ${itemType} provided to handleDeleteClick()`,
-        );
-    }
+    await deleteItem({ itemId });
   };
 
   useEffect(() => {
-    if (!isFetching && hasFetched && !isErrored) {
+    if (!fetching && hasFetched && !isErrored) {
       router.replace(`/cellars/${cellarId}/items`);
     }
-  }, [cellarId, isFetching, hasFetched, isErrored, router]);
+  }, [cellarId, fetching, hasFetched, isErrored, router]);
 
   const isOwner =
     cellarCreatedById === userId || cellarCoOwners?.includes(userId) === true;

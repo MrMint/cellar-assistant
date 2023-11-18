@@ -1,11 +1,11 @@
 "use client";
 
-import { Card, Grid, Stack } from "@mui/joy";
+import { Grid, Stack } from "@mui/joy";
 import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
 import {
   addItemImageMutation,
-  updateCellarBeerMutation,
+  updateCellarItemMutation,
 } from "@shared/queries";
 import { formatBeerStyle, formatCountry } from "@shared/utility";
 import { isNil, isNotNil } from "ramda";
@@ -14,15 +14,19 @@ import { useClient, useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImage } from "@/components/item/ItemImage";
+import { ItemRemainingSlider } from "@/components/item/ItemRemainingSlider";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
 import { AddReview } from "@/components/review/AddReview";
 import beer1 from "@/images/beer1.png";
-import { formatAsPercentage, formatVintage } from "@/utilities";
+import { formatAsPercentage, formatVintage, parseDate } from "@/utilities";
 
 const getBeerQuery = graphql(`
   query GetCellarBeer($itemId: uuid!) {
-    cellar_beer_by_pk(id: $itemId) {
+    cellar_items_by_pk(id: $itemId) {
+      open_at
+      empty_at
+      percentage_remaining
       beer {
         id
         name
@@ -70,9 +74,10 @@ const BeerDetails = ({
   });
   const isLoading = fetching || operation === undefined;
 
-  const beer = data?.cellar_beer_by_pk?.beer;
-  const cellar = data?.cellar_beer_by_pk?.cellar;
-  const displayImage = data?.cellar_beer_by_pk?.display_image;
+  const item = data?.cellar_items_by_pk;
+  const beer = data?.cellar_items_by_pk?.beer;
+  const cellar = data?.cellar_items_by_pk?.cellar;
+  const displayImage = data?.cellar_items_by_pk?.display_image;
 
   const handleCaptureImage = useCallback(
     async (image: string) => {
@@ -82,10 +87,10 @@ const BeerDetails = ({
         });
         if (isNil(addImageResult.error)) {
           const updateItemResult = await client.mutation(
-            updateCellarBeerMutation,
+            updateCellarItemMutation,
             {
-              beerId: itemId,
-              beer: {
+              id: itemId,
+              item: {
                 display_image_id: addImageResult.data?.item_image_upload?.id,
               },
             },
@@ -110,30 +115,36 @@ const BeerDetails = ({
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
           {!isLoading && isNotNil(beer) && (
-            <Stack spacing={1}>
-              <ItemImage
-                fileId={displayImage?.file_id}
-                placeholder={displayImage?.placeholder}
-                fallback={beer1}
-                onCaptureImage={handleCaptureImage}
-              />
-              <ItemShare itemId={beer.id} itemType={ItemType.Beer} />
-            </Stack>
+            <ItemImage
+              fileId={displayImage?.file_id}
+              placeholder={displayImage?.placeholder}
+              fallback={beer1}
+              onCaptureImage={handleCaptureImage}
+            />
           )}
         </Grid>
-        {!isLoading && isNotNil(beer) && (
+        {!isLoading && isNotNil(item) && isNotNil(beer) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
-              <ItemDetails
-                title={beer.name}
-                subTitlePhrases={[
-                  formatVintage(beer.vintage),
-                  formatBeerStyle(beer.style),
-                  formatCountry(beer.country),
-                  formatAsPercentage(beer.alcohol_content_percentage),
-                ]}
-                description={beer.description}
-              />
+              <Stack spacing={1}>
+                <ItemDetails
+                  title={beer.name}
+                  subTitlePhrases={[
+                    formatVintage(beer.vintage),
+                    formatBeerStyle(beer.style),
+                    formatCountry(beer.country),
+                    formatAsPercentage(beer.alcohol_content_percentage),
+                  ]}
+                  description={beer.description}
+                />
+                <ItemRemainingSlider
+                  itemId={itemId}
+                  percentageRemaining={item.percentage_remaining}
+                  opened={parseDate(item.open_at)}
+                  emptied={parseDate(item.empty_at)}
+                />
+                <ItemShare itemId={beer.id} itemType={ItemType.Beer} />
+              </Stack>
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>

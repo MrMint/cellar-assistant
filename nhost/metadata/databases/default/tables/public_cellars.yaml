@@ -6,13 +6,6 @@ object_relationships:
     using:
       foreign_key_constraint_on: created_by_id
 array_relationships:
-  - name: beers
-    using:
-      foreign_key_constraint_on:
-        column: cellar_id
-        table:
-          name: cellar_beer
-          schema: public
   - name: co_owners
     using:
       foreign_key_constraint_on:
@@ -20,19 +13,12 @@ array_relationships:
         table:
           name: cellar_owners
           schema: public
-  - name: spirits
+  - name: items
     using:
       foreign_key_constraint_on:
         column: cellar_id
         table:
-          name: cellar_spirit
-          schema: public
-  - name: wines
-    using:
-      foreign_key_constraint_on:
-        column: cellar_id
-        table:
-          name: cellar_wine
+          name: cellar_items
           schema: public
 insert_permissions:
   - role: user

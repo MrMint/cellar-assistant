@@ -63,7 +63,9 @@ const AddItemTypeCard = ({ type, cellarId }: AddItemTypeCardProps) => (
         overlay
         href={`/cellars/${cellarId}/${type.toLowerCase()}s/add`}
       >
-        <Typography level="title-lg">{type}</Typography>
+        <Typography level="title-lg" flexGrow={1} textAlign="center">
+          {type}
+        </Typography>
       </Link>
     </CardContent>
   </InteractiveCard>
@@ -107,7 +109,7 @@ const Add = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
         )}
         <Grid container spacing={2}>
           {new Array<ItemType>("Wine", "Beer", "Spirit").map((x) => (
-            <Grid key={x} xs={12} sm={6} md={4} lg={2}>
+            <Grid key={x} xs={6} sm={6} md={4} lg={2}>
               <AddItemTypeCard type={x} cellarId={cellarId} />
             </Grid>
           ))}

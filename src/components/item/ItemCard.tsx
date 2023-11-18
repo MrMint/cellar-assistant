@@ -21,16 +21,18 @@ import {
 import InteractiveCard from "../common/InteractiveCard";
 import Link from "../common/Link";
 
+export type ItemCardItem = {
+  id: string;
+  name: string;
+  vintage?: string;
+  displayImageId?: string;
+  placeholder?: string | null;
+  score?: number | null;
+  reviewCount?: number | null;
+};
+
 export type ItemCardProps = {
-  item: {
-    id: string;
-    name: string;
-    vintage?: string;
-    displayImageId?: string;
-    placeholder?: string | null;
-    score?: number | null;
-    reviewCount?: number | null;
-  };
+  item: ItemCardItem;
   href?: string;
   onClick?: (itemId: string) => void;
   type: ItemType;
