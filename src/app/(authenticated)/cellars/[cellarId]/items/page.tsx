@@ -11,6 +11,7 @@ import {
   isNil,
   isNotNil,
   not,
+  path,
   prop,
   sortBy,
   sortWith,
@@ -20,10 +21,15 @@ import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
 import TopNavigationBar from "@/components/common/HeaderBar";
 import Link from "@/components/common/Link";
-import { ItemCard } from "@/components/item/ItemCard";
+import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
 import withAuth from "@/hocs/withAuth";
 import { formatItemType } from "@/utilities";
 
+type Item = {
+  item: ItemCardItem;
+  distance: number;
+  type: ItemType;
+};
 const cellarQuery = graphql(`
   query GetCellarItemsQuery($cellarId: uuid!, $search: vector) {
     cellars_by_pk(id: $cellarId) {
@@ -33,8 +39,9 @@ const cellarQuery = graphql(`
       co_owners {
         user_id
       }
-      spirits {
+      items(where: { empty_at: { _is_null: true } }) {
         id
+        type
         display_image {
           file_id
           placeholder
@@ -54,13 +61,6 @@ const cellarQuery = graphql(`
             }
           }
         }
-      }
-      wines {
-        id
-        display_image {
-          file_id
-          placeholder
-        }
         wine {
           name
           vintage
@@ -76,13 +76,7 @@ const cellarQuery = graphql(`
             }
           }
         }
-      }
-      beers {
-        id
-        display_image {
-          file_id
-          placeholder
-        }
+
         beer {
           name
           item_vectors {
@@ -135,50 +129,63 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
       .includes(userId) === true;
 
   const items =
-    res.data?.cellars_by_pk?.wines
-      .map((x) => ({
-        id: x.id,
-        name: x.wine.name,
-        vintage: x.wine.vintage as string | undefined,
-        displayImageId: x.display_image?.file_id,
-        placeholder: x.display_image?.placeholder,
-        score: x.wine.reviews_aggregate.aggregate?.avg?.score,
-        reviewCount: x.wine.reviews_aggregate.aggregate?.count,
-        type: ItemType.Wine,
-        distance: Math.min(
-          ...x.wine.item_vectors.map((y) => y.distance).filter(isNotNil),
-        ),
-      }))
-      .concat(
-        res.data?.cellars_by_pk?.beers.map((x) => ({
-          id: x.id,
-          vintage: undefined,
-          name: x.beer.name,
-          displayImageId: x.display_image?.file_id,
-          placeholder: x.display_image?.placeholder,
-          score: x.beer.reviews_aggregate.aggregate?.avg?.score,
-          reviewCount: x.beer.reviews_aggregate.aggregate?.count,
-          type: ItemType.Beer,
-          distance: Math.min(
-            ...x.beer.item_vectors.map((y) => y.distance).filter(isNotNil),
-          ),
-        })),
-      )
-      .concat(
-        res.data?.cellars_by_pk?.spirits.map((x) => ({
-          id: x.id,
-          name: x.spirit.name,
-          vintage: undefined,
-          displayImageId: x.display_image?.file_id,
-          placeholder: x.display_image?.placeholder,
-          score: x.spirit.reviews_aggregate.aggregate?.avg?.score,
-          reviewCount: x.spirit.reviews_aggregate.aggregate?.count,
-          type: ItemType.Spirit,
-          distance: Math.min(
-            ...x.spirit.item_vectors.map((y) => y.distance).filter(isNotNil),
-          ),
-        })),
-      ) ?? [];
+    res.data?.cellars_by_pk?.items.map((x) => {
+      switch (x.type) {
+        case "BEER":
+          if (isNil(x.beer)) throw Error();
+          return {
+            item: {
+              id: x.id,
+              name: x.beer.name,
+              displayImageId: x.display_image?.file_id,
+              placeholder: x.display_image?.placeholder,
+              score: x.beer.reviews_aggregate.aggregate?.avg?.score,
+              reviewCount: x.beer.reviews_aggregate.aggregate?.count,
+            } as ItemCardItem,
+            type: ItemType.Beer,
+            distance: Math.min(
+              ...x.beer.item_vectors.map((y) => y.distance).filter(isNotNil),
+            ),
+          } as Item;
+        case "WINE":
+          if (isNil(x.wine)) throw Error();
+          return {
+            item: {
+              id: x.id,
+              name: x.wine.name,
+              vintage: x.wine.vintage,
+              displayImageId: x.display_image?.file_id,
+              placeholder: x.display_image?.placeholder,
+              score: x.wine.reviews_aggregate.aggregate?.avg?.score,
+              reviewCount: x.wine.reviews_aggregate.aggregate?.count,
+            } as ItemCardItem,
+            type: ItemType.Wine,
+            distance: Math.min(
+              ...x.wine.item_vectors.map((y) => y.distance).filter(isNotNil),
+            ),
+          } as Item;
+        case "SPIRIT":
+          if (isNil(x.spirit)) throw Error();
+          return {
+            item: {
+              id: x.id,
+              name: x.spirit.name,
+              vintage: x.spirit.vintage,
+              displayImageId: x.display_image?.file_id,
+              placeholder: x.display_image?.placeholder,
+              score: x.spirit.reviews_aggregate.aggregate?.avg?.score,
+              reviewCount: x.spirit.reviews_aggregate.aggregate?.count,
+            } as ItemCardItem,
+            type: ItemType.Spirit,
+            distance: Math.min(
+              ...x.spirit.item_vectors.map((y) => y.distance).filter(isNotNil),
+            ),
+          } as Item;
+
+        default:
+          throw Error("unexpected item type");
+      }
+    }) ?? [];
 
   return (
     <Box>
@@ -206,22 +213,14 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
         />
         <Grid container spacing={2}>
           {sortWith(
-            [ascend(prop("distance")), ascend(prop("name"))],
+            [ascend(prop("distance")), ascend((x) => x.item.name)],
             items,
           ).map((x) => (
-            <Grid key={x.id} xs={12} sm={6} md={4} lg={3} xl={2}>
+            <Grid key={x.item.id} xs={12} sm={6} md={4} lg={3} xl={2}>
               <ItemCard
-                item={{
-                  id: x.id,
-                  name: x.name,
-                  vintage: x.vintage,
-                  displayImageId: x.displayImageId,
-                  placeholder: x.placeholder,
-                  score: x.score,
-                  reviewCount: x.reviewCount,
-                }}
+                item={x.item}
                 type={x.type}
-                href={`${formatItemType(x.type).toLowerCase()}s/${x.id}`}
+                href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
               />
             </Grid>
           ))}

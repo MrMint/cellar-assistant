@@ -36,10 +36,10 @@ export function formatAsPercentage(input: string | null | undefined) {
 type RecursivelyReplaceNullWithUndefined<T> = T extends null
   ? undefined
   : T extends (infer U)[]
-  ? RecursivelyReplaceNullWithUndefined<U>[]
-  : T extends Record<string, unknown>
-  ? { [K in keyof T]: RecursivelyReplaceNullWithUndefined<T[K]> }
-  : T;
+    ? RecursivelyReplaceNullWithUndefined<U>[]
+    : T extends Record<string, unknown>
+      ? { [K in keyof T]: RecursivelyReplaceNullWithUndefined<T[K]> }
+      : T;
 
 export function nullsToUndefined<T>(
   obj: T,
@@ -115,4 +115,11 @@ export const formatItemType = (type: ItemType) => {
     default:
       throw new Error("Unsupported item type");
   }
+};
+
+export const parseDate = (
+  value: string | null | undefined,
+): Date | undefined => {
+  if (isNil(value)) return undefined;
+  return new Date(value);
 };
