@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.30.0](https://github.com/MrMint/cellar-assistant/compare/v0.29.0...v0.30.0) (2023-11-18)
+
+
+### Features
+
+* Adds percentage remaining, open and empty to cellar items ([d3be09e](https://github.com/MrMint/cellar-assistant/commit/d3be09e067ca51f966e2f2b6c70dff0aef8663b8))
+* Adds Scotland and Wales as countries ([e81c6a8](https://github.com/MrMint/cellar-assistant/commit/e81c6a8f2ad995559cc6e47af568c47d7e6fc5cd))
+* Condenses cellar items view on mobile for large cellars ([ad18fd9](https://github.com/MrMint/cellar-assistant/commit/ad18fd9a7595e1487a979e8cdb38da3ac465c3f3))
+* Improves styling on add item type select page ([264b659](https://github.com/MrMint/cellar-assistant/commit/264b6590b1a5a94591b25e2178504cd5801685c1))
+* Sets PWA orientation to "any" for landscape support on tablets ([27e9363](https://github.com/MrMint/cellar-assistant/commit/27e9363e0b08c4e4282faf4ad06f4ec0a998bc62))
+
+
+### Bug Fixes
+
+* **deps:** update dependency eslint to v8.54.0 ([5e838ee](https://github.com/MrMint/cellar-assistant/commit/5e838eeea399b9b514da05c831508918ee693548))
+* Fixes item form submitting empty strings for numeric fields when cleared ([d5187ec](https://github.com/MrMint/cellar-assistant/commit/d5187eccc9e68143819558641f38966aafd43fbb))
+* Removes non-functional search bar from item page ([592ed8f](https://github.com/MrMint/cellar-assistant/commit/592ed8fb690e7f5bb0c186eaa22be2e8ef563af1))
+
 ## [0.29.0](https://github.com/MrMint/cellar-assistant/compare/v0.28.1...v0.29.0) (2023-11-17)
 
 
