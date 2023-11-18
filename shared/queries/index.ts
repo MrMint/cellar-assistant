@@ -8,9 +8,9 @@ export const addItemImageMutation = graphql(`
   }
 `);
 
-export const addBeerToCellarMutation = graphql(`
-  mutation AddBeerToCellar($beer: cellar_beer_insert_input!) {
-    insert_cellar_beer_one(object: $beer) {
+export const addCellarItemMutation = graphql(`
+  mutation AddCellarItem($item: cellar_items_insert_input!) {
+    insert_cellar_items_one(object: $item) {
       id
       cellar_id
     }
@@ -33,9 +33,9 @@ export const updateBeerMutation = graphql(`
   }
 `);
 
-export const updateCellarBeerMutation = graphql(`
-  mutation UpdateCellarBeer($beerId: uuid!, $beer: cellar_beer_set_input!) {
-    update_cellar_beer_by_pk(pk_columns: { id: $beerId }, _set: $beer) {
+export const updateCellarItemMutation = graphql(`
+  mutation UpdateCellarItem($id: uuid!, $item: cellar_items_set_input!) {
+    update_cellar_items_by_pk(pk_columns: { id: $id }, _set: $item) {
       id
     }
   }
@@ -49,26 +49,9 @@ export const addWineMutation = graphql(`
   }
 `);
 
-export const addWineToCellarMutation = graphql(`
-  mutation AddWineToCellar($input: cellar_wine_insert_input!) {
-    insert_cellar_wine_one(object: $input) {
-      id
-      cellar_id
-    }
-  }
-`);
-
 export const updateWineMutation = graphql(`
   mutation UpdateWine($wineId: uuid!, $wine: wines_set_input!) {
     update_wines_by_pk(pk_columns: { id: $wineId }, _set: $wine) {
-      id
-    }
-  }
-`);
-
-export const updateCellarWineMutation = graphql(`
-  mutation UpdateCellarWine($wineId: uuid!, $wine: cellar_wine_set_input!) {
-    update_cellar_wine_by_pk(pk_columns: { id: $wineId }, _set: $wine) {
       id
     }
   }
@@ -82,28 +65,9 @@ export const addSpiritMutation = graphql(`
   }
 `);
 
-export const addSpiritToCellarMutation = graphql(`
-  mutation AddSpiritToCellar($spirit: cellar_spirit_insert_input!) {
-    insert_cellar_spirit_one(object: $spirit) {
-      id
-    }
-  }
-`);
-
 export const updateSpiritMutation = graphql(`
   mutation UpdateSpirit($spiritId: uuid!, $spirit: spirits_set_input!) {
     update_spirits_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {
-      id
-    }
-  }
-`);
-
-export const updateCellarSpiritMutation = graphql(`
-  mutation UpdateCellarSpirit(
-    $spiritId: uuid!
-    $spirit: cellar_spirit_set_input!
-  ) {
-    update_cellar_spirit_by_pk(pk_columns: { id: $spiritId }, _set: $spirit) {
       id
     }
   }

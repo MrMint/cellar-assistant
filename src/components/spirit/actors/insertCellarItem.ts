@@ -1,8 +1,5 @@
 import { ItemType } from "@shared/gql/graphql";
-import {
-  addItemImageMutation,
-  addSpiritToCellarMutation,
-} from "@shared/queries";
+import { addCellarItemMutation, addItemImageMutation } from "@shared/queries";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
 import {
@@ -30,15 +27,15 @@ export const insertCellarItem = fromPromise(
       if (isNil(imageId) || isNotNil(addImageResult.error)) throw Error();
     }
 
-    const addResult = await urqlClient.mutation(addSpiritToCellarMutation, {
-      spirit: {
+    const addResult = await urqlClient.mutation(addCellarItemMutation, {
+      item: {
         spirit_id: itemId,
         cellar_id: cellarId,
         display_image_id: imageId,
       },
     });
 
-    if (isNil(addResult.data?.insert_cellar_spirit_one?.id)) throw Error();
-    return { itemId: addResult.data?.insert_cellar_spirit_one?.id ?? "" };
+    if (isNil(addResult.data?.insert_cellar_items_one?.id)) throw Error();
+    return { itemId: addResult.data?.insert_cellar_items_one?.id ?? "" };
   },
 );
