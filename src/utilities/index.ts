@@ -123,3 +123,10 @@ export const parseDate = (
   if (isNil(value)) return undefined;
   return new Date(value);
 };
+
+export const parseNumber = (value: string | null | undefined) => {
+  if (isNil(value)) return undefined;
+  const result = Number.parseFloat(value);
+  if (Number.isNaN(result)) return undefined;
+  return result;
+};
