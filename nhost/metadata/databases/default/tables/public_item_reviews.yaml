@@ -5,6 +5,9 @@ object_relationships:
   - name: beer
     using:
       foreign_key_constraint_on: beer_id
+  - name: coffee
+    using:
+      foreign_key_constraint_on: coffee_id
   - name: spirit
     using:
       foreign_key_constraint_on: spirit_id
@@ -22,6 +25,7 @@ insert_permissions:
         user_id: x-hasura-User-Id
       columns:
         - beer_id
+        - coffee_id
         - score
         - spirit_id
         - text
@@ -31,13 +35,14 @@ select_permissions:
   - role: user
     permission:
       columns:
-        - text
-        - score
-        - created_at
-        - updated_at
         - beer_id
+        - coffee_id
+        - created_at
         - id
+        - score
         - spirit_id
+        - text
+        - updated_at
         - user_id
         - wine_id
       filter: {}

@@ -10,6 +10,7 @@ import Image from "next/image";
 import { always, cond, equals, isNil, isNotNil } from "ramda";
 import { MdOutlineComment, MdStar } from "react-icons/md";
 import beer1 from "@/images/beer1.png";
+import coffee1 from "@/images/coffee1.png";
 import spirit1 from "@/images/spirit1.png";
 import wine1 from "@/images/wine1.png";
 import {
@@ -41,6 +42,10 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
   const fallback = cond([
     [equals(ItemType.Beer), always({ image: beer1, alt: "A beer glass" })],
     [equals(ItemType.Wine), always({ image: wine1, alt: "A wine bottle" })],
+    [
+      equals(ItemType.Coffee),
+      always({ image: coffee1, alt: "A bag of coffee beans" }),
+    ],
     [
       equals(ItemType.Spirit),
       always({ image: spirit1, alt: "A bottle of spirits" }),

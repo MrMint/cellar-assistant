@@ -34,9 +34,7 @@ export const ItemHeader = ({
 }: ItemHeaderProps) => {
   const { get } = useSearchParams();
   const defaultCellar = get("defaultCellar");
-  const [{ fetching, error, operation }, addItem] = useMutation(
-    addCellarItemMutation,
-  );
+  const [{ fetching }, addItem] = useMutation(addCellarItemMutation);
 
   const isLoading = isNil(cellars) || fetching;
   const isDisabled = isNil(cellars);
@@ -51,6 +49,9 @@ export const ItemHeader = ({
         break;
       case ItemType.Wine:
         await addItem({ item: { cellar_id: cellarId, wine_id: itemId } });
+        break;
+      case ItemType.Coffee:
+        await addItem({ item: { cellar_id: cellarId, coffee_id: itemId } });
         break;
 
       default:

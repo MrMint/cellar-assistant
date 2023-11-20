@@ -17,10 +17,11 @@ import NextLink from "next/link";
 import { useQuery } from "urql";
 import InteractiveCard from "@/components/common/InteractiveCard";
 import beer1 from "@/images/beer1.png";
+import coffee1 from "@/images/coffee1.png";
 import spirit1 from "@/images/spirit1.png";
 import wine1 from "@/images/wine1.png";
 
-type ItemType = "Beer" | "Wine" | "Spirit";
+type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee";
 
 type AddItemTypeCardProps = {
   type: ItemType;
@@ -51,6 +52,14 @@ const AddItemTypeCard = ({ type, cellarId }: AddItemTypeCardProps) => (
           <Image
             src={spirit1}
             alt="An image of a liquor bottle"
+            fill
+            placeholder="blur"
+          />
+        )}
+        {type === "Coffee" && (
+          <Image
+            src={coffee1}
+            alt="A bag of coffee beans"
             fill
             placeholder="blur"
           />
@@ -108,7 +117,7 @@ const Add = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
           </Typography>
         )}
         <Grid container spacing={2}>
-          {new Array<ItemType>("Wine", "Beer", "Spirit").map((x) => (
+          {new Array<ItemType>("Wine", "Beer", "Spirit", "Coffee").map((x) => (
             <Grid key={x} xs={6} sm={6} md={4} lg={2}>
               <AddItemTypeCard type={x} cellarId={cellarId} />
             </Grid>
