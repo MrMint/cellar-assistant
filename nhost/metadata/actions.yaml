@@ -28,6 +28,34 @@ actions:
     permissions:
       - role: user
     comment: beer_defaults
+  - name: coffee_defaults
+    definition:
+      kind: ""
+      handler: '{{NHOST_FUNCTIONS_URL}}/getItemDefaults'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "hint": {
+                "barcode": {{$body.input.hint?.barcode}},
+                "barcodeType": {{$body.input.hint?.barcodeType}},
+                "frontLabelFileId": {{$body.input.hint?.frontLabelFileId}},
+                "backLabelFileId": {{$body.input.hint?.backLabelFileId}}
+              },
+              "itemType": "COFFEE",
+              "session_variables": {{$body?.session_variables}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
   - name: create_search_vector
     definition:
       kind: ""
@@ -123,6 +151,9 @@ custom_types:
         - description: null
           is_deprecated: null
           value: SPIRIT
+        - description: null
+          is_deprecated: null
+          value: COFFEE
   input_objects:
     - name: item_defaults_input
     - name: item_defaults_hint
@@ -132,4 +163,5 @@ custom_types:
     - name: beer_defaults_result
     - name: spirit_defaults_result
     - name: item_image_upload_result
+    - name: coffee_defaults_result
   scalars: []

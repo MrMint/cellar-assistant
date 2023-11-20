@@ -115,15 +115,12 @@ const SpiritDetails = ({
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
           {!isLoading && isNotNil(spirit) && (
-            <Stack spacing={1}>
-              <ItemImage
-                fileId={displayImage?.file_id}
-                placeholder={displayImage?.placeholder}
-                fallback={spirit1}
-                onCaptureImage={handleCaptureImage}
-              />
-              <ItemShare itemId={spirit.id} itemType={ItemType.Spirit} />
-            </Stack>
+            <ItemImage
+              fileId={displayImage?.file_id}
+              placeholder={displayImage?.placeholder}
+              fallback={spirit1}
+              onCaptureImage={handleCaptureImage}
+            />
           )}
         </Grid>
         {!isLoading && isNotNil(item) && isNotNil(spirit) && (
@@ -147,7 +144,7 @@ const SpiritDetails = ({
                   opened={parseDate(item.open_at)}
                   emptied={parseDate(item.empty_at)}
                 />
-                <ItemShare itemId={spirit.id} itemType={ItemType.Beer} />
+                <ItemShare itemId={spirit.id} itemType={ItemType.Spirit} />
               </Stack>
             </Grid>
             <Grid xs={12} sm={12} lg={6}>

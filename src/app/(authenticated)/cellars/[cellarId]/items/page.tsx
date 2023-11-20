@@ -76,8 +76,21 @@ const cellarQuery = graphql(`
             }
           }
         }
-
         beer {
+          name
+          item_vectors {
+            distance(args: { search: $search })
+          }
+          reviews_aggregate {
+            aggregate {
+              count
+              avg {
+                score
+              }
+            }
+          }
+        }
+        coffee {
           name
           item_vectors {
             distance(args: { search: $search })
@@ -181,7 +194,22 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
               ...x.spirit.item_vectors.map((y) => y.distance).filter(isNotNil),
             ),
           } as Item;
-
+        case "COFFEE":
+          if (isNil(x.coffee)) throw Error();
+          return {
+            item: {
+              id: x.id,
+              name: x.coffee.name,
+              displayImageId: x.display_image?.file_id,
+              placeholder: x.display_image?.placeholder,
+              score: x.coffee.reviews_aggregate.aggregate?.avg?.score,
+              reviewCount: x.coffee.reviews_aggregate.aggregate?.count,
+            } as ItemCardItem,
+            type: ItemType.Coffee,
+            distance: Math.min(
+              ...x.coffee.item_vectors.map((y) => y.distance).filter(isNotNil),
+            ),
+          } as Item;
         default:
           throw Error("unexpected item type");
       }

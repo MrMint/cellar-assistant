@@ -112,6 +112,8 @@ export const formatItemType = (type: ItemType) => {
       return "Wine";
     case ItemType.Spirit:
       return "Spirit";
+    case ItemType.Coffee:
+      return "Coffee";
     default:
       throw new Error("Unsupported item type");
   }

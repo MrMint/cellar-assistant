@@ -22,6 +22,10 @@ const searchByBarcodeQuery = graphql(`
         name
         vintage
       }
+      coffees {
+        id
+        name
+      }
     }
   }
 `);
@@ -42,7 +46,8 @@ export const searchByBarcode = fromPromise(
       isNotNil(searchResults.data) &&
       isNotNil(searchResults.data.barcodes_by_pk)
     ) {
-      const { wines, beers, spirits } = searchResults.data.barcodes_by_pk;
+      const { wines, beers, spirits, coffees } =
+        searchResults.data.barcodes_by_pk;
       results = results
         .concat(
           wines.map(
@@ -74,6 +79,16 @@ export const searchByBarcode = fromPromise(
                 name: x.name,
                 vintage: x.vintage,
                 type: ItemType.Spirit,
+              }) as BarcodeSearchResult,
+          ),
+        )
+        .concat(
+          coffees.map(
+            (x) =>
+              ({
+                id: x.id,
+                name: x.name,
+                type: ItemType.Coffee,
               }) as BarcodeSearchResult,
           ),
         );

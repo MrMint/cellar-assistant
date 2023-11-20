@@ -11,6 +11,15 @@ import {
 const isNil = (value: any): value is null | undefined =>
   value === null || value === undefined;
 
+export const formatEnum = (type: string | null | undefined) => {
+  if (isNil(type)) return undefined;
+  return type
+    .toLowerCase()
+    .split("_")
+    .map((x) => x[0].toUpperCase() + x.substring(1))
+    .join(" ");
+};
+
 export const formatCountry = (type: Country_Enum | null | undefined) => {
   if (isNil(type)) return undefined;
   return type

@@ -3,6 +3,7 @@ import { NhostClient } from "@nhost/nhost-js";
 import { NhostFunctionCallResponse } from "@nhost/nhost-js/dist/clients/functions/types";
 import {
   Beer_Defaults_Result,
+  Coffee_Defaults_Result,
   Query_RootWine_DefaultsArgs,
   Spirit_Defaults_Result,
   Wine_Defaults_Result,
@@ -40,6 +41,7 @@ type GetItemDefaultsResult =
   | Wine_Defaults_Result
   | Beer_Defaults_Result
   | Spirit_Defaults_Result
+  | Coffee_Defaults_Result
   | {
       barcode_code?: string;
       barcode_type?: string;
@@ -50,7 +52,9 @@ export default async function getItemDefaults(
   req: Request<
     any,
     any,
-    Query_RootWine_DefaultsArgs & { itemType: "BEER" | "WINE" | "SPIRIT" } & {
+    Query_RootWine_DefaultsArgs & {
+      itemType: "BEER" | "WINE" | "SPIRIT" | "COFFEE";
+    } & {
       session_variables?: { "x-hasura-user-id"?: string };
     }
   >,
