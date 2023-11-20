@@ -1,0 +1,3 @@
+-- Could not auto-generate a down migration.
+-- Please write an appropriate down migration for the SQL below:
+-- INSERT INTO "public"."coffee_species"("text") VALUES (E'ARABICA'), (E'ROBUSTA'), (E'LIBERICA'), (E'CHARRIERIANA'), (E'STENOPHYLLA');

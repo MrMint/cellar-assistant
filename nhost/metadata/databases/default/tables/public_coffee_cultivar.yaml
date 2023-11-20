@@ -1,0 +1,4 @@
+table:
+  name: coffee_cultivar
+  schema: public
+is_enum: true

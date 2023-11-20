@@ -8,6 +8,9 @@ object_relationships:
   - name: cellar
     using:
       foreign_key_constraint_on: cellar_id
+  - name: coffee
+    using:
+      foreign_key_constraint_on: coffee_id
   - name: createdBy
     using:
       foreign_key_constraint_on: created_by
@@ -36,6 +39,7 @@ insert_permissions:
       columns:
         - beer_id
         - cellar_id
+        - coffee_id
         - display_image_id
         - empty_at
         - id
@@ -50,6 +54,7 @@ select_permissions:
       columns:
         - beer_id
         - cellar_id
+        - coffee_id
         - created_at
         - created_by
         - display_image_id

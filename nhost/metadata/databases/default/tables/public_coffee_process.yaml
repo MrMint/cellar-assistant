@@ -1,0 +1,4 @@
+table:
+  name: coffee_process
+  schema: public
+is_enum: true

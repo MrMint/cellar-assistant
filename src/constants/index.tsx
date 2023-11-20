@@ -1,5 +1,9 @@
 import {
   Beer_Style_Enum,
+  Coffee_Cultivar_Enum,
+  Coffee_Process_Enum,
+  Coffee_Roast_Level_Enum,
+  Coffee_Species_Enum,
   Country_Enum,
   Permission_Type_Enum,
   Wine_Style_Enum,
@@ -43,3 +47,7 @@ export const wineStyleKeys = getEnumKeys(Wine_Style_Enum);
 export const wineVarietyKeys = getEnumKeys(Wine_Variety_Enum);
 export const countryKeys = getEnumKeys(Country_Enum);
 export const permissionKeys = getEnumKeys(Permission_Type_Enum);
+export const coffeeRoastLevelKeys = getEnumKeys(Coffee_Roast_Level_Enum);
+export const coffeeProcessKeys = getEnumKeys(Coffee_Process_Enum);
+export const coffeeSpeciesKeys = getEnumKeys(Coffee_Species_Enum);
+export const coffeeCultivarKeys = getEnumKeys(Coffee_Cultivar_Enum);
