@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.31.0](https://github.com/MrMint/cellar-assistant/compare/v0.30.0...v0.31.0) (2023-11-20)
+
+
+### Features
+
+* Adds coffee item type ([74851ac](https://github.com/MrMint/cellar-assistant/commit/74851acf4e06fb09eac62ca0842b781cdcf9f41d))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v20.9.2 ([fb9e0a2](https://github.com/MrMint/cellar-assistant/commit/fb9e0a2887bf5299eed73138bf40fc2700a7e380))
+* **deps:** update dependency typescript to v5.3.2 ([7551fc9](https://github.com/MrMint/cellar-assistant/commit/7551fc9906c01961542df6cd5f290c35e47fa852))
+
 ## [0.30.0](https://github.com/MrMint/cellar-assistant/compare/v0.29.0...v0.30.0) (2023-11-18)
 
 
