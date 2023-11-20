@@ -5,6 +5,12 @@ type Query {
 }
 
 type Query {
+  coffee_defaults(
+    hint: item_defaults_hint!
+  ): coffee_defaults_result
+}
+
+type Query {
   create_search_vector(
     search: String!
   ): vector!
@@ -32,6 +38,7 @@ enum ItemType {
   BEER
   WINE
   SPIRIT
+  COFFEE
 }
 
 input item_defaults_input {
@@ -99,5 +106,18 @@ type spirit_defaults_result {
 
 type item_image_upload_result {
   id: uuid!
+}
+
+type coffee_defaults_result {
+  description: String
+  barcode_code: String
+  barcode_type: String
+  name: String
+  country: String
+  process: String
+  species: String
+  cultivar: String
+  roast_level: String
+  item_onboarding_id: String!
 }
 

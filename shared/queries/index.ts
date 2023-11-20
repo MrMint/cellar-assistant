@@ -33,6 +33,22 @@ export const updateBeerMutation = graphql(`
   }
 `);
 
+export const addCoffeeMutation = graphql(`
+  mutation AddCoffee($coffee: coffees_insert_input!) {
+    insert_coffees_one(object: $coffee) {
+      id
+    }
+  }
+`);
+
+export const updateCoffeeMutation = graphql(`
+  mutation UpdateCoffee($coffeeId: uuid!, $coffee: coffees_set_input!) {
+    update_coffees_by_pk(pk_columns: { id: $coffeeId }, _set: $coffee) {
+      id
+    }
+  }
+`);
+
 export const updateCellarItemMutation = graphql(`
   mutation UpdateCellarItem($id: uuid!, $item: cellar_items_set_input!) {
     update_cellar_items_by_pk(pk_columns: { id: $id }, _set: $item) {

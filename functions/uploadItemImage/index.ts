@@ -66,6 +66,9 @@ export default async function uploadItemImage(
       case "SPIRIT":
         item.spirit_id = item_id;
         break;
+      case "COFFEE":
+        item.coffee_id = item_id;
+        break;
       default:
         throw new Error("Unsupported type received");
     }

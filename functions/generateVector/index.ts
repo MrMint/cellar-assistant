@@ -2,6 +2,7 @@ import { PredictionServiceClient } from "@google-cloud/aiplatform";
 import { NhostClient } from "@nhost/nhost-js";
 import {
   Beers,
+  Coffees,
   Item_Vectors_Bool_Exp,
   Spirits,
   Wines,
@@ -34,7 +35,7 @@ const nhostClient = new NhostClient({
   adminSecret: NHOST_ADMIN_SECRET,
 });
 
-type TableName = "beers" | "wines" | "spirits";
+type TableName = "beers" | "wines" | "spirits" | "coffees";
 
 const getDeleteVectorWhereClause = (
   type: TableName,
@@ -51,6 +52,8 @@ const getDeleteVectorWhereClause = (
       return { ...where, wine_id: { _eq: itemId } };
     case "spirits":
       return { ...where, spirit_id: { _eq: itemId } };
+    case "coffees":
+      return { ...where, coffee_id: { _eq: itemId } };
     default:
       throw new Error("unsupported table name");
   }
@@ -77,6 +80,10 @@ const getEmbeddingText = (
       )} style spirit/liquor. It was produced in ${formatCountry(
         item.country,
       )}.`;
+    case "coffees":
+      return `${item.name} is a ${formatSpiritType(
+        (item as Coffees).roast_level,
+      )} coffee. It was produced in ${formatCountry(item.country)}.`;
     default:
       break;
   }
@@ -84,8 +91,8 @@ const getEmbeddingText = (
 let predictionServiceClient: PredictionServiceClient;
 
 type input = {
-  table: { name: "beers" | "wines" | "spirits" };
-  event: { data: { new: Beers | Wines | Spirits } };
+  table: { name: TableName };
+  event: { data: { new: Beers | Wines | Spirits | Coffees } };
 };
 export default async function generateVector(
   req: Request<any, any, input>,
@@ -130,6 +137,7 @@ export default async function generateVector(
           beer_id: name === "beers" ? item.id : undefined,
           spirit_id: name === "spirits" ? item.id : undefined,
           wine_id: name === "wines" ? item.id : undefined,
+          coffee_id: name === "coffees" ? item.id : undefined,
           vector: JSON.stringify(result),
         },
       },

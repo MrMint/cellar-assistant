@@ -7,6 +7,11 @@ import {
   Wine_Style_Enum,
   Wine_Variety_Enum,
   Beer_Style_Enum,
+  Coffee_Cultivar_Enum,
+  Coffee_Process_Enum,
+  Coffee_Species_Enum,
+  Coffee_Roast_Level_Enum,
+  Coffee_Defaults_Result,
 } from "@shared/gql/graphql";
 import { extract } from "fuzzball";
 import { defaultTo, filter, is, isNotNil, nth, pipe } from "ramda";
@@ -17,8 +22,12 @@ export const wineStyleValues = getEnumValues(Wine_Style_Enum);
 export const wineVarietyValues = getEnumValues(Wine_Variety_Enum);
 export const spiritTypes = getEnumValues(Spirit_Type_Enum);
 export const countries = getEnumValues(Country_Enum);
+export const coffeeCultivarValues = getEnumValues(Coffee_Cultivar_Enum);
+export const coffeeProcessValues = getEnumValues(Coffee_Process_Enum);
+export const coffeeSpeciesValues = getEnumValues(Coffee_Species_Enum);
+export const coffeeRoastLevelValues = getEnumValues(Coffee_Roast_Level_Enum);
 
-export type ItemType = "BEER" | "WINE" | "SPIRIT";
+export type ItemType = "BEER" | "WINE" | "SPIRIT" | "COFFEE";
 
 // SharedFields
 // TODO experiment with how to avoid the country embed, abbreviations are the problem
@@ -64,7 +73,7 @@ const spiritFields = {
   name,
   description:
     "description (an experts creative description of the spirits history, tasting notes, pairings, recipes, glassware)",
-  type: `type (one of [${spiritTypes}])`,
+  type: `type (one of [${spiritTypes.join(", ")}])`,
   style: "style (an example being anejo vs blanco)",
   vintage,
   distillery: "distillery",
@@ -73,10 +82,25 @@ const spiritFields = {
   barcode,
 };
 
+const coffeeFields = {
+  name,
+  description:
+    "description (long description of the coffee beans, tasting notes)",
+  roast_level: `roast_level (one of [${coffeeRoastLevelValues.join(", ")}])`,
+  process: `process (one of [${coffeeProcessValues.join(", ")}])`,
+  species: `species (one of [${coffeeSpeciesValues.join(", ")}])`,
+  cultivar: `cultivar (one of [${coffeeCultivarValues.join(", ")}])`,
+  roaster: "roaster",
+  weight: "weight (number of grams as integer)",
+  country,
+  barcode,
+};
+
 const fieldPrompts = {
   WINE: Object.values(wineFields).join(", "),
   BEER: Object.values(beerFields).join(", "),
   SPIRIT: Object.values(spiritFields).join(", "),
+  COFFEE: Object.values(coffeeFields).join(", "),
 };
 
 export const generateDefaultsPrompt = (
@@ -112,7 +136,11 @@ function performEnumMatch(prediction: string, enumValues: string[]) {
 export function mapJsonToReturnType(
   itemType: ItemType,
   jsonPrediction: any,
-): Beer_Defaults_Result | Wine_Defaults_Result | Spirit_Defaults_Result {
+):
+  | Beer_Defaults_Result
+  | Wine_Defaults_Result
+  | Spirit_Defaults_Result
+  | Coffee_Defaults_Result {
   const country = performEnumMatch(jsonPrediction.country, countries);
 
   switch (itemType) {
@@ -167,6 +195,35 @@ export function mapJsonToReturnType(
         barcode_code: jsonPrediction.barcode,
         distillery: jsonPrediction.distillery,
       } as Spirit_Defaults_Result;
+    }
+    case "COFFEE": {
+      const roast_level = performEnumMatch(
+        jsonPrediction.roast_level,
+        coffeeRoastLevelValues,
+      );
+      const species = performEnumMatch(
+        jsonPrediction.species,
+        coffeeSpeciesValues,
+      );
+      const cultivar = performEnumMatch(
+        jsonPrediction.cultivar,
+        coffeeCultivarValues,
+      );
+      const process = performEnumMatch(
+        jsonPrediction.process,
+        coffeeProcessValues,
+      );
+      return {
+        __typename: "coffee_defaults_result",
+        name: jsonPrediction.name,
+        description: jsonPrediction.description,
+        country,
+        roast_level,
+        species,
+        cultivar,
+        process,
+        barcode_code: jsonPrediction.barcode,
+      } as Coffee_Defaults_Result;
     }
     default:
       throw Error();

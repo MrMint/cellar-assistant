@@ -21,30 +21,43 @@ export type AddReviewResult = {
   text?: string;
 };
 
-interface BaseAddReviewProps {}
-
-interface AddBeerReviewProps extends BaseAddReviewProps {
+interface AddBeerReviewProps {
   beerId: string;
   wineId?: never;
   spiritId?: never;
+  coffeeId?: never;
 }
-interface AddWineReviewProps extends BaseAddReviewProps {
-  beerId?: never;
+interface AddWineReviewProps {
   wineId: string;
+  beerId?: never;
   spiritId?: never;
+  coffeeId?: never;
 }
-interface AddSpiritReviewProps extends BaseAddReviewProps {
+interface AddSpiritReviewProps {
+  spiritId: string;
   beerId?: never;
   wineId?: never;
-  spiritId: string;
+  coffeeId?: never;
+}
+interface AddCoffeeReviewProps {
+  coffeeId: string;
+  beerId?: never;
+  wineId?: never;
+  spiritId?: never;
 }
 
 export type AddReviewProps =
   | AddBeerReviewProps
   | AddWineReviewProps
+  | AddCoffeeReviewProps
   | AddSpiritReviewProps;
 
-export const AddReview = ({ beerId, spiritId, wineId }: AddReviewProps) => {
+export const AddReview = ({
+  beerId,
+  spiritId,
+  wineId,
+  coffeeId,
+}: AddReviewProps) => {
   const [open, setOpen] = useState(false);
   const [score, setScore] = useState<number>();
   const [text, setText] = useState<string>();
@@ -59,6 +72,7 @@ export const AddReview = ({ beerId, spiritId, wineId }: AddReviewProps) => {
           beer_id: beerId,
           wine_id: wineId,
           spirit_id: spiritId,
+          coffee_id: coffeeId,
           score,
           text,
         },

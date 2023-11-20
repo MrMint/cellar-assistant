@@ -1,0 +1,102 @@
+table:
+  name: coffees
+  schema: public
+object_relationships:
+  - name: barcode
+    using:
+      foreign_key_constraint_on: barcode_code
+  - name: createdBy
+    using:
+      foreign_key_constraint_on: created_by_id
+array_relationships:
+  - name: item_images
+    using:
+      foreign_key_constraint_on:
+        column: coffee_id
+        table:
+          name: item_image
+          schema: public
+  - name: item_vectors
+    using:
+      foreign_key_constraint_on:
+        column: coffee_id
+        table:
+          name: item_vectors
+          schema: public
+  - name: reviews
+    using:
+      foreign_key_constraint_on:
+        column: coffee_id
+        table:
+          name: item_reviews
+          schema: public
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      set:
+        created_by_id: x-hasura-User-Id
+      columns:
+        - barcode_code
+        - country
+        - cultivar
+        - description
+        - item_onboarding_id
+        - name
+        - process
+        - roast_level
+        - species
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - barcode_code
+        - country
+        - created_at
+        - created_by_id
+        - cultivar
+        - description
+        - id
+        - name
+        - process
+        - roast_level
+        - species
+        - updated_at
+      filter: {}
+      query_root_fields:
+        - select_by_pk
+      subscription_root_fields:
+        - select_by_pk
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - barcode_code
+        - country
+        - cultivar
+        - description
+        - name
+        - process
+        - roast_level
+        - species
+      filter: {}
+      check: {}
+    comment: ""
+event_triggers:
+  - name: generate_coffee_vector
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+      update:
+        columns: '*'
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/generateVector'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET
