@@ -9,7 +9,7 @@ import { useCallback } from "react";
 import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
 import { CellarCard } from "@/components/cellar/CellarCard";
-import TopNavigationBar from "@/components/common/HeaderBar";
+import { HeaderBar } from "@/components/common/HeaderBar";
 import withAuth from "@/hocs/withAuth";
 
 const cellarsQuery = graphql(`
@@ -47,7 +47,7 @@ const Cellars = () => {
   return (
     <Box>
       <Stack spacing={2}>
-        <TopNavigationBar
+        <HeaderBar
           breadcrumbs={[{ url: "/cellars", text: "Cellars" }]}
           endComponent={
             <Button

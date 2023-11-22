@@ -1,10 +1,4 @@
-import {
-  CardContent,
-  CardOverflow,
-  Divider,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
+import { CardContent, CardOverflow, Divider, Typography } from "@mui/joy";
 import { ItemType } from "@shared/gql/graphql";
 import Image from "next/image";
 import { always, cond, equals, isNil, isNotNil } from "ramda";
