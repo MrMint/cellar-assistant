@@ -10,13 +10,15 @@ type HeaderBarProps = {
   endComponent?: ReactNode;
   onSearchChange?: (value: string) => void;
   isSearching?: boolean;
+  defaultSearchValue?: string;
 };
 
-const HeaderBar = ({
+export const HeaderBar = ({
   breadcrumbs = [],
   endComponent,
   isSearching = false,
   onSearchChange,
+  defaultSearchValue = "",
 }: HeaderBarProps) => {
   return (
     <Stack
@@ -34,6 +36,7 @@ const HeaderBar = ({
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
         {isNotNil(onSearchChange) && (
           <DebounceInput
+            defaultValue={defaultSearchValue}
             debounceTimeout={300}
             startDecorator={
               !isSearching ? <MdSearch /> : <CircularProgress size="sm" />
@@ -47,5 +50,3 @@ const HeaderBar = ({
     </Stack>
   );
 };
-
-export default HeaderBar;

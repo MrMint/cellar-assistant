@@ -13,7 +13,7 @@ import { useSearchParams } from "next/navigation";
 import { gt, isNil, isNotNil, length } from "ramda";
 import { MdAdd, MdArrowDownward } from "react-icons/md";
 import { useMutation } from "urql";
-import TopNavigationBar from "@/components/common/HeaderBar";
+import { HeaderBar } from "@/components/common/HeaderBar";
 import { formatItemType } from "@/utilities";
 
 type ItemHeaderProps = {
@@ -62,7 +62,7 @@ export const ItemHeader = ({
   };
 
   return (
-    <TopNavigationBar
+    <HeaderBar
       breadcrumbs={[
         {
           url: `/${formatItemType(itemType)}s`,
