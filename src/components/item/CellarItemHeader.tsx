@@ -16,7 +16,7 @@ import { isNil, isNotNil } from "ramda";
 import { useEffect, useState } from "react";
 import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
 import { useMutation } from "urql";
-import TopNavigationBar from "@/components/common/HeaderBar";
+import { HeaderBar } from "@/components/common/HeaderBar";
 import { formatItemType } from "@/utilities";
 import Link from "../common/Link";
 
@@ -74,7 +74,7 @@ export const CellarItemHeader = ({
     cellarCreatedById === userId || cellarCoOwners?.includes(userId) === true;
 
   return (
-    <TopNavigationBar
+    <HeaderBar
       breadcrumbs={[
         { url: "/cellars", text: "Cellars" },
         {
