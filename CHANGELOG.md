@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.32.0](https://github.com/MrMint/cellar-assistant/compare/v0.31.0...v0.32.0) (2023-11-22)
+
+
+### Features
+
+* Adds item type filtering to cellar items page ([63060f8](https://github.com/MrMint/cellar-assistant/commit/63060f8b1b016a0bca55d4e9cdd7e7223202900b))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v20.9.4 ([60a78c5](https://github.com/MrMint/cellar-assistant/commit/60a78c5a6e7890b7eb3e40d380c19858fa620b39))
+* **deps:** update dependency xstate to v5.0.0-beta.45 ([0c0dba4](https://github.com/MrMint/cellar-assistant/commit/0c0dba4ced4b9b26352e19d05c2f4b50dad8ac39))
+* **deps:** update react monorepo ([c55113d](https://github.com/MrMint/cellar-assistant/commit/c55113d26c8b6e1eb96a1abe3242940b1eeb672d))
+
 ## [0.31.0](https://github.com/MrMint/cellar-assistant/compare/v0.30.0...v0.31.0) (2023-11-20)
 
 
