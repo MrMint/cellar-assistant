@@ -3,7 +3,8 @@
 import { Box, Button, Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
-import { ItemType } from "@shared/gql/graphql";
+import { Cellar_Items_Bool_Exp, ItemType } from "@shared/gql/graphql";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ascend,
   descend,
@@ -16,14 +17,14 @@ import {
   sortBy,
   sortWith,
 } from "ramda";
-import { useState } from "react";
 import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
-import TopNavigationBar from "@/components/common/HeaderBar";
+import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
+import { HeaderBar } from "@/components/common/HeaderBar";
 import Link from "@/components/common/Link";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
 import withAuth from "@/hocs/withAuth";
-import { formatItemType } from "@/utilities";
+import { formatItemType, getEnumKeys } from "@/utilities";
 
 type Item = {
   item: ItemCardItem;
@@ -31,7 +32,11 @@ type Item = {
   type: ItemType;
 };
 const cellarQuery = graphql(`
-  query GetCellarItemsQuery($cellarId: uuid!, $search: vector) {
+  query GetCellarItemsQuery(
+    $cellarId: uuid!
+    $itemsWhereClause: cellar_items_bool_exp
+    $search: vector
+  ) {
     cellars_by_pk(id: $cellarId) {
       id
       name
@@ -39,7 +44,7 @@ const cellarQuery = graphql(`
       co_owners {
         user_id
       }
-      items(where: { empty_at: { _is_null: true } }) {
+      items(where: $itemsWhereClause) {
         id
         type
         display_image {
@@ -115,21 +120,57 @@ const getSearchVectorQuery = graphql(`
   }
 `);
 
-const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
+const Items = ({
+  params: { cellarId },
+  searchParams: { search, types },
+}: {
+  params: { cellarId: string };
+  searchParams: { search?: string; types?: string };
+}) => {
   const userId = useUserId();
   if (isNil(userId)) throw new Error("Invalid user id");
+  const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
+  const router = useRouter();
+  const searchParams = new URLSearchParams(useSearchParams());
 
-  const [searchString, setSearchString] = useState("");
+  const handleSearchChange = (search: string) => {
+    if (isEmpty(search)) {
+      searchParams.delete("search");
+    } else {
+      searchParams.set("search", search);
+    }
+    router.replace(`?${searchParams}`);
+  };
+
+  const handleTypesChange = (types: ItemType[]) => {
+    if (isEmpty(types) || types.length >= getEnumKeys(ItemType).length) {
+      searchParams.delete("types");
+    } else {
+      searchParams.set("types", JSON.stringify(types));
+    }
+    router.replace(`?${searchParams}`);
+  };
+
   const [searchVectorResponse] = useQuery({
     query: getSearchVectorQuery,
-    variables: { search: searchString },
-    pause: isEmpty(searchString),
+    variables: { search: search ?? "" },
+    pause: isEmpty(search ?? ""),
   });
+
+  const itemsWhereClause: Cellar_Items_Bool_Exp = {
+    empty_at: { _is_null: true },
+  };
+
+  if (isNotNil(parsedTypes)) {
+    itemsWhereClause.type = { _in: parsedTypes };
+  }
+
   const [res] = useQuery({
     query: cellarQuery,
     variables: {
       cellarId,
-      search: not(isEmpty(searchString))
+      itemsWhereClause,
+      search: not(isEmpty(search ?? ""))
         ? JSON.stringify(searchVectorResponse?.data?.create_search_vector)
         : undefined,
     },
@@ -218,9 +259,10 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
   return (
     <Box>
       <Stack spacing={2}>
-        <TopNavigationBar
+        <HeaderBar
+          defaultSearchValue={search}
           isSearching={isSearching}
-          onSearchChange={setSearchString}
+          onSearchChange={handleSearchChange}
           breadcrumbs={[
             { url: "/cellars", text: "Cellars" },
             {
@@ -229,14 +271,20 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
             },
           ]}
           endComponent={
-            <Button
-              component={Link}
-              href={"items/add"}
-              startDecorator={<MdAdd />}
-              disabled={not(canAdd)}
-            >
-              Add item
-            </Button>
+            <Stack direction="row" spacing={2}>
+              <CellarItemsFilter
+                types={parsedTypes}
+                onTypesChange={handleTypesChange}
+              />
+              <Button
+                component={Link}
+                href={"items/add"}
+                startDecorator={<MdAdd />}
+                disabled={not(canAdd)}
+              >
+                Add item
+              </Button>
+            </Stack>
           }
         />
         <Grid container spacing={2}>
