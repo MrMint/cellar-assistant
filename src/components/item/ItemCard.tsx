@@ -92,7 +92,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
           </Link>
         </CardContent>
       )}
-      {isNotNil(onClick) && (
+      {isNil(href) && isNotNil(onClick) && (
         <Typography level="title-md" noWrap>
           {type === ItemType.Wine &&
             `${formatVintage(item.vintage)} ${item.name}`}
