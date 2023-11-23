@@ -5,18 +5,8 @@ import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
 import { Cellar_Items_Bool_Exp, ItemType } from "@shared/gql/graphql";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ascend,
-  descend,
-  isEmpty,
-  isNil,
-  isNotNil,
-  not,
-  path,
-  prop,
-  sortBy,
-  sortWith,
-} from "ramda";
+import { ascend, isEmpty, isNil, isNotNil, not, prop, sortWith } from "ramda";
+import { useEffect, useRef } from "react";
 import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
@@ -25,6 +15,7 @@ import Link from "@/components/common/Link";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
 import withAuth from "@/hocs/withAuth";
 import { formatItemType, getEnumKeys } from "@/utilities";
+import { useHash } from "@/utilities/hooks";
 
 type Item = {
   item: ItemCardItem;
@@ -132,6 +123,8 @@ const Items = ({
   const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
   const router = useRouter();
   const searchParams = new URLSearchParams(useSearchParams());
+  const hash = useHash();
+  const scrollTargetRef = useRef<HTMLDivElement>(null);
 
   const handleSearchChange = (search: string) => {
     if (isEmpty(search)) {
@@ -256,6 +249,12 @@ const Items = ({
       }
     }) ?? [];
 
+  // Scroll to element on navigate back
+  useEffect(() => {
+    if (isNotNil(scrollTargetRef.current)) {
+      scrollTargetRef.current.scrollIntoView();
+    }
+  }, []);
   return (
     <Box>
       <Stack spacing={2}>
@@ -293,6 +292,8 @@ const Items = ({
             items,
           ).map((x) => (
             <Grid
+              ref={hash === x.item.id ? scrollTargetRef : null}
+              id={x.item.id}
               key={x.item.id}
               xs={items.length > 6 ? 6 : 12}
               sm={6}
@@ -304,6 +305,16 @@ const Items = ({
                 item={x.item}
                 type={x.type}
                 href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
+                onClick={() => {
+                  // TODO switch to simple hash update when nextjs fixes bug
+                  // https://github.com/vercel/next.js/issues/56112
+                  // window.location.hash = x.item.id;
+                  window.history.replaceState(
+                    window.history.state,
+                    "",
+                    `#${x.item.id}`,
+                  );
+                }}
               />
             </Grid>
           ))}
