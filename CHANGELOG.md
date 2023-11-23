@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.33.0](https://github.com/MrMint/cellar-assistant/compare/v0.32.0...v0.33.0) (2023-11-23)
+
+
+### Features
+
+* Adds scroll restoration to cellar items page when returning from item ([93bc2a5](https://github.com/MrMint/cellar-assistant/commit/93bc2a5611650e884297ed1f564500f399475c45))
+
 ## [0.32.0](https://github.com/MrMint/cellar-assistant/compare/v0.31.0...v0.32.0) (2023-11-22)
 
 
