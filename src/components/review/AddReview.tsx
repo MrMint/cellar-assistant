@@ -80,11 +80,13 @@ export const AddReview = ({
       setOpen(false);
     }
   };
+
   if (open === false) {
     return (
       <Input placeholder="Add a Review..." onClick={() => setOpen(true)} />
     );
   }
+
   return (
     <Card>
       <Stack spacing={2}>

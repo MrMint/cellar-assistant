@@ -1,0 +1,52 @@
+table:
+  name: check_ins
+  schema: public
+object_relationships:
+  - name: cellar_item
+    using:
+      foreign_key_constraint_on: cellar_item_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        _or:
+          - user_id:
+              _eq: X-Hasura-User-Id
+          - user:
+              friends:
+                friend_id:
+                  _eq: X-Hasura-User-Id
+      columns:
+        - cellar_item_id
+        - user_id
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - created_at
+        - updated_at
+        - cellar_item_id
+        - id
+        - user_id
+      filter:
+        _or:
+          - user_id:
+              _eq: X-Hasura-User-Id
+          - user:
+              friends:
+                friend_id:
+                  _eq: X-Hasura-User-Id
+      query_root_fields: []
+      subscription_root_fields: []
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+    comment: ""
