@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.34.0](https://github.com/MrMint/cellar-assistant/compare/v0.33.0...v0.34.0) (2023-11-29)
+
+
+### Features
+
+* Adds check-in feature to items ([ed6dde2](https://github.com/MrMint/cellar-assistant/commit/ed6dde2b5e3bea29c80d116b2f9a802274f82d8b))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.16 ([8b8abe2](https://github.com/MrMint/cellar-assistant/commit/8b8abe258daea6111fc4ca04596497e1e3a7c7aa))
+* **deps:** update dependency @types/node to v20.10.1 ([6b1aeb6](https://github.com/MrMint/cellar-assistant/commit/6b1aeb64e3eb92fcf4c7ab886898bf04ec2250c3))
+* **deps:** update dependency @types/react to v18.2.39 ([4afbb53](https://github.com/MrMint/cellar-assistant/commit/4afbb537d993b3cfb0db064bc050619b4c8035bd))
+* **deps:** update dependency xstate to v5.0.0-beta.49 ([6501ea9](https://github.com/MrMint/cellar-assistant/commit/6501ea928aca95fa1137908f115a1b8d23672ec2))
+
 ## [0.33.0](https://github.com/MrMint/cellar-assistant/compare/v0.32.0...v0.33.0) (2023-11-23)
 
 
