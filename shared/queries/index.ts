@@ -105,3 +105,24 @@ export const addItemReview = graphql(`
     }
   }
 `);
+
+export const addCheckIn = graphql(`
+  mutation AddCheckIn($checkIn: check_ins_insert_input!) {
+    insert_check_ins_one(object: $checkIn) {
+      id
+      cellar_item_id
+    }
+  }
+`);
+
+export const addCheckIns = graphql(`
+  mutation AddCheckIns($checkIns: [check_ins_insert_input!]!) {
+    insert_check_ins(objects: $checkIns) {
+      affected_rows
+      returning {
+        id
+        cellar_item_id
+      }
+    }
+  }
+`);
