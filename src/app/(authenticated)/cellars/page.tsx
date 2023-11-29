@@ -36,8 +36,8 @@ const cellarsQuery = graphql(`
 const Cellars = () => {
   const [{ data }] = useQuery({ query: cellarsQuery });
   const userId = useUserId();
-  const router = useRouter();
   if (isNil(userId)) throw new Error("Nil UserId");
+  const router = useRouter();
 
   const handleEditClick = useCallback(
     (cellarId: string) => router.push(`/cellars/${cellarId}/edit`),

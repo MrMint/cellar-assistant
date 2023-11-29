@@ -1,6 +1,7 @@
 "use client";
 
 import { Grid, Stack } from "@mui/joy";
+import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
 import {
@@ -12,6 +13,7 @@ import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
 import { useClient, useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
+import { ItemCheckIns } from "@/components/item/ItemCheckIns";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImage } from "@/components/item/ItemImage";
 import { ItemRemainingSlider } from "@/components/item/ItemRemainingSlider";
@@ -22,8 +24,9 @@ import beer1 from "@/images/beer1.png";
 import { formatAsPercentage, formatVintage, parseDate } from "@/utilities";
 
 const getBeerQuery = graphql(`
-  query GetCellarBeer($itemId: uuid!) {
+  query GetCellarBeer($itemId: uuid!, $userId: uuid!) {
     cellar_items_by_pk(id: $itemId) {
+      id
       open_at
       empty_at
       percentage_remaining
@@ -58,6 +61,27 @@ const getBeerQuery = graphql(`
           user_id
         }
       }
+      check_ins(order_by: { created_at: desc }) {
+        id
+        createdAt: created_at
+        user {
+          id
+          displayName
+          avatarUrl
+        }
+      }
+    }
+    user(id: $userId) {
+      id
+      displayName
+      avatarUrl
+      friends(order_by: { friend: { displayName: desc } }) {
+        friend {
+          id
+          displayName
+          avatarUrl
+        }
+      }
     }
   }
 `);
@@ -68,15 +92,19 @@ const BeerDetails = ({
   params: { itemId: string; cellarId: string };
 }) => {
   const client = useClient();
+  const userId = useUserId();
+  if (isNil(userId)) throw new Error("Nil UserId");
+
   const [{ data, fetching, operation }] = useQuery({
     query: getBeerQuery,
-    variables: { itemId },
+    variables: { itemId, userId },
   });
   const isLoading = fetching || operation === undefined;
 
   const item = data?.cellar_items_by_pk;
   const beer = data?.cellar_items_by_pk?.beer;
   const cellar = data?.cellar_items_by_pk?.cellar;
+  const user = data?.user;
   const displayImage = data?.cellar_items_by_pk?.display_image;
 
   const handleCaptureImage = useCallback(
@@ -123,10 +151,10 @@ const BeerDetails = ({
             />
           )}
         </Grid>
-        {!isLoading && isNotNil(item) && isNotNil(beer) && (
+        {!isLoading && isNotNil(item) && isNotNil(beer) && isNotNil(user) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
-              <Stack spacing={1}>
+              <Stack spacing={2}>
                 <ItemDetails
                   title={beer.name}
                   subTitlePhrases={[
@@ -137,6 +165,15 @@ const BeerDetails = ({
                   ]}
                   description={beer.description}
                 />
+                {isNotNil(item.open_at) && (
+                  <ItemCheckIns
+                    isOwner
+                    checkIns={item.check_ins}
+                    itemId={item.id}
+                    friends={user.friends.map((x) => x.friend)}
+                    user={user}
+                  />
+                )}
                 <ItemRemainingSlider
                   itemId={itemId}
                   percentageRemaining={item.percentage_remaining}
