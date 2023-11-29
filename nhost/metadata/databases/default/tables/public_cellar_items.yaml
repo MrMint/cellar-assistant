@@ -23,6 +23,14 @@ object_relationships:
   - name: wine
     using:
       foreign_key_constraint_on: wine_id
+array_relationships:
+  - name: check_ins
+    using:
+      foreign_key_constraint_on:
+        column: cellar_item_id
+        table:
+          name: check_ins
+          schema: public
 insert_permissions:
   - role: user
     permission:
