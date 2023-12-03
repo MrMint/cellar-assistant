@@ -24,7 +24,7 @@
     "@nhost/nextjs": "1.13.40",
     "@parcel/watcher": "2.3.0",
     "@trivago/prettier-plugin-sort-imports": "4.3.0",
-    "@types/node": "20.10.1",
+    "@types/node": "20.10.3",
     "@types/ramda": "0.29.9",
     "@types/react": "18.2.39",
     "@types/react-dom": "18.2.17",
