@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.35.0](https://github.com/MrMint/cellar-assistant/compare/v0.34.0...v0.35.0) (2023-12-05)
+
+
+### Features
+
+* Adds native share support on items ([287580e](https://github.com/MrMint/cellar-assistant/commit/287580eca98a284802f61389eec6d2b5b963bf7b))
+* Adds reverse image search to onboarding workflow ([f234fcb](https://github.com/MrMint/cellar-assistant/commit/f234fcbf94d73c015e422b3b8ee49d7eab20d3ac))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/aiplatform to v3.8.0 ([919200b](https://github.com/MrMint/cellar-assistant/commit/919200b67f57be116761f595db1a9ff5bf20bf61))
+* **deps:** update dependency @lexical/react to v0.12.4 ([937e0fb](https://github.com/MrMint/cellar-assistant/commit/937e0fb1a20582bba30764e525f8ebaddea4fbd0))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.17 ([417a182](https://github.com/MrMint/cellar-assistant/commit/417a18274f123896710404a29cc2a0df5eca4484))
+* **deps:** update dependency @types/node to v20.10.3 ([450705e](https://github.com/MrMint/cellar-assistant/commit/450705e34d067ff64eab0eeefde90723e6c45986))
+* **deps:** update dependency @types/react to v18.2.42 ([323dd39](https://github.com/MrMint/cellar-assistant/commit/323dd39f83bdc07e7b1fc200236aad31cf6dac2b))
+* **deps:** update dependency eslint to v8.55.0 ([d3a8609](https://github.com/MrMint/cellar-assistant/commit/d3a860949cca4ad831c6adf78ecdc8cf7551a245))
+* **deps:** update dependency eslint-config-next to v14.0.3 ([d577a09](https://github.com/MrMint/cellar-assistant/commit/d577a09f26573a3b9fdbd43628e9b99afcd40a6f))
+* **deps:** update dependency eslint-config-prettier to v9.1.0 ([738bbcb](https://github.com/MrMint/cellar-assistant/commit/738bbcb97b9847ad4041f0b23310455cb258f6c1))
+* **deps:** update dependency xstate to v5.0.2 ([2e3ce3c](https://github.com/MrMint/cellar-assistant/commit/2e3ce3ca677e9295b07ee0413e67e74d214ae47c))
+* **deps:** update xstate monorepo ([e1f993a](https://github.com/MrMint/cellar-assistant/commit/e1f993a4fed6e7c5678faf64cb51039a147f355c))
+
 ## [0.34.0](https://github.com/MrMint/cellar-assistant/compare/v0.33.0...v0.34.0) (2023-11-29)
 
 
