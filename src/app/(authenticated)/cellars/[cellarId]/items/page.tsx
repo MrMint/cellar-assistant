@@ -107,7 +107,7 @@ const cellarQuery = graphql(`
 
 const getSearchVectorQuery = graphql(`
   query GetSearchVectorQuery($search: String!) {
-    create_search_vector(search: $search)
+    create_search_vector(text: $search)
   }
 `);
 

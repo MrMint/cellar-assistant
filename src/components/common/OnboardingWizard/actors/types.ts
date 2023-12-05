@@ -11,6 +11,11 @@ export type SearchByBarcodeInput = {
   urqlClient: Client;
 };
 
+export type SearchByImageInput = {
+  displayImage?: string;
+  urqlClient: Client;
+};
+
 export type InsertCellarItemInput = {
   urqlClient: Client;
   itemId: string;
@@ -56,4 +61,8 @@ export type BarcodeSearchResult = {
   name: string;
   vintage?: string;
   type: ItemType;
+  displayImageId?: string;
+  placeholder?: string | null;
+  score?: number | null;
+  reviewCount?: number | null;
 };
