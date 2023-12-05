@@ -1,34 +1,17 @@
 import { PredictionServiceClient } from "@google-cloud/aiplatform";
 import { ImageAnnotatorClient, v1 } from "@google-cloud/vision";
 import { NhostClient } from "@nhost/nhost-js";
-import { Request, Response } from "express";
 import pLimit from "p-limit";
 import { isEmpty, isNil, not } from "ramda";
 import { callPredict } from "../_utils/gcp.js";
 import { isFulfilled } from "../_utils/index.js";
-import { getCredential } from "../_utils/queries.js";
+import {
+  addTextExtractionResultsMutation,
+  getFileQuery,
+} from "../_utils/queries.js";
 import { ItemType } from "../getItemDefaults/_utils.js";
-import { addTextExtractionResultsMutation, getFileQuery } from "./_queries.js";
 
-const {
-  NHOST_ADMIN_SECRET,
-  NHOST_SUBDOMAIN,
-  NHOST_REGION,
-  CREDENTIALS_GCP_ID,
-  GOOGLE_GCP_VERTEX_AI_ENDPOINT,
-} = process.env;
-
-const nhostClient = new NhostClient({
-  subdomain: NHOST_SUBDOMAIN,
-  region: NHOST_REGION,
-  adminSecret: NHOST_ADMIN_SECRET,
-});
-
-let imageAnnotatorClient: ImageAnnotatorClient;
-
-let predictionServiceClient: PredictionServiceClient;
-
-export type RetrieveTextFromImageBody = {
+export type GetTextFromImageBody = {
   fileId: string;
   itemType: ItemType;
 };
@@ -37,36 +20,16 @@ type TextBlockResult = {
   enhanced_text: string;
   bounding_box: string;
 };
-export type RetrieveTextFromImageData = TextBlockResult[];
+export type GetTextFromImageData = TextBlockResult[];
 
-export default async function retrieveTextFromImage(
-  req: Request<any, any, RetrieveTextFromImageBody, any>,
-  res: Response<RetrieveTextFromImageData>,
+export default async function getTextFromImage(
+  fileId: string,
+  itemType: ItemType,
+  nhostClient: NhostClient,
+  imageAnnotatorClient: ImageAnnotatorClient,
+  predictionServiceClient: PredictionServiceClient,
 ) {
   try {
-    if (req.method !== "POST") return res.status(405).send();
-    if (
-      req.headers["nhost-webhook-secret"] !== process.env.NHOST_WEBHOOK_SECRET
-    ) {
-      return res.status(400).send();
-    }
-
-    // TODO improve gcp credential handling
-    if (isNil(imageAnnotatorClient) || isNil(predictionServiceClient)) {
-      const credResult = await nhostClient.graphql.request(getCredential, {
-        id: CREDENTIALS_GCP_ID,
-      });
-      predictionServiceClient = new PredictionServiceClient({
-        credentials: credResult.data.admin_credentials_by_pk.credentials,
-        apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
-      });
-      imageAnnotatorClient = new v1.ImageAnnotatorClient({
-        credentials: credResult.data.admin_credentials_by_pk.credentials,
-      });
-      console.log("Initialized GCP clients");
-    }
-
-    const { fileId, itemType } = req.body;
     console.log(`Recieved request with ${fileId}`);
 
     const fileMetadata = await nhostClient.graphql.request(getFileQuery, {
@@ -80,7 +43,7 @@ export default async function retrieveTextFromImage(
       fileMetadata.data.file.mimeType.includes("image/") === false ||
       fileMetadata.data.file.bucket.id !== "label_images" // TODO any reason to limit this?
     ) {
-      return res.status(500).send();
+      throw new Error("Unexpected error while retrieving file metadata");
     }
 
     let {
@@ -150,7 +113,7 @@ export default async function retrieveTextFromImage(
                   topK: 40,
                 },
                 "google",
-                // text-bison@latest seems to frequentlynot want to respond due to the general
+                // text-bison@latest seems to frequently not want to respond due to the general
                 // surgeon warning (Pregnancy and Birth defect portion)?
                 "text-bison@001",
               );
@@ -164,7 +127,7 @@ export default async function retrieveTextFromImage(
       console.log("Completed predicting text annotations");
 
       if (predictResults.find((x) => x.status === "rejected"))
-        return res.status(500).send();
+        throw new Error("Error predicting text");
 
       results = predictResults.filter(isFulfilled).map((x) => x.value);
 
@@ -192,9 +155,9 @@ export default async function retrieveTextFromImage(
       console.log(mutationResult.error);
     }
 
-    return res.status(200).send(results);
+    return results;
   } catch (exception) {
     console.log(exception);
-    return res.status(500).send();
+    throw new Error("Unexpected Error");
   }
 }

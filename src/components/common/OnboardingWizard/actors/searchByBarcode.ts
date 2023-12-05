@@ -11,20 +11,68 @@ const searchByBarcodeQuery = graphql(`
         id
         name
         vintage
+        item_images(limit: 1) {
+          file_id
+          placeholder
+        }
+        reviews_aggregate {
+          aggregate {
+            count
+            avg {
+              score
+            }
+          }
+        }
       }
       beers {
         id
         name
         vintage
+        item_images(limit: 1) {
+          file_id
+          placeholder
+        }
+        reviews_aggregate {
+          aggregate {
+            count
+            avg {
+              score
+            }
+          }
+        }
       }
       spirits {
         id
         name
         vintage
+        item_images(limit: 1) {
+          file_id
+          placeholder
+        }
+        reviews_aggregate {
+          aggregate {
+            count
+            avg {
+              score
+            }
+          }
+        }
       }
       coffees {
         id
         name
+        item_images(limit: 1) {
+          file_id
+          placeholder
+        }
+        reviews_aggregate {
+          aggregate {
+            count
+            avg {
+              score
+            }
+          }
+        }
       }
     }
   }
@@ -57,6 +105,10 @@ export const searchByBarcode = fromPromise(
                 name: x.name,
                 vintage: x.vintage,
                 type: ItemType.Wine,
+                displayImageId: x.item_images[0]?.file_id,
+                placeholder: x.item_images[0]?.placeholder,
+                score: x.reviews_aggregate.aggregate?.avg?.score,
+                reviewCount: x.reviews_aggregate.aggregate?.count,
               }) as BarcodeSearchResult,
           ),
         )
@@ -68,6 +120,10 @@ export const searchByBarcode = fromPromise(
                 name: x.name,
                 vintage: x.vintage,
                 type: ItemType.Beer,
+                displayImageId: x.item_images[0]?.file_id,
+                placeholder: x.item_images[0]?.placeholder,
+                score: x.reviews_aggregate.aggregate?.avg?.score,
+                reviewCount: x.reviews_aggregate.aggregate?.count,
               }) as BarcodeSearchResult,
           ),
         )
@@ -79,6 +135,10 @@ export const searchByBarcode = fromPromise(
                 name: x.name,
                 vintage: x.vintage,
                 type: ItemType.Spirit,
+                displayImageId: x.item_images[0]?.file_id,
+                placeholder: x.item_images[0]?.placeholder,
+                score: x.reviews_aggregate.aggregate?.avg?.score,
+                reviewCount: x.reviews_aggregate.aggregate?.count,
               }) as BarcodeSearchResult,
           ),
         )
@@ -89,6 +149,10 @@ export const searchByBarcode = fromPromise(
                 id: x.id,
                 name: x.name,
                 type: ItemType.Coffee,
+                displayImageId: x.item_images[0]?.file_id,
+                placeholder: x.item_images[0]?.placeholder,
+                score: x.reviews_aggregate.aggregate?.avg?.score,
+                reviewCount: x.reviews_aggregate.aggregate?.count,
               }) as BarcodeSearchResult,
           ),
         );

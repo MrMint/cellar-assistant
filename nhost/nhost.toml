@@ -48,7 +48,7 @@ httpPoolSize = 100
 version = 18
 
 [auth]
-version = '0.21.2'
+version = '0.23.0'
 
 [auth.redirections]
 clientUrl = 'https://cellar-assistant.vercel.app/cellars'
@@ -67,7 +67,7 @@ allowed = ['en']
 
 [auth.user.gravatar]
 enabled = true
-default = 'blank'
+default = 'identicon'
 rating = 'g'
 
 [auth.user.email]

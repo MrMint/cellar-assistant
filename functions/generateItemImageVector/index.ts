@@ -1,13 +1,11 @@
 import { PredictionServiceClient } from "@google-cloud/aiplatform";
 import { NhostClient } from "@nhost/nhost-js";
+import { Item_Image } from "@shared/gql/graphql.js";
 import { Request, Response } from "express";
 import { isNil, isNotNil } from "ramda";
-import {
-  createImageEmbeddingAsync,
-  createSearchEmbeddingAsync,
-} from "../_utils/gcp.js";
-import { dataUrlToImageBuffer } from "../_utils/index.js";
+import { createImageEmbeddingAsync } from "../_utils/gcp.js";
 import { getCredential } from "../_utils/queries.js";
+import { updateItemImageMutation } from "../generatePlaceholder/_queries.js";
 
 const {
   NHOST_ADMIN_SECRET,
@@ -27,15 +25,14 @@ const nhostClient = new NhostClient({
 let predictionServiceClient: PredictionServiceClient;
 
 type input = {
-  input: { text: string; image: string };
-  session_variables?: { "x-hasura-user-id"?: string };
+  event: { data: { new: Item_Image } };
 };
-
-export default async function generateVector(
+export default async function generateItemImageVector(
   req: Request<any, any, input>,
   res: Response,
 ) {
   try {
+    console.log(`Receieved request`);
     if (req.method !== "POST") return res.status(405).send();
     if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
       return res.status(400).send();
@@ -54,24 +51,44 @@ export default async function generateVector(
     }
 
     const {
-      input: { text, image },
+      event: {
+        data: { new: item },
+      },
     } = req.body;
-    if (isNil(text) && isNil(image)) return res.status(400).send();
-    if (isNotNil(text) && isNotNil(image)) return res.status(400).send();
-    console.log(`Received request`);
+    console.log(`Receieved request for item_image with id ${item.id}`);
 
-    let result: Number[];
-    if (isNotNil(text)) {
-      result = await createSearchEmbeddingAsync(predictionServiceClient, text);
+    let {
+      presignedUrl: { url },
+    } = await nhostClient.storage.getPresignedUrl({
+      fileId: item.file_id,
+    });
+
+    const response = await fetch(url);
+    const image = await response.arrayBuffer();
+    console.log("Fetched image");
+
+    const result = await createImageEmbeddingAsync(
+      predictionServiceClient,
+      Buffer.from(image),
+    );
+
+    const insertVectorResult = await nhostClient.graphql.request(
+      updateItemImageMutation,
+      {
+        itemId: item.id,
+        item: {
+          vector: JSON.stringify(result),
+        },
+      },
+    );
+
+    if (isNotNil(insertVectorResult.error)) {
+      console.log(insertVectorResult.error);
+      return res.status(500).send();
     }
-    if (isNotNil(image)) {
-      result = await createImageEmbeddingAsync(
-        predictionServiceClient,
-        dataUrlToImageBuffer(image),
-      );
-    }
-    console.log(`Created vector`);
-    return res.status(200).send(JSON.stringify(result));
+    console.log(`Updated item_image vector`);
+
+    return res.status(200).send();
   } catch (exception) {
     console.log(exception);
     return res.status(500).send();

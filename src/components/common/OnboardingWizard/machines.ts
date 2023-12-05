@@ -5,6 +5,7 @@ import { Client } from "urql";
 import { PromiseActorLogic, assign, createMachine } from "xstate";
 import { Barcode } from "@/constants";
 import { searchByBarcode } from "./actors/searchByBarcode";
+import { searchByImage } from "./actors/searchByImage";
 import {
   BarcodeSearchResult,
   DefaultValues,
@@ -255,7 +256,9 @@ export const pictureOnboardingMachine = createMachine(
         | { type: "CHOOSE_ITEM"; existingItemId: string }
         | { type: "CAPTURED"; image: string };
       actions: { type: "handleDone" };
-      actors: { src: "searchByBarcode"; logic: typeof searchByBarcode };
+      actors:
+        | { src: "searchByBarcode"; logic: typeof searchByBarcode }
+        | { src: "searchByImage"; logic: typeof searchByImage };
     },
     context: ({ input }) => ({
       urqlClient: input.urqlClient,
@@ -340,9 +343,41 @@ export const pictureOnboardingMachine = createMachine(
             actions: assign({
               displayImageDataUrl: ({ event }) => event.image,
             }),
-            target: "done",
+            target: "searchingByImage",
           },
           BACK: "front",
+          SKIP: "done",
+        },
+      },
+      searchingByImage: {
+        invoke: {
+          src: "searchByImage",
+          input: ({ context: { displayImageDataUrl, urqlClient } }) => ({
+            displayImage: displayImageDataUrl,
+            urqlClient,
+          }),
+          onDone: [
+            {
+              guard: ({ event }) => not(isEmpty(event.output)),
+              target: "chooseExistingImage",
+              actions: assign({
+                existingItems: ({ event }) => event.output,
+              }),
+            },
+            {
+              target: "done",
+            },
+          ],
+        },
+      },
+      chooseExistingImage: {
+        on: {
+          CHOOSE_ITEM: {
+            actions: assign({
+              existingItemId: ({ event }) => event.existingItemId,
+            }),
+            target: "done",
+          },
           SKIP: "done",
         },
       },
@@ -352,5 +387,5 @@ export const pictureOnboardingMachine = createMachine(
       },
     },
   },
-  { actors: { searchByBarcode } },
+  { actors: { searchByBarcode, searchByImage } },
 );

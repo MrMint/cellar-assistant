@@ -23,6 +23,19 @@ select_permissions:
       subscription_root_fields: []
     comment: ""
 event_triggers:
+  - name: generate_item_image_vector
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/generateItemImageVector'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET
   - name: generate_placeholder
     definition:
       enable_manual: true

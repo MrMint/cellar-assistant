@@ -9,6 +9,7 @@ const scalars = {
   smallint: "number",
   json: "string",
   timestamptz: "string",
+  vector: "string",
 };
 
 const config: CodegenConfig = {
