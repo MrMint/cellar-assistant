@@ -1,6 +1,6 @@
 import { Box, CircularProgress, Stack, Typography } from "@mui/joy";
 import { useMachine } from "@xstate/react";
-import { isNotNil } from "ramda";
+import { includes, isNotNil } from "ramda";
 import { useClient } from "urql";
 import { Barcode } from "@/constants";
 import { Analyzing } from "../Analyzing";
@@ -60,8 +60,10 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
           onSkip={() => send({ type: "SKIP" })}
         />
       )}
-      {state.value === "searching" && <SearchingStep />}
-      {state.value === "chooseExisting" &&
+      {includes(state.value, ["searching", "searchingByImage"]) && (
+        <SearchingStep />
+      )}
+      {includes(state.value, ["chooseExisting", "chooseExistingImage"]) &&
         isNotNil(state.context.existingItems) && (
           <ExistingItems
             items={state.context.existingItems}

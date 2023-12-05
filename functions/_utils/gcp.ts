@@ -2,6 +2,7 @@ import {
   type PredictionServiceClient,
   helpers,
 } from "@google-cloud/aiplatform";
+import { dataUrlToImageBuffer } from ".";
 
 const { GOOGLE_GCP_VERTEX_AI_LOCATION, GOOGLE_GCP_PROJECT_ID } = process.env;
 
@@ -121,6 +122,40 @@ export async function createSearchEmbeddingAsync(
     const response = await predictionServiceClient.predict(request);
     const result =
       response[0].predictions[0].structValue.fields.embeddings.structValue.fields.values.listValue.values.map(
+        (x) => x.numberValue,
+      );
+    return result;
+  } catch (error) {
+    console.log(error);
+    throw error;
+  }
+}
+
+export async function createImageEmbeddingAsync(
+  predictionServiceClient: PredictionServiceClient,
+  image: Buffer,
+  modelPublisher = "google",
+  model = "multimodalembedding@001",
+) {
+  // Configure the parent resource
+  try {
+    const endpoint = `projects/${GOOGLE_GCP_PROJECT_ID}/locations/${GOOGLE_GCP_VERTEX_AI_LOCATION}/publishers/${modelPublisher}/models/${model}`;
+    const instanceValue = helpers.toValue({
+      image: {
+        bytesBase64Encoded: image.toString("base64"),
+      },
+    });
+    const instances = [instanceValue];
+
+    const request = {
+      endpoint,
+      instances,
+    };
+
+    // Predict request
+    const response = await predictionServiceClient.predict(request);
+    const result =
+      response[0].predictions[0].structValue.fields.imageEmbedding.listValue.values.map(
         (x) => x.numberValue,
       );
     return result;
