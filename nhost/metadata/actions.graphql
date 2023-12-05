@@ -12,7 +12,8 @@ type Query {
 
 type Query {
   create_search_vector(
-    search: String!
+    text: String
+    image: String
   ): vector!
 }
 

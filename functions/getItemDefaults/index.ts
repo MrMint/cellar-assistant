@@ -1,6 +1,6 @@
 import { PredictionServiceClient } from "@google-cloud/aiplatform";
+import { ImageAnnotatorClient } from "@google-cloud/vision";
 import { NhostClient } from "@nhost/nhost-js";
-import { NhostFunctionCallResponse } from "@nhost/nhost-js/dist/clients/functions/types";
 import {
   Beer_Defaults_Result,
   Coffee_Defaults_Result,
@@ -12,11 +12,10 @@ import { Request, Response } from "express";
 import { isEmpty, isNil, isNotNil, not } from "ramda";
 import { isFulfilled, isRejected } from "../_utils";
 import { callPredict, convertPredictionToJson } from "../_utils/gcp";
+import getTextFromImage, {
+  GetTextFromImageData,
+} from "../_utils/getTextFromImage";
 import { getCredential } from "../_utils/queries.js";
-import {
-  RetrieveTextFromImageBody,
-  RetrieveTextFromImageData,
-} from "../retrieveTextFromImage/index.js";
 import { addItemOnboarding } from "./_queries.js";
 import { generateDefaultsPrompt, mapJsonToReturnType } from "./_utils.js";
 
@@ -36,6 +35,7 @@ const nhostClient = new NhostClient({
 });
 
 let predictionServiceClient: PredictionServiceClient;
+let imageAnnotatorClient: ImageAnnotatorClient;
 
 type GetItemDefaultsResult =
   | Wine_Defaults_Result
@@ -75,6 +75,10 @@ export default async function getItemDefaults(
         credentials: credResult.data.admin_credentials_by_pk.credentials,
         apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
       });
+
+      imageAnnotatorClient = new ImageAnnotatorClient({
+        credentials: credResult.data.admin_credentials_by_pk.credentials,
+      });
       console.log("Initialized GCP clients");
     }
 
@@ -96,24 +100,16 @@ export default async function getItemDefaults(
     // TODO Check user item quota
     // TODO search reference tables for item by barcode
 
-    const labelTasks = new Array<
-      Promise<NhostFunctionCallResponse<RetrieveTextFromImageData>>
-    >();
+    const labelTasks = new Array<Promise<GetTextFromImageData>>();
 
     if (isNotNil(frontLabelFileId)) {
       labelTasks.push(
-        nhostClient.functions.call<
-          RetrieveTextFromImageData,
-          RetrieveTextFromImageBody,
-          any
-        >(
-          "retrieveTextFromImage",
-          { fileId: frontLabelFileId, itemType },
-          {
-            headers: {
-              "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET,
-            },
-          },
+        getTextFromImage(
+          frontLabelFileId,
+          itemType,
+          nhostClient,
+          imageAnnotatorClient,
+          predictionServiceClient,
         ),
       );
       console.log(`Started text extraction for front label`);
@@ -121,18 +117,12 @@ export default async function getItemDefaults(
 
     if (isNotNil(backLabelFileId)) {
       labelTasks.push(
-        nhostClient.functions.call<
-          RetrieveTextFromImageData,
-          RetrieveTextFromImageBody,
-          any
-        >(
-          "retrieveTextFromImage",
-          { fileId: backLabelFileId, itemType },
-          {
-            headers: {
-              "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET,
-            },
-          },
+        getTextFromImage(
+          frontLabelFileId,
+          itemType,
+          nhostClient,
+          imageAnnotatorClient,
+          predictionServiceClient,
         ),
       );
       console.log(`Started text extraction for back label`);
@@ -141,20 +131,16 @@ export default async function getItemDefaults(
     if (labelTasks.length > 0) {
       const labelResults = await Promise.allSettled(labelTasks);
       const promiseLevelErrors = labelResults.filter(isRejected);
-      const graphqlErrors = labelResults
-        .filter(isFulfilled)
-        .filter((x) => isNotNil(x.value.error));
 
-      if (promiseLevelErrors.length > 0 || graphqlErrors.length > 0) {
+      if (promiseLevelErrors.length > 0) {
         promiseLevelErrors.forEach(console.log);
-        graphqlErrors.forEach(console.log);
         return res.status(500).send();
       }
 
       console.log(`Completed text extraction`);
       const labelResultsSuccess = labelResults
         .filter(isFulfilled)
-        .map((x) => x.value.res.data);
+        .map((x) => x.value);
 
       if (
         labelResultsSuccess.find((x) =>

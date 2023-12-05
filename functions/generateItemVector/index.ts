@@ -10,6 +10,7 @@ import {
 import {
   formatBeerStyle,
   formatCountry,
+  formatEnum,
   formatSpiritType,
   formatWineStyle,
   formatWineVariety,
@@ -60,8 +61,8 @@ const getDeleteVectorWhereClause = (
 };
 
 const getEmbeddingText = (
-  type: "beers" | "wines" | "spirits",
-  item: Beers | Wines | Spirits,
+  type: "beers" | "wines" | "spirits" | "coffees",
+  item: Beers | Wines | Spirits | Coffees,
 ) => {
   switch (type) {
     case "beers":
@@ -81,7 +82,7 @@ const getEmbeddingText = (
         item.country,
       )}.`;
     case "coffees":
-      return `${item.name} is a ${formatSpiritType(
+      return `${item.name} is a ${formatEnum(
         (item as Coffees).roast_level,
       )} coffee. It was produced in ${formatCountry(item.country)}.`;
     default:
@@ -94,7 +95,7 @@ type input = {
   table: { name: TableName };
   event: { data: { new: Beers | Wines | Spirits | Coffees } };
 };
-export default async function generateVector(
+export default async function generateItemVector(
   req: Request<any, any, input>,
   res: Response,
 ) {
