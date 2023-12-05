@@ -17,9 +17,21 @@ export type ItemShareProps = {
 };
 export const ItemShare = ({ itemId, itemType }: ItemShareProps) => {
   const [open, setOpen] = useState(false);
+
+  const handleShareClick = async () => {
+    const url = `${window.location.host}/${formatItemType(
+      itemType,
+    )}s/${itemId}`;
+
+    if (navigator.canShare({ url })) {
+      await navigator.share({ url });
+    } else {
+      setOpen(true);
+    }
+  };
   return (
     <>
-      <Button onClick={() => setOpen(true)} variant="outlined" color="neutral">
+      <Button onClick={handleShareClick} variant="outlined" color="neutral">
         Share
       </Button>
       <Modal open={open} onClose={() => setOpen(false)}>
