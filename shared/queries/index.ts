@@ -126,3 +126,9 @@ export const addCheckIns = graphql(`
     }
   }
 `);
+
+export const getSearchVectorQuery = graphql(`
+  query GetSearchVectorQuery($text: String, $image: String) {
+    create_search_vector(text: $text, image: $image)
+  }
+`);
