@@ -16,7 +16,7 @@ import {
 import { useSignOut, useUserAvatarUrl } from "@nhost/nextjs";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
-import { MdGroup, MdWarehouse } from "react-icons/md";
+import { MdGroup, MdSearch, MdWarehouse } from "react-icons/md";
 import { useMediaQuery } from "react-responsive";
 import Link from "./Link";
 
@@ -89,6 +89,17 @@ const SideNavigationBar = () => {
                 href="/friends"
                 pathname={pathname}
                 icon={<MdGroup />}
+              />
+            </ListItem>
+          </Tooltip>
+        </Box>
+        <Box>
+          <Tooltip title="Search" arrow placement={placement}>
+            <ListItem>
+              <NavLinkButton
+                href="/search"
+                pathname={pathname}
+                icon={<MdSearch />}
               />
             </ListItem>
           </Tooltip>
