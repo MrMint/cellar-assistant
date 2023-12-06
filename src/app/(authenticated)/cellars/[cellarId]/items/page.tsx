@@ -4,6 +4,7 @@ import { Box, Button, Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
 import { Cellar_Items_Bool_Exp, ItemType } from "@shared/gql/graphql";
+import { getSearchVectorQuery } from "@shared/queries";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ascend, isEmpty, isNil, isNotNil, not, prop, sortWith } from "ramda";
 import { useEffect, useRef } from "react";
@@ -105,12 +106,6 @@ const cellarQuery = graphql(`
   }
 `);
 
-const getSearchVectorQuery = graphql(`
-  query GetSearchVectorQuery($search: String!) {
-    create_search_vector(text: $search)
-  }
-`);
-
 const Items = ({
   params: { cellarId },
   searchParams: { search, types },
@@ -146,7 +141,7 @@ const Items = ({
 
   const [searchVectorResponse] = useQuery({
     query: getSearchVectorQuery,
-    variables: { search: search ?? "" },
+    variables: { text: search ?? "" },
     pause: isEmpty(search ?? ""),
   });
 

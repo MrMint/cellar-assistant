@@ -86,4 +86,45 @@
               schema: public
       returns: image_search_result
       root_field_name: image_search
+    - arguments:
+        text:
+          description: ""
+          nullable: false
+          type: text
+      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id) *, vector <=> {{text}}::vector AS distance FROM public.item_vectors ORDER BY beer_id, wine_id, spirit_id, coffee_id, distance
+      object_relationships:
+        - name: beer
+          using:
+            column_mapping:
+              beer_id: id
+            insertion_order: null
+            remote_table:
+              name: beers
+              schema: public
+        - name: coffee
+          using:
+            column_mapping:
+              coffee_id: id
+            insertion_order: null
+            remote_table:
+              name: coffees
+              schema: public
+        - name: spirit
+          using:
+            column_mapping:
+              spirit_id: id
+            insertion_order: null
+            remote_table:
+              name: spirits
+              schema: public
+        - name: wine
+          using:
+            column_mapping:
+              wine_id: id
+            insertion_order: null
+            remote_table:
+              name: wines
+              schema: public
+      returns: image_search_result
+      root_field_name: text_search
   tables: "!include default/tables/tables.yaml"

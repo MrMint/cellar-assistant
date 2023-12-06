@@ -1,3 +1,5 @@
+"use client";
+
 import Input, { InputProps } from "@mui/joy/Input";
 import { useRef } from "react";
 
