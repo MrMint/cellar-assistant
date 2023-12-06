@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.36.0](https://github.com/MrMint/cellar-assistant/compare/v0.35.0...v0.36.0) (2023-12-06)
+
+
+### Features
+
+* Adds item text, barcode and image search ([1d28362](https://github.com/MrMint/cellar-assistant/commit/1d283622c13ffaa97e85d9ab944c6255d06d0660))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fontsource/inter to v5.0.16 ([9cd2325](https://github.com/MrMint/cellar-assistant/commit/9cd2325a0151435722b285f51719e5b29c8fdb59))
+* **deps:** update dependency typescript to v5.3.3 ([87c6c12](https://github.com/MrMint/cellar-assistant/commit/87c6c128c29d86e53ef78ac75cd4b6c59b390d48))
+* **deps:** update xstate monorepo ([304f94e](https://github.com/MrMint/cellar-assistant/commit/304f94eb6399df3395d9b0ea8bf589206f0a7ffd))
+
 ## [0.35.0](https://github.com/MrMint/cellar-assistant/compare/v0.34.0...v0.35.0) (2023-12-05)
 
 
