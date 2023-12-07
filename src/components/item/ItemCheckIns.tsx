@@ -19,18 +19,8 @@ import {
 } from "@mui/joy";
 import { addCheckIn, addCheckIns } from "@shared/queries";
 import { format, parseISO } from "date-fns";
-import {
-  groupBy,
-  isEmpty,
-  map,
-  mapObjIndexed,
-  not,
-  uniqBy,
-  values,
-  without,
-} from "ramda";
+import { groupBy, isEmpty, mapObjIndexed, not, values, without } from "ramda";
 import { useEffect, useState } from "react";
-import { MdCheckBox, MdCheckBoxOutlineBlank } from "react-icons/md";
 import { useMutation } from "urql";
 
 type User = {

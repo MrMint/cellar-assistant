@@ -9,6 +9,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { useQuery } from "urql";
+import { ItemCellars } from "@/components/item/ItemCellars";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemHeader } from "@/components/item/ItemHeader";
 import { ItemImage } from "@/components/item/ItemImage";
@@ -46,6 +47,27 @@ const getWineQuery = graphql(`
         file_id
         placeholder
       }
+      cellar_items(
+        where: { empty_at: { _is_null: true } }
+        distinct_on: cellar_id
+      ) {
+        cellar {
+          id
+          name
+          createdBy {
+            id
+            displayName
+            avatarUrl
+          }
+          co_owners {
+            user {
+              id
+              displayName
+              avatarUrl
+            }
+          }
+        }
+      }
     }
     cellars(where: { created_by_id: { _eq: $userId } }) {
       id
@@ -71,6 +93,7 @@ const WineDetails = ({
 
   const wine = data?.wines_by_pk;
   const cellars = data?.cellars;
+  const itemCellars = data?.wines_by_pk?.cellar_items;
   const displayImage = nth(0, wine?.item_images ?? []);
   if (isLoading === false && isNotNil(operation) && isNil(wine)) {
     notFound();
@@ -97,20 +120,28 @@ const WineDetails = ({
             </Stack>
           )}
         </Grid>
-        {!isLoading && isNotNil(wine) && (
+        {!isLoading && isNotNil(wine) && isNotNil(itemCellars) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
-              <ItemDetails
-                title={wine.name}
-                subTitlePhrases={[
-                  formatVintage(wine.vintage),
-                  formatWineVariety(wine.variety),
-                  formatCountry(wine.country),
-                  wine.region,
-                  formatAsPercentage(wine.alcohol_content_percentage),
-                ]}
-                description={wine.description}
-              />
+              <Stack spacing={2}>
+                <ItemDetails
+                  title={wine.name}
+                  subTitlePhrases={[
+                    formatVintage(wine.vintage),
+                    formatWineVariety(wine.variety),
+                    formatCountry(wine.country),
+                    wine.region,
+                    formatAsPercentage(wine.alcohol_content_percentage),
+                  ]}
+                  description={wine.description}
+                />
+                <ItemCellars
+                  cellars={itemCellars.map((x) => ({
+                    ...x.cellar,
+                    co_owners: x.cellar.co_owners.map((y) => y.user),
+                  }))}
+                />
+              </Stack>
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
