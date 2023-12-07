@@ -8,6 +8,7 @@ import { formatCountry, formatEnum } from "@shared/utility";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { useQuery } from "urql";
+import { ItemCellars } from "@/components/item/ItemCellars";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemHeader } from "@/components/item/ItemHeader";
 import { ItemImage } from "@/components/item/ItemImage";
@@ -42,6 +43,27 @@ const getCoffeeQuery = graphql(`
         file_id
         placeholder
       }
+      cellar_items(
+        where: { empty_at: { _is_null: true } }
+        distinct_on: cellar_id
+      ) {
+        cellar {
+          id
+          name
+          createdBy {
+            id
+            displayName
+            avatarUrl
+          }
+          co_owners {
+            user {
+              id
+              displayName
+              avatarUrl
+            }
+          }
+        }
+      }
     }
     cellars(where: { created_by_id: { _eq: $userId } }) {
       id
@@ -67,6 +89,7 @@ const CoffeeDetails = ({
 
   const coffee = data?.coffees_by_pk;
   const cellars = data?.cellars;
+  const itemCellars = data?.coffees_by_pk?.cellar_items;
   const displayImage = nth(0, coffee?.item_images ?? []);
   if (isLoading === false && isNotNil(operation) && isNil(coffee)) {
     notFound();
@@ -93,19 +116,27 @@ const CoffeeDetails = ({
             </Stack>
           )}
         </Grid>
-        {!isLoading && isNotNil(coffee) && (
+        {!isLoading && isNotNil(coffee) && isNotNil(itemCellars) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
-              <ItemDetails
-                title={coffee.name}
-                subTitlePhrases={[
-                  formatEnum(coffee.roast_level),
-                  formatCountry(coffee.country),
-                  formatEnum(coffee.species),
-                  formatEnum(coffee.cultivar),
-                ]}
-                description={coffee.description}
-              />
+              <Stack spacing={2}>
+                <ItemDetails
+                  title={coffee.name}
+                  subTitlePhrases={[
+                    formatEnum(coffee.roast_level),
+                    formatCountry(coffee.country),
+                    formatEnum(coffee.species),
+                    formatEnum(coffee.cultivar),
+                  ]}
+                  description={coffee.description}
+                />
+                <ItemCellars
+                  cellars={itemCellars.map((x) => ({
+                    ...x.cellar,
+                    co_owners: x.cellar.co_owners.map((y) => y.user),
+                  }))}
+                />
+              </Stack>
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
