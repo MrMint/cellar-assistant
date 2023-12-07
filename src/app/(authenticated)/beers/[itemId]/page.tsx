@@ -8,6 +8,7 @@ import { formatBeerStyle, formatCountry } from "@shared/utility";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { useQuery } from "urql";
+import { ItemCellars } from "@/components/item/ItemCellars";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemHeader } from "@/components/item/ItemHeader";
 import { ItemImage } from "@/components/item/ItemImage";
@@ -42,6 +43,27 @@ const getBeerQuery = graphql(`
         file_id
         placeholder
       }
+      cellar_items(
+        where: { empty_at: { _is_null: true } }
+        distinct_on: cellar_id
+      ) {
+        cellar {
+          id
+          name
+          createdBy {
+            id
+            displayName
+            avatarUrl
+          }
+          co_owners {
+            user {
+              id
+              displayName
+              avatarUrl
+            }
+          }
+        }
+      }
     }
     cellars(where: { created_by_id: { _eq: $userId } }) {
       id
@@ -67,6 +89,7 @@ const BeerDetails = ({
 
   const beer = data?.beers_by_pk;
   const cellars = data?.cellars;
+  const itemCellars = data?.beers_by_pk?.cellar_items;
   const displayImage = nth(0, beer?.item_images ?? []);
   if (isLoading === false && isNotNil(operation) && isNil(beer)) {
     notFound();
@@ -93,19 +116,27 @@ const BeerDetails = ({
             </Stack>
           )}
         </Grid>
-        {!isLoading && isNotNil(beer) && (
+        {!isLoading && isNotNil(beer) && isNotNil(itemCellars) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
-              <ItemDetails
-                title={beer.name}
-                subTitlePhrases={[
-                  formatVintage(beer.vintage),
-                  formatCountry(beer.country),
-                  formatBeerStyle(beer.style),
-                  formatAsPercentage(beer.alcohol_content_percentage),
-                ]}
-                description={beer.description}
-              />
+              <Stack spacing={2}>
+                <ItemDetails
+                  title={beer.name}
+                  subTitlePhrases={[
+                    formatVintage(beer.vintage),
+                    formatCountry(beer.country),
+                    formatBeerStyle(beer.style),
+                    formatAsPercentage(beer.alcohol_content_percentage),
+                  ]}
+                  description={beer.description}
+                />
+                <ItemCellars
+                  cellars={itemCellars.map((x) => ({
+                    ...x.cellar,
+                    co_owners: x.cellar.co_owners.map((y) => y.user),
+                  }))}
+                />
+              </Stack>
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>

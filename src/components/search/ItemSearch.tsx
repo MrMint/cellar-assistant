@@ -124,7 +124,7 @@ export const ItemSearch = () => {
         </Stack>
       )}
       {state.value === "barcode" && (
-        <Grid xs={12} sm={12} md={6}>
+        <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.md })}>
           <Card sx={{ padding: "1rem" }}>
             <Typography level="title-lg" textAlign="center">
               Scan barcode
@@ -139,10 +139,10 @@ export const ItemSearch = () => {
               <Button onClick={() => send({ type: "CANCEL" })}>Cancel</Button>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
       )}
       {state.value === "image" && (
-        <Grid xs={12} sm={12} md={6}>
+        <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.md })}>
           <Card sx={{ padding: "1rem" }}>
             <Typography level="h4" textAlign="center">
               Take a picture of the item
@@ -159,7 +159,7 @@ export const ItemSearch = () => {
               </Button>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
       )}
     </Box>
   );

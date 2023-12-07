@@ -8,6 +8,7 @@ import { formatCountry, formatSpiritType } from "@shared/utility";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { useQuery } from "urql";
+import { ItemCellars } from "@/components/item/ItemCellars";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemHeader } from "@/components/item/ItemHeader";
 import { ItemImage } from "@/components/item/ItemImage";
@@ -43,6 +44,27 @@ const getSpiritQuery = graphql(`
         file_id
         placeholder
       }
+      cellar_items(
+        where: { empty_at: { _is_null: true } }
+        distinct_on: cellar_id
+      ) {
+        cellar {
+          id
+          name
+          createdBy {
+            id
+            displayName
+            avatarUrl
+          }
+          co_owners {
+            user {
+              id
+              displayName
+              avatarUrl
+            }
+          }
+        }
+      }
     }
     cellars(where: { created_by_id: { _eq: $userId } }) {
       id
@@ -68,6 +90,7 @@ const SpiritDetails = ({
 
   const spirit = data?.spirits_by_pk;
   const cellars = data?.cellars;
+  const itemCellars = data?.spirits_by_pk?.cellar_items;
   const displayImage = nth(0, spirit?.item_images ?? []);
   if (isLoading === false && isNotNil(operation) && isNil(spirit)) {
     notFound();
@@ -94,20 +117,28 @@ const SpiritDetails = ({
             </Stack>
           )}
         </Grid>
-        {!isLoading && isNotNil(spirit) && (
+        {!isLoading && isNotNil(spirit) && isNotNil(itemCellars) && (
           <Grid container xs={12} sm={8}>
             <Grid xs={12} sm={12} lg={6}>
-              <ItemDetails
-                title={spirit.name}
-                subTitlePhrases={[
-                  formatVintage(spirit.vintage),
-                  formatSpiritType(spirit.type),
-                  spirit.style,
-                  formatCountry(spirit.country),
-                  formatAsPercentage(spirit.alcohol_content_percentage),
-                ]}
-                description={spirit.description}
-              />
+              <Stack spacing={2}>
+                <ItemDetails
+                  title={spirit.name}
+                  subTitlePhrases={[
+                    formatVintage(spirit.vintage),
+                    formatSpiritType(spirit.type),
+                    spirit.style,
+                    formatCountry(spirit.country),
+                    formatAsPercentage(spirit.alcohol_content_percentage),
+                  ]}
+                  description={spirit.description}
+                />
+                <ItemCellars
+                  cellars={itemCellars.map((x) => ({
+                    ...x.cellar,
+                    co_owners: x.cellar.co_owners.map((y) => y.user),
+                  }))}
+                />
+              </Stack>
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
