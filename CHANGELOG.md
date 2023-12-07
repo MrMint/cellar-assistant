@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.37.0](https://github.com/MrMint/cellar-assistant/compare/v0.36.0...v0.37.0) (2023-12-07)
+
+
+### Features
+
+* Adds list of cellars containing item to item page ([b9dce30](https://github.com/MrMint/cellar-assistant/commit/b9dce301b4d46254d632e8f20f7cb08bedb2d538))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v20.10.4 ([70b701c](https://github.com/MrMint/cellar-assistant/commit/70b701c3fbf9da17eb1c279dfd3fc4da91f84bda))
+* **deps:** update dependency xstate to v5.2.0 ([8490480](https://github.com/MrMint/cellar-assistant/commit/84904806c2a8b5a6c9f08c3ed743d029a0ff2875))
+* **deps:** update next monorepo ([f0769ab](https://github.com/MrMint/cellar-assistant/commit/f0769abc8f0d7924d479bd93fe010e2cc793bef3))
+* Fixes barcode and image search component width ([34b2e93](https://github.com/MrMint/cellar-assistant/commit/34b2e93b7dea8a1a441cab04f099c8c2c2f8c273))
+
 ## [0.36.0](https://github.com/MrMint/cellar-assistant/compare/v0.35.0...v0.36.0) (2023-12-06)
 
 
