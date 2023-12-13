@@ -1,6 +1,5 @@
 "use client";
 
-import withAuth, { RedirectOn } from "@/hocs/withAuth";
 import {
   Input,
   FormControl,
@@ -15,6 +14,7 @@ import {
 } from "@mui/joy";
 import { useSignUpEmailPassword } from "@nhost/nextjs";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
+import withAuth, { RedirectOn } from "@/hocs/withAuth";
 
 interface IFormInput {
   email: string;
