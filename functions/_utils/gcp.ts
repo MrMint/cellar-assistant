@@ -16,7 +16,7 @@ export async function callPredict(
     topK: 40,
   },
   modelPublisher = "google",
-  model = "text-bison",
+  model = "text-bison@002",
 ) {
   // Configure the parent resource
   try {
@@ -53,7 +53,7 @@ export async function createDocumentEmbeddingAsync(
     topK: 1,
   },
   modelPublisher = "google",
-  model = "textembedding-gecko@002",
+  model = "textembedding-gecko@003",
 ) {
   // Configure the parent resource
   try {
@@ -100,7 +100,7 @@ export async function createSearchEmbeddingAsync(
     topK: 1,
   },
   modelPublisher = "google",
-  model = "textembedding-gecko@002",
+  model = "textembedding-gecko@003",
 ) {
   // Configure the parent resource
   try {
