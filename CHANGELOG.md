@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.38.0](https://github.com/MrMint/cellar-assistant/compare/v0.37.0...v0.38.0) (2023-12-13)
+
+
+### Features
+
+* Updates ABV prompt for new model ([24fca5b](https://github.com/MrMint/cellar-assistant/commit/24fca5bac832f04ad4484f185efdd851aa67bd09))
+
+
+### Bug Fixes
+
+* **deps:** Pins text-bison to 002 and updates text-embedding-gecko to 003 ([9943d2d](https://github.com/MrMint/cellar-assistant/commit/9943d2d1f615bfc39f5dcfed74393aa77339630f))
+* **deps:** Removes unused react-easy-crop ([c21891b](https://github.com/MrMint/cellar-assistant/commit/c21891b3d6d48b3872683294b1e7199ee410ff8f))
+* **deps:** update dependency @google-cloud/aiplatform to v3.9.0 ([9b7d285](https://github.com/MrMint/cellar-assistant/commit/9b7d285f77fcc7bb2182b31f6b0017bc6ea7886c))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.18 ([6feaf56](https://github.com/MrMint/cellar-assistant/commit/6feaf56d5682b2dafe7e0acd540db981e3ae1df0))
+* **deps:** update dependency prettier to v3.1.1 ([21b0b71](https://github.com/MrMint/cellar-assistant/commit/21b0b71a486a01304ac6631a2d17ffc593fef117))
+* **deps:** update dependency react-hook-form to v7.49.1 ([d462c27](https://github.com/MrMint/cellar-assistant/commit/d462c275c7b8dcbbd42b0a258d362683728a77ff))
+* **deps:** update dependency ts-node to v10.9.2 ([5ca7a67](https://github.com/MrMint/cellar-assistant/commit/5ca7a67c41c62ff6fff9c264f77a4bbb789f8e2a))
+* **deps:** update dependency xstate to v5.2.1 ([1e364b3](https://github.com/MrMint/cellar-assistant/commit/1e364b3a02c2c86e4e8e1ad7139d3661e40298ec))
+
 ## [0.37.0](https://github.com/MrMint/cellar-assistant/compare/v0.36.0...v0.37.0) (2023-12-07)
 
 
