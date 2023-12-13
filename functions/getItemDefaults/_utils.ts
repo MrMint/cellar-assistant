@@ -35,7 +35,7 @@ const name = "name";
 const vintage = `vintage (formatted as "yyyy")`;
 const country = `country (one of ${countries.join(", ")})`;
 const alcohol_content_percentage =
-  "alcohol_content_percentage (ALC % or ABV formatted as decimal)";
+  "alcohol_content_percentage (ALC % or ABV formatted as decimal xxx.xx)";
 const barcode = "barcode (formatted as EAN or UPC code)";
 
 const wineFields = {
