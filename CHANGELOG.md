@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.39.0](https://github.com/MrMint/cellar-assistant/compare/v0.38.0...v0.39.0) (2023-12-13)
+
+
+### Features
+
+* Updates text search similarity cutoff ([a168346](https://github.com/MrMint/cellar-assistant/commit/a168346663fb08c29060cc36455a26459cadeab1))
+
+
+### Bug Fixes
+
+* **deps:** update dependency react-hook-form to v7.49.2 ([204ff6e](https://github.com/MrMint/cellar-assistant/commit/204ff6e1681e8e1bfbb7fccaf46e293cc1126cc0))
+* **deps:** update dependency xstate to v5.3.0 ([f05b24b](https://github.com/MrMint/cellar-assistant/commit/f05b24b0561a58b1ecc9b5a11e95b729d827c337))
+* Fixes item onboarding not using rear label in default creation ([6499186](https://github.com/MrMint/cellar-assistant/commit/6499186af70619f00326c4a8b6d9d499e6430a4a))
+
 ## [0.38.0](https://github.com/MrMint/cellar-assistant/compare/v0.37.0...v0.38.0) (2023-12-13)
 
 
