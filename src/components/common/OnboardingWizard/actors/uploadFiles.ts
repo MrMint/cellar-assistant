@@ -1,7 +1,7 @@
-import { fromPromise } from "xstate";
-import { UploadFilesInput, UploadFilesResult } from "./types";
 import { isNotNil } from "ramda";
+import { fromPromise } from "xstate";
 import { dataUrlToFile } from "@/utilities";
+import { UploadFilesInput, UploadFilesResult } from "./types";
 
 export const uploadFiles = fromPromise(
   async ({

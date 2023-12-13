@@ -1,4 +1,8 @@
+import type { NhostClient } from "@nhost/nhost-js";
+import { devtoolsExchange } from "@urql/devtools";
+import { refocusExchange } from "@urql/exchange-refocus";
 import { createClient as createWSClient } from "graphql-ws";
+import { isNil } from "ramda";
 import React, { PropsWithChildren } from "react";
 import {
   cacheExchange,
@@ -10,11 +14,6 @@ import {
   RequestPolicy,
   subscriptionExchange,
 } from "urql";
-import { refocusExchange } from "@urql/exchange-refocus";
-import { devtoolsExchange } from "@urql/devtools";
-
-import type { NhostClient } from "@nhost/nhost-js";
-import { isNil } from "ramda";
 
 export type NhostUrqlClientOptions = {
   /* Nhost client instance */

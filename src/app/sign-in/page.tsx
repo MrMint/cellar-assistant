@@ -1,6 +1,5 @@
 "use client";
 
-import withAuth, { RedirectOn } from "@/hocs/withAuth";
 import {
   Input,
   FormControl,
@@ -18,8 +17,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { FcGoogle } from "react-icons/fc";
 import { BsDiscord, BsFacebook } from "react-icons/bs";
+import { FcGoogle } from "react-icons/fc";
+import withAuth, { RedirectOn } from "@/hocs/withAuth";
 
 interface IFormInput {
   email: string;
