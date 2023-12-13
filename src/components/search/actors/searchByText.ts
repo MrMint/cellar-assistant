@@ -15,7 +15,7 @@ const textSearchQuery = graphql(`
   query TextSearchQuery($text: String!) {
     text_search(
       args: { text: $text }
-      where: { distance: { _lte: 0.15 } }
+      where: { distance: { _lte: 0.32 } }
       order_by: { distance: asc }
       limit: 10
     ) {

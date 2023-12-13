@@ -118,7 +118,7 @@ export default async function getItemDefaults(
     if (isNotNil(backLabelFileId)) {
       labelTasks.push(
         getTextFromImage(
-          frontLabelFileId,
+          backLabelFileId,
           itemType,
           nhostClient,
           imageAnnotatorClient,
