@@ -1,5 +1,5 @@
-import { useColorScheme } from "@mui/joy/styles";
 import Button from "@mui/joy/Button";
+import { useColorScheme } from "@mui/joy/styles";
 
 function ThemeToggle() {
   const { mode, setMode } = useColorScheme();

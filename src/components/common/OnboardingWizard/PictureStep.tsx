@@ -1,6 +1,6 @@
 import { Box, Button, Card, CardContent, Grid, Typography } from "@mui/joy";
-import { CameraCapture } from "../CameraCapture";
 import { ReactNode } from "react";
+import { CameraCapture } from "../CameraCapture";
 
 export type PictureStepProps = {
   onCapture: (result: string) => void;
