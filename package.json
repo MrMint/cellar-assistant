@@ -55,7 +55,7 @@
     "react-simple-star-rating": "5.1.7",
     "react-webcam": "7.2.0",
     "react-zxing": "2.0.0",
-    "ts-node": "10.9.1",
+    "ts-node": "10.9.2",
     "typescript": "5.3.3",
     "urql": "4.0.6",
     "xstate": "5.2.0"
