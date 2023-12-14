@@ -87,11 +87,7 @@ export const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
         </CardCover>
       )}
       <CardCover>
-        <StyledVideo
-          ref={ref}
-          placeholder=""
-          onLoadedData={() => setIsVideoLoaded(true)}
-        />
+        <StyledVideo ref={ref} onLoadedData={() => setIsVideoLoaded(true)} />
       </CardCover>
       {isVideoLoaded && (
         <CardContent>

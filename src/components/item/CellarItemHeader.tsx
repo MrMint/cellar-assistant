@@ -26,8 +26,7 @@ type CellarItemHeaderProps = {
   itemType: ItemType;
   cellarId: string;
   cellarName: string | undefined;
-  cellarCreatedById: string | undefined;
-  cellarCoOwners: string[] | undefined;
+  isOwner: boolean;
 };
 
 const deleteCellarItem = graphql(`
@@ -44,8 +43,7 @@ export const CellarItemHeader = ({
   itemName,
   cellarId,
   cellarName,
-  cellarCreatedById,
-  cellarCoOwners,
+  isOwner,
 }: CellarItemHeaderProps) => {
   const router = useRouter();
   const userId = useUserId();
@@ -69,9 +67,6 @@ export const CellarItemHeader = ({
       router.replace(`/cellars/${cellarId}/items`);
     }
   }, [cellarId, fetching, hasFetched, isErrored, router]);
-
-  const isOwner =
-    cellarCreatedById === userId || cellarCoOwners?.includes(userId) === true;
 
   return (
     <HeaderBar

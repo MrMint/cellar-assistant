@@ -110,7 +110,9 @@ export const addCheckIn = graphql(`
   mutation AddCheckIn($checkIn: check_ins_insert_input!) {
     insert_check_ins_one(object: $checkIn) {
       id
-      cellar_item_id
+      cellar_item {
+        id
+      }
     }
   }
 `);
@@ -121,7 +123,9 @@ export const addCheckIns = graphql(`
       affected_rows
       returning {
         id
-        cellar_item_id
+        cellar_item {
+          id
+        }
       }
     }
   }

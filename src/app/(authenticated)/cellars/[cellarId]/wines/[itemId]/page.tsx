@@ -12,6 +12,7 @@ import {
   formatCountry,
   formatWineStyle,
   formatWineVariety,
+  getIsCellarOwner,
 } from "@shared/utility";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
@@ -114,6 +115,7 @@ const WineDetails = ({
   const cellar = data?.cellar_items_by_pk?.cellar;
   const user = data?.user;
   const displayImage = data?.cellar_items_by_pk?.display_image;
+  const isOwner = getIsCellarOwner(userId, cellar);
 
   const handleCaptureImage = useCallback(
     async (image: string) => {
@@ -145,8 +147,7 @@ const WineDetails = ({
         itemType={ItemType.Wine}
         cellarId={cellarId}
         cellarName={cellar?.name}
-        cellarCoOwners={cellar?.co_owners.map((x) => x.user_id)}
-        cellarCreatedById={cellar?.created_by_id}
+        isOwner={isOwner}
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
@@ -177,7 +178,6 @@ const WineDetails = ({
                 />
                 {isNotNil(item.open_at) && (
                   <ItemCheckIns
-                    isOwner
                     checkIns={item.check_ins}
                     itemId={item.id}
                     friends={user.friends.map((x) => x.friend)}
@@ -186,6 +186,7 @@ const WineDetails = ({
                 )}
                 <ItemRemainingSlider
                   itemId={itemId}
+                  isCellarOwner={isOwner}
                   percentageRemaining={item.percentage_remaining}
                   opened={parseDate(item.open_at)}
                   emptied={parseDate(item.empty_at)}

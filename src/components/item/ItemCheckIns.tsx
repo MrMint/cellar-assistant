@@ -37,7 +37,6 @@ type CheckIn = {
 
 export type ItemCheckInsProps = {
   checkIns: CheckIn[];
-  isOwner: boolean;
   itemId: string;
   friends: User[];
   user: User;
