@@ -8,6 +8,7 @@ import { useMutation } from "urql";
 import { useInterval } from "@/utilities/hooks";
 
 export type ItemRemainingSliderProps = {
+  isCellarOwner: boolean;
   itemId: string;
   opened?: Date;
   emptied?: Date;
@@ -19,6 +20,7 @@ export const ItemRemainingSlider = ({
   percentageRemaining,
   opened,
   emptied,
+  isCellarOwner,
 }: ItemRemainingSliderProps) => {
   const [percent, setPercent] = useState(percentageRemaining);
   const [now, setNow] = useState(new Date());
@@ -49,7 +51,7 @@ export const ItemRemainingSlider = ({
 
   return (
     <Card>
-      {isNil(opened) && (
+      {isCellarOwner && isNil(opened) && (
         <Button loading={res.fetching} onClick={handleOpen}>
           Open it!
         </Button>
@@ -62,6 +64,7 @@ export const ItemRemainingSlider = ({
             max={100}
             min={0}
             step={1}
+            disabled={!isCellarOwner}
             onChange={(_, value) => setPercent(value as number)}
             sx={{
               "--Slider-trackSize": "3rem",

@@ -8,7 +8,11 @@ import {
   addItemImageMutation,
   updateCellarItemMutation,
 } from "@shared/queries";
-import { formatBeerStyle, formatCountry } from "@shared/utility";
+import {
+  formatBeerStyle,
+  formatCountry,
+  getIsCellarOwner,
+} from "@shared/utility";
 import { isNil, isNotNil } from "ramda";
 import { useCallback } from "react";
 import { useClient, useQuery } from "urql";
@@ -106,6 +110,7 @@ const BeerDetails = ({
   const cellar = data?.cellar_items_by_pk?.cellar;
   const user = data?.user;
   const displayImage = data?.cellar_items_by_pk?.display_image;
+  const isOwner = getIsCellarOwner(userId, cellar);
 
   const handleCaptureImage = useCallback(
     async (image: string) => {
@@ -137,8 +142,7 @@ const BeerDetails = ({
         itemName={beer?.name}
         cellarId={cellarId}
         cellarName={cellar?.name}
-        cellarCreatedById={cellar?.created_by_id}
-        cellarCoOwners={cellar?.co_owners.map((x) => x.user_id)}
+        isOwner={isOwner}
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
@@ -167,7 +171,6 @@ const BeerDetails = ({
                 />
                 {isNotNil(item.open_at) && (
                   <ItemCheckIns
-                    isOwner
                     checkIns={item.check_ins}
                     itemId={item.id}
                     friends={user.friends.map((x) => x.friend)}
@@ -176,6 +179,7 @@ const BeerDetails = ({
                 )}
                 <ItemRemainingSlider
                   itemId={itemId}
+                  isCellarOwner={isOwner}
                   percentageRemaining={item.percentage_remaining}
                   opened={parseDate(item.open_at)}
                   emptied={parseDate(item.empty_at)}
