@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.40.0](https://github.com/MrMint/cellar-assistant/compare/v0.39.0...v0.40.0) (2023-12-14)
+
+
+### Features
+
+* Updates Item remaining % slider to reflect permissions ([d513219](https://github.com/MrMint/cellar-assistant/commit/d513219c1500dc8dd25791c21ddaf538f3514b64))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/react to v18.2.45 ([677f866](https://github.com/MrMint/cellar-assistant/commit/677f866434900c4fe1fc7a1e23112ef988a48fc0))
+* Trigger cellar item re-fetch on check-in ([c3d6284](https://github.com/MrMint/cellar-assistant/commit/c3d62840edb77c6d915d78494e8da80763f5fe96))
+
 ## [0.39.0](https://github.com/MrMint/cellar-assistant/compare/v0.38.0...v0.39.0) (2023-12-13)
 
 
