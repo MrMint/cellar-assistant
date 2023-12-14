@@ -6,6 +6,17 @@ import {
   Wine_Variety_Enum,
 } from "@shared/gql/graphql";
 
+export const getIsCellarOwner = (
+  userId: string,
+  cellar?: { created_by_id: string; co_owners: { user_id: string }[] },
+) => {
+  if (isNil(cellar)) return false;
+  return (
+    cellar.created_by_id === userId ||
+    cellar.co_owners.map((x) => x.user_id).includes(userId)
+  );
+};
+
 // importing anything from node_modules causes lambda build to fail due to unresolved dep
 // TODO investigate monorepo solution
 const isNil = (value: any): value is null | undefined =>
