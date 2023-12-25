@@ -20,7 +20,7 @@
     "@graphql-codegen/cli": "5.0.0",
     "@graphql-codegen/client-preset": "4.1.0",
     "@lexical/react": "0.12.4",
-    "@mui/joy": "5.0.0-beta.18",
+    "@mui/joy": "5.0.0-beta.20",
     "@nhost/nextjs": "1.13.40",
     "@parcel/watcher": "2.3.0",
     "@trivago/prettier-plugin-sort-imports": "4.3.0",
