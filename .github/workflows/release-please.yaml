@@ -18,11 +18,11 @@ jobs:
         with:
           release-type: node
       - uses: actions/checkout@v4
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.release_created }}
         with:
           fetch-depth: 100
       - name: Deploy Prod
-        if: ${{ steps.release.outputs.releases_created }}
+        if: ${{ steps.release.outputs.release_created }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
