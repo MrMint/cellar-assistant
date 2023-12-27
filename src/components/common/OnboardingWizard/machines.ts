@@ -339,12 +339,22 @@ export const pictureOnboardingMachine = createMachine(
       },
       display: {
         on: {
-          CAPTURED: {
-            actions: assign({
-              displayImageDataUrl: ({ event }) => event.image,
-            }),
-            target: "searchingByImage",
-          },
+          CAPTURED: [
+            {
+              guard: ({ context }) => isNotNil(context.existingItemId),
+              actions: assign({
+                displayImageDataUrl: ({ event }) => event.image,
+              }),
+              target: "done",
+            },
+            {
+              guard: ({ context }) => isNil(context.existingItemId),
+              actions: assign({
+                displayImageDataUrl: ({ event }) => event.image,
+              }),
+              target: "searchingByImage",
+            },
+          ],
           BACK: "front",
           SKIP: "done",
         },
