@@ -32,7 +32,7 @@
     "@urql/devtools": "2.0.3",
     "@urql/exchange-refocus": "1.0.2",
     "@vercel/analytics": "1.1.1",
-    "@xstate/react": "4.0.1",
+    "@xstate/react": "4.0.2",
     "autoprefixer": "10.4.16",
     "date-fns": "2.30.0",
     "eslint": "8.55.0",
@@ -57,7 +57,7 @@
     "ts-node": "10.9.2",
     "typescript": "5.3.3",
     "urql": "4.0.6",
-    "xstate": "5.3.0"
+    "xstate": "5.4.1"
   },
   "overrides": {
     "next": "14.0.4"
