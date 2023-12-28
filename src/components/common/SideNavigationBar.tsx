@@ -16,6 +16,7 @@ import {
 import { useSignOut, useUserAvatarUrl } from "@nhost/nextjs";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
+import { FaRankingStar } from "react-icons/fa6";
 import { MdGroup, MdSearch, MdWarehouse } from "react-icons/md";
 import { useMediaQuery } from "react-responsive";
 import Link from "./Link";
@@ -83,23 +84,34 @@ const SideNavigationBar = () => {
           </Tooltip>
         </Box>
         <Box>
-          <Tooltip title="Friends" arrow placement={placement}>
-            <ListItem>
-              <NavLinkButton
-                href="/friends"
-                pathname={pathname}
-                icon={<MdGroup />}
-              />
-            </ListItem>
-          </Tooltip>
-        </Box>
-        <Box>
           <Tooltip title="Search" arrow placement={placement}>
             <ListItem>
               <NavLinkButton
                 href="/search"
                 pathname={pathname}
                 icon={<MdSearch />}
+              />
+            </ListItem>
+          </Tooltip>
+        </Box>
+        <Box>
+          <Tooltip title="Rankings" arrow placement={placement}>
+            <ListItem>
+              <NavLinkButton
+                href="/rankings"
+                pathname={pathname}
+                icon={<FaRankingStar />}
+              />
+            </ListItem>
+          </Tooltip>
+        </Box>
+        <Box>
+          <Tooltip title="Friends" arrow placement={placement}>
+            <ListItem>
+              <NavLinkButton
+                href="/friends"
+                pathname={pathname}
+                icon={<MdGroup />}
               />
             </ListItem>
           </Tooltip>
