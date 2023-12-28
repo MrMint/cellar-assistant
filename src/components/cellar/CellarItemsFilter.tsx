@@ -1,12 +1,5 @@
-import {
-  Divider,
-  IconButton,
-  Sheet,
-  ToggleButtonGroup,
-  Tooltip,
-} from "@mui/joy";
+import { IconButton, Sheet, ToggleButtonGroup, Tooltip } from "@mui/joy";
 import { ItemType } from "@shared/gql/graphql";
-import { useState } from "react";
 import { FaBeer, FaCocktail, FaCoffee, FaWineGlass } from "react-icons/fa";
 
 type CellarItemsFilterProps = {
