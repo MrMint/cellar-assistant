@@ -64,7 +64,7 @@
         - name: score
           type:
             nullable: true
-            scalar: float8 
+            scalar: float8
         - name: count
           type:
             nullable: false
