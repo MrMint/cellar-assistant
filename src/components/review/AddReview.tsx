@@ -1,5 +1,4 @@
 import {
-  Box,
   Button,
   Card,
   CardActions,
@@ -96,11 +95,17 @@ export const AddReview = ({
             onClick={setScore}
             showTooltip
             tooltipDefaultText="Your Score"
+            allowFraction
             tooltipArray={[
+              "Terrible",
               "Bad",
+              "Bad+",
               "Mediocre",
+              "Mediocre+",
               "Good",
+              "Good+",
               "Very Good",
+              "Very Good+",
               "Outstanding",
             ]}
             readonly={fetching}
