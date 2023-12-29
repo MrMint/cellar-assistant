@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.41.1](https://github.com/MrMint/cellar-assistant/compare/v0.41.0...v0.41.1) (2023-12-29)
+
+
+### Bug Fixes
+
+* Fixes prod build only nextjs search parameters bugs on ranking page ([213fe81](https://github.com/MrMint/cellar-assistant/commit/213fe81fb71064c32ba56065309fb6148f6b8e72))
+
 ## [0.41.0](https://github.com/MrMint/cellar-assistant/compare/v0.40.1...v0.41.0) (2023-12-29)
 
 
