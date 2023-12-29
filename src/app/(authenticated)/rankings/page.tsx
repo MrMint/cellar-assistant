@@ -135,15 +135,15 @@ const Rankings = ({
     variables: { userId },
   });
 
-  let reviewersFilter = new Array<string>();
-  if (parsedReviewers?.includes(RankingsFilterValue.ME)) {
-    reviewersFilter = reviewersFilter.concat([userId]);
-  }
   const reviewWhereClause: Item_Score_Bool_Exp_Bool_Exp = {};
   if (isNotNil(parsedTypes)) {
     reviewWhereClause.type = { _in: parsedTypes };
   }
 
+  let reviewersFilter = new Array<string>();
+  if (parsedReviewers?.includes(RankingsFilterValue.ME)) {
+    reviewersFilter = reviewersFilter.concat([userId]);
+  }
   if (
     isNotNil(friendData) &&
     isNotNil(friendData.user) &&
