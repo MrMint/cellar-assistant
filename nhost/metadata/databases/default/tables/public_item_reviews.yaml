@@ -48,9 +48,9 @@ select_permissions:
       filter: {}
       allow_aggregations: true
       query_root_fields:
+        - select
         - select_by_pk
-      subscription_root_fields:
-        - select_by_pk
+      subscription_root_fields: []
     comment: ""
 update_permissions:
   - role: user
