@@ -23,7 +23,6 @@ export type Scalars = {
   jsonb: { input: any; output: any; }
   numeric: { input: any; output: any; }
   polygon: { input: any; output: any; }
-  smallint: { input: number; output: number; }
   timestamptz: { input: string; output: string; }
   uuid: { input: string; output: string; }
   vector: { input: string; output: string; }
@@ -40,6 +39,19 @@ export type Boolean_Comparison_Exp = {
   _lte?: InputMaybe<Scalars['Boolean']['input']>;
   _neq?: InputMaybe<Scalars['Boolean']['input']>;
   _nin?: InputMaybe<Array<Scalars['Boolean']['input']>>;
+};
+
+/** Boolean expression to compare columns of type "Float". All fields are combined with logical 'AND'. */
+export type Float_Comparison_Exp = {
+  _eq?: InputMaybe<Scalars['Float']['input']>;
+  _gt?: InputMaybe<Scalars['Float']['input']>;
+  _gte?: InputMaybe<Scalars['Float']['input']>;
+  _in?: InputMaybe<Array<Scalars['Float']['input']>>;
+  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
+  _lt?: InputMaybe<Scalars['Float']['input']>;
+  _lte?: InputMaybe<Scalars['Float']['input']>;
+  _neq?: InputMaybe<Scalars['Float']['input']>;
+  _nin?: InputMaybe<Array<Scalars['Float']['input']>>;
 };
 
 /** Boolean expression to compare columns of type "Int". All fields are combined with logical 'AND'. */
@@ -8531,7 +8543,7 @@ export type Item_Reviews = {
   coffee_id?: Maybe<Scalars['uuid']['output']>;
   created_at: Scalars['timestamptz']['output'];
   id: Scalars['uuid']['output'];
-  score: Scalars['smallint']['output'];
+  score: Scalars['Float']['output'];
   /** An object relationship */
   spirit?: Maybe<Spirits>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
@@ -8636,7 +8648,7 @@ export type Item_Reviews_Bool_Exp = {
   coffee_id?: InputMaybe<Uuid_Comparison_Exp>;
   created_at?: InputMaybe<Timestamptz_Comparison_Exp>;
   id?: InputMaybe<Uuid_Comparison_Exp>;
-  score?: InputMaybe<Smallint_Comparison_Exp>;
+  score?: InputMaybe<Float_Comparison_Exp>;
   spirit?: InputMaybe<Spirits_Bool_Exp>;
   spirit_id?: InputMaybe<Uuid_Comparison_Exp>;
   text?: InputMaybe<Json_Comparison_Exp>;
@@ -8655,7 +8667,7 @@ export enum Item_Reviews_Constraint {
 
 /** input type for incrementing numeric columns in table "item_reviews" */
 export type Item_Reviews_Inc_Input = {
-  score?: InputMaybe<Scalars['smallint']['input']>;
+  score?: InputMaybe<Scalars['Float']['input']>;
 };
 
 /** input type for inserting data into table "item_reviews" */
@@ -8666,7 +8678,7 @@ export type Item_Reviews_Insert_Input = {
   coffee_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  score?: InputMaybe<Scalars['smallint']['input']>;
+  score?: InputMaybe<Scalars['Float']['input']>;
   spirit?: InputMaybe<Spirits_Obj_Rel_Insert_Input>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
   text?: InputMaybe<Scalars['json']['input']>;
@@ -8684,7 +8696,7 @@ export type Item_Reviews_Max_Fields = {
   coffee_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
-  score?: Maybe<Scalars['smallint']['output']>;
+  score?: Maybe<Scalars['Float']['output']>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
@@ -8711,7 +8723,7 @@ export type Item_Reviews_Min_Fields = {
   coffee_id?: Maybe<Scalars['uuid']['output']>;
   created_at?: Maybe<Scalars['timestamptz']['output']>;
   id?: Maybe<Scalars['uuid']['output']>;
-  score?: Maybe<Scalars['smallint']['output']>;
+  score?: Maybe<Scalars['Float']['output']>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   user_id?: Maybe<Scalars['uuid']['output']>;
@@ -8801,7 +8813,7 @@ export type Item_Reviews_Set_Input = {
   coffee_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  score?: InputMaybe<Scalars['smallint']['input']>;
+  score?: InputMaybe<Scalars['Float']['input']>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
   text?: InputMaybe<Scalars['json']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -8856,7 +8868,7 @@ export type Item_Reviews_Stream_Cursor_Value_Input = {
   coffee_id?: InputMaybe<Scalars['uuid']['input']>;
   created_at?: InputMaybe<Scalars['timestamptz']['input']>;
   id?: InputMaybe<Scalars['uuid']['input']>;
-  score?: InputMaybe<Scalars['smallint']['input']>;
+  score?: InputMaybe<Scalars['Float']['input']>;
   spirit_id?: InputMaybe<Scalars['uuid']['input']>;
   text?: InputMaybe<Scalars['json']['input']>;
   updated_at?: InputMaybe<Scalars['timestamptz']['input']>;
@@ -8867,7 +8879,7 @@ export type Item_Reviews_Stream_Cursor_Value_Input = {
 /** aggregate sum on columns */
 export type Item_Reviews_Sum_Fields = {
   __typename: 'item_reviews_sum_fields';
-  score?: Maybe<Scalars['smallint']['output']>;
+  score?: Maybe<Scalars['Float']['output']>;
 };
 
 /** order by sum() on columns of table "item_reviews" */
@@ -8949,7 +8961,7 @@ export type Item_Score_Bool_Exp_Bool_Exp = {
   beer_id?: InputMaybe<Uuid_Comparison_Exp>;
   coffee_id?: InputMaybe<Uuid_Comparison_Exp>;
   count?: InputMaybe<Bigint_Comparison_Exp>;
-  score?: InputMaybe<Numeric_Comparison_Exp>;
+  score?: InputMaybe<Float8_Comparison_Exp>;
   spirit_id?: InputMaybe<Uuid_Comparison_Exp>;
   type?: InputMaybe<String_Comparison_Exp>;
   wine_id?: InputMaybe<Uuid_Comparison_Exp>;
@@ -8992,7 +9004,7 @@ export type Item_Scores = {
   coffee?: Maybe<Coffees>;
   coffee_id?: Maybe<Scalars['uuid']['output']>;
   count: Scalars['bigint']['output'];
-  score?: Maybe<Scalars['numeric']['output']>;
+  score?: Maybe<Scalars['float8']['output']>;
   /** An object relationship */
   spirit?: Maybe<Spirits>;
   spirit_id?: Maybe<Scalars['uuid']['output']>;
@@ -13739,19 +13751,6 @@ export type Query_RootWines_AggregateArgs = {
 
 export type Query_RootWines_By_PkArgs = {
   id: Scalars['uuid']['input'];
-};
-
-/** Boolean expression to compare columns of type "smallint". All fields are combined with logical 'AND'. */
-export type Smallint_Comparison_Exp = {
-  _eq?: InputMaybe<Scalars['smallint']['input']>;
-  _gt?: InputMaybe<Scalars['smallint']['input']>;
-  _gte?: InputMaybe<Scalars['smallint']['input']>;
-  _in?: InputMaybe<Array<Scalars['smallint']['input']>>;
-  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
-  _lt?: InputMaybe<Scalars['smallint']['input']>;
-  _lte?: InputMaybe<Scalars['smallint']['input']>;
-  _neq?: InputMaybe<Scalars['smallint']['input']>;
-  _nin?: InputMaybe<Array<Scalars['smallint']['input']>>;
 };
 
 export type Spirit_Defaults_Result = {
@@ -18537,7 +18536,7 @@ export type RankingQueryQueryVariables = Exact<{
 }>;
 
 
-export type RankingQueryQuery = { __typename: 'query_root', item_scores: Array<{ __typename: 'item_scores', score?: any | null, count: number, beer?: { __typename: 'beers', id: string, name: string, vintage?: string | null, item_images: Array<{ __typename: 'item_image', file_id: string, placeholder?: string | null }> } | null, wine?: { __typename: 'wines', id: string, name: string, vintage: string, item_images: Array<{ __typename: 'item_image', file_id: string, placeholder?: string | null }> } | null, spirit?: { __typename: 'spirits', id: string, name: string, vintage?: string | null, item_images: Array<{ __typename: 'item_image', file_id: string, placeholder?: string | null }> } | null, coffee?: { __typename: 'coffees', id: string, name: string, item_images: Array<{ __typename: 'item_image', file_id: string, placeholder?: string | null }> } | null }> };
+export type RankingQueryQuery = { __typename: 'query_root', item_scores: Array<{ __typename: 'item_scores', score?: number | null, count: number, beer?: { __typename: 'beers', id: string, name: string, vintage?: string | null, item_images: Array<{ __typename: 'item_image', file_id: string, placeholder?: string | null }> } | null, wine?: { __typename: 'wines', id: string, name: string, vintage: string, item_images: Array<{ __typename: 'item_image', file_id: string, placeholder?: string | null }> } | null, spirit?: { __typename: 'spirits', id: string, name: string, vintage?: string | null, item_images: Array<{ __typename: 'item_image', file_id: string, placeholder?: string | null }> } | null, coffee?: { __typename: 'coffees', id: string, name: string, item_images: Array<{ __typename: 'item_image', file_id: string, placeholder?: string | null }> } | null }> };
 
 export type GetSpiritPageQueryQueryVariables = Exact<{
   itemId: Scalars['uuid']['input'];
