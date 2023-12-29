@@ -55,7 +55,12 @@ export const ItemReviews = ({ reviews }: ItemReviewsProps) => {
                 <Avatar src={x.user.avatarUrl} />
                 <ListItemContent>
                   <Typography level="title-md">{x.user.displayName}</Typography>
-                  <Rating initialValue={x.score} size={25} readonly />
+                  <Rating
+                    initialValue={x.score}
+                    allowFraction
+                    size={25}
+                    readonly
+                  />
                 </ListItemContent>
                 <Typography>
                   {format(parseISO(x.createdAt), "MM/dd/yyyy")}
