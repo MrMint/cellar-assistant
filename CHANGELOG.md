@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.41.0](https://github.com/MrMint/cellar-assistant/compare/v0.40.1...v0.41.0) (2023-12-29)
+
+
+### Features
+
+* Adds .5 fractions to scores ([629a942](https://github.com/MrMint/cellar-assistant/commit/629a94240e78a896725f5454c8279341adab09bf))
+* Adds Rankings page ([11f5703](https://github.com/MrMint/cellar-assistant/commit/11f5703f2cd6909140729b6b2149c5167b050437))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/react to v18.2.46 ([b997e47](https://github.com/MrMint/cellar-assistant/commit/b997e479ded2f01792c8106bf15323f539205e00))
+* Fixes inconsistent metadata for item_score numeric =&gt; float8 ([bb31254](https://github.com/MrMint/cellar-assistant/commit/bb31254acf91e67dbfe594c2186f5bf94d9b864b))
+
 ## [0.40.1](https://github.com/MrMint/cellar-assistant/compare/v0.40.0...v0.40.1) (2023-12-27)
 
 
