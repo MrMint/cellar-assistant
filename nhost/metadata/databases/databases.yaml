@@ -44,6 +44,48 @@
               - distance
             filter: {}
           role: user
+    - fields:
+        - name: beer_id
+          type:
+            nullable: true
+            scalar: uuid
+        - name: wine_id
+          type:
+            nullable: true
+            scalar: uuid
+        - name: spirit_id
+          type:
+            nullable: true
+            scalar: uuid
+        - name: coffee_id
+          type:
+            nullable: true
+            scalar: uuid
+        - name: score
+          type:
+            nullable: true
+            scalar: numeric
+        - name: count
+          type:
+            nullable: false
+            scalar: bigint
+        - name: type
+          type:
+            nullable: false
+            scalar: text
+      name: item_score
+      select_permissions:
+        - permission:
+            columns:
+              - beer_id
+              - wine_id
+              - spirit_id
+              - coffee_id
+              - score
+              - count
+              - type
+            filter: {}
+          role: user
   native_queries:
     - arguments:
         image:
@@ -86,6 +128,56 @@
               schema: public
       returns: image_search_result
       root_field_name: image_search
+    - arguments:
+        reviewers:
+          description: ""
+          nullable: true
+          type: text
+      code: |-
+        SELECT beer_id, wine_id, spirit_id, coffee_id, AVG(score) as score, COUNT(*) as count, CASE WHEN (beer_id IS NOT NULL) THEN 'BEER'::text WHEN (wine_id IS NOT NULL) THEN 'WINE'::text WHEN (coffee_id IS NOT NULL) THEN 'COFFEE'::text ELSE 'SPIRIT'::text END as type
+        FROM item_reviews
+        WHERE CASE
+        WHEN cardinality({{reviewers}}::UUID[]) = 0 THEN true
+        ELSE user_id = ANY ({{reviewers}}::UUID[])
+        END
+        GROUP BY (beer_id, wine_id, spirit_id, coffee_id)
+        -- Do not have access to session variables (user_id) in native queries
+        -- https://github.com/hasura/graphql-engine/issues/9915
+      object_relationships:
+        - name: beer
+          using:
+            column_mapping:
+              beer_id: id
+            insertion_order: null
+            remote_table:
+              name: beers
+              schema: public
+        - name: coffee
+          using:
+            column_mapping:
+              coffee_id: id
+            insertion_order: null
+            remote_table:
+              name: coffees
+              schema: public
+        - name: spirit
+          using:
+            column_mapping:
+              spirit_id: id
+            insertion_order: null
+            remote_table:
+              name: spirits
+              schema: public
+        - name: wine
+          using:
+            column_mapping:
+              wine_id: id
+            insertion_order: null
+            remote_table:
+              name: wines
+              schema: public
+      returns: item_score
+      root_field_name: item_scores
     - arguments:
         text:
           description: ""
