@@ -96,36 +96,32 @@ const rankingQuery = graphql(`
   }
 `);
 
-const Rankings = ({
-  searchParams: { reviewers, types },
-}: {
-  searchParams: { reviewers?: string; types?: string };
-}) => {
+const Rankings = () => {
   const userId = useUserId();
   if (isNil(userId)) throw new Error("Nil UserId");
   const router = useRouter();
   const searchParams = new URLSearchParams(useSearchParams());
+  const reviewers = searchParams.get("reviewers");
+  const types = searchParams.get("types");
   const parsedReviewers = isNotNil(reviewers)
-    ? (JSON.parse(reviewers) as RankingsFilterValue[])
+    ? JSON.parse(reviewers)
     : undefined;
-  const parsedTypes = isNotNil(types)
-    ? (JSON.parse(types) as ItemType[])
-    : undefined;
+  const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
 
-  const handleReviewersChange = (reviewers: RankingsFilterValue[]) => {
-    if (isEmpty(reviewers)) {
+  const handleReviewersChange = (r: RankingsFilterValue[]) => {
+    if (isEmpty(r)) {
       searchParams.delete("reviewers");
     } else {
-      searchParams.set("reviewers", JSON.stringify(reviewers));
+      searchParams.set("reviewers", JSON.stringify(r));
     }
     router.replace(`?${searchParams}`);
   };
 
-  const handleTypesChange = (types: ItemType[]) => {
-    if (isEmpty(types) || types.length >= getEnumKeys(ItemType).length) {
+  const handleTypesChange = (t: ItemType[]) => {
+    if (isEmpty(t) || t.length >= getEnumKeys(ItemType).length) {
       searchParams.delete("types");
     } else {
-      searchParams.set("types", JSON.stringify(types));
+      searchParams.set("types", JSON.stringify(t));
     }
     router.replace(`?${searchParams}`);
   };
@@ -135,15 +131,15 @@ const Rankings = ({
     variables: { userId },
   });
 
-  let reviewersFilter = new Array<string>();
-  if (parsedReviewers?.includes(RankingsFilterValue.ME)) {
-    reviewersFilter = reviewersFilter.concat([userId]);
-  }
   const reviewWhereClause: Item_Score_Bool_Exp_Bool_Exp = {};
   if (isNotNil(parsedTypes)) {
     reviewWhereClause.type = { _in: parsedTypes };
   }
 
+  let reviewersFilter = new Array<string>();
+  if (parsedReviewers?.includes(RankingsFilterValue.ME)) {
+    reviewersFilter = reviewersFilter.concat([userId]);
+  }
   if (
     isNotNil(friendData) &&
     isNotNil(friendData.user) &&
