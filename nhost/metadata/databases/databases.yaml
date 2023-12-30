@@ -126,6 +126,14 @@
             remote_table:
               name: wines
               schema: public
+        - name: coffee
+          using:
+            column_mapping:
+              coffee_id: id
+            insertion_order: null
+            remote_table:
+              name: coffees
+              schema: public
       returns: image_search_result
       root_field_name: image_search
     - arguments:
@@ -176,6 +184,14 @@
             remote_table:
               name: wines
               schema: public
+        - name: coffee
+          using:
+            column_mapping:
+              coffee_id: id
+            insertion_order: null
+            remote_table:
+              name: coffees
+              schema: public
       returns: item_score
       root_field_name: item_scores
     - arguments:
@@ -216,6 +232,14 @@
             insertion_order: null
             remote_table:
               name: wines
+              schema: public
+        - name: coffee
+          using:
+            column_mapping:
+              coffee_id: id
+            insertion_order: null
+            remote_table:
+              name: coffees
               schema: public
       returns: image_search_result
       root_field_name: text_search
