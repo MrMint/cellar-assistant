@@ -19,7 +19,7 @@
     "@fontsource/inter": "5.0.16",
     "@graphql-codegen/cli": "5.0.0",
     "@graphql-codegen/client-preset": "4.1.0",
-    "@lexical/react": "0.12.4",
+    "@lexical/react": "0.12.5",
     "@mui/joy": "5.0.0-beta.20",
     "@nhost/nextjs": "2.0.1",
     "@parcel/watcher": "2.3.0",
