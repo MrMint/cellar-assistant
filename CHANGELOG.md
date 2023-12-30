@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.41.2](https://github.com/MrMint/cellar-assistant/compare/v0.41.1...v0.41.2) (2023-12-30)
+
+
+### Bug Fixes
+
+* Adds missing coffee relationship to item_score ([81fa59f](https://github.com/MrMint/cellar-assistant/commit/81fa59f7ebbdf109e97717dff5f117a58c4265fa))
+* Adds missing coffee relationship to text and image search ([cd23d94](https://github.com/MrMint/cellar-assistant/commit/cd23d940acdce3e5c52344ea7d4c0bffc840107b))
+* **deps:** update dependency @lexical/react to v0.12.5 ([746df46](https://github.com/MrMint/cellar-assistant/commit/746df466a8ad352cc984d2952d0faeada25c5314))
+* **deps:** update dependency @types/node to v20.10.6 ([4f7ff4e](https://github.com/MrMint/cellar-assistant/commit/4f7ff4eaad414056ff9186b83a8b1138e1698fb6))
+
 ## [0.41.1](https://github.com/MrMint/cellar-assistant/compare/v0.41.0...v0.41.1) (2023-12-29)
 
 
