@@ -165,7 +165,17 @@ const Rankings = () => {
       .map((x) => {
         const result = nth(
           0,
-          without([undefined, null], [x.beer, x.wine, x.spirit]),
+          without(
+            [undefined, null],
+            [
+              x.beer,
+              x.wine,
+              x.spirit,
+              isNotNil(x.coffee)
+                ? { ...x.coffee, vintage: undefined }
+                : undefined,
+            ],
+          ),
         );
         if (isNil(result)) return undefined;
         return {
