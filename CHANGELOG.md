@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.41.3](https://github.com/MrMint/cellar-assistant/compare/v0.41.2...v0.41.3) (2024-01-08)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.21 ([f08827d](https://github.com/MrMint/cellar-assistant/commit/f08827dd534b117a9214043bd306874c358077f5))
+* **deps:** update dependency @types/node to v20.10.7 ([e6afff0](https://github.com/MrMint/cellar-assistant/commit/e6afff0384fdc302272b1eb296f4354b55125465))
+* **deps:** update dependency @types/react to v18.2.47 ([046280f](https://github.com/MrMint/cellar-assistant/commit/046280f809e6da93428d6c9a1111fe00e5e9ae0d))
+* **deps:** update dependency date-fns to v3.1.0 ([ac1a7fe](https://github.com/MrMint/cellar-assistant/commit/ac1a7fe15b267a55468fd2d62ad52fee80755360))
+* Fixes ranking page not displaying coffee ([a87a9e7](https://github.com/MrMint/cellar-assistant/commit/a87a9e7f3105f157e7dc48e002f6f42cf327128e))
+
 ## [0.41.2](https://github.com/MrMint/cellar-assistant/compare/v0.41.1...v0.41.2) (2023-12-30)
 
 
