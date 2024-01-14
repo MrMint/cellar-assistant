@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.42.0](https://github.com/MrMint/cellar-assistant/compare/v0.41.3...v0.42.0) (2024-01-14)
+
+
+### Features
+
+* Adds README.md ([2fdfa4d](https://github.com/MrMint/cellar-assistant/commit/2fdfa4d09f914e7bc8fb62a5dc96df4d0d7ec03a))
+
+
+### Bug Fixes
+
+* **deps:** Bumps nhost auth, postgres and storage to latest versions ([215a239](https://github.com/MrMint/cellar-assistant/commit/215a239ab947d28f66b09ec3bea8793ea2d636c8))
+* **deps:** update dependency @google-cloud/aiplatform to v3.10.0 ([adab618](https://github.com/MrMint/cellar-assistant/commit/adab618bf358eadf9c9e6f4974068c0fe21c1f82))
+* **deps:** update dependency @lexical/react to v0.12.6 ([fc7866e](https://github.com/MrMint/cellar-assistant/commit/fc7866ebc2a4e26a114904a34149d0b6f21a784e))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.22 ([d7ebf27](https://github.com/MrMint/cellar-assistant/commit/d7ebf27ca26925c2a1fe7feb00a662408864cec5))
+* **deps:** update dependency @types/node to v20.11.0 ([6943867](https://github.com/MrMint/cellar-assistant/commit/6943867c8a8260847fabe99674e54b9e56e8550f))
+* **deps:** update dependency date-fns to v3.2.0 ([a1f2181](https://github.com/MrMint/cellar-assistant/commit/a1f2181996937f1d9c26e98439114cbb58155321))
+* **deps:** update dependency prettier to v3.2.2 ([fbe3e6e](https://github.com/MrMint/cellar-assistant/commit/fbe3e6eb5ce1073c534af473dfefd0b27691934b))
+* **deps:** update dependency react-hook-form to v7.49.3 ([a8a23a7](https://github.com/MrMint/cellar-assistant/commit/a8a23a779185a8b997508275d1258e6158e1d76e))
+* **deps:** update dependency react-icons to v5 ([81e9755](https://github.com/MrMint/cellar-assistant/commit/81e975562a99d23a8c869c04135e602e7a855cdb))
+* **deps:** update dependency xstate to v5.5.1 ([83d49a3](https://github.com/MrMint/cellar-assistant/commit/83d49a3327e7b2c399070174b1d07d668d9bf0e0))
+* Fixes share item url ([fba5a3d](https://github.com/MrMint/cellar-assistant/commit/fba5a3d8c9e2bc80f4ff954eccb63dd9089e0ea7))
+
 ## [0.41.3](https://github.com/MrMint/cellar-assistant/compare/v0.41.2...v0.41.3) (2024-01-08)
 
 
