@@ -36,12 +36,12 @@
     "autoprefixer": "10.4.16",
     "date-fns": "3.2.0",
     "eslint": "8.56.0",
-    "eslint-config-next": "14.0.4",
+    "eslint-config-next": "14.1.0",
     "eslint-config-prettier": "9.1.0",
     "graphql": "16.8.1",
     "graphql-config": "5.0.3",
     "graphql-ws": "5.14.3",
-    "next": "14.0.4",
+    "next": "14.1.0",
     "npm-run-all2": "6.1.1",
     "prettier": "3.2.2",
     "ramda": "0.29.1",
@@ -60,6 +60,6 @@
     "xstate": "5.5.1"
   },
   "overrides": {
-    "next": "14.0.4"
+    "next": "14.1.0"
   }
 }
