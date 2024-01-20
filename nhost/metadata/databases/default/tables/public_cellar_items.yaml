@@ -95,6 +95,7 @@ select_permissions:
           - cellar:
               created_by_id:
                 _eq: X-Hasura-User-Id
+      allow_aggregations: true
     comment: ""
 update_permissions:
   - role: user

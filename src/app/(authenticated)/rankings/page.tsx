@@ -23,6 +23,7 @@ import {
   RankingsFilterValue,
 } from "@/components/ranking/RankingsFilter";
 import { formatItemType, getEnumKeys } from "@/utilities";
+import { useScrollRestore } from "@/utilities/hooks";
 
 const getItemType = (
   typename: "beers" | "wines" | "spirits" | "coffees",
@@ -100,6 +101,7 @@ const Rankings = () => {
   const userId = useUserId();
   if (isNil(userId)) throw new Error("Nil UserId");
   const router = useRouter();
+  const { scrollId, setScrollId, scrollTargetRef } = useScrollRestore();
   const searchParams = new URLSearchParams(useSearchParams());
   const reviewers = searchParams.get("reviewers");
   const types = searchParams.get("types");
@@ -215,11 +217,18 @@ const Rankings = () => {
         </Stack>
       </Grid>
       {items.map((x) => (
-        <Grid key={x.item.id} xs={6} md={4} lg={2}>
+        <Grid
+          ref={scrollId === x.item.id ? scrollTargetRef : undefined}
+          key={x.item.id}
+          xs={6}
+          md={4}
+          lg={2}
+        >
           <ItemCard
             item={x.item}
             type={x.type}
             href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
+            onClick={() => setScrollId(x.item.id)}
           />
         </Grid>
       ))}

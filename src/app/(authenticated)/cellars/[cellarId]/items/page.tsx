@@ -16,7 +16,7 @@ import Link from "@/components/common/Link";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
 import withAuth from "@/hocs/withAuth";
 import { formatItemType, getEnumKeys } from "@/utilities";
-import { useHash } from "@/utilities/hooks";
+import { useHash, useScrollRestore } from "@/utilities/hooks";
 
 type Item = {
   item: ItemCardItem;
@@ -35,6 +35,20 @@ const cellarQuery = graphql(`
       created_by_id
       co_owners {
         user_id
+      }
+      item_counts: items_aggregate(where: { empty_at: { _is_null: true } }) {
+        beers: aggregate {
+          count(columns: [beer_id])
+        }
+        wines: aggregate {
+          count(columns: [wine_id])
+        }
+        spirits: aggregate {
+          count(columns: [spirit_id])
+        }
+        coffees: aggregate {
+          count(columns: [coffee_id])
+        }
       }
       items(where: $itemsWhereClause) {
         id
@@ -118,8 +132,7 @@ const Items = ({
   const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
   const router = useRouter();
   const searchParams = new URLSearchParams(useSearchParams());
-  const hash = useHash();
-  const scrollTargetRef = useRef<HTMLDivElement>(null);
+  const { scrollId, setScrollId, scrollTargetRef } = useScrollRestore();
 
   const handleSearchChange = (search: string) => {
     if (isEmpty(search)) {
@@ -169,7 +182,12 @@ const Items = ({
     res?.data?.cellars_by_pk?.co_owners
       ?.map((x) => x.user_id)
       .includes(userId) === true;
-
+  const counts = {
+    wines: res.data?.cellars_by_pk?.item_counts?.wines?.count,
+    beers: res.data?.cellars_by_pk?.item_counts?.beers?.count,
+    spirits: res.data?.cellars_by_pk?.item_counts?.spirits?.count,
+    coffees: res.data?.cellars_by_pk?.item_counts?.coffees?.count,
+  };
   const items =
     res.data?.cellars_by_pk?.items.map((x) => {
       switch (x.type) {
@@ -244,12 +262,6 @@ const Items = ({
       }
     }) ?? [];
 
-  // Scroll to element on navigate back
-  useEffect(() => {
-    if (isNotNil(scrollTargetRef.current)) {
-      scrollTargetRef.current.scrollIntoView();
-    }
-  }, []);
   return (
     <Box>
       <Stack spacing={2}>
@@ -269,6 +281,7 @@ const Items = ({
               <CellarItemsFilter
                 types={parsedTypes}
                 onTypesChange={handleTypesChange}
+                counts={counts}
               />
               <Button
                 component={Link}
@@ -287,7 +300,7 @@ const Items = ({
             items,
           ).map((x) => (
             <Grid
-              ref={hash === x.item.id ? scrollTargetRef : null}
+              ref={scrollId === x.item.id ? scrollTargetRef : null}
               id={x.item.id}
               key={x.item.id}
               xs={items.length > 6 ? 6 : 12}
@@ -300,16 +313,7 @@ const Items = ({
                 item={x.item}
                 type={x.type}
                 href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
-                onClick={() => {
-                  // TODO switch to simple hash update when nextjs fixes bug
-                  // https://github.com/vercel/next.js/issues/56112
-                  // window.location.hash = x.item.id;
-                  window.history.replaceState(
-                    window.history.state,
-                    "",
-                    `#${x.item.id}`,
-                  );
-                }}
+                onClick={() => setScrollId(x.item.id)}
               />
             </Grid>
           ))}
