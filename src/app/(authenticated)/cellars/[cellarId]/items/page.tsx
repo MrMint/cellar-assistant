@@ -266,7 +266,7 @@ const Items = ({
   // Scroll to element on navigate back
   useEffect(() => {
     if (isNotNil(scrollTargetRef.current)) {
-      scrollTargetRef.current.scrollIntoView();
+      scrollTargetRef.current.scrollIntoView({ block: "center" });
     }
   }, []);
   return (
@@ -323,7 +323,7 @@ const Items = ({
                 onClick={() => {
                   // TODO switch to simple hash update when nextjs fixes bug
                   // https://github.com/vercel/next.js/issues/56112
-                  // window.location.hash = x.item.id;
+                  //window.location.hash = x.item.id;
                   window.history.replaceState(
                     window.history.state,
                     "",
