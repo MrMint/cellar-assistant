@@ -1,14 +1,29 @@
-import { IconButton, Sheet, ToggleButtonGroup, Tooltip } from "@mui/joy";
+import {
+  IconButton,
+  Sheet,
+  Stack,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
+} from "@mui/joy";
 import { ItemType } from "@shared/gql/graphql";
+import { isNotNil } from "ramda";
 import { FaBeer, FaCocktail, FaCoffee, FaWineGlass } from "react-icons/fa";
 
 type CellarItemsFilterProps = {
   types?: ItemType[];
+  counts?: {
+    beers?: number;
+    wines?: number;
+    spirits?: number;
+    coffees?: number;
+  };
   onTypesChange: (types: ItemType[]) => void;
 };
 
 export const CellarItemsFilter = ({
   types = [],
+  counts = {},
   onTypesChange,
 }: CellarItemsFilterProps) => {
   return (
@@ -27,22 +42,42 @@ export const CellarItemsFilter = ({
       >
         <Tooltip title="Beer">
           <IconButton value={ItemType.Beer} aria-label="Beer">
-            <FaBeer />
+            <Stack direction="row" gap={0.5} alignItems="center">
+              {isNotNil(counts.beers) && (
+                <Typography>{counts.beers}</Typography>
+              )}
+              <FaBeer />
+            </Stack>
           </IconButton>
         </Tooltip>
         <Tooltip title="Wine">
           <IconButton value={ItemType.Wine} aria-label="Wine">
-            <FaWineGlass />
+            <Stack direction="row" gap={0.5} alignItems="center">
+              {isNotNil(counts.wines) && (
+                <Typography>{counts.wines}</Typography>
+              )}
+              <FaWineGlass />
+            </Stack>
           </IconButton>
         </Tooltip>
         <Tooltip title="Spirit">
           <IconButton value={ItemType.Spirit} aria-label="Spirit">
-            <FaCocktail />
+            <Stack direction="row" gap={0.5} alignItems="center">
+              {isNotNil(counts.spirits) && (
+                <Typography>{counts.spirits}</Typography>
+              )}
+              <FaCocktail />
+            </Stack>
           </IconButton>
         </Tooltip>
         <Tooltip title="Coffee">
           <IconButton value={ItemType.Coffee} aria-label="Coffee">
-            <FaCoffee />
+            <Stack direction="row" gap={0.5} alignItems="center">
+              {isNotNil(counts.coffees) && (
+                <Typography>{counts.coffees}</Typography>
+              )}
+              <FaCoffee />
+            </Stack>
           </IconButton>
         </Tooltip>
       </ToggleButtonGroup>
