@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.43.0](https://github.com/MrMint/cellar-assistant/compare/v0.42.0...v0.43.0) (2024-01-20)
+
+
+### Features
+
+* Adds item counts to cellar items filter component ([8c0fddb](https://github.com/MrMint/cellar-assistant/commit/8c0fddbfd7fd7738566b966ce99fc23d0d76d8c3))
+* Adds scroll restore to rankings page ([862cafa](https://github.com/MrMint/cellar-assistant/commit/862cafa1b0f544ae805a2ae000f3fe4e1e2b3e3b))
+* Updates scroll restore on cellar page to center item ([bfaf8f2](https://github.com/MrMint/cellar-assistant/commit/bfaf8f2aa18ca4c2924794fda13bcc6a1b71a595))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.23 ([c35dcd6](https://github.com/MrMint/cellar-assistant/commit/c35dcd6e6ba0eb1bf7a90e33d909fac47a5226a9))
+* **deps:** update dependency @parcel/watcher to v2.4.0 ([7b6fd93](https://github.com/MrMint/cellar-assistant/commit/7b6fd93879c536a575e07ac8c6996c247150410a))
+* **deps:** update dependency @types/node to v20.11.5 ([5b99d34](https://github.com/MrMint/cellar-assistant/commit/5b99d343fc5a7407b19ece8fb927c9547fe575ed))
+* **deps:** update dependency @types/react to v18.2.48 ([9964ae1](https://github.com/MrMint/cellar-assistant/commit/9964ae16e2c70099a949f53c0b6ade76ed0b4906))
+* **deps:** update dependency @vercel/analytics to v1.1.2 ([758d231](https://github.com/MrMint/cellar-assistant/commit/758d2312f2b9bdb7383309bc9057a068c43e2362))
+* **deps:** update dependency autoprefixer to v10.4.17 ([f857438](https://github.com/MrMint/cellar-assistant/commit/f85743899d936b324fd26d0486c0e308a58706e9))
+* **deps:** update dependency date-fns to v3.3.0 ([6740faa](https://github.com/MrMint/cellar-assistant/commit/6740faa2b0809610f83e11da17e7043ea54eb8b4))
+* **deps:** update dependency prettier to v3.2.4 ([79698f5](https://github.com/MrMint/cellar-assistant/commit/79698f5e11877e889d5318bc1af4ada7b9932299))
+* **deps:** update nextjs monorepo to v14.1.0 ([011f52d](https://github.com/MrMint/cellar-assistant/commit/011f52d703fd6078ca5c31b8aba1344c446cd81f))
+* Fix empty item forms submitting default values ([5a87007](https://github.com/MrMint/cellar-assistant/commit/5a87007a7f00926aaea0958d7a41ffee6f328d8a))
+
 ## [0.42.0](https://github.com/MrMint/cellar-assistant/compare/v0.41.3...v0.42.0) (2024-01-14)
 
 
