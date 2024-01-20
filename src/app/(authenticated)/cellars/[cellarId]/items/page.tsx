@@ -36,6 +36,20 @@ const cellarQuery = graphql(`
       co_owners {
         user_id
       }
+      item_counts: items_aggregate(where: { empty_at: { _is_null: true } }) {
+        beers: aggregate {
+          count(columns: [beer_id])
+        }
+        wines: aggregate {
+          count(columns: [wine_id])
+        }
+        spirits: aggregate {
+          count(columns: [spirit_id])
+        }
+        coffees: aggregate {
+          count(columns: [coffee_id])
+        }
+      }
       items(where: $itemsWhereClause) {
         id
         type
@@ -169,7 +183,12 @@ const Items = ({
     res?.data?.cellars_by_pk?.co_owners
       ?.map((x) => x.user_id)
       .includes(userId) === true;
-
+  const counts = {
+    wines: res.data?.cellars_by_pk?.item_counts?.wines?.count,
+    beers: res.data?.cellars_by_pk?.item_counts?.beers?.count,
+    spirits: res.data?.cellars_by_pk?.item_counts?.spirits?.count,
+    coffees: res.data?.cellars_by_pk?.item_counts?.coffees?.count,
+  };
   const items =
     res.data?.cellars_by_pk?.items.map((x) => {
       switch (x.type) {
@@ -269,6 +288,7 @@ const Items = ({
               <CellarItemsFilter
                 types={parsedTypes}
                 onTypesChange={handleTypesChange}
+                counts={counts}
               />
               <Button
                 component={Link}
