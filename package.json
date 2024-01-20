@@ -31,7 +31,7 @@
     "@uidotdev/usehooks": "2.4.1",
     "@urql/devtools": "2.0.3",
     "@urql/exchange-refocus": "1.0.2",
-    "@vercel/analytics": "1.1.1",
+    "@vercel/analytics": "1.1.2",
     "@xstate/react": "4.0.2",
     "autoprefixer": "10.4.16",
     "date-fns": "3.3.0",
