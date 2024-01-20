@@ -68,21 +68,13 @@ function mapFormValuesToInsertInput(
 ): Coffees_Insert_Input {
   const update = {
     name: values.name,
-    // alcohol_content_percentage: parseNumber(values.alcohol_content_percentage),
     description: values.description,
     country: values.country,
     process: values.process,
     roast_level: values.roast_level,
     species: values.species,
     cultivar: values.cultivar,
-    // style: values.style,
-    // vintage: isNotNil(values.vintage)
-    //   ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
-    //   : undefined,
     item_onboarding_id: itemOnboardingId,
-    // international_bitterness_unit: parseNumber(
-    //   values.international_bitterness_unit,
-    // ),
   } as Coffees_Insert_Input;
 
   if (isNotNil(update) && isNotNil(values.barcode_code)) {

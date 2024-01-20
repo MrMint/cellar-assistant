@@ -1,7 +1,7 @@
 import { ItemType } from "@shared/gql/graphql";
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
 import { ImageLoaderProps } from "next/image";
-import { isNil, isNotNil } from "ramda";
+import { isEmpty, isNil } from "ramda";
 
 // https://stackoverflow.com/a/76775845
 export function getEnums<T extends { [key: string]: number | string }>(
@@ -23,7 +23,7 @@ export function formatIsoDateString(
   input: string | null | undefined,
   format: string,
 ) {
-  if (isNil(input)) return undefined;
+  if (isNil(input) || isEmpty(input)) return undefined;
   return dateFnsFormat(parseISO(input), format);
 }
 
@@ -122,13 +122,19 @@ export const formatItemType = (type: ItemType) => {
 export const parseDate = (
   value: string | null | undefined,
 ): Date | undefined => {
-  if (isNil(value)) return undefined;
+  if (isNil(value) || isEmpty(value)) return undefined;
   return new Date(value);
 };
 
 export const parseNumber = (value: string | null | undefined) => {
-  if (isNil(value)) return undefined;
+  if (isNil(value) || isEmpty(value)) return undefined;
   const result = Number.parseFloat(value);
   if (Number.isNaN(result)) return undefined;
   return result;
+};
+
+export const convertYearToDate = (year: number | null | undefined) => {
+  if (isNil(year) || isEmpty(year)) return undefined;
+
+  return format(new Date(year, 0, 1), "yyyy-MM-dd");
 };

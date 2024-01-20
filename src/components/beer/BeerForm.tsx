@@ -21,11 +21,11 @@ import {
 import { addBeerMutation, updateBeerMutation } from "@shared/queries";
 import { formatBeerStyle, formatCountry } from "@shared/utility";
 import { format } from "date-fns";
-import { isNil, isNotNil } from "ramda";
+import { isEmpty, isNil, isNotNil, not } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useClient } from "urql";
 import { beerStyleKeys, countryKeys } from "@/constants";
-import { formatVintage, parseNumber } from "@/utilities";
+import { convertYearToDate, formatVintage, parseNumber } from "@/utilities";
 
 type SharedFields = {
   description?: string;
@@ -64,9 +64,7 @@ function mapFormValuesToInsertInput(
     description: values.description,
     country: values.country,
     style: values.style,
-    vintage: isNotNil(values.vintage)
-      ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
-      : undefined,
+    vintage: convertYearToDate(values.vintage),
     item_onboarding_id: itemOnboardingId,
     international_bitterness_unit: parseNumber(
       values.international_bitterness_unit,
