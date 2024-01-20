@@ -1,3 +1,4 @@
+import { isNotNil } from "ramda";
 import { useEffect, useRef, useState } from "react";
 
 export function useInterval(callback: () => void, delay: number) {
@@ -33,4 +34,25 @@ export const useHash = () => {
   }, []);
 
   return hash;
+};
+
+export const useScrollRestore = () => {
+  const hash = useHash();
+  const scrollTargetRef = useRef<HTMLDivElement>(null);
+
+  const setScrollId = (id: string) => {
+    // TODO switch to simple hash update when nextjs fixes bug
+    // https://github.com/vercel/next.js/issues/56112
+    //window.location.hash = x.item.id;
+    window.history.replaceState(window.history.state, "", `#${id}`);
+  };
+
+  // Scroll to element on navigate back
+  useEffect(() => {
+    if (isNotNil(scrollTargetRef.current)) {
+      scrollTargetRef.current.scrollIntoView({ block: "center" });
+    }
+  }, []);
+
+  return { scrollId: hash, scrollTargetRef, setScrollId };
 };
