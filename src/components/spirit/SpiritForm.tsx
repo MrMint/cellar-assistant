@@ -25,7 +25,12 @@ import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useClient } from "urql";
 import { countryKeys } from "@/constants";
-import { formatVintage, getEnumKeys, parseNumber } from "@/utilities";
+import {
+  convertYearToDate,
+  formatVintage,
+  getEnumKeys,
+  parseNumber,
+} from "@/utilities";
 
 const typeOptions = getEnumKeys(Spirit_Type_Enum);
 
@@ -68,9 +73,7 @@ function mapFormValuesToInsertInput(
     country: values.country,
     style: values.style,
     type: values.type,
-    vintage: isNotNil(values.vintage)
-      ? format(new Date(values.vintage, 0, 1), "yyyy-MM-dd")
-      : undefined,
+    vintage: convertYearToDate(values.vintage),
     item_onboarding_id: itemOnboardingId,
   } as Spirits_Insert_Input;
 

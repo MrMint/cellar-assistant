@@ -29,7 +29,7 @@ import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useClient, useMutation } from "urql";
 import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
-import { formatVintage, parseNumber } from "@/utilities";
+import { convertYearToDate, formatVintage, parseNumber } from "@/utilities";
 
 type SharedFields = {
   description?: string;
@@ -76,7 +76,7 @@ function mapFormValuesToInsertInput(
     vineyard_designation: values.vineyard_designation,
     variety: values.variety,
     style: values.style,
-    vintage: format(new Date(values.vintage, 0, 1), "yyyy-MM-dd"),
+    vintage: convertYearToDate(values.vintage),
     item_onboarding_id: itemOnboardingId,
   } as Wines_Insert_Input;
 
