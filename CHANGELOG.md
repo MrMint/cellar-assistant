@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.44.0](https://github.com/MrMint/cellar-assistant/compare/v0.43.0...v0.44.0) (2024-01-22)
+
+
+### Features
+
+* Adds seed for local development ([839ec37](https://github.com/MrMint/cellar-assistant/commit/839ec37fc372db31961b445495ad5dbd1606177c))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/ramda to v0.29.10 ([47b4ea7](https://github.com/MrMint/cellar-assistant/commit/47b4ea75ecdf514d77b6bb29739f76e5bdb4cdee))
+
 ## [0.43.0](https://github.com/MrMint/cellar-assistant/compare/v0.42.0...v0.43.0) (2024-01-20)
 
 
