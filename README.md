@@ -1,17 +1,17 @@
-**# Cellar Assistant**
+# Cellar Assistant
 
 **Uncork the potential of your collection with Cellar Assistant**
 
-**## Features**
+## Features
 
 - TODO
 
-**## Technology Stack**
+## Technology Stack
 
 - **Frontend:** Next.js
 - **Backend:** Nhost (serverless backend platform with GraphQL API, authentication, and storage)
 
-**## Getting Started (local dev)**
+## Getting Started (local dev)
 
 1. **Prerequisites:**
    - Node and Docker
@@ -49,7 +49,7 @@
      ```
 5. **Start the local nhost environment:**
    ```bash
-   nhost up
+   nhost up --apply-seeds
    ```
 6. **Start the development server:**
    ```bash
@@ -65,7 +65,10 @@
    - Functions: https://local.functions.nhost.run
    - Dashboard: https://local.dashboard.nhost.run
    - Mailhog: https://local.mailhog.nhost.run
+8. **Logins**
+   - test@test.com:123456789
+   - test2@test.com:123456789
 
-**## Contributing**
+## Contributing
 
 We welcome contributions from the community! Please feel free to open issues or pull requests.
