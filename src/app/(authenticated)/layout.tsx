@@ -1,11 +1,9 @@
 "use client";
 
-import { Box, styled } from "@mui/joy";
-import Image from "next/image";
+import { Box } from "@mui/joy";
 import { InstallPwaDialog } from "@/components/common/InstallPwaDialog";
 import SideNavigationBar from "@/components/common/SideNavigationBar";
 import withAuth from "@/hocs/withAuth";
-import bot1 from "@/images/bot2.png";
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   return (
