@@ -1,9 +1,23 @@
 "use client";
 
 import { Box, Button, Stack, Typography } from "@mui/joy";
+import { useAuthenticationStatus } from "@nhost/nextjs";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function Home() {
+  const { isAuthenticated, isLoading, isError } = useAuthenticationStatus();
+  const router = useRouter();
+  useEffect(() => {
+    if (isLoading === false) {
+      if (isAuthenticated && !isError) {
+        router.replace("/cellars");
+      } else {
+        router.replace("/sign-in");
+      }
+    }
+  }, [isAuthenticated, isLoading, isError, router]);
   return (
     <Box
       component={"main"}
