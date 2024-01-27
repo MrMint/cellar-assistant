@@ -1,13 +1,12 @@
 import type { NhostClient } from "@nhost/nhost-js";
 import { devtoolsExchange } from "@urql/devtools";
-import { refocusExchange } from "@urql/exchange-refocus";
+import { authExchange } from "@urql/exchange-auth";
 import { createClient as createWSClient } from "graphql-ws";
 import { isNil } from "ramda";
 import React, { PropsWithChildren } from "react";
 import {
   cacheExchange,
   createClient as createUrqlClient,
-  dedupExchange,
   Exchange,
   fetchExchange,
   Provider as UrqlProvider,
@@ -33,12 +32,7 @@ export type NhostUrqlClientOptions = {
 // TODO: Break out this function to a separate package: @nhost/urql
 // Opinionated urql client for Nhost
 function createNhostUrqlClient(options: NhostUrqlClientOptions) {
-  const {
-    nhost,
-    headers,
-    requestPolicy = "cache-and-network",
-    exchanges,
-  } = options;
+  const { nhost, headers, requestPolicy = "cache-first", exchanges } = options;
 
   if (!nhost) {
     throw new Error("No `nhost` instance provided.");
@@ -48,26 +42,30 @@ function createNhostUrqlClient(options: NhostUrqlClientOptions) {
     throw new Error("`exchanges` must be an array.");
   }
 
-  const getHeaders = () => {
-    const resHeaders = {
-      ...headers,
-      "Sec-WebSocket-Protocol": "graphql-ws",
-    } as { [header: string]: string };
-
-    const accessToken = nhost.auth.getAccessToken();
-
-    if (accessToken) {
-      resHeaders.authorization = `Bearer ${accessToken}`;
-    }
-
-    return resHeaders;
-  };
-
   let urqlExchanges: Exchange[] = [
     devtoolsExchange,
-    dedupExchange,
-    refocusExchange(),
     cacheExchange,
+    authExchange(async (util) => {
+      let userSession = nhost.auth.getSession();
+      return {
+        didAuthError: (error, operation) => error.response?.status === 401,
+
+        willAuthError: () =>
+          isNil(userSession) || userSession.accessTokenExpiresIn <= 0,
+        refreshAuth: async () => {
+          const refreshResult = await nhost.auth.refreshSession();
+          if (isNil(refreshResult.error)) {
+            userSession = refreshResult.session;
+          } else {
+            await nhost.auth.signOut();
+          }
+        },
+        addAuthToOperation: (operation) =>
+          util.appendHeaders(operation, {
+            Authorization: `Bearer ${userSession?.accessToken}`,
+          }),
+      };
+    }),
     fetchExchange,
   ];
 
@@ -89,7 +87,7 @@ function createNhostUrqlClient(options: NhostUrqlClientOptions) {
       connectionParams() {
         return {
           headers: {
-            ...getHeaders(),
+            "Sec-WebSocket-Protocol": "graphql-ws",
           },
         };
       },
@@ -128,13 +126,6 @@ function createNhostUrqlClient(options: NhostUrqlClientOptions) {
     url: nhost.graphql.httpUrl,
     requestPolicy,
     exchanges: urqlExchanges,
-    fetchOptions: () => {
-      return {
-        headers: {
-          ...getHeaders(),
-        },
-      };
-    },
   });
 
   return client;
