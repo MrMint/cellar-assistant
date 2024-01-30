@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.46.0](https://github.com/MrMint/cellar-assistant/compare/v0.45.0...v0.46.0) (2024-01-30)
+
+
+### Features
+
+* Adds 200 response for high use function health check ([033ac26](https://github.com/MrMint/cellar-assistant/commit/033ac26eee7a060b9663a01dadd1bf2efa1f1919))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v20.11.10 ([08d1577](https://github.com/MrMint/cellar-assistant/commit/08d15775f2bd527d4803a00b2f35715391a3f4c0))
+* **deps:** update dependency xstate to v5.6.0 ([c332bd5](https://github.com/MrMint/cellar-assistant/commit/c332bd54a259f48a87e58731f5f95cab1813bde4))
+
 ## [0.45.0](https://github.com/MrMint/cellar-assistant/compare/v0.44.0...v0.45.0) (2024-01-27)
 
 
