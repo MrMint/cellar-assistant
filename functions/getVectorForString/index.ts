@@ -36,6 +36,7 @@ export default async function generateVector(
   res: Response,
 ) {
   try {
+    if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
     if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
       return res.status(400).send();
