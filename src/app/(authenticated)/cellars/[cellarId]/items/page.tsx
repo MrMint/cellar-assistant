@@ -6,8 +6,17 @@ import { graphql } from "@shared/gql";
 import { Cellar_Items_Bool_Exp, ItemType } from "@shared/gql/graphql";
 import { getSearchVectorQuery } from "@shared/queries";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ascend, isEmpty, isNil, isNotNil, not, prop, sortWith } from "ramda";
-import { useEffect, useRef } from "react";
+import {
+  ascend,
+  defaultTo,
+  isEmpty,
+  isNil,
+  isNotNil,
+  not,
+  nth,
+  prop,
+  sortWith,
+} from "ramda";
 import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
@@ -16,18 +25,20 @@ import Link from "@/components/common/Link";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
 import withAuth from "@/hocs/withAuth";
 import { formatItemType, getEnumKeys } from "@/utilities";
-import { useHash, useScrollRestore } from "@/utilities/hooks";
+import { useScrollRestore } from "@/utilities/hooks";
 
 type Item = {
   item: ItemCardItem;
   distance: number;
   type: ItemType;
 };
+
 const cellarQuery = graphql(`
   query GetCellarItemsQuery(
     $cellarId: uuid!
     $itemsWhereClause: cellar_items_bool_exp
     $search: vector
+    $userId: uuid!
   ) {
     cellars_by_pk(id: $cellarId) {
       id
@@ -58,63 +69,116 @@ const cellarQuery = graphql(`
           placeholder
         }
         spirit {
+          id
           name
           vintage
+          item_favorites(where: { user_id: { _eq: $userId } }) {
+            id
+          }
           item_vectors {
             distance(args: { search: $search })
           }
-          reviews_aggregate {
+          user_reviews: reviews_aggregate(
+            where: { user_id: { _eq: $userId } }
+            limit: 1
+          ) {
             aggregate {
               count
-              avg {
-                score
-              }
             }
+          }
+          reviews_aggregate {
+            ...reviewFragment
+          }
+          item_favorites_aggregate {
+            ...favoriteFragment
           }
         }
         wine {
+          id
           name
           vintage
+          item_favorites(where: { user_id: { _eq: $userId } }) {
+            id
+          }
           item_vectors {
             distance(args: { search: $search })
           }
-          reviews_aggregate {
+          user_reviews: reviews_aggregate(
+            where: { user_id: { _eq: $userId } }
+            limit: 1
+          ) {
             aggregate {
               count
-              avg {
-                score
-              }
             }
+          }
+          reviews_aggregate {
+            ...reviewFragment
+          }
+          item_favorites_aggregate {
+            ...favoriteFragment
           }
         }
         beer {
+          id
           name
           item_vectors {
             distance(args: { search: $search })
           }
-          reviews_aggregate {
+          item_favorites(where: { user_id: { _eq: $userId } }) {
+            id
+          }
+          user_reviews: reviews_aggregate(
+            where: { user_id: { _eq: $userId } }
+            limit: 1
+          ) {
             aggregate {
               count
-              avg {
-                score
-              }
             }
+          }
+          reviews_aggregate {
+            ...reviewFragment
+          }
+          item_favorites_aggregate {
+            ...favoriteFragment
           }
         }
         coffee {
+          id
           name
           item_vectors {
             distance(args: { search: $search })
           }
-          reviews_aggregate {
+          item_favorites(where: { user_id: { _eq: $userId } }) {
+            id
+          }
+          user_reviews: reviews_aggregate(
+            where: { user_id: { _eq: $userId } }
+            limit: 1
+          ) {
             aggregate {
               count
-              avg {
-                score
-              }
             }
           }
+          reviews_aggregate {
+            ...reviewFragment
+          }
+          item_favorites_aggregate {
+            ...favoriteFragment
+          }
         }
+      }
+    }
+  }
+  fragment favoriteFragment on item_favorites_aggregate {
+    aggregate {
+      count
+    }
+  }
+  fragment reviewFragment on item_reviews_aggregate {
+    aggregate {
+      count
+      avg {
+        score
       }
     }
   }
@@ -169,6 +233,7 @@ const Items = ({
   const [res] = useQuery({
     query: cellarQuery,
     variables: {
+      userId,
       cellarId,
       itemsWhereClause,
       search: not(isEmpty(search ?? ""))
@@ -196,11 +261,15 @@ const Items = ({
           return {
             item: {
               id: x.id,
+              itemId: x.beer.id,
               name: x.beer.name,
               displayImageId: x.display_image?.file_id,
               placeholder: x.display_image?.placeholder,
               score: x.beer.reviews_aggregate.aggregate?.avg?.score,
               reviewCount: x.beer.reviews_aggregate.aggregate?.count,
+              favoriteCount: x.beer.item_favorites_aggregate.aggregate?.count,
+              favoriteId: nth(0, x.beer.item_favorites)?.id,
+              reviewed: defaultTo(0, x.beer.user_reviews.aggregate?.count) > 0,
             } as ItemCardItem,
             type: ItemType.Beer,
             distance: Math.min(
@@ -212,12 +281,16 @@ const Items = ({
           return {
             item: {
               id: x.id,
+              itemId: x.wine.id,
               name: x.wine.name,
               vintage: x.wine.vintage,
               displayImageId: x.display_image?.file_id,
               placeholder: x.display_image?.placeholder,
               score: x.wine.reviews_aggregate.aggregate?.avg?.score,
               reviewCount: x.wine.reviews_aggregate.aggregate?.count,
+              favoriteCount: x.wine.item_favorites_aggregate.aggregate?.count,
+              favoriteId: nth(0, x.wine.item_favorites)?.id,
+              reviewed: defaultTo(0, x.wine.user_reviews.aggregate?.count) > 0,
             } as ItemCardItem,
             type: ItemType.Wine,
             distance: Math.min(
@@ -229,12 +302,17 @@ const Items = ({
           return {
             item: {
               id: x.id,
+              itemId: x.spirit.id,
               name: x.spirit.name,
               vintage: x.spirit.vintage,
               displayImageId: x.display_image?.file_id,
               placeholder: x.display_image?.placeholder,
               score: x.spirit.reviews_aggregate.aggregate?.avg?.score,
               reviewCount: x.spirit.reviews_aggregate.aggregate?.count,
+              favoriteCount: x.spirit.item_favorites_aggregate.aggregate?.count,
+              favoriteId: nth(0, x.spirit.item_favorites)?.id,
+              reviewed:
+                defaultTo(0, x.spirit.user_reviews.aggregate?.count) > 0,
             } as ItemCardItem,
             type: ItemType.Spirit,
             distance: Math.min(
@@ -246,11 +324,16 @@ const Items = ({
           return {
             item: {
               id: x.id,
+              itemId: x.coffee.id,
               name: x.coffee.name,
               displayImageId: x.display_image?.file_id,
               placeholder: x.display_image?.placeholder,
               score: x.coffee.reviews_aggregate.aggregate?.avg?.score,
               reviewCount: x.coffee.reviews_aggregate.aggregate?.count,
+              favoriteCount: x.coffee.item_favorites_aggregate.aggregate?.count,
+              favoriteId: nth(0, x.coffee.item_favorites)?.id,
+              reviewed:
+                defaultTo(0, x.coffee.user_reviews.aggregate?.count) > 0,
             } as ItemCardItem,
             type: ItemType.Coffee,
             distance: Math.min(

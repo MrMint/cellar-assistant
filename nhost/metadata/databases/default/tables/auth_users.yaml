@@ -113,6 +113,13 @@ array_relationships:
         table:
           name: friend_requests
           schema: public
+  - name: item_favorites
+    using:
+      foreign_key_constraint_on:
+        column: user_id
+        table:
+          name: item_favorites
+          schema: public
   - name: outgoingFriendRequests
     using:
       foreign_key_constraint_on:

@@ -29,6 +29,14 @@ const getBeerQuery = graphql(`
       description
       alcohol_content_percentage
       country
+      item_favorites(where: { user_id: { _eq: $userId } }) {
+        id
+      }
+      item_favorites_aggregate {
+        aggregate {
+          count
+        }
+      }
       reviews(limit: 10, order_by: { created_at: desc }) {
         id
         user {
@@ -121,6 +129,9 @@ const BeerDetails = ({
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
                 <ItemDetails
+                  itemId={beer.id}
+                  type={ItemType.Beer}
+                  favoriteId={nth(0, beer.item_favorites)?.id}
                   title={beer.name}
                   subTitlePhrases={[
                     formatVintage(beer.vintage),

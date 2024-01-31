@@ -30,6 +30,14 @@ const getSpiritQuery = graphql(`
       alcohol_content_percentage
       type
       country
+      item_favorites(where: { user_id: { _eq: $userId } }) {
+        id
+      }
+      item_favorites_aggregate {
+        aggregate {
+          count
+        }
+      }
       reviews(limit: 10, order_by: { created_at: desc }) {
         id
         user {
@@ -122,6 +130,9 @@ const SpiritDetails = ({
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
                 <ItemDetails
+                  itemId={spirit.id}
+                  type={ItemType.Spirit}
+                  favoriteId={nth(0, spirit.item_favorites)?.id}
                   title={spirit.name}
                   subTitlePhrases={[
                     formatVintage(spirit.vintage),

@@ -1,8 +1,25 @@
-import { CardContent, CardOverflow, Divider, Typography } from "@mui/joy";
+import {
+  Button,
+  CardContent,
+  CardOverflow,
+  Divider,
+  Typography,
+} from "@mui/joy";
+import { SxProps } from "@mui/joy/styles/types";
+import { useUserId } from "@nhost/nextjs";
+import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
+import { addFavoriteMutation, deleteFavoriteMutation } from "@shared/queries";
 import Image from "next/image";
 import { always, cond, equals, isNil, isNotNil } from "ramda";
-import { MdOutlineComment, MdStar } from "react-icons/md";
+import { MouseEvent } from "react";
+import {
+  MdFavorite,
+  MdFavoriteBorder,
+  MdOutlineComment,
+  MdStar,
+} from "react-icons/md";
+import { useMutation } from "urql";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
 import spirit1 from "@/images/spirit1.png";
@@ -12,28 +29,20 @@ import {
   formatVintage,
   getNextPlaceholder,
   nhostImageLoader,
+  typeToIdKey,
 } from "@/utilities";
 import InteractiveCard from "../common/InteractiveCard";
 import Link from "../common/Link";
 
-export type ItemCardItem = {
-  id: string;
-  name: string;
-  vintage?: string;
-  displayImageId?: string;
-  placeholder?: string | null;
-  score?: number | null;
-  reviewCount?: number | null;
+const overflowItemStyles: SxProps = {
+  justifyContent: "center",
+  textAlign: "center",
+  flexGrow: 1,
+  py: 1,
 };
 
-export type ItemCardProps = {
-  item: ItemCardItem;
-  href?: string;
-  onClick?: (itemId: string) => void;
-  type: ItemType;
-};
-export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
-  const fallback = cond([
+const getFallback = (type: ItemType) =>
+  cond([
     [equals(ItemType.Beer), always({ image: beer1, alt: "A beer glass" })],
     [equals(ItemType.Wine), always({ image: wine1, alt: "A wine bottle" })],
     [
@@ -45,6 +54,53 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
       always({ image: spirit1, alt: "A bottle of spirits" }),
     ],
   ])(type);
+
+export type ItemCardItem = {
+  id: string;
+  itemId: string;
+  name: string;
+  vintage?: string;
+  displayImageId?: string;
+  placeholder?: string | null;
+  score?: number | null;
+  reviewCount?: number | null;
+  reviewed?: boolean | null;
+  favoriteCount?: number | null;
+  favoriteId?: string | null;
+};
+
+export type ItemCardProps = {
+  item: ItemCardItem;
+  href?: string;
+  onClick?: (itemId: string) => void;
+  type: ItemType;
+};
+
+export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
+  const userId = useUserId();
+  if (isNil(userId)) throw new Error("Invalid user id");
+  const [{ fetching: fetchingAdd }, addFavorite] =
+    useMutation(addFavoriteMutation);
+  const [{ fetching: fetchingDelete }, deleteFavorite] = useMutation(
+    deleteFavoriteMutation,
+  );
+  const fallback = getFallback(type);
+
+  const handleFavoriteClick = async (
+    event: MouseEvent<HTMLAnchorElement, globalThis.MouseEvent>,
+  ) => {
+    event.stopPropagation();
+    if (isNil(item.favoriteId)) {
+      await addFavorite({
+        object: { [typeToIdKey(type)]: item.itemId },
+      });
+    } else {
+      await deleteFavorite({
+        id: item.favoriteId,
+      });
+    }
+  };
+  const fetching = fetchingAdd || fetchingDelete;
 
   return (
     <InteractiveCard
@@ -106,23 +162,73 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
           flexDirection: "row",
           gap: 1,
           justifyContent: "space-around",
-          py: 1,
+          overflow: "hidden",
+          alignItems: "center",
+          padding: 0,
           borderTop: "1px solid",
           borderColor: "divider",
         }}
       >
-        {isNil(item.reviewCount) && <Typography>No Reviews</Typography>}
+        {isNotNil(item.favoriteCount) && (
+          <>
+            <Button
+              sx={{
+                zIndex: 2,
+                flexGrow: 1,
+              }}
+              onClick={handleFavoriteClick}
+              variant="soft"
+              color="neutral"
+              size="sm"
+              loading={fetching}
+              endDecorator={
+                isNotNil(item.favoriteId) ? (
+                  <MdFavorite
+                    style={{
+                      color: "red",
+                      fontSize: "2rem",
+                    }}
+                  />
+                ) : (
+                  <MdFavoriteBorder
+                    style={{
+                      fontSize: "2rem",
+                    }}
+                  />
+                )
+              }
+            >
+              <Typography level="title-md">{item.favoriteCount}</Typography>
+            </Button>
+          </>
+        )}
+        <Divider orientation="vertical" />
+        {/* {isNil(item.reviewCount) && (
+          <Typography sx={overflowItemStyles}>No Reviews</Typography>
+        )} */}
         {isNotNil(item.reviewCount) && (
-          <Typography endDecorator={<MdOutlineComment />} level="title-md">
+          <Typography
+            sx={overflowItemStyles}
+            endDecorator={<MdOutlineComment />}
+            level="title-md"
+          >
             {item.reviewCount}
           </Typography>
         )}
         <Divider orientation="vertical" />
-        {isNil(item.score) && <Typography>No Scores</Typography>}
+        {/* {isNil(item.score) && (
+          <Typography sx={overflowItemStyles}>No Scores</Typography>
+        )} */}
         {isNotNil(item.score) && (
           <Typography
+            sx={overflowItemStyles}
             endDecorator={
-              <MdStar style={{ color: "#ffba26", fontSize: "2rem" }} />
+              <MdStar
+                style={{
+                  color: item.reviewed ? "#ffba26" : "var(--Icon-color)",
+                  fontSize: "2rem",
+                }}
+              />
             }
             level="title-md"
           >

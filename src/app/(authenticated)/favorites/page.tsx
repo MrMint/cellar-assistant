@@ -3,7 +3,7 @@
 import { Grid, Stack, Typography } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
-import { ItemType, Item_Score_Bool_Exp_Bool_Exp } from "@shared/gql/graphql";
+import { ItemType, Item_Favorites_Bool_Exp } from "@shared/gql/graphql";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   always,
@@ -46,105 +46,108 @@ const friendsQuery = graphql(`
   }
 `);
 
-const rankingQuery = graphql(`
-  query RankingQuery(
-    $userId: uuid!
-    $reviewers: String!
-    $where: item_score_bool_exp_bool_exp
-  ) {
-    item_scores(
-      args: { reviewers: $reviewers }
-      order_by: { score: desc, count: desc }
-      where: $where
-      limit: 200
-    ) {
-      score
-      count
-      beer {
-        id
-        name
-        vintage
-        item_favorites(where: { user_id: { _eq: $userId } }) {
+const favoritesQuery = graphql(`
+  query FavoritesQuery($id: uuid!, $where: item_favorites_bool_exp) {
+    user(id: $id) {
+      item_favorites(where: $where) {
+        beer {
           id
-        }
-        user_reviews: reviews_aggregate(
-          where: { user_id: { _eq: $userId } }
-          limit: 1
-        ) {
-          aggregate {
-            count
+          name
+          vintage
+          reviews_aggregate {
+            ...avgScore
+          }
+          item_favorites(where: { user_id: { _eq: $id } }) {
+            id
+          }
+          user_reviews: reviews_aggregate(
+            where: { user_id: { _eq: $id } }
+            limit: 1
+          ) {
+            aggregate {
+              count
+            }
+          }
+          item_favorites_aggregate {
+            ...favoriteFragment
+          }
+          item_images(limit: 1) {
+            ...imageFragment
           }
         }
-        item_favorites_aggregate {
-          ...favoriteFragment
-        }
-        item_images(limit: 1) {
-          ...imageFragment
-        }
-      }
-      wine {
-        id
-        name
-        vintage
-        item_favorites(where: { user_id: { _eq: $userId } }) {
+        wine {
           id
-        }
-        user_reviews: reviews_aggregate(
-          where: { user_id: { _eq: $userId } }
-          limit: 1
-        ) {
-          aggregate {
-            count
+          name
+          vintage
+          reviews_aggregate {
+            ...avgScore
+          }
+          item_favorites(where: { user_id: { _eq: $id } }) {
+            id
+          }
+          user_reviews: reviews_aggregate(
+            where: { user_id: { _eq: $id } }
+            limit: 1
+          ) {
+            aggregate {
+              count
+            }
+          }
+          item_favorites_aggregate {
+            ...favoriteFragment
+          }
+          item_images(limit: 1) {
+            ...imageFragment
           }
         }
-        item_favorites_aggregate {
-          ...favoriteFragment
-        }
-        item_images(limit: 1) {
-          ...imageFragment
-        }
-      }
-      spirit {
-        id
-        name
-        vintage
-        item_favorites(where: { user_id: { _eq: $userId } }) {
+        spirit {
           id
-        }
-        user_reviews: reviews_aggregate(
-          where: { user_id: { _eq: $userId } }
-          limit: 1
-        ) {
-          aggregate {
-            count
+          name
+          vintage
+          reviews_aggregate {
+            ...avgScore
+          }
+          item_favorites(where: { user_id: { _eq: $id } }) {
+            id
+          }
+          user_reviews: reviews_aggregate(
+            where: { user_id: { _eq: $id } }
+            limit: 1
+          ) {
+            aggregate {
+              count
+            }
+          }
+          item_favorites_aggregate {
+            ...favoriteFragment
+          }
+          item_images(limit: 1) {
+            ...imageFragment
           }
         }
-        item_favorites_aggregate {
-          ...favoriteFragment
-        }
-        item_images(limit: 1) {
-          ...imageFragment
-        }
-      }
-      coffee {
-        id
-        name
-        item_favorites(where: { user_id: { _eq: $userId } }) {
+        coffee {
           id
-        }
-        user_reviews: reviews_aggregate(
-          where: { user_id: { _eq: $userId } }
-          limit: 1
-        ) {
-          aggregate {
-            count
+          name
+          reviews_aggregate {
+            ...avgScore
           }
-        }
-        item_favorites_aggregate {
-          ...favoriteFragment
-        }
-        item_images(limit: 1) {
-          ...imageFragment
+          item_favorites(where: { user_id: { _eq: $id } }) {
+            id
+          }
+          user_reviews: reviews_aggregate(
+            where: { user_id: { _eq: $id } }
+            limit: 1
+          ) {
+            aggregate {
+              count
+            }
+          }
+          item_favorites_aggregate {
+            ...favoriteFragment
+          }
+          item_images(limit: 1) {
+            ...imageFragment
+          }
         }
       }
     }
@@ -158,6 +161,14 @@ const rankingQuery = graphql(`
     file_id
     placeholder
   }
+  fragment avgScore on item_reviews_aggregate {
+    aggregate {
+      count
+      avg {
+        score
+      }
+    }
+  }
 `);
 
 const Rankings = () => {
@@ -166,21 +177,8 @@ const Rankings = () => {
   const router = useRouter();
   const { scrollId, setScrollId, scrollTargetRef } = useScrollRestore();
   const searchParams = new URLSearchParams(useSearchParams());
-  const reviewers = searchParams.get("reviewers");
   const types = searchParams.get("types");
-  const parsedReviewers = isNotNil(reviewers)
-    ? JSON.parse(reviewers)
-    : undefined;
   const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
-
-  const handleReviewersChange = (r: RankingsFilterValue[]) => {
-    if (isEmpty(r)) {
-      searchParams.delete("reviewers");
-    } else {
-      searchParams.set("reviewers", JSON.stringify(r));
-    }
-    router.replace(`?${searchParams}`);
-  };
 
   const handleTypesChange = (t: ItemType[]) => {
     if (isEmpty(t) || t.length >= getEnumKeys(ItemType).length) {
@@ -191,43 +189,22 @@ const Rankings = () => {
     router.replace(`?${searchParams}`);
   };
 
-  const [{ data: friendData }] = useQuery({
-    query: friendsQuery,
-    variables: { userId },
-  });
-
-  const reviewWhereClause: Item_Score_Bool_Exp_Bool_Exp = {};
+  const favoritesWhereClause: Item_Favorites_Bool_Exp = {};
   if (isNotNil(parsedTypes)) {
-    reviewWhereClause.type = { _in: parsedTypes };
-  }
-
-  let reviewersFilter = new Array<string>();
-  if (parsedReviewers?.includes(RankingsFilterValue.ME)) {
-    reviewersFilter = reviewersFilter.concat([userId]);
-  }
-  if (
-    isNotNil(friendData) &&
-    isNotNil(friendData.user) &&
-    parsedReviewers?.includes(RankingsFilterValue.FRIENDS)
-  ) {
-    reviewersFilter = reviewersFilter.concat(
-      friendData.user.friends.map((x) => x.friend_id),
-    );
+    favoritesWhereClause.type = { _in: parsedTypes };
   }
 
   const [{ data }] = useQuery({
-    query: rankingQuery,
+    query: favoritesQuery,
     variables: {
-      userId,
-      reviewers: `{${reviewersFilter.join(", ")}}`,
-      where: reviewWhereClause,
+      id: userId,
+      where: favoritesWhereClause,
     },
-    pause: isNil(friendData),
   });
 
   let items = new Array<{ item: ItemCardItem; type: ItemType }>();
-  if (isNotNil(data)) {
-    items = data.item_scores
+  if (isNotNil(data?.user?.item_favorites)) {
+    items = data.user?.item_favorites
       .map((x) => {
         const result = nth(
           0,
@@ -253,8 +230,8 @@ const Rankings = () => {
             vintage: result.vintage,
             displayImageId: result.item_images[0]?.file_id,
             placeholder: result.item_images[0]?.placeholder,
-            score: x.score,
-            reviewCount: x.count,
+            score: result.reviews_aggregate?.aggregate?.avg?.score,
+            reviewCount: result.reviews_aggregate?.aggregate?.count,
             favoriteCount: result.item_favorites_aggregate.aggregate?.count,
             favoriteId: nth(0, result.item_favorites)?.id,
             reviewed: defaultTo(0, result.user_reviews.aggregate?.count) > 0,
@@ -271,12 +248,8 @@ const Rankings = () => {
           spacing={2}
           sx={{ justifyContent: "space-between", alignItems: "center" }}
         >
-          <Typography level="title-lg">Rankings</Typography>
+          <Typography level="title-lg">Favorites</Typography>
           <Stack direction="row" spacing={2}>
-            <RankingsFilter
-              types={parsedReviewers}
-              onTypesChange={handleReviewersChange}
-            />
             <CellarItemsFilter
               types={parsedTypes}
               onTypesChange={handleTypesChange}
