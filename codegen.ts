@@ -31,6 +31,9 @@ const config: CodegenConfig = {
         "./shared/{*.ts,!(gql)/**/*.ts}",
       ],
       preset: "client",
+      presetConfig: {
+        fragmentMasking: false,
+      },
       plugins: [],
       config: {
         scalars,

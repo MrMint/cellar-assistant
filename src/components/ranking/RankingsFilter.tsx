@@ -1,5 +1,4 @@
 import { IconButton, Sheet, ToggleButtonGroup, Tooltip } from "@mui/joy";
-import { ItemType } from "@shared/gql/graphql";
 import { MdGroup, MdPerson } from "react-icons/md";
 
 export enum RankingsFilterValue {

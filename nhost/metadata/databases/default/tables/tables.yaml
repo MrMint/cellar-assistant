@@ -26,6 +26,7 @@
 - "!include public_friends.yaml"
 - "!include public_image_analysis.yaml"
 - "!include public_image_analysis_text_blocks.yaml"
+- "!include public_item_favorites.yaml"
 - "!include public_item_image.yaml"
 - "!include public_item_onboardings.yaml"
 - "!include public_item_reviews.yaml"

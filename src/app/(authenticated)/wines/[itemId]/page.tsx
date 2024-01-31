@@ -1,11 +1,10 @@
 "use client";
 
-import { AspectRatio, Card, Grid, Sheet, Stack } from "@mui/joy";
+import { Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
 import { formatCountry, formatWineVariety } from "@shared/utility";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { useQuery } from "urql";
@@ -33,6 +32,14 @@ const getWineQuery = graphql(`
       barcode_code
       alcohol_content_percentage
       country
+      item_favorites(where: { user_id: { _eq: $userId } }) {
+        id
+      }
+      item_favorites_aggregate {
+        aggregate {
+          count
+        }
+      }
       reviews(limit: 10, order_by: { created_at: desc }) {
         id
         user {
@@ -125,6 +132,9 @@ const WineDetails = ({
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
                 <ItemDetails
+                  itemId={wine.id}
+                  type={ItemType.Wine}
+                  favoriteId={nth(0, wine.item_favorites)?.id}
                   title={wine.name}
                   subTitlePhrases={[
                     formatVintage(wine.vintage),

@@ -1,0 +1,55 @@
+table:
+  name: item_favorites
+  schema: public
+object_relationships:
+  - name: beer
+    using:
+      foreign_key_constraint_on: beer_id
+  - name: coffee
+    using:
+      foreign_key_constraint_on: coffee_id
+  - name: spirit
+    using:
+      foreign_key_constraint_on: spirit_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+  - name: wine
+    using:
+      foreign_key_constraint_on: wine_id
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      set:
+        user_id: x-hasura-User-Id
+      columns:
+        - beer_id
+        - coffee_id
+        - spirit_id
+        - wine_id
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - beer_id
+        - coffee_id
+        - created_at
+        - id
+        - spirit_id
+        - type
+        - user_id
+        - wine_id
+      filter: {}
+      allow_aggregations: true
+      query_root_fields: []
+      subscription_root_fields: []
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+    comment: ""
