@@ -43,7 +43,7 @@
     "graphql-ws": "5.14.3",
     "lexical": "0.13.1",
     "next": "14.1.0",
-    "npm-run-all2": "6.1.1",
+    "npm-run-all2": "6.1.2",
     "prettier": "3.2.4",
     "ramda": "0.29.1",
     "react": "18.2.0",
