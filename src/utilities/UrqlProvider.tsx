@@ -1,6 +1,7 @@
 import type { NhostClient } from "@nhost/nhost-js";
 import { devtoolsExchange } from "@urql/devtools";
 import { authExchange } from "@urql/exchange-auth";
+import { add } from "date-fns";
 import { createClient as createWSClient } from "graphql-ws";
 import { isNil } from "ramda";
 import React, { PropsWithChildren } from "react";
@@ -47,15 +48,23 @@ function createNhostUrqlClient(options: NhostUrqlClientOptions) {
     cacheExchange,
     authExchange(async (util) => {
       let userSession = nhost.auth.getSession();
+      let expiresAt = add(new Date(), {
+        seconds: userSession?.accessTokenExpiresIn,
+      });
       return {
-        didAuthError: (error, operation) => error.response?.status === 401,
-
-        willAuthError: () =>
-          isNil(userSession) || userSession.accessTokenExpiresIn <= 0,
+        didAuthError: (error, operation) =>
+          error.response?.status === 401 ||
+          error.graphQLErrors.filter(
+            (x) => x.extensions?.code === "invalid-jwt",
+          ).length > 0,
+        willAuthError: () => isNil(userSession) || new Date() >= expiresAt,
         refreshAuth: async () => {
           const refreshResult = await nhost.auth.refreshSession();
           if (isNil(refreshResult.error)) {
             userSession = refreshResult.session;
+            expiresAt = add(new Date(), {
+              seconds: userSession?.accessTokenExpiresIn,
+            });
           } else {
             await nhost.auth.signOut();
           }
