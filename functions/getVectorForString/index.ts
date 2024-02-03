@@ -36,12 +36,6 @@ export default async function generateVector(
   res: Response,
 ) {
   try {
-    if (req.method === "GET") return res.status(200).send();
-    if (req.method !== "POST") return res.status(405).send();
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
-      return res.status(400).send();
-    }
-
     // TODO improve gcp credential handling
     if (isNil(predictionServiceClient)) {
       const credResult = await nhostClient.graphql.request(getCredential, {
@@ -52,6 +46,12 @@ export default async function generateVector(
         apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
       });
       console.log("Initialized GCP clients");
+    }
+
+    if (req.method === "GET") return res.status(200).send();
+    if (req.method !== "POST") return res.status(405).send();
+    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+      return res.status(400).send();
     }
 
     const {
