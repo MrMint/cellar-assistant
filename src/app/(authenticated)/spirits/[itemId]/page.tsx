@@ -3,7 +3,7 @@
 import { Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
-import { ItemType } from "@shared/gql/graphql";
+import { ItemType, Spirits } from "@shared/gql/graphql";
 import { formatCountry, formatSpiritType } from "@shared/utility";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
@@ -154,7 +154,7 @@ const SpiritDetails = ({
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
-                <AddReview item={spirit} />
+                <AddReview item={spirit as unknown as Spirits} />
                 <ItemReviews reviews={spirit.reviews} />
               </Stack>
             </Grid>

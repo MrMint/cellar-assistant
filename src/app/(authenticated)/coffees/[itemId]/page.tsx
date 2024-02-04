@@ -3,7 +3,7 @@
 import { Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
-import { ItemType } from "@shared/gql/graphql";
+import { Coffees, ItemType } from "@shared/gql/graphql";
 import { formatCountry, formatEnum } from "@shared/utility";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
@@ -152,7 +152,7 @@ const CoffeeDetails = ({
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
-                <AddReview item={coffee} />
+                <AddReview item={coffee as unknown as Coffees} />
                 <ItemReviews reviews={coffee.reviews} />
               </Stack>
             </Grid>

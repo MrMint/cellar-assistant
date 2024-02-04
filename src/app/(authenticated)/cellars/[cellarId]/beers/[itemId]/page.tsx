@@ -3,7 +3,7 @@
 import { Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
-import { ItemType } from "@shared/gql/graphql";
+import { Beers, ItemType } from "@shared/gql/graphql";
 import {
   addItemImageMutation,
   updateCellarItemMutation,
@@ -201,7 +201,7 @@ const BeerDetails = ({
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
-                <AddReview item={beer} />
+                <AddReview item={beer as unknown as Beers} />
                 <ItemReviews reviews={beer.reviews} />
               </Stack>
             </Grid>
