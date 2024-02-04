@@ -21,7 +21,7 @@ import { ReactNode } from "react";
 import { FaRankingStar } from "react-icons/fa6";
 import { MdFavorite, MdGroup, MdSearch, MdWarehouse } from "react-icons/md";
 import { useMediaQuery } from "react-responsive";
-import Link from "./Link";
+import { Link } from "./Link";
 
 const NavLinkIconButton = styled(IconButton)(({ theme }) => ({
   color: theme.palette.text.secondary,

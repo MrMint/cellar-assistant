@@ -23,18 +23,8 @@ import {
   RankingsFilter,
   RankingsFilterValue,
 } from "@/components/ranking/RankingsFilter";
-import { formatItemType, getEnumKeys } from "@/utilities";
+import { formatItemType, getEnumKeys, getItemType } from "@/utilities";
 import { useScrollRestore } from "@/utilities/hooks";
-
-const getItemType = (
-  typename: "beers" | "wines" | "spirits" | "coffees",
-): ItemType =>
-  cond([
-    [equals("beers"), always(ItemType.Beer)],
-    [equals("spirits"), always(ItemType.Spirit)],
-    [equals("wines"), always(ItemType.Wine)],
-    [equals("coffees"), always(ItemType.Coffee)],
-  ])(typename);
 
 const friendsQuery = graphql(`
   query FriendsQuery($userId: uuid!) {
@@ -47,125 +37,21 @@ const friendsQuery = graphql(`
 `);
 
 const favoritesQuery = graphql(`
-  query FavoritesQuery($id: uuid!, $where: item_favorites_bool_exp) {
-    user(id: $id) {
+  query FavoritesQuery($userId: uuid!, $where: item_favorites_bool_exp) {
+    user(id: $userId) {
       item_favorites(where: $where) {
         beer {
-          id
-          name
-          vintage
-          reviews_aggregate {
-            ...avgScore
-          }
-          item_favorites(where: { user_id: { _eq: $id } }) {
-            id
-          }
-          user_reviews: reviews_aggregate(
-            where: { user_id: { _eq: $id } }
-            limit: 1
-          ) {
-            aggregate {
-              count
-            }
-          }
-          item_favorites_aggregate {
-            ...favoriteFragment
-          }
-          item_images(limit: 1) {
-            ...imageFragment
-          }
+          ...beerItemCardFragment
         }
         wine {
-          id
-          name
-          vintage
-          reviews_aggregate {
-            ...avgScore
-          }
-          item_favorites(where: { user_id: { _eq: $id } }) {
-            id
-          }
-          user_reviews: reviews_aggregate(
-            where: { user_id: { _eq: $id } }
-            limit: 1
-          ) {
-            aggregate {
-              count
-            }
-          }
-          item_favorites_aggregate {
-            ...favoriteFragment
-          }
-          item_images(limit: 1) {
-            ...imageFragment
-          }
+          ...wineItemCardFragment
         }
         spirit {
-          id
-          name
-          vintage
-          reviews_aggregate {
-            ...avgScore
-          }
-          item_favorites(where: { user_id: { _eq: $id } }) {
-            id
-          }
-          user_reviews: reviews_aggregate(
-            where: { user_id: { _eq: $id } }
-            limit: 1
-          ) {
-            aggregate {
-              count
-            }
-          }
-          item_favorites_aggregate {
-            ...favoriteFragment
-          }
-          item_images(limit: 1) {
-            ...imageFragment
-          }
+          ...spiritItemCardFragment
         }
         coffee {
-          id
-          name
-          reviews_aggregate {
-            ...avgScore
-          }
-          item_favorites(where: { user_id: { _eq: $id } }) {
-            id
-          }
-          user_reviews: reviews_aggregate(
-            where: { user_id: { _eq: $id } }
-            limit: 1
-          ) {
-            aggregate {
-              count
-            }
-          }
-          item_favorites_aggregate {
-            ...favoriteFragment
-          }
-          item_images(limit: 1) {
-            ...imageFragment
-          }
+          ...coffeeItemCardFragment
         }
-      }
-    }
-  }
-  fragment favoriteFragment on item_favorites_aggregate {
-    aggregate {
-      count
-    }
-  }
-  fragment imageFragment on item_image {
-    file_id
-    placeholder
-  }
-  fragment avgScore on item_reviews_aggregate {
-    aggregate {
-      count
-      avg {
-        score
       }
     }
   }
@@ -197,7 +83,7 @@ const Rankings = () => {
   const [{ data }] = useQuery({
     query: favoritesQuery,
     variables: {
-      id: userId,
+      userId,
       where: favoritesWhereClause,
     },
   });

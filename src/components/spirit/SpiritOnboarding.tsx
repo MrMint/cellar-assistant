@@ -16,9 +16,13 @@ import { insertCellarItem } from "./actors/insertCellarItem";
 
 type SpiritOnboardingProps = {
   cellarId: string;
+  userId: string;
 };
 
-export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
+export const SpiritOnboarding = ({
+  cellarId,
+  userId,
+}: SpiritOnboardingProps) => {
   const urqlClient = useClient();
   const router = useRouter();
   const nhostClient = useNhostClient();
@@ -36,6 +40,7 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
         urqlClient,
         cellarId,
         router,
+        userId,
       },
     },
   );
@@ -68,7 +73,7 @@ export const SpiritOnboarding = ({ cellarId }: SpiritOnboardingProps) => {
         {state.value === "wizard" && (
           <Grid xs={12}>
             <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.lg })}>
-              <OnboardingWizard onComplete={handleOnComplete} />
+              <OnboardingWizard onComplete={handleOnComplete} userId={userId} />
             </Box>
           </Grid>
         )}

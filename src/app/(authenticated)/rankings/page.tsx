@@ -5,17 +5,7 @@ import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
 import { ItemType, Item_Score_Bool_Exp_Bool_Exp } from "@shared/gql/graphql";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  always,
-  cond,
-  defaultTo,
-  equals,
-  isEmpty,
-  isNil,
-  isNotNil,
-  nth,
-  without,
-} from "ramda";
+import { defaultTo, isEmpty, isNil, isNotNil, nth, without } from "ramda";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
@@ -23,18 +13,8 @@ import {
   RankingsFilter,
   RankingsFilterValue,
 } from "@/components/ranking/RankingsFilter";
-import { formatItemType, getEnumKeys } from "@/utilities";
+import { formatItemType, getEnumKeys, getItemType } from "@/utilities";
 import { useScrollRestore } from "@/utilities/hooks";
-
-const getItemType = (
-  typename: "beers" | "wines" | "spirits" | "coffees",
-): ItemType =>
-  cond([
-    [equals("beers"), always(ItemType.Beer)],
-    [equals("spirits"), always(ItemType.Spirit)],
-    [equals("wines"), always(ItemType.Wine)],
-    [equals("coffees"), always(ItemType.Coffee)],
-  ])(typename);
 
 const friendsQuery = graphql(`
   query FriendsQuery($userId: uuid!) {

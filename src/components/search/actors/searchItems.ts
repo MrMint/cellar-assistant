@@ -12,8 +12,9 @@ export const searchItemsMachine = createMachine(
     id: "search-items",
     initial: "idle",
     types: {} as {
-      input: { urqlClient: Client };
+      input: { urqlClient: Client; userId: string };
       context: {
+        userId: string;
         text: string;
         barcode?: Barcode;
         imageDataUrl?: string;
@@ -38,6 +39,7 @@ export const searchItemsMachine = createMachine(
     },
     context: ({ input }) => ({
       urqlClient: input.urqlClient,
+      userId: input.userId,
       text: "",
       items: [],
     }),
@@ -119,9 +121,10 @@ export const searchItemsMachine = createMachine(
         },
         invoke: {
           src: "searchByText",
-          input: ({ context: { text, urqlClient } }) => ({
+          input: ({ context: { text, urqlClient, userId } }) => ({
             text,
             urqlClient,
+            userId,
           }),
           onDone: [
             {
@@ -136,8 +139,9 @@ export const searchItemsMachine = createMachine(
       barcodeSearching: {
         invoke: {
           src: "searchByBarcode",
-          input: ({ context: { barcode, urqlClient } }) => ({
+          input: ({ context: { barcode, urqlClient, userId } }) => ({
             barcode,
+            userId,
             urqlClient,
           }),
           onDone: [
@@ -153,8 +157,9 @@ export const searchItemsMachine = createMachine(
       imageSearching: {
         invoke: {
           src: "searchByImage",
-          input: ({ context: { imageDataUrl, urqlClient } }) => ({
+          input: ({ context: { imageDataUrl, urqlClient, userId } }) => ({
             displayImage: imageDataUrl,
+            userId,
             urqlClient,
           }),
           onDone: [
