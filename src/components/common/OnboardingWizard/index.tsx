@@ -21,10 +21,14 @@ export type OnboardingResult = {
 };
 
 export type OnboardingWizardProps = {
+  userId: string;
   onComplete: (result: OnboardingResult) => void;
 };
 
-export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
+export const OnboardingWizard = ({
+  onComplete,
+  userId,
+}: OnboardingWizardProps) => {
   const urqlClient = useClient();
 
   const [state, send] = useMachine(
@@ -48,7 +52,7 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
           }),
       },
     }),
-    { input: { urqlClient } },
+    { input: { urqlClient, userId } },
   );
 
   return (

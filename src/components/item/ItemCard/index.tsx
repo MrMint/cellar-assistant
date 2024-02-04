@@ -7,7 +7,6 @@ import {
 } from "@mui/joy";
 import { SxProps } from "@mui/joy/styles/types";
 import { useUserId } from "@nhost/nextjs";
-import { graphql } from "@shared/gql";
 import { ItemType } from "@shared/gql/graphql";
 import { addFavoriteMutation, deleteFavoriteMutation } from "@shared/queries";
 import Image from "next/image";
@@ -20,6 +19,8 @@ import {
   MdStar,
 } from "react-icons/md";
 import { useMutation } from "urql";
+import { InteractiveCard } from "@/components/common/InteractiveCard";
+import { Link } from "@/components/common/Link";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
 import spirit1 from "@/images/spirit1.png";
@@ -31,8 +32,6 @@ import {
   nhostImageLoader,
   typeToIdKey,
 } from "@/utilities";
-import InteractiveCard from "../common/InteractiveCard";
-import Link from "../common/Link";
 
 const overflowItemStyles: SxProps = {
   justifyContent: "center",

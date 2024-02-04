@@ -1,5 +1,7 @@
 "use client";
 
+import { useUserId } from "@nhost/nextjs";
+import { isNil } from "ramda";
 import { SpiritOnboarding } from "@/components/spirit/SpiritOnboarding";
 
 const AddSpirit = ({
@@ -7,7 +9,9 @@ const AddSpirit = ({
 }: {
   params: { cellarId: string };
 }) => {
-  return <SpiritOnboarding cellarId={cellarId} />;
+  const userId = useUserId();
+  if (isNil(userId)) throw new Error("Bad UserId");
+  return <SpiritOnboarding cellarId={cellarId} userId={userId} />;
 };
 
 export default AddSpirit;

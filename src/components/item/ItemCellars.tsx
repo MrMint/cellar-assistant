@@ -11,7 +11,7 @@ import {
   Typography,
 } from "@mui/joy";
 import { isEmpty, not } from "ramda";
-import Link from "../common/Link";
+import { Link } from "../common/Link";
 
 type user = {
   id: string;

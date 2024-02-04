@@ -146,3 +146,13 @@ export const typeToIdKey = (type: ItemType) =>
     [equals(ItemType.Spirit), always("spirit_id")],
     [equals(ItemType.Coffee), always("coffee_id")],
   ])(type);
+
+export const getItemType = (
+  typename: "beers" | "wines" | "spirits" | "coffees",
+): ItemType =>
+  cond([
+    [equals("beers"), always(ItemType.Beer)],
+    [equals("spirits"), always(ItemType.Spirit)],
+    [equals("wines"), always(ItemType.Wine)],
+    [equals("coffees"), always(ItemType.Coffee)],
+  ])(typename);
