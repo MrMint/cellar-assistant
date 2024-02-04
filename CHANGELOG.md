@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.47.0](https://github.com/MrMint/cellar-assistant/compare/v0.46.0...v0.47.0) (2024-02-04)
+
+
+### Features
+
+* Adds favorites feature ([d6a4e91](https://github.com/MrMint/cellar-assistant/commit/d6a4e914cfe14eebab035c418a54dc09de8ad1ae))
+* Improves cold starts by moving gcp init above warming ([dba7c03](https://github.com/MrMint/cellar-assistant/commit/dba7c03faa9f3647712bf64b6c768a23afc80c5a))
+* Improves token handling around authorization errors ([3e1b63a](https://github.com/MrMint/cellar-assistant/commit/3e1b63abe85d91b43f905fec04cc3a4abcc2a6ce))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.25 ([14ed78a](https://github.com/MrMint/cellar-assistant/commit/14ed78a6151235df0df76b547098054c751e4f2c))
+* **deps:** update dependency @types/node to v20.11.13 ([515c89f](https://github.com/MrMint/cellar-assistant/commit/515c89fa7aeefd6fc514960eefc8cb9bf611e2ca))
+* **deps:** update dependency @types/node to v20.11.16 ([55f2f89](https://github.com/MrMint/cellar-assistant/commit/55f2f89e4310c36ffd5e6f0c191a2bc3fc93aa89))
+* **deps:** update dependency @types/react to v18.2.52 ([e386ee0](https://github.com/MrMint/cellar-assistant/commit/e386ee03cb907efb11bea28e6f2de265266d1376))
+* **deps:** update dependency npm-run-all2 to v6.1.2 ([8e71e6c](https://github.com/MrMint/cellar-assistant/commit/8e71e6c290ec2cab68a50c554793571d31d536d4))
+* **deps:** update dependency react-hook-form to v7.50.0 ([4f59f2a](https://github.com/MrMint/cellar-assistant/commit/4f59f2a57977a9d70927bb4246f81a709af55b22))
+* Makes native item share lowercase url ([100a581](https://github.com/MrMint/cellar-assistant/commit/100a581257a19398aaf7c58dccf9fc3660f057bc))
+
 ## [0.46.0](https://github.com/MrMint/cellar-assistant/compare/v0.45.0...v0.46.0) (2024-01-30)
 
 
