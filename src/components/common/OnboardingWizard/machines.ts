@@ -27,8 +27,10 @@ export const OnboardingMachine = createMachine(
         urqlClient: Client;
         cellarId: string;
         router: AppRouterInstance;
+        userId: string;
       };
       context: {
+        userId: string;
         urqlClient: Client;
         nhostClient: NhostClient;
         barcode?: Barcode;
@@ -77,6 +79,7 @@ export const OnboardingMachine = createMachine(
           };
     },
     context: ({ input }) => ({
+      userId: input.userId,
       itemOnboardingId: "",
       nhostClient: input.nhostClient,
       urqlClient: input.urqlClient,
@@ -236,8 +239,9 @@ export const pictureOnboardingMachine = createMachine(
     id: "onboarding-wizard-sub",
     initial: "barcode",
     types: {} as {
-      input: { urqlClient: Client };
+      input: { urqlClient: Client; userId: string };
       context: {
+        userId: string;
         barcode?: Barcode;
         frontLabelDataUrl?: string;
         backLabelDataUrl?: string;
@@ -262,6 +266,7 @@ export const pictureOnboardingMachine = createMachine(
     },
     context: ({ input }) => ({
       urqlClient: input.urqlClient,
+      userId: input.userId,
     }),
     states: {
       barcode: {
@@ -278,7 +283,8 @@ export const pictureOnboardingMachine = createMachine(
       searching: {
         invoke: {
           src: "searchByBarcode",
-          input: ({ context: { barcode, urqlClient } }) => ({
+          input: ({ context: { barcode, urqlClient, userId } }) => ({
+            userId,
             barcode,
             urqlClient,
           }),
@@ -362,7 +368,10 @@ export const pictureOnboardingMachine = createMachine(
       searchingByImage: {
         invoke: {
           src: "searchByImage",
-          input: ({ context: { displayImageDataUrl, urqlClient } }) => ({
+          input: ({
+            context: { displayImageDataUrl, urqlClient, userId },
+          }) => ({
+            userId,
             displayImage: displayImageDataUrl,
             urqlClient,
           }),

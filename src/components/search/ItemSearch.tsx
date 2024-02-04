@@ -13,8 +13,9 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import { useUserId } from "@nhost/nextjs";
 import { useActor } from "@xstate/react";
-import { includes, isEmpty, not } from "ramda";
+import { includes, isEmpty, isNil, not } from "ramda";
 import { MdCamera, MdScanner, MdSearch } from "react-icons/md";
 import { useClient } from "urql";
 import { formatItemType } from "@/utilities";
@@ -25,10 +26,13 @@ import { searchItemsMachine } from "./actors/searchItems";
 
 export const ItemSearch = () => {
   const urqlClient = useClient();
+  const userId = useUserId();
+  if (isNil(userId)) throw new Error("Nil UserId");
 
   const [state, send] = useActor(searchItemsMachine, {
     input: {
       urqlClient,
+      userId,
     },
   });
 

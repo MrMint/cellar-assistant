@@ -5,16 +5,7 @@ import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
 import { ItemType, Item_Score_Bool_Exp_Bool_Exp } from "@shared/gql/graphql";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  always,
-  cond,
-  equals,
-  isEmpty,
-  isNil,
-  isNotNil,
-  nth,
-  without,
-} from "ramda";
+import { defaultTo, isEmpty, isNil, isNotNil, nth, without } from "ramda";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
@@ -22,18 +13,8 @@ import {
   RankingsFilter,
   RankingsFilterValue,
 } from "@/components/ranking/RankingsFilter";
-import { formatItemType, getEnumKeys } from "@/utilities";
+import { formatItemType, getEnumKeys, getItemType } from "@/utilities";
 import { useScrollRestore } from "@/utilities/hooks";
-
-const getItemType = (
-  typename: "beers" | "wines" | "spirits" | "coffees",
-): ItemType =>
-  cond([
-    [equals("beers"), always(ItemType.Beer)],
-    [equals("spirits"), always(ItemType.Spirit)],
-    [equals("wines"), always(ItemType.Wine)],
-    [equals("coffees"), always(ItemType.Coffee)],
-  ])(typename);
 
 const friendsQuery = graphql(`
   query FriendsQuery($userId: uuid!) {
@@ -47,6 +28,7 @@ const friendsQuery = graphql(`
 
 const rankingQuery = graphql(`
   query RankingQuery(
+    $userId: uuid!
     $reviewers: String!
     $where: item_score_bool_exp_bool_exp
   ) {
@@ -62,38 +44,99 @@ const rankingQuery = graphql(`
         id
         name
         vintage
+        item_favorites(where: { user_id: { _eq: $userId } }) {
+          id
+        }
+        user_reviews: reviews_aggregate(
+          where: { user_id: { _eq: $userId } }
+          limit: 1
+        ) {
+          aggregate {
+            count
+          }
+        }
+        item_favorites_aggregate {
+          ...favoriteFragment
+        }
         item_images(limit: 1) {
-          file_id
-          placeholder
+          ...imageFragment
         }
       }
       wine {
         id
         name
         vintage
+        item_favorites(where: { user_id: { _eq: $userId } }) {
+          id
+        }
+        user_reviews: reviews_aggregate(
+          where: { user_id: { _eq: $userId } }
+          limit: 1
+        ) {
+          aggregate {
+            count
+          }
+        }
+        item_favorites_aggregate {
+          ...favoriteFragment
+        }
         item_images(limit: 1) {
-          file_id
-          placeholder
+          ...imageFragment
         }
       }
       spirit {
         id
         name
         vintage
+        item_favorites(where: { user_id: { _eq: $userId } }) {
+          id
+        }
+        user_reviews: reviews_aggregate(
+          where: { user_id: { _eq: $userId } }
+          limit: 1
+        ) {
+          aggregate {
+            count
+          }
+        }
+        item_favorites_aggregate {
+          ...favoriteFragment
+        }
         item_images(limit: 1) {
-          file_id
-          placeholder
+          ...imageFragment
         }
       }
       coffee {
         id
         name
+        item_favorites(where: { user_id: { _eq: $userId } }) {
+          id
+        }
+        user_reviews: reviews_aggregate(
+          where: { user_id: { _eq: $userId } }
+          limit: 1
+        ) {
+          aggregate {
+            count
+          }
+        }
+        item_favorites_aggregate {
+          ...favoriteFragment
+        }
         item_images(limit: 1) {
-          file_id
-          placeholder
+          ...imageFragment
         }
       }
     }
+  }
+  fragment favoriteFragment on item_favorites_aggregate {
+    aggregate {
+      count
+    }
+  }
+  fragment imageFragment on item_image {
+    file_id
+    placeholder
   }
 `);
 
@@ -155,6 +198,7 @@ const Rankings = () => {
   const [{ data }] = useQuery({
     query: rankingQuery,
     variables: {
+      userId,
       reviewers: `{${reviewersFilter.join(", ")}}`,
       where: reviewWhereClause,
     },
@@ -184,12 +228,16 @@ const Rankings = () => {
           type: getItemType(result.__typename),
           item: {
             id: result.id,
+            itemId: result.id,
             name: result.name,
             vintage: result.vintage,
             displayImageId: result.item_images[0]?.file_id,
             placeholder: result.item_images[0]?.placeholder,
             score: x.score,
             reviewCount: x.count,
+            favoriteCount: result.item_favorites_aggregate.aggregate?.count,
+            favoriteId: nth(0, result.item_favorites)?.id,
+            reviewed: defaultTo(0, result.user_reviews.aggregate?.count) > 0,
           },
         } as { item: ItemCardItem; type: ItemType };
       })

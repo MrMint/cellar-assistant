@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Avatar,
   Box,
@@ -17,9 +19,9 @@ import { useSignOut, useUserAvatarUrl } from "@nhost/nextjs";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
 import { FaRankingStar } from "react-icons/fa6";
-import { MdGroup, MdSearch, MdWarehouse } from "react-icons/md";
+import { MdFavorite, MdGroup, MdSearch, MdWarehouse } from "react-icons/md";
 import { useMediaQuery } from "react-responsive";
-import Link from "./Link";
+import { Link } from "./Link";
 
 const NavLinkIconButton = styled(IconButton)(({ theme }) => ({
   color: theme.palette.text.secondary,
@@ -101,6 +103,17 @@ const SideNavigationBar = () => {
                 href="/rankings"
                 pathname={pathname}
                 icon={<FaRankingStar />}
+              />
+            </ListItem>
+          </Tooltip>
+        </Box>
+        <Box>
+          <Tooltip title="Favorites" arrow placement={placement}>
+            <ListItem>
+              <NavLinkButton
+                href="/favorites"
+                pathname={pathname}
+                icon={<MdFavorite />}
               />
             </ListItem>
           </Tooltip>

@@ -18,7 +18,7 @@ import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
 import { useMutation } from "urql";
 import { HeaderBar } from "@/components/common/HeaderBar";
 import { formatItemType } from "@/utilities";
-import Link from "../common/Link";
+import { Link } from "../common/Link";
 
 type CellarItemHeaderProps = {
   itemId: string;

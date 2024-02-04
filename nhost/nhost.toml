@@ -159,12 +159,12 @@ timeout = 60000
 enabled = false
 
 [postgres]
-version = '14.6-20231218-1'
+version = '14.6-20240129-1'
 
 [provider]
 
 [storage]
-version = '0.5.1'
+version = '0.6.0'
 
 [observability]
 [observability.grafana]

@@ -9,11 +9,13 @@ import { Barcode } from "@/constants";
 export type SearchByBarcodeInput = {
   barcode?: Barcode;
   urqlClient: Client;
+  userId: string;
 };
 
 export type SearchByImageInput = {
   displayImage?: string;
   urqlClient: Client;
+  userId: string;
 };
 
 export type InsertCellarItemInput = {
@@ -58,6 +60,7 @@ export interface DefaultValuesResult<T extends DefaultValues> {
 
 export type BarcodeSearchResult = {
   id: string;
+  itemId: string;
   name: string;
   vintage?: string;
   type: ItemType;
@@ -65,4 +68,7 @@ export type BarcodeSearchResult = {
   placeholder?: string | null;
   score?: number | null;
   reviewCount?: number | null;
+  reviewed?: boolean | null;
+  favoriteCount?: number | null;
+  favoriteId?: string | null;
 };

@@ -9,7 +9,7 @@ import {
   updateCellarItemMutation,
 } from "@shared/queries";
 import { formatCountry, formatEnum, getIsCellarOwner } from "@shared/utility";
-import { isNil, isNotNil } from "ramda";
+import { isNil, isNotNil, nth } from "ramda";
 import { useCallback } from "react";
 import { useClient, useQuery } from "urql";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
@@ -40,6 +40,14 @@ const getCoffeeQuery = graphql(`
         roast_level
         species
         cultivar
+        item_favorites(where: { user_id: { _eq: $userId } }) {
+          id
+        }
+        item_favorites_aggregate {
+          aggregate {
+            count
+          }
+        }
         reviews(limit: 10, order_by: { created_at: desc }) {
           id
           user {
@@ -156,6 +164,9 @@ const CoffeeDetails = ({
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
                 <ItemDetails
+                  itemId={coffee.id}
+                  type={ItemType.Coffee}
+                  favoriteId={nth(0, coffee.item_favorites)?.id}
                   title={coffee.name}
                   subTitlePhrases={[
                     formatEnum(coffee.roast_level),

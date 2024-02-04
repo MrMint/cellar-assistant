@@ -1,7 +1,7 @@
 import { ItemType } from "@shared/gql/graphql";
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
 import { ImageLoaderProps } from "next/image";
-import { isEmpty, isNil } from "ramda";
+import { always, cond, equals, isEmpty, isNil } from "ramda";
 
 // https://stackoverflow.com/a/76775845
 export function getEnums<T extends { [key: string]: number | string }>(
@@ -138,3 +138,21 @@ export const convertYearToDate = (year: number | null | undefined) => {
 
   return format(new Date(year, 0, 1), "yyyy-MM-dd");
 };
+
+export const typeToIdKey = (type: ItemType) =>
+  cond([
+    [equals(ItemType.Beer), always("beer_id")],
+    [equals(ItemType.Wine), always("wine_id")],
+    [equals(ItemType.Spirit), always("spirit_id")],
+    [equals(ItemType.Coffee), always("coffee_id")],
+  ])(type);
+
+export const getItemType = (
+  typename: "beers" | "wines" | "spirits" | "coffees",
+): ItemType =>
+  cond([
+    [equals("beers"), always(ItemType.Beer)],
+    [equals("spirits"), always(ItemType.Spirit)],
+    [equals("wines"), always(ItemType.Wine)],
+    [equals("coffees"), always(ItemType.Coffee)],
+  ])(typename);

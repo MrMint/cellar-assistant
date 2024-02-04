@@ -1,18 +1,19 @@
 import { graphql } from "@shared/gql";
-import { ItemType } from "@shared/gql/graphql";
 import { getSearchVectorQuery } from "@shared/queries";
-import { isNil, isNotNil } from "ramda";
+import { defaultTo, isNil, isNotNil, nth, without } from "ramda";
 import { type Client } from "urql";
 import { fromPromise } from "xstate";
 import { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
+import { getItemType } from "@/utilities";
 
 type SearchByTextInput = {
   text: string;
+  userId: string;
   urqlClient: Client;
 };
 
 const textSearchQuery = graphql(`
-  query TextSearchQuery($text: String!) {
+  query TextSearchQuery($text: String!, $userId: uuid!) {
     text_search(
       args: { text: $text }
       where: { distance: { _lte: 0.32 } }
@@ -21,76 +22,27 @@ const textSearchQuery = graphql(`
     ) {
       distance
       beer {
-        id
-        name
-        item_images(limit: 1) {
-          file_id
-          placeholder
-        }
-        reviews_aggregate {
-          aggregate {
-            count
-            avg {
-              score
-            }
-          }
-        }
+        ...beerItemCardFragment
       }
       wine {
-        id
-        name
-        vintage
-        item_images(limit: 1) {
-          file_id
-          placeholder
-        }
-        reviews_aggregate {
-          aggregate {
-            count
-            avg {
-              score
-            }
-          }
-        }
+        ...wineItemCardFragment
       }
       spirit {
-        id
-        name
-        item_images(limit: 1) {
-          file_id
-          placeholder
-        }
-        reviews_aggregate {
-          aggregate {
-            count
-            avg {
-              score
-            }
-          }
-        }
+        ...spiritItemCardFragment
       }
       coffee {
-        id
-        name
-        item_images(limit: 1) {
-          file_id
-          placeholder
-        }
-        reviews_aggregate {
-          aggregate {
-            count
-            avg {
-              score
-            }
-          }
-        }
+        ...coffeeItemCardFragment
       }
     }
   }
 `);
 
 export const searchByText = fromPromise(
-  async ({ input: { text, urqlClient } }: { input: SearchByTextInput }) => {
+  async ({
+    input: { text, urqlClient, userId },
+  }: {
+    input: SearchByTextInput;
+  }) => {
     if (isNil(text)) return [];
     const vector = await urqlClient.query(getSearchVectorQuery, {
       text,
@@ -100,55 +52,40 @@ export const searchByText = fromPromise(
     if (isNotNil(vector.data?.create_search_vector)) {
       const searchResults = await urqlClient.query(textSearchQuery, {
         text: JSON.stringify(vector.data.create_search_vector),
+        userId,
       });
       if (isNotNil(searchResults.data?.text_search)) {
         results = searchResults.data.text_search
           .map((x) => {
-            if (isNotNil(x.wine)) {
-              return {
-                id: x.wine.id,
-                name: x.wine.name,
-                vintage: x.wine.vintage,
-                type: ItemType.Wine,
-                displayImageId: x.wine.item_images[0]?.file_id,
-                placeholder: x.wine.item_images[0]?.placeholder,
-                score: x.wine.reviews_aggregate.aggregate?.avg?.score,
-                reviewCount: x.wine.reviews_aggregate.aggregate?.count,
-              } as BarcodeSearchResult;
-            }
-            if (isNotNil(x.beer)) {
-              return {
-                id: x.beer.id,
-                name: x.beer.name,
-                type: ItemType.Beer,
-                displayImageId: x.beer.item_images[0]?.file_id,
-                placeholder: x.beer.item_images[0]?.placeholder,
-                score: x.beer.reviews_aggregate.aggregate?.avg?.score,
-                reviewCount: x.beer.reviews_aggregate.aggregate?.count,
-              } as BarcodeSearchResult;
-            }
-            if (isNotNil(x.spirit)) {
-              return {
-                id: x.spirit.id,
-                name: x.spirit.name,
-                type: ItemType.Spirit,
-                displayImageId: x.spirit.item_images[0]?.file_id,
-                placeholder: x.spirit.item_images[0]?.placeholder,
-                score: x.spirit.reviews_aggregate.aggregate?.avg?.score,
-                reviewCount: x.spirit.reviews_aggregate.aggregate?.count,
-              } as BarcodeSearchResult;
-            }
-            if (isNotNil(x.coffee)) {
-              return {
-                id: x.coffee.id,
-                name: x.coffee.name,
-                type: ItemType.Coffee,
-                displayImageId: x.coffee.item_images[0]?.file_id,
-                placeholder: x.coffee.item_images[0]?.placeholder,
-                score: x.coffee.reviews_aggregate.aggregate?.avg?.score,
-                reviewCount: x.coffee.reviews_aggregate.aggregate?.count,
-              } as BarcodeSearchResult;
-            }
+            const result = nth(
+              0,
+              without(
+                [undefined, null],
+                [
+                  x.beer,
+                  x.wine,
+                  x.spirit,
+                  isNotNil(x.coffee)
+                    ? { ...x.coffee, vintage: undefined }
+                    : undefined,
+                ],
+              ),
+            );
+            if (isNil(result)) return undefined;
+            return {
+              id: result.id,
+              type: getItemType(result.__typename),
+              itemId: result.id,
+              name: result.name,
+              vintage: result.vintage ?? undefined,
+              displayImageId: result.item_images[0]?.file_id,
+              placeholder: result.item_images[0]?.placeholder,
+              score: result.reviews_aggregate.aggregate?.avg?.score,
+              reviewCount: result.reviews_aggregate.aggregate?.count,
+              favoriteCount: result.item_favorites_aggregate.aggregate?.count,
+              favoriteId: nth(0, result.item_favorites)?.id,
+              reviewed: defaultTo(0, result.user_reviews.aggregate?.count) > 0,
+            } satisfies BarcodeSearchResult;
           })
           .filter(isNotNil);
       }

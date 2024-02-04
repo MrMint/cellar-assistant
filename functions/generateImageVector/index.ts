@@ -33,12 +33,11 @@ export default async function generateItemImageVector(
 ) {
   try {
     console.log(`Receieved request`);
-    if (req.method === "GET") return res.status(200).send();
+
     if (req.method !== "POST") return res.status(405).send();
     if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
       return res.status(400).send();
     }
-
     // TODO improve gcp credential handling
     if (isNil(predictionServiceClient)) {
       const credResult = await nhostClient.graphql.request(getCredential, {
@@ -66,7 +65,7 @@ export default async function generateItemImageVector(
 
     const response = await fetch(url);
     const image = await response.arrayBuffer();
-    const content = Buffer.from(image).toString("base64");
+    const content = Buffer.from(image);
     console.log("Fetched image");
 
     console.log(`Received request`);

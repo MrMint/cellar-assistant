@@ -6,28 +6,40 @@ import { graphql } from "@shared/gql";
 import { Cellar_Items_Bool_Exp, ItemType } from "@shared/gql/graphql";
 import { getSearchVectorQuery } from "@shared/queries";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ascend, isEmpty, isNil, isNotNil, not, prop, sortWith } from "ramda";
-import { useEffect, useRef } from "react";
+import {
+  ascend,
+  defaultTo,
+  isEmpty,
+  isNil,
+  isNotNil,
+  not,
+  nth,
+  prop,
+  sortWith,
+  without,
+} from "ramda";
 import { MdAdd } from "react-icons/md";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { HeaderBar } from "@/components/common/HeaderBar";
-import Link from "@/components/common/Link";
+import { Link } from "@/components/common/Link";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
 import withAuth from "@/hocs/withAuth";
-import { formatItemType, getEnumKeys } from "@/utilities";
-import { useHash, useScrollRestore } from "@/utilities/hooks";
+import { formatItemType, getEnumKeys, getItemType } from "@/utilities";
+import { useScrollRestore } from "@/utilities/hooks";
 
 type Item = {
   item: ItemCardItem;
   distance: number;
   type: ItemType;
 };
+
 const cellarQuery = graphql(`
   query GetCellarItemsQuery(
     $cellarId: uuid!
     $itemsWhereClause: cellar_items_bool_exp
     $search: vector
+    $userId: uuid!
   ) {
     cellars_by_pk(id: $cellarId) {
       id
@@ -57,62 +69,28 @@ const cellarQuery = graphql(`
           file_id
           placeholder
         }
-        spirit {
-          name
-          vintage
+        beer {
+          ...beerItemCardFragment
           item_vectors {
             distance(args: { search: $search })
-          }
-          reviews_aggregate {
-            aggregate {
-              count
-              avg {
-                score
-              }
-            }
           }
         }
         wine {
-          name
-          vintage
+          ...wineItemCardFragment
           item_vectors {
             distance(args: { search: $search })
-          }
-          reviews_aggregate {
-            aggregate {
-              count
-              avg {
-                score
-              }
-            }
           }
         }
-        beer {
-          name
+        spirit {
+          ...spiritItemCardFragment
           item_vectors {
             distance(args: { search: $search })
-          }
-          reviews_aggregate {
-            aggregate {
-              count
-              avg {
-                score
-              }
-            }
           }
         }
         coffee {
-          name
+          ...coffeeItemCardFragment
           item_vectors {
             distance(args: { search: $search })
-          }
-          reviews_aggregate {
-            aggregate {
-              count
-              avg {
-                score
-              }
-            }
           }
         }
       }
@@ -169,6 +147,7 @@ const Items = ({
   const [res] = useQuery({
     query: cellarQuery,
     variables: {
+      userId,
       cellarId,
       itemsWhereClause,
       search: not(isEmpty(search ?? ""))
@@ -176,91 +155,60 @@ const Items = ({
         : undefined,
     },
   });
+
   const isSearching = searchVectorResponse.fetching || res.fetching;
   const canAdd =
     res?.data?.cellars_by_pk?.created_by_id === userId ||
     res?.data?.cellars_by_pk?.co_owners
       ?.map((x) => x.user_id)
       .includes(userId) === true;
+
   const counts = {
     wines: res.data?.cellars_by_pk?.item_counts?.wines?.count,
     beers: res.data?.cellars_by_pk?.item_counts?.beers?.count,
     spirits: res.data?.cellars_by_pk?.item_counts?.spirits?.count,
     coffees: res.data?.cellars_by_pk?.item_counts?.coffees?.count,
   };
+
   const items =
-    res.data?.cellars_by_pk?.items.map((x) => {
-      switch (x.type) {
-        case "BEER":
-          if (isNil(x.beer)) throw Error();
-          return {
-            item: {
-              id: x.id,
-              name: x.beer.name,
-              displayImageId: x.display_image?.file_id,
-              placeholder: x.display_image?.placeholder,
-              score: x.beer.reviews_aggregate.aggregate?.avg?.score,
-              reviewCount: x.beer.reviews_aggregate.aggregate?.count,
-            } as ItemCardItem,
-            type: ItemType.Beer,
-            distance: Math.min(
-              ...x.beer.item_vectors.map((y) => y.distance).filter(isNotNil),
-            ),
-          } as Item;
-        case "WINE":
-          if (isNil(x.wine)) throw Error();
-          return {
-            item: {
-              id: x.id,
-              name: x.wine.name,
-              vintage: x.wine.vintage,
-              displayImageId: x.display_image?.file_id,
-              placeholder: x.display_image?.placeholder,
-              score: x.wine.reviews_aggregate.aggregate?.avg?.score,
-              reviewCount: x.wine.reviews_aggregate.aggregate?.count,
-            } as ItemCardItem,
-            type: ItemType.Wine,
-            distance: Math.min(
-              ...x.wine.item_vectors.map((y) => y.distance).filter(isNotNil),
-            ),
-          } as Item;
-        case "SPIRIT":
-          if (isNil(x.spirit)) throw Error();
-          return {
-            item: {
-              id: x.id,
-              name: x.spirit.name,
-              vintage: x.spirit.vintage,
-              displayImageId: x.display_image?.file_id,
-              placeholder: x.display_image?.placeholder,
-              score: x.spirit.reviews_aggregate.aggregate?.avg?.score,
-              reviewCount: x.spirit.reviews_aggregate.aggregate?.count,
-            } as ItemCardItem,
-            type: ItemType.Spirit,
-            distance: Math.min(
-              ...x.spirit.item_vectors.map((y) => y.distance).filter(isNotNil),
-            ),
-          } as Item;
-        case "COFFEE":
-          if (isNil(x.coffee)) throw Error();
-          return {
-            item: {
-              id: x.id,
-              name: x.coffee.name,
-              displayImageId: x.display_image?.file_id,
-              placeholder: x.display_image?.placeholder,
-              score: x.coffee.reviews_aggregate.aggregate?.avg?.score,
-              reviewCount: x.coffee.reviews_aggregate.aggregate?.count,
-            } as ItemCardItem,
-            type: ItemType.Coffee,
-            distance: Math.min(
-              ...x.coffee.item_vectors.map((y) => y.distance).filter(isNotNil),
-            ),
-          } as Item;
-        default:
-          throw Error("unexpected item type");
-      }
-    }) ?? [];
+    res.data?.cellars_by_pk?.items
+      .map((x) => {
+        const result = nth(
+          0,
+          without(
+            [undefined, null],
+            [
+              x.beer,
+              x.wine,
+              x.spirit,
+              isNotNil(x.coffee)
+                ? { ...x.coffee, vintage: undefined }
+                : undefined,
+            ],
+          ),
+        );
+        if (isNil(result)) return undefined;
+        return {
+          type: getItemType(result.__typename),
+          distance: Math.min(
+            ...result.item_vectors.map((y) => y.distance).filter(isNotNil),
+          ),
+          item: {
+            id: x.id,
+            itemId: result.id,
+            name: result.name,
+            vintage: result.vintage ?? undefined,
+            displayImageId: result.item_images[0]?.file_id,
+            placeholder: result.item_images[0]?.placeholder,
+            score: result.reviews_aggregate.aggregate?.avg?.score,
+            reviewCount: result.reviews_aggregate.aggregate?.count,
+            favoriteCount: result.item_favorites_aggregate.aggregate?.count,
+            favoriteId: nth(0, result.item_favorites)?.id,
+            reviewed: defaultTo(0, result.user_reviews.aggregate?.count) > 0,
+          } satisfies ItemCardItem,
+        };
+      })
+      .filter(isNotNil) ?? [];
 
   return (
     <Box>
