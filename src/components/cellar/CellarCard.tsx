@@ -17,8 +17,8 @@ import cellar2 from "@/images/cellar2.png";
 import cellar3 from "@/images/cellar3.png";
 import cellar4 from "@/images/cellar4.png";
 import cellar5 from "@/images/cellar5.png";
-import InteractiveCard from "../common/InteractiveCard";
-import Link from "../common/Link";
+import { InteractiveCard } from "../common/InteractiveCard";
+import { Link } from "../common/Link";
 
 const cellarImages = [cellar1, cellar2, cellar3, cellar4, cellar5];
 type user = {

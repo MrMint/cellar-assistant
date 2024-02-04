@@ -3,7 +3,7 @@ import { isNil, isNotNil } from "ramda";
 import { ReactNode } from "react";
 import { MdSearch } from "react-icons/md";
 import { DebounceInput } from "./DebouncedInput";
-import Link from "./Link";
+import { Link } from "./Link";
 
 type HeaderBarProps = {
   breadcrumbs?: { url: string; text: string }[];

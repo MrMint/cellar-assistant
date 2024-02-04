@@ -1,78 +1,23 @@
 import { graphql } from "@shared/gql";
-import { ItemType } from "@shared/gql/graphql";
-import { isNil, isNotNil } from "ramda";
+import { defaultTo, isNil, isNotNil, nth, without } from "ramda";
 import { fromPromise } from "xstate";
+import { getItemType } from "@/utilities";
 import { BarcodeSearchResult, SearchByBarcodeInput } from "./types";
 
 const searchByBarcodeQuery = graphql(`
-  query SearchByBarcode($code: String!) {
+  query SearchByBarcode($code: String!, $userId: uuid!) {
     barcodes_by_pk(code: $code) {
-      wines {
-        id
-        name
-        vintage
-        item_images(limit: 1) {
-          file_id
-          placeholder
-        }
-        reviews_aggregate {
-          aggregate {
-            count
-            avg {
-              score
-            }
-          }
-        }
-      }
       beers {
-        id
-        name
-        vintage
-        item_images(limit: 1) {
-          file_id
-          placeholder
-        }
-        reviews_aggregate {
-          aggregate {
-            count
-            avg {
-              score
-            }
-          }
-        }
+        ...beerItemCardFragment
+      }
+      wines {
+        ...wineItemCardFragment
       }
       spirits {
-        id
-        name
-        vintage
-        item_images(limit: 1) {
-          file_id
-          placeholder
-        }
-        reviews_aggregate {
-          aggregate {
-            count
-            avg {
-              score
-            }
-          }
-        }
+        ...spiritItemCardFragment
       }
       coffees {
-        id
-        name
-        item_images(limit: 1) {
-          file_id
-          placeholder
-        }
-        reviews_aggregate {
-          aggregate {
-            count
-            avg {
-              score
-            }
-          }
-        }
+        ...coffeeItemCardFragment
       }
     }
   }
@@ -80,13 +25,14 @@ const searchByBarcodeQuery = graphql(`
 
 export const searchByBarcode = fromPromise(
   async ({
-    input: { barcode, urqlClient },
+    input: { barcode, urqlClient, userId },
   }: {
     input: SearchByBarcodeInput;
   }) => {
     if (isNil(barcode)) return [];
     const searchResults = await urqlClient.query(searchByBarcodeQuery, {
       code: barcode.text,
+      userId,
     });
 
     let results = new Array<BarcodeSearchResult>();
@@ -96,66 +42,29 @@ export const searchByBarcode = fromPromise(
     ) {
       const { wines, beers, spirits, coffees } =
         searchResults.data.barcodes_by_pk;
-      results = results
-        .concat(
-          wines.map(
-            (x) =>
-              ({
-                id: x.id,
-                name: x.name,
-                vintage: x.vintage,
-                type: ItemType.Wine,
-                displayImageId: x.item_images[0]?.file_id,
-                placeholder: x.item_images[0]?.placeholder,
-                score: x.reviews_aggregate.aggregate?.avg?.score,
-                reviewCount: x.reviews_aggregate.aggregate?.count,
-              }) as BarcodeSearchResult,
-          ),
-        )
-        .concat(
-          beers.map(
-            (x) =>
-              ({
-                id: x.id,
-                name: x.name,
-                vintage: x.vintage,
-                type: ItemType.Beer,
-                displayImageId: x.item_images[0]?.file_id,
-                placeholder: x.item_images[0]?.placeholder,
-                score: x.reviews_aggregate.aggregate?.avg?.score,
-                reviewCount: x.reviews_aggregate.aggregate?.count,
-              }) as BarcodeSearchResult,
-          ),
-        )
-        .concat(
-          spirits.map(
-            (x) =>
-              ({
-                id: x.id,
-                name: x.name,
-                vintage: x.vintage,
-                type: ItemType.Spirit,
-                displayImageId: x.item_images[0]?.file_id,
-                placeholder: x.item_images[0]?.placeholder,
-                score: x.reviews_aggregate.aggregate?.avg?.score,
-                reviewCount: x.reviews_aggregate.aggregate?.count,
-              }) as BarcodeSearchResult,
-          ),
-        )
-        .concat(
-          coffees.map(
-            (x) =>
-              ({
-                id: x.id,
-                name: x.name,
-                type: ItemType.Coffee,
-                displayImageId: x.item_images[0]?.file_id,
-                placeholder: x.item_images[0]?.placeholder,
-                score: x.reviews_aggregate.aggregate?.avg?.score,
-                reviewCount: x.reviews_aggregate.aggregate?.count,
-              }) as BarcodeSearchResult,
-          ),
-        );
+      results = [
+        ...wines,
+        ...beers,
+        ...spirits,
+        ...coffees.map((x) => ({ ...x, vintage: undefined })),
+      ]
+        .map((result) => {
+          return {
+            id: result.id,
+            type: getItemType(result.__typename),
+            itemId: result.id,
+            name: result.name,
+            vintage: result.vintage ?? undefined,
+            displayImageId: result.item_images[0]?.file_id,
+            placeholder: result.item_images[0]?.placeholder,
+            score: result.reviews_aggregate.aggregate?.avg?.score,
+            reviewCount: result.reviews_aggregate.aggregate?.count,
+            favoriteCount: result.item_favorites_aggregate.aggregate?.count,
+            favoriteId: nth(0, result.item_favorites)?.id,
+            reviewed: defaultTo(0, result.user_reviews.aggregate?.count) > 0,
+          } satisfies BarcodeSearchResult;
+        })
+        .filter(isNotNil);
     }
     return results;
   },

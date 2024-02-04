@@ -136,3 +136,31 @@ export const getSearchVectorQuery = graphql(`
     create_search_vector(text: $text, image: $image)
   }
 `);
+
+export const addFavoriteMutation = graphql(`
+  mutation AddFavoriteMutation($object: item_favorites_insert_input!) {
+    insert_item_favorites_one(object: $object) {
+      id
+      beer {
+        id
+      }
+      wine {
+        id
+      }
+      spirit {
+        id
+      }
+      coffee {
+        id
+      }
+    }
+  }
+`);
+
+export const deleteFavoriteMutation = graphql(`
+  mutation DeleteFavoriteMutation($id: uuid!) {
+    delete_item_favorites_by_pk(id: $id) {
+      id
+    }
+  }
+`);

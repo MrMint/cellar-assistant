@@ -16,9 +16,10 @@ import { insertCellarItem } from "./actors/insertCellarItem";
 
 type BeerOnboardingProps = {
   cellarId: string;
+  userId: string;
 };
 
-export const BeerOnboarding = ({ cellarId }: BeerOnboardingProps) => {
+export const BeerOnboarding = ({ cellarId, userId }: BeerOnboardingProps) => {
   const urqlClient = useClient();
   const router = useRouter();
   const nhostClient = useNhostClient();
@@ -36,6 +37,7 @@ export const BeerOnboarding = ({ cellarId }: BeerOnboardingProps) => {
         urqlClient,
         cellarId,
         router,
+        userId,
       },
     },
   );
@@ -68,7 +70,7 @@ export const BeerOnboarding = ({ cellarId }: BeerOnboardingProps) => {
         {state.value === "wizard" && (
           <Grid xs={12}>
             <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.lg })}>
-              <OnboardingWizard onComplete={handleOnComplete} />
+              <OnboardingWizard onComplete={handleOnComplete} userId={userId} />
             </Box>
           </Grid>
         )}
