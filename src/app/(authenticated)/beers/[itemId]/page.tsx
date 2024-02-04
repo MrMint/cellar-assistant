@@ -40,6 +40,7 @@ const getBeerQuery = graphql(`
       reviews(limit: 10, order_by: { created_at: desc }) {
         id
         user {
+          id
           avatarUrl
           displayName
         }
@@ -151,7 +152,7 @@ const BeerDetails = ({
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
-                <AddReview beerId={beer.id} />
+                <AddReview item={beer} />
                 <ItemReviews reviews={beer.reviews} />
               </Stack>
             </Grid>

@@ -1,4 +1,4 @@
-import { ItemType } from "@shared/gql/graphql";
+import { Beers, Coffees, ItemType, Spirits, Wines } from "@shared/gql/graphql";
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
 import { ImageLoaderProps } from "next/image";
 import { always, cond, equals, isEmpty, isNil } from "ramda";
@@ -156,3 +156,5 @@ export const getItemType = (
     [equals("wines"), always(ItemType.Wine)],
     [equals("coffees"), always(ItemType.Coffee)],
   ])(typename);
+
+export type Item = Beers | Wines | Spirits | Coffees;

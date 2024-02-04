@@ -7,11 +7,14 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import { useUserId } from "@nhost/nextjs";
+import { ItemType, Item_Reviews } from "@shared/gql/graphql";
 import { addItemReview } from "@shared/queries";
 import { isNotNil } from "ramda";
 import { useState } from "react";
 import { Rating } from "react-simple-star-rating";
 import { useMutation } from "urql";
+import { Item, getItemType } from "@/utilities";
 import { RichTextEditor } from "../common/RichTextEditor";
 
 export type AddReviewResult = {
@@ -20,71 +23,52 @@ export type AddReviewResult = {
   text?: string;
 };
 
-interface AddBeerReviewProps {
-  beerId: string;
-  wineId?: never;
-  spiritId?: never;
-  coffeeId?: never;
-}
-interface AddWineReviewProps {
-  wineId: string;
-  beerId?: never;
-  spiritId?: never;
-  coffeeId?: never;
-}
-interface AddSpiritReviewProps {
-  spiritId: string;
-  beerId?: never;
-  wineId?: never;
-  coffeeId?: never;
-}
-interface AddCoffeeReviewProps {
-  coffeeId: string;
-  beerId?: never;
-  wineId?: never;
-  spiritId?: never;
+interface AddItemReviewProps {
+  item: Item;
 }
 
-export type AddReviewProps =
-  | AddBeerReviewProps
-  | AddWineReviewProps
-  | AddCoffeeReviewProps
-  | AddSpiritReviewProps;
+const getAddItemPayload = (item: Item, score?: number, text?: string) => {
+  const itemType = getItemType(item.__typename);
+  return {
+    review: {
+      beer_id: itemType === ItemType.Beer ? item?.id : undefined,
+      wine_id: itemType === ItemType.Wine ? item?.id : undefined,
+      spirit_id: itemType === ItemType.Spirit ? item?.id : undefined,
+      coffee_id: itemType === ItemType.Coffee ? item?.id : undefined,
+      score,
+      text,
+    },
+  };
+};
 
-export const AddReview = ({
-  beerId,
-  spiritId,
-  wineId,
-  coffeeId,
-}: AddReviewProps) => {
+export const AddReview = ({ item }: AddItemReviewProps) => {
   const [open, setOpen] = useState(false);
   const [score, setScore] = useState<number>();
   const [text, setText] = useState<string>();
+  const userId = useUserId();
   const [{ fetching }, addItem] = useMutation(addItemReview);
 
   const dirty = isNotNil(score) || isNotNil(text);
+  const existingReview = item?.reviews?.find(
+    (review: Item_Reviews) => review.user.id === userId,
+  );
 
-  const handleClick = async () => {
-    if (dirty === true) {
-      await addItem({
-        review: {
-          beer_id: beerId,
-          wine_id: wineId,
-          spirit_id: spiritId,
-          coffee_id: coffeeId,
-          score,
-          text,
-        },
-      });
-      setOpen(false);
-    }
-  };
+  if (existingReview) {
+    return null;
+  }
 
   if (open === false) {
     return (
       <Input placeholder="Add a Review..." onClick={() => setOpen(true)} />
     );
   }
+
+  const handleClick = async () => {
+    if (dirty === true) {
+      await addItem(getAddItemPayload(item, score, text));
+      setOpen(false);
+    }
+  };
 
   return (
     <Card>
