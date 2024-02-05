@@ -22,7 +22,8 @@
 3. **Install dependencies:**
    ```bash
    cd cellar-assistant
-   npm install
+   nvm use
+   npm ci
    ```
 4. **Create a Nhost project and set up environment variables:**
    - Follow the documentation to install the [Nhost cli](https://docs.nhost.io/development/cli/getting-started)
