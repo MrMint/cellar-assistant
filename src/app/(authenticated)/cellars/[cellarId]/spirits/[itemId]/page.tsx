@@ -3,7 +3,7 @@
 import { Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
-import { ItemType } from "@shared/gql/graphql";
+import { ItemType, Spirits } from "@shared/gql/graphql";
 import {
   addItemImageMutation,
   updateCellarItemMutation,
@@ -55,6 +55,7 @@ const getSpiritQuery = graphql(`
         reviews(limit: 10, order_by: { created_at: desc }) {
           id
           user {
+            id
             avatarUrl
             displayName
           }
@@ -201,7 +202,7 @@ const SpiritDetails = ({
             </Grid>
             <Grid xs={12} sm={12} lg={6}>
               <Stack spacing={2}>
-                <AddReview spiritId={spirit.id} />
+                <AddReview item={spirit as unknown as Spirits} />
                 <ItemReviews reviews={spirit.reviews} />
               </Stack>
             </Grid>
