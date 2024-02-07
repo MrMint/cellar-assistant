@@ -96,6 +96,7 @@ function createNhostUrqlClient(options: NhostUrqlClientOptions) {
       connectionParams() {
         return {
           headers: {
+            Authorization: `Bearer ${nhost.auth.getAccessToken()}`,
             "Sec-WebSocket-Protocol": "graphql-ws",
           },
         };
