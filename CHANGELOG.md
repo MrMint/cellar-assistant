@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.47.1](https://github.com/MrMint/cellar-assistant/compare/v0.47.0...v0.47.1) (2024-02-07)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @mui/joy to v5.0.0-beta.26 ([7fae258](https://github.com/MrMint/cellar-assistant/commit/7fae2583cb10f15630f9f41eeeffa57a2c321042))
+* **deps:** update dependency @nhost/nextjs to v2.1.0 ([6f7d565](https://github.com/MrMint/cellar-assistant/commit/6f7d565bab3b9c24d21f4fc1c6719f789a85da05))
+* **deps:** update dependency @nhost/nhost-js to v3.0.3 ([943ecf4](https://github.com/MrMint/cellar-assistant/commit/943ecf42a88e90886ea58cdef71d44367ef9ef87))
+* **deps:** update dependency @types/react to v18.2.55 ([8607e4c](https://github.com/MrMint/cellar-assistant/commit/8607e4c839cd653ae76bd730d05e783986500923))
+* **deps:** update dependency @vercel/analytics to v1.1.3 ([a6ac02b](https://github.com/MrMint/cellar-assistant/commit/a6ac02b7cbc30c879a9ac5b829e2fe4c9e90ce3e))
+* **deps:** update dependency prettier to v3.2.5 ([92fce27](https://github.com/MrMint/cellar-assistant/commit/92fce2729f3fa42057df72b04da5aece1ba64605))
+* **deps:** update dependency react-hook-form to v7.50.1 ([60eb31a](https://github.com/MrMint/cellar-assistant/commit/60eb31a27284e158eaa9a2653c3c2d39742a63b4))
+* **deps:** update dependency xstate to v5.6.1 ([a64352d](https://github.com/MrMint/cellar-assistant/commit/a64352d94ef51baa95657d493837877f8ad8a64b))
+* **deps:** update graphqlcodegenerator monorepo ([a013b52](https://github.com/MrMint/cellar-assistant/commit/a013b5290e205e62eb4b806f1da3352085e84e3d))
+* Fixes friends page subscription ([e380e87](https://github.com/MrMint/cellar-assistant/commit/e380e873fa6857de3b411bac4a8171b34b7b2161))
+
 ## [0.47.0](https://github.com/MrMint/cellar-assistant/compare/v0.46.0...v0.47.0) (2024-02-04)
 
 
