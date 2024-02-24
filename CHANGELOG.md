@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.47.2](https://github.com/MrMint/cellar-assistant/compare/v0.47.1...v0.47.2) (2024-02-24)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/aiplatform to v3.13.0 ([6b161c2](https://github.com/MrMint/cellar-assistant/commit/6b161c24cb542aed8168392f52eb6bf0755330f1))
+* **deps:** update dependency @google-cloud/vision to v4.1.0 ([9389885](https://github.com/MrMint/cellar-assistant/commit/938988500157b4c7e4b64f3be2e79ab003f4b479))
+* **deps:** update dependency @graphql-codegen/client-preset to v4.2.4 ([1e6f2d4](https://github.com/MrMint/cellar-assistant/commit/1e6f2d43519601ae6b6083bb81db2ae1e37e8f47))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.28 ([ceca16f](https://github.com/MrMint/cellar-assistant/commit/ceca16ff305b3fbc60597a34f41f7c6362f677bc))
+* **deps:** update dependency @nhost/nextjs to v2.1.4 ([9bcfb60](https://github.com/MrMint/cellar-assistant/commit/9bcfb60c301b02a8a128ca6158cd15733b9825b1))
+* **deps:** update dependency @nhost/nhost-js to v3.0.7 ([45dbbaf](https://github.com/MrMint/cellar-assistant/commit/45dbbaf87565a097b0c9d5054f929422e87f97a5))
+* **deps:** update dependency @parcel/watcher to v2.4.1 ([02eb5f0](https://github.com/MrMint/cellar-assistant/commit/02eb5f0c2c49ffcbedff976d68a5322e6e109cd2))
+* **deps:** update dependency graphql-ws to v5.15.0 ([bf336c9](https://github.com/MrMint/cellar-assistant/commit/bf336c9d32c1c2cd56b33b68fb6170af4b50d879))
+* **deps:** update react monorepo ([455315e](https://github.com/MrMint/cellar-assistant/commit/455315ef837151dc8c5611f88dc0d6cccc324586))
+* **deps:** update xstate monorepo ([4c0862c](https://github.com/MrMint/cellar-assistant/commit/4c0862c10864b0fd5c60e233dcb2e8c9d2b291f8))
+
 ## [0.47.1](https://github.com/MrMint/cellar-assistant/compare/v0.47.0...v0.47.1) (2024-02-07)
 
 
