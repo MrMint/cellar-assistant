@@ -10,7 +10,7 @@
     "@types/express": "4.17.21"
   },
   "dependencies": {
-    "@google-cloud/aiplatform": "3.10.1",
+    "@google-cloud/aiplatform": "3.13.0",
     "@google-cloud/vision": "4.0.3",
     "@nhost/nhost-js": "3.0.7",
     "form-data": "4.0.0",
