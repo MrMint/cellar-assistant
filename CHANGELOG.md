@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.47.3](https://github.com/MrMint/cellar-assistant/compare/v0.47.2...v0.47.3) (2024-03-07)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @emotion/react to v11.11.4 ([0f91411](https://github.com/MrMint/cellar-assistant/commit/0f9141104869a304b6a014aa094d7d451fb12c6f))
+* **deps:** update dependency @fontsource/inter to v5.0.17 ([7063b1a](https://github.com/MrMint/cellar-assistant/commit/7063b1ae992bf7d5cd27e0b7103bd6946a0633ef))
+* **deps:** update dependency @google-cloud/aiplatform to v3.14.0 ([d021277](https://github.com/MrMint/cellar-assistant/commit/d02127715fb907b21dbf7f52819dd1c51a462d87))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.30 ([1c11ecf](https://github.com/MrMint/cellar-assistant/commit/1c11ecf72e6d0b886021e9898fec2f448c8b457b))
+* **deps:** update dependency @nhost/nextjs to v2.1.6 ([bd40c5e](https://github.com/MrMint/cellar-assistant/commit/bd40c5e9ba305f287adcc840ff5b6c23cc75b5d4))
+* **deps:** update dependency @nhost/nhost-js to v3.0.8 ([c836de9](https://github.com/MrMint/cellar-assistant/commit/c836de990ce6dc2d16d3dcab166761771eb6cd92))
+* **deps:** update dependency @types/node to v20.11.25 ([7e00f14](https://github.com/MrMint/cellar-assistant/commit/7e00f140dbb44aed673a6a54c3b5e56598c5e721))
+* **deps:** update dependency @vercel/analytics to v1.2.2 ([6116b1e](https://github.com/MrMint/cellar-assistant/commit/6116b1e10527ffdde70a5329a0ae1db1ca7243da))
+* **deps:** update dependency eslint to v8.57.0 ([6c91fb3](https://github.com/MrMint/cellar-assistant/commit/6c91fb3be7b8f760e933b48f01c3c96a7884afa0))
+* **deps:** update dependency xstate to v5.9.1 ([6238dc7](https://github.com/MrMint/cellar-assistant/commit/6238dc7733b56f0cfc60e75d7d96ce02a4892064))
+* **deps:** update react monorepo ([de774f8](https://github.com/MrMint/cellar-assistant/commit/de774f88fb1b394a3283834520b1764522175b95))
+
 ## [0.47.2](https://github.com/MrMint/cellar-assistant/compare/v0.47.1...v0.47.2) (2024-02-24)
 
 
