@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.47.5](https://github.com/MrMint/cellar-assistant/compare/v0.47.4...v0.47.5) (2024-03-30)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @emotion/styled to v11.11.5 ([be38a0c](https://github.com/MrMint/cellar-assistant/commit/be38a0ca0277df5266723df166ec2730f60f4dd9))
+* **deps:** update dependency @google-cloud/aiplatform to v3.17.0 ([382af2b](https://github.com/MrMint/cellar-assistant/commit/382af2bb078fcb463597daf68cf79a80e83acbfb))
+* **deps:** update dependency @graphql-codegen/client-preset to v4.2.5 ([4236db0](https://github.com/MrMint/cellar-assistant/commit/4236db0f6a24a155765f909cb7dc7c1f001ba2dc))
+* **deps:** update dependency @types/ramda to v0.29.12 ([3f8871a](https://github.com/MrMint/cellar-assistant/commit/3f8871a040736febb8aa103ea8230fd7ad00b7d4))
+* **deps:** update dependency graphql-ws to v5.16.0 ([7213a5b](https://github.com/MrMint/cellar-assistant/commit/7213a5b192812488e1d7fe1f19092dcfaf515332))
+* **deps:** update dependency react-hook-form to v7.51.2 ([2e0b8e4](https://github.com/MrMint/cellar-assistant/commit/2e0b8e4e011330ec6e8348af8937d2d1b9b36141))
+* **deps:** update dependency react-responsive to v10 ([3ded9d4](https://github.com/MrMint/cellar-assistant/commit/3ded9d483d0d5d921fa9369efdc7da74eca70e29))
+* **deps:** update lexical monorepo to v0.14.2 ([371e078](https://github.com/MrMint/cellar-assistant/commit/371e0782439102d776be4f97ef46f029fede3821))
+* **deps:** update react monorepo ([f8d5dc5](https://github.com/MrMint/cellar-assistant/commit/f8d5dc52e0f84b332d4d516a4980e133bfecb2e0))
+
 ## [0.47.4](https://github.com/MrMint/cellar-assistant/compare/v0.47.3...v0.47.4) (2024-03-23)
 
 
