@@ -3,9 +3,8 @@
 import { Box, Button, Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
-import { Cellar_Items_Bool_Exp, ItemType } from "@shared/gql/graphql";
+import { Cellar_Items_Bool_Exp, Item_Type_Enum } from "@shared/gql/graphql";
 import { getSearchVectorQuery } from "@shared/queries";
-import { useRouter, useSearchParams } from "next/navigation";
 import {
   ascend,
   defaultTo,
@@ -25,14 +24,12 @@ import { HeaderBar } from "@/components/common/HeaderBar";
 import { Link } from "@/components/common/Link";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
 import withAuth from "@/hocs/withAuth";
-import { formatItemType, getEnumKeys, getItemType } from "@/utilities";
-import { useScrollRestore } from "@/utilities/hooks";
-
-type Item = {
-  item: ItemCardItem;
-  distance: number;
-  type: ItemType;
-};
+import { formatItemType, getItemType } from "@/utilities";
+import {
+  useScrollRestore,
+  useSearchFilterState,
+  useTypesFilterState,
+} from "@/utilities/hooks";
 
 const cellarQuery = graphql(`
   query GetCellarItemsQuery(
@@ -98,37 +95,12 @@ const cellarQuery = graphql(`
   }
 `);
 
-const Items = ({
-  params: { cellarId },
-  searchParams: { search, types },
-}: {
-  params: { cellarId: string };
-  searchParams: { search?: string; types?: string };
-}) => {
+const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
   const userId = useUserId();
   if (isNil(userId)) throw new Error("Invalid user id");
-  const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
-  const router = useRouter();
-  const searchParams = new URLSearchParams(useSearchParams());
   const { scrollId, setScrollId, scrollTargetRef } = useScrollRestore();
-
-  const handleSearchChange = (search: string) => {
-    if (isEmpty(search)) {
-      searchParams.delete("search");
-    } else {
-      searchParams.set("search", search);
-    }
-    router.replace(`?${searchParams}`);
-  };
-
-  const handleTypesChange = (types: ItemType[]) => {
-    if (isEmpty(types) || types.length >= getEnumKeys(ItemType).length) {
-      searchParams.delete("types");
-    } else {
-      searchParams.set("types", JSON.stringify(types));
-    }
-    router.replace(`?${searchParams}`);
-  };
+  const { types, setTypes } = useTypesFilterState();
+  const { search, setSearch } = useSearchFilterState();
 
   const [searchVectorResponse] = useQuery({
     query: getSearchVectorQuery,
@@ -140,8 +112,8 @@ const Items = ({
     empty_at: { _is_null: true },
   };
 
-  if (isNotNil(parsedTypes)) {
-    itemsWhereClause.type = { _in: parsedTypes };
+  if (isNotNil(types)) {
+    itemsWhereClause.type = { _in: types as string[] as Item_Type_Enum[] };
   }
 
   const [res] = useQuery({
@@ -216,7 +188,7 @@ const Items = ({
         <HeaderBar
           defaultSearchValue={search}
           isSearching={isSearching}
-          onSearchChange={handleSearchChange}
+          onSearchChange={setSearch}
           breadcrumbs={[
             { url: "/cellars", text: "Cellars" },
             {
@@ -227,8 +199,8 @@ const Items = ({
           endComponent={
             <Stack direction="row" spacing={2}>
               <CellarItemsFilter
-                types={parsedTypes}
-                onTypesChange={handleTypesChange}
+                types={types}
+                onTypesChange={setTypes}
                 counts={counts}
               />
               <Button

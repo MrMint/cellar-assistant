@@ -6,6 +6,7 @@ import { graphql } from "@shared/gql";
 import { ItemType, Item_Score_Bool_Exp_Bool_Exp } from "@shared/gql/graphql";
 import { useRouter, useSearchParams } from "next/navigation";
 import { defaultTo, isEmpty, isNil, isNotNil, nth, without } from "ramda";
+import { startTransition, useOptimistic } from "react";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
@@ -14,7 +15,11 @@ import {
   RankingsFilterValue,
 } from "@/components/ranking/RankingsFilter";
 import { formatItemType, getEnumKeys, getItemType } from "@/utilities";
-import { useScrollRestore } from "@/utilities/hooks";
+import {
+  useReviewersFilterState,
+  useScrollRestore,
+  useTypesFilterState,
+} from "@/utilities/hooks";
 
 const friendsQuery = graphql(`
   query FriendsQuery($userId: uuid!) {
@@ -143,33 +148,9 @@ const rankingQuery = graphql(`
 const Rankings = () => {
   const userId = useUserId();
   if (isNil(userId)) throw new Error("Nil UserId");
-  const router = useRouter();
   const { scrollId, setScrollId, scrollTargetRef } = useScrollRestore();
-  const searchParams = new URLSearchParams(useSearchParams());
-  const reviewers = searchParams.get("reviewers");
-  const types = searchParams.get("types");
-  const parsedReviewers = isNotNil(reviewers)
-    ? JSON.parse(reviewers)
-    : undefined;
-  const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
-
-  const handleReviewersChange = (r: RankingsFilterValue[]) => {
-    if (isEmpty(r)) {
-      searchParams.delete("reviewers");
-    } else {
-      searchParams.set("reviewers", JSON.stringify(r));
-    }
-    router.replace(`?${searchParams}`);
-  };
-
-  const handleTypesChange = (t: ItemType[]) => {
-    if (isEmpty(t) || t.length >= getEnumKeys(ItemType).length) {
-      searchParams.delete("types");
-    } else {
-      searchParams.set("types", JSON.stringify(t));
-    }
-    router.replace(`?${searchParams}`);
-  };
+  const { types, setTypes } = useTypesFilterState();
+  const { reviewers, setReviewers } = useReviewersFilterState();
 
   const [{ data: friendData }] = useQuery({
     query: friendsQuery,
@@ -177,18 +158,18 @@ const Rankings = () => {
   });
 
   const reviewWhereClause: Item_Score_Bool_Exp_Bool_Exp = {};
-  if (isNotNil(parsedTypes)) {
-    reviewWhereClause.type = { _in: parsedTypes };
+  if (isNotNil(types)) {
+    reviewWhereClause.type = { _in: types };
   }
 
   let reviewersFilter = new Array<string>();
-  if (parsedReviewers?.includes(RankingsFilterValue.ME)) {
+  if (reviewers?.includes(RankingsFilterValue.ME)) {
     reviewersFilter = reviewersFilter.concat([userId]);
   }
   if (
     isNotNil(friendData) &&
     isNotNil(friendData.user) &&
-    parsedReviewers?.includes(RankingsFilterValue.FRIENDS)
+    reviewers?.includes(RankingsFilterValue.FRIENDS)
   ) {
     reviewersFilter = reviewersFilter.concat(
       friendData.user.friends.map((x) => x.friend_id),
@@ -253,14 +234,8 @@ const Rankings = () => {
         >
           <Typography level="title-lg">Rankings</Typography>
           <Stack direction="row" spacing={2}>
-            <RankingsFilter
-              types={parsedReviewers}
-              onTypesChange={handleReviewersChange}
-            />
-            <CellarItemsFilter
-              types={parsedTypes}
-              onTypesChange={handleTypesChange}
-            />
+            <RankingsFilter types={reviewers} onTypesChange={setReviewers} />
+            <CellarItemsFilter types={types} onTypesChange={setTypes} />
           </Stack>
         </Stack>
       </Grid>
