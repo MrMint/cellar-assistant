@@ -3,28 +3,17 @@
 import { Grid, Stack, Typography } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
 import { graphql } from "@shared/gql";
-import { ItemType, Item_Favorites_Bool_Exp } from "@shared/gql/graphql";
-import { useRouter, useSearchParams } from "next/navigation";
 import {
-  always,
-  cond,
-  defaultTo,
-  equals,
-  isEmpty,
-  isNil,
-  isNotNil,
-  nth,
-  without,
-} from "ramda";
+  ItemType,
+  Item_Favorites_Bool_Exp,
+  Item_Type_Enum,
+} from "@shared/gql/graphql";
+import { defaultTo, isNil, isNotNil, nth, without } from "ramda";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
-import {
-  RankingsFilter,
-  RankingsFilterValue,
-} from "@/components/ranking/RankingsFilter";
-import { formatItemType, getEnumKeys, getItemType } from "@/utilities";
-import { useScrollRestore } from "@/utilities/hooks";
+import { formatItemType, getItemType } from "@/utilities";
+import { useScrollRestore, useTypesFilterState } from "@/utilities/hooks";
 
 const friendsQuery = graphql(`
   query FriendsQuery($userId: uuid!) {
@@ -60,24 +49,13 @@ const favoritesQuery = graphql(`
 const Rankings = () => {
   const userId = useUserId();
   if (isNil(userId)) throw new Error("Nil UserId");
-  const router = useRouter();
   const { scrollId, setScrollId, scrollTargetRef } = useScrollRestore();
-  const searchParams = new URLSearchParams(useSearchParams());
-  const types = searchParams.get("types");
-  const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
-
-  const handleTypesChange = (t: ItemType[]) => {
-    if (isEmpty(t) || t.length >= getEnumKeys(ItemType).length) {
-      searchParams.delete("types");
-    } else {
-      searchParams.set("types", JSON.stringify(t));
-    }
-    router.replace(`?${searchParams}`);
-  };
+  const { types, setTypes } = useTypesFilterState();
 
   const favoritesWhereClause: Item_Favorites_Bool_Exp = {};
-  if (isNotNil(parsedTypes)) {
-    favoritesWhereClause.type = { _in: parsedTypes };
+  if (isNotNil(types)) {
+    const itemTypes = types as string[] as Item_Type_Enum[];
+    favoritesWhereClause.type = { _in: itemTypes };
   }
 
   const [{ data }] = useQuery({
@@ -136,10 +114,7 @@ const Rankings = () => {
         >
           <Typography level="title-lg">Favorites</Typography>
           <Stack direction="row" spacing={2}>
-            <CellarItemsFilter
-              types={parsedTypes}
-              onTypesChange={handleTypesChange}
-            />
+            <CellarItemsFilter types={types} onTypesChange={setTypes} />
           </Stack>
         </Stack>
       </Grid>
