@@ -1,5 +1,15 @@
-import { isNotNil } from "ramda";
-import { useEffect, useRef, useState } from "react";
+import { ItemType } from "@shared/gql/graphql";
+import { useRouter, useSearchParams } from "next/navigation";
+import { isEmpty, isNotNil } from "ramda";
+import {
+  startTransition,
+  useEffect,
+  useOptimistic,
+  useRef,
+  useState,
+} from "react";
+import { RankingsFilterValue } from "@/components/ranking/RankingsFilter";
+import { getEnumKeys } from ".";
 
 export function useInterval(callback: () => void, delay: number) {
   const intervalRef = useRef<any>(null);
@@ -55,4 +65,70 @@ export const useScrollRestore = () => {
   }, []);
 
   return { scrollId: hash, scrollTargetRef, setScrollId };
+};
+
+export const useTypesFilterState = () => {
+  const router = useRouter();
+  const searchParams = new URLSearchParams(useSearchParams());
+
+  const types = searchParams.get("types");
+  const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
+  const [optimisticTypes, setOptimisticTypes] =
+    useOptimistic<ItemType[]>(parsedTypes);
+
+  const setTypes = (t: ItemType[]) => {
+    if (isEmpty(t) || t.length >= getEnumKeys(ItemType).length) {
+      startTransition(() => setOptimisticTypes([]));
+      searchParams.delete("types");
+    } else {
+      startTransition(() => setOptimisticTypes(t));
+      searchParams.set("types", JSON.stringify(t));
+    }
+    router.replace(`?${searchParams}`);
+  };
+
+  return { types: optimisticTypes, setTypes };
+};
+
+export const useReviewersFilterState = () => {
+  const router = useRouter();
+  const searchParams = new URLSearchParams(useSearchParams());
+
+  const reviewers = searchParams.get("reviewers");
+  const parsedReviewers = isNotNil(reviewers)
+    ? JSON.parse(reviewers)
+    : undefined;
+  const [optimisticReviewers, setOptimisticReviewers] =
+    useOptimistic<RankingsFilterValue[]>(parsedReviewers);
+
+  const setReviewers = (r: RankingsFilterValue[]) => {
+    if (isEmpty(r)) {
+      startTransition(() => setOptimisticReviewers([]));
+      searchParams.delete("reviewers");
+    } else {
+      startTransition(() => setOptimisticReviewers(r));
+      searchParams.set("reviewers", JSON.stringify(r));
+    }
+    router.replace(`?${searchParams}`);
+  };
+
+  return { reviewers: optimisticReviewers, setReviewers };
+};
+
+export const useSearchFilterState = () => {
+  const router = useRouter();
+  const searchParams = new URLSearchParams(useSearchParams());
+
+  const search = searchParams.get("search") ?? undefined;
+
+  const setSearch = (search: string) => {
+    if (isEmpty(search)) {
+      searchParams.delete("search");
+    } else {
+      searchParams.set("search", search);
+    }
+    router.replace(`?${searchParams}`);
+  };
+
+  return { search, setSearch };
 };
