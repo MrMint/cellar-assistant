@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.48.0](https://github.com/MrMint/cellar-assistant/compare/v0.47.5...v0.48.0) (2024-04-06)
+
+
+### Features
+
+* Adds optimistic update for filtering on pages ([30dacbb](https://github.com/MrMint/cellar-assistant/commit/30dacbbbdadbe8db3a1ed3646b509eac48a6f303))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/vision to v4.2.0 ([353598a](https://github.com/MrMint/cellar-assistant/commit/353598a5de59d405788174f6fb6eb4059a3356ee))
+* **deps:** update dependency @nhost/nextjs to v2.1.10 ([ad9f002](https://github.com/MrMint/cellar-assistant/commit/ad9f00245eb3cce50552cc4efb68344a6c890368))
+* **deps:** update dependency @nhost/nhost-js to v3.0.11 ([19fe1bf](https://github.com/MrMint/cellar-assistant/commit/19fe1bf0fd9a6a28485d5e893e98d071dc602325))
+* **deps:** update dependency hasura to v2.38.0-ce ([802b29e](https://github.com/MrMint/cellar-assistant/commit/802b29e310b0abe9f90e0169eb0551ecb8dfb558))
+* **deps:** update dependency typescript to v5.4.4 ([d9b5ae1](https://github.com/MrMint/cellar-assistant/commit/d9b5ae10e4680c0743bcfcdc57e7a7058fb9ae1f))
+* **deps:** update dependency urql to v4.0.7 ([ae8cf16](https://github.com/MrMint/cellar-assistant/commit/ae8cf160ed1c18502acc02a6bd558ac2437b09b9))
+* **deps:** update lexical monorepo to v0.14.3 ([670c110](https://github.com/MrMint/cellar-assistant/commit/670c110bae2fa755c0cff9b1858ee135bce153ca))
+* **deps:** update react monorepo ([46179a8](https://github.com/MrMint/cellar-assistant/commit/46179a80e94617bf46e897a3dffc60d0ff9ff517))
+
 ## [0.47.5](https://github.com/MrMint/cellar-assistant/compare/v0.47.4...v0.47.5) (2024-03-30)
 
 
