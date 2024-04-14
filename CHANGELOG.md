@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.48.1](https://github.com/MrMint/cellar-assistant/compare/v0.48.0...v0.48.1) (2024-04-14)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/aiplatform to v3.18.0 ([ee4289b](https://github.com/MrMint/cellar-assistant/commit/ee4289b478611a3958d15d272e75bcf032cc17f2))
+* **deps:** update dependency react-hook-form to v7.51.3 ([e80fdb2](https://github.com/MrMint/cellar-assistant/commit/e80fdb258276e4b5bb59774f905b0d18c3cb3fb5))
+* **deps:** update dependency typescript to v5.4.5 ([812748e](https://github.com/MrMint/cellar-assistant/commit/812748e5e90eabe7fde9e6d6b2e5dfc376842d2d))
+* **deps:** update dependency xstate to v5.10.0 ([96fb0d5](https://github.com/MrMint/cellar-assistant/commit/96fb0d532125164fff28c9fe978485acb790f68a))
+* **deps:** update nextjs monorepo to v14.2.1 ([ba4d97b](https://github.com/MrMint/cellar-assistant/commit/ba4d97bf0e23d0dcad2febfc07192c64235c9f1f))
+* **deps:** update react monorepo ([332e134](https://github.com/MrMint/cellar-assistant/commit/332e134cfb4d68eb3a368e86fb600b636b96e5fd))
+* **deps:** Updates nhost versions ([328b7c8](https://github.com/MrMint/cellar-assistant/commit/328b7c88c6d542202e93cec62e6a1676c7c59121))
+
 ## [0.48.0](https://github.com/MrMint/cellar-assistant/compare/v0.47.5...v0.48.0) (2024-04-06)
 
 
