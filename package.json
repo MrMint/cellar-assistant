@@ -32,7 +32,7 @@
     "@urql/exchange-auth": "2.1.6",
     "@urql/devtools": "2.0.3",
     "@vercel/analytics": "1.2.2",
-    "@xstate/react": "4.1.0",
+    "@xstate/react": "4.1.1",
     "autoprefixer": "10.4.19",
     "date-fns": "3.6.0",
     "eslint": "8.57.0",
@@ -58,6 +58,6 @@
     "ts-node": "10.9.2",
     "typescript": "5.4.5",
     "urql": "4.0.7",
-    "xstate": "5.10.0"
+    "xstate": "5.11.0"
   }
 }
