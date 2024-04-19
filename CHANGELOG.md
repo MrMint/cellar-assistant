@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.48.2](https://github.com/MrMint/cellar-assistant/compare/v0.48.1...v0.48.2) (2024-04-19)
+
+
+### Bug Fixes
+
+* Fixes unhandled exception rendering item page ([9e078a1](https://github.com/MrMint/cellar-assistant/commit/9e078a116caf7ff8d723d5f534774e83b1ad46ee))
+
 ## [0.48.1](https://github.com/MrMint/cellar-assistant/compare/v0.48.0...v0.48.1) (2024-04-14)
 
 
