@@ -9,7 +9,6 @@ import {
 } from "@mui/joy";
 import { ItemType } from "@shared/gql/graphql";
 import { addCellarItemMutation } from "@shared/queries";
-import { useSearchParams } from "next/navigation";
 import { gt, isNil, isNotNil, length } from "ramda";
 import { MdAdd, MdArrowDownward } from "react-icons/md";
 import { useMutation } from "urql";
@@ -32,8 +31,6 @@ export const ItemHeader = ({
   itemName,
   cellars,
 }: ItemHeaderProps) => {
-  const { get } = useSearchParams();
-  const defaultCellar = get("defaultCellar");
   const [{ fetching }, addItem] = useMutation(addCellarItemMutation);
 
   const isLoading = isNil(cellars) || fetching;
