@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.48.3](https://github.com/MrMint/cellar-assistant/compare/v0.48.2...v0.48.3) (2024-04-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fontsource/inter to v5.0.18 ([9e57f72](https://github.com/MrMint/cellar-assistant/commit/9e57f7225e9e052d67a5eaccf013f1d4afa39f79))
+* **deps:** update dependency @google-cloud/aiplatform to v3.19.0 ([3150551](https://github.com/MrMint/cellar-assistant/commit/315055154670504bbf0c5feecb8618d3b1e4556e))
+* **deps:** update dependency @google-cloud/aiplatform to v3.19.1 ([69805ed](https://github.com/MrMint/cellar-assistant/commit/69805edf219ecefd4fcf05cfdf7510bc584c1b68))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.36 ([abe30c1](https://github.com/MrMint/cellar-assistant/commit/abe30c17565f5094a921a27c71be4967d61e2855))
+* **deps:** update lexical monorepo to v0.14.5 ([11e3171](https://github.com/MrMint/cellar-assistant/commit/11e3171a760356260cf163375475cf758d69ab0f))
+* **deps:** update nextjs monorepo to v14.2.3 ([20e4e9d](https://github.com/MrMint/cellar-assistant/commit/20e4e9dc4cc3474d9bf3cac1a7cb63a19a99cdb3))
+
 ## [0.48.2](https://github.com/MrMint/cellar-assistant/compare/v0.48.1...v0.48.2) (2024-04-19)
 
 
