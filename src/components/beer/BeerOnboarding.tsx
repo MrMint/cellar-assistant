@@ -1,5 +1,6 @@
 import { Box, Grid, Stack, Typography } from "@mui/joy";
 import { useNhostClient } from "@nhost/nextjs";
+import { BeerStyle, Country } from "@shared/gql";
 import { useActor } from "@xstate/react";
 import { useRouter } from "next/navigation";
 import { includes } from "ramda";
@@ -17,9 +18,16 @@ import { insertCellarItem } from "./actors/insertCellarItem";
 type BeerOnboardingProps = {
   cellarId: string;
   userId: string;
+  styles: BeerStyle[];
+  countries: Country[];
 };
 
-export const BeerOnboarding = ({ cellarId, userId }: BeerOnboardingProps) => {
+export const BeerOnboarding = ({
+  cellarId,
+  userId,
+  styles,
+  countries,
+}: BeerOnboardingProps) => {
   const urqlClient = useClient();
   const router = useRouter();
   const nhostClient = useNhostClient();
@@ -99,6 +107,8 @@ export const BeerOnboarding = ({ cellarId, userId }: BeerOnboardingProps) => {
               itemOnboardingId={state.context.itemOnboardingId}
               defaultValues={state.context.defaults as BeerFormDefaultValues}
               onCreated={(itemId: string) => send({ type: "CREATED", itemId })}
+              countries={countries}
+              styles={styles}
             />
           </Grid>
         )}

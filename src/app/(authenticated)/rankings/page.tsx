@@ -14,7 +14,7 @@ import {
   RankingsFilter,
   RankingsFilterValue,
 } from "@/components/ranking/RankingsFilter";
-import { formatItemType, getEnumKeys, getItemType } from "@/utilities";
+import { formatItemType, getItemType } from "@/utilities";
 import {
   useReviewersFilterState,
   useScrollRestore,
@@ -49,6 +49,7 @@ const rankingQuery = graphql(`
         id
         name
         vintage
+        __typename
         item_favorites(where: { user_id: { _eq: $userId } }) {
           id
         }
@@ -71,6 +72,7 @@ const rankingQuery = graphql(`
         id
         name
         vintage
+        __typename
         item_favorites(where: { user_id: { _eq: $userId } }) {
           id
         }
@@ -93,6 +95,7 @@ const rankingQuery = graphql(`
         id
         name
         vintage
+        __typename
         item_favorites(where: { user_id: { _eq: $userId } }) {
           id
         }
@@ -114,6 +117,7 @@ const rankingQuery = graphql(`
       coffee {
         id
         name
+        __typename
         item_favorites(where: { user_id: { _eq: $userId } }) {
           id
         }

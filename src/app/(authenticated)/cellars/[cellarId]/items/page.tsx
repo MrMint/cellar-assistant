@@ -2,8 +2,7 @@
 
 import { Box, Button, Grid, Stack } from "@mui/joy";
 import { useUserId } from "@nhost/nextjs";
-import { graphql } from "@shared/gql";
-import { Cellar_Items_Bool_Exp, Item_Type_Enum } from "@shared/gql/graphql";
+import { VariablesOf, graphql } from "@shared/gql";
 import { getSearchVectorQuery } from "@shared/queries";
 import {
   ascend,
@@ -23,6 +22,12 @@ import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { HeaderBar } from "@/components/common/HeaderBar";
 import { Link } from "@/components/common/Link";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
+import {
+  beerItemCardFragment,
+  coffeeItemCardFragment,
+  spiritItemCardFragment,
+  wineItemCardFragment,
+} from "@/components/item/ItemCard/fragments";
 import withAuth from "@/hocs/withAuth";
 import { formatItemType, getItemType } from "@/utilities";
 import {
@@ -31,69 +36,77 @@ import {
   useTypesFilterState,
 } from "@/utilities/hooks";
 
-const cellarQuery = graphql(`
-  query GetCellarItemsQuery(
-    $cellarId: uuid!
-    $itemsWhereClause: cellar_items_bool_exp
-    $search: vector
-    $userId: uuid!
-  ) {
-    cellars_by_pk(id: $cellarId) {
-      id
-      name
-      created_by_id
-      co_owners {
-        user_id
-      }
-      item_counts: items_aggregate(where: { empty_at: { _is_null: true } }) {
-        beers: aggregate {
-          count(columns: [beer_id])
-        }
-        wines: aggregate {
-          count(columns: [wine_id])
-        }
-        spirits: aggregate {
-          count(columns: [spirit_id])
-        }
-        coffees: aggregate {
-          count(columns: [coffee_id])
-        }
-      }
-      items(where: $itemsWhereClause) {
+const cellarQuery = graphql(
+  `
+    query GetCellarItemsQuery(
+      $cellarId: uuid!
+      $itemsWhereClause: cellar_items_bool_exp
+      $search: vector
+      $userId: uuid!
+    ) {
+      cellars_by_pk(id: $cellarId) {
         id
-        type
-        display_image {
-          file_id
-          placeholder
+        name
+        created_by_id
+        co_owners {
+          user_id
         }
-        beer {
-          ...beerItemCardFragment
-          item_vectors {
-            distance(args: { search: $search })
+        item_counts: items_aggregate(where: { empty_at: { _is_null: true } }) {
+          beers: aggregate {
+            count(columns: [beer_id])
+          }
+          wines: aggregate {
+            count(columns: [wine_id])
+          }
+          spirits: aggregate {
+            count(columns: [spirit_id])
+          }
+          coffees: aggregate {
+            count(columns: [coffee_id])
           }
         }
-        wine {
-          ...wineItemCardFragment
-          item_vectors {
-            distance(args: { search: $search })
+        items(where: $itemsWhereClause) {
+          id
+          type
+          display_image {
+            file_id
+            placeholder
           }
-        }
-        spirit {
-          ...spiritItemCardFragment
-          item_vectors {
-            distance(args: { search: $search })
+          beer {
+            ...beerItemCardFragment
+            item_vectors {
+              distance(args: { search: $search })
+            }
           }
-        }
-        coffee {
-          ...coffeeItemCardFragment
-          item_vectors {
-            distance(args: { search: $search })
+          wine {
+            ...wineItemCardFragment
+            item_vectors {
+              distance(args: { search: $search })
+            }
+          }
+          spirit {
+            ...spiritItemCardFragment
+            item_vectors {
+              distance(args: { search: $search })
+            }
+          }
+          coffee {
+            ...coffeeItemCardFragment
+            item_vectors {
+              distance(args: { search: $search })
+            }
           }
         }
       }
     }
-  }
-`);
+  `,
+  [
+    beerItemCardFragment,
+    wineItemCardFragment,
+    spiritItemCardFragment,
+    coffeeItemCardFragment,
+  ],
+);
 
 const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
   const userId = useUserId();
@@ -108,12 +121,13 @@ const Items = ({ params: { cellarId } }: { params: { cellarId: string } }) => {
     pause: isEmpty(search ?? ""),
   });
 
-  const itemsWhereClause: Cellar_Items_Bool_Exp = {
-    empty_at: { _is_null: true },
-  };
+  const itemsWhereClause: VariablesOf<typeof cellarQuery>["itemsWhereClause"] =
+    {
+      empty_at: { _is_null: true },
+    };
 
   if (isNotNil(types)) {
-    itemsWhereClause.type = { _in: types as string[] as Item_Type_Enum[] };
+    itemsWhereClause.type = { _in: types };
   }
 
   const [res] = useQuery({

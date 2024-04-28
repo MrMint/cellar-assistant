@@ -12,6 +12,12 @@ import { defaultTo, isNil, isNotNil, nth, without } from "ramda";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { ItemCard, ItemCardItem } from "@/components/item/ItemCard";
+import {
+  beerItemCardFragment,
+  spiritItemCardFragment,
+  coffeeItemCardFragment,
+  wineItemCardFragment,
+} from "@/components/item/ItemCard/fragments";
 import { formatItemType, getItemType } from "@/utilities";
 import { useScrollRestore, useTypesFilterState } from "@/utilities/hooks";
 
@@ -25,26 +31,34 @@ const friendsQuery = graphql(`
   }
 `);
 
-const favoritesQuery = graphql(`
-  query FavoritesQuery($userId: uuid!, $where: item_favorites_bool_exp) {
-    user(id: $userId) {
-      item_favorites(where: $where) {
-        beer {
-          ...beerItemCardFragment
-        }
-        wine {
-          ...wineItemCardFragment
-        }
-        spirit {
-          ...spiritItemCardFragment
-        }
-        coffee {
-          ...coffeeItemCardFragment
+const favoritesQuery = graphql(
+  `
+    query FavoritesQuery($userId: uuid!, $where: item_favorites_bool_exp) {
+      user(id: $userId) {
+        item_favorites(where: $where) {
+          beer {
+            ...beerItemCardFragment
+          }
+          wine {
+            ...wineItemCardFragment
+          }
+          spirit {
+            ...spiritItemCardFragment
+          }
+          coffee {
+            ...coffeeItemCardFragment
+          }
         }
       }
     }
-  }
-`);
+  `,
+  [
+    beerItemCardFragment,
+    wineItemCardFragment,
+    spiritItemCardFragment,
+    coffeeItemCardFragment,
+  ],
+);
 
 const Rankings = () => {
   const userId = useUserId();

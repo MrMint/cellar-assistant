@@ -124,7 +124,7 @@ const BeerDetails = ({
     async (image: string) => {
       if (isNotNil(beer)) {
         const addImageResult = await client.mutation(addItemImageMutation, {
-          input: { image, item_id: beer.id, item_type: ItemType.Beer },
+          input: { image, item_id: beer.id, item_type: "BEER" },
         });
         if (isNil(addImageResult.error)) {
           const updateItemResult = await client.mutation(

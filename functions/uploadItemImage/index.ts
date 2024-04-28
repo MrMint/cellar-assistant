@@ -1,12 +1,8 @@
 import { NhostClient } from "@nhost/nhost-js";
-import {
-  Item_Image_Insert_Input,
-  Item_Image_Upload_Input,
-  Item_Image_Upload_Result,
-} from "@shared/gql/graphql.js";
 import { addItemImageMutation } from "@shared/queries/index.js";
 import { randomUUID } from "crypto";
 import { Request, Response } from "express";
+import { ResultOf, VariablesOf } from "gql.tada";
 import { isNil, isNotNil } from "ramda";
 import { dataUrlToFormData } from "../_utils/index.js";
 import { insertItemImage } from "./_queries.js";
@@ -29,11 +25,11 @@ export default async function uploadItemImage(
     any,
     any,
     {
-      input: { input: Item_Image_Upload_Input };
+      input: VariablesOf<typeof addItemImageMutation>;
       session_variables?: { "x-hasura-user-id"?: string };
     }
   >,
-  res: Response<Item_Image_Upload_Result>,
+  res: Response<ResultOf<typeof addItemImageMutation>["item_image_upload"]>,
 ) {
   try {
     if (req.method !== "POST") return res.status(405).send();
@@ -55,7 +51,7 @@ export default async function uploadItemImage(
     }
     console.log(`Received request`);
 
-    let item: Item_Image_Insert_Input = {};
+    let item: VariablesOf<typeof insertItemImage>["item"] = {};
     switch (item_type) {
       case "BEER":
         item.beer_id = item_id;
@@ -106,7 +102,6 @@ export default async function uploadItemImage(
     console.log(`Added item_image row`);
 
     return res.status(200).send({
-      __typename: "item_image_upload_result",
       id: addItemImageResult.data.insert_item_image_one.id,
     });
   } catch (exception) {

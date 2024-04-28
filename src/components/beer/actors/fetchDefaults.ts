@@ -1,6 +1,6 @@
 import { graphql } from "@shared/gql";
-import { Country_Enum, Beer_Style_Enum } from "@shared/gql/graphql";
-import { isNil, isNotNil } from "ramda";
+import { Country, BeerStyle } from "@shared/gql/graphql";
+import { isNil } from "ramda";
 import { fromPromise } from "xstate";
 import {
   DefaultValues,
@@ -57,12 +57,8 @@ export const fetchDefaults = fromPromise(
         alcohol_content_percentage: beer.alcohol_content_percentage,
         barcode_code: beer.barcode_code,
         barcode_type: beer.barcode_type,
-        country: isNotNil(beer.country)
-          ? (beer.country as Country_Enum)
-          : undefined,
-        style: isNotNil(beer.style)
-          ? (beer.style as Beer_Style_Enum)
-          : undefined,
+        country: beer.country as Country | undefined,
+        style: beer.style as BeerStyle | undefined,
         international_bitterness_unit: beer.international_bitterness_unit,
       },
       itemOnboardingId: result.data.beer_defaults.item_onboarding_id,

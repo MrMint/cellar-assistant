@@ -1,15 +1,4 @@
-import {
-  Beer_Style_Enum,
-  Coffee_Cultivar_Enum,
-  Coffee_Process_Enum,
-  Coffee_Roast_Level_Enum,
-  Coffee_Species_Enum,
-  Country_Enum,
-  Permission_Type_Enum,
-  Wine_Style_Enum,
-  Wine_Variety_Enum,
-} from "@shared/gql/graphql";
-import { getEnumKeys } from "@/utilities";
+import { graphql } from "@shared/gql/graphql";
 
 export enum BarcodeType {
   UPC_A = "UPC_A",
@@ -42,12 +31,22 @@ declare global {
 }
 
 // TODO move these over to graphql queries to support enum table edits at runtime
-export const beerStyleKeys = getEnumKeys(Beer_Style_Enum);
-export const wineStyleKeys = getEnumKeys(Wine_Style_Enum);
-export const wineVarietyKeys = getEnumKeys(Wine_Variety_Enum);
-export const countryKeys = getEnumKeys(Country_Enum);
-export const permissionKeys = getEnumKeys(Permission_Type_Enum);
-export const coffeeRoastLevelKeys = getEnumKeys(Coffee_Roast_Level_Enum);
-export const coffeeProcessKeys = getEnumKeys(Coffee_Process_Enum);
-export const coffeeSpeciesKeys = getEnumKeys(Coffee_Species_Enum);
-export const coffeeCultivarKeys = getEnumKeys(Coffee_Cultivar_Enum);
+export type wineStyleKeys = ReturnType<
+  typeof graphql.scalar<"wine_style_enum">
+>;
+export type wineVarietyKeys = ReturnType<
+  typeof graphql.scalar<"wine_variety_enum">
+>;
+export const countryKeys = graphql.scalar<"country_enum">;
+export type permissionKeys = ReturnType<
+  typeof graphql.scalar<"permission_type_enum">
+>;
+export type coffeeRoastLevelKeys = ReturnType<
+  typeof graphql.scalar<"coffee_roast_level_enum">
+>;
+export type coffeeProcessKeys = ReturnType<
+  typeof graphql.scalar<"coffee_process_enum">
+>;
+export type coffeeCultivarKeys = ReturnType<
+  typeof graphql.scalar<"coffee_cultivar_enum">
+>;

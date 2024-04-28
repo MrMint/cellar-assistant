@@ -27,7 +27,7 @@ export function formatIsoDateString(
   return dateFnsFormat(parseISO(input), format);
 }
 
-export function formatAsPercentage(input: string | null | undefined) {
+export function formatAsPercentage(input: number | null | undefined) {
   if (isNil(input)) return undefined;
   return `${input}%`;
 }

@@ -16,6 +16,17 @@
     "plugins": [
       {
         "name": "next"
+      },
+      {
+        "name": "@0no-co/graphqlsp",
+        "schema": {
+          "url": "https://local.graphql.nhost.run/v1",
+          "headers": {
+            "x-hasura-admin-secret": "nhost-admin-secret",
+            "X-Exclude-Invalid": "true"
+          }
+        },
+        "tadaOutputLocation": "./shared/gql/graphql-env.d.ts"
       }
     ],
     "paths": {

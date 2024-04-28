@@ -10,29 +10,20 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
-import { graphql } from "@shared/gql";
-import {
-  Barcodes_Constraint,
-  Barcodes_Update_Column,
-  Beer_Style_Enum,
-  Beers_Insert_Input,
-  Country_Enum,
-} from "@shared/gql/graphql";
+import { BeerStyle, Country, VariablesOf } from "@shared/gql";
 import { addBeerMutation, updateBeerMutation } from "@shared/queries";
 import { formatBeerStyle, formatCountry } from "@shared/utility";
-import { format } from "date-fns";
-import { isEmpty, isNil, isNotNil, not } from "ramda";
+import { isNil, isNotNil } from "ramda";
 import { Controller, SubmitHandler, useForm } from "react-hook-form";
 import { CombinedError, useClient } from "urql";
-import { beerStyleKeys, countryKeys } from "@/constants";
 import { convertYearToDate, formatVintage, parseNumber } from "@/utilities";
 
 type SharedFields = {
   description?: string;
   barcode_code?: string;
   barcode_type?: string;
-  style?: Beer_Style_Enum;
-  country?: Country_Enum;
+  style?: BeerStyle;
+  country?: Country;
   alcohol_content_percentage?: string;
   international_bitterness_unit?: string;
 };
@@ -51,13 +42,15 @@ export type BeerFormProps = {
   id?: string;
   itemOnboardingId?: string;
   defaultValues?: BeerFormDefaultValues;
+  countries: Country[];
+  styles: BeerStyle[];
   onCreated: (createdId: string) => void;
 };
 
 function mapFormValuesToInsertInput(
   values: IBeerFormInput,
   itemOnboardingId?: string,
-): Beers_Insert_Input {
+): VariablesOf<typeof addBeerMutation>["beer"] {
   const update = {
     name: values.name,
     alcohol_content_percentage: parseNumber(values.alcohol_content_percentage),
@@ -69,7 +62,7 @@ function mapFormValuesToInsertInput(
     international_bitterness_unit: parseNumber(
       values.international_bitterness_unit,
     ),
-  } as Beers_Insert_Input;
+  } as VariablesOf<typeof addBeerMutation>["beer"];
 
   if (isNotNil(update) && isNotNil(values.barcode_code)) {
     update.barcode = {
@@ -78,8 +71,8 @@ function mapFormValuesToInsertInput(
         type: values.barcode_type,
       },
       on_conflict: {
-        constraint: Barcodes_Constraint.BarcodesPkey,
-        update_columns: [Barcodes_Update_Column.Code],
+        constraint: "barcodes_pkey",
+        update_columns: ["code"],
       },
     };
   }
@@ -91,6 +84,8 @@ export const BeerForm = ({
   defaultValues,
   itemOnboardingId,
   onCreated,
+  styles,
+  countries,
 }: BeerFormProps) => {
   const client = useClient();
   const defaultVintage = formatVintage(defaultValues?.vintage);
@@ -200,9 +195,9 @@ export const BeerForm = ({
                       field.onChange(value);
                     }}
                   >
-                    {beerStyleKeys.map((x) => (
-                      <Option key={x} value={Beer_Style_Enum[x]}>
-                        {formatBeerStyle(Beer_Style_Enum[x])}
+                    {styles.map((x) => (
+                      <Option key={x} value={x}>
+                        {formatBeerStyle(x)}
                       </Option>
                     ))}
                   </Select>
@@ -222,9 +217,9 @@ export const BeerForm = ({
                       field.onChange(value);
                     }}
                   >
-                    {countryKeys.map((x) => (
-                      <Option key={x} value={Country_Enum[x]}>
-                        {formatCountry(Country_Enum[x])}
+                    {countries.map((x) => (
+                      <Option key={x} value={x}>
+                        {formatCountry(x)}
                       </Option>
                     ))}
                   </Select>
