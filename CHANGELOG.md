@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.48.4](https://github.com/MrMint/cellar-assistant/compare/v0.48.3...v0.48.4) (2024-05-28)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/aiplatform to v3.21.0 ([472488c](https://github.com/MrMint/cellar-assistant/commit/472488c3457ee894eaebdcc965302d53abb838b2))
+* **deps:** update dependency @graphql-codegen/client-preset to v4.2.6 ([edaeaad](https://github.com/MrMint/cellar-assistant/commit/edaeaad64ef072697885a93b3fce8b9e83cff422))
+* **deps:** update dependency @nhost/nextjs to v2.1.15 ([7945aaf](https://github.com/MrMint/cellar-assistant/commit/7945aaf8915ed03556720a88f9fb1cd3aa3a3071))
+* **deps:** update dependency @types/ramda to v0.30.0 ([3b2358a](https://github.com/MrMint/cellar-assistant/commit/3b2358ad2fb0027ea785c5328e971e8d82800e0d))
+* **deps:** update dependency @urql/exchange-auth to v2.2.0 ([e54c90c](https://github.com/MrMint/cellar-assistant/commit/e54c90c41ef65c0dd18338a2d130a1cd058faa32))
+* **deps:** update dependency ramda to v0.30.0 ([379670b](https://github.com/MrMint/cellar-assistant/commit/379670b743ccf31c4bade434b71fcb09980dea27))
+* **deps:** update dependency react-hook-form to v7.51.5 ([42c1e8f](https://github.com/MrMint/cellar-assistant/commit/42c1e8feda51d555fe6338d6ffb4f87dec772972))
+* **deps:** update dependency react-icons to v5.2.1 ([618887e](https://github.com/MrMint/cellar-assistant/commit/618887ed000679f9cfc67c59f3ee920c59065ddb))
+* **deps:** update dependency urql to v4.1.0 ([3f051fb](https://github.com/MrMint/cellar-assistant/commit/3f051fbfe533ae0b8b4daf0df18a9fc099221a71))
+* **deps:** update dependency xstate to v5.12.0 ([4ce2538](https://github.com/MrMint/cellar-assistant/commit/4ce2538dfc52ee662bab4a06c53b93e340d82fc0))
+* **deps:** update dependency xstate to v5.13.0 ([950f9be](https://github.com/MrMint/cellar-assistant/commit/950f9be4be6cdadce7c1461c31bd3f5d1d0a0642))
+* **deps:** Update nhost infra verions ([f52c92e](https://github.com/MrMint/cellar-assistant/commit/f52c92e064ece5dc6c5cb6753b135ffacd99a337))
+* **deps:** update react monorepo ([34de2c7](https://github.com/MrMint/cellar-assistant/commit/34de2c754100b21e235a63eb09e0b4823cc198c5))
+* **deps:** Updates postgres version ([b1c4b39](https://github.com/MrMint/cellar-assistant/commit/b1c4b39201ab5b0410f8852c8e9f26bc9aa2eb8b))
+
 ## [0.48.3](https://github.com/MrMint/cellar-assistant/compare/v0.48.2...v0.48.3) (2024-04-27)
 
 
