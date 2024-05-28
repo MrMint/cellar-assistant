@@ -159,7 +159,7 @@ timeout = 60000
 enabled = false
 
 [postgres]
-version = '14.6-20240515-1'
+version = '14.11-20240515-1'
 
 [provider]
 
