@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.48.5](https://github.com/MrMint/cellar-assistant/compare/v0.48.4...v0.48.5) (2024-06-05)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/vision to v4.3.0 ([0570eac](https://github.com/MrMint/cellar-assistant/commit/0570eac714a615ce54a6bd482636fab57fbb69f7))
+* **deps:** update dependency @nhost/nextjs to v2.1.16 ([aa079e8](https://github.com/MrMint/cellar-assistant/commit/aa079e8f6cdef2b181923eabf409978a611bab21))
+* **deps:** update dependency @nhost/nhost-js to v3.1.5 ([58de807](https://github.com/MrMint/cellar-assistant/commit/58de807fb6808a3199fc7ddda790a58d1c2e69ab))
+* **deps:** update dependency @types/react to v18.3.3 ([c93171f](https://github.com/MrMint/cellar-assistant/commit/c93171f84aeb9573aeab803cf04d6df3f0f23be3))
+* **deps:** update dependency @vercel/analytics to v1.3.1 ([89be2b4](https://github.com/MrMint/cellar-assistant/commit/89be2b4db9683dee4ed7b7c1d5ecd0a741c013fc))
+* **deps:** update dependency npm-run-all2 to v6.2.0 ([760bd05](https://github.com/MrMint/cellar-assistant/commit/760bd05aecccfc70318d1f8ba8bb164d56008e54))
+* **deps:** update dependency ramda to v0.30.1 ([be8df7e](https://github.com/MrMint/cellar-assistant/commit/be8df7ec51c64d46901749788ff9724cd4c6364b))
+* **deps:** update dependency react-qr-code to v2.0.14 ([a6cbf5b](https://github.com/MrMint/cellar-assistant/commit/a6cbf5bd392b7a1b09e210dec4ba9db5d8f1ce5c))
+* **deps:** update lexical monorepo to v0.16.0 ([121e5ea](https://github.com/MrMint/cellar-assistant/commit/121e5ea4a6f41a262369bdc3d74939a7fa389317))
+
 ## [0.48.4](https://github.com/MrMint/cellar-assistant/compare/v0.48.3...v0.48.4) (2024-05-28)
 
 
