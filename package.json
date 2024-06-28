@@ -18,7 +18,7 @@
     "@emotion/styled": "11.11.5",
     "@fontsource/inter": "5.0.18",
     "@graphql-codegen/cli": "5.0.2",
-    "@graphql-codegen/client-preset": "4.2.6",
+    "@graphql-codegen/client-preset": "4.3.1",
     "@lexical/react": "0.16.0",
     "@mui/joy": "5.0.0-beta.36",
     "@nhost/nextjs": "2.1.16",
