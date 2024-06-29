@@ -48,7 +48,7 @@ httpPoolSize = 100
 version = 18
 
 [auth]
-version = '0.31.0'
+version = '0.32.0'
 
 [auth.redirections]
 clientUrl = 'https://cellar-assistant.vercel.app/cellars'
