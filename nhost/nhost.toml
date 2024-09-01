@@ -48,7 +48,7 @@ httpPoolSize = 100
 version = 20
 
 [auth]
-version = '0.32.0'
+version = '0.33.0'
 
 [auth.redirections]
 clientUrl = 'https://cellar-assistant.vercel.app/cellars'
@@ -159,12 +159,12 @@ timeout = 60000
 enabled = false
 
 [postgres]
-version = '14.11-20240515-1'
+version = '16.2-20240718-1'
 
 [provider]
 
 [storage]
-version = '0.6.0'
+version = '0.6.1'
 
 [observability]
 [observability.grafana]
