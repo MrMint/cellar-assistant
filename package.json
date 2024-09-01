@@ -16,7 +16,7 @@
   "dependencies": {
     "@emotion/react": "11.11.4",
     "@emotion/styled": "11.11.5",
-    "@fontsource/inter": "5.0.18",
+    "@fontsource/inter": "5.0.20",
     "@graphql-codegen/cli": "5.0.2",
     "@graphql-codegen/client-preset": "4.3.3",
     "@lexical/react": "0.16.0",
