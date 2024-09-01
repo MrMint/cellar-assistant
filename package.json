@@ -21,7 +21,7 @@
     "@graphql-codegen/client-preset": "4.3.1",
     "@lexical/react": "0.16.0",
     "@mui/joy": "5.0.0-beta.48",
-    "@nhost/nextjs": "2.1.16",
+    "@nhost/nextjs": "2.1.19",
     "@parcel/watcher": "2.4.1",
     "@trivago/prettier-plugin-sort-imports": "4.3.0",
     "@types/node": "20.16.3",
