@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.48.8](https://github.com/MrMint/cellar-assistant/compare/v0.48.7...v0.48.8) (2024-09-02)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @google-cloud/aiplatform to v3.28.0 ([cd8b74b](https://github.com/MrMint/cellar-assistant/commit/cd8b74b73ae8373650e8e350a3338e0837cc8880))
+* **deps:** update dependency @types/ramda to v0.30.2 ([8d339b0](https://github.com/MrMint/cellar-assistant/commit/8d339b04ed0d71e1a1469439e481f2cd69554cc1))
+* **deps:** update dependency @types/react to v18.3.5 ([af913df](https://github.com/MrMint/cellar-assistant/commit/af913df5c2805b90c97902fcfb166ea4b16e3076))
+* **deps:** update dependency autoprefixer to v10.4.20 ([95b6034](https://github.com/MrMint/cellar-assistant/commit/95b6034635cd52662e8f8540d30f1f4c47abb550))
+* **deps:** update dependency graphql-config to v5.1.2 ([0e93b9c](https://github.com/MrMint/cellar-assistant/commit/0e93b9c5580dd234fad29b24eacd539cd55c8283))
+* **deps:** update dependency prettier to v3.3.3 ([df9a1a8](https://github.com/MrMint/cellar-assistant/commit/df9a1a83f7f619a19bc3d495ae5bc82cd2882bd2))
+* **deps:** update dependency react-icons to v5.3.0 ([8e5f5b0](https://github.com/MrMint/cellar-assistant/commit/8e5f5b044007e3047e8cb45290c29ec699b1f5a0))
+* **deps:** update dependency xstate to v5.18.0 ([500877c](https://github.com/MrMint/cellar-assistant/commit/500877c1da105dcfb618a914c3b40166200d4c98))
+* **deps:** update nextjs monorepo to v14.2.7 ([3a30173](https://github.com/MrMint/cellar-assistant/commit/3a30173decec7a2f343d0700609aaa391143e483))
+
 ## [0.48.7](https://github.com/MrMint/cellar-assistant/compare/v0.48.6...v0.48.7) (2024-09-01)
 
 
