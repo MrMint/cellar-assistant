@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.48.9](https://github.com/MrMint/cellar-assistant/compare/v0.48.8...v0.48.9) (2024-09-15)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fontsource/inter to v5.1.0 ([2bdb99d](https://github.com/MrMint/cellar-assistant/commit/2bdb99da01e5c0f6fc42baf4cdce9a93f13853e0))
+* **deps:** update dependency @google-cloud/aiplatform to v3.29.0 ([8c2dad5](https://github.com/MrMint/cellar-assistant/commit/8c2dad5783bf83a20fff65d3c6125ea1fe1f0c0e))
+* **deps:** update dependency @nhost/nextjs to v2.1.20 ([1e7999d](https://github.com/MrMint/cellar-assistant/commit/1e7999d3097a6ca9dd2d3c390328182fefc60d79))
+* **deps:** update dependency @nhost/nhost-js to v3.1.9 ([7cfcb9d](https://github.com/MrMint/cellar-assistant/commit/7cfcb9dca0f55e14bbea0395fd77a6a782d28968))
+* **deps:** update dependency @types/node to v20.16.5 ([fa0e8e6](https://github.com/MrMint/cellar-assistant/commit/fa0e8e61d7ec201b5339375f26db136f376ce422))
+* **deps:** update dependency npm-run-all2 to v6.2.3 ([40324a3](https://github.com/MrMint/cellar-assistant/commit/40324a3c4998dae5690873f848bad845190646ec))
+* **deps:** update nextjs monorepo to v14.2.11 ([b854db8](https://github.com/MrMint/cellar-assistant/commit/b854db84957d0ec83abcc1da8c2d2331d13bfed1))
+* **deps:** update xstate monorepo ([53db2c8](https://github.com/MrMint/cellar-assistant/commit/53db2c8c503f7b7854804b7c5cba21582d207091))
+
 ## [0.48.8](https://github.com/MrMint/cellar-assistant/compare/v0.48.7...v0.48.8) (2024-09-02)
 
 
