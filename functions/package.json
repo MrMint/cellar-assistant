@@ -15,7 +15,7 @@
     "@nhost/nhost-js": "3.1.9",
     "form-data": "4.0.0",
     "fuzzball": "2.1.2",
-    "p-limit": "4.0.0",
+    "p-limit": "6.1.0",
     "ramda": "0.30.1"
   }
 }
