@@ -1,6 +1,6 @@
 {
   "name": "cellar-assistant",
-  "version": "0.48.9",
+  "version": "0.48.10",
   "private": true,
   "scripts": {
     "dev": "npm-run-all --parallel codegen-watch next-dev",
