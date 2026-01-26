@@ -1,3 +1,5 @@
+"use client";
+
 import type {
   Beer_Style_Enum,
   Country_Enum,
