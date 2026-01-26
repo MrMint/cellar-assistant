@@ -1,0 +1,79 @@
+table:
+  name: user_place_interactions
+  schema: public
+object_relationships:
+  - name: place
+    using:
+      foreign_key_constraint_on: place_id
+    comment: The place this interaction is for
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+    comment: The user who created this interaction
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+      set:
+        user_id: X-Hasura-User-Id
+      columns:
+        - place_id
+        - is_favorite
+        - is_visited
+        - want_to_visit
+        - rating
+        - notes
+        - tags
+        - last_visited_at
+        - visit_count
+    comment: Users can create interactions for themselves
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - user_id
+        - place_id
+        - is_favorite
+        - is_visited
+        - want_to_visit
+        - rating
+        - notes
+        - tags
+        - last_visited_at
+        - visit_count
+        - created_at
+        - updated_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true
+    comment: Users can only view their own place interactions
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - is_favorite
+        - is_visited
+        - want_to_visit
+        - rating
+        - notes
+        - tags
+        - last_visited_at
+        - visit_count
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check:
+        user_id:
+          _eq: X-Hasura-User-Id
+    comment: Users can update their own place interactions
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+    comment: Users can delete their own place interactions

@@ -1,0 +1,61 @@
+table:
+  name: generic_items
+  schema: public
+object_relationships:
+  - name: createdBy
+    using:
+      foreign_key_constraint_on: created_by_id
+array_relationships:
+  - name: recipe_ingredients
+    using:
+      foreign_key_constraint_on:
+        column: generic_item_id
+        table:
+          name: recipe_ingredients
+          schema: public
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      set:
+        created_by_id: X-Hasura-User-Id
+      columns:
+        - category
+        - description
+        - is_substitutable
+        - item_type
+        - name
+        - subcategory
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - category
+        - created_at
+        - created_by_id
+        - description
+        - id
+        - is_substitutable
+        - item_type
+        - name
+        - subcategory
+        - updated_at
+      filter: {}
+      allow_aggregations: true
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - category
+        - description
+        - is_substitutable
+        - item_type
+        - name
+        - subcategory
+      filter:
+        created_by_id:
+          _eq: X-Hasura-User-Id
+      check: {}
+    comment: ""

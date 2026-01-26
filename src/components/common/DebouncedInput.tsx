@@ -1,6 +1,6 @@
 "use client";
 
-import Input, { InputProps } from "@mui/joy/Input";
+import Input, { type InputProps } from "@mui/joy/Input";
 import { useRef } from "react";
 
 type DebounceProps = {
@@ -9,17 +9,26 @@ type DebounceProps = {
 };
 
 export const DebounceInput = (props: InputProps & DebounceProps) => {
-  const { handleDebounce, debounceTimeout, ...rest } = props;
+  const { handleDebounce, debounceTimeout, onChange, ...rest } = props;
 
-  const timerRef = useRef<number>();
+  const timerRef = useRef<number | undefined>(undefined);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+
+    // Call the original onChange immediately for visual updates
+    if (onChange) {
+      onChange(event);
+    }
+
+    // Clear existing timer
     if (timerRef.current) {
       clearTimeout(timerRef.current);
     }
 
+    // Set up debounced callback
     timerRef.current = window.setTimeout(() => {
-      handleDebounce(event.target.value);
+      handleDebounce(value);
     }, debounceTimeout);
   };
 

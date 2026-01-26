@@ -2,3 +2,11 @@ table:
   name: friend_request_status
   schema: public
 is_enum: true
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - value
+        - comment
+      filter: {}
+    comment: ""

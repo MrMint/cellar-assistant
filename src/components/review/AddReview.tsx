@@ -1,3 +1,6 @@
+"use client";
+
+import { addItemReview } from "@cellar-assistant/shared/queries";
 import {
   Button,
   Card,
@@ -7,7 +10,6 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
-import { addItemReview } from "@shared/queries";
 import { isNotNil } from "ramda";
 import { useState } from "react";
 import { Rating } from "react-simple-star-rating";

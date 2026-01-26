@@ -1,9 +1,15 @@
-import { graphql } from "@shared/gql";
-import { getSearchVectorQuery } from "@shared/queries";
+import { graphql } from "@cellar-assistant/shared";
+import { getSearchVectorQuery } from "@cellar-assistant/shared/queries";
 import { defaultTo, isNil, isNotNil, nth, without } from "ramda";
-import { type Client } from "urql";
+import type { Client } from "urql";
 import { fromPromise } from "xstate";
-import { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
+import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
+import {
+  beerItemCardFragment,
+  coffeeItemCardFragment,
+  spiritItemCardFragment,
+  wineItemCardFragment,
+} from "@/components/item/ItemCard/fragments";
 import { getItemType } from "@/utilities";
 
 type SearchByTextInput = {
@@ -12,30 +18,38 @@ type SearchByTextInput = {
   urqlClient: Client;
 };
 
-const textSearchQuery = graphql(`
-  query TextSearchQuery($text: String!, $userId: uuid!) {
-    text_search(
-      args: { text: $text }
-      where: { distance: { _lte: 0.32 } }
-      order_by: { distance: asc }
-      limit: 10
-    ) {
-      distance
-      beer {
-        ...beerItemCardFragment
-      }
-      wine {
-        ...wineItemCardFragment
-      }
-      spirit {
-        ...spiritItemCardFragment
-      }
-      coffee {
-        ...coffeeItemCardFragment
+const textSearchQuery = graphql(
+  `
+    query TextSearchQuery($text: String!, $userId: uuid!) {
+      text_search(
+        args: { text: $text }
+        where: { distance: { _lte: 1 } }
+        order_by: { distance: asc }
+        limit: 10
+      ) {
+        distance
+        beer {
+          ...beerItemCardFragment
+        }
+        wine {
+          ...wineItemCardFragment
+        }
+        spirit {
+          ...spiritItemCardFragment
+        }
+        coffee {
+          ...coffeeItemCardFragment
+        }
       }
     }
-  }
-`);
+  `,
+  [
+    beerItemCardFragment,
+    wineItemCardFragment,
+    spiritItemCardFragment,
+    coffeeItemCardFragment,
+  ],
+);
 
 export const searchByText = fromPromise(
   async ({
@@ -48,7 +62,7 @@ export const searchByText = fromPromise(
       text,
     });
 
-    let results = new Array<BarcodeSearchResult>();
+    let results: BarcodeSearchResult[] = [];
     if (isNotNil(vector.data?.create_search_vector)) {
       const searchResults = await urqlClient.query(textSearchQuery, {
         text: JSON.stringify(vector.data.create_search_vector),

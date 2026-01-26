@@ -1,8 +1,10 @@
-import { ItemType } from "@shared/gql/graphql";
-import { addCellarItemMutation, addItemImageMutation } from "@shared/queries";
+import {
+  addCellarItemMutation,
+  addItemImageMutation,
+} from "@cellar-assistant/shared/queries";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
-import {
+import type {
   InsertCellarItemInput,
   InsertCellarItemResult,
 } from "../../common/OnboardingWizard/actors/types";
@@ -18,7 +20,7 @@ export const insertCellarItem = fromPromise(
       const addImageResult = await urqlClient.mutation(addItemImageMutation, {
         input: {
           item_id: itemId,
-          item_type: ItemType.Coffee,
+          item_type: "COFFEE",
           image: displayImage,
         },
       });

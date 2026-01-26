@@ -1,0 +1,6 @@
+initial_project: cellar-assistant
+
+projects:
+  cellar-assistant:
+    path: /workspace/cellar-assistant
+    language: typescript

@@ -1,0 +1,104 @@
+table:
+  name: places
+  schema: public
+array_relationships:
+  - name: cellar_items
+    using:
+      foreign_key_constraint_on:
+        column: source_place_id
+        table:
+          name: cellar_items
+          schema: public
+    comment: Cellar items sourced from this place
+  - name: estimated_menu_scans
+    using:
+      foreign_key_constraint_on:
+        column: estimated_place_id
+        table:
+          name: menu_scans
+          schema: public
+    comment: Menu scans estimated for this place
+  - name: manual_menu_scans
+    using:
+      foreign_key_constraint_on:
+        column: manual_place_override
+        table:
+          name: menu_scans
+          schema: public
+    comment: Menu scans manually assigned to this place
+  - name: menu_scans
+    using:
+      foreign_key_constraint_on:
+        column: place_id
+        table:
+          name: menu_scans
+          schema: public
+    comment: Menu scans for this place
+  - name: place_brands
+    using:
+      foreign_key_constraint_on:
+        column: place_id
+        table:
+          name: place_brands
+          schema: public
+    comment: Brands available at this place
+  - name: place_menu_items
+    using:
+      foreign_key_constraint_on:
+        column: place_id
+        table:
+          name: place_menu_items
+          schema: public
+    comment: Menu items for this place
+  - name: place_menus
+    using:
+      foreign_key_constraint_on:
+        column: place_id
+        table:
+          name: place_menus
+          schema: public
+    comment: Menus for this place
+  - name: user_place_interactions
+    using:
+      foreign_key_constraint_on:
+        column: place_id
+        table:
+          name: user_place_interactions
+          schema: public
+    comment: User interactions with this place
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - overture_id
+        - name
+        - display_name
+        - categories
+        - primary_category
+        - confidence
+        - location
+        - street_address
+        - locality
+        - region
+        - postcode
+        - country_code
+        - phone
+        - website
+        - email
+        - hours
+        - price_level
+        - rating
+        - review_count
+        - access_count
+        - last_accessed_at
+        - first_cached_reason
+        - source_tags
+        - is_verified
+        - is_active
+        - created_at
+        - updated_at
+        - last_sync_at
+      filter: {}
+      allow_aggregations: true
+    comment: Allow users to view all places data

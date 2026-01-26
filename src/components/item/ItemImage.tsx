@@ -1,3 +1,5 @@
+"use client";
+
 import { Card, CardActions, CardCover, IconButton } from "@mui/joy";
 import Image, { type StaticImageData } from "next/image";
 import { isNil, isNotNil } from "ramda";
@@ -28,7 +30,7 @@ export const ItemImage = ({
         setOpen(false);
       }
     },
-    [onCaptureImage, setOpen],
+    [onCaptureImage],
   );
 
   return (

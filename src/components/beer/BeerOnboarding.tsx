@@ -1,18 +1,32 @@
+"use client";
+
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+} from "@cellar-assistant/shared";
+import {
+  addBeerMutation,
+  type Beers_Insert_Input,
+} from "@cellar-assistant/shared/queries";
 import { Box, Grid, Stack, Typography } from "@mui/joy";
-import { useNhostClient } from "@nhost/nextjs";
 import { useActor } from "@xstate/react";
 import { useRouter } from "next/navigation";
 import { includes } from "ramda";
 import { useCallback } from "react";
 import { useClient } from "urql";
+import { convertYearToDate, parseNumber } from "@/utilities";
 import { Analyzing } from "../common/Analyzing";
-import { OnboardingWizard, OnboardingResult } from "../common/OnboardingWizard";
+import {
+  type OnboardingResult,
+  OnboardingWizard,
+} from "../common/OnboardingWizard";
 import { FinalPrompt } from "../common/OnboardingWizard/FinalPrompt";
 import { OnboardingMachine } from "../common/OnboardingWizard/machines";
+import { QuickAddCard } from "../common/QuickAddCard";
 import { Searching } from "../common/Searching";
-import { BeerForm, BeerFormDefaultValues } from "./BeerForm";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
+import { BeerForm, type BeerFormDefaultValues } from "./BeerForm";
 
 type BeerOnboardingProps = {
   cellarId: string;
@@ -22,7 +36,6 @@ type BeerOnboardingProps = {
 export const BeerOnboarding = ({ cellarId, userId }: BeerOnboardingProps) => {
   const urqlClient = useClient();
   const router = useRouter();
-  const nhostClient = useNhostClient();
 
   const [state, send] = useActor(
     OnboardingMachine.provide({
@@ -33,7 +46,6 @@ export const BeerOnboarding = ({ cellarId, userId }: BeerOnboardingProps) => {
     }),
     {
       input: {
-        nhostClient,
         urqlClient,
         cellarId,
         router,
@@ -63,6 +75,68 @@ export const BeerOnboarding = ({ cellarId, userId }: BeerOnboardingProps) => {
     [send],
   );
 
+  const handleQuickAddConfirm = useCallback(async (): Promise<
+    string | undefined
+  > => {
+    const defaults = state.context.defaults as BeerFormDefaultValues;
+    if (!defaults?.name) {
+      console.error("Cannot quick add beer without a name");
+      return undefined;
+    }
+
+    const beerInput: Beers_Insert_Input = {
+      name: defaults.name,
+      description: defaults.description,
+      country: defaults.country,
+      style: defaults.style,
+      alcohol_content_percentage: parseNumber(
+        defaults.alcohol_content_percentage,
+      ),
+      international_bitterness_unit: defaults.international_bitterness_unit
+        ? parseInt(String(defaults.international_bitterness_unit), 10)
+        : undefined,
+      vintage: defaults.vintage
+        ? convertYearToDate(parseInt(defaults.vintage, 10))
+        : undefined,
+      item_onboarding_id: state.context.itemOnboardingId || undefined,
+    };
+
+    if (defaults.barcode_code) {
+      beerInput.barcode = {
+        data: {
+          code: defaults.barcode_code,
+          type: defaults.barcode_type,
+        },
+        on_conflict: {
+          constraint: Barcodes_Constraint.BarcodesPkey,
+          update_columns: [Barcodes_Update_Column.Code],
+        },
+      };
+    }
+
+    const result = await urqlClient.mutation(addBeerMutation, {
+      beer: beerInput,
+    });
+
+    if (result.error || !result.data?.insert_beers_one?.id) {
+      console.error("Failed to create beer:", result.error);
+      return undefined;
+    }
+
+    const itemId = result.data.insert_beers_one.id;
+    send({ type: "CONFIRM", itemId });
+    return itemId;
+  }, [
+    state.context.defaults,
+    state.context.itemOnboardingId,
+    urqlClient,
+    send,
+  ]);
+
+  const handleQuickAddEdit = useCallback(() => {
+    send({ type: "EDIT" });
+  }, [send]);
+
   return (
     <Stack spacing={2}>
       <Typography level="h4">Add Beer</Typography>
@@ -90,6 +164,17 @@ export const BeerOnboarding = ({ cellarId, userId }: BeerOnboardingProps) => {
             <FinalPrompt
               onYes={() => send({ type: "ADD_ANOTHER" })}
               onNo={() => send({ type: "DONE" })}
+            />
+          </Grid>
+        )}
+        {state.value === "quickReview" && (
+          <Grid xs={12} sm={6}>
+            <QuickAddCard
+              defaults={state.context.defaults as BeerFormDefaultValues}
+              itemType="BEER"
+              confidence={state.context.confidence ?? 0}
+              onConfirm={handleQuickAddConfirm}
+              onEdit={handleQuickAddEdit}
             />
           </Grid>
         )}

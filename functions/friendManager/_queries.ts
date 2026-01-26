@@ -1,16 +1,2 @@
-import { graphql } from "@shared/gql";
-
-export const insertFriendsAndDeleteRequest = graphql(`
-  mutation InsertFriends(
-    $friends: [friends_insert_input!]!
-    $requestId: uuid!
-  ) {
-    insert_friends(objects: $friends) {
-      affected_rows
-    }
-
-    delete_friend_requests_by_pk(id: $requestId) {
-      id
-    }
-  }
-`);
+// GraphQL operations now exported from ./types.ts
+export { INSERT_FRIENDS_AND_DELETE_REQUEST_MUTATION as insertFriendsAndDeleteRequest } from "./_types";

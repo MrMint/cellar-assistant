@@ -1,0 +1,29 @@
+services:
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+  context7-mcp:
+    image: mcp/context7:latest
+    ports:
+      - "6334:8080"
+
+
+  serena:
+    build:
+      context: .
+      dockerfile: Dockerfile.serena
+    ports:
+      - "9121:9121"
+      - "24282:24282"
+    environment:
+      - SERENA_DOCKER=1
+    volumes:
+      - ./:/workspace/cellar-assistant
+    command: ["serena-mcp-server", "--transport", "sse", "--port", "9121", "--host", "0.0.0.0", "--project", "/workspace/cellar-assistant"]
+volumes:
+  qdrant_storage:
+
+

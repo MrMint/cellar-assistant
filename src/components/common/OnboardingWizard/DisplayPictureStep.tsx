@@ -1,3 +1,5 @@
+"use client";
+
 import { Button, Card, CardContent, Grid, Typography } from "@mui/joy";
 import { useState } from "react";
 import { CameraCapture } from "../CameraCapture";
@@ -13,7 +15,7 @@ export const DisplayPictureStep = ({
   onBack,
   onSkip,
 }: DisplayPictureStepProps) => {
-  const [image, setImage] = useState<string>();
+  const [_image, _setImage] = useState<string>();
 
   return (
     <Grid container spacing={2}>

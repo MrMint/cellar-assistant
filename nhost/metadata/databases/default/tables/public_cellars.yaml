@@ -25,7 +25,7 @@ insert_permissions:
     permission:
       check: {}
       set:
-        created_by_id: x-hasura-User-Id
+        created_by_id: X-Hasura-User-Id
       columns:
         - name
         - privacy

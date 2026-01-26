@@ -1,30 +1,26 @@
+import type {
+  Beer_Style_Enum,
+  Country_Enum,
+  VariablesOf,
+} from "@cellar-assistant/shared";
+import {
+  addBeerMutation,
+  updateBeerMutation,
+} from "@cellar-assistant/shared/queries";
 import {
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
-  Option,
-  Select,
   Stack,
   Textarea,
   Typography,
 } from "@mui/joy";
-import { graphql } from "@shared/gql";
-import {
-  Barcodes_Constraint,
-  Barcodes_Update_Column,
-  Beer_Style_Enum,
-  Beers_Insert_Input,
-  Country_Enum,
-} from "@shared/gql/graphql";
-import { addBeerMutation, updateBeerMutation } from "@shared/queries";
-import { formatBeerStyle, formatCountry } from "@shared/utility";
-import { format } from "date-fns";
-import { isEmpty, isNil, isNotNil, not } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient } from "urql";
-import { beerStyleKeys, countryKeys } from "@/constants";
+import { isNil, isNotNil } from "ramda";
+import { Controller, type SubmitHandler, useForm } from "react-hook-form";
+import { type CombinedError, useClient } from "urql";
+import { EnumSelect } from "@/components/forms/EnumSelect";
 import { convertYearToDate, formatVintage, parseNumber } from "@/utilities";
 
 type SharedFields = {
@@ -57,7 +53,7 @@ export type BeerFormProps = {
 function mapFormValuesToInsertInput(
   values: IBeerFormInput,
   itemOnboardingId?: string,
-): Beers_Insert_Input {
+): VariablesOf<typeof addBeerMutation>["beer"] {
   const update = {
     name: values.name,
     alcohol_content_percentage: parseNumber(values.alcohol_content_percentage),
@@ -69,7 +65,7 @@ function mapFormValuesToInsertInput(
     international_bitterness_unit: parseNumber(
       values.international_bitterness_unit,
     ),
-  } as Beers_Insert_Input;
+  } as VariablesOf<typeof addBeerMutation>["beer"];
 
   if (isNotNil(update) && isNotNil(values.barcode_code)) {
     update.barcode = {
@@ -78,8 +74,8 @@ function mapFormValuesToInsertInput(
         type: values.barcode_type,
       },
       on_conflict: {
-        constraint: Barcodes_Constraint.BarcodesPkey,
-        update_columns: [Barcodes_Update_Column.Code],
+        constraint: "barcodes_pkey",
+        update_columns: ["code"],
       },
     };
   }
@@ -104,7 +100,7 @@ export const BeerForm = ({
     defaultValues: {
       ...defaultValues,
       vintage:
-        defaultVintage !== undefined ? parseInt(defaultVintage) : undefined,
+        defaultVintage !== undefined ? parseInt(defaultVintage, 10) : undefined,
     },
   });
 
@@ -187,50 +183,18 @@ export const BeerForm = ({
                 )}
               />
             </FormControl>
-            <FormControl>
-              <FormLabel>Style</FormLabel>
-              <Controller
-                name="style"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {beerStyleKeys.map((x) => (
-                      <Option key={x} value={Beer_Style_Enum[x]}>
-                        {formatBeerStyle(Beer_Style_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Country</FormLabel>
-              <Controller
-                name="country"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {countryKeys.map((x) => (
-                      <Option key={x} value={Country_Enum[x]}>
-                        {formatCountry(Country_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
+            <EnumSelect
+              name="style"
+              control={control}
+              enumKey="beerStyle"
+              label="Style"
+            />
+            <EnumSelect
+              name="country"
+              control={control}
+              enumKey="country"
+              label="Country"
+            />
             <FormControl>
               <FormLabel>Alcohol Content</FormLabel>
               <Controller

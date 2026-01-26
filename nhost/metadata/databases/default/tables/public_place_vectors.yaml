@@ -1,0 +1,26 @@
+table:
+  name: place_vectors
+  schema: public
+object_relationships:
+  - name: place
+    using:
+      foreign_key_constraint_on: place_id
+computed_fields:
+  - name: distance
+    definition:
+      function:
+        name: calculate_place_vector_distance
+        schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - created_at
+        - id
+        - place_id
+        - updated_at
+      computed_fields:
+        - distance
+      filter: {}
+      allow_aggregations: true
+    comment: ""

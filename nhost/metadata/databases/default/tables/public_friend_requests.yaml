@@ -32,7 +32,7 @@ insert_permissions:
               _neq: X-Hasura-User-Id
       set:
         status: PENDING
-        user_id: x-hasura-User-Id
+        user_id: X-Hasura-User-Id
       columns:
         - friend_id
     comment: ""

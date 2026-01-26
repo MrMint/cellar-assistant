@@ -1,68 +1,47 @@
-"use client";
-
-import { graphql } from "@shared/gql";
-import { isNotNil, omit } from "ramda";
-import { useQuery } from "urql";
+import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { notFound } from "next/navigation";
+import { EnumProvider } from "@/components/providers/EnumProvider";
+import { GetSpiritEditQuery } from "@/components/spirit/fragments";
 import { SpiritForm } from "@/components/spirit/SpiritForm";
-import { nullsToUndefined } from "@/utilities";
+import { createEnumQueryFn, serverQuery } from "@/lib/urql/server";
 
-const editSpiritPageQuery = graphql(`
-  query EditSpiritPageQuery($itemId: uuid!) {
-    spirits_by_pk(id: $itemId) {
-      id
-      name
-      created_by_id
-      vintage
-      type
-      style
-      description
-      alcohol_content_percentage
-      barcode_code
-      country
-    }
-  }
-`);
-
-const EditSpirit = ({
-  params: { itemId, cellarId },
+export default async function EditSpirit({
+  params,
 }: {
-  params: { itemId: string; cellarId: string };
-}) => {
-  const [{ data, fetching, operation }] = useQuery({
-    query: editSpiritPageQuery,
-    variables: { itemId },
-  });
+  params: Promise<{ itemId: string; cellarId: string }>;
+}) {
+  const { itemId } = await params;
+  // Pre-fetch enum data and spirit data in parallel
+  const [data, enumData] = await Promise.all([
+    serverQuery(GetSpiritEditQuery, { itemId }),
+    getMultipleEnumOptions(
+      ["spiritType", "country"],
+      await createEnumQueryFn(),
+    ),
+  ]);
 
-  const isLoading = fetching || operation === undefined;
-
-  let spirit = undefined;
-  if (
-    isLoading === false &&
-    data !== undefined &&
-    isNotNil(data.spirits_by_pk)
-  ) {
-    spirit = nullsToUndefined(data.spirits_by_pk);
+  if (!data.spirits_by_pk) {
+    notFound();
   }
-  return (
-    <>
-      {spirit !== undefined && (
-        <SpiritForm
-          id={itemId}
-          onCreated={() => {}}
-          // returnUrl={`/cellars/${cellarId}/spirits/${itemId}`}
-          defaultValues={{
-            name: spirit.name,
-            description: spirit.description,
-            style: spirit.style,
-            vintage: spirit.vintage,
-            type: spirit.type,
-            alcohol_content_percentage: spirit.alcohol_content_percentage,
-            barcode_code: spirit.barcode_code,
-          }}
-        />
-      )}
-    </>
-  );
-};
 
-export default EditSpirit;
+  const spirit = data.spirits_by_pk;
+
+  return (
+    <EnumProvider serverEnumData={enumData}>
+      <SpiritForm
+        id={itemId}
+        onCreated={() => {}}
+        defaultValues={{
+          name: spirit.name,
+          description: spirit.description ?? undefined,
+          style: spirit.style ?? undefined,
+          vintage: spirit.vintage ?? undefined,
+          type: spirit.type ?? undefined,
+          alcohol_content_percentage:
+            spirit.alcohol_content_percentage?.toString() ?? "",
+          barcode_code: spirit.barcode_code ?? undefined,
+        }}
+      />
+    </EnumProvider>
+  );
+}

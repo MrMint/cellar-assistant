@@ -1,40 +1,33 @@
+"use client";
+
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+  type Coffee_Cultivar_Enum,
+  type Coffee_Process_Enum,
+  type Coffee_Roast_Level_Enum,
+  type Coffee_Species_Enum,
+  type Country_Enum,
+} from "@cellar-assistant/shared";
+import {
+  addCoffeeMutation,
+  type Coffees_Insert_Input,
+  updateCoffeeMutation,
+} from "@cellar-assistant/shared/queries";
 import {
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
-  Option,
-  Select,
   Stack,
   Textarea,
   Typography,
 } from "@mui/joy";
-import { graphql } from "@shared/gql";
-import {
-  Barcodes_Constraint,
-  Barcodes_Update_Column,
-  Coffee_Cultivar_Enum,
-  Coffee_Process_Enum,
-  Coffee_Roast_Level_Enum,
-  Coffee_Species_Enum,
-  Coffees_Insert_Input,
-  Country_Enum,
-} from "@shared/gql/graphql";
-import { addCoffeeMutation, updateCoffeeMutation } from "@shared/queries";
-import { formatCountry, formatEnum } from "@shared/utility";
-import { format } from "date-fns";
 import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient } from "urql";
-import {
-  coffeeCultivarKeys,
-  coffeeProcessKeys,
-  coffeeRoastLevelKeys,
-  coffeeSpeciesKeys,
-  countryKeys,
-} from "@/constants";
-import { formatVintage, parseNumber } from "@/utilities";
+import { Controller, type SubmitHandler, useForm } from "react-hook-form";
+import { type CombinedError, useClient } from "urql";
+import { EnumSelect } from "@/components/forms/EnumSelect";
 
 type SharedFields = {
   description?: string;
@@ -169,116 +162,36 @@ export const CoffeeForm = ({
                 )}
               />
             </FormControl>
-            <FormControl>
-              <FormLabel>Roast Level</FormLabel>
-              <Controller
-                name="roast_level"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {coffeeRoastLevelKeys.map((x) => (
-                      <Option key={x} value={Coffee_Roast_Level_Enum[x]}>
-                        {formatEnum(Coffee_Roast_Level_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Species</FormLabel>
-              <Controller
-                name="species"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {coffeeSpeciesKeys.map((x) => (
-                      <Option key={x} value={Coffee_Species_Enum[x]}>
-                        {formatEnum(Coffee_Species_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Cultivar</FormLabel>
-              <Controller
-                name="cultivar"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {coffeeCultivarKeys.map((x) => (
-                      <Option key={x} value={Coffee_Cultivar_Enum[x]}>
-                        {formatEnum(Coffee_Cultivar_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Process</FormLabel>
-              <Controller
-                name="process"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {coffeeProcessKeys.map((x) => (
-                      <Option key={x} value={Coffee_Process_Enum[x]}>
-                        {formatEnum(Coffee_Process_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Country</FormLabel>
-              <Controller
-                name="country"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {countryKeys.map((x) => (
-                      <Option key={x} value={Country_Enum[x]}>
-                        {formatCountry(Country_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
+            <EnumSelect
+              name="roast_level"
+              control={control}
+              enumKey="coffeeRoastLevel"
+              label="Roast Level"
+            />
+            <EnumSelect
+              name="species"
+              control={control}
+              enumKey="coffeeSpecies"
+              label="Species"
+            />
+            <EnumSelect
+              name="cultivar"
+              control={control}
+              enumKey="coffeeCultivar"
+              label="Cultivar"
+            />
+            <EnumSelect
+              name="process"
+              control={control}
+              enumKey="coffeeProcess"
+              label="Process"
+            />
+            <EnumSelect
+              name="country"
+              control={control}
+              enumKey="country"
+              label="Country"
+            />
             <FormControl>
               <FormLabel>Barcode</FormLabel>
               <Controller

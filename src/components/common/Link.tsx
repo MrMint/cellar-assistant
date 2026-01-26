@@ -1,6 +1,6 @@
 import { Link as MuiLink } from "@mui/joy";
 import NextLink from "next/link";
-import { ComponentPropsWithoutRef } from "react";
+import type { ComponentPropsWithoutRef } from "react";
 
 export const Link = (
   props: Omit<

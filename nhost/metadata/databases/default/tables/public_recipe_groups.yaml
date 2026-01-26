@@ -1,0 +1,65 @@
+table:
+  name: recipe_groups
+  schema: public
+object_relationships:
+  - name: canonical_recipe_rel
+    using:
+      foreign_key_constraint_on: canonical_recipe_id
+  - name: recipe_category
+    using:
+      foreign_key_constraint_on: category
+array_relationships:
+  - name: recipes
+    using:
+      foreign_key_constraint_on:
+        column: recipe_group_id
+        table:
+          name: recipes
+          schema: public
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      set:
+        created_by_id: X-Hasura-User-Id
+      columns:
+        - base_spirit
+        - category
+        - description
+        - image_url
+        - name
+        - tags
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - base_spirit
+        - canonical_recipe_id
+        - category
+        - created_at
+        - created_by_id
+        - description
+        - id
+        - image_url
+        - name
+        - tags
+        - updated_at
+      filter: {}
+      allow_aggregations: true
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - base_spirit
+        - category
+        - description
+        - image_url
+        - name
+        - tags
+      filter:
+        created_by_id:
+          _eq: X-Hasura-User-Id
+      check: {}
+    comment: ""

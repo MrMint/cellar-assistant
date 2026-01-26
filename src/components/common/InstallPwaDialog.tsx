@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Button,
   DialogContent,
@@ -12,7 +14,7 @@ import {
 import { track } from "@vercel/analytics/react";
 import { isNil, isNotNil } from "ramda";
 import { useEffect, useState } from "react";
-import { BeforeInstallPromptEvent } from "@/constants";
+import type { BeforeInstallPromptEvent } from "@/constants";
 
 // detect if the device is on iOS
 const isIos = () => {

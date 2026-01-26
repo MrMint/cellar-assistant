@@ -1,18 +1,32 @@
+"use client";
+
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+} from "@cellar-assistant/shared";
+import {
+  addSpiritMutation,
+  type Spirits_Insert_Input,
+} from "@cellar-assistant/shared/queries";
 import { Box, Grid, Stack, Typography } from "@mui/joy";
-import { useNhostClient } from "@nhost/nextjs";
 import { useActor } from "@xstate/react";
 import { useRouter } from "next/navigation";
 import { includes } from "ramda";
 import { useCallback } from "react";
 import { useClient } from "urql";
+import { convertYearToDate, parseNumber } from "@/utilities";
 import { Analyzing } from "../common/Analyzing";
-import { OnboardingWizard, OnboardingResult } from "../common/OnboardingWizard";
+import {
+  type OnboardingResult,
+  OnboardingWizard,
+} from "../common/OnboardingWizard";
 import { FinalPrompt } from "../common/OnboardingWizard/FinalPrompt";
 import { OnboardingMachine } from "../common/OnboardingWizard/machines";
+import { QuickAddCard } from "../common/QuickAddCard";
 import { Searching } from "../common/Searching";
-import { SpiritForm, SpiritFormDefaultValues } from "./SpiritForm";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
+import { SpiritForm, type SpiritFormDefaultValues } from "./SpiritForm";
 
 type SpiritOnboardingProps = {
   cellarId: string;
@@ -25,7 +39,6 @@ export const SpiritOnboarding = ({
 }: SpiritOnboardingProps) => {
   const urqlClient = useClient();
   const router = useRouter();
-  const nhostClient = useNhostClient();
 
   const [state, send] = useActor(
     OnboardingMachine.provide({
@@ -36,7 +49,6 @@ export const SpiritOnboarding = ({
     }),
     {
       input: {
-        nhostClient,
         urqlClient,
         cellarId,
         router,
@@ -66,6 +78,66 @@ export const SpiritOnboarding = ({
     [send],
   );
 
+  const handleQuickAddConfirm = useCallback(async (): Promise<
+    string | undefined
+  > => {
+    const defaults = state.context.defaults as SpiritFormDefaultValues;
+    if (!defaults?.name) {
+      console.error("Cannot quick add spirit without a name");
+      return undefined;
+    }
+
+    const spiritInput: Spirits_Insert_Input = {
+      name: defaults.name,
+      description: defaults.description,
+      country: defaults.country,
+      style: defaults.style,
+      type: defaults.type,
+      alcohol_content_percentage: parseNumber(
+        defaults.alcohol_content_percentage,
+      ),
+      vintage: defaults.vintage
+        ? convertYearToDate(parseInt(defaults.vintage, 10))
+        : undefined,
+      item_onboarding_id: state.context.itemOnboardingId || undefined,
+    };
+
+    if (defaults.barcode_code) {
+      spiritInput.barcode = {
+        data: {
+          code: defaults.barcode_code,
+          type: defaults.barcode_type,
+        },
+        on_conflict: {
+          constraint: Barcodes_Constraint.BarcodesPkey,
+          update_columns: [Barcodes_Update_Column.Code],
+        },
+      };
+    }
+
+    const result = await urqlClient.mutation(addSpiritMutation, {
+      spirit: spiritInput,
+    });
+
+    if (result.error || !result.data?.insert_spirits_one?.id) {
+      console.error("Failed to create spirit:", result.error);
+      return undefined;
+    }
+
+    const itemId = result.data.insert_spirits_one.id;
+    send({ type: "CONFIRM", itemId });
+    return itemId;
+  }, [
+    state.context.defaults,
+    state.context.itemOnboardingId,
+    urqlClient,
+    send,
+  ]);
+
+  const handleQuickAddEdit = useCallback(() => {
+    send({ type: "EDIT" });
+  }, [send]);
+
   return (
     <Stack spacing={2}>
       <Typography level="h4">Add Spirit</Typography>
@@ -93,6 +165,17 @@ export const SpiritOnboarding = ({
             <FinalPrompt
               onYes={() => send({ type: "ADD_ANOTHER" })}
               onNo={() => send({ type: "DONE" })}
+            />
+          </Grid>
+        )}
+        {state.value === "quickReview" && (
+          <Grid xs={12} sm={6}>
+            <QuickAddCard
+              defaults={state.context.defaults as SpiritFormDefaultValues}
+              itemType="SPIRIT"
+              confidence={state.context.confidence ?? 0}
+              onConfirm={handleQuickAddConfirm}
+              onEdit={handleQuickAddEdit}
             />
           </Grid>
         )}

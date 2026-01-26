@@ -1,10 +1,10 @@
 import { isEmpty, not } from "ramda";
-import { Client } from "urql";
+import type { Client } from "urql";
 import { assign, createMachine } from "xstate";
 import { searchByBarcode } from "@/components/common/OnboardingWizard/actors/searchByBarcode";
 import { searchByImage } from "@/components/common/OnboardingWizard/actors/searchByImage";
-import { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
-import { Barcode } from "@/constants";
+import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
+import type { Barcode } from "@/constants";
 import { searchByText } from "./searchByText";
 
 export const searchItemsMachine = createMachine(

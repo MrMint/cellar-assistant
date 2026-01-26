@@ -1,10 +1,10 @@
 "use client";
 
-import createCache from "@emotion/cache";
 import type {
   EmotionCache,
   Options as OptionsOfCreateCache,
 } from "@emotion/cache";
+import createCache from "@emotion/cache";
 import { CacheProvider as DefaultCacheProvider } from "@emotion/react";
 import { useServerInsertedHTML } from "next/navigation";
 import * as React from "react";
@@ -63,7 +63,7 @@ export default function EmotionCacheProvider(props: EmotionCacheProviderProps) {
     inserted.forEach(({ name, isGlobal }) => {
       const style = registry.cache.inserted[name];
 
-      if (typeof style !== "boolean") {
+      if (typeof style !== "boolean" && style) {
         if (isGlobal) {
           globals.push({ name, style });
         } else {

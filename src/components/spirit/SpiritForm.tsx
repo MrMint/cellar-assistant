@@ -1,38 +1,31 @@
+"use client";
+
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+  type Country_Enum,
+  type Spirit_Type_Enum,
+} from "@cellar-assistant/shared";
+import {
+  addSpiritMutation,
+  type Spirits_Insert_Input,
+  updateSpiritMutation,
+} from "@cellar-assistant/shared/queries";
 import {
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
-  Option,
-  Select,
   Stack,
   Textarea,
   Typography,
 } from "@mui/joy";
-import {
-  Barcodes_Constraint,
-  Barcodes_Update_Column,
-  Country_Enum,
-  Spirit_Type_Enum,
-  Spirits_Insert_Input,
-} from "@shared/gql/graphql";
-import { addSpiritMutation, updateSpiritMutation } from "@shared/queries";
-import { formatCountry, formatSpiritType } from "@shared/utility";
-import { format } from "date-fns";
-import { useRouter } from "next/navigation";
 import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient } from "urql";
-import { countryKeys } from "@/constants";
-import {
-  convertYearToDate,
-  formatVintage,
-  getEnumKeys,
-  parseNumber,
-} from "@/utilities";
-
-const typeOptions = getEnumKeys(Spirit_Type_Enum);
+import { Controller, type SubmitHandler, useForm } from "react-hook-form";
+import { type CombinedError, useClient } from "urql";
+import { EnumSelect } from "@/components/forms/EnumSelect";
+import { convertYearToDate, formatVintage, parseNumber } from "@/utilities";
 
 type SharedFields = {
   description?: string;
@@ -110,7 +103,7 @@ export const SpiritForm = ({
     defaultValues: {
       ...defaultValues,
       vintage:
-        defaultVintage !== undefined ? parseInt(defaultVintage) : undefined,
+        defaultVintage !== undefined ? parseInt(defaultVintage, 10) : undefined,
     },
   });
 
@@ -119,7 +112,7 @@ export const SpiritForm = ({
     let createdId: string | undefined;
     const update = mapFormValuesToInsertInput(values, itemOnboardingId);
 
-    if (id == undefined) {
+    if (id === undefined) {
       const result = await client.mutation(addSpiritMutation, {
         spirit: update,
       });
@@ -162,29 +155,14 @@ export const SpiritForm = ({
                 )}
               />
             </FormControl>
-            <FormControl required>
-              <FormLabel>Type</FormLabel>
-              <Controller
-                name="type"
-                control={control}
-                rules={{ required: true }}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {typeOptions.map((x) => (
-                      <Option key={x} value={Spirit_Type_Enum[x]}>
-                        {formatSpiritType(Spirit_Type_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
+            <EnumSelect
+              name="type"
+              control={control}
+              enumKey="spiritType"
+              label="Type"
+              required
+              rules={{ required: true }}
+            />
             <FormControl>
               <FormLabel>Description</FormLabel>
               <Controller
@@ -236,28 +214,12 @@ export const SpiritForm = ({
                 )}
               />
             </FormControl>
-            <FormControl>
-              <FormLabel>Country</FormLabel>
-              <Controller
-                name="country"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {countryKeys.map((x) => (
-                      <Option key={x} value={Country_Enum[x]}>
-                        {formatCountry(Country_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
+            <EnumSelect
+              name="country"
+              control={control}
+              enumKey="country"
+              label="Country"
+            />
             <FormControl>
               <FormLabel>Barcode</FormLabel>
               <Controller

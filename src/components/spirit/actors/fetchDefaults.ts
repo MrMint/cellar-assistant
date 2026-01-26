@@ -1,14 +1,17 @@
-import { graphql } from "@shared/gql";
-import { Country_Enum, Spirit_Type_Enum } from "@shared/gql/graphql";
+import {
+  type Country_Enum,
+  graphql,
+  type Spirit_Type_Enum,
+} from "@cellar-assistant/shared";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
-import {
+import type {
   DefaultValues,
   DefaultValuesResult,
   FetchDefaultsInput,
 } from "@/components/common/OnboardingWizard/actors/types";
 import { nullsToUndefined } from "@/utilities";
-import { SpiritFormDefaultValues } from "../SpiritForm";
+import type { SpiritFormDefaultValues } from "../SpiritForm";
 
 const getDefaultsQuery = graphql(`
   query GetSpiritDefaults($hint: item_defaults_hint!) {
@@ -23,6 +26,7 @@ const getDefaultsQuery = graphql(`
       vintage
       style
       type
+      confidence
     }
   }
 `);
@@ -66,6 +70,7 @@ export const fetchDefaults = fromPromise(
           : undefined,
       },
       itemOnboardingId: result.data.spirit_defaults.item_onboarding_id,
+      confidence: result.data.spirit_defaults.confidence ?? 0,
     } as DefaultValuesResult<SpiritFormDefaultValues>;
   },
 );

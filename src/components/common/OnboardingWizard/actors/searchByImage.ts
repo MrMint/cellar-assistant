@@ -1,8 +1,14 @@
-import { graphql } from "@shared/gql";
+import { graphql } from "@cellar-assistant/shared";
 import { defaultTo, isNil, isNotNil, nth, without } from "ramda";
 import { fromPromise } from "xstate";
+import {
+  beerItemCardFragment,
+  coffeeItemCardFragment,
+  spiritItemCardFragment,
+  wineItemCardFragment,
+} from "@/components/item/ItemCard/fragments";
 import { getItemType } from "@/utilities";
-import { BarcodeSearchResult, SearchByImageInput } from "./types";
+import type { BarcodeSearchResult, SearchByImageInput } from "./types";
 
 const getImageVector = graphql(`
   query GetImageVector($image: String!) {
@@ -10,29 +16,37 @@ const getImageVector = graphql(`
   }
 `);
 
-const imageSearchQuery = graphql(`
-  query ImageSearchQuery($image: String!, $userId: uuid!) {
-    image_search(
-      args: { image: $image }
-      where: { distance: { _lte: 0.3 } }
-      order_by: { distance: asc }
-      limit: 10
-    ) {
-      beer {
-        ...beerItemCardFragment
-      }
-      wine {
-        ...wineItemCardFragment
-      }
-      spirit {
-        ...spiritItemCardFragment
-      }
-      coffee {
-        ...coffeeItemCardFragment
+const imageSearchQuery = graphql(
+  `
+    query ImageSearchQuery($image: String!, $userId: uuid!) {
+      image_search(
+        args: { image: $image }
+        where: { distance: { _lte: 0.3 } }
+        order_by: { distance: asc }
+        limit: 10
+      ) {
+        beer {
+          ...beerItemCardFragment
+        }
+        wine {
+          ...wineItemCardFragment
+        }
+        spirit {
+          ...spiritItemCardFragment
+        }
+        coffee {
+          ...coffeeItemCardFragment
+        }
       }
     }
-  }
-`);
+  `,
+  [
+    beerItemCardFragment,
+    wineItemCardFragment,
+    spiritItemCardFragment,
+    coffeeItemCardFragment,
+  ],
+);
 
 export const searchByImage = fromPromise(
   async ({
@@ -45,7 +59,7 @@ export const searchByImage = fromPromise(
       image: displayImage,
     });
 
-    let results = new Array<BarcodeSearchResult>();
+    let results: BarcodeSearchResult[] = [];
     if (isNotNil(vector.data?.create_search_vector)) {
       const searchResults = await urqlClient.query(imageSearchQuery, {
         image: JSON.stringify(vector.data.create_search_vector),

@@ -1,0 +1,380 @@
+schema {
+  query: query_root
+  subscription: subscription_root
+}
+
+"""whether this query should be cached (Hasura Cloud only)"""
+directive @cached(
+  """measured in seconds"""
+  ttl: Int! = 60
+
+  """refresh the cache entry"""
+  refresh: Boolean! = false
+) on QUERY
+
+"""
+Boolean expression to compare columns of type "Boolean". All fields are combined with logical 'AND'.
+"""
+input Boolean_comparison_exp {
+  _eq: Boolean
+  _gt: Boolean
+  _gte: Boolean
+  _in: [Boolean!]
+  _is_null: Boolean
+  _lt: Boolean
+  _lte: Boolean
+  _neq: Boolean
+  _nin: [Boolean!]
+}
+
+"""
+Boolean expression to compare columns of type "Int". All fields are combined with logical 'AND'.
+"""
+input Int_comparison_exp {
+  _eq: Int
+  _gt: Int
+  _gte: Int
+  _in: [Int!]
+  _is_null: Boolean
+  _lt: Int
+  _lte: Int
+  _neq: Int
+  _nin: [Int!]
+}
+
+"""
+Boolean expression to compare columns of type "String". All fields are combined with logical 'AND'.
+"""
+input String_comparison_exp {
+  _eq: String
+  _gt: String
+  _gte: String
+
+  """does the column match the given case-insensitive pattern"""
+  _ilike: String
+  _in: [String!]
+
+  """
+  does the column match the given POSIX regular expression, case insensitive
+  """
+  _iregex: String
+  _is_null: Boolean
+
+  """does the column match the given pattern"""
+  _like: String
+  _lt: String
+  _lte: String
+  _neq: String
+
+  """does the column NOT match the given case-insensitive pattern"""
+  _nilike: String
+  _nin: [String!]
+
+  """
+  does the column NOT match the given POSIX regular expression, case insensitive
+  """
+  _niregex: String
+
+  """does the column NOT match the given pattern"""
+  _nlike: String
+
+  """
+  does the column NOT match the given POSIX regular expression, case sensitive
+  """
+  _nregex: String
+
+  """does the column NOT match the given SQL regular expression"""
+  _nsimilar: String
+
+  """
+  does the column match the given POSIX regular expression, case sensitive
+  """
+  _regex: String
+
+  """does the column match the given SQL regular expression"""
+  _similar: String
+}
+
+"""ordering argument of a cursor"""
+enum cursor_ordering {
+  """ascending ordering of the cursor"""
+  ASC
+
+  """descending ordering of the cursor"""
+  DESC
+}
+
+"""
+columns and relationships of "storage.files"
+"""
+type files {
+  bucketId: String!
+  createdAt: timestamptz!
+  etag: String
+  id: uuid!
+  isUploaded: Boolean
+  metadata(
+    """JSON select path"""
+    path: String
+  ): jsonb
+  mimeType: String
+  name: String
+  size: Int
+  updatedAt: timestamptz!
+  uploadedByUserId: uuid
+}
+
+"""
+Boolean expression to filter rows from the table "storage.files". All fields are combined with a logical 'AND'.
+"""
+input files_bool_exp {
+  _and: [files_bool_exp!]
+  _not: files_bool_exp
+  _or: [files_bool_exp!]
+  bucketId: String_comparison_exp
+  createdAt: timestamptz_comparison_exp
+  etag: String_comparison_exp
+  id: uuid_comparison_exp
+  isUploaded: Boolean_comparison_exp
+  metadata: jsonb_comparison_exp
+  mimeType: String_comparison_exp
+  name: String_comparison_exp
+  size: Int_comparison_exp
+  updatedAt: timestamptz_comparison_exp
+  uploadedByUserId: uuid_comparison_exp
+}
+
+"""Ordering options when selecting data from "storage.files"."""
+input files_order_by {
+  bucketId: order_by
+  createdAt: order_by
+  etag: order_by
+  id: order_by
+  isUploaded: order_by
+  metadata: order_by
+  mimeType: order_by
+  name: order_by
+  size: order_by
+  updatedAt: order_by
+  uploadedByUserId: order_by
+}
+
+"""
+select columns of table "storage.files"
+"""
+enum files_select_column {
+  """column name"""
+  bucketId
+
+  """column name"""
+  createdAt
+
+  """column name"""
+  etag
+
+  """column name"""
+  id
+
+  """column name"""
+  isUploaded
+
+  """column name"""
+  metadata
+
+  """column name"""
+  mimeType
+
+  """column name"""
+  name
+
+  """column name"""
+  size
+
+  """column name"""
+  updatedAt
+
+  """column name"""
+  uploadedByUserId
+}
+
+"""
+Streaming cursor of the table "files"
+"""
+input files_stream_cursor_input {
+  """Stream column input with initial value"""
+  initial_value: files_stream_cursor_value_input!
+
+  """cursor ordering"""
+  ordering: cursor_ordering
+}
+
+"""Initial value of the column from where the streaming should start"""
+input files_stream_cursor_value_input {
+  bucketId: String
+  createdAt: timestamptz
+  etag: String
+  id: uuid
+  isUploaded: Boolean
+  metadata: jsonb
+  mimeType: String
+  name: String
+  size: Int
+  updatedAt: timestamptz
+  uploadedByUserId: uuid
+}
+
+scalar jsonb
+
+input jsonb_cast_exp {
+  String: String_comparison_exp
+}
+
+"""
+Boolean expression to compare columns of type "jsonb". All fields are combined with logical 'AND'.
+"""
+input jsonb_comparison_exp {
+  _cast: jsonb_cast_exp
+
+  """is the column contained in the given json value"""
+  _contained_in: jsonb
+
+  """does the column contain the given json value at the top level"""
+  _contains: jsonb
+  _eq: jsonb
+  _gt: jsonb
+  _gte: jsonb
+
+  """does the string exist as a top-level key in the column"""
+  _has_key: String
+
+  """do all of these strings exist as top-level keys in the column"""
+  _has_keys_all: [String!]
+
+  """do any of these strings exist as top-level keys in the column"""
+  _has_keys_any: [String!]
+  _in: [jsonb!]
+  _is_null: Boolean
+  _lt: jsonb
+  _lte: jsonb
+  _neq: jsonb
+  _nin: [jsonb!]
+}
+
+"""column ordering options"""
+enum order_by {
+  """in ascending order, nulls last"""
+  asc
+
+  """in ascending order, nulls first"""
+  asc_nulls_first
+
+  """in ascending order, nulls last"""
+  asc_nulls_last
+
+  """in descending order, nulls first"""
+  desc
+
+  """in descending order, nulls first"""
+  desc_nulls_first
+
+  """in descending order, nulls last"""
+  desc_nulls_last
+}
+
+type query_root {
+  """fetch data from the table: "storage.files" using primary key columns"""
+  file(id: uuid!): files
+
+  """
+  fetch data from the table: "storage.files"
+  """
+  files(
+    """distinct select on columns"""
+    distinct_on: [files_select_column!]
+
+    """limit the number of rows returned"""
+    limit: Int
+
+    """skip the first n rows. Use only with order_by"""
+    offset: Int
+
+    """sort the rows by one or more columns"""
+    order_by: [files_order_by!]
+
+    """filter the rows returned"""
+    where: files_bool_exp
+  ): [files!]!
+}
+
+type subscription_root {
+  """fetch data from the table: "storage.files" using primary key columns"""
+  file(id: uuid!): files
+
+  """
+  fetch data from the table: "storage.files"
+  """
+  files(
+    """distinct select on columns"""
+    distinct_on: [files_select_column!]
+
+    """limit the number of rows returned"""
+    limit: Int
+
+    """skip the first n rows. Use only with order_by"""
+    offset: Int
+
+    """sort the rows by one or more columns"""
+    order_by: [files_order_by!]
+
+    """filter the rows returned"""
+    where: files_bool_exp
+  ): [files!]!
+
+  """
+  fetch data from the table in a streaming manner: "storage.files"
+  """
+  files_stream(
+    """maximum number of rows returned in a single batch"""
+    batch_size: Int!
+
+    """cursor to stream the results returned by the query"""
+    cursor: [files_stream_cursor_input]!
+
+    """filter the rows returned"""
+    where: files_bool_exp
+  ): [files!]!
+}
+
+scalar timestamptz
+
+"""
+Boolean expression to compare columns of type "timestamptz". All fields are combined with logical 'AND'.
+"""
+input timestamptz_comparison_exp {
+  _eq: timestamptz
+  _gt: timestamptz
+  _gte: timestamptz
+  _in: [timestamptz!]
+  _is_null: Boolean
+  _lt: timestamptz
+  _lte: timestamptz
+  _neq: timestamptz
+  _nin: [timestamptz!]
+}
+
+scalar uuid
+
+"""
+Boolean expression to compare columns of type "uuid". All fields are combined with logical 'AND'.
+"""
+input uuid_comparison_exp {
+  _eq: uuid
+  _gt: uuid
+  _gte: uuid
+  _in: [uuid!]
+  _is_null: Boolean
+  _lt: uuid
+  _lte: uuid
+  _neq: uuid
+  _nin: [uuid!]
+}

@@ -1,0 +1,3 @@
+table:
+  name: menu_item_recipes
+  schema: public

@@ -1,10 +1,13 @@
 "use client";
 
+import type { ItemTypeValue } from "@cellar-assistant/shared";
+import {
+  addFavoriteMutation,
+  deleteFavoriteMutation,
+} from "@cellar-assistant/shared/queries";
 import { Card, IconButton, Stack, Typography } from "@mui/joy";
-import { ItemType } from "@shared/gql/graphql";
-import { addFavoriteMutation, deleteFavoriteMutation } from "@shared/queries";
 import { isNil, isNotNil, without } from "ramda";
-import { MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import { MdFavorite, MdFavoriteBorder } from "react-icons/md";
 import { useMutation } from "urql";
 import { typeToIdKey } from "@/utilities";
@@ -12,7 +15,7 @@ import { typeToIdKey } from "@/utilities";
 export type ItemDetailsProp = {
   itemId: string;
   favoriteId?: string;
-  type: ItemType;
+  type: ItemTypeValue;
   title: string;
   subTitlePhrases: Array<string | null | undefined>;
   description: string | null | undefined;

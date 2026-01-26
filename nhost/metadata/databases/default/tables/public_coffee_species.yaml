@@ -2,3 +2,11 @@ table:
   name: coffee_species
   schema: public
 is_enum: true
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - comment
+        - value
+      filter: {}
+    comment: ""

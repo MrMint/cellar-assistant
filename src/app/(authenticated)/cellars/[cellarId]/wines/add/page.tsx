@@ -1,17 +1,27 @@
-"use client";
-
-import { useUserId } from "@nhost/nextjs";
-import { isNil } from "ramda";
+import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { EnumProvider } from "@/components/providers/EnumProvider";
 import { WineOnboarding } from "@/components/wine/WineOnboarding";
+import { createEnumQueryFn } from "@/lib/urql/server";
+import { getServerUserId } from "@/utilities/auth-server";
 
-const AddWine = ({
-  params: { cellarId },
+export default async function AddWine({
+  params,
 }: {
-  params: { cellarId: string };
-}) => {
-  const userId = useUserId();
-  if (isNil(userId)) throw new Error("Bad UserId");
-  return <WineOnboarding cellarId={cellarId} userId={userId} />;
-};
+  params: Promise<{ cellarId: string }>;
+}) {
+  const { cellarId } = await params;
+  // Pre-fetch enum data
+  const [userId, enumData] = await Promise.all([
+    getServerUserId(),
+    getMultipleEnumOptions(
+      ["wineStyle", "wineVariety", "country"],
+      await createEnumQueryFn(),
+    ),
+  ]);
 
-export default AddWine;
+  return (
+    <EnumProvider serverEnumData={enumData}>
+      <WineOnboarding cellarId={cellarId} userId={userId} />
+    </EnumProvider>
+  );
+}

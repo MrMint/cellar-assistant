@@ -1,34 +1,31 @@
+"use client";
+
+import {
+  Barcodes_Constraint,
+  Barcodes_Update_Column,
+  type Country_Enum,
+  type Wine_Style_Enum,
+  type Wine_Variety_Enum,
+} from "@cellar-assistant/shared";
+import {
+  addWineMutation,
+  updateWineMutation,
+  type Wines_Insert_Input,
+} from "@cellar-assistant/shared/queries";
 import {
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
-  Option,
-  Select,
   Stack,
   Textarea,
   Typography,
 } from "@mui/joy";
-import {
-  Barcodes_Constraint,
-  Wine_Variety_Enum,
-  Barcodes_Update_Column,
-  Country_Enum,
-  Wine_Style_Enum,
-  Wines_Insert_Input,
-} from "@shared/gql/graphql";
-import { addWineMutation, updateWineMutation } from "@shared/queries";
-import {
-  formatCountry,
-  formatWineStyle,
-  formatWineVariety,
-} from "@shared/utility";
-import { format } from "date-fns";
 import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient, useMutation } from "urql";
-import { countryKeys, wineStyleKeys, wineVarietyKeys } from "@/constants";
+import { Controller, type SubmitHandler, useForm } from "react-hook-form";
+import { type CombinedError, useClient } from "urql";
+import { EnumSelect } from "@/components/forms/EnumSelect";
 import { convertYearToDate, formatVintage, parseNumber } from "@/utilities";
 
 type SharedFields = {
@@ -113,7 +110,7 @@ export const WineForm = ({
     defaultValues: {
       ...defaultValues,
       vintage:
-        defaultVintage !== undefined ? parseInt(defaultVintage) : undefined,
+        defaultVintage !== undefined ? parseInt(defaultVintage, 10) : undefined,
     },
   });
 
@@ -122,7 +119,7 @@ export const WineForm = ({
     let createdId: string | undefined;
     const update = mapFormValuesToInsertInput(values, itemOnboardingId);
 
-    if (id == undefined) {
+    if (id === undefined) {
       const result = await client.mutation(addWineMutation, {
         wine: update,
       });
@@ -197,73 +194,26 @@ export const WineForm = ({
                 )}
               />
             </FormControl>
-            <FormControl required>
-              <FormLabel>Style</FormLabel>
-              <Controller
-                name="style"
-                control={control}
-                rules={{ required: true }}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {wineStyleKeys.map((x) => (
-                      <Option key={x} value={Wine_Style_Enum[x]}>
-                        {formatWineStyle(Wine_Style_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Variety</FormLabel>
-              <Controller
-                name="variety"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {wineVarietyKeys.map((x) => (
-                      <Option key={x} value={Wine_Variety_Enum[x]}>
-                        {formatWineVariety(Wine_Variety_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel>Country</FormLabel>
-              <Controller
-                name="country"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    placeholder="Choose one…"
-                    {...field}
-                    onChange={(_, value) => {
-                      field.onChange(value);
-                    }}
-                  >
-                    {countryKeys.map((x) => (
-                      <Option key={x} value={Country_Enum[x]}>
-                        {formatCountry(Country_Enum[x])}
-                      </Option>
-                    ))}
-                  </Select>
-                )}
-              />
-            </FormControl>
+            <EnumSelect
+              name="style"
+              control={control}
+              enumKey="wineStyle"
+              label="Style"
+              required
+              rules={{ required: true }}
+            />
+            <EnumSelect
+              name="variety"
+              control={control}
+              enumKey="wineVariety"
+              label="Variety"
+            />
+            <EnumSelect
+              name="country"
+              control={control}
+              enumKey="country"
+              label="Country"
+            />
             <FormControl>
               <FormLabel>Region</FormLabel>
               <Controller

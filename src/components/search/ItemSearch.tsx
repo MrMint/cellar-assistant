@@ -4,19 +4,16 @@ import {
   Card,
   CardContent,
   CardCover,
-  CardOverflow,
   CircularProgress,
   Grid,
-  IconButton,
   Input,
   Skeleton,
   Stack,
   Typography,
 } from "@mui/joy";
-import { useUserId } from "@nhost/nextjs";
 import { useActor } from "@xstate/react";
-import { includes, isEmpty, isNil, not } from "ramda";
-import { MdCamera, MdScanner, MdSearch } from "react-icons/md";
+import { includes, isEmpty, isNil } from "ramda";
+import { MdSearch } from "react-icons/md";
 import { useClient } from "urql";
 import { formatItemType } from "@/utilities";
 import { BarcodeScanner } from "../common/BarcodeScanner";
@@ -24,9 +21,12 @@ import { CameraCapture } from "../common/CameraCapture";
 import { ItemCard } from "../item/ItemCard";
 import { searchItemsMachine } from "./actors/searchItems";
 
-export const ItemSearch = () => {
+interface ItemSearchProps {
+  userId: string;
+}
+
+export const ItemSearch = ({ userId }: ItemSearchProps) => {
   const urqlClient = useClient();
-  const userId = useUserId();
   if (isNil(userId)) throw new Error("Nil UserId");
 
   const [state, send] = useActor(searchItemsMachine, {

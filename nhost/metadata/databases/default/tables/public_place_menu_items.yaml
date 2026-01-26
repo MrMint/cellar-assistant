@@ -1,0 +1,73 @@
+table:
+  name: place_menu_items
+  schema: public
+array_relationships:
+  - name: menu_item_recipes
+    using:
+      foreign_key_constraint_on:
+        column: menu_item_id
+        table:
+          name: menu_item_recipes
+          schema: public
+    comment: Recipes associated with this menu item
+object_relationships:
+  - name: beer
+    using:
+      foreign_key_constraint_on: beer_id
+    comment: Beer item match
+  - name: coffee
+    using:
+      foreign_key_constraint_on: coffee_id
+    comment: Coffee item match
+  - name: match_verified_by_user
+    using:
+      foreign_key_constraint_on: match_verified_by
+    comment: User who verified the item match
+  - name: menu_scan
+    using:
+      foreign_key_constraint_on: menu_scan_id
+    comment: Menu scan this item was extracted from
+  - name: place
+    using:
+      foreign_key_constraint_on: place_id
+    comment: The place this menu item belongs to
+  - name: place_menu
+    using:
+      foreign_key_constraint_on: place_menu_id
+    comment: The menu this item belongs to
+  - name: spirit
+    using:
+      foreign_key_constraint_on: spirit_id
+    comment: Spirit item match
+  - name: wine
+    using:
+      foreign_key_constraint_on: wine_id
+    comment: Wine item match
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - place_menu_id
+        - menu_scan_id
+        - place_id
+        - menu_item_name
+        - menu_item_description
+        - menu_item_price
+        - menu_category
+        - detected_item_type
+        - confidence_score
+        - extracted_attributes
+        - wine_id
+        - beer_id
+        - spirit_id
+        - coffee_id
+        - match_verified_by
+        - match_verified_at
+        - is_available
+        - seasonal
+        - created_at
+        - updated_at
+      filter: {}
+      allow_aggregations: true
+    comment: Users can view all menu items

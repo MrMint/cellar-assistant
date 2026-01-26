@@ -1,27 +1,41 @@
-import { graphql } from "@shared/gql";
-import { defaultTo, isNil, isNotNil, nth, without } from "ramda";
+import { graphql } from "@cellar-assistant/shared";
+import { defaultTo, isNil, isNotNil, nth } from "ramda";
 import { fromPromise } from "xstate";
+import {
+  beerItemCardFragment,
+  coffeeItemCardFragment,
+  spiritItemCardFragment,
+  wineItemCardFragment,
+} from "@/components/item/ItemCard/fragments";
 import { getItemType } from "@/utilities";
-import { BarcodeSearchResult, SearchByBarcodeInput } from "./types";
+import type { BarcodeSearchResult, SearchByBarcodeInput } from "./types";
 
-const searchByBarcodeQuery = graphql(`
-  query SearchByBarcode($code: String!, $userId: uuid!) {
-    barcodes_by_pk(code: $code) {
-      beers {
-        ...beerItemCardFragment
-      }
-      wines {
-        ...wineItemCardFragment
-      }
-      spirits {
-        ...spiritItemCardFragment
-      }
-      coffees {
-        ...coffeeItemCardFragment
+const searchByBarcodeQuery = graphql(
+  `
+    query SearchByBarcode($code: String!, $userId: uuid!) {
+      barcodes_by_pk(code: $code) {
+        beers {
+          ...beerItemCardFragment
+        }
+        wines {
+          ...wineItemCardFragment
+        }
+        spirits {
+          ...spiritItemCardFragment
+        }
+        coffees {
+          ...coffeeItemCardFragment
+        }
       }
     }
-  }
-`);
+  `,
+  [
+    beerItemCardFragment,
+    wineItemCardFragment,
+    spiritItemCardFragment,
+    coffeeItemCardFragment,
+  ],
+);
 
 export const searchByBarcode = fromPromise(
   async ({
@@ -35,7 +49,7 @@ export const searchByBarcode = fromPromise(
       userId,
     });
 
-    let results = new Array<BarcodeSearchResult>();
+    let results: BarcodeSearchResult[] = [];
     if (
       isNotNil(searchResults.data) &&
       isNotNil(searchResults.data.barcodes_by_pk)

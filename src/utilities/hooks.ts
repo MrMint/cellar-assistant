@@ -1,4 +1,4 @@
-import { ItemType } from "@shared/gql/graphql";
+import { ITEM_TYPES, type ItemTypeValue } from "@cellar-assistant/shared";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isEmpty, isNotNil } from "ramda";
 import {
@@ -8,11 +8,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { RankingsFilterValue } from "@/components/ranking/RankingsFilter";
-import { getEnumKeys } from ".";
+import type { RankingsFilterValue } from "@/components/ranking/RankingsFilter";
 
 export function useInterval(callback: () => void, delay: number) {
-  const intervalRef = useRef<any>(null);
+  const intervalRef = useRef<number | null>(null);
   const savedCallback = useRef(callback);
   useEffect(() => {
     savedCallback.current = callback;
@@ -20,7 +19,11 @@ export function useInterval(callback: () => void, delay: number) {
   useEffect(() => {
     const tick = () => savedCallback.current();
     intervalRef.current = window.setInterval(tick, delay);
-    return () => window.clearInterval(intervalRef.current);
+    return () => {
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+      }
+    };
   }, [delay]);
   return intervalRef;
 }
@@ -74,10 +77,10 @@ export const useTypesFilterState = () => {
   const types = searchParams.get("types");
   const parsedTypes = isNotNil(types) ? JSON.parse(types) : undefined;
   const [optimisticTypes, setOptimisticTypes] =
-    useOptimistic<ItemType[]>(parsedTypes);
+    useOptimistic<ItemTypeValue[]>(parsedTypes);
 
-  const setTypes = (t: ItemType[]) => {
-    if (isEmpty(t) || t.length >= getEnumKeys(ItemType).length) {
+  const setTypes = (t: ItemTypeValue[]) => {
+    if (isEmpty(t) || t.length >= ITEM_TYPES.length) {
       startTransition(() => setOptimisticTypes([]));
       searchParams.delete("types");
     } else {

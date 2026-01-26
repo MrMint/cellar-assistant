@@ -1,4 +1,6 @@
 import "@fontsource/inter";
+import "leaflet/dist/leaflet.css";
+import "@/styles/google-maps.css";
 import { Box } from "@mui/joy";
 import { Analytics } from "@vercel/analytics/react";
 import type { Metadata } from "next";

@@ -1,17 +1,33 @@
-"use client";
-
-import { useUserId } from "@nhost/nextjs";
-import { isNil } from "ramda";
+import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
 import { CoffeeOnboarding } from "@/components/coffee/CoffeeOnboarding";
+import { EnumProvider } from "@/components/providers/EnumProvider";
+import { createEnumQueryFn } from "@/lib/urql/server";
+import { getServerUserId } from "@/utilities/auth-server";
 
-const AddCoffee = ({
-  params: { cellarId },
+export default async function AddCoffee({
+  params,
 }: {
-  params: { cellarId: string };
-}) => {
-  const userId = useUserId();
-  if (isNil(userId)) throw new Error("Bad UserId");
-  return <CoffeeOnboarding cellarId={cellarId} userId={userId} />;
-};
+  params: Promise<{ cellarId: string }>;
+}) {
+  const { cellarId } = await params;
+  // Pre-fetch enum data
+  const [userId, enumData] = await Promise.all([
+    getServerUserId(),
+    getMultipleEnumOptions(
+      [
+        "coffeeRoastLevel",
+        "coffeeSpecies",
+        "coffeeCultivar",
+        "coffeeProcess",
+        "country",
+      ],
+      await createEnumQueryFn(),
+    ),
+  ]);
 
-export default AddCoffee;
+  return (
+    <EnumProvider serverEnumData={enumData}>
+      <CoffeeOnboarding cellarId={cellarId} userId={userId} />
+    </EnumProvider>
+  );
+}

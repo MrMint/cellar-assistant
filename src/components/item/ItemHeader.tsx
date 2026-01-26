@@ -1,3 +1,5 @@
+import type { ItemTypeValue } from "@cellar-assistant/shared";
+import { addCellarItemMutation } from "@cellar-assistant/shared/queries";
 import {
   Button,
   ButtonGroup,
@@ -7,18 +9,15 @@ import {
   MenuItem,
   Stack,
 } from "@mui/joy";
-import { ItemType } from "@shared/gql/graphql";
-import { addCellarItemMutation } from "@shared/queries";
 import { gt, isNil, isNotNil, length } from "ramda";
 import { MdAdd, MdArrowDownward } from "react-icons/md";
 import { useMutation } from "urql";
 import { HeaderBar } from "@/components/common/HeaderBar";
-import { formatItemType } from "@/utilities";
 
 type ItemHeaderProps = {
   itemId: string;
   itemName?: string;
-  itemType: ItemType;
+  itemType: ItemTypeValue;
   cellars?: {
     id: string;
     name: string;
@@ -38,16 +37,16 @@ export const ItemHeader = ({
 
   const handleAddClick = async (cellarId: string) => {
     switch (itemType) {
-      case ItemType.Beer:
+      case "BEER":
         await addItem({ item: { cellar_id: cellarId, beer_id: itemId } });
         break;
-      case ItemType.Spirit:
+      case "SPIRIT":
         await addItem({ item: { cellar_id: cellarId, spirit_id: itemId } });
         break;
-      case ItemType.Wine:
+      case "WINE":
         await addItem({ item: { cellar_id: cellarId, wine_id: itemId } });
         break;
-      case ItemType.Coffee:
+      case "COFFEE":
         await addItem({ item: { cellar_id: cellarId, coffee_id: itemId } });
         break;
 
@@ -60,16 +59,9 @@ export const ItemHeader = ({
 
   return (
     <HeaderBar
-      breadcrumbs={[
-        {
-          url: `/${formatItemType(itemType)}s`,
-          text: `${formatItemType(itemType)}s`,
-        },
-        {
-          url: `/${itemType}s/${itemId}`,
-          text: itemName ?? "loading...",
-        },
-      ]}
+      serverBreadcrumbs={{
+        itemName: itemName ?? "loading...",
+      }}
       endComponent={
         <Stack spacing={2} direction="row">
           {isNil(cellars) ||

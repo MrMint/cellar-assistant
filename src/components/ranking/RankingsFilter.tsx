@@ -24,7 +24,7 @@ export const RankingsFilter = ({
         variant="plain"
         spacing={0.5}
         value={types}
-        onChange={(event, newTypes) => {
+        onChange={(_event, newTypes) => {
           onTypesChange(newTypes);
         }}
         aria-label="text formatting"

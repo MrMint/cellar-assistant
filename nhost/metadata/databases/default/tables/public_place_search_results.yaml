@@ -1,0 +1,36 @@
+table:
+  name: place_search_results
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - is_cluster
+        - cluster_id
+        - cluster_count
+        - cluster_center
+        - cluster_bounds
+        - id
+        - name
+        - location
+        - primary_category
+        - categories
+        - confidence
+        - street_address
+        - locality
+        - region
+        - postcode
+        - country_code
+        - phone
+        - website
+        - email
+        - hours
+        - price_level
+        - rating
+        - review_count
+        - is_verified
+        - viewport_area_km2
+        - density_per_km2
+        - clustering_applied
+      filter: {}
+    comment: Allow users to read place search results

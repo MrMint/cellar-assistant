@@ -1,19 +1,19 @@
-import { graphql } from "@shared/gql";
 import {
-  Coffee_Roast_Level_Enum,
-  Coffee_Process_Enum,
-  Coffee_Species_Enum,
-  Coffee_Cultivar_Enum,
-} from "@shared/gql/graphql";
+  type Coffee_Cultivar_Enum,
+  type Coffee_Process_Enum,
+  type Coffee_Roast_Level_Enum,
+  type Coffee_Species_Enum,
+  graphql,
+} from "@cellar-assistant/shared";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
-import {
+import type {
   DefaultValues,
   DefaultValuesResult,
   FetchDefaultsInput,
 } from "@/components/common/OnboardingWizard/actors/types";
 import { nullsToUndefined } from "@/utilities";
-import { CoffeeFormDefaultValues } from "../CoffeeForm";
+import type { CoffeeFormDefaultValues } from "../CoffeeForm";
 
 const getDefaultsQuery = graphql(`
   query GetCoffeeDefaults($hint: item_defaults_hint!) {
@@ -28,6 +28,7 @@ const getDefaultsQuery = graphql(`
       cultivar
       process
       species
+      confidence
     }
   }
 `);
@@ -74,6 +75,7 @@ export const fetchDefaults = fromPromise(
           : undefined,
       },
       itemOnboardingId: result.data.coffee_defaults.item_onboarding_id,
+      confidence: result.data.coffee_defaults.confidence ?? 0,
     } as DefaultValuesResult<CoffeeFormDefaultValues>;
   },
 );

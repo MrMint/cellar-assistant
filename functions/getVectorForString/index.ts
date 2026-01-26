@@ -1,80 +1,178 @@
-import { PredictionServiceClient } from "@google-cloud/aiplatform";
-import { NhostClient } from "@nhost/nhost-js";
-import { Request, Response } from "express";
-import { isNil, isNotNil } from "ramda";
+import type { Request, Response } from "express";
+import { isNotNil } from "ramda";
 import {
-  createImageEmbeddingAsync,
-  createSearchEmbeddingAsync,
-} from "../_utils/gcp.js";
+  createErrorResponse,
+  createPerformanceTracker,
+  DatabaseError,
+  type ExtendedPerformanceMetrics,
+  executeWithRetry,
+  getConfig,
+  logError,
+  logPerformanceMetrics,
+  ValidationError,
+} from "../_utils";
+import { createAIProvider } from "../_utils/ai-providers/factory";
 import { dataUrlToImageBuffer } from "../_utils/index.js";
-import { getCredential } from "../_utils/queries.js";
+import {
+  type VectorInput,
+  type VectorOutput,
+  validateVectorInput,
+} from "./_types.js";
 
-const {
-  NHOST_ADMIN_SECRET,
-  NHOST_SUBDOMAIN,
-  NHOST_REGION,
-  CREDENTIALS_GCP_ID,
-  GOOGLE_GCP_VERTEX_AI_ENDPOINT,
-  NHOST_WEBHOOK_SECRET,
-} = process.env;
+const { NHOST_WEBHOOK_SECRET } = process.env;
 
-const nhostClient = new NhostClient({
-  subdomain: NHOST_SUBDOMAIN,
-  region: NHOST_REGION,
-  adminSecret: NHOST_ADMIN_SECRET,
-});
+// Get shared configuration
+const CONFIG = getConfig();
 
-let predictionServiceClient: PredictionServiceClient;
-
-type input = {
-  input: { text: string; image: string };
-  session_variables?: { "x-hasura-user-id"?: string };
-};
-
-export default async function generateVector(
-  req: Request<any, any, input>,
+export default async function getVectorForString(
+  req: Request<Record<string, never>, Record<string, never>, VectorInput>,
   res: Response,
 ) {
   try {
-    // TODO improve gcp credential handling
-    if (isNil(predictionServiceClient)) {
-      const credResult = await nhostClient.graphql.request(getCredential, {
-        id: CREDENTIALS_GCP_ID,
-      });
-      predictionServiceClient = new PredictionServiceClient({
-        credentials: credResult.data.admin_credentials_by_pk.credentials,
-        apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
-      });
-      console.log("Initialized GCP clients");
-    }
-
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+
+    // Validate webhook secret
+    const receivedSecret = req.headers["nhost-webhook-secret"];
+    const expectedSecret = NHOST_WEBHOOK_SECRET;
+
+    if (receivedSecret !== expectedSecret) {
       return res.status(400).send();
     }
 
+    const validatedInput = validateVectorInput(req.body);
+    const performanceTracker =
+      createPerformanceTracker<ExtendedPerformanceMetrics>();
+
     const {
       input: { text, image },
-    } = req.body;
-    if (isNil(text) && isNil(image)) return res.status(400).send();
-    if (isNotNil(text) && isNotNil(image)) return res.status(400).send();
-    console.log(`Received request`);
+      session_variables,
+    } = validatedInput;
 
-    let result: Number[];
-    if (isNotNil(text)) {
-      result = await createSearchEmbeddingAsync(predictionServiceClient, text);
-    }
-    if (isNotNil(image)) {
-      result = await createImageEmbeddingAsync(
-        predictionServiceClient,
-        dataUrlToImageBuffer(image),
-      );
-    }
-    console.log(`Created vector`);
-    return res.status(200).send(JSON.stringify(result));
+    const userId = session_variables?.["x-hasura-user-id"];
+    const inputType = isNotNil(text) ? "text" : "image";
+
+    const result = await executeWithRetry(
+      () => processVectorGeneration(text, image, inputType, performanceTracker),
+      {
+        retryConfig: {
+          maxRetries: CONFIG.RETRY.MAX_RETRIES,
+          baseDelayMs: CONFIG.RETRY.BASE_DELAY_MS,
+          maxDelayMs: CONFIG.RETRY.MAX_DELAY_MS,
+          jitterFactor: CONFIG.RETRY.JITTER_FACTOR,
+        },
+        operationName: `${inputType} vector generation`,
+        context: { inputType, userId, hasContent: true },
+      },
+    );
+
+    // Log performance metrics
+    const metrics = performanceTracker.getMetrics();
+    logPerformanceMetrics(
+      metrics,
+      { inputType, userId },
+      {
+        functionName: "getVectorForString",
+        sampleRate: CONFIG.PERFORMANCE.LOG_METRICS_SAMPLE_RATE,
+        slowOperationThresholdMs: CONFIG.PERFORMANCE.LOG_SLOW_OPERATIONS_MS,
+      },
+    );
+
+    return res.status(200).json(result.vector);
   } catch (exception) {
-    console.log(exception);
-    return res.status(500).send();
+    // Extract context for error logging
+    let errorContext: Record<string, unknown> = {};
+    try {
+      const context = validateVectorInput(req.body);
+      errorContext = {
+        inputType: isNotNil(context.input.text) ? "text" : "image",
+        hasText: isNotNil(context.input.text),
+        hasImage: isNotNil(context.input.image),
+        userId: context.session_variables?.["x-hasura-user-id"],
+      };
+    } catch {
+      errorContext = {
+        hasInput: !!req.body?.input,
+        hasSessionVars: !!req.body?.session_variables,
+      };
+    }
+
+    logError(exception, errorContext, "getVectorForString");
+
+    const errorResponse = createErrorResponse(
+      exception,
+      "getVectorForString",
+      process.env.NODE_ENV === "development",
+    );
+
+    return res.status(errorResponse.statusCode).json(errorResponse);
   }
+}
+
+async function processVectorGeneration(
+  text: string | undefined,
+  image: string | undefined,
+  inputType: string,
+  performanceTracker: ReturnType<
+    typeof createPerformanceTracker<ExtendedPerformanceMetrics>
+  >,
+): Promise<VectorOutput> {
+  // Get the AI provider with performance tracking
+  const endProviderTimer = performanceTracker.startTimer("externalApiDuration");
+  const aiProvider = await createAIProvider();
+  endProviderTimer();
+
+  let result: number[];
+
+  if (inputType === "text" && isNotNil(text)) {
+    const endEmbeddingTimer = performanceTracker.startTimer(
+      "externalApiDuration",
+    );
+    const response = await aiProvider.generateEmbeddings?.({
+      content: text,
+      type: "text",
+    });
+    endEmbeddingTimer();
+
+    if (!response?.embeddings) {
+      throw new DatabaseError("Failed to generate text embeddings");
+    }
+
+    result = response.embeddings;
+  } else if (inputType === "image" && isNotNil(image)) {
+    // Convert data URL to buffer with performance tracking
+    const endConversionTimer =
+      performanceTracker.startTimer("validationDuration");
+    const imageBuffer = dataUrlToImageBuffer(image);
+    endConversionTimer();
+
+    if (!imageBuffer) {
+      throw new ValidationError("Invalid image data URL provided");
+    }
+
+    const endEmbeddingTimer = performanceTracker.startTimer(
+      "externalApiDuration",
+    );
+    const response = await aiProvider.generateEmbeddings?.({
+      content: imageBuffer,
+      type: "image",
+    });
+    endEmbeddingTimer();
+
+    if (!response?.embeddings) {
+      throw new DatabaseError("Failed to generate image embeddings");
+    }
+
+    result = response.embeddings;
+  } else {
+    throw new ValidationError(
+      "Invalid input: neither valid text nor image provided",
+    );
+  }
+
+  if (!result || result.length === 0) {
+    throw new DatabaseError("Generated vector is empty or invalid");
+  }
+
+  return { success: true, vector: result };
 }

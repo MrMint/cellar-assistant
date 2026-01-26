@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "context7": {
+      "type": "http",
+      "url": "http://localhost:6334/mcp"
+    },
+    "playwright": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--init",
+        "--pull=always",
+        "mcr.microsoft.com/playwright/mcp"
+      ]
+    },
+    "serena": {
+      "type": "sse",
+      "url": "http://localhost:9121/sse"
+    },
+    "mcp-nhost": {
+      "command": "nhost",
+      "args": ["mcp", "start"]
+    }
+  }
+}

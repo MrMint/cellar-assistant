@@ -1,6 +1,22 @@
 table:
   name: item_vectors
   schema: public
+object_relationships:
+  - name: beer
+    using:
+      foreign_key_constraint_on: beer_id
+  - name: coffee
+    using:
+      foreign_key_constraint_on: coffee_id
+  - name: sake
+    using:
+      foreign_key_constraint_on: sake_id
+  - name: spirit
+    using:
+      foreign_key_constraint_on: spirit_id
+  - name: wine
+    using:
+      foreign_key_constraint_on: wine_id
 computed_fields:
   - name: distance
     definition:
@@ -10,10 +26,17 @@ computed_fields:
 select_permissions:
   - role: user
     permission:
-      columns: []
+      columns:
+        - beer_id
+        - coffee_id
+        - created_at
+        - id
+        - sake_id
+        - spirit_id
+        - updated_at
+        - wine_id
       computed_fields:
         - distance
       filter: {}
-      query_root_fields: []
-      subscription_root_fields: []
+      allow_aggregations: true
     comment: ""

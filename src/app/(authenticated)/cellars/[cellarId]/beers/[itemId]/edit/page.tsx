@@ -1,65 +1,45 @@
-"use client";
-
-import { Box } from "@mui/joy";
-import { graphql } from "@shared/gql";
-import { isNotNil, omit } from "ramda";
-import { useQuery } from "urql";
+import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { notFound } from "next/navigation";
 import { BeerForm } from "@/components/beer/BeerForm";
-import { nullsToUndefined } from "@/utilities";
+import { GetBeerEditQuery } from "@/components/beer/fragments";
+import { EnumProvider } from "@/components/providers/EnumProvider";
+import { createEnumQueryFn, serverQuery } from "@/lib/urql/server";
 
-const editBeerPageQuery = graphql(`
-  query EditBeerPageQuery($itemId: uuid!) {
-    beers_by_pk(id: $itemId) {
-      id
-      name
-      created_by_id
-      vintage
-      style
-      description
-      alcohol_content_percentage
-      barcode_code
-      international_bitterness_unit
-      country
-    }
-  }
-`);
-
-const EditBeer = ({
-  params: { itemId, cellarId },
+export default async function EditBeer({
+  params,
 }: {
-  params: { itemId: string; cellarId: string };
-}) => {
-  const [{ data, fetching, operation }] = useQuery({
-    query: editBeerPageQuery,
-    variables: { itemId },
-  });
+  params: Promise<{ itemId: string; cellarId: string }>;
+}) {
+  const { itemId } = await params;
+  // Pre-fetch enum data and beer data in parallel
+  const [data, enumData] = await Promise.all([
+    serverQuery(GetBeerEditQuery, { itemId }),
+    getMultipleEnumOptions(["beerStyle", "country"], await createEnumQueryFn()),
+  ]);
 
-  const isLoading = fetching || operation === undefined;
-
-  let beer = undefined;
-  if (isLoading === false && data !== undefined && isNotNil(data.beers_by_pk)) {
-    beer = nullsToUndefined(data.beers_by_pk);
+  if (!data.beers_by_pk) {
+    notFound();
   }
-  return (
-    <>
-      {beer !== undefined && (
-        <BeerForm
-          id={itemId}
-          onCreated={() => {}}
-          defaultValues={{
-            name: beer.name,
-            description: beer.description,
-            style: beer.style,
-            vintage: beer.vintage,
-            alcohol_content_percentage: beer.alcohol_content_percentage,
-            barcode_code: beer.barcode_code,
-            international_bitterness_unit:
-              beer.international_bitterness_unit?.toString(),
-          }}
-        />
-      )}
-    </>
-  );
-};
 
-export default EditBeer;
+  const beer = data.beers_by_pk;
+
+  return (
+    <EnumProvider serverEnumData={enumData}>
+      <BeerForm
+        id={itemId}
+        onCreated={() => {}}
+        defaultValues={{
+          name: beer.name,
+          description: beer.description ?? undefined,
+          style: beer.style ?? undefined,
+          vintage: beer.vintage ?? undefined,
+          alcohol_content_percentage:
+            beer.alcohol_content_percentage?.toString() ?? "",
+          barcode_code: beer.barcode_code ?? undefined,
+          international_bitterness_unit:
+            beer.international_bitterness_unit?.toString() ?? "",
+        }}
+      />
+    </EnumProvider>
+  );
+}

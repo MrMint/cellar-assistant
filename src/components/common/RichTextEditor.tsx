@@ -3,15 +3,16 @@ import {
   LexicalComposer,
 } from "@lexical/react/LexicalComposer";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
-import LexicalErrorBoundary from "@lexical/react/LexicalErrorBoundary";
+import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { Sheet, styled } from "@mui/joy";
-import { EditorState } from "lexical";
+import type { EditorState } from "lexical";
 import { not } from "ramda";
 
 export type RichTextEditorProps = {
   initialText?: string;
+  value?: string;
   placeholder?: string;
   readonly?: boolean;
   onChange: (editorState: string) => void;
@@ -40,6 +41,7 @@ const StyledPlaceholder = styled("div")(() => ({
 
 export const RichTextEditor = ({
   initialText,
+  value,
   onChange,
   readonly = false,
   placeholder = "Enter some text...",
@@ -48,12 +50,15 @@ export const RichTextEditor = ({
     onChange(JSON.stringify(editorState));
   };
 
+  // Use value as alias for initialText if provided
+  const editorInitialState = value ?? initialText;
+
   return (
     <LexicalComposer
       initialConfig={
         {
           editable: not(readonly),
-          editorState: initialText,
+          editorState: editorInitialState,
         } as InitialConfigType
       }
     >

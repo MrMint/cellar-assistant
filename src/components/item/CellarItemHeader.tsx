@@ -1,3 +1,6 @@
+"use client";
+
+import { graphql, type ItemTypeValue } from "@cellar-assistant/shared";
 import {
   Button,
   DialogActions,
@@ -8,11 +11,8 @@ import {
   ModalDialog,
   Stack,
 } from "@mui/joy";
-import { useUserId } from "@nhost/nextjs";
-import { graphql } from "@shared/gql";
-import { ItemType } from "@shared/gql/graphql";
 import { useRouter } from "next/navigation";
-import { isNil, isNotNil } from "ramda";
+import { isNotNil } from "ramda";
 import { useEffect, useState } from "react";
 import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
 import { useMutation } from "urql";
@@ -23,10 +23,11 @@ import { Link } from "../common/Link";
 type CellarItemHeaderProps = {
   itemId: string;
   itemName: string | undefined;
-  itemType: ItemType;
+  itemType: ItemTypeValue;
   cellarId: string;
   cellarName: string | undefined;
   isOwner: boolean;
+  userId: string;
 };
 
 const deleteCellarItem = graphql(`
@@ -44,10 +45,9 @@ export const CellarItemHeader = ({
   cellarId,
   cellarName,
   isOwner,
+  userId,
 }: CellarItemHeaderProps) => {
   const router = useRouter();
-  const userId = useUserId();
-  if (isNil(userId)) throw Error("UserId not found");
 
   const [open, setOpen] = useState(false);
   const [{ fetching, error, operation }, deleteItem] =
@@ -69,69 +69,64 @@ export const CellarItemHeader = ({
   }, [cellarId, fetching, hasFetched, isErrored, router]);
 
   return (
-    <HeaderBar
-      breadcrumbs={[
-        { url: "/cellars", text: "Cellars" },
-        {
-          url: `/cellars/${cellarId}/items`,
-          text: cellarName ?? "loading...",
-        },
-        {
-          url: `${itemId}`,
-          text: itemName ?? "loading...",
-        },
-      ]}
-      endComponent={
-        <Stack spacing={2} direction="row">
-          <Button
-            component={Link}
-            href={`${itemId}/edit`}
-            startDecorator={<MdEdit />}
-            disabled
-          >
-            Edit item
-          </Button>
-          <Button
-            variant="outlined"
-            color="danger"
-            disabled={!isOwner}
-            onClick={() => setOpen(true)}
-            startDecorator={<MdDelete />}
-          >
-            Delete item
-          </Button>
-          <Modal open={open} onClose={() => setOpen(false)}>
-            <ModalDialog variant="outlined" role="alertdialog">
-              <DialogTitle>
-                <MdWarning />
-                Confirmation
-              </DialogTitle>
-              <Divider />
-              <DialogContent>
-                Are you sure you want to delete {itemName} from your cellar?
-              </DialogContent>
-              <DialogActions>
-                <Button
-                  variant="solid"
-                  color="danger"
-                  disabled={isDisabled}
-                  onClick={handleDeleteClick}
-                >
-                  Delete {formatItemType(itemType)}
-                </Button>
-                <Button
-                  variant="plain"
-                  color="neutral"
-                  disabled={isDisabled}
-                  onClick={() => setOpen(false)}
-                >
-                  Cancel
-                </Button>
-              </DialogActions>
-            </ModalDialog>
-          </Modal>
-        </Stack>
-      }
-    />
+    <>
+      <HeaderBar
+        serverBreadcrumbs={{
+          cellarName,
+          itemName,
+        }}
+        endComponent={
+          <Stack spacing={2} direction="row">
+            <Button
+              component={Link}
+              href={`${itemId}/edit`}
+              startDecorator={<MdEdit />}
+              disabled
+            >
+              Edit item
+            </Button>
+            <Button
+              variant="outlined"
+              color="danger"
+              disabled={!isOwner}
+              onClick={() => setOpen(true)}
+              startDecorator={<MdDelete />}
+            >
+              Delete item
+            </Button>
+          </Stack>
+        }
+      />
+      <Modal open={open} onClose={() => setOpen(false)}>
+        <ModalDialog variant="outlined" role="alertdialog">
+          <DialogTitle>
+            <MdWarning />
+            Confirmation
+          </DialogTitle>
+          <Divider />
+          <DialogContent>
+            Are you sure you want to delete {itemName} from your cellar?
+          </DialogContent>
+          <DialogActions>
+            <Button
+              variant="solid"
+              color="danger"
+              disabled={isDisabled}
+              onClick={handleDeleteClick}
+            >
+              Delete {formatItemType(itemType)}
+            </Button>
+            <Button
+              variant="plain"
+              color="neutral"
+              disabled={isDisabled}
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+          </DialogActions>
+        </ModalDialog>
+      </Modal>
+    </>
   );
 };

@@ -1,39 +1,42 @@
 import { isNotNil } from "ramda";
 import { fromPromise } from "xstate";
+import { uploadLabelImagesAction } from "@/app/actions/uploadLabelImages";
 import { dataUrlToFile } from "@/utilities";
-import { UploadFilesInput, UploadFilesResult } from "./types";
+import type { UploadFilesInput, UploadFilesResult } from "./types";
 
 export const uploadFiles = fromPromise(
   async ({
-    input: { frontLabel, backLabel, nhostClient },
+    input: { frontLabel, backLabel },
   }: {
     input: UploadFilesInput;
   }): Promise<UploadFilesResult> => {
-    let frontLabelFileId: string | undefined;
-    let backLabelFileId: string | undefined;
-
-    nhostClient.storage.setAccessToken(nhostClient.auth.getAccessToken());
+    // Create FormData with the label files
+    const formData = new FormData();
 
     if (isNotNil(frontLabel)) {
       const file = dataUrlToFile(frontLabel, "front-label.jpg");
       if (isNotNil(file)) {
-        const { fileMetadata } = await nhostClient.storage.upload({
-          file,
-          bucketId: "label_images",
-        });
-        frontLabelFileId = fileMetadata?.id;
+        formData.append("frontLabel", file);
       }
     }
+
     if (isNotNil(backLabel)) {
       const file = dataUrlToFile(backLabel, "back-label.jpg");
       if (isNotNil(file)) {
-        const { fileMetadata } = await nhostClient.storage.upload({
-          file,
-          bucketId: "label_images",
-        });
-        backLabelFileId = fileMetadata?.id;
+        formData.append("backLabel", file);
       }
     }
-    return { frontLabelFileId, backLabelFileId };
+
+    // Call the server action to upload files securely
+    const result = await uploadLabelImagesAction(formData);
+
+    if (!result.success) {
+      throw new Error(result.error || "Upload failed");
+    }
+
+    return {
+      frontLabelFileId: result.frontLabelFileId,
+      backLabelFileId: result.backLabelFileId,
+    };
   },
 );

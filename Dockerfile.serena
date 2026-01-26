@@ -1,0 +1,12 @@
+FROM ghcr.io/oraios/serena:0.1.4
+
+# Install Node.js 24 for TypeScript support
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Verify installation
+RUN node --version && npm --version

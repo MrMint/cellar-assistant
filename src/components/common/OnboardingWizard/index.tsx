@@ -1,16 +1,13 @@
-import { Box, CircularProgress, Stack, Typography } from "@mui/joy";
 import { useMachine } from "@xstate/react";
 import { includes, isNotNil } from "ramda";
 import { useClient } from "urql";
-import { Barcode } from "@/constants";
-import { Analyzing } from "../Analyzing";
-import { Searching } from "../Searching";
+import type { Barcode } from "@/constants";
 import { BarcodeStep } from "./BarcodeStep";
 import { DisplayPictureStep } from "./DisplayPictureStep";
 import { ExistingItems } from "./ExistingItems";
+import { pictureOnboardingMachine } from "./machines";
 import { PictureStep } from "./PictureStep";
 import { SearchingStep } from "./SearchingStep";
-import { pictureOnboardingMachine } from "./machines";
 
 export type OnboardingResult = {
   barcode?: Barcode;

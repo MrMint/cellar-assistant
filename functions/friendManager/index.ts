@@ -1,28 +1,40 @@
-import { NhostClient } from "@nhost/nhost-js";
-import { Friend_Requests } from "@shared/gql/graphql.js";
-import { Request, Response } from "express";
-import { isNotNil } from "ramda";
+import type { Request, Response } from "express";
+import {
+  createErrorResponse,
+  createPerformanceTracker,
+  type ExtendedPerformanceMetrics,
+  executeWithRetry,
+  getConfig,
+  logError,
+  logPerformanceMetrics,
+} from "../_utils";
+import { functionMutation, getAdminAuthHeaders } from "../_utils/urql-client";
 import { insertFriendsAndDeleteRequest } from "./_queries.js";
+import type {
+  FriendAcceptanceResult,
+  FriendManagerInput,
+  FriendManagerResult,
+} from "./_types";
+import {
+  createFriendInsertData,
+  shouldProcessStatusTransition,
+  validateFriendAcceptanceResult,
+  validateFriendManagerInput,
+} from "./_types";
 
-const {
-  NHOST_ADMIN_SECRET,
-  NHOST_SUBDOMAIN,
-  NHOST_REGION,
-  NHOST_WEBHOOK_SECRET,
-} = process.env;
+const { NHOST_WEBHOOK_SECRET } = process.env;
 
-const nhostClient = new NhostClient({
-  subdomain: NHOST_SUBDOMAIN,
-  region: NHOST_REGION,
-  adminSecret: NHOST_ADMIN_SECRET,
-});
+// Get shared configuration
+const CONFIG = getConfig();
 
-type input = {
-  event: { data: { new: Friend_Requests; old?: Friend_Requests } };
-};
+// Types and validation now imported from ./types.ts
 
-export default async function uploadItemImage(
-  req: Request<any, any, input>,
+export default async function friendManager(
+  req: Request<
+    Record<string, never>,
+    Record<string, never>,
+    FriendManagerInput
+  >,
   res: Response,
 ) {
   try {
@@ -32,39 +44,134 @@ export default async function uploadItemImage(
       return res.status(400).send();
     }
 
+    const validatedInput = validateFriendManagerInput(req.body);
+    const performanceTracker =
+      createPerformanceTracker<ExtendedPerformanceMetrics>();
+
     const {
       event: {
         data: {
           new: { id, user_id, friend_id, status: newStatus },
-          old: { status: oldStatus },
+          old,
         },
       },
-    } = req.body;
+    } = validatedInput;
 
-    console.log(`Received request`);
+    const oldStatus = old?.status;
+    console.log(
+      `Processing friend request ${id}: ${oldStatus || "NEW"} -> ${newStatus}`,
+    );
 
-    if (oldStatus === "PENDING" && newStatus === "ACCEPTED") {
-      const insertFriendsResult = await nhostClient.graphql.request(
-        insertFriendsAndDeleteRequest,
+    let result: FriendManagerResult = { success: true };
+
+    // Only process status transitions from PENDING to ACCEPTED
+    if (shouldProcessStatusTransition(oldStatus, newStatus)) {
+      result = await executeWithRetry(
+        () =>
+          processFriendAcceptance(id, user_id, friend_id, performanceTracker),
         {
-          friends: [
-            { user_id, friend_id },
-            { user_id: friend_id, friend_id: user_id },
-          ],
-          requestId: id,
+          retryConfig: {
+            maxRetries: CONFIG.RETRY.MAX_RETRIES,
+            baseDelayMs: CONFIG.RETRY.BASE_DELAY_MS,
+            maxDelayMs: CONFIG.RETRY.MAX_DELAY_MS,
+            jitterFactor: CONFIG.RETRY.JITTER_FACTOR,
+          },
+          operationName: "friend acceptance processing",
+          context: { requestId: id, userId: user_id, friendId: friend_id },
         },
       );
-
-      if (isNotNil(insertFriendsResult.error)) {
-        console.log(insertFriendsResult.error);
-        return res.status(500).send();
-      }
-      console.log(`Updated friends rows`);
+    } else {
+      console.log(
+        `No action needed for status transition: ${oldStatus} -> ${newStatus}`,
+      );
     }
 
-    return res.status(200).send();
+    // Log performance metrics
+    const metrics = performanceTracker.getMetrics();
+    logPerformanceMetrics(
+      metrics,
+      {
+        requestId: id,
+        userId: user_id,
+        friendId: friend_id,
+        statusTransition: `${oldStatus}->${newStatus}`,
+      },
+      {
+        functionName: "friendManager",
+        sampleRate: CONFIG.PERFORMANCE.LOG_METRICS_SAMPLE_RATE,
+        slowOperationThresholdMs: CONFIG.PERFORMANCE.LOG_SLOW_OPERATIONS_MS,
+      },
+    );
+
+    return res.status(200).json(result);
   } catch (exception) {
-    console.log(exception);
-    return res.status(500).send();
+    // Extract context for error logging
+    let errorContext: Record<string, unknown> = {};
+    try {
+      const context = validateFriendManagerInput(req.body);
+      errorContext = {
+        requestId: context.event.data.new.id,
+        userId: context.event.data.new.user_id,
+        friendId: context.event.data.new.friend_id,
+        newStatus: context.event.data.new.status,
+        oldStatus: context.event.data.old?.status,
+      };
+    } catch {
+      errorContext = {
+        hasEventData: !!req.body?.event?.data,
+      };
+    }
+
+    logError(exception, errorContext, "friendManager");
+
+    const errorResponse = createErrorResponse(
+      exception,
+      "friendManager",
+      process.env.NODE_ENV === "development",
+    );
+
+    return res.status(errorResponse.statusCode).json(errorResponse);
   }
+}
+
+async function processFriendAcceptance(
+  requestId: string,
+  userId: string,
+  friendId: string,
+  performanceTracker: ReturnType<
+    typeof createPerformanceTracker<ExtendedPerformanceMetrics>
+  >,
+): Promise<FriendAcceptanceResult> {
+  // Create bidirectional friendship and delete the request
+  const endDbTimer = performanceTracker.startTimer("dbOperationDuration");
+  const insertFriendsResult = await functionMutation(
+    insertFriendsAndDeleteRequest,
+    {
+      friends: createFriendInsertData(userId, friendId),
+      requestId: requestId,
+    },
+    { headers: getAdminAuthHeaders() },
+  );
+  endDbTimer();
+
+  const affectedRows = insertFriendsResult?.insert_friends?.affected_rows ?? 0;
+  const deletedRequests = insertFriendsResult?.delete_friend_requests_by_pk?.id
+    ? 1
+    : 0;
+
+  console.log(
+    `Created ${affectedRows} friendship records and deleted ${deletedRequests} friend request(s)`,
+  );
+
+  if (affectedRows !== 2) {
+    console.warn(`Expected 2 friendship records but created ${affectedRows}`);
+  }
+
+  if (deletedRequests !== 1) {
+    console.warn(
+      `Expected to delete 1 friend request but deleted ${deletedRequests}`,
+    );
+  }
+
+  return validateFriendAcceptanceResult(affectedRows, deletedRequests);
 }
