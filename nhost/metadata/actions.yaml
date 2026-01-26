@@ -110,6 +110,9 @@ actions:
       kind: asynchronous
       handler: '{{NHOST_FUNCTIONS_URL}}/refreshPlaces'
       forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
       timeout: 300
       request_transform:
         method: POST
