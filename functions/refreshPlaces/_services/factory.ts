@@ -7,20 +7,31 @@ import { MockPlaceDataService } from "./mock-service";
  * based on the environment
  */
 export function createPlaceDataService(): PlaceDataService {
-  const isDevelopment =
-    process.env.NODE_ENV === "development" ||
-    process.env.NHOST_LOCAL === "true" ||
-    !process.env.GOOGLE_CLOUD_PROJECT_ID;
+  // Check if we have credentials available (file-based or database-based)
+  const hasFileCredentials = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const hasDatabaseCredentials = !!process.env.CREDENTIALS_GCP_ID;
+  const hasCredentials = hasFileCredentials || hasDatabaseCredentials;
 
-  if (isDevelopment) {
+  const isLocalDevelopment =
+    process.env.NODE_ENV === "development" || process.env.NHOST_LOCAL === "true";
+
+  // Use mock service only for local development without credentials
+  if (isLocalDevelopment && !hasCredentials) {
     console.log(
-      "[PlaceDataServiceFactory] Creating MockPlaceDataService for development",
+      "[PlaceDataServiceFactory] Creating MockPlaceDataService for local development",
+    );
+    return new MockPlaceDataService();
+  }
+
+  if (!hasCredentials) {
+    console.warn(
+      "[PlaceDataServiceFactory] No GCP credentials found (GOOGLE_APPLICATION_CREDENTIALS or CREDENTIALS_GCP_ID), falling back to mock service",
     );
     return new MockPlaceDataService();
   }
 
   console.log(
-    "[PlaceDataServiceFactory] Creating BigQueryPlaceDataService for production",
+    `[PlaceDataServiceFactory] Creating BigQueryPlaceDataService (credentials: ${hasFileCredentials ? "file" : "database"})`,
   );
   return new BigQueryPlaceDataService();
 }
