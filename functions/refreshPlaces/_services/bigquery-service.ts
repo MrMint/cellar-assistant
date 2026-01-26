@@ -183,8 +183,8 @@ export class BigQueryPlaceDataService implements PlaceDataService {
         ST_Y(geometry) as latitude,
         ST_X(geometry) as longitude,
         addresses,
-        ARRAY_TO_STRING(phones.list, ', ') as phone,
-        websites[OFFSET(0)] as website,
+        (SELECT STRING_AGG(p.element, ', ') FROM UNNEST(phones.list) as p) as phone,
+        websites[SAFE_OFFSET(0)] as website,
         brand.names.primary as brand_name
       FROM \`bigquery-public-data.overture_maps.place\`
       WHERE
