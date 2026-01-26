@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@cellar-assistant/shared':
-        specifier: workspace:*
-        version: link:../packages/shared
+        specifier: file:./packages/shared
+        version: file:packages/shared(graphql@16.8.1)(typescript@5.9.2)
       '@cellar-assistant/typescript-config':
-        specifier: workspace:*
-        version: link:../packages/typescript-config
+        specifier: file:./packages/typescript-config
+        version: file:packages/typescript-config
       '@google-cloud/bigquery':
         specifier: 8.1.1
         version: 8.1.1
@@ -76,6 +76,12 @@ packages:
     peerDependencies:
       graphql: ^15.5.0 || ^16.0.0 || ^17.0.0
       typescript: ^5.0.0
+
+  '@cellar-assistant/shared@file:packages/shared':
+    resolution: {directory: packages/shared, type: directory}
+
+  '@cellar-assistant/typescript-config@file:packages/typescript-config':
+    resolution: {directory: packages/typescript-config, type: directory}
 
   '@google-cloud/bigquery@8.1.1':
     resolution: {integrity: sha512-2GHlohfA/VJffTvibMazMsZi6jPRx8MmaMberyDTL8rnhVs/frKSXVVRtLU83uSAy2j/5SD4mOs4jMQgJPON2g==}
@@ -709,6 +715,17 @@ snapshots:
       '@gql.tada/internal': 1.0.8(graphql@16.8.1)(typescript@5.9.2)
       graphql: 16.8.1
       typescript: 5.9.2
+
+  '@cellar-assistant/shared@file:packages/shared(graphql@16.8.1)(typescript@5.9.2)':
+    dependencies:
+      gql.tada: 1.9.0(graphql@16.8.1)(typescript@5.9.2)
+    transitivePeerDependencies:
+      - '@gql.tada/svelte-support'
+      - '@gql.tada/vue-support'
+      - graphql
+      - typescript
+
+  '@cellar-assistant/typescript-config@file:packages/typescript-config': {}
 
   '@google-cloud/bigquery@8.1.1':
     dependencies:

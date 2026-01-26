@@ -10,8 +10,8 @@
     "@types/express": "5.0.6"
   },
   "dependencies": {
-    "@cellar-assistant/shared": "workspace:*",
-    "@cellar-assistant/typescript-config": "workspace:*",
+    "@cellar-assistant/shared": "file:./packages/shared",
+    "@cellar-assistant/typescript-config": "file:./packages/typescript-config",
     "@google-cloud/bigquery": "8.1.1",
     "@google/genai": "1.38.0",
     "@nhost/nhost-js": "4.2.2",
