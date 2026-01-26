@@ -1,7 +1,8 @@
 -- Consolidated migration for place features
 -- This combines all place-related schema changes from the feature branch
 
--- Install PostGIS extension
+-- Install PostGIS extension (requires postgres role like pgvector)
+Set role postgres;
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- Create places table for map feature
