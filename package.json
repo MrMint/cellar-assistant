@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@biomejs/biome": "2.3.12",
+    "@biomejs/biome": "2.3.13",
     "@cellar-assistant/shared": "workspace:*",
     "@cellar-assistant/typescript-config": "workspace:*",
     "@emotion/cache": "11.14.0",
