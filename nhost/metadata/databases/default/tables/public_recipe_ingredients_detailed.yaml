@@ -1,0 +1,3 @@
+table:
+  name: recipe_ingredients_detailed
+  schema: public

@@ -1,0 +1,165 @@
+table:
+  name: sakes
+  schema: public
+object_relationships:
+  - name: barcode
+    using:
+      foreign_key_constraint_on: barcode_code
+  - name: createdBy
+    using:
+      foreign_key_constraint_on: created_by_id
+array_relationships:
+  - name: brands
+    using:
+      foreign_key_constraint_on:
+        column: sake_id
+        table:
+          name: item_brands
+          schema: public
+  - name: cellar_items
+    using:
+      foreign_key_constraint_on:
+        column: sake_id
+        table:
+          name: cellar_items
+          schema: public
+  - name: item_favorites
+    using:
+      foreign_key_constraint_on:
+        column: sake_id
+        table:
+          name: item_favorites
+          schema: public
+  - name: item_images
+    using:
+      foreign_key_constraint_on:
+        column: sake_id
+        table:
+          name: item_image
+          schema: public
+  - name: item_vectors
+    using:
+      foreign_key_constraint_on:
+        column: sake_id
+        table:
+          name: item_vectors
+          schema: public
+  - name: match_suggestions
+    using:
+      foreign_key_constraint_on:
+        column: sake_id
+        table:
+          name: item_match_suggestions
+          schema: public
+  - name: recipe_ingredients
+    using:
+      foreign_key_constraint_on:
+        column: sake_id
+        table:
+          name: recipe_ingredients
+          schema: public
+  - name: reviews
+    using:
+      foreign_key_constraint_on:
+        column: sake_id
+        table:
+          name: item_reviews
+          schema: public
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      set:
+        created_by_id: X-Hasura-User-Id
+      columns:
+        - alcohol_content_percentage
+        - barcode_code
+        - category
+        - type
+        - polish_grade
+        - serving_temperature
+        - rice_variety
+        - yeast_strain
+        - sake_meter_value
+        - acidity
+        - amino_acid
+        - vintage
+        - country
+        - region
+        - description
+        - item_onboarding_id
+        - name
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - alcohol_content_percentage
+        - barcode_code
+        - category
+        - type
+        - polish_grade
+        - serving_temperature
+        - rice_variety
+        - yeast_strain
+        - sake_meter_value
+        - acidity
+        - amino_acid
+        - vintage
+        - country
+        - region
+        - created_at
+        - created_by_id
+        - description
+        - id
+        - name
+        - updated_at
+        - item_onboarding_id
+      filter: {}
+      allow_aggregations: true
+      query_root_fields:
+        - select_by_pk
+      subscription_root_fields:
+        - select_by_pk
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - alcohol_content_percentage
+        - barcode_code
+        - category
+        - type
+        - polish_grade
+        - serving_temperature
+        - rice_variety
+        - yeast_strain
+        - sake_meter_value
+        - acidity
+        - amino_acid
+        - vintage
+        - country
+        - region
+        - description
+        - name
+      filter:
+        created_by_id:
+          _eq: X-Hasura-User-Id
+      check: {}
+    comment: ""
+event_triggers:
+  - name: generate_sake_vector
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+      update:
+        columns: '*'
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/generateItemVector'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET

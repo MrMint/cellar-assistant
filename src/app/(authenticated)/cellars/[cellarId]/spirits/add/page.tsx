@@ -1,17 +1,27 @@
-"use client";
-
-import { useUserId } from "@nhost/nextjs";
-import { isNil } from "ramda";
+import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { EnumProvider } from "@/components/providers/EnumProvider";
 import { SpiritOnboarding } from "@/components/spirit/SpiritOnboarding";
+import { createEnumQueryFn } from "@/lib/urql/server";
+import { getServerUserId } from "@/utilities/auth-server";
 
-const AddSpirit = ({
-  params: { cellarId },
+export default async function AddSpirit({
+  params,
 }: {
-  params: { cellarId: string };
-}) => {
-  const userId = useUserId();
-  if (isNil(userId)) throw new Error("Bad UserId");
-  return <SpiritOnboarding cellarId={cellarId} userId={userId} />;
-};
+  params: Promise<{ cellarId: string }>;
+}) {
+  const { cellarId } = await params;
+  // Pre-fetch enum data
+  const [userId, enumData] = await Promise.all([
+    getServerUserId(),
+    getMultipleEnumOptions(
+      ["spiritType", "country"],
+      await createEnumQueryFn(),
+    ),
+  ]);
 
-export default AddSpirit;
+  return (
+    <EnumProvider serverEnumData={enumData}>
+      <SpiritOnboarding cellarId={cellarId} userId={userId} />
+    </EnumProvider>
+  );
+}

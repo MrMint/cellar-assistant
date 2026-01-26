@@ -1,0 +1,3 @@
+table:
+  name: item_brands_detailed
+  schema: public

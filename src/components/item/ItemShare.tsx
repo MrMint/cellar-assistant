@@ -1,3 +1,6 @@
+"use client";
+
+import type { ItemTypeValue } from "@cellar-assistant/shared";
 import {
   Box,
   Button,
@@ -6,14 +9,13 @@ import {
   ModalDialog,
   Typography,
 } from "@mui/joy";
-import { ItemType } from "@shared/gql/graphql";
 import { useState } from "react";
 import QRCode from "react-qr-code";
 import { formatItemType } from "@/utilities";
 
 export type ItemShareProps = {
   itemId: string;
-  itemType: ItemType;
+  itemType: ItemTypeValue;
 };
 export const ItemShare = ({ itemId, itemType }: ItemShareProps) => {
   const [open, setOpen] = useState(false);
@@ -38,7 +40,7 @@ export const ItemShare = ({ itemId, itemType }: ItemShareProps) => {
           <Typography level="title-lg">Link to item page</Typography>
           <Box sx={{ padding: "1rem", backgroundColor: "#fff" }}>
             <QRCode
-              value={`${window.location.host}/${formatItemType(
+              value={`${typeof window !== "undefined" ? window.location.host : ""}/${formatItemType(
                 itemType,
               ).toLowerCase()}s/${itemId}`}
             />

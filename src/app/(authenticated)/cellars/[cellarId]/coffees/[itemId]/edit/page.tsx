@@ -1,60 +1,48 @@
-"use client";
-
-import { Box } from "@mui/joy";
-import { graphql } from "@shared/gql";
-import { isNotNil, omit } from "ramda";
-import { useQuery } from "urql";
+import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { notFound } from "next/navigation";
 import { CoffeeForm } from "@/components/coffee/CoffeeForm";
-import { nullsToUndefined } from "@/utilities";
+import { GetCoffeeEditQuery } from "@/components/coffee/fragments";
+import { EnumProvider } from "@/components/providers/EnumProvider";
+import { createEnumQueryFn, serverQuery } from "@/lib/urql/server";
 
-const editCoffeePageQuery = graphql(`
-  query EditCoffeePageQuery($itemId: uuid!) {
-    coffees_by_pk(id: $itemId) {
-      id
-      name
-      created_by_id
-      description
-      barcode_code
-      country
-    }
-  }
-`);
-
-const EditCoffee = ({
-  params: { itemId, cellarId },
+export default async function EditCoffee({
+  params,
 }: {
-  params: { itemId: string; cellarId: string };
-}) => {
-  const [{ data, fetching, operation }] = useQuery({
-    query: editCoffeePageQuery,
-    variables: { itemId },
-  });
+  params: Promise<{ itemId: string; cellarId: string }>;
+}) {
+  const { itemId } = await params;
+  // Pre-fetch enum data and coffee data in parallel
+  const [data, enumData] = await Promise.all([
+    serverQuery(GetCoffeeEditQuery, { itemId }),
+    getMultipleEnumOptions(
+      [
+        "coffeeRoastLevel",
+        "coffeeSpecies",
+        "coffeeCultivar",
+        "coffeeProcess",
+        "country",
+      ],
+      await createEnumQueryFn(),
+    ),
+  ]);
 
-  const isLoading = fetching || operation === undefined;
-
-  let coffee = undefined;
-  if (
-    isLoading === false &&
-    data !== undefined &&
-    isNotNil(data.coffees_by_pk)
-  ) {
-    coffee = nullsToUndefined(data.coffees_by_pk);
+  if (!data.coffees_by_pk) {
+    notFound();
   }
-  return (
-    <>
-      {coffee !== undefined && (
-        <CoffeeForm
-          id={itemId}
-          onCreated={() => {}}
-          defaultValues={{
-            name: coffee.name,
-            description: coffee.description,
-            barcode_code: coffee.barcode_code,
-          }}
-        />
-      )}
-    </>
-  );
-};
 
-export default EditCoffee;
+  const coffee = data.coffees_by_pk;
+
+  return (
+    <EnumProvider serverEnumData={enumData}>
+      <CoffeeForm
+        id={itemId}
+        onCreated={() => {}}
+        defaultValues={{
+          name: coffee.name,
+          description: coffee.description ?? undefined,
+          barcode_code: coffee.barcode_code ?? undefined,
+        }}
+      />
+    </EnumProvider>
+  );
+}

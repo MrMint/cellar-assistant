@@ -2,7 +2,6 @@ import {
   AspectRatio,
   Avatar,
   AvatarGroup,
-  Box,
   CardOverflow,
   IconButton,
   Stack,

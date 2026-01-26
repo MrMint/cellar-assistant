@@ -1,4 +1,4 @@
-import { graphql } from "@shared/gql";
+import { graphql } from "@cellar-assistant/shared/gql/graphql";
 
 export const insertVectorMutation = graphql(`
   mutation InsertVector($vector: item_vectors_insert_input!) {

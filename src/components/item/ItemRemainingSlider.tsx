@@ -1,5 +1,7 @@
+"use client";
+
+import { updateCellarItemMutation } from "@cellar-assistant/shared/queries";
 import { Button, Card, Slider, Stack, Typography } from "@mui/joy";
-import { updateCellarItemMutation } from "@shared/queries";
 import { useDebounce } from "@uidotdev/usehooks";
 import { formatDistance, formatISO } from "date-fns";
 import { isNil, isNotNil } from "ramda";
@@ -26,7 +28,7 @@ export const ItemRemainingSlider = ({
   const [now, setNow] = useState(new Date());
   const debouncedPercent = useDebounce(percent, 400);
   const [res, updateItem] = useMutation(updateCellarItemMutation);
-  const clear = useInterval(() => {
+  const _clear = useInterval(() => {
     setNow(new Date());
   }, 10000);
 

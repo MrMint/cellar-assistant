@@ -23,6 +23,28 @@ type Mutation {
   ): item_image_upload_result
 }
 
+type Mutation {
+  processRecipePhoto(
+    input: ProcessRecipePhotoInput!
+  ): ProcessRecipePhotoOutput
+}
+
+type Mutation {
+  refresh_places: refresh_places_result
+}
+
+type Query {
+  sake_defaults(
+    hint: item_defaults_hint!
+  ): sake_defaults_result
+}
+
+type Query {
+  search_nearby_places(
+    input: search_nearby_places_input!
+  ): search_nearby_places_result
+}
+
 type Query {
   spirit_defaults(
     hint: item_defaults_hint!
@@ -40,6 +62,7 @@ enum ItemType {
   WINE
   SPIRIT
   COFFEE
+  SAKE
 }
 
 input item_defaults_input {
@@ -62,6 +85,21 @@ input item_image_upload_input {
   item_type: ItemType!
 }
 
+input search_nearby_places_input {
+  latitude: Float!
+  longitude: Float!
+  radius: Int!
+  categories: [String!]!
+  limit: Int!
+}
+
+input ProcessRecipePhotoInput {
+  photoId: String!
+  userId: String!
+  placeId: String
+  menuItemId: String
+}
+
 type wine_defaults_result {
   alcohol_content_percentage: numeric
   description: String
@@ -76,6 +114,7 @@ type wine_defaults_result {
   vineyard_designation: String
   vintage: date
   item_onboarding_id: String!
+  confidence: Float
 }
 
 type beer_defaults_result {
@@ -89,6 +128,7 @@ type beer_defaults_result {
   vintage: date
   international_bitterness_unit: Int
   item_onboarding_id: String!
+  confidence: Float
 }
 
 type spirit_defaults_result {
@@ -103,6 +143,7 @@ type spirit_defaults_result {
   type: String
   distillery: String
   item_onboarding_id: String!
+  confidence: Float
 }
 
 type item_image_upload_result {
@@ -120,5 +161,101 @@ type coffee_defaults_result {
   cultivar: String
   roast_level: String
   item_onboarding_id: String!
+  confidence: Float
+}
+
+type sake_defaults_result {
+  description: String
+  barcode_code: String
+  barcode_type: String
+  name: String
+  country: String
+  type: String
+  category: String
+  rice_variety: String
+  serving_temperature: String
+  alcohol_content_percentage: numeric
+  item_onboarding_id: String!
+  confidence: Float
+}
+
+type search_nearby_places_result {
+  success: Boolean!
+  places: [search_nearby_place!]!
+  total: Int!
+  fromCache: Int!
+  fromBigQuery: Int!
+  queryInfo: search_query_info!
+  error: String
+}
+
+type search_nearby_place {
+  id: String!
+  overture_id: String
+  name: String!
+  display_name: String
+  primary_category: String!
+  categories: [String!]!
+  confidence: Float
+  location: String!
+  street_address: String
+  locality: String
+  region: String
+  postcode: String
+  country_code: String
+  phone: String
+  website: String
+  email: String
+  hours: String
+  price_level: Int
+  rating: Float
+  review_count: Int
+  is_verified: Boolean
+  distance_meters: Int
+}
+
+type search_query_info {
+  center: search_location_info!
+  radius: Int!
+  categories: [String!]!
+}
+
+type search_location_info {
+  lat: Float!
+  lng: Float!
+}
+
+type refresh_places_result {
+  success: Boolean!
+  places_refreshed: Int
+  duration_ms: Int
+  categories_included: Int
+  data_source: String!
+  error: String
+  timestamp: String!
+}
+
+type ProcessRecipePhotoOutput {
+  success: Boolean!
+  recipesCreated: Int!
+  totalIngredients: Int!
+  enhancementsApplied: Int!
+  results: [ProcessRecipePhotoResult!]!
+  menuAnalysis: MenuAnalysis
+}
+
+type ProcessRecipePhotoResult {
+  recipeId: String
+  recipeName: String!
+  success: Boolean!
+  ingredientsCreated: Int
+  instructionsCreated: Int
+  error: String
+}
+
+type MenuAnalysis {
+  restaurant_type: String
+  recipes_extracted: Int
+  extraction_method: String
 }
 

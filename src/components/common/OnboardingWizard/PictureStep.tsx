@@ -1,5 +1,5 @@
-import { Box, Button, Card, CardContent, Grid, Typography } from "@mui/joy";
-import { ReactNode } from "react";
+import { Button, Card, CardContent, Grid, Typography } from "@mui/joy";
+import type { ReactNode } from "react";
 import { CameraCapture } from "../CameraCapture";
 
 export type PictureStepProps = {

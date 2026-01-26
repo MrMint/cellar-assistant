@@ -1,4 +1,4 @@
-import { graphql } from "@shared/gql/gql.js";
+import { graphql } from "@cellar-assistant/shared/";
 
 export const getCredential = graphql(`
   query GetCredential($id: String!) {
@@ -18,14 +18,6 @@ export const getFileQuery = graphql(`
       }
       mimeType
       size
-    }
-  }
-`);
-
-export const addTextExtractionResultsMutation = graphql(`
-  mutation AddTextExtractionResults($analysis: image_analysis_insert_input!) {
-    insert_image_analysis_one(object: $analysis) {
-      id
     }
   }
 `);

@@ -19,8 +19,20 @@ value = 'us-central1'
 name = 'GOOGLE_GCP_VERTEX_AI_ENDPOINT'
 value = 'us-central1-aiplatform.googleapis.com'
 
+[[global.environment]]
+name = 'CI'
+value = '1'
+
+[[global.environment]]
+name = 'AI_PROVIDER'
+value = '{{ secrets.AI_PROVIDER }}'
+
+[[global.environment]]
+name = 'OLLAMA_ENDPOINT'
+value = 'http://host.docker.internal:11434'
+
 [hasura]
-version = 'v2.38.0-ce'
+version = 'v2.48.5-ce'
 adminSecret = '{{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}'
 webhookSecret = '{{ secrets.NHOST_WEBHOOK_SECRET }}'
 
@@ -29,7 +41,7 @@ type = 'HS256'
 key = '{{ secrets.HASURA_GRAPHQL_JWT_SECRET }}'
 
 [hasura.settings]
-corsDomain = ['*']
+corsDomain = ['https://cellar-assistant.vercel.app']
 devMode = true
 enableAllowList = false
 enableConsole = true
@@ -48,7 +60,7 @@ httpPoolSize = 100
 version = 20
 
 [auth]
-version = '0.33.0'
+version = '0.43.2'
 
 [auth.redirections]
 clientUrl = 'https://cellar-assistant.vercel.app/cellars'
@@ -159,12 +171,16 @@ timeout = 60000
 enabled = false
 
 [postgres]
-version = '16.2-20240718-1'
+version = '17.5-20250728-1'
+
+[postgres.resources]
+[postgres.resources.storage]
+capacity = 10
 
 [provider]
 
 [storage]
-version = '0.6.1'
+version = '0.10.0'
 
 [observability]
 [observability.grafana]

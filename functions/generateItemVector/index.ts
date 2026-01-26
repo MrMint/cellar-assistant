@@ -1,172 +1,217 @@
-import { PredictionServiceClient } from "@google-cloud/aiplatform";
-import { NhostClient } from "@nhost/nhost-js";
+import { graphql } from "@cellar-assistant/shared/gql/graphql";
+import type { Request, Response } from "express";
 import {
-  Beers,
-  Coffees,
-  Item_Vectors_Bool_Exp,
-  Spirits,
-  Wines,
-} from "@shared/gql/graphql.js";
+  createErrorResponse,
+  createFunctionNhostClient,
+  createPerformanceTracker,
+  DatabaseError,
+  type ExtendedPerformanceMetrics,
+  executeWithRetry,
+  functionMutation,
+  getAdminAuthHeaders,
+  getConfig,
+  logError,
+  logPerformanceMetrics,
+} from "../_utils";
+import { createAIProvider } from "../_utils/ai-providers/factory";
+import { generateEmbeddingText } from "./_embedding-generator";
+import type { GenerateVectorInput, ItemType, TableName } from "./_types";
 import {
-  formatBeerStyle,
-  formatCountry,
-  formatEnum,
-  formatSpiritType,
-  formatWineStyle,
-  formatWineVariety,
-} from "@shared/utility/index.js";
-import { Request, Response } from "express";
-import { isNil, isNotNil } from "ramda";
-import { createDocumentEmbeddingAsync } from "../_utils/gcp.js";
-import { getCredential } from "../_utils/queries.js";
-import { deleteOldVectorsMutation, insertVectorMutation } from "./_queries.js";
+  createDeleteVectorWhereClause,
+  validateGenerateVectorInput,
+} from "./_types";
 
-const {
-  NHOST_ADMIN_SECRET,
-  NHOST_SUBDOMAIN,
-  NHOST_REGION,
-  CREDENTIALS_GCP_ID,
-  GOOGLE_GCP_VERTEX_AI_ENDPOINT,
-  NHOST_WEBHOOK_SECRET,
-} = process.env;
+const { NHOST_WEBHOOK_SECRET } = process.env;
 
-const nhostClient = new NhostClient({
-  subdomain: NHOST_SUBDOMAIN,
-  region: NHOST_REGION,
-  adminSecret: NHOST_ADMIN_SECRET,
-});
+const _nhostClient = createFunctionNhostClient();
 
-type TableName = "beers" | "wines" | "spirits" | "coffees";
+// Get shared configuration
+const CONFIG = getConfig();
 
-const getDeleteVectorWhereClause = (
-  type: TableName,
-  newId: number,
-  itemId: string,
-): Item_Vectors_Bool_Exp => {
-  let where = {
-    id: { _neq: newId },
-  } as Item_Vectors_Bool_Exp;
-  switch (type) {
-    case "beers":
-      return { ...where, beer_id: { _eq: itemId } };
-    case "wines":
-      return { ...where, wine_id: { _eq: itemId } };
-    case "spirits":
-      return { ...where, spirit_id: { _eq: itemId } };
-    case "coffees":
-      return { ...where, coffee_id: { _eq: itemId } };
-    default:
-      throw new Error("unsupported table name");
-  }
+// TableName and getDeleteVectorWhereClause are now imported from ./types.ts
+
+// Schema-driven embedding text generation - now maintainable and configurable!
+const getEmbeddingText = (type: TableName, item: ItemType): string => {
+  return generateEmbeddingText(type, item);
 };
 
-const getEmbeddingText = (
-  type: "beers" | "wines" | "spirits" | "coffees",
-  item: Beers | Wines | Spirits | Coffees,
-) => {
-  switch (type) {
-    case "beers":
-      return `${item.name} is a ${formatBeerStyle(
-        (item as Beers).style,
-      )} style beer. It was produced in ${formatCountry(item.country)}.`;
-    case "wines":
-      return `${item.name} is a ${formatWineVariety(
-        (item as Wines).variety,
-      )} ${formatWineStyle((item as Wines).style)} wine. It was produced in ${
-        (item as Wines).region
-      } ${formatCountry(item.country)}.`;
-    case "spirits":
-      return `${item.name} is a ${formatSpiritType(
-        (item as Spirits).type,
-      )} style spirit/liquor. It was produced in ${formatCountry(
-        item.country,
-      )}.`;
-    case "coffees":
-      return `${item.name} is a ${formatEnum(
-        (item as Coffees).roast_level,
-      )} coffee. It was produced in ${formatCountry(item.country)}.`;
-    default:
-      break;
-  }
-};
-let predictionServiceClient: PredictionServiceClient;
+// validateInput is now replaced with validateGenerateVectorInput from ./types.ts
 
-type input = {
-  table: { name: TableName };
-  event: { data: { new: Beers | Wines | Spirits | Coffees } };
-};
 export default async function generateItemVector(
-  req: Request<any, any, input>,
+  req: Request<
+    Record<string, never>,
+    Record<string, never>,
+    GenerateVectorInput
+  >,
   res: Response,
 ) {
   try {
+    if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
     if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
       return res.status(400).send();
     }
 
-    // TODO improve gcp credential handling
-    if (isNil(predictionServiceClient)) {
-      const credResult = await nhostClient.graphql.request(getCredential, {
-        id: CREDENTIALS_GCP_ID,
-      });
-      predictionServiceClient = new PredictionServiceClient({
-        credentials: credResult.data.admin_credentials_by_pk.credentials,
-        apiEndpoint: GOOGLE_GCP_VERTEX_AI_ENDPOINT,
-      });
-      console.log("Initialized GCP clients");
-    }
+    const validatedInput = validateGenerateVectorInput(req.body);
+    const performanceTracker =
+      createPerformanceTracker<ExtendedPerformanceMetrics>();
 
     const {
       table: { name },
       event: {
         data: { new: item },
       },
-    } = req.body;
+    } = validatedInput;
 
-    console.log(`Received request`);
-    const result = await createDocumentEmbeddingAsync(
-      predictionServiceClient,
-      name,
-      getEmbeddingText(name, item),
-    );
+    console.log(`Processing ${name} vector generation for item ${item.id}`);
 
-    const insertVectorResult = await nhostClient.graphql.request(
-      insertVectorMutation,
+    const result = await executeWithRetry(
+      () => processVectorGeneration(name, item, performanceTracker),
       {
-        vector: {
-          beer_id: name === "beers" ? item.id : undefined,
-          spirit_id: name === "spirits" ? item.id : undefined,
-          wine_id: name === "wines" ? item.id : undefined,
-          coffee_id: name === "coffees" ? item.id : undefined,
-          vector: JSON.stringify(result),
+        retryConfig: {
+          maxRetries: CONFIG.RETRY.MAX_RETRIES,
+          baseDelayMs: CONFIG.RETRY.BASE_DELAY_MS,
+          maxDelayMs: CONFIG.RETRY.MAX_DELAY_MS,
+          jitterFactor: CONFIG.RETRY.JITTER_FACTOR,
         },
+        operationName: `${name} vector generation`,
+        context: { itemId: item.id, tableName: name },
       },
     );
 
-    if (isNotNil(insertVectorResult.error)) {
-      console.log(insertVectorResult.error);
-      return res.status(500).send();
-    }
-    console.log(`Inserted item_vector`);
-
-    const deleteOldVectorsResult = await nhostClient.graphql.request(
-      deleteOldVectorsMutation,
+    // Log performance metrics
+    const metrics = performanceTracker.getMetrics();
+    logPerformanceMetrics(
+      metrics,
+      { itemId: item.id, tableName: name },
       {
-        where: getDeleteVectorWhereClause(
-          name,
-          insertVectorResult.data.insert_item_vectors_one.id,
-          item.id,
-        ),
+        functionName: "generateItemVector",
+        sampleRate: CONFIG.PERFORMANCE.LOG_METRICS_SAMPLE_RATE,
+        slowOperationThresholdMs: CONFIG.PERFORMANCE.LOG_SLOW_OPERATIONS_MS,
       },
     );
-    console.log(
-      `Removed ${deleteOldVectorsResult.data?.delete_item_vectors?.affected_rows}`,
+
+    return res.status(200).json(result);
+  } catch (exception) {
+    // Extract context for error logging
+    let errorContext: Record<string, unknown> = {};
+    try {
+      const context = validateGenerateVectorInput(req.body);
+      errorContext = {
+        itemId: context.event.data.new.id,
+        tableName: context.table.name,
+      };
+    } catch {
+      errorContext = {
+        tableName: req.body?.table?.name || "unknown",
+        hasEventData: !!req.body?.event?.data,
+      };
+    }
+
+    logError(exception, errorContext, "generateItemVector");
+
+    const errorResponse = createErrorResponse(
+      exception,
+      "generateItemVector",
+      process.env.NODE_ENV === "development",
     );
 
-    return res.status(200).send();
-  } catch (exception) {
-    console.log(exception);
-    return res.status(500).send();
+    return res.status(errorResponse.statusCode).json(errorResponse);
   }
+}
+
+async function processVectorGeneration(
+  name: TableName,
+  item: ItemType,
+  performanceTracker: ReturnType<
+    typeof createPerformanceTracker<ExtendedPerformanceMetrics>
+  >,
+): Promise<{ success: boolean; vectorId?: number }> {
+  // Get the AI provider with performance tracking
+  const endProviderTimer = performanceTracker.startTimer("externalApiDuration");
+  const aiProvider = await createAIProvider();
+  endProviderTimer();
+
+  // Build descriptive text for the item
+  const embeddingText = getEmbeddingText(name, item);
+  console.log(`Generated embedding text: ${embeddingText}`);
+
+  // Generate text embedding with performance tracking
+  const endEmbeddingTimer = performanceTracker.startTimer(
+    "externalApiDuration",
+  );
+  const embeddingResponse = await aiProvider.generateEmbeddings?.({
+    content: embeddingText,
+    type: "text",
+  });
+  endEmbeddingTimer();
+
+  if (!embeddingResponse?.embeddings) {
+    throw new DatabaseError("Failed to generate embeddings");
+  }
+
+  console.log(
+    `Generated vector with ${embeddingResponse.embeddings.length} dimensions`,
+  );
+
+  // Insert vector into database with performance tracking
+  const endDbTimer = performanceTracker.startTimer("dbOperationDuration");
+  const insertVectorMutation = graphql(`
+    mutation InsertVector($vector: item_vectors_insert_input!) {
+      insert_item_vectors_one(object: $vector) {
+        id
+      }
+    }
+  `);
+
+  const insertVectorResult = await functionMutation(
+    insertVectorMutation,
+    {
+      vector: {
+        beer_id: name === "beers" ? String(item.id) : undefined,
+        spirit_id: name === "spirits" ? String(item.id) : undefined,
+        wine_id: name === "wines" ? String(item.id) : undefined,
+        coffee_id: name === "coffees" ? String(item.id) : undefined,
+        vector: JSON.stringify(embeddingResponse.embeddings),
+      },
+    },
+    { headers: getAdminAuthHeaders() },
+  );
+  endDbTimer();
+
+  if (!insertVectorResult) {
+    throw new DatabaseError("Failed to insert item vector");
+  }
+
+  const vectorId = insertVectorResult?.insert_item_vectors_one?.id;
+  console.log(`Inserted item_vector with id ${vectorId}`);
+
+  // Delete old vectors with performance tracking
+  const endDeleteTimer = performanceTracker.startTimer("dbOperationDuration");
+  const deleteVectorsMutation = graphql(`
+    mutation DeleteVectors($where: item_vectors_bool_exp!) {
+      delete_item_vectors(where: $where) {
+        affected_rows
+      }
+    }
+  `);
+
+  const deleteOldVectorsResult = await functionMutation(
+    deleteVectorsMutation,
+    {
+      where: createDeleteVectorWhereClause(name, vectorId, String(item.id)),
+    },
+    { headers: getAdminAuthHeaders() },
+  );
+  endDeleteTimer();
+
+  if (!deleteOldVectorsResult) {
+    console.warn("Failed to delete old vectors");
+  } else {
+    console.log(
+      `Removed ${deleteOldVectorsResult?.delete_item_vectors?.affected_rows} old vector(s)`,
+    );
+  }
+
+  return { success: true, vectorId };
 }

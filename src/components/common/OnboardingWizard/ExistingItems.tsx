@@ -1,6 +1,6 @@
 import { Button, Grid, Stack, Typography } from "@mui/joy";
 import { ItemCard } from "@/components/item/ItemCard";
-import { BarcodeSearchResult } from "./actors/types";
+import type { BarcodeSearchResult } from "./actors/types";
 
 type ExistingItemsProps = {
   items: BarcodeSearchResult[];

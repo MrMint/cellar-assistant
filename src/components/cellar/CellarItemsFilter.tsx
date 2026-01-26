@@ -1,3 +1,4 @@
+import type { ItemTypeValue } from "@cellar-assistant/shared";
 import {
   IconButton,
   Sheet,
@@ -6,19 +7,25 @@ import {
   Tooltip,
   Typography,
 } from "@mui/joy";
-import { ItemType } from "@shared/gql/graphql";
 import { isNotNil } from "ramda";
-import { FaBeer, FaCocktail, FaCoffee, FaWineGlass } from "react-icons/fa";
+import {
+  FaBeer,
+  FaCocktail,
+  FaCoffee,
+  FaGlassWhiskey,
+  FaWineGlass,
+} from "react-icons/fa";
 
 type CellarItemsFilterProps = {
-  types?: ItemType[];
+  types?: ItemTypeValue[];
   counts?: {
     beers?: number;
     wines?: number;
     spirits?: number;
     coffees?: number;
+    sakes?: number;
   };
-  onTypesChange: (types: ItemType[]) => void;
+  onTypesChange: (types: ItemTypeValue[]) => void;
 };
 
 export const CellarItemsFilter = ({
@@ -35,13 +42,13 @@ export const CellarItemsFilter = ({
         variant="plain"
         spacing={0.5}
         value={types}
-        onChange={(event, newTypes) => {
+        onChange={(_event, newTypes) => {
           onTypesChange(newTypes);
         }}
         aria-label="text formatting"
       >
         <Tooltip title="Beer">
-          <IconButton value={ItemType.Beer} aria-label="Beer">
+          <IconButton value={"BEER"} aria-label="Beer">
             <Stack direction="row" gap={0.5} alignItems="center">
               {isNotNil(counts.beers) && (
                 <Typography>{counts.beers}</Typography>
@@ -51,7 +58,7 @@ export const CellarItemsFilter = ({
           </IconButton>
         </Tooltip>
         <Tooltip title="Wine">
-          <IconButton value={ItemType.Wine} aria-label="Wine">
+          <IconButton value={"WINE"} aria-label="Wine">
             <Stack direction="row" gap={0.5} alignItems="center">
               {isNotNil(counts.wines) && (
                 <Typography>{counts.wines}</Typography>
@@ -61,7 +68,7 @@ export const CellarItemsFilter = ({
           </IconButton>
         </Tooltip>
         <Tooltip title="Spirit">
-          <IconButton value={ItemType.Spirit} aria-label="Spirit">
+          <IconButton value={"SPIRIT"} aria-label="Spirit">
             <Stack direction="row" gap={0.5} alignItems="center">
               {isNotNil(counts.spirits) && (
                 <Typography>{counts.spirits}</Typography>
@@ -71,12 +78,22 @@ export const CellarItemsFilter = ({
           </IconButton>
         </Tooltip>
         <Tooltip title="Coffee">
-          <IconButton value={ItemType.Coffee} aria-label="Coffee">
+          <IconButton value={"COFFEE"} aria-label="Coffee">
             <Stack direction="row" gap={0.5} alignItems="center">
               {isNotNil(counts.coffees) && (
                 <Typography>{counts.coffees}</Typography>
               )}
               <FaCoffee />
+            </Stack>
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Sake">
+          <IconButton value={"SAKE"} aria-label="Sake">
+            <Stack direction="row" gap={0.5} alignItems="center">
+              {isNotNil(counts.sakes) && (
+                <Typography>{counts.sakes}</Typography>
+              )}
+              <FaGlassWhiskey />
             </Stack>
           </IconButton>
         </Tooltip>

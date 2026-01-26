@@ -1,10 +1,9 @@
-import { NhostClient } from "@nhost/nextjs";
-import { ItemType } from "@shared/gql/graphql";
-import { Client } from "urql";
-import { BeerFormDefaultValues } from "@/components/beer/BeerForm";
-import { SpiritFormDefaultValues } from "@/components/spirit/SpiritForm";
-import { WineFormDefaultValues } from "@/components/wine/WineForm";
-import { Barcode } from "@/constants";
+import type { ItemTypeValue } from "@cellar-assistant/shared";
+import type { Client } from "urql";
+import type { BeerFormDefaultValues } from "@/components/beer/BeerForm";
+import type { SpiritFormDefaultValues } from "@/components/spirit/SpiritForm";
+import type { WineFormDefaultValues } from "@/components/wine/WineForm";
+import type { Barcode } from "@/constants";
 
 export type SearchByBarcodeInput = {
   barcode?: Barcode;
@@ -32,7 +31,6 @@ export type InsertCellarItemResult = {
 export type UploadFilesInput = {
   frontLabel?: string;
   backLabel?: string;
-  nhostClient: NhostClient;
 };
 
 export type UploadFilesResult = {
@@ -56,6 +54,7 @@ export type DefaultValues =
 export interface DefaultValuesResult<T extends DefaultValues> {
   defaults: T;
   itemOnboardingId: string;
+  confidence: number;
 }
 
 export type BarcodeSearchResult = {
@@ -63,7 +62,7 @@ export type BarcodeSearchResult = {
   itemId: string;
   name: string;
   vintage?: string;
-  type: ItemType;
+  type: ItemTypeValue;
   displayImageId?: string;
   placeholder?: string | null;
   score?: number | null;

@@ -1,0 +1,91 @@
+table:
+  name: menu_scans
+  schema: public
+object_relationships:
+  - name: estimated_place
+    using:
+      foreign_key_constraint_on: estimated_place_id
+  - name: place
+    using:
+      foreign_key_constraint_on: place_id
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      set:
+        user_id: X-Hasura-User-Id
+      columns:
+        - confidence_score
+        - estimated_place_id
+        - extracted_text
+        - items_detected
+        - items_matched
+        - manual_place_override
+        - original_image_id
+        - place_id
+        - processed_image_id
+        - processing_duration_ms
+        - processing_error
+        - processing_model
+        - processing_status
+        - scan_location
+        - scanned_at
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - confidence_score
+        - created_at
+        - estimated_place_id
+        - extracted_text
+        - id
+        - items_detected
+        - items_matched
+        - manual_place_override
+        - original_image_id
+        - place_id
+        - processed_at
+        - processed_image_id
+        - processing_duration_ms
+        - processing_error
+        - processing_model
+        - processing_status
+        - scan_location
+        - scanned_at
+        - updated_at
+        - user_id
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      allow_aggregations: true
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - confidence_score
+        - estimated_place_id
+        - extracted_text
+        - items_detected
+        - items_matched
+        - manual_place_override
+        - place_id
+        - processed_image_id
+        - processing_duration_ms
+        - processing_error
+        - processing_model
+        - processing_status
+        - scan_location
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+      check: {}
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+    comment: ""

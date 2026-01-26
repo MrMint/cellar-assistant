@@ -1,5 +1,6 @@
 "use client";
 
+import { graphql, type Permission_Type_Enum } from "@cellar-assistant/shared";
 import {
   Avatar,
   Box,
@@ -14,12 +15,10 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
-import { graphql } from "@shared/gql";
-import { Permission_Type_Enum } from "@shared/gql/graphql";
 import { isNil, isNotNil } from "ramda";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import { CombinedError, useClient } from "urql";
-import { permissionKeys } from "@/constants";
+import { Controller, type SubmitHandler, useForm } from "react-hook-form";
+import { type CombinedError, useClient } from "urql";
+import { EnumSelect } from "@/components/forms/EnumSelect";
 
 interface IFormInput {
   name: string;
@@ -68,7 +67,11 @@ export const CellarForm = ({
   id,
   onSubmitted,
   friends,
-  defaults = { name: "", privacy: Permission_Type_Enum.Friends, co_owners: [] },
+  defaults = {
+    name: "",
+    privacy: "FRIENDS" as Permission_Type_Enum,
+    co_owners: [],
+  },
 }: CellarFormProps) => {
   const client = useClient();
 
@@ -138,29 +141,14 @@ export const CellarForm = ({
               )}
             />
           </FormControl>
-          <FormControl required>
-            <FormLabel>Privacy</FormLabel>
-            <Controller
-              name="privacy"
-              control={control}
-              rules={{ required: true }}
-              render={({ field }) => (
-                <Select
-                  placeholder="Choose one…"
-                  {...field}
-                  onChange={(_, value) => {
-                    field.onChange(value);
-                  }}
-                >
-                  {permissionKeys.map((x) => (
-                    <Option key={x} value={Permission_Type_Enum[x]}>
-                      {x}
-                    </Option>
-                  ))}
-                </Select>
-              )}
-            />
-          </FormControl>
+          <EnumSelect
+            name="privacy"
+            control={control}
+            enumKey="permission"
+            label="Privacy"
+            required
+            rules={{ required: true }}
+          />
           <FormControl>
             <FormLabel>Co-Owners</FormLabel>
             <Controller

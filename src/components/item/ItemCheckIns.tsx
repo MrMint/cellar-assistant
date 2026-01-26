@@ -1,3 +1,6 @@
+"use client";
+
+import { addCheckIn, addCheckIns } from "@cellar-assistant/shared/queries";
 import {
   Avatar,
   AvatarGroup,
@@ -17,7 +20,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/joy";
-import { addCheckIn, addCheckIns } from "@shared/queries";
 import { format, parseISO } from "date-fns";
 import { groupBy, isEmpty, mapObjIndexed, not, values, without } from "ramda";
 import { useEffect, useState } from "react";
@@ -49,7 +51,7 @@ export const ItemCheckIns = ({
   user,
 }: ItemCheckInsProps) => {
   const [open, setOpen] = useState(false);
-  const [bulk, setBulk] = useState(new Array<string>());
+  const [bulk, setBulk] = useState([] as string[]);
   const [{ fetching }, addCheckInMutation] = useMutation(addCheckIn);
   const [{ fetching: bulkFetcing }, addCheckInsMutation] =
     useMutation(addCheckIns);
@@ -120,7 +122,7 @@ export const ItemCheckIns = ({
           <List>
             {values(
               mapObjIndexed(
-                (x: CheckIn[], i, groups) => (
+                (x: CheckIn[], _i, _groups) => (
                   <>
                     <ListDivider />
                     <ListItem key={x[0].id}>

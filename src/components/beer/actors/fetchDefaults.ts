@@ -1,14 +1,17 @@
-import { graphql } from "@shared/gql";
-import { Country_Enum, Beer_Style_Enum } from "@shared/gql/graphql";
-import { isNil, isNotNil } from "ramda";
-import { fromPromise } from "xstate";
 import {
+  type Beer_Style_Enum,
+  type Country_Enum,
+  graphql,
+} from "@cellar-assistant/shared";
+import { isNil } from "ramda";
+import { fromPromise } from "xstate";
+import type {
   DefaultValues,
   DefaultValuesResult,
   FetchDefaultsInput,
 } from "@/components/common/OnboardingWizard/actors/types";
 import { nullsToUndefined } from "@/utilities";
-import { BeerFormDefaultValues } from "../BeerForm";
+import type { BeerFormDefaultValues } from "../BeerForm";
 
 const getDefaultsQuery = graphql(`
   query GetBeerDefaults($hint: item_defaults_hint!) {
@@ -23,6 +26,7 @@ const getDefaultsQuery = graphql(`
       vintage
       style
       international_bitterness_unit
+      confidence
     }
   }
 `);
@@ -57,15 +61,12 @@ export const fetchDefaults = fromPromise(
         alcohol_content_percentage: beer.alcohol_content_percentage,
         barcode_code: beer.barcode_code,
         barcode_type: beer.barcode_type,
-        country: isNotNil(beer.country)
-          ? (beer.country as Country_Enum)
-          : undefined,
-        style: isNotNil(beer.style)
-          ? (beer.style as Beer_Style_Enum)
-          : undefined,
+        country: beer.country as Country_Enum | undefined,
+        style: beer.style as Beer_Style_Enum | undefined,
         international_bitterness_unit: beer.international_bitterness_unit,
       },
       itemOnboardingId: result.data.beer_defaults.item_onboarding_id,
+      confidence: result.data.beer_defaults.confidence ?? 0,
     } as DefaultValuesResult<BeerFormDefaultValues>;
   },
 );

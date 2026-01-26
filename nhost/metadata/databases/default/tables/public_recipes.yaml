@@ -1,0 +1,113 @@
+table:
+  name: recipes
+  schema: public
+object_relationships:
+  - name: createdBy
+    using:
+      foreign_key_constraint_on: created_by_id
+  - name: recipe_group
+    using:
+      foreign_key_constraint_on: recipe_group_id
+array_relationships:
+  - name: ingredients
+    using:
+      foreign_key_constraint_on:
+        column: recipe_id
+        table:
+          name: recipe_ingredients
+          schema: public
+  - name: instructions
+    using:
+      foreign_key_constraint_on:
+        column: recipe_id
+        table:
+          name: recipe_instructions
+          schema: public
+  - name: recipe_vectors
+    using:
+      foreign_key_constraint_on:
+        column: recipe_id
+        table:
+          name: recipe_vectors
+          schema: public
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      set:
+        created_by_id: X-Hasura-User-Id
+      columns:
+        - canonical_recipe_id
+        - description
+        - difficulty_level
+        - image_url
+        - name
+        - prep_time_minutes
+        - recipe_group_id
+        - serving_size
+        - type
+        - version
+    comment: ""
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - canonical_recipe_id
+        - created_at
+        - created_by_id
+        - description
+        - difficulty_level
+        - id
+        - image_url
+        - name
+        - prep_time_minutes
+        - recipe_group_id
+        - serving_size
+        - type
+        - updated_at
+        - version
+      filter: {}
+      allow_aggregations: true
+    comment: ""
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - canonical_recipe_id
+        - description
+        - difficulty_level
+        - image_url
+        - name
+        - prep_time_minutes
+        - recipe_group_id
+        - serving_size
+        - type
+        - version
+      filter:
+        created_by_id:
+          _eq: X-Hasura-User-Id
+      check: {}
+    comment: ""
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        created_by_id:
+          _eq: X-Hasura-User-Id
+    comment: ""
+event_triggers:
+  - name: generate_recipe_vector
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+      update:
+        columns: '*'
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/generateRecipeVector'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET

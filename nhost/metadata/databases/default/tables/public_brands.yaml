@@ -1,0 +1,47 @@
+table:
+  name: brands
+  schema: public
+object_relationships:
+  - name: brand_type_relation
+    using:
+      foreign_key_constraint_on: brand_type
+  - name: parent_brand
+    using:
+      foreign_key_constraint_on: parent_brand_id
+array_relationships:
+  - name: child_brands
+    using:
+      foreign_key_constraint_on:
+        column: parent_brand_id
+        table:
+          name: brands
+          schema: public
+  - name: item_brands
+    using:
+      foreign_key_constraint_on:
+        column: brand_id
+        table:
+          name: item_brands
+          schema: public
+  - name: place_brands
+    using:
+      foreign_key_constraint_on:
+        column: brand_id
+        table:
+          name: place_brands
+          schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - name
+        - description
+        - logo_url
+        - brand_type
+        - parent_brand_id
+        - created_at
+        - updated_at
+      filter: {}
+      allow_aggregations: true
+    comment: Read-only access - brands are managed via migrations or admin functions

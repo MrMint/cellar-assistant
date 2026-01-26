@@ -1,12 +1,11 @@
-import { type NhostClient } from "@nhost/nextjs";
-import { type AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { isEmpty, isNil, isNotNil, not } from "ramda";
-import { Client } from "urql";
-import { PromiseActorLogic, assign, createMachine } from "xstate";
-import { Barcode } from "@/constants";
+import type { Client } from "urql";
+import { assign, createMachine, type PromiseActorLogic } from "xstate";
+import { type Barcode, CONFIDENCE_THRESHOLDS } from "@/constants";
 import { searchByBarcode } from "./actors/searchByBarcode";
 import { searchByImage } from "./actors/searchByImage";
-import {
+import type {
   BarcodeSearchResult,
   DefaultValues,
   DefaultValuesResult,
@@ -23,7 +22,6 @@ export const OnboardingMachine = createMachine(
     initial: "wizard",
     types: {} as {
       input: {
-        nhostClient: NhostClient;
         urqlClient: Client;
         cellarId: string;
         router: AppRouterInstance;
@@ -32,7 +30,6 @@ export const OnboardingMachine = createMachine(
       context: {
         userId: string;
         urqlClient: Client;
-        nhostClient: NhostClient;
         barcode?: Barcode;
         frontLabel?: string;
         backLabel?: string;
@@ -45,6 +42,10 @@ export const OnboardingMachine = createMachine(
         cellarId: string;
         router: AppRouterInstance;
         retryCount: number;
+        /** AI analysis confidence score (0-1) */
+        confidence?: number;
+        /** Whether quick add mode is enabled for this session */
+        quickAddEnabled: boolean;
       };
       events:
         | {
@@ -57,7 +58,9 @@ export const OnboardingMachine = createMachine(
           }
         | { type: "CREATED"; itemId: string }
         | { type: "ADD_ANOTHER" }
-        | { type: "DONE" };
+        | { type: "DONE" }
+        | { type: "CONFIRM"; itemId: string }
+        | { type: "EDIT" };
       actors:
         | {
             src: "uploadFiles";
@@ -81,11 +84,11 @@ export const OnboardingMachine = createMachine(
     context: ({ input }) => ({
       userId: input.userId,
       itemOnboardingId: "",
-      nhostClient: input.nhostClient,
       urqlClient: input.urqlClient,
       cellarId: input.cellarId,
       router: input.router,
       retryCount: 0,
+      quickAddEnabled: true, // Enable quick add by default
     }),
     states: {
       wizard: {
@@ -116,11 +119,10 @@ export const OnboardingMachine = createMachine(
       upload: {
         invoke: {
           src: "uploadFiles",
-          input: ({ context: { backLabel, frontLabel, nhostClient } }) =>
+          input: ({ context: { backLabel, frontLabel } }) =>
             ({
               backLabel,
               frontLabel,
-              nhostClient,
             }) as UploadFilesInput,
           onDone: {
             target: "analyze",
@@ -164,11 +166,45 @@ export const OnboardingMachine = createMachine(
           onError: {
             target: "retryAnalyze",
           },
-          onDone: {
+          onDone: [
+            // High confidence + quick add enabled → quickReview
+            {
+              guard: ({ event, context }) =>
+                context.quickAddEnabled &&
+                (event.output.confidence ?? 0) >= CONFIDENCE_THRESHOLDS.HIGH,
+              target: "quickReview",
+              actions: assign({
+                itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
+                defaults: ({ event }) => event.output.defaults,
+                confidence: ({ event }) => event.output.confidence,
+              }),
+            },
+            // Default → form (existing behavior)
+            {
+              target: "form",
+              actions: assign({
+                itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
+                defaults: ({ event }) => event.output.defaults,
+                confidence: ({ event }) => event.output.confidence,
+              }),
+            },
+          ],
+        },
+      },
+      quickReview: {
+        // Note: Auto-confirm is handled by the QuickAddCard component
+        // which creates the item and sends CONFIRM with itemId
+        on: {
+          CONFIRM: {
+            actions: assign({
+              existingItemId: ({ event }) => event.itemId,
+            }),
+            target: "addItemToCellar",
+          },
+          EDIT: {
             target: "form",
             actions: assign({
-              itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
-              defaults: ({ event }) => event.output.defaults,
+              quickAddEnabled: () => false, // Disable quick add if user chooses to edit
             }),
           },
         },

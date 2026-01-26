@@ -1,13 +1,13 @@
-import { ItemType } from "@shared/gql/graphql";
+import type { ItemTypeValue } from "@cellar-assistant/shared";
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
-import { ImageLoaderProps } from "next/image";
+import type { ImageLoaderProps } from "next/image";
 import { always, cond, equals, isEmpty, isNil } from "ramda";
 
 // https://stackoverflow.com/a/76775845
 export function getEnums<T extends { [key: string]: number | string }>(
   enumType: T,
 ): Array<[key: keyof T, value: T[keyof T]]> {
-  const keys = Object.keys(enumType).filter((key) => isNaN(Number(key)));
+  const keys = Object.keys(enumType).filter((key) => Number.isNaN(Number(key)));
   return keys.map((key) => [key, enumType[key] as T[keyof T]]);
 }
 
@@ -27,7 +27,7 @@ export function formatIsoDateString(
   return dateFnsFormat(parseISO(input), format);
 }
 
-export function formatAsPercentage(input: string | null | undefined) {
+export function formatAsPercentage(input: number | null | undefined) {
   if (isNil(input)) return undefined;
   return `${input}%`;
 }
@@ -45,15 +45,21 @@ export function nullsToUndefined<T>(
   obj: T,
 ): RecursivelyReplaceNullWithUndefined<T> {
   if (obj === null || obj === undefined) {
-    return undefined as any;
+    return undefined as RecursivelyReplaceNullWithUndefined<T>;
   }
 
-  if ((obj as any).constructor.name === "Object" || Array.isArray(obj)) {
+  if (
+    typeof obj === "object" &&
+    obj !== null &&
+    (obj.constructor === Object || Array.isArray(obj))
+  ) {
     for (const key in obj) {
-      obj[key] = nullsToUndefined(obj[key]) as any;
+      (obj as Record<string, unknown>)[key] = nullsToUndefined(
+        (obj as Record<string, unknown>)[key],
+      );
     }
   }
-  return obj as any;
+  return obj as RecursivelyReplaceNullWithUndefined<T>;
 }
 
 /***
@@ -78,7 +84,10 @@ export function dataUrlToFile(
   return new File([buff], filename, { type: mime });
 }
 
-export function formatVintage(vintage: string | null | undefined) {
+export function formatVintage(vintage: string | number | null | undefined) {
+  if (typeof vintage === "number") {
+    return vintage.toString();
+  }
   return formatIsoDateString(vintage, "yyyy");
 }
 
@@ -104,16 +113,18 @@ export const getNextPlaceholder = (
   return `data:image/${placeholderDataUrl}`;
 };
 
-export const formatItemType = (type: ItemType) => {
+export const formatItemType = (type: ItemTypeValue) => {
   switch (type) {
-    case ItemType.Beer:
+    case "BEER":
       return "Beer";
-    case ItemType.Wine:
+    case "WINE":
       return "Wine";
-    case ItemType.Spirit:
+    case "SPIRIT":
       return "Spirit";
-    case ItemType.Coffee:
+    case "COFFEE":
       return "Coffee";
+    case "SAKE":
+      return "Sake";
     default:
       throw new Error("Unsupported item type");
   }
@@ -139,20 +150,22 @@ export const convertYearToDate = (year: number | null | undefined) => {
   return format(new Date(year, 0, 1), "yyyy-MM-dd");
 };
 
-export const typeToIdKey = (type: ItemType) =>
+export const typeToIdKey = (type: ItemTypeValue) =>
   cond([
-    [equals(ItemType.Beer), always("beer_id")],
-    [equals(ItemType.Wine), always("wine_id")],
-    [equals(ItemType.Spirit), always("spirit_id")],
-    [equals(ItemType.Coffee), always("coffee_id")],
+    [equals("BEER"), always("beer_id")],
+    [equals("WINE"), always("wine_id")],
+    [equals("SPIRIT"), always("spirit_id")],
+    [equals("COFFEE"), always("coffee_id")],
+    [equals("SAKE"), always("sake_id")],
   ])(type);
 
 export const getItemType = (
-  typename: "beers" | "wines" | "spirits" | "coffees",
-): ItemType =>
+  typename: "beers" | "wines" | "spirits" | "coffees" | "sakes",
+): ItemTypeValue =>
   cond([
-    [equals("beers"), always(ItemType.Beer)],
-    [equals("spirits"), always(ItemType.Spirit)],
-    [equals("wines"), always(ItemType.Wine)],
-    [equals("coffees"), always(ItemType.Coffee)],
-  ])(typename);
+    [equals("beers"), always("BEER" as const)],
+    [equals("spirits"), always("SPIRIT" as const)],
+    [equals("wines"), always("WINE" as const)],
+    [equals("coffees"), always("COFFEE" as const)],
+    [equals("sakes"), always("SAKE" as const)],
+  ])(typename) as ItemTypeValue;

@@ -1,0 +1,10 @@
+npm warn exec The following package was not found and will be installed: get-graphql-schema@2.1.2
+npm warn deprecated graphql@14.7.0: No longer supported; please update to a newer version. Details: https://github.com/graphql/graphql-js#version-support
+Error: Invalid or incomplete introspection result. Ensure that you are passing "data" property of introspection response and no "errors" was returned alongside: undefined
+    at devAssert (/Users/jaredprather/.npm/_npx/14e49fcee2040dc0/node_modules/graphql/jsutils/devAssert.js:12:11)
+    at Object.buildClientSchema (/Users/jaredprather/.npm/_npx/14e49fcee2040dc0/node_modules/graphql/utilities/buildClientSchema.js:47:125)
+    at /Users/jaredprather/.npm/_npx/14e49fcee2040dc0/node_modules/get-graphql-schema/dist/index.js:90:54
+    at step (/Users/jaredprather/.npm/_npx/14e49fcee2040dc0/node_modules/get-graphql-schema/dist/index.js:33:23)
+    at Object.next (/Users/jaredprather/.npm/_npx/14e49fcee2040dc0/node_modules/get-graphql-schema/dist/index.js:14:53)
+    at fulfilled (/Users/jaredprather/.npm/_npx/14e49fcee2040dc0/node_modules/get-graphql-schema/dist/index.js:5:58)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)

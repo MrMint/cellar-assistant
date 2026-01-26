@@ -1,18 +1,18 @@
-import { graphql } from "@shared/gql";
 import {
-  Country_Enum,
-  Wine_Style_Enum,
-  Wine_Variety_Enum,
-} from "@shared/gql/graphql";
+  type Country_Enum,
+  graphql,
+  type Wine_Style_Enum,
+  type Wine_Variety_Enum,
+} from "@cellar-assistant/shared";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
-import {
+import type {
   DefaultValues,
   DefaultValuesResult,
   FetchDefaultsInput,
 } from "@/components/common/OnboardingWizard/actors/types";
 import { nullsToUndefined } from "@/utilities";
-import { WineFormDefaultValues } from "../WineForm";
+import type { WineFormDefaultValues } from "../WineForm";
 
 const getDefaultsQuery = graphql(`
   query GetWineDefaults($hint: item_defaults_hint!) {
@@ -30,6 +30,7 @@ const getDefaultsQuery = graphql(`
       vineyard_designation
       vintage
       style
+      confidence
     }
   }
 `);
@@ -78,6 +79,7 @@ export const fetchDefaults = fromPromise(
         vineyard_designation: wine.vineyard_designation,
       },
       itemOnboardingId: result.data.wine_defaults.item_onboarding_id,
+      confidence: result.data.wine_defaults.confidence ?? 0,
     } as DefaultValuesResult<WineFormDefaultValues>;
   },
 );

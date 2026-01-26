@@ -1,5 +1,5 @@
 import { Button, Card, CardContent, Grid, Typography } from "@mui/joy";
-import { Barcode } from "@/constants";
+import type { Barcode } from "@/constants";
 import { BarcodeScanner } from "../BarcodeScanner";
 
 export type BarcodeStepProps = {
@@ -36,7 +36,7 @@ export const BarcodeStep = ({
           Tips
         </Typography>
         <CardContent>
-          <Typography level="body-md">
+          <Typography level="body-md" component="div">
             <ul>
               <li>
                 Make sure the barcode is horizontal, with the numbers below the

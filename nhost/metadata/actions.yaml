@@ -7,6 +7,7 @@ actions:
       headers:
         - name: nhost-webhook-secret
           value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 120
       request_transform:
         body:
           action: transform
@@ -36,6 +37,7 @@ actions:
       headers:
         - name: nhost-webhook-secret
           value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 120
       request_transform:
         body:
           action: transform
@@ -61,9 +63,6 @@ actions:
       kind: ""
       handler: '{{NHOST_FUNCTIONS_URL}}/getVectorForString'
       forward_client_headers: true
-      headers:
-        - name: nhost-webhook-secret
-          value_from_env: NHOST_WEBHOOK_SECRET
     permissions:
       - role: user
   - name: item_image_upload
@@ -81,6 +80,98 @@ actions:
         version: 2
     permissions:
       - role: user
+  - name: processRecipePhoto
+    definition:
+      kind: synchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/processRecipePhoto'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 120
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "photoId": {{$body.input.input.photoId}},
+              "userId": {{$body.input.input.userId}},
+              "placeId": {{$body.input.input.placeId}},
+              "menuItemId": {{$body.input.input.menuItemId}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
+  - name: refresh_places
+    definition:
+      kind: asynchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/refreshPlaces'
+      forward_client_headers: true
+      timeout: 300
+      request_transform:
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: admin
+  - name: sake_defaults
+    definition:
+      kind: ""
+      handler: '{{NHOST_FUNCTIONS_URL}}/getItemDefaults'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 120
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "hint": {
+                "barcode": {{$body.input.hint?.barcode}},
+                "barcodeType": {{$body.input.hint?.barcodeType}},
+                "frontLabelFileId": {{$body.input.hint?.frontLabelFileId}},
+                "backLabelFileId": {{$body.input.hint?.backLabelFileId}}
+              },
+              "itemType": "SAKE",
+              "session_variables": {{$body?.session_variables}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
+    comment: sake_defaults
+  - name: search_nearby_places
+    definition:
+      kind: ""
+      handler: '{{NHOST_FUNCTIONS_URL}}/searchNearbyPlaces'
+      forward_client_headers: true
+      timeout: 35
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "latitude": {{$body.input.input.latitude}},
+              "longitude": {{$body.input.input.longitude}},
+              "radius": {{$body.input.input.radius}},
+              "categories": {{$body.input.input.categories}},
+              "limit": {{$body.input.input.limit}},
+              "session_variables": {{$body.session_variables}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
   - name: spirit_defaults
     definition:
       kind: ""
@@ -89,6 +180,7 @@ actions:
       headers:
         - name: nhost-webhook-secret
           value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 118
       request_transform:
         body:
           action: transform
@@ -118,6 +210,7 @@ actions:
       headers:
         - name: nhost-webhook-secret
           value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 118
       request_transform:
         body:
           action: transform
@@ -154,14 +247,28 @@ custom_types:
         - description: null
           is_deprecated: null
           value: COFFEE
+        - description: null
+          is_deprecated: null
+          value: SAKE
   input_objects:
     - name: item_defaults_input
     - name: item_defaults_hint
     - name: item_image_upload_input
+    - name: search_nearby_places_input
+    - name: ProcessRecipePhotoInput
   objects:
     - name: wine_defaults_result
     - name: beer_defaults_result
     - name: spirit_defaults_result
     - name: item_image_upload_result
     - name: coffee_defaults_result
+    - name: sake_defaults_result
+    - name: search_nearby_places_result
+    - name: search_nearby_place
+    - name: search_query_info
+    - name: search_location_info
+    - name: refresh_places_result
+    - name: ProcessRecipePhotoOutput
+    - name: ProcessRecipePhotoResult
+    - name: MenuAnalysis
   scalars: []

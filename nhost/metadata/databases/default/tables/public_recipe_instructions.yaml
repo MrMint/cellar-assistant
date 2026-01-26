@@ -1,0 +1,58 @@
+table:
+  name: recipe_instructions
+  schema: public
+object_relationships:
+  - name: instruction_type_relation
+    using:
+      foreign_key_constraint_on: instruction_type
+  - name: recipe
+    using:
+      foreign_key_constraint_on: recipe_id
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        recipe:
+          created_by_id:
+            _eq: X-Hasura-User-Id
+      columns:
+        - recipe_id
+        - step_number
+        - instruction_text
+        - instruction_type
+        - equipment_needed
+        - time_minutes
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - recipe_id
+        - step_number
+        - instruction_text
+        - instruction_type
+        - equipment_needed
+        - time_minutes
+        - created_at
+      filter: {}
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - step_number
+        - instruction_text
+        - instruction_type
+        - equipment_needed
+        - time_minutes
+      filter:
+        recipe:
+          created_by_id:
+            _eq: X-Hasura-User-Id
+      check: {}
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        recipe:
+          created_by_id:
+            _eq: X-Hasura-User-Id

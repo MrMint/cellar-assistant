@@ -8,6 +8,9 @@ object_relationships:
   - name: coffee
     using:
       foreign_key_constraint_on: coffee_id
+  - name: sake
+    using:
+      foreign_key_constraint_on: sake_id
   - name: spirit
     using:
       foreign_key_constraint_on: spirit_id
@@ -22,10 +25,11 @@ insert_permissions:
     permission:
       check: {}
       set:
-        user_id: x-hasura-User-Id
+        user_id: X-Hasura-User-Id
       columns:
         - beer_id
         - coffee_id
+        - sake_id
         - score
         - spirit_id
         - text
@@ -39,6 +43,7 @@ select_permissions:
         - coffee_id
         - created_at
         - id
+        - sake_id
         - score
         - spirit_id
         - text
@@ -50,7 +55,9 @@ select_permissions:
       query_root_fields:
         - select
         - select_by_pk
-      subscription_root_fields: []
+      subscription_root_fields:
+        - select
+        - select_by_pk
     comment: ""
 update_permissions:
   - role: user
@@ -61,7 +68,7 @@ update_permissions:
       filter:
         user_id:
           _eq: X-Hasura-User-Id
-      check: null
+      check: {}
     comment: ""
 delete_permissions:
   - role: user

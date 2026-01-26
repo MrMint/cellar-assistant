@@ -1,3 +1,10 @@
+"use client";
+
+import type { ItemTypeValue } from "@cellar-assistant/shared";
+import {
+  addFavoriteMutation,
+  deleteFavoriteMutation,
+} from "@cellar-assistant/shared/queries";
 import {
   Button,
   CardContent,
@@ -5,13 +12,10 @@ import {
   Divider,
   Typography,
 } from "@mui/joy";
-import { SxProps } from "@mui/joy/styles/types";
-import { useUserId } from "@nhost/nextjs";
-import { ItemType } from "@shared/gql/graphql";
-import { addFavoriteMutation, deleteFavoriteMutation } from "@shared/queries";
+import type { SxProps } from "@mui/joy/styles/types";
 import Image from "next/image";
 import { always, cond, equals, isNil, isNotNil } from "ramda";
-import { MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import {
   MdFavorite,
   MdFavoriteBorder,
@@ -24,6 +28,7 @@ import { Link } from "@/components/common/Link";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
 import spirit1 from "@/images/spirit1.png";
+import sake1 from "@/images/wine1.png";
 import wine1 from "@/images/wine1.png";
 import {
   formatItemType,
@@ -40,18 +45,16 @@ const overflowItemStyles: SxProps = {
   py: 1,
 };
 
-const getFallback = (type: ItemType) =>
+const getFallback = (type: ItemTypeValue) =>
   cond([
-    [equals(ItemType.Beer), always({ image: beer1, alt: "A beer glass" })],
-    [equals(ItemType.Wine), always({ image: wine1, alt: "A wine bottle" })],
+    [equals("BEER"), always({ image: beer1, alt: "A beer glass" })],
+    [equals("WINE"), always({ image: wine1, alt: "A wine bottle" })],
     [
-      equals(ItemType.Coffee),
+      equals("COFFEE"),
       always({ image: coffee1, alt: "A bag of coffee beans" }),
     ],
-    [
-      equals(ItemType.Spirit),
-      always({ image: spirit1, alt: "A bottle of spirits" }),
-    ],
+    [equals("SPIRIT"), always({ image: spirit1, alt: "A bottle of spirits" })],
+    [equals("SAKE"), always({ image: sake1, alt: "A sake bottle" })],
   ])(type);
 
 export type ItemCardItem = {
@@ -72,12 +75,10 @@ export type ItemCardProps = {
   item: ItemCardItem;
   href?: string;
   onClick?: (itemId: string) => void;
-  type: ItemType;
+  type: ItemTypeValue;
 };
 
 export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
-  const userId = useUserId();
-  if (isNil(userId)) throw new Error("Invalid user id");
   const [{ fetching: fetchingAdd }, addFavorite] =
     useMutation(addFavoriteMutation);
   const [{ fetching: fetchingDelete }, deleteFavorite] = useMutation(
@@ -140,18 +141,16 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             href={`${formatItemType(type).toLowerCase()}s/${item.id}`}
           >
             <Typography level="title-md" noWrap>
-              {type === ItemType.Wine &&
-                `${formatVintage(item.vintage)} ${item.name}`}
-              {type !== ItemType.Wine && item.name}
+              {type === "WINE" && `${formatVintage(item.vintage)} ${item.name}`}
+              {type !== "WINE" && item.name}
             </Typography>
           </Link>
         </CardContent>
       )}
       {isNil(href) && isNotNil(onClick) && (
         <Typography level="title-md" noWrap>
-          {type === ItemType.Wine &&
-            `${formatVintage(item.vintage)} ${item.name}`}
-          {type !== ItemType.Wine && item.name}
+          {type === "WINE" && `${formatVintage(item.vintage)} ${item.name}`}
+          {type !== "WINE" && item.name}
         </Typography>
       )}
       <CardOverflow
@@ -169,37 +168,35 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         }}
       >
         {isNotNil(item.favoriteCount) && (
-          <>
-            <Button
-              sx={{
-                zIndex: 2,
-                flexGrow: 1,
-              }}
-              onClick={handleFavoriteClick}
-              variant="soft"
-              color="neutral"
-              size="sm"
-              loading={fetching}
-              endDecorator={
-                isNotNil(item.favoriteId) ? (
-                  <MdFavorite
-                    style={{
-                      color: "red",
-                      fontSize: "2rem",
-                    }}
-                  />
-                ) : (
-                  <MdFavoriteBorder
-                    style={{
-                      fontSize: "2rem",
-                    }}
-                  />
-                )
-              }
-            >
-              <Typography level="title-md">{item.favoriteCount}</Typography>
-            </Button>
-          </>
+          <Button
+            sx={{
+              zIndex: 2,
+              flexGrow: 1,
+            }}
+            onClick={handleFavoriteClick}
+            variant="soft"
+            color="neutral"
+            size="sm"
+            loading={fetching}
+            endDecorator={
+              isNotNil(item.favoriteId) ? (
+                <MdFavorite
+                  style={{
+                    color: "red",
+                    fontSize: "2rem",
+                  }}
+                />
+              ) : (
+                <MdFavoriteBorder
+                  style={{
+                    fontSize: "2rem",
+                  }}
+                />
+              )
+            }
+          >
+            <Typography level="title-md">{item.favoriteCount}</Typography>
+          </Button>
         )}
         <Divider orientation="vertical" />
         {/* {isNil(item.reviewCount) && (

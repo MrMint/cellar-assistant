@@ -1,17 +1,24 @@
-"use client";
-
-import { useUserId } from "@nhost/nextjs";
-import { isNil } from "ramda";
+import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
 import { BeerOnboarding } from "@/components/beer/BeerOnboarding";
+import { EnumProvider } from "@/components/providers/EnumProvider";
+import { createEnumQueryFn } from "@/lib/urql/server";
+import { getServerUserId } from "@/utilities/auth-server";
 
-const AddBeer = ({
-  params: { cellarId },
+export default async function AddBeer({
+  params,
 }: {
-  params: { cellarId: string };
-}) => {
-  const userId = useUserId();
-  if (isNil(userId)) throw new Error("Bad UserId");
-  return <BeerOnboarding cellarId={cellarId} userId={userId} />;
-};
+  params: Promise<{ cellarId: string }>;
+}) {
+  const { cellarId } = await params;
+  // Pre-fetch enum data
+  const [userId, enumData] = await Promise.all([
+    getServerUserId(),
+    getMultipleEnumOptions(["beerStyle", "country"], await createEnumQueryFn()),
+  ]);
 
-export default AddBeer;
+  return (
+    <EnumProvider serverEnumData={enumData}>
+      <BeerOnboarding cellarId={cellarId} userId={userId} />
+    </EnumProvider>
+  );
+}

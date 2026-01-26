@@ -1,0 +1,27 @@
+table:
+  name: recipe_vectors
+  schema: public
+object_relationships:
+  - name: recipe
+    using:
+      foreign_key_constraint_on: recipe_id
+computed_fields:
+  - name: distance
+    definition:
+      function:
+        name: calculate_recipe_vector_distance
+        schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - created_at
+        - id
+        - recipe_id
+        - updated_at
+        - embedding_text
+      computed_fields:
+        - distance
+      filter: {}
+      allow_aggregations: true
+    comment: ""

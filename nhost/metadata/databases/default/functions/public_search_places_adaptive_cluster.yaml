@@ -1,0 +1,9 @@
+function:
+  name: search_places_adaptive_cluster
+  schema: public
+configuration:
+  custom_name: searchPlacesAdaptiveCluster
+  custom_root_fields: {}
+  exposed_as: query
+permissions:
+  - role: user
