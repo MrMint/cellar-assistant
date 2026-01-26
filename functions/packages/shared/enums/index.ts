@@ -1,3 +1,3 @@
 export * from "./provider";
 export * from "./registry";
-export type { EnumOption } from "./server";
+// EnumOption is also exported from provider.ts
