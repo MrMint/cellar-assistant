@@ -1,6 +1,7 @@
 import { graphql } from "@cellar-assistant/shared/gql/graphql";
 import type { Request, Response } from "express";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { AUTH_ERROR_RESPONSE, requireAuth } from "../_utils/auth-middleware";
 import { createFunctionNhostClient } from "../_utils/index";
 import {
   functionMutation,
@@ -14,6 +15,16 @@ import type { ExtractedMenuItem, MenuScanRequest } from "./_types";
 export default async (req: Request, res: Response) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // Validate authentication first
+  const authResult = requireAuth(req);
+  if (authResult.isAuthenticated === false) {
+    console.error(
+      "🚫 [processMenuScan] Authentication failed:",
+      authResult.error,
+    );
+    return res.status(401).json(AUTH_ERROR_RESPONSE);
   }
 
   const { scanId, userId }: MenuScanRequest = req.body;
