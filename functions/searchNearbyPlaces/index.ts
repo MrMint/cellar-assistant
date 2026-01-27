@@ -1,5 +1,6 @@
 import { graphql } from "@cellar-assistant/shared/gql/graphql";
 import type { Request, Response } from "express";
+import { AUTH_ERROR_RESPONSE, validateAuth } from "../_utils/auth-middleware";
 import { functionQuery, getAdminAuthHeaders } from "../_utils/urql-client";
 import { isSearchNearbyPlacesInput, validateFunctionInput } from "./_types";
 
@@ -25,6 +26,11 @@ function calculateDistance(
 }
 
 export default async (req: Request, res: Response) => {
+  // Validate authentication
+  if (!validateAuth(req)) {
+    return res.status(401).json(AUTH_ERROR_RESPONSE);
+  }
+
   // Declare variables at function scope for error handling
   let latitude = 0;
   let longitude = 0;
