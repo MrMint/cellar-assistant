@@ -46,7 +46,7 @@ export function SignInClient() {
   ) => {
     setIsRedirectingToSso(true);
     try {
-      const providerUrl = await getProviderSignInUrl(provider);
+      const providerUrl = await getProviderSignInUrl(provider, window.location.origin);
       window.location.href = providerUrl;
     } catch (_error) {
       setError("Failed to redirect to provider");

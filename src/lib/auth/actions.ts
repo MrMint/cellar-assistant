@@ -91,12 +91,13 @@ export async function signUp(formData: FormData) {
 
 export async function getProviderSignInUrl(
   provider: "google" | "discord" | "facebook",
+  origin: string,
 ) {
   const nhost = await createNhostClient();
 
   try {
     const url = nhost.auth.signInProviderURL(provider, {
-      redirectTo: "/cellars",
+      redirectTo: `${origin}/cellars`,
     });
     return url;
   } catch (error) {
