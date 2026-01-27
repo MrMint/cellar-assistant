@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { verifyJWT } from "@/utilities/jwt";
 
 // Only log auth details in development to avoid exposing sensitive info in production
 const isDev = process.env.NODE_ENV === "development";
@@ -10,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies();
 
-    // Get the Nhost session cookie (new format)
+    // Get the Nhost session cookie
     const nhostSessionCookie = cookieStore.get("nhostSession")?.value;
 
     if (!nhostSessionCookie) {
@@ -44,43 +43,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify JWT with signature validation
-    const payload = await verifyJWT(accessToken);
-
-    if (!payload) {
-      if (isDev) console.log("🔑 [GraphQL Proxy] JWT verification failed");
-      return NextResponse.json(
-        { errors: [{ message: "Invalid or expired token" }] },
-        { status: 401 },
-      );
-    }
-
-    if (isDev) {
-      console.log(
-        `🔑 [GraphQL Proxy] JWT verified for user: ${payload.sub || payload["https://hasura.io/jwt/claims"]?.["x-hasura-user-id"] || "unknown"}`,
-      );
-    }
-
     // Get the GraphQL query/variables from the request
     const { query, variables, operationName } = await request.json();
 
-    // Forward request to Hasura with authentication headers
-    const graphqlUrl =
-      process.env.NHOST_GRAPHQL_URL ||
-      process.env.NEXT_PUBLIC_NHOST_GRAPHQL_URL ||
-      `https://local.graphql.nhost.run/v1`;
+    // Construct GraphQL URL based on subdomain and region (Nhost Cloud pattern)
+    const subdomain =
+      process.env.NHOST_SUBDOMAIN || process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN;
+    const region =
+      process.env.NHOST_REGION || process.env.NEXT_PUBLIC_NHOST_REGION;
 
+    let graphqlUrl: string;
+    if (process.env.NHOST_GRAPHQL_URL) {
+      graphqlUrl = process.env.NHOST_GRAPHQL_URL;
+    } else if (process.env.NEXT_PUBLIC_NHOST_GRAPHQL_URL) {
+      graphqlUrl = process.env.NEXT_PUBLIC_NHOST_GRAPHQL_URL;
+    } else if (subdomain === "local" || !region) {
+      // Local development
+      graphqlUrl = "https://local.graphql.nhost.run/v1";
+    } else {
+      // Nhost Cloud: https://{subdomain}.graphql.{region}.nhost.run/v1
+      graphqlUrl = `https://${subdomain}.graphql.${region}.nhost.run/v1`;
+    }
+
+    if (isDev) {
+      console.log(`🔑 [GraphQL Proxy] Forwarding to ${graphqlUrl}`);
+    }
+
+    // Forward request to Hasura with the access token
+    // Hasura will verify the JWT using its configured secret
     const hasuraResponse = await fetch(graphqlUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
-        // Add Hasura-specific headers for better permissions
-        "X-Hasura-User-Id":
-          payload.sub ||
-          payload["https://hasura.io/jwt/claims"]?.["x-hasura-user-id"] ||
-          "",
-        "X-Hasura-Role": "user",
       },
       body: JSON.stringify({
         query,
@@ -90,6 +85,22 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await hasuraResponse.json();
+
+    // Check if Hasura returned an auth error
+    if (
+      hasuraResponse.status === 401 ||
+      data.errors?.some(
+        (e: { extensions?: { code?: string } }) =>
+          e.extensions?.code === "invalid-jwt" ||
+          e.extensions?.code === "access-denied",
+      )
+    ) {
+      if (isDev) console.log("🔑 [GraphQL Proxy] Hasura rejected the token");
+      return NextResponse.json(
+        { errors: [{ message: "Invalid or expired token" }] },
+        { status: 401 },
+      );
+    }
 
     if (isDev) console.log(`🔑 [GraphQL Proxy] Request forwarded successfully`);
     return NextResponse.json(data);

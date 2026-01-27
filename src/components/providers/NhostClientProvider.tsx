@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         region: process.env.NEXT_PUBLIC_NHOST_REGION || "local",
         subdomain: process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN || "local",
         storage: new CookieStorage({
-          secure: false, // Fixed: Never use secure in development
+          secure: process.env.NODE_ENV === "production",
           sameSite: "lax",
         }),
       }),
