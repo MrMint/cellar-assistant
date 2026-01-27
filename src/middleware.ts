@@ -16,6 +16,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow OAuth callback requests through - they have a refreshToken query param
+  // that the client-side SDK needs to process to complete the OAuth flow
+  const refreshToken = request.nextUrl.searchParams.get("refreshToken");
+  if (refreshToken) {
+    return NextResponse.next();
+  }
+
   // Use Nhost's handleNhostMiddleware for authentication
   return handleNhostMiddleware(request, () => {
     return NextResponse.redirect(new URL("/sign-in", request.url));
