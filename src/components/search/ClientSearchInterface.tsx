@@ -10,9 +10,9 @@ import {
   Typography,
 } from "@mui/joy";
 import { useActor } from "@xstate/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { includes } from "ramda";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { MdCamera, MdScanner, MdSearch } from "react-icons/md";
 import {
   barcodeSearchAction,
@@ -31,18 +31,11 @@ export const ClientSearchInterface = ({
   initialQuery,
 }: ClientSearchInterfaceProps) => {
   const [searchQuery, setSearchQuery] = useState(initialQuery || "");
-  const searchParams = useSearchParams();
   const router = useRouter();
 
   const [state, send] = useActor(interactiveSearchMachine, {
     input: {},
   });
-
-  // Update search input when URL changes
-  useEffect(() => {
-    const urlQuery = searchParams.get("q") || "";
-    setSearchQuery(urlQuery);
-  }, [searchParams]);
 
   const handleInputChange = (value: string) => {
     setSearchQuery(value);

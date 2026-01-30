@@ -8,12 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@0no-co/graphql.web':
+        specifier: ^1.2.0
+        version: 1.2.0(graphql@16.8.1)
       '@cellar-assistant/shared':
-        specifier: file:./packages/shared
-        version: file:packages/shared(graphql@16.8.1)(typescript@5.9.2)
+        specifier: file:./_packages/shared
+        version: file:_packages/shared(graphql@16.8.1)(typescript@5.9.2)
       '@cellar-assistant/typescript-config':
-        specifier: file:./packages/typescript-config
-        version: file:packages/typescript-config
+        specifier: file:./_packages/typescript-config
+        version: file:_packages/typescript-config
       '@google-cloud/bigquery':
         specifier: 8.1.1
         version: 8.1.1
@@ -77,11 +80,11 @@ packages:
       graphql: ^15.5.0 || ^16.0.0 || ^17.0.0
       typescript: ^5.0.0
 
-  '@cellar-assistant/shared@file:packages/shared':
-    resolution: {directory: packages/shared, type: directory}
+  '@cellar-assistant/shared@file:_packages/shared':
+    resolution: {directory: _packages/shared, type: directory}
 
-  '@cellar-assistant/typescript-config@file:packages/typescript-config':
-    resolution: {directory: packages/typescript-config, type: directory}
+  '@cellar-assistant/typescript-config@file:_packages/typescript-config':
+    resolution: {directory: _packages/typescript-config, type: directory}
 
   '@google-cloud/bigquery@8.1.1':
     resolution: {integrity: sha512-2GHlohfA/VJffTvibMazMsZi6jPRx8MmaMberyDTL8rnhVs/frKSXVVRtLU83uSAy2j/5SD4mOs4jMQgJPON2g==}
@@ -716,7 +719,7 @@ snapshots:
       graphql: 16.8.1
       typescript: 5.9.2
 
-  '@cellar-assistant/shared@file:packages/shared(graphql@16.8.1)(typescript@5.9.2)':
+  '@cellar-assistant/shared@file:_packages/shared(graphql@16.8.1)(typescript@5.9.2)':
     dependencies:
       gql.tada: 1.9.0(graphql@16.8.1)(typescript@5.9.2)
     transitivePeerDependencies:
@@ -725,7 +728,7 @@ snapshots:
       - graphql
       - typescript
 
-  '@cellar-assistant/typescript-config@file:packages/typescript-config': {}
+  '@cellar-assistant/typescript-config@file:_packages/typescript-config': {}
 
   '@google-cloud/bigquery@8.1.1':
     dependencies:

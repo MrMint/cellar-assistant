@@ -10,8 +10,9 @@
     "@types/express": "5.0.6"
   },
   "dependencies": {
-    "@cellar-assistant/shared": "file:./packages/shared",
-    "@cellar-assistant/typescript-config": "file:./packages/typescript-config",
+    "@0no-co/graphql.web": "^1.2.0",
+    "@cellar-assistant/shared": "file:./_packages/shared",
+    "@cellar-assistant/typescript-config": "file:./_packages/typescript-config",
     "@google-cloud/bigquery": "8.1.1",
     "@google/genai": "1.38.0",
     "@nhost/nhost-js": "4.2.2",
