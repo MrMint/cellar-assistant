@@ -1,38 +1,74 @@
+import { createServerClient } from "@nhost/nhost-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { handleNhostMiddleware } from "./lib/nhost/server";
 
-/**
- * Exchange a refresh token for a full session via Nhost Auth API
- */
-async function exchangeRefreshToken(refreshToken: string): Promise<{
+/** Session type returned from Nhost token exchange */
+interface NhostSession {
   accessToken: string;
   refreshToken: string;
   refreshTokenId: string;
   accessTokenExpiresIn: number;
-  user: Record<string, unknown>;
-} | null> {
+  user: {
+    id: string;
+    email?: string;
+    displayName?: string;
+    avatarUrl?: string;
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * Validate that a session object has all required fields
+ */
+function isValidSession(session: unknown): session is NhostSession {
+  if (!session || typeof session !== "object") return false;
+  const s = session as Record<string, unknown>;
+  return (
+    typeof s.accessToken === "string" &&
+    s.accessToken.length > 0 &&
+    typeof s.refreshToken === "string" &&
+    s.refreshToken.length > 0 &&
+    typeof s.user === "object" &&
+    s.user !== null &&
+    typeof (s.user as Record<string, unknown>).id === "string"
+  );
+}
+
+/**
+ * Exchange a refresh token for a full session using the Nhost SDK
+ */
+async function exchangeRefreshToken(
+  refreshToken: string,
+): Promise<NhostSession | null> {
   const subdomain = process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN || "local";
   const region = process.env.NEXT_PUBLIC_NHOST_REGION;
 
-  const authUrl = region
-    ? `https://${subdomain}.auth.${region}.nhost.run/v1/token`
-    : `https://local.auth.local.nhost.run/v1/token`;
+  // Create a minimal Nhost client for token exchange (no storage needed)
+  const nhost = createServerClient({
+    subdomain,
+    region: region || undefined,
+    storage: {
+      get: () => null,
+      set: () => {},
+      remove: () => {},
+    },
+  });
 
   try {
-    const response = await fetch(authUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ refreshToken }),
-    });
+    const result = await nhost.auth.refreshToken({ refreshToken });
 
-    if (!response.ok) {
-      console.error("[Middleware] Token exchange failed:", response.status);
+    if (result.status !== 200 || !result.body) {
+      console.error("[Middleware] Token exchange failed:", result.status);
       return null;
     }
 
-    return await response.json();
+    // Validate the session structure before returning
+    if (!isValidSession(result.body)) {
+      console.error("[Middleware] Invalid session structure received");
+      return null;
+    }
+
+    return result.body;
   } catch (error) {
     console.error("[Middleware] Token exchange error:", error);
     return null;
@@ -63,6 +99,16 @@ export async function middleware(request: NextRequest) {
       // Create clean URL without refreshToken param
       const cleanUrl = new URL(request.url);
       cleanUrl.searchParams.delete("refreshToken");
+
+      // Security: Validate redirect stays on same origin to prevent open redirect
+      const requestOrigin = request.nextUrl.origin;
+      if (cleanUrl.origin !== requestOrigin) {
+        console.error(
+          "[Middleware] Blocked cross-origin redirect:",
+          cleanUrl.origin,
+        );
+        return NextResponse.redirect(new URL("/cellars", request.url));
+      }
 
       // Redirect to clean URL with session cookie set
       const response = NextResponse.redirect(cleanUrl);

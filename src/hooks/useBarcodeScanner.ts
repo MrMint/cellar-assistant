@@ -94,9 +94,9 @@ export const useBarcodeScanner = ({
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [fallbackResult, setFallbackResult] = useState<Result>();
-  const [isInitialized, setIsInitialized] = useState(false);
 
   // Refs for native implementation
+  const isInitializedRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<{
@@ -185,7 +185,7 @@ export const useBarcodeScanner = ({
 
     setIsStreaming(false);
     setTorchEnabled(false);
-    setIsInitialized(false); // Reset initialization state when stopping
+    isInitializedRef.current = false; // Reset initialization state when stopping
   }, []);
 
   // Native barcode detection function
@@ -306,11 +306,11 @@ export const useBarcodeScanner = ({
 
   // Start scanning function
   const startScanning = useCallback(async () => {
-    if (nativeSupported === null || isInitialized) return; // Wait for support check and prevent double init
+    if (nativeSupported === null || isInitializedRef.current) return; // Wait for support check and prevent double init
 
     try {
       setError(null);
-      setIsInitialized(true);
+      isInitializedRef.current = true;
 
       if (nativeSupported) {
         // Use native implementation
@@ -352,9 +352,9 @@ export const useBarcodeScanner = ({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start camera");
       setIsStreaming(false);
-      setIsInitialized(false); // Reset initialization state on error
+      isInitializedRef.current = false; // Reset initialization state on error
     }
-  }, [nativeSupported, stableConstraints, isAvailable, isOn, isInitialized]);
+  }, [nativeSupported, stableConstraints, isAvailable, isOn]);
 
   // Toggle torch function
   const toggleTorch = useCallback(async () => {
