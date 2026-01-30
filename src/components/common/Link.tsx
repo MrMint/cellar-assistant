@@ -1,3 +1,5 @@
+"use client";
+
 import { Link as MuiLink } from "@mui/joy";
 import NextLink from "next/link";
 import type { ComponentPropsWithoutRef } from "react";
