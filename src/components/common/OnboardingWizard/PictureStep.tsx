@@ -43,7 +43,7 @@ export const PictureStep = ({
           Tips
         </Typography>
         <CardContent>
-          <Typography level="body-md">
+          <Typography level="body-md" component="div">
             <ul>
               <li>
                 This picture will be used to generate the product information

@@ -1,4 +1,9 @@
-import { type GenerationConfig, GoogleGenAI, type Part } from "@google/genai";
+import {
+  type GenerationConfig,
+  GoogleGenAI,
+  type Part,
+  ThinkingLevel,
+} from "@google/genai";
 import { hasProperty, isRecord } from "../types";
 import type {
   AIProvider,
@@ -149,11 +154,23 @@ function convertJsonSchemaToVertexSchema(jsonSchema: unknown): unknown {
 export class VertexAIProvider implements AIProvider {
   private ai: GoogleGenAI;
   // Valid Vertex AI Gemini model names
-  // See: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models
+  // See: https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-flash
+  // Note: Gemini 3 models require global endpoint and support thinking_level parameter
   private qualityModelMap: Record<ModelQuality, string> = {
-    low: "gemini-2.5-flash-lite",
-    medium: "gemini-2.5-flash",
-    high: "gemini-2.5-pro",
+    low: "gemini-3-flash-preview",
+    medium: "gemini-3-flash-preview",
+    high: "gemini-3-pro-preview",
+  };
+
+  // Map quality levels to Gemini 3 thinking levels
+  // MINIMAL: Near-zero reasoning, optimized for throughput
+  // LOW: Light reasoning
+  // MEDIUM: Balanced speed and reasoning
+  // HIGH: Full reasoning capability
+  private qualityThinkingMap: Record<ModelQuality, ThinkingLevel> = {
+    low: ThinkingLevel.MINIMAL,
+    medium: ThinkingLevel.MEDIUM,
+    high: ThinkingLevel.MEDIUM,
   };
 
   constructor(config: VertexAIConfig) {
@@ -288,7 +305,13 @@ export class VertexAIProvider implements AIProvider {
 
       // Prepare the generation config
       // IMPORTANT: Vertex AI uses responseSchema (not responseJsonSchema) with UPPERCASE types
-      const generationConfig: GenerationConfig = {};
+      const generationConfig: GenerationConfig = {
+        // Configure thinking level for Gemini 3 models
+        // This replaces thinking_budget from Gemini 2.x
+        thinkingConfig: {
+          thinkingLevel: this.qualityThinkingMap[quality],
+        },
+      };
 
       // Add JSON schema support if provided
       // Convert JSON Schema to Vertex AI format with UPPERCASE types
