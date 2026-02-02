@@ -98,14 +98,12 @@ export type RecipeVersionData = {
 export type RecipeVersionsTabProps = {
   recipes: RecipeVersionData[];
   canonicalRecipeId?: string | null;
-  userId: string;
   groupId: string;
 };
 
 export const RecipeVersionsTab = ({
   recipes,
   canonicalRecipeId,
-  userId,
   groupId,
 }: RecipeVersionsTabProps) => {
   const [selectedVersion, setSelectedVersion] = useState(0);
@@ -242,7 +240,6 @@ export const RecipeVersionsTab = ({
                           currentVote={recipe.userVote}
                           upvotes={recipe.upvotes}
                           downvotes={recipe.downvotes}
-                          userId={userId}
                         />
 
                         <Typography

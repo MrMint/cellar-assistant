@@ -40,6 +40,7 @@
     "@urql/core": "6.0.1",
     "@urql/devtools": "2.0.3",
     "@urql/exchange-auth": "3.0.0",
+    "@urql/exchange-graphcache": "^9.0.0",
     "@urql/next": "2.0.0",
     "@vercel/analytics": "1.6.1",
     "@xstate/react": "6.0.0",

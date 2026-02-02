@@ -1,6 +1,6 @@
 "use client";
 
-import { graphql, type ItemTypeValue } from "@cellar-assistant/shared";
+import type { ItemTypeValue } from "@cellar-assistant/shared";
 import {
   Button,
   DialogActions,
@@ -12,10 +12,9 @@ import {
   Stack,
 } from "@mui/joy";
 import { useRouter } from "next/navigation";
-import { isNotNil } from "ramda";
-import { useEffect, useState } from "react";
+import { useState, useTransition } from "react";
 import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
-import { useMutation } from "urql";
+import { deleteCellarItemAction } from "@/app/actions/cellarItems";
 import { HeaderBar } from "@/components/common/HeaderBar";
 import { formatItemType } from "@/utilities";
 import { Link } from "../common/Link";
@@ -30,14 +29,6 @@ type CellarItemHeaderProps = {
   userId: string;
 };
 
-const deleteCellarItem = graphql(`
-  mutation DeleteCellarItem($itemId: uuid!) {
-    delete_cellar_items_by_pk(id: $itemId) {
-      id
-    }
-  }
-`);
-
 export const CellarItemHeader = ({
   itemType,
   itemId,
@@ -45,28 +36,23 @@ export const CellarItemHeader = ({
   cellarId,
   cellarName,
   isOwner,
-  userId,
 }: CellarItemHeaderProps) => {
   const router = useRouter();
-
   const [open, setOpen] = useState(false);
-  const [{ fetching, error, operation }, deleteItem] =
-    useMutation(deleteCellarItem);
+  const [isPending, startTransition] = useTransition();
+  const [hasDeleted, setHasDeleted] = useState(false);
 
-  const isErrored = isNotNil(error);
-  const hasFetched = isNotNil(operation);
+  const isDisabled = isPending || hasDeleted;
 
-  const isDisabled = fetching || (hasFetched && !isErrored);
-
-  const handleDeleteClick = async () => {
-    await deleteItem({ itemId });
+  const handleDeleteClick = () => {
+    startTransition(async () => {
+      const result = await deleteCellarItemAction(itemId, cellarId);
+      if (result.success) {
+        setHasDeleted(true);
+        router.replace(`/cellars/${cellarId}/items`);
+      }
+    });
   };
-
-  useEffect(() => {
-    if (!fetching && hasFetched && !isErrored) {
-      router.replace(`/cellars/${cellarId}/items`);
-    }
-  }, [cellarId, fetching, hasFetched, isErrored, router]);
 
   return (
     <>
@@ -112,6 +98,7 @@ export const CellarItemHeader = ({
               variant="solid"
               color="danger"
               disabled={isDisabled}
+              loading={isPending}
               onClick={handleDeleteClick}
             >
               Delete {formatItemType(itemType)}

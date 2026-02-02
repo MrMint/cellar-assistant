@@ -53,6 +53,9 @@ export const updateCellarItemMutation = graphql(`
   mutation UpdateCellarItem($id: uuid!, $item: cellar_items_set_input!) {
     update_cellar_items_by_pk(pk_columns: { id: $id }, _set: $item) {
       id
+      open_at
+      empty_at
+      percentage_remaining
     }
   }
 `);
@@ -105,79 +108,12 @@ export const updateSakeMutation = graphql(`
   }
 `);
 
-export const addItemReview = graphql(`
-  mutation AddItemReview($review: item_reviews_insert_input!) {
-    insert_item_reviews_one(object: $review) {
-      id
-      beer {
-        id
-      }
-      wine {
-        id
-      }
-      spirit {
-        id
-      }
-    }
-  }
-`);
-
-export const addCheckIn = graphql(`
-  mutation AddCheckIn($checkIn: check_ins_insert_input!) {
-    insert_check_ins_one(object: $checkIn) {
-      id
-      cellar_item {
-        id
-      }
-    }
-  }
-`);
-
-export const addCheckIns = graphql(`
-  mutation AddCheckIns($checkIns: [check_ins_insert_input!]!) {
-    insert_check_ins(objects: $checkIns) {
-      affected_rows
-      returning {
-        id
-        cellar_item {
-          id
-        }
-      }
-    }
-  }
-`);
+// Note: addItemReview, addCheckIn, addCheckIns, addFavoriteMutation,
+// deleteFavoriteMutation mutations moved to server actions
 
 export const getSearchVectorQuery = graphql(`
   query GetSearchVectorQuery($text: String, $image: String) {
     create_search_vector(text: $text, image: $image)
-  }
-`);
-
-export const addFavoriteMutation = graphql(`
-  mutation AddFavoriteMutation($object: item_favorites_insert_input!) {
-    insert_item_favorites_one(object: $object) {
-      id
-      beer {
-        id
-      }
-      wine {
-        id
-      }
-      spirit {
-        id
-      }
-      coffee {
-        id
-      }
-    }
-  }
-`);
-
-export const deleteFavoriteMutation = graphql(`
-  mutation DeleteFavoriteMutation($id: uuid!) {
-    delete_item_favorites_by_pk(id: $id) {
-      id
-    }
   }
 `);
 

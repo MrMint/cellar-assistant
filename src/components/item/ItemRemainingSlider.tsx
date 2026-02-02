@@ -1,12 +1,14 @@
 "use client";
 
-import { updateCellarItemMutation } from "@cellar-assistant/shared/queries";
 import { Button, Card, Slider, Stack, Typography } from "@mui/joy";
 import { useDebounce } from "@uidotdev/usehooks";
-import { formatDistance, formatISO } from "date-fns";
+import { formatDistance } from "date-fns";
 import { isNil, isNotNil } from "ramda";
-import { useEffect, useState } from "react";
-import { useMutation } from "urql";
+import { useEffect, useState, useTransition } from "react";
+import {
+  openCellarItemAction,
+  updateCellarItemPercentageAction,
+} from "@/app/actions/cellarItems";
 import { useInterval } from "@/utilities/hooks";
 
 export type ItemRemainingSliderProps = {
@@ -24,37 +26,33 @@ export const ItemRemainingSlider = ({
   emptied,
   isCellarOwner,
 }: ItemRemainingSliderProps) => {
+  const [isPending, startTransition] = useTransition();
   const [percent, setPercent] = useState(percentageRemaining);
   const [now, setNow] = useState(new Date());
   const debouncedPercent = useDebounce(percent, 400);
-  const [res, updateItem] = useMutation(updateCellarItemMutation);
+
   const _clear = useInterval(() => {
     setNow(new Date());
   }, 10000);
 
   useEffect(() => {
     if (debouncedPercent !== percentageRemaining) {
-      updateItem({
-        id: itemId,
-        item: {
-          percentage_remaining: debouncedPercent,
-          empty_at: debouncedPercent === 0 ? formatISO(new Date()) : undefined,
-        },
+      startTransition(async () => {
+        await updateCellarItemPercentageAction(itemId, debouncedPercent);
       });
     }
-  }, [debouncedPercent, percentageRemaining, itemId, updateItem]);
+  }, [debouncedPercent, percentageRemaining, itemId]);
 
-  const handleOpen = async () => {
-    await updateItem({
-      id: itemId,
-      item: { open_at: formatISO(new Date()), percentage_remaining: 100 },
+  const handleOpen = () => {
+    startTransition(async () => {
+      await openCellarItemAction(itemId);
     });
   };
 
   return (
     <Card>
       {isCellarOwner && isNil(opened) && (
-        <Button loading={res.fetching} onClick={handleOpen}>
+        <Button loading={isPending} onClick={handleOpen}>
           Open it!
         </Button>
       )}

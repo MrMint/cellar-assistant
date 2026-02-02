@@ -1,5 +1,6 @@
+"use client";
+
 import type { ItemTypeValue } from "@cellar-assistant/shared";
-import { addCellarItemMutation } from "@cellar-assistant/shared/queries";
 import {
   Button,
   ButtonGroup,
@@ -10,8 +11,9 @@ import {
   Stack,
 } from "@mui/joy";
 import { gt, isNil, isNotNil, length } from "ramda";
+import { useTransition } from "react";
 import { MdAdd, MdArrowDownward } from "react-icons/md";
-import { useMutation } from "urql";
+import { addCellarItemAction } from "@/app/actions/cellarItems";
 import { HeaderBar } from "@/components/common/HeaderBar";
 
 type ItemHeaderProps = {
@@ -30,31 +32,15 @@ export const ItemHeader = ({
   itemName,
   cellars,
 }: ItemHeaderProps) => {
-  const [{ fetching }, addItem] = useMutation(addCellarItemMutation);
+  const [isPending, startTransition] = useTransition();
 
-  const isLoading = isNil(cellars) || fetching;
+  const isLoading = isNil(cellars) || isPending;
   const isDisabled = isNil(cellars);
 
-  const handleAddClick = async (cellarId: string) => {
-    switch (itemType) {
-      case "BEER":
-        await addItem({ item: { cellar_id: cellarId, beer_id: itemId } });
-        break;
-      case "SPIRIT":
-        await addItem({ item: { cellar_id: cellarId, spirit_id: itemId } });
-        break;
-      case "WINE":
-        await addItem({ item: { cellar_id: cellarId, wine_id: itemId } });
-        break;
-      case "COFFEE":
-        await addItem({ item: { cellar_id: cellarId, coffee_id: itemId } });
-        break;
-
-      default:
-        throw new Error(
-          `Unsupported type ${itemType} provided to handleAddClick()`,
-        );
-    }
+  const handleAddClick = (cellarId: string) => {
+    startTransition(async () => {
+      await addCellarItemAction(cellarId, itemId, itemType);
+    });
   };
 
   return (
