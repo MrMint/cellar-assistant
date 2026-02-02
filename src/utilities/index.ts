@@ -169,3 +169,62 @@ export const getItemType = (
     [equals("coffees"), always("COFFEE" as const)],
     [equals("sakes"), always("SAKE" as const)],
   ])(typename) as ItemTypeValue;
+
+/**
+ * Compress and resize an image data URL to reduce file size.
+ * This helps avoid Vercel's serverless function payload limits (~4.5MB).
+ *
+ * @param dataUrl - The original image as a data URL
+ * @param maxDimension - Maximum width/height (default 1400px - preserves fine text)
+ * @param quality - JPEG quality 0-1 (default 0.92 - high quality for text recognition)
+ * @returns Promise resolving to compressed image data URL
+ */
+export async function compressImage(
+  dataUrl: string,
+  maxDimension = 1400,
+  quality = 0.92,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      // Calculate new dimensions maintaining aspect ratio
+      let { width, height } = img;
+
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      // Create canvas and draw resized image
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+
+      // Use better quality interpolation
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Convert to compressed JPEG
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+      resolve(compressedDataUrl);
+    };
+
+    img.onerror = () => {
+      reject(new Error("Failed to load image for compression"));
+    };
+
+    img.src = dataUrl;
+  });
+}

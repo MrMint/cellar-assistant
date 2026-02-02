@@ -12,19 +12,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BsCamera, BsLightbulb, BsLightbulbFill } from "react-icons/bs";
 import Webcam from "react-webcam";
 
-// Enhanced video constraints for maximum quality - square aspect ratio
+// Video constraints for quality capture - square aspect ratio
+// Note: colorTemperature and iso removed - poorly supported on Android and cause white balance issues
 const getVideoConstraints = () => ({
-  width: { ideal: 1920, min: 1080 }, // Square resolution
-  height: { ideal: 1920, min: 1080 }, // Match width for 1:1 aspect ratio
-  aspectRatio: 1, // Force square aspect ratio
+  width: { ideal: 1920, min: 1080 },
+  height: { ideal: 1920, min: 1080 },
+  aspectRatio: 1,
   facingMode: "environment",
+  // These are well-supported across devices
   focusMode: "continuous",
   exposureMode: "continuous",
   whiteBalanceMode: "continuous",
-  zoom: { ideal: 1.0 },
-  // Try to enable HDR when available
-  colorTemperature: { ideal: 5600 }, // Daylight balanced
-  iso: { ideal: 100, max: 800 }, // Low ISO for better quality
 });
 
 const CameraContainer = styled(Box)(() => ({
