@@ -29,6 +29,9 @@ const getDefaultsQuery = graphql(`
       process
       species
       confidence
+      brand_id
+      brand_name
+      is_new_brand
     }
   }
 `);
@@ -73,6 +76,9 @@ export const fetchDefaults = fromPromise(
         cultivar: isNotNil(coffee.cultivar)
           ? (coffee.cultivar as Coffee_Cultivar_Enum)
           : undefined,
+        brand_id: coffee.brand_id,
+        brand_name: coffee.brand_name,
+        is_new_brand: coffee.is_new_brand,
       },
       itemOnboardingId: result.data.coffee_defaults.item_onboarding_id,
       confidence: result.data.coffee_defaults.confidence ?? 0,

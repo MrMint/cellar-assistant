@@ -211,10 +211,16 @@ export const CellarBeerDataFragment = graphql(
       ...BeerCore
       ...BeerUserData
       ...BeerReviews
+      ...BeerRelationships
     }
   }
 `,
-  [BeerCoreFragment, BeerUserDataFragment, BeerReviewsFragment],
+  [
+    BeerCoreFragment,
+    BeerUserDataFragment,
+    BeerReviewsFragment,
+    BeerRelationshipsFragment,
+  ],
 );
 
 /**

@@ -214,10 +214,16 @@ export const CellarWineDataFragment = graphql(
       ...WineCore
       ...WineUserData
       ...WineReviews
+      ...WineRelationships
     }
   }
 `,
-  [WineCoreFragment, WineUserDataFragment, WineReviewsFragment],
+  [
+    WineCoreFragment,
+    WineUserDataFragment,
+    WineReviewsFragment,
+    WineRelationshipsFragment,
+  ],
 );
 
 /**

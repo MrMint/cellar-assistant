@@ -41,6 +41,8 @@ export const OnboardingMachine = createMachine(
         itemOnboardingId: string;
         defaults?: DefaultValues;
         existingItemId?: string;
+        /** The cellar_items ID after adding item to cellar (used for redirect) */
+        cellarItemId?: string;
         cellarId: string;
         router: AppRouterInstance;
         retryCount: number;
@@ -240,11 +242,12 @@ export const OnboardingMachine = createMachine(
             urqlClient,
             displayImage: displayImageDataUrl,
           }),
-          onDone: [
-            {
-              target: "finalPrompt",
-            },
-          ],
+          onDone: {
+            target: "finalPrompt",
+            actions: assign({
+              cellarItemId: ({ event }) => event.output.itemId,
+            }),
+          },
         },
       },
       finalPrompt: {
@@ -257,10 +260,14 @@ export const OnboardingMachine = createMachine(
           },
           DONE: {
             actions: ({ context }) => {
-              // Redirect to the item detail page instead of the cellar items list
-              context.router.push(
-                `/cellars/${context.cellarId}/${context.itemType}/${context.existingItemId}`,
-              );
+              // Redirect to cellar item page if added to cellar, otherwise item page
+              if (context.cellarItemId && context.cellarId) {
+                context.router.push(
+                  `/cellars/${context.cellarId}/${context.itemType}/${context.cellarItemId}`,
+                );
+              } else {
+                context.router.push(`/${context.itemType}/${context.existingItemId}`);
+              }
             },
             target: "done",
           },

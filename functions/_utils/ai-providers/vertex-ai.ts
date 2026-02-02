@@ -153,6 +153,9 @@ function convertJsonSchemaToVertexSchema(jsonSchema: unknown): unknown {
 
 export class VertexAIProvider implements AIProvider {
   private ai: GoogleGenAI;
+  private projectId: string;
+  private location: string;
+  private credentials: Record<string, unknown>;
   // Valid Vertex AI Gemini model names
   // See: https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-flash
   // Note: Gemini 3 models require global endpoint and support thinking_level parameter
@@ -237,6 +240,11 @@ export class VertexAIProvider implements AIProvider {
           // For now, we'll rely on the credentials being properly set up in the environment
         }
       }
+
+      // Store config for REST API calls (needed for multimodal embeddings)
+      this.projectId = config.projectId;
+      this.location = config.location;
+      this.credentials = config.credentials;
 
       this.ai = new GoogleGenAI({
         vertexai: true,
@@ -396,24 +404,56 @@ export class VertexAIProvider implements AIProvider {
           },
         };
       } else if (request.type === "image" && Buffer.isBuffer(request.content)) {
-        // Multimodal embeddings (image) with Vertex AI
-        const response = await this.ai.models.embedContent({
-          model: "multimodalembedding@001", // Vertex AI multimodal embedding model
-          contents: [
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: request.content.toString("base64"),
+        // Multimodal embeddings (image) with Vertex AI REST API
+        // The @google/genai SDK doesn't support multimodalembedding@001, so we use REST API directly
+        // Note: multimodalembedding@001 is only available in specific regions, not "global"
+        // Supported regions: us-central1, europe-west2, asia-northeast3
+        const embeddingLocation =
+          this.location === "global" ? "us-central1" : this.location;
+        const accessToken = await this.getAccessToken();
+        const endpoint = `https://${embeddingLocation}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${embeddingLocation}/publishers/google/models/multimodalembedding@001:predict`;
+
+        const imageBase64 = request.content.toString("base64");
+        console.log(
+          `[VertexAI] Calling multimodal embeddings REST API, image size: ${imageBase64.length} chars`,
+        );
+
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            instances: [
+              {
+                image: {
+                  bytesBase64Encoded: imageBase64,
+                },
               },
-            },
-          ],
+            ],
+          }),
         });
 
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(
+            `Multimodal embedding API error (${response.status}): ${errorText}`,
+          );
+        }
+
+        const result = (await response.json()) as {
+          predictions?: Array<{
+            imageEmbedding?: number[];
+          }>;
+        };
+        const embedding = result.predictions?.[0]?.imageEmbedding || [];
+
         return {
-          embeddings: response.embeddings?.[0]?.values || [],
+          embeddings: embedding,
           metadata: {
             model: "multimodalembedding@001",
-            dimensions: response.embeddings?.[0]?.values?.length || 1408, // Default multimodal dimension
+            dimensions: embedding.length || 1408,
             provider: "vertex-ai",
           },
         };
@@ -434,5 +474,73 @@ export class VertexAIProvider implements AIProvider {
 
   getAvailableQualities(): ModelQuality[] {
     return ["low", "medium", "high"];
+  }
+
+  /**
+   * Get an access token for Google Cloud APIs using service account credentials
+   * Uses JWT assertion to exchange for an access token
+   */
+  private async getAccessToken(): Promise<string> {
+    const clientEmail = this.credentials.client_email as string;
+    const privateKey = this.credentials.private_key as string;
+
+    // Create JWT header and payload
+    const header = {
+      alg: "RS256",
+      typ: "JWT",
+    };
+
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      iss: clientEmail,
+      scope: "https://www.googleapis.com/auth/cloud-platform",
+      aud: "https://oauth2.googleapis.com/token",
+      iat: now,
+      exp: now + 3600, // 1 hour expiration
+    };
+
+    // Base64url encode header and payload
+    const base64UrlEncode = (obj: object) =>
+      Buffer.from(JSON.stringify(obj))
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+    const headerEncoded = base64UrlEncode(header);
+    const payloadEncoded = base64UrlEncode(payload);
+    const signatureInput = `${headerEncoded}.${payloadEncoded}`;
+
+    // Sign with private key using Node.js crypto
+    const crypto = await import("crypto");
+    const sign = crypto.createSign("RSA-SHA256");
+    sign.update(signatureInput);
+    const signature = sign
+      .sign(privateKey, "base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    const jwt = `${signatureInput}.${signature}`;
+
+    // Exchange JWT for access token
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      throw new Error(`Failed to get access token: ${errorText}`);
+    }
+
+    const tokenData = (await tokenResponse.json()) as { access_token: string };
+    return tokenData.access_token;
   }
 }

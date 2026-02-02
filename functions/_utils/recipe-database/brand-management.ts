@@ -17,7 +17,6 @@ import {
 import {
   CreateBrandMutation,
   CreateBrandWithDetailsMutation,
-  FindBrandMatchQuery,
   FindBrandQuery,
   LinkItemToBrandMutation,
   SearchBrandsBySimilarityQuery,

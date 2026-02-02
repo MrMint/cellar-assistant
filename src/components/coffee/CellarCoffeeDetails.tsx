@@ -8,6 +8,7 @@ import { Grid, Stack } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
+import { ItemBrands } from "@/components/item/ItemBrands";
 import { ItemCheckIns } from "@/components/item/ItemCheckIns";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImageWithCaptureClient } from "@/components/item/ItemImageWithCaptureClient";
@@ -23,6 +24,7 @@ import {
   type CellarCoffeeDetailsFragment,
   CellarCoffeeItemFragment,
   CoffeeCoreFragment,
+  CoffeeRelationshipsFragment,
   CoffeeReviewsFragment,
   CoffeeUserDataFragment,
   UserWithFriendsFragment,
@@ -64,6 +66,10 @@ export function CellarCoffeeDetails({
     coffeeData.coffee,
   );
   const coffeeReviews = readFragment(CoffeeReviewsFragment, coffeeData.coffee);
+  const coffeeRelationships = readFragment(
+    CoffeeRelationshipsFragment,
+    coffeeData.coffee,
+  );
 
   // Null safety checks
   if (!coffeeCore || !coffeeUserData || !coffeeReviews) {
@@ -126,6 +132,13 @@ export function CellarCoffeeDetails({
                 emptied={parseDate(itemData?.empty_at)}
               />
               <ItemShare itemId={coffeeCore?.id} itemType={"COFFEE"} />
+              {coffeeRelationships?.brands &&
+                coffeeRelationships.brands.length > 0 && (
+                  <ItemBrands
+                    brands={coffeeRelationships.brands}
+                    title="Roasters"
+                  />
+                )}
             </Stack>
           </Grid>
           <Grid xs={12} sm={12} lg={6}>

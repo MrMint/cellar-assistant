@@ -31,6 +31,9 @@ const getDefaultsQuery = graphql(`
       vintage
       style
       confidence
+      brand_id
+      brand_name
+      is_new_brand
     }
   }
 `);
@@ -77,6 +80,9 @@ export const fetchDefaults = fromPromise(
           : undefined,
         special_designation: wine.special_designation,
         vineyard_designation: wine.vineyard_designation,
+        brand_id: wine.brand_id,
+        brand_name: wine.brand_name,
+        is_new_brand: wine.is_new_brand,
       },
       itemOnboardingId: result.data.wine_defaults.item_onboarding_id,
       confidence: result.data.wine_defaults.confidence ?? 0,

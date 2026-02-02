@@ -48,28 +48,6 @@ export const SearchBrandsBySimilarityQuery = graphql(`
   }
 `);
 
-/**
- * Find the best matching brand using exact or similarity match
- * Returns a single best match or empty if no match above threshold
- */
-export const FindBrandMatchQuery = graphql(`
-  query FindBrandMatch($search_term: String!, $similarity_threshold: float8) {
-    findBrandMatch(
-      args: {
-        search_term: $search_term
-        similarity_threshold: $similarity_threshold
-      }
-    ) {
-      id
-      name
-      description
-      brand_type
-      similarity_score
-      is_exact_match
-    }
-  }
-`);
-
 export const CreateBrandMutation = graphql(`
   mutation CreateBrand(
     $name: String!

@@ -3,6 +3,7 @@ import { formatCountry, formatEnum } from "@cellar-assistant/shared/utility";
 import { Grid, Stack } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { isNil, nth } from "ramda";
+import { ItemBrands } from "@/components/item/ItemBrands";
 import { ItemCellars } from "@/components/item/ItemCellars";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemHeaderServer } from "@/components/item/ItemHeaderServer";
@@ -16,6 +17,7 @@ import {
   CoffeeCoreFragment,
   type CoffeeDetailsFragment,
   CoffeeImagesFragment,
+  CoffeeRelationshipsFragment,
   CoffeeReviewsFragment,
   CoffeeUserDataFragment,
 } from "./fragments";
@@ -37,6 +39,7 @@ export function CoffeeDetails({ coffee, cellars, itemId }: CoffeeDetailsProps) {
   const userData = readFragment(CoffeeUserDataFragment, coffee);
   const reviews = readFragment(CoffeeReviewsFragment, coffee);
   const cellarItems = readFragment(CoffeeCellarsFragment, coffee);
+  const relationships = readFragment(CoffeeRelationshipsFragment, coffee);
 
   const displayImage = nth(0, imageData.item_images ?? []);
 
@@ -81,6 +84,9 @@ export function CoffeeDetails({ coffee, cellars, itemId }: CoffeeDetailsProps) {
                   co_owners: x.cellar.co_owners.map((y) => y.user),
                 }))}
               />
+              {relationships?.brands && relationships.brands.length > 0 && (
+                <ItemBrands brands={relationships.brands} title="Roasters" />
+              )}
             </Stack>
           </Grid>
           <Grid xs={12} sm={12} lg={6}>

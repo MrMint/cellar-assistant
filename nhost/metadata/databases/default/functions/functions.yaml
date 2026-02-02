@@ -1,3 +1,1 @@
-- "!include public_find_brand_match.yaml"
-- "!include public_search_brands_by_similarity.yaml"
 - "!include public_search_places_adaptive_cluster.yaml"

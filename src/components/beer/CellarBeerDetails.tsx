@@ -8,6 +8,7 @@ import { Grid, Stack } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
+import { ItemBrands } from "@/components/item/ItemBrands";
 import { ItemCheckIns } from "@/components/item/ItemCheckIns";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImageWithCaptureClient } from "@/components/item/ItemImageWithCaptureClient";
@@ -19,6 +20,7 @@ import beer1 from "@/images/beer1.png";
 import { formatAsPercentage, formatVintage, parseDate } from "@/utilities";
 import {
   BeerCoreFragment,
+  BeerRelationshipsFragment,
   BeerReviewsFragment,
   BeerUserDataFragment,
   CellarBeerCheckInsFragment,
@@ -61,6 +63,10 @@ export function CellarBeerDetails({
   const beerCore = readFragment(BeerCoreFragment, beerData.beer);
   const beerUserData = readFragment(BeerUserDataFragment, beerData.beer);
   const beerReviews = readFragment(BeerReviewsFragment, beerData.beer);
+  const beerRelationships = readFragment(
+    BeerRelationshipsFragment,
+    beerData.beer,
+  );
 
   // Null safety checks
   if (!beerCore || !beerUserData || !beerReviews) {
@@ -129,6 +135,13 @@ export function CellarBeerDetails({
             <Stack spacing={2}>
               <AddReview beerId={beerCore?.id} />
               <ItemReviews reviews={beerReviews?.reviews || []} />
+              {beerRelationships?.brands &&
+                beerRelationships.brands.length > 0 && (
+                  <ItemBrands
+                    brands={beerRelationships.brands}
+                    title="Beer Brands"
+                  />
+                )}
             </Stack>
           </Grid>
         </Grid>

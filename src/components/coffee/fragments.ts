@@ -212,10 +212,16 @@ export const CellarCoffeeDataFragment = graphql(
       ...CoffeeCore
       ...CoffeeUserData
       ...CoffeeReviews
+      ...CoffeeRelationships
     }
   }
 `,
-  [CoffeeCoreFragment, CoffeeUserDataFragment, CoffeeReviewsFragment],
+  [
+    CoffeeCoreFragment,
+    CoffeeUserDataFragment,
+    CoffeeReviewsFragment,
+    CoffeeRelationshipsFragment,
+  ],
 );
 
 /**
