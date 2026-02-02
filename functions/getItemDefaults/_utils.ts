@@ -215,10 +215,20 @@ async function fetchEnumValues(enumType: string): Promise<string[]> {
   }
 }
 
-export type ItemType = "BEER" | "WINE" | "SPIRIT" | "COFFEE";
+export type ItemType = "BEER" | "WINE" | "SPIRIT" | "COFFEE" | "SAKE";
+
+// Common brand fields extracted by AI for all item types
+export interface AIBrandFields {
+  brand_name?: string;
+  brand_description?: string;
+  brand_region?: string;
+  brand_country?: string;
+  brand_website?: string;
+  parent_brand_name?: string;
+}
 
 // Typed AI prediction data based on JSON schemas
-export interface BeerAIDefaults {
+export interface BeerAIDefaults extends AIBrandFields {
   name: string;
   style?: string;
   vintage?: string;
@@ -230,7 +240,7 @@ export interface BeerAIDefaults {
   brewery?: string;
 }
 
-export interface WineAIDefaults {
+export interface WineAIDefaults extends AIBrandFields {
   name: string;
   vintage?: string;
   variety?: string;
@@ -245,7 +255,7 @@ export interface WineAIDefaults {
   vineyard_designation?: string;
 }
 
-export interface SpiritAIDefaults {
+export interface SpiritAIDefaults extends AIBrandFields {
   name: string;
   type?: string;
   style?: string;
@@ -257,7 +267,7 @@ export interface SpiritAIDefaults {
   distillery?: string;
 }
 
-export interface CoffeeAIDefaults {
+export interface CoffeeAIDefaults extends AIBrandFields {
   name: string;
   description: string;
   roast_level?: string;
@@ -360,12 +370,20 @@ export function sanitizeAIResponse(
     "roaster",
     "special_designation",
     "vineyard_designation",
+    // Brand fields
+    "brand_name",
+    "brand_description",
+    "brand_region",
+    "brand_country",
+    "brand_website",
+    "parent_brand_name",
   ];
 
-  // Get the appropriate enum list for country and style fields
+  // Get the appropriate enum list for country, style, and other enum fields
   const getEnumValues = (field: string): string[] => {
     switch (field) {
       case "country":
+      case "brand_country":
         return enumValues.countries;
       case "style":
         return itemType === "BEER"

@@ -38,6 +38,10 @@ type SharedFields = {
   barcode_type?: string;
   country?: Country_Enum;
   variety?: Wine_Variety_Enum;
+  // Brand fields from AI detection
+  brand_id?: string;
+  brand_name?: string;
+  is_new_brand?: boolean;
 };
 
 type IWineFormInput = {

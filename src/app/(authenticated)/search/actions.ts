@@ -54,9 +54,47 @@ const textSearchQuery = graphql(
   ],
 );
 
+const imageSearchQuery = graphql(
+  `
+    query ImageSearchQuery($image: String!, $userId: uuid!) {
+      image_search(
+        args: { image: $image }
+        where: { distance: { _lte: 0.3 } }
+        order_by: { distance: asc }
+        limit: 10
+      ) {
+        beer {
+          ...beerItemCardFragment
+        }
+        wine {
+          ...wineItemCardFragment
+        }
+        spirit {
+          ...spiritItemCardFragment
+        }
+        coffee {
+          ...coffeeItemCardFragment
+        }
+        sake {
+          ...sakeItemCardFragment
+        }
+      }
+    }
+  `,
+  [
+    beerItemCardFragment,
+    wineItemCardFragment,
+    spiritItemCardFragment,
+    coffeeItemCardFragment,
+    sakeItemCardFragment,
+  ],
+);
+
 // Type definitions using gql.tada for full type safety
 type TextSearchResult = ResultOf<typeof textSearchQuery>;
 type TextSearchItem = TextSearchResult["text_search"][number];
+type ImageSearchResult = ResultOf<typeof imageSearchQuery>;
+type ImageSearchItem = ImageSearchResult["image_search"][number];
 
 // Extract item data with proper typing
 function extractItemFromSearchResult(searchResult: TextSearchItem) {
@@ -138,11 +176,56 @@ export async function searchByBarcode(
 }
 
 export async function searchByImage(
-  _imageDataUrl: string,
+  imageDataUrl: string,
 ): Promise<BarcodeSearchResult[]> {
-  // This would need to be implemented with the actual image search logic
-  // For now, returning empty array as placeholder
-  return [];
+  // Ensure user is authenticated first
+  const userId = await getServerUserId();
+
+  if (isNil(imageDataUrl) || imageDataUrl.trim() === "") return [];
+
+  // Get vector representation of the image
+  const vectorData = await serverQuery(getSearchVectorQuery, {
+    image: imageDataUrl,
+  });
+
+  if (isNil(vectorData?.create_search_vector)) {
+    return [];
+  }
+
+  // Execute vector similarity search
+  const searchData = await serverQuery(imageSearchQuery, {
+    image: JSON.stringify(vectorData.create_search_vector),
+    userId,
+  });
+
+  return searchData.image_search
+    .map((searchResult: ImageSearchItem) => {
+      const extracted = extractItemFromSearchResult(
+        searchResult as unknown as TextSearchItem,
+      );
+
+      if (!extracted) return undefined;
+
+      const { item } = extracted;
+
+      return {
+        id: item.id,
+        type: getItemType(
+          item.__typename as "beers" | "wines" | "spirits" | "coffees",
+        ),
+        itemId: item.id,
+        name: item.name,
+        vintage: "vintage" in item ? formatVintage(item.vintage) : undefined,
+        displayImageId: item.item_images?.[0]?.file_id,
+        placeholder: item.item_images?.[0]?.placeholder,
+        score: item.reviews_aggregate?.aggregate?.avg?.score,
+        reviewCount: item.reviews_aggregate?.aggregate?.count,
+        favoriteCount: item.item_favorites_aggregate?.aggregate?.count,
+        favoriteId: item.item_favorites?.[0]?.id,
+        reviewed: defaultTo(0, item.user_reviews?.aggregate?.count) > 0,
+      } satisfies BarcodeSearchResult;
+    })
+    .filter(isNotNil);
 }
 
 export async function searchAction(formData: FormData) {

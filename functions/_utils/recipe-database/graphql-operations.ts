@@ -21,6 +21,55 @@ export const FindBrandQuery = graphql(`
   }
 `);
 
+/**
+ * Search for brands using PostgreSQL trigram similarity (pg_trgm)
+ * Uses database-side similarity matching for better performance
+ * Returns brands with similarity score above threshold
+ */
+export const SearchBrandsBySimilarityQuery = graphql(`
+  query SearchBrandsBySimilarity(
+    $search_term: String!
+    $similarity_threshold: float8
+    $max_results: Int
+  ) {
+    searchBrandsBySimilarity(
+      args: {
+        search_term: $search_term
+        similarity_threshold: $similarity_threshold
+        max_results: $max_results
+      }
+    ) {
+      id
+      name
+      description
+      brand_type
+      similarity_score
+    }
+  }
+`);
+
+/**
+ * Find the best matching brand using exact or similarity match
+ * Returns a single best match or empty if no match above threshold
+ */
+export const FindBrandMatchQuery = graphql(`
+  query FindBrandMatch($search_term: String!, $similarity_threshold: float8) {
+    findBrandMatch(
+      args: {
+        search_term: $search_term
+        similarity_threshold: $similarity_threshold
+      }
+    ) {
+      id
+      name
+      description
+      brand_type
+      similarity_score
+      is_exact_match
+    }
+  }
+`);
+
 export const CreateBrandMutation = graphql(`
   mutation CreateBrand(
     $name: String!
@@ -34,6 +83,30 @@ export const CreateBrandMutation = graphql(`
     }) {
       id
       name
+    }
+  }
+`);
+
+/**
+ * Create a brand with full details including optional parent brand
+ */
+export const CreateBrandWithDetailsMutation = graphql(`
+  mutation CreateBrandWithDetails(
+    $name: String!
+    $brand_type: brand_types_enum
+    $description: String
+    $parent_brand_id: uuid
+  ) {
+    insert_brands_one(object: {
+      name: $name
+      brand_type: $brand_type
+      description: $description
+      parent_brand_id: $parent_brand_id
+    }) {
+      id
+      name
+      brand_type
+      description
     }
   }
 `);

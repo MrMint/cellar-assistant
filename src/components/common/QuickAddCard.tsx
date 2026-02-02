@@ -26,6 +26,10 @@ export type QuickAddItemDefaults = {
   type?: string;
   roast_level?: string;
   category?: string;
+  // Brand fields
+  brand_id?: string;
+  brand_name?: string;
+  is_new_brand?: boolean;
 };
 
 type QuickAddCardProps = {
@@ -167,6 +171,20 @@ export const QuickAddCard = ({
               {confidencePercent}% match
             </Chip>
           </Stack>
+
+          {/* Brand info */}
+          {defaults.brand_name && (
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography level="body-md" fontWeight="lg" color="primary">
+                {defaults.brand_name}
+              </Typography>
+              {defaults.is_new_brand && (
+                <Chip size="sm" color="success" variant="soft">
+                  New
+                </Chip>
+              )}
+            </Stack>
+          )}
 
           {/* Item summary */}
           <Typography level="body-sm" color="neutral">

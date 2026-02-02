@@ -38,6 +38,9 @@ type SharedFields = {
   process?: Coffee_Process_Enum;
   cultivar?: Coffee_Cultivar_Enum;
   country?: Country_Enum;
+  brand_id?: string;
+  brand_name?: string;
+  is_new_brand?: boolean;
 };
 
 type ICoffeeFormInput = {

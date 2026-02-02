@@ -17,7 +17,7 @@ export const CONFIDENCE_THRESHOLDS = {
 } as const;
 
 /** Default auto-confirm delay in seconds for quick add */
-export const QUICK_ADD_AUTO_CONFIRM_DELAY = 3;
+export const QUICK_ADD_AUTO_CONFIRM_DELAY = 15;
 
 export type Barcode = {
   text: string;

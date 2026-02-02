@@ -26,6 +26,8 @@ export const OnboardingMachine = createMachine(
         cellarId: string;
         router: AppRouterInstance;
         userId: string;
+        /** Item type for routing (wines, beers, spirits, coffees, sakes) */
+        itemType: string;
       };
       context: {
         userId: string;
@@ -46,6 +48,8 @@ export const OnboardingMachine = createMachine(
         confidence?: number;
         /** Whether quick add mode is enabled for this session */
         quickAddEnabled: boolean;
+        /** Item type for routing (wines, beers, spirits, coffees, sakes) */
+        itemType: string;
       };
       events:
         | {
@@ -89,6 +93,7 @@ export const OnboardingMachine = createMachine(
       router: input.router,
       retryCount: 0,
       quickAddEnabled: true, // Enable quick add by default
+      itemType: input.itemType,
     }),
     states: {
       wizard: {
@@ -252,7 +257,10 @@ export const OnboardingMachine = createMachine(
           },
           DONE: {
             actions: ({ context }) => {
-              context.router.push(`/cellars/${context.cellarId}/items`);
+              // Redirect to the item detail page instead of the cellar items list
+              context.router.push(
+                `/cellars/${context.cellarId}/${context.itemType}/${context.existingItemId}`,
+              );
             },
             target: "done",
           },

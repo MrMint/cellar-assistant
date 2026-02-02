@@ -42,6 +42,9 @@ type SharedFields = {
   type?: Sake_Type_Enum;
   serving_temperature?: Sake_Serving_Temperature_Enum;
   rice_variety?: Sake_Rice_Variety_Enum;
+  brand_id?: string;
+  brand_name?: string;
+  is_new_brand?: boolean;
 };
 
 type ISakeFormInput = {

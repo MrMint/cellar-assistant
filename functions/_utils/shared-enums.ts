@@ -20,6 +20,7 @@ export const BRAND_TYPES = {
   DISTILLERY: "distillery",
   WINERY: "winery",
   ROASTERY: "roastery",
+  KURA: "kura", // Japanese sake brewery
   RESTAURANT_CHAIN: "restaurant_chain",
   MANUFACTURER: "manufacturer",
   OTHER: "other",

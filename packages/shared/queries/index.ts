@@ -182,6 +182,43 @@ export const deleteFavoriteMutation = graphql(`
 `);
 
 // =============================================================================
+// Brand Linking
+// =============================================================================
+
+/**
+ * Link an item to a brand via the item_brands join table
+ * Supports all item types (wine, beer, spirit, coffee, sake)
+ * Use on_conflict to update is_primary if relationship already exists
+ */
+export const linkItemToBrandMutation = graphql(`
+  mutation LinkItemToBrand(
+    $wine_id: uuid
+    $beer_id: uuid
+    $spirit_id: uuid
+    $coffee_id: uuid
+    $sake_id: uuid
+    $brand_id: uuid!
+    $is_primary: Boolean
+  ) {
+    insert_item_brands_one(
+      object: {
+        wine_id: $wine_id
+        beer_id: $beer_id
+        spirit_id: $spirit_id
+        coffee_id: $coffee_id
+        sake_id: $sake_id
+        brand_id: $brand_id
+        is_primary: $is_primary
+      }
+    ) {
+      id
+      brand_id
+      is_primary
+    }
+  }
+`);
+
+// =============================================================================
 // Input Types extracted from mutations using VariablesOf
 // =============================================================================
 

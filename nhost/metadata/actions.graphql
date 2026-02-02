@@ -115,6 +115,9 @@ type wine_defaults_result {
   vintage: date
   item_onboarding_id: String!
   confidence: Float
+  brand_id: String
+  brand_name: String
+  is_new_brand: Boolean
 }
 
 type beer_defaults_result {
@@ -129,6 +132,9 @@ type beer_defaults_result {
   international_bitterness_unit: Int
   item_onboarding_id: String!
   confidence: Float
+  brand_id: String
+  brand_name: String
+  is_new_brand: Boolean
 }
 
 type spirit_defaults_result {
@@ -144,6 +150,9 @@ type spirit_defaults_result {
   distillery: String
   item_onboarding_id: String!
   confidence: Float
+  brand_id: String
+  brand_name: String
+  is_new_brand: Boolean
 }
 
 type item_image_upload_result {
@@ -162,6 +171,9 @@ type coffee_defaults_result {
   roast_level: String
   item_onboarding_id: String!
   confidence: Float
+  brand_id: String
+  brand_name: String
+  is_new_brand: Boolean
 }
 
 type sake_defaults_result {
@@ -177,6 +189,9 @@ type sake_defaults_result {
   alcohol_content_percentage: numeric
   item_onboarding_id: String!
   confidence: Float
+  brand_id: String
+  brand_name: String
+  is_new_brand: Boolean
 }
 
 type search_nearby_places_result {

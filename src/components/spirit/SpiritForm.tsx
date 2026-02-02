@@ -34,6 +34,9 @@ type SharedFields = {
   barcode_type?: string;
   style?: string;
   country?: Country_Enum;
+  brand_id?: string;
+  brand_name?: string;
+  is_new_brand?: boolean;
 };
 
 type ISpiritFormInput = {
