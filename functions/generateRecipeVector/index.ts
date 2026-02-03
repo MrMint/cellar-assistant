@@ -159,6 +159,7 @@ async function processRecipeVectorGeneration(
   const embeddingResponse = await aiProvider.generateEmbeddings?.({
     content: embeddingText,
     type: "text",
+    taskType: "RETRIEVAL_DOCUMENT", // Optimized for being searched
   });
   endEmbeddingTimer();
 

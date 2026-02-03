@@ -83,6 +83,7 @@ export default async function semanticRecipeSearch(
         const result = await aiProvider.generateEmbeddings({
           content: query.trim(),
           type: "text",
+          taskType: "RETRIEVAL_QUERY", // Optimized for searching
         });
         return result?.embeddings || [];
       },

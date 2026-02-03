@@ -386,20 +386,31 @@ export class VertexAIProvider implements AIProvider {
       console.log(`Vertex AI generateEmbeddings with type: ${request.type}`);
 
       if (request.type === "text" && typeof request.content === "string") {
-        // Text embeddings with Vertex AI - use textembedding-gecko@003 for 768 dimensions
-        const embeddingModel = request.model || "textembedding-gecko@003";
+        // Text embeddings with Vertex AI - use gemini-embedding-001 for state-of-the-art performance
+        // gemini-embedding-001 supports Matryoshka Representation Learning (MRL) for efficient dimension reduction
+        // At 768 dimensions, there's only 0.26% quality loss vs full 3072 dimensions
+        const embeddingModel = request.model || "gemini-embedding-001";
+        const dimensions = request.dimensions || 768;
+        const taskType = request.taskType || "RETRIEVAL_DOCUMENT";
+
+        console.log(
+          `[VertexAI] Generating text embeddings with model: ${embeddingModel}, dimensions: ${dimensions}, taskType: ${taskType}`,
+        );
 
         const response = await this.ai.models.embedContent({
           model: embeddingModel,
           contents: request.content,
+          config: {
+            outputDimensionality: dimensions,
+            taskType: taskType,
+          },
         });
 
         return {
           embeddings: response.embeddings?.[0]?.values || [],
           metadata: {
             model: embeddingModel,
-            dimensions:
-              response.embeddings?.[0]?.values?.length || request.dimensions,
+            dimensions: response.embeddings?.[0]?.values?.length || dimensions,
             provider: "vertex-ai",
           },
         };
