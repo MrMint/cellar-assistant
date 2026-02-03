@@ -13,7 +13,8 @@ export function createPlaceDataService(): PlaceDataService {
   const hasCredentials = hasFileCredentials || hasDatabaseCredentials;
 
   const isLocalDevelopment =
-    process.env.NODE_ENV === "development" || process.env.NHOST_LOCAL === "true";
+    process.env.NODE_ENV === "development" ||
+    process.env.NHOST_LOCAL === "true";
 
   // Use mock service only for local development without credentials
   if (isLocalDevelopment && !hasCredentials) {

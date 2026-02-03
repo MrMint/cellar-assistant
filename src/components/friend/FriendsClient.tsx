@@ -114,23 +114,25 @@ export const FriendsClient = ({ initialData }: FriendsClientProps) => {
                 </ListItemContent>
               </ListItem>
             )}
-            {user?.friends.map((x) => x.friend).map((x) => (
-              <ListItem variant="outlined" key={x.id}>
-                <Avatar src={x.avatarUrl ?? undefined} />
-                <ListItemContent>
-                  <Typography level="title-md">{x.displayName}</Typography>
-                </ListItemContent>
-                <Button
-                  startDecorator={<MdDelete />}
-                  color="danger"
-                  variant="outlined"
-                  loading={pendingIds.has(x.id)}
-                  onClick={() => handleDeleteFriend(x.id)}
-                >
-                  Remove
-                </Button>
-              </ListItem>
-            ))}
+            {user?.friends
+              .map((x) => x.friend)
+              .map((x) => (
+                <ListItem variant="outlined" key={x.id}>
+                  <Avatar src={x.avatarUrl ?? undefined} />
+                  <ListItemContent>
+                    <Typography level="title-md">{x.displayName}</Typography>
+                  </ListItemContent>
+                  <Button
+                    startDecorator={<MdDelete />}
+                    color="danger"
+                    variant="outlined"
+                    loading={pendingIds.has(x.id)}
+                    onClick={() => handleDeleteFriend(x.id)}
+                  >
+                    Remove
+                  </Button>
+                </ListItem>
+              ))}
           </List>
         </Card>
       </Grid>

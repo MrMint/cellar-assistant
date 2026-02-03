@@ -90,7 +90,10 @@ export function SpiritDetails({ spirit, cellars, itemId }: SpiritDetailsProps) {
                 }))}
               />
               {relationships?.brands && relationships.brands.length > 0 && (
-                <ItemBrands brands={relationships.brands} title="Distilleries" />
+                <ItemBrands
+                  brands={relationships.brands}
+                  title="Distilleries"
+                />
               )}
             </Stack>
           </Grid>

@@ -1,9 +1,6 @@
 import { BigQuery } from "@google-cloud/bigquery";
 import { graphql } from "@cellar-assistant/shared/gql/graphql";
-import {
-  functionQuery,
-  getAdminAuthHeaders,
-} from "../../_utils/urql-client";
+import { functionQuery, getAdminAuthHeaders } from "../../_utils/urql-client";
 import { hasProperty, isRecord } from "../../_utils/types";
 import type { PlaceData, PlaceDataService } from "./_types";
 
@@ -103,7 +100,9 @@ async function getGCPCredentials(): Promise<Record<string, unknown>> {
     }
 
     if (!result.admin_credentials_by_pk.credentials) {
-      throw new Error("Credential record exists but credentials field is empty");
+      throw new Error(
+        "Credential record exists but credentials field is empty",
+      );
     }
 
     const credentials = result.admin_credentials_by_pk.credentials;
@@ -151,8 +150,7 @@ export class BigQueryPlaceDataService implements PlaceDataService {
     const credentials = await getGCPCredentials();
 
     const projectId =
-      process.env.GOOGLE_CLOUD_PROJECT_ID ||
-      (credentials.project_id as string);
+      process.env.GOOGLE_CLOUD_PROJECT_ID || (credentials.project_id as string);
 
     console.log(`🔐 [BigQuery] Initializing client for project: ${projectId}`);
 

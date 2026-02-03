@@ -63,6 +63,9 @@ export const CellarInfoFragment = graphql(`
       coffees: aggregate {
         count(columns: [coffee_id])
       }
+      sakes: aggregate {
+        count(columns: [sake_id])
+      }
     }
   }
 `);

@@ -441,8 +441,9 @@ async function finalizeResults({
       brandResult.id;
     (results as GetItemDefaultsResult & { brand_name: string }).brand_name =
       brandResult.name;
-    (results as GetItemDefaultsResult & { is_new_brand: boolean }).is_new_brand =
-      brandResult.isNew;
+    (
+      results as GetItemDefaultsResult & { is_new_brand: boolean }
+    ).is_new_brand = brandResult.isNew;
   }
 
   // Save to database
@@ -492,7 +493,8 @@ async function processBrandFromAIDefaults(
   // Build brand details for creation if needed
   const details: BrandDetails = {
     name: brandName,
-    description: (aiDefaults as { brand_description?: string }).brand_description,
+    description: (aiDefaults as { brand_description?: string })
+      .brand_description,
     brandType,
     region: (aiDefaults as { brand_region?: string }).brand_region,
     country: (aiDefaults as { brand_country?: string }).brand_country,

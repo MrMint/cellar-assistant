@@ -281,7 +281,9 @@ export async function findOrCreateBrandWithDetails(
   }
 
   // Step 3: No match found - create new brand with full details
-  console.log(`🆕 [findOrCreateBrandWithDetails] Creating new brand: "${trimmedName}"`);
+  console.log(
+    `🆕 [findOrCreateBrandWithDetails] Creating new brand: "${trimmedName}"`,
+  );
 
   // Build description from AI-extracted details
   let description = details.description || "";

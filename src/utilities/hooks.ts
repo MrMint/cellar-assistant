@@ -115,21 +115,3 @@ export const useReviewersFilterState = () => {
 
   return { reviewers: optimisticReviewers, setReviewers };
 };
-
-export const useSearchFilterState = () => {
-  const router = useRouter();
-  const searchParams = new URLSearchParams(useSearchParams());
-
-  const search = searchParams.get("search") ?? undefined;
-
-  const setSearch = (search: string) => {
-    if (isEmpty(search)) {
-      searchParams.delete("search");
-    } else {
-      searchParams.set("search", search);
-    }
-    router.replace(`?${searchParams}`);
-  };
-
-  return { search, setSearch };
-};
