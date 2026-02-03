@@ -121,7 +121,7 @@ export function FavoritesClient({ userId }: FavoritesClientProps) {
       </Grid>
       {items.map((x) => (
         <Grid
-          ref={scrollId === x.item.id ? scrollTargetRef : undefined}
+          ref={scrollId === x.item.id ? scrollTargetRef : null}
           key={x.item.id}
           xs={6}
           md={4}

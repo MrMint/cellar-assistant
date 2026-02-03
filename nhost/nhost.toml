@@ -63,6 +63,10 @@ version = 20
 version = '0.45.0'
 
 [auth.redirections]
+allowedUrls = [
+"https://cellar-assistant.vercel.app/cellars",
+"https://cellar-assistant.mrmint.dev/cellars"
+]
 clientUrl = 'https://cellar-assistant.vercel.app/cellars'
 
 [auth.signUp]
@@ -180,7 +184,7 @@ capacity = 10
 [provider]
 
 [storage]
-version = '0.10.0'
+version = '0.11.0'
 
 [observability]
 [observability.grafana]
