@@ -2,6 +2,68 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.49.0](https://github.com/MrMint/cellar-assistant/compare/v0.48.9...v0.49.0) (2026-02-03)
+
+
+### Features
+
+* Adds brand detection and linking ([80baad2](https://github.com/MrMint/cellar-assistant/commit/80baad2048df4b29d7f5f232ecb924b46897d2a7))
+* Adds concurrency limiters ([3374f53](https://github.com/MrMint/cellar-assistant/commit/3374f5321c2bebbb303f90fe3e6d49059fbd03aa))
+* Camera improvements ([3a60021](https://github.com/MrMint/cellar-assistant/commit/3a6002113dfa2a6d0f0be72b64d0948da5d677a4))
+* Improves scroll restoration ([374c8dc](https://github.com/MrMint/cellar-assistant/commit/374c8dc9aa8064fcac033fb8c3755dbd5b63a5fe))
+* Major additions ([0674a84](https://github.com/MrMint/cellar-assistant/commit/0674a84d61b93583d776e35abde2b5ce8ab51459))
+* Migrates to gemini 3 models ([4bb690e](https://github.com/MrMint/cellar-assistant/commit/4bb690e4d83b28d21020b0fed2f07866dbff3b5c))
+* Migrates to gemini for text embeddings ([fb7f3c4](https://github.com/MrMint/cellar-assistant/commit/fb7f3c4f8b19243dd85c801d7bb18a77feeda94b))
+* Migrates to server actions for mutations ([ed843c7](https://github.com/MrMint/cellar-assistant/commit/ed843c7787f5d40b32566856d6994c0388804a07))
+
+
+### Bug Fixes
+
+* auth ([1db8fb3](https://github.com/MrMint/cellar-assistant/commit/1db8fb31235fc203788b1f207b91bd3dd653bbf5))
+* Auth ([560c01c](https://github.com/MrMint/cellar-assistant/commit/560c01c5ed86f8c3b0264d01d9150ad57acdd7c0))
+* Bundle shared packages for Nhost functions deployment ([2642f91](https://github.com/MrMint/cellar-assistant/commit/2642f916249a785e6307c657836d4a542070146c))
+* **deps:** update dependency @fontsource/inter to v5.1.1 ([e9d5419](https://github.com/MrMint/cellar-assistant/commit/e9d5419b8dd45b26b8850fa06e0a5e1d0a1a8e37))
+* **deps:** update dependency @fontsource/inter to v5.1.1 ([6c23013](https://github.com/MrMint/cellar-assistant/commit/6c230130609035a66ebc2486d8f0283869e200c6))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.51 ([1c27ce2](https://github.com/MrMint/cellar-assistant/commit/1c27ce2a8d3cacc29b4ca20b42e346cbf924e28d))
+* **deps:** update dependency @mui/joy to v5.0.0-beta.51 ([5a13afb](https://github.com/MrMint/cellar-assistant/commit/5a13afbd2c2d9feec01fddb8efc0113f39fec682))
+* **deps:** update dependency @nhost/nextjs to v2.1.24 ([637e1fa](https://github.com/MrMint/cellar-assistant/commit/637e1fa1c3eff466991ae89e0bb618f909af9306))
+* **deps:** update dependency @nhost/nextjs to v2.1.24 ([6fbf0df](https://github.com/MrMint/cellar-assistant/commit/6fbf0df5264be29d63c5e49563d398948d63a7fa))
+* **deps:** update dependency eslint to v8.57.1 ([43bfd1e](https://github.com/MrMint/cellar-assistant/commit/43bfd1e80b980255a58df168fce9e27ca41e4d06))
+* **deps:** update dependency eslint to v8.57.1 ([8305275](https://github.com/MrMint/cellar-assistant/commit/83052752b46318a4e642255d8221636bb079e764))
+* **deps:** update dependency form-data to v4.0.1 ([4bbd413](https://github.com/MrMint/cellar-assistant/commit/4bbd41303c91331c7411cfeda0ddba0f38007d17))
+* **deps:** update dependency form-data to v4.0.1 ([4dd09de](https://github.com/MrMint/cellar-assistant/commit/4dd09dec1ad5d0b871007b5a1064d6662be5ffca))
+* **deps:** update dependency fuzzball to v2.1.3 ([097d782](https://github.com/MrMint/cellar-assistant/commit/097d7829347aaaa5fc97cb52b239a9023e6bc448))
+* **deps:** update dependency fuzzball to v2.1.3 ([e086c56](https://github.com/MrMint/cellar-assistant/commit/e086c567f6f4340d751f0984277d8f52c6fb2e42))
+* **deps:** update dependency graphql-config to v5.1.3 ([ad02538](https://github.com/MrMint/cellar-assistant/commit/ad025388965faaab6c3d71e53a4103f55b445acc))
+* **deps:** update dependency graphql-config to v5.1.3 ([bb80291](https://github.com/MrMint/cellar-assistant/commit/bb8029179880d58180ebe686ac571b322fc488a8))
+* **deps:** update dependency leaflet to v2.0.0-alpha.1 ([cfcf63e](https://github.com/MrMint/cellar-assistant/commit/cfcf63e5d8aa3c0ec4eb1829a0d1ebbc130c5202))
+* **deps:** update dependency leaflet to v2.0.0-alpha.1 ([ed7c6bf](https://github.com/MrMint/cellar-assistant/commit/ed7c6bf01e69e59e4c4276d77682b3e30a50bc08))
+* **deps:** update dependency next to v14.2.15 [security] ([df4beda](https://github.com/MrMint/cellar-assistant/commit/df4beda72de9c706443ed8b6d9935cf212f66217))
+* **deps:** update dependency next to v14.2.15 [security] ([37f73fe](https://github.com/MrMint/cellar-assistant/commit/37f73fef2628ac810c9953ec2fe1547ddb4b29f9))
+* **deps:** update dependency npm-run-all2 to v6.2.6 ([00c2ed6](https://github.com/MrMint/cellar-assistant/commit/00c2ed67cf9257a8b9be4217fa99fab1d66f67d7))
+* **deps:** update dependency npm-run-all2 to v6.2.6 ([3699a66](https://github.com/MrMint/cellar-assistant/commit/3699a66ba66e1c60638a7ae35726028c879e144d))
+* **deps:** update dependency react-zxing to v2.0.2 ([73ca1be](https://github.com/MrMint/cellar-assistant/commit/73ca1be0688fecf914f4a4a544d7b1f898fa7827))
+* **deps:** update graphqlcodegenerator monorepo ([e1836d0](https://github.com/MrMint/cellar-assistant/commit/e1836d065c9a087c40fad8f3b9235b1254d7c952))
+* **deps:** update graphqlcodegenerator monorepo ([148d701](https://github.com/MrMint/cellar-assistant/commit/148d7016e8fd063b279619842205373c808d114f))
+* **deps:** update node.js to v20.18.1 ([d1f7396](https://github.com/MrMint/cellar-assistant/commit/d1f739602920453eda397e918cfcac6c36b88521))
+* **deps:** update node.js to v20.18.1 ([34205f0](https://github.com/MrMint/cellar-assistant/commit/34205f0a4bf86b6d3e1ba1b7e2a07e9b9aafbd3c))
+* Fix barcode scanner bug ([f5a651d](https://github.com/MrMint/cellar-assistant/commit/f5a651d14ef3c07bf60e7e208416fcd2497c0c4d))
+* Fix brand matching ([accc93b](https://github.com/MrMint/cellar-assistant/commit/accc93b52a3a240c91bc12ef4eed8d48a224014f))
+* Fix error on cellars page ([46f657a](https://github.com/MrMint/cellar-assistant/commit/46f657a1d35a510e5a8137421f3cbc1f3eccc496))
+* Fix SSR link error ([6609b79](https://github.com/MrMint/cellar-assistant/commit/6609b79df35fe254d978dafbfde5f4454502022b))
+* Fixes beer form ([902724c](https://github.com/MrMint/cellar-assistant/commit/902724cc4bd68d802de890f7db1dbf0098f949f6))
+* Fixes big query places query ([18f4b72](https://github.com/MrMint/cellar-assistant/commit/18f4b7292b611e0b90518e386da63967778858fc))
+* Fixes functions packages folder ([b72ef83](https://github.com/MrMint/cellar-assistant/commit/b72ef83db7937b3f5c13c0b46d8a09bf54ead964))
+* Fixes google cred handling for big query ([be0251f](https://github.com/MrMint/cellar-assistant/commit/be0251f5e196439cb6f697d5664ed57f7ef07a41))
+* Fixes postgis install ([2f89f4d](https://github.com/MrMint/cellar-assistant/commit/2f89f4d99d1457694a46cb164215ded93ba1fd26))
+* Fixes redirect on login ([f316326](https://github.com/MrMint/cellar-assistant/commit/f316326449c8782007516e99062f4bd17f346fa8))
+* Fixes refresh places webhook ([57a763f](https://github.com/MrMint/cellar-assistant/commit/57a763fed50a3d03ea1b570129fcbd59c19a1e0e))
+* Fixes vercel corepack build ([c8ea40a](https://github.com/MrMint/cellar-assistant/commit/c8ea40ade0a1b06ffd2a0639c5180b88d8bfbccf))
+* Handle sso refresh ([4f51e8a](https://github.com/MrMint/cellar-assistant/commit/4f51e8abacda05445348982e659cdba8fdca41af))
+* more auth fixes ([65c7739](https://github.com/MrMint/cellar-assistant/commit/65c773948e2b60fc6dbca37457b2c12df0818d64))
+* Remove Next.js dependencies from functions shared package ([135f0e4](https://github.com/MrMint/cellar-assistant/commit/135f0e49e7b16495cf069b159cfb7997c307efe4))
+* sso ([e6df6b0](https://github.com/MrMint/cellar-assistant/commit/e6df6b0d06f0cdb46c64209d97bbd6ccecd7814b))
+
 ## [0.48.9](https://github.com/MrMint/cellar-assistant/compare/v0.48.8...v0.48.9) (2024-09-15)
 
 
