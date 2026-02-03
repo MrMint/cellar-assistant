@@ -229,6 +229,66 @@ export async function createEnumQueryFn() {
 }
 
 /**
+ * Admin query utility for user-agnostic cached operations.
+ * Uses HASURA_ADMIN_SECRET instead of cookies, allowing use inside unstable_cache.
+ *
+ * IMPORTANT: Only use this for operations that don't require user-specific permissions.
+ * The admin secret bypasses RLS, so use carefully.
+ */
+export async function adminQuery<TDocument extends TadaDocumentNode<any, any>>(
+  query: TDocument,
+  variables?: VariablesOf<TDocument>,
+): Promise<ResultOf<TDocument>> {
+  if (!query) {
+    throw new Error("Query document is required");
+  }
+
+  const adminSecret = process.env.HASURA_ADMIN_SECRET;
+  if (!adminSecret) {
+    throw new Error(
+      "HASURA_ADMIN_SECRET is required for admin queries. Add it to your .env.local file.",
+    );
+  }
+
+  const client = getClient();
+
+  try {
+    const result = await client
+      .query(query, variables || {}, {
+        fetchOptions: {
+          headers: {
+            "x-hasura-admin-secret": adminSecret,
+          },
+          cache: "no-store",
+        },
+      })
+      .toPromise();
+
+    if (result.error) {
+      console.error("Admin query error:", result.error);
+
+      const errorMessage =
+        result.error.graphQLErrors?.length > 0
+          ? result.error.graphQLErrors[0].message
+          : result.error.networkError?.message || result.error.message;
+
+      throw new Error(`Admin GraphQL query failed: ${errorMessage}`);
+    }
+
+    if (!result.data) {
+      throw new Error("No data returned from admin query");
+    }
+
+    return result.data as ResultOf<TDocument>;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`Unexpected error during admin query: ${String(error)}`);
+  }
+}
+
+/**
  * Server-side mutation utility with error handling
  * Use this in Server Actions for mutations
  */

@@ -3,7 +3,6 @@ import type {
   ResultOf,
   VariablesOf,
 } from "@cellar-assistant/shared";
-import { getSearchVectorQuery } from "@cellar-assistant/shared/queries";
 import {
   ascend,
   defaultTo,
@@ -16,7 +15,7 @@ import {
   without,
 } from "ramda";
 import type { ItemCardItem } from "@/components/item/ItemCard";
-import { serverQuery } from "@/lib/urql/server";
+import { getCachedSearchVector } from "@/lib/cache";
 import { formatVintage, getItemType } from "@/utilities";
 import type { GetCellarItemsQuery } from "./queries";
 
@@ -35,7 +34,8 @@ export interface CellarItemCounts {
 }
 
 /**
- * Generate search vector from text (server-side)
+ * Generate search vector from text (server-side).
+ * Uses cached embedding generation - same text produces same vector for all users.
  */
 export async function generateSearchVector(
   searchText: string,
@@ -44,15 +44,7 @@ export async function generateSearchVector(
     return undefined;
   }
 
-  const vectorData = await serverQuery(getSearchVectorQuery, {
-    text: searchText.trim(),
-  });
-
-  if (isNil(vectorData?.create_search_vector)) {
-    return undefined;
-  }
-
-  return JSON.stringify(vectorData.create_search_vector);
+  return getCachedSearchVector(searchText);
 }
 
 /**
