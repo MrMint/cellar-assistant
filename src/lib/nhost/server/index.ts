@@ -2,13 +2,32 @@ import { createServerClient, type NhostClient } from "@nhost/nhost-js";
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 
+// Helper to get Nhost service URLs for local development
+// The SDK's fallback URL pattern is broken for local dev (uses local.*.local.nhost.run)
+function getNhostConfig() {
+  const subdomain = process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN || "local";
+  const region = process.env.NEXT_PUBLIC_NHOST_REGION;
+
+  if (!region) {
+    // Local development - provide explicit URLs
+    return {
+      authUrl: `https://${subdomain}.auth.nhost.run/v1`,
+      storageUrl: `https://${subdomain}.storage.nhost.run/v1`,
+      graphqlUrl: `https://${subdomain}.graphql.nhost.run/v1`,
+      functionsUrl: `https://${subdomain}.functions.nhost.run/v1`,
+    };
+  }
+
+  // Production - use subdomain/region
+  return { subdomain, region };
+}
+
 // Create Nhost client for server components
 export async function createNhostClient(): Promise<NhostClient> {
   const cookieStore = await cookies();
 
   return createServerClient({
-    subdomain: process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN!,
-    region: process.env.NEXT_PUBLIC_NHOST_REGION || undefined,
+    ...getNhostConfig(),
     storage: {
       // Server component storage - matches official pattern
       get: () => {
@@ -117,8 +136,7 @@ export async function handleNhostMiddleware(
 
   // Token expires within 60 seconds - try to refresh
   const nhost = createServerClient({
-    subdomain: process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN!,
-    region: process.env.NEXT_PUBLIC_NHOST_REGION || undefined,
+    ...getNhostConfig(),
     storage: {
       get: () => sessionData,
       set: () => {},

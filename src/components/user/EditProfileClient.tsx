@@ -1,6 +1,6 @@
 "use client";
 
-import { type FragmentOf } from "@cellar-assistant/shared";
+import type { FragmentOf } from "@cellar-assistant/shared";
 import {
   Button,
   Card,

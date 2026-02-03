@@ -20,7 +20,7 @@ import {
   Typography,
 } from "@mui/joy";
 import { format, parseISO } from "date-fns";
-import { groupBy, isEmpty, mapObjIndexed, not, values, without } from "ramda";
+import { groupBy, isEmpty, not, without } from "ramda";
 import { useEffect, useState, useTransition } from "react";
 import {
   addBulkCheckInsAction,
@@ -117,33 +117,30 @@ export const ItemCheckIns = ({
         </Stack>
         {not(isEmpty(checkIns)) && (
           <List>
-            {values(
-              mapObjIndexed(
-                (x: CheckIn[], _i, _groups) => (
-                  <>
-                    <ListDivider />
-                    <ListItem key={x[0].id}>
-                      <ListItemContent>
-                        <AvatarGroup>
-                          {x.map((y) => (
-                            <Tooltip key={y.id} title={y.user.displayName}>
-                              <Avatar src={y.user.avatarUrl} />
-                            </Tooltip>
-                          ))}
-                        </AvatarGroup>
-                      </ListItemContent>
-                      <Typography>
-                        {format(parseISO(x[0].createdAt), "MM/dd/yyyy")}
-                      </Typography>
-                    </ListItem>
-                  </>
-                ),
+            {(
+              Object.entries(
                 groupBy(
-                  (x) => format(parseISO(x.createdAt), "yyyy-MM-dd"),
+                  (x: CheckIn) => format(parseISO(x.createdAt), "yyyy-MM-dd"),
                   checkIns,
                 ),
-              ),
-            )}
+              ) as [string, CheckIn[]][]
+            ).flatMap(([dateKey, x]) => [
+              <ListDivider key={`divider-${dateKey}`} />,
+              <ListItem key={dateKey}>
+                <ListItemContent>
+                  <AvatarGroup>
+                    {x.map((y) => (
+                      <Tooltip key={y.id} title={y.user.displayName}>
+                        <Avatar src={y.user.avatarUrl} />
+                      </Tooltip>
+                    ))}
+                  </AvatarGroup>
+                </ListItemContent>
+                <Typography>
+                  {format(parseISO(x[0].createdAt), "MM/dd/yyyy")}
+                </Typography>
+              </ListItem>,
+            ])}
             <ListDivider />
           </List>
         )}

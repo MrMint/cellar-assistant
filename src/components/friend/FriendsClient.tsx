@@ -11,67 +11,93 @@ import {
   ListItemContent,
   Typography,
 } from "@mui/joy";
-import { concat, isNil, without } from "ramda";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { MdDelete } from "react-icons/md";
-import { useClient, useQuery, useSubscription } from "urql";
 import { DebounceInput } from "@/components/common/DebouncedInput";
 import { UserCoreFragment } from "../shared/fragments/user-core";
 import {
-  AcceptFriendRequestMutation,
-  DeleteFriendRequestMutation,
-  GetFriendRequestsSubscription,
-  InsertFriendRequestMutation,
-  RemoveFriendMutation,
-  SearchUsersQuery,
-} from "./fragments";
-
-type AsyncFn = (id: string) => Promise<void>;
+  acceptFriendRequest,
+  type FriendsData,
+  insertFriendRequest,
+  rejectFriendRequest,
+  removeFriend,
+  searchUsers,
+  type SearchUsersData,
+} from "./actions";
 
 interface FriendsClientProps {
-  userId: string;
+  initialData: FriendsData;
 }
 
-export const FriendsClient = ({ userId }: FriendsClientProps) => {
-  if (isNil(userId)) throw new Error("User cannot be null");
-  const client = useClient();
-  const [search, setSearch] = useState("");
-  const [fetching, setFetching] = useState([] as string[]);
-  const [{ data }] = useQuery({
-    query: SearchUsersQuery,
-    variables: { search: `%${search}%`, userId },
-  });
+export const FriendsClient = ({ initialData }: FriendsClientProps) => {
+  const [, startTransition] = useTransition();
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [searchResults, setSearchResults] = useState<SearchUsersData | null>(
+    null,
+  );
+  const [isSearching, setIsSearching] = useState(false);
 
-  const [{ data: friendRequests }] = useSubscription({
-    query: GetFriendRequestsSubscription,
-    variables: { id: userId },
-  });
+  const user = initialData.user;
 
-  const track =
-    <T extends AsyncFn>(call: T): ((id: string) => Promise<void>) =>
-    async (id: string) => {
-      setFetching(concat([id], fetching));
-      await call(id);
-      setFetching(without([id], fetching));
-    };
-
-  const handleAddFriend = track(async (id: string) => {
-    await client.mutation(InsertFriendRequestMutation, {
-      request: { friend_id: id },
+  const withPending = (id: string, action: () => Promise<void>) => {
+    startTransition(async () => {
+      setPendingIds((prev) => new Set(prev).add(id));
+      try {
+        await action();
+        // revalidatePath in server actions triggers refresh automatically
+      } finally {
+        setPendingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
     });
-  });
+  };
 
-  const handleAcceptFriend = track(async (id: string) => {
-    await client.mutation(AcceptFriendRequestMutation, { id });
-  });
+  const handleSearch = async (search: string) => {
+    if (!search.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const results = await searchUsers(search);
+      setSearchResults(results);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
-  const handleRejectFriend = track(async (id: string) => {
-    await client.mutation(DeleteFriendRequestMutation, { id });
-  });
+  const handleAddFriend = (id: string) => {
+    withPending(id, async () => {
+      await insertFriendRequest(id);
+      // Remove the user from search results after sending request
+      setSearchResults((prev) =>
+        prev
+          ? {
+              ...prev,
+              users: prev.users.filter((u) => {
+                const userData = readFragment(UserCoreFragment, u);
+                return userData.id !== id;
+              }),
+            }
+          : null,
+      );
+    });
+  };
 
-  const handleDeleteFriend = track(async (friendId: string) => {
-    await client.mutation(RemoveFriendMutation, { userId, friendId });
-  });
+  const handleAcceptFriend = (id: string) => {
+    withPending(id, () => acceptFriendRequest(id));
+  };
+
+  const handleRejectFriend = (id: string) => {
+    withPending(id, () => rejectFriendRequest(id));
+  };
+
+  const handleDeleteFriend = (friendId: string) => {
+    withPending(friendId, () => removeFriend(friendId));
+  };
 
   return (
     <Grid container spacing={2} justifyContent="center">
@@ -79,25 +105,32 @@ export const FriendsClient = ({ userId }: FriendsClientProps) => {
         <Card>
           <Typography level="title-lg">Friends</Typography>
           <List size="lg">
-            {friendRequests?.user?.friends
-              .map((x) => x.friend)
-              .map((x) => (
-                <ListItem variant="outlined" key={x.id}>
-                  <Avatar src={x.avatarUrl} />
-                  <ListItemContent>
-                    <Typography level="title-md">{x.displayName}</Typography>
-                  </ListItemContent>
-                  <Button
-                    startDecorator={<MdDelete />}
-                    color="danger"
-                    variant="outlined"
-                    loading={fetching.includes(x.id)}
-                    onClick={() => handleDeleteFriend(x.id)}
-                  >
-                    Remove
-                  </Button>
-                </ListItem>
-              ))}
+            {user?.friends.length === 0 && (
+              <ListItem>
+                <ListItemContent>
+                  <Typography level="body-sm" sx={{ color: "neutral.500" }}>
+                    No friends yet. Search for users to add friends.
+                  </Typography>
+                </ListItemContent>
+              </ListItem>
+            )}
+            {user?.friends.map((x) => x.friend).map((x) => (
+              <ListItem variant="outlined" key={x.id}>
+                <Avatar src={x.avatarUrl ?? undefined} />
+                <ListItemContent>
+                  <Typography level="title-md">{x.displayName}</Typography>
+                </ListItemContent>
+                <Button
+                  startDecorator={<MdDelete />}
+                  color="danger"
+                  variant="outlined"
+                  loading={pendingIds.has(x.id)}
+                  onClick={() => handleDeleteFriend(x.id)}
+                >
+                  Remove
+                </Button>
+              </ListItem>
+            ))}
           </List>
         </Card>
       </Grid>
@@ -108,14 +141,14 @@ export const FriendsClient = ({ userId }: FriendsClientProps) => {
             size="lg"
             placeholder="Search for users by name..."
             debounceTimeout={500}
-            handleDebounce={setSearch}
+            handleDebounce={handleSearch}
           />
           <List size="lg">
-            {data?.users.map((user) => {
+            {searchResults?.users.map((user) => {
               const userData = readFragment(UserCoreFragment, user);
               return (
                 <ListItem variant="outlined" key={userData.id}>
-                  <Avatar src={userData.avatarUrl} />
+                  <Avatar src={userData.avatarUrl ?? undefined} />
                   <ListItemContent>
                     <Typography level="title-md">
                       {userData.displayName}
@@ -124,7 +157,7 @@ export const FriendsClient = ({ userId }: FriendsClientProps) => {
                   <Button
                     color="primary"
                     variant="solid"
-                    loading={fetching.includes(userData.id)}
+                    loading={pendingIds.has(userData.id) || isSearching}
                     onClick={() => handleAddFriend(userData.id)}
                   >
                     Request
@@ -139,16 +172,25 @@ export const FriendsClient = ({ userId }: FriendsClientProps) => {
         <Card>
           <Typography level="title-lg">Incoming Requests</Typography>
           <List size="lg">
-            {friendRequests?.user?.incomingFriendRequests.map((x) => (
+            {user?.incomingFriendRequests.length === 0 && (
+              <ListItem>
+                <ListItemContent>
+                  <Typography level="body-sm" sx={{ color: "neutral.500" }}>
+                    No incoming requests.
+                  </Typography>
+                </ListItemContent>
+              </ListItem>
+            )}
+            {user?.incomingFriendRequests.map((x) => (
               <ListItem variant="outlined" key={x.id}>
-                <Avatar src={x.user.avatarUrl} />
+                <Avatar src={x.user.avatarUrl ?? undefined} />
                 <ListItemContent>
                   <Typography level="title-md">{x.user.displayName}</Typography>
                 </ListItemContent>
                 <Button
                   color="danger"
                   variant="solid"
-                  loading={fetching.includes(x.id)}
+                  loading={pendingIds.has(x.id)}
                   onClick={() => handleRejectFriend(x.id)}
                 >
                   Reject
@@ -156,7 +198,7 @@ export const FriendsClient = ({ userId }: FriendsClientProps) => {
                 <Button
                   color="primary"
                   variant="solid"
-                  loading={fetching.includes(x.id)}
+                  loading={pendingIds.has(x.id)}
                   onClick={() => handleAcceptFriend(x.id)}
                 >
                   Accept
@@ -166,20 +208,28 @@ export const FriendsClient = ({ userId }: FriendsClientProps) => {
           </List>
           <Typography level="title-lg">Outgoing Requests</Typography>
           <List size="lg">
-            {friendRequests?.user?.outgoingFriendRequests.map((x) => (
+            {user?.outgoingFriendRequests.length === 0 && (
+              <ListItem>
+                <ListItemContent>
+                  <Typography level="body-sm" sx={{ color: "neutral.500" }}>
+                    No outgoing requests.
+                  </Typography>
+                </ListItemContent>
+              </ListItem>
+            )}
+            {user?.outgoingFriendRequests.map((x) => (
               <ListItem variant="outlined" key={x.id}>
-                <Avatar src={x.friend.avatarUrl} />
+                <Avatar src={x.friend.avatarUrl ?? undefined} />
                 <ListItemContent>
                   <Typography level="title-md">
                     {x.friend.displayName}
                   </Typography>
                 </ListItemContent>
                 <Button
-                  disabled
-                  color="primary"
-                  variant="solid"
-                  loading={fetching.includes(x.id)}
-                  onClick={() => handleAcceptFriend(x.id)}
+                  color="danger"
+                  variant="outlined"
+                  loading={pendingIds.has(x.id)}
+                  onClick={() => handleRejectFriend(x.id)}
                 >
                   Cancel
                 </Button>

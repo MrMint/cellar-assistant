@@ -1,6 +1,6 @@
 "use client";
 
-import { type Permission_Type_Enum } from "@cellar-assistant/shared";
+import type { Permission_Type_Enum } from "@cellar-assistant/shared";
 import {
   Avatar,
   Box,

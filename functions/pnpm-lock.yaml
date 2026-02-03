@@ -24,8 +24,8 @@ importers:
         specifier: 1.39.0
         version: 1.39.0
       '@nhost/nhost-js':
-        specifier: 4.2.2
-        version: 4.2.2
+        specifier: 4.3.0
+        version: 4.3.0
       '@types/json-schema':
         specifier: 7.0.15
         version: 7.0.15
@@ -147,8 +147,8 @@ packages:
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
     engines: {node: '>=12'}
 
-  '@nhost/nhost-js@4.2.2':
-    resolution: {integrity: sha512-4ZCccQAI1o+2a7wb3yPMyQc8J1KNFRyOQoYsePFnW8K2GnlW4oYfJ5TS7eYVO960mbdi+BsALKgeoOETlhHQ3g==}
+  '@nhost/nhost-js@4.3.0':
+    resolution: {integrity: sha512-Ab9KTzpeV3hx113F1j4J5D9ExhvHLhKW4Z3Ybi8okEcEtiN5qYRWcAKOKcIceVVQGj3TuQYs/w/BceuNtTmtpA==}
     engines: {node: '>=20'}
 
   '@pkgjs/parseargs@0.11.0':
@@ -803,7 +803,7 @@ snapshots:
       wrap-ansi: 8.1.0
       wrap-ansi-cjs: wrap-ansi@7.0.0
 
-  '@nhost/nhost-js@4.2.2':
+  '@nhost/nhost-js@4.3.0':
     dependencies:
       tslib: 2.8.1
 
