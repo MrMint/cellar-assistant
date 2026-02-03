@@ -1,6 +1,5 @@
 "use client";
 
-import { graphql } from "@cellar-assistant/shared";
 import {
   Button,
   Card,
@@ -11,27 +10,10 @@ import {
   Typography,
 } from "@mui/joy";
 import { isNotNil } from "ramda";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Rating } from "react-simple-star-rating";
-import { useMutation } from "urql";
+import { addRecipeReviewAction } from "@/app/actions/recipes";
 import { RichTextEditor } from "../common/RichTextEditor";
-
-// GraphQL mutation for adding recipe reviews
-const AddRecipeReviewMutation = graphql(`
-  mutation AddRecipeReview($review: recipe_reviews_insert_input!) {
-    insert_recipe_reviews_one(object: $review) {
-      id
-      score
-      text
-      created_at
-      user {
-        id
-        displayName
-        avatarUrl
-      }
-    }
-  }
-`);
 
 export type AddRecipeReviewResult = {
   userId: string;
@@ -51,38 +33,29 @@ export const AddRecipeReview = ({
   const [open, setOpen] = useState(false);
   const [score, setScore] = useState<number>();
   const [text, setText] = useState<string>();
-  const [{ fetching }, addReview] = useMutation(AddRecipeReviewMutation);
+  const [isPending, startTransition] = useTransition();
 
   const dirty = isNotNil(score) || isNotNil(text);
 
-  const handleClick = async () => {
+  const handleClick = () => {
     if (dirty === true) {
-      const result = await addReview({
-        review: {
-          recipe_id: recipeId,
-          score,
-          text,
-        },
-      });
+      startTransition(async () => {
+        const result = await addRecipeReviewAction(recipeId, score, text);
 
-      if (result.data?.insert_recipe_reviews_one) {
-        setOpen(false);
-        setScore(undefined);
-        setText(undefined);
+        if (result.success && result.userId) {
+          setOpen(false);
+          setScore(undefined);
+          setText(undefined);
 
-        if (onReviewAdded) {
-          const user = result.data.insert_recipe_reviews_one.user as {
-            id: string;
-            displayName?: string;
-            avatarUrl?: string;
-          };
-          onReviewAdded({
-            userId: user.id,
-            score,
-            text,
-          });
+          if (onReviewAdded) {
+            onReviewAdded({
+              userId: result.userId,
+              score,
+              text,
+            });
+          }
         }
-      }
+      });
     }
   };
 
@@ -129,7 +102,7 @@ export const AddRecipeReview = ({
                   "Very Good+",
                   "Outstanding",
                 ]}
-                readonly={fetching}
+                readonly={isPending}
                 initialValue={score}
               />
             </div>
@@ -146,12 +119,12 @@ export const AddRecipeReview = ({
         <Button
           onClick={handleClick}
           disabled={!dirty}
-          loading={fetching}
+          loading={isPending}
           color="primary"
         >
           Add Review
         </Button>
-        <Button onClick={handleCancel} variant="outlined" disabled={fetching}>
+        <Button onClick={handleCancel} variant="outlined" disabled={isPending}>
           Cancel
         </Button>
       </CardActions>

@@ -1,3 +1,5 @@
+"use client";
+
 import { type FragmentOf, readFragment } from "@cellar-assistant/shared";
 import { Box, Button, Grid, Link, Stack } from "@mui/joy";
 import { MdAdd } from "react-icons/md";

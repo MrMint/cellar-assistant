@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         region: process.env.NEXT_PUBLIC_NHOST_REGION || "local",
         subdomain: process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN || "local",
         storage: new CookieStorage({
-          secure: false, // Fixed: Never use secure in development
+          secure: process.env.NODE_ENV === "production",
           sameSite: "lax",
         }),
       }),
@@ -53,15 +53,56 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   );
 
   useEffect(() => {
-    setIsLoading(true);
+    const initializeAuth = async () => {
+      setIsLoading(true);
 
-    // Get initial session from SDK
-    const currentSession = nhost.getUserSession();
-    setUser(currentSession?.user || null);
-    setSession(currentSession);
-    setIsAuthenticated(!!currentSession);
-    lastRefreshTokenIdRef.current = currentSession?.refreshTokenId || null;
-    setIsLoading(false);
+      // Check for OAuth callback - refreshToken in URL from SSO redirect
+      const urlParams = new URLSearchParams(window.location.search);
+      const refreshTokenFromUrl = urlParams.get("refreshToken");
+
+      if (refreshTokenFromUrl) {
+        try {
+          // Exchange the refresh token for a full session
+          const result = await nhost.auth.refreshToken({
+            refreshToken: refreshTokenFromUrl,
+          });
+
+          if (result.body && result.status === 200) {
+            // Store the session using the SDK's storage
+            nhost.sessionStorage.set(result.body);
+
+            // Clean up the URL by removing the refreshToken param
+            const url = new URL(window.location.href);
+            url.searchParams.delete("refreshToken");
+            window.history.replaceState({}, "", url.toString());
+
+            setUser(result.body.user || null);
+            setSession(result.body);
+            setIsAuthenticated(true);
+            lastRefreshTokenIdRef.current = result.body.refreshTokenId || null;
+            setIsLoading(false);
+            router.refresh();
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to exchange OAuth refresh token:", error);
+          // Clean up the URL even on error
+          const url = new URL(window.location.href);
+          url.searchParams.delete("refreshToken");
+          window.history.replaceState({}, "", url.toString());
+        }
+      }
+
+      // Get initial session from SDK
+      const currentSession = nhost.getUserSession();
+      setUser(currentSession?.user || null);
+      setSession(currentSession);
+      setIsAuthenticated(!!currentSession);
+      lastRefreshTokenIdRef.current = currentSession?.refreshTokenId || null;
+      setIsLoading(false);
+    };
+
+    initializeAuth();
 
     // Subscribe to session changes using SDK's storage onChange
     const unsubscribe = nhost.sessionStorage?.onChange?.(

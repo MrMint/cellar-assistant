@@ -222,10 +222,16 @@ export const CellarSakeDataFragment = graphql(
       ...SakeCore
       ...SakeUserData
       ...SakeReviews
+      ...SakeRelationships
     }
   }
 `,
-  [SakeCoreFragment, SakeUserDataFragment, SakeReviewsFragment],
+  [
+    SakeCoreFragment,
+    SakeUserDataFragment,
+    SakeReviewsFragment,
+    SakeRelationshipsFragment,
+  ],
 );
 
 /**

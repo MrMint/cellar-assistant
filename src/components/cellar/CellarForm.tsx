@@ -1,6 +1,6 @@
 "use client";
 
-import { graphql, type Permission_Type_Enum } from "@cellar-assistant/shared";
+import { type Permission_Type_Enum } from "@cellar-assistant/shared";
 import {
   Avatar,
   Box,
@@ -17,7 +17,7 @@ import {
 } from "@mui/joy";
 import { isNil, isNotNil } from "ramda";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
-import { type CombinedError, useClient } from "urql";
+import { addCellarAction, editCellarAction } from "@/app/actions/cellars";
 import { EnumSelect } from "@/components/forms/EnumSelect";
 
 interface IFormInput {
@@ -37,32 +37,6 @@ export type CellarFormProps = {
   friends: { id: string; displayName: string; avatarUrl: string }[];
 };
 
-const addCellarMutation = graphql(`
-  mutation AddCellar($cellar: cellars_insert_input!) {
-    insert_cellars_one(object: $cellar) {
-      id
-    }
-  }
-`);
-
-const editCellarMutation = graphql(`
-  mutation EditCellar(
-    $id: uuid!
-    $cellar: cellars_set_input!
-    $co_owners: [cellar_owners_insert_input!]!
-  ) {
-    update_cellars_by_pk(pk_columns: { id: $id }, _set: $cellar) {
-      id
-    }
-    delete_cellar_owners(where: { cellar_id: { _eq: $id } }) {
-      affected_rows
-    }
-    insert_cellar_owners(objects: $co_owners) {
-      affected_rows
-    }
-  }
-`);
-
 export const CellarForm = ({
   id,
   onSubmitted,
@@ -73,8 +47,6 @@ export const CellarForm = ({
     co_owners: [],
   },
 }: CellarFormProps) => {
-  const client = useClient();
-
   const {
     control,
     handleSubmit,
@@ -87,37 +59,20 @@ export const CellarForm = ({
     privacy,
     co_owners,
   }) => {
-    let errored: CombinedError | undefined;
-    let createdId: string | undefined;
+    let result;
 
     if (isNil(id)) {
-      const result = await client.mutation(addCellarMutation, {
-        cellar: {
-          name,
-          privacy,
-          co_owners: { data: co_owners.map((x) => ({ user_id: x })) },
-        },
-      });
-      errored = result.error;
-      createdId = result.data?.insert_cellars_one?.id;
+      result = await addCellarAction(name, privacy, co_owners);
     } else {
-      const result = await client.mutation(editCellarMutation, {
-        id,
-        cellar: {
-          name,
-          privacy,
-        },
-        co_owners: co_owners.map((x) => ({ user_id: x, cellar_id: id })),
-      });
-      errored = result.error;
-      createdId = result.data?.update_cellars_by_pk?.id;
+      result = await editCellarAction(id, name, privacy, co_owners);
     }
-    if (isNil(errored) && isNotNil(createdId)) {
-      onSubmitted(createdId);
+
+    if (result.success && isNotNil(result.cellarId)) {
+      onSubmitted(result.cellarId);
     } else {
       setError("root", {
         type: "custom",
-        message: "Something went wrong please try again...",
+        message: result.error ?? "Something went wrong please try again...",
       });
     }
   };

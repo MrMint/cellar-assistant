@@ -1,12 +1,12 @@
 import type { NhostClient } from "@nhost/nhost-js";
 import {
-  cacheExchange,
   createClient,
   fetchExchange,
   ssrExchange,
   subscriptionExchange,
 } from "@urql/core";
 import { devtoolsExchange } from "@urql/devtools";
+import { cacheExchange } from "@urql/exchange-graphcache";
 import { createClient as createWSClient } from "graphql-ws";
 import { createCookieAuthExchange } from "./auth-exchange";
 
@@ -22,7 +22,21 @@ export function makeClientClient(nhost: NhostClient) {
 
   const exchanges = [
     devtoolsExchange,
-    cacheExchange,
+    cacheExchange({
+      // Configure keys for Hasura types that don't have IDs
+      keys: {
+        // Aggregate types don't have IDs - embed them on parent
+        cellar_items_aggregate: () => null,
+        cellar_items_aggregate_fields: () => null,
+        item_reviews_aggregate: () => null,
+        item_reviews_aggregate_fields: () => null,
+        item_reviews_avg_fields: () => null,
+        item_favorites_aggregate: () => null,
+        item_favorites_aggregate_fields: () => null,
+        item_vectors: () => null,
+        item_image: () => null,
+      },
+    }),
     ssr,
     createCookieAuthExchange(), // Handle auth errors and token refresh
     fetchExchange,

@@ -137,6 +137,51 @@ async function generateJsonSchemaFromIntrospection(
   const properties: Record<string, JSONSchema7> = {};
   const required: string[] = [];
 
+  // Common brand fields shared across all item types
+  const commonBrandFields: Record<string, JSONSchema7> = {
+    brand_name: {
+      type: "string",
+      description:
+        "Official name of the producer/brand (e.g., 'Stone Brewing', 'Château Margaux', 'Buffalo Trace'). This is the primary brand identity.",
+    },
+    brand_description: {
+      type: "string",
+      description:
+        "Brief description of the brand - include history, specialties, reputation, and location. Write 2-3 informative sentences about what makes this producer notable.",
+    },
+    brand_region: {
+      type: "string",
+      description:
+        "Region or city where the brand is headquartered or primarily operates (e.g., 'Escondido, California', 'Bordeaux', 'Frankfort, Kentucky')",
+    },
+    brand_country: {
+      type: "string",
+      enum: enumOrUndefined(countries),
+      description:
+        "Country where the brand is based (may differ from the item's country of origin)",
+    },
+    brand_website: {
+      type: "string",
+      description:
+        "Brand website URL if visible on the label or packaging (e.g., 'www.stonebrewing.com')",
+    },
+    parent_brand_name: {
+      type: "string",
+      description:
+        "Parent company or holding company name if the brand is owned by a larger entity (e.g., 'Diageo' for Johnnie Walker, 'Constellation Brands' for Corona)",
+    },
+  };
+
+  // Common brand fields to add to required array for all item types
+  const commonBrandFieldNames = [
+    "brand_name",
+    "brand_description",
+    "brand_region",
+    "brand_country",
+    "brand_website",
+    "parent_brand_name",
+  ];
+
   // Define which fields are required for each table
   // IMPORTANT: Vertex AI only populates fields in the 'required' array by default
   // Fields not listed here will be skipped by the model
@@ -152,6 +197,7 @@ async function generateJsonSchemaFromIntrospection(
       "country",
       "barcode_code",
       "brewery",
+      ...commonBrandFieldNames,
     ],
     wines: [
       "name",
@@ -164,6 +210,7 @@ async function generateJsonSchemaFromIntrospection(
       "description",
       "barcode_code",
       "winery",
+      ...commonBrandFieldNames,
     ],
     spirits: [
       "name",
@@ -175,6 +222,7 @@ async function generateJsonSchemaFromIntrospection(
       "country",
       "barcode_code",
       "distillery",
+      ...commonBrandFieldNames,
     ],
     coffees: [
       "name",
@@ -187,6 +235,7 @@ async function generateJsonSchemaFromIntrospection(
       "barcode_code",
       "weight",
       "roaster",
+      ...commonBrandFieldNames,
     ],
   };
 
@@ -198,6 +247,7 @@ async function generateJsonSchemaFromIntrospection(
         description:
           'Product name only, excluding brand/brewery name (e.g., "IPA" not "Stone IPA")',
       },
+      ...commonBrandFields,
       style: {
         type: "string",
         enum: enumOrUndefined(beerStyles),
@@ -249,6 +299,7 @@ async function generateJsonSchemaFromIntrospection(
         description:
           'Product name only, excluding winery/producer name (e.g., "Cabernet Sauvignon" not "Kendall-Jackson Cabernet Sauvignon")',
       },
+      ...commonBrandFields,
       vintage: {
         type: "string",
         pattern: "^(19|20)\\d{2}$",
@@ -304,6 +355,7 @@ async function generateJsonSchemaFromIntrospection(
         description:
           'Product name only, excluding brand/distillery name (e.g., "Single Malt" not "Macallan Single Malt")',
       },
+      ...commonBrandFields,
       type: {
         type: "string",
         enum: enumOrUndefined(spiritTypes),
@@ -355,6 +407,7 @@ async function generateJsonSchemaFromIntrospection(
         description:
           'Product name only, excluding brand/roaster name (e.g., "Ethiopian Single Origin" not "Blue Bottle Ethiopian Single Origin")',
       },
+      ...commonBrandFields,
       description: {
         type: "string",
         description:

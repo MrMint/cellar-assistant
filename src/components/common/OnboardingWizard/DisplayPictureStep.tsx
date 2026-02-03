@@ -44,7 +44,7 @@ export const DisplayPictureStep = ({
             Tips
           </Typography>
           <CardContent>
-            <Typography level="body-md">
+            <Typography level="body-md" component="div">
               <ul>
                 <li>
                   This photo will be used for display when viewing the item

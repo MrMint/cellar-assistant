@@ -27,6 +27,9 @@ const getDefaultsQuery = graphql(`
       style
       type
       confidence
+      brand_id
+      brand_name
+      is_new_brand
     }
   }
 `);
@@ -68,6 +71,9 @@ export const fetchDefaults = fromPromise(
         type: isNotNil(spirit.type)
           ? (spirit.type as Spirit_Type_Enum)
           : undefined,
+        brand_id: spirit.brand_id,
+        brand_name: spirit.brand_name,
+        is_new_brand: spirit.is_new_brand,
       },
       itemOnboardingId: result.data.spirit_defaults.item_onboarding_id,
       confidence: result.data.spirit_defaults.confidence ?? 0,

@@ -38,9 +38,9 @@ function generateBreadcrumbs(
       segment.match(/^[0-9a-f-]{36}$/i) &&
       segments[i - 1] === "cellars"
     ) {
-      // Cellar ID
+      // Cellar ID - navigate to items page since /cellars/[cellarId] is not implemented
       const label = cellarName || "Cellar";
-      breadcrumbs.push({ label, href: isLast ? undefined : href });
+      breadcrumbs.push({ label, href: isLast ? undefined : `${href}/items` });
     } else if (["beers", "wines", "spirits", "coffees"].includes(segment)) {
       // Check if this is a cellar item path (cellars/{id}/spirits/{id}) vs standalone item path (spirits/{id})
       const isCellarItemPath = segments.some(

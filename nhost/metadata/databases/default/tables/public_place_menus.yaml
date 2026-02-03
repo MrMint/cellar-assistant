@@ -1,14 +1,6 @@
 table:
   name: place_menus
   schema: public
-array_relationships:
-  - name: place_menu_items
-    using:
-      foreign_key_constraint_on:
-        column: place_menu_id
-        table:
-          name: place_menu_items
-          schema: public
 object_relationships:
   - name: created_by_user
     using:
@@ -22,6 +14,14 @@ object_relationships:
     using:
       foreign_key_constraint_on: verified_by
     comment: User who verified this menu
+array_relationships:
+  - name: place_menu_items
+    using:
+      foreign_key_constraint_on:
+        column: place_menu_id
+        table:
+          name: place_menu_items
+          schema: public
 select_permissions:
   - role: user
     permission:

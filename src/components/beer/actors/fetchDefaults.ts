@@ -27,6 +27,9 @@ const getDefaultsQuery = graphql(`
       style
       international_bitterness_unit
       confidence
+      brand_id
+      brand_name
+      is_new_brand
     }
   }
 `);
@@ -64,6 +67,9 @@ export const fetchDefaults = fromPromise(
         country: beer.country as Country_Enum | undefined,
         style: beer.style as Beer_Style_Enum | undefined,
         international_bitterness_unit: beer.international_bitterness_unit,
+        brand_id: beer.brand_id,
+        brand_name: beer.brand_name,
+        is_new_brand: beer.is_new_brand,
       },
       itemOnboardingId: result.data.beer_defaults.item_onboarding_id,
       confidence: result.data.beer_defaults.confidence ?? 0,

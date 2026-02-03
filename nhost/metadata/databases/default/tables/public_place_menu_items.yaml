@@ -1,15 +1,6 @@
 table:
   name: place_menu_items
   schema: public
-array_relationships:
-  - name: menu_item_recipes
-    using:
-      foreign_key_constraint_on:
-        column: menu_item_id
-        table:
-          name: menu_item_recipes
-          schema: public
-    comment: Recipes associated with this menu item
 object_relationships:
   - name: beer
     using:
@@ -43,6 +34,15 @@ object_relationships:
     using:
       foreign_key_constraint_on: wine_id
     comment: Wine item match
+array_relationships:
+  - name: menu_item_recipes
+    using:
+      foreign_key_constraint_on:
+        column: menu_item_id
+        table:
+          name: menu_item_recipes
+          schema: public
+    comment: Recipes associated with this menu item
 select_permissions:
   - role: user
     permission:

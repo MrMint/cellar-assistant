@@ -6,6 +6,7 @@ import {
 import { Grid, Stack } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { isNil, nth } from "ramda";
+import { ItemBrands } from "@/components/item/ItemBrands";
 import { ItemCellars } from "@/components/item/ItemCellars";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemHeaderServer } from "@/components/item/ItemHeaderServer";
@@ -20,6 +21,7 @@ import {
   SpiritCoreFragment,
   type SpiritDetailsFragment,
   SpiritImagesFragment,
+  SpiritRelationshipsFragment,
   SpiritReviewsFragment,
   SpiritUserDataFragment,
 } from "./fragments";
@@ -41,6 +43,7 @@ export function SpiritDetails({ spirit, cellars, itemId }: SpiritDetailsProps) {
   const userData = readFragment(SpiritUserDataFragment, spirit);
   const reviews = readFragment(SpiritReviewsFragment, spirit);
   const cellarItems = readFragment(SpiritCellarsFragment, spirit);
+  const relationships = readFragment(SpiritRelationshipsFragment, spirit);
 
   const displayImage = nth(0, imageData.item_images ?? []);
 
@@ -86,6 +89,9 @@ export function SpiritDetails({ spirit, cellars, itemId }: SpiritDetailsProps) {
                   co_owners: x.cellar.co_owners.map((y) => y.user),
                 }))}
               />
+              {relationships?.brands && relationships.brands.length > 0 && (
+                <ItemBrands brands={relationships.brands} title="Distilleries" />
+              )}
             </Stack>
           </Grid>
           <Grid xs={12} sm={12} lg={6}>

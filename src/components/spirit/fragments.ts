@@ -212,10 +212,16 @@ export const CellarSpiritDataFragment = graphql(
       ...SpiritCore
       ...SpiritUserData
       ...SpiritReviews
+      ...SpiritRelationships
     }
   }
 `,
-  [SpiritCoreFragment, SpiritUserDataFragment, SpiritReviewsFragment],
+  [
+    SpiritCoreFragment,
+    SpiritUserDataFragment,
+    SpiritReviewsFragment,
+    SpiritRelationshipsFragment,
+  ],
 );
 
 /**

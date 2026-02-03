@@ -131,6 +131,7 @@ async function processVectorGeneration(
     const response = await aiProvider.generateEmbeddings?.({
       content: text,
       type: "text",
+      taskType: "RETRIEVAL_QUERY", // Optimized for searching
     });
     endEmbeddingTimer();
 

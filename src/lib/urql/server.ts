@@ -149,11 +149,6 @@ async function getServerAuthHeaders(): Promise<ServerAuthHeaders> {
       headers["X-Hasura-Role"] = "user";
     }
 
-    // Add webhook secret for Hasura actions
-    if (process.env.NHOST_WEBHOOK_SECRET) {
-      headers["nhost-webhook-secret"] = process.env.NHOST_WEBHOOK_SECRET;
-    }
-
     if (isDev) console.log(`🔑 [URQL] Headers created successfully`);
     return headers;
   } catch (error) {

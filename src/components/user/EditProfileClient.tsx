@@ -1,6 +1,6 @@
 "use client";
 
-import { type FragmentOf, graphql } from "@cellar-assistant/shared";
+import { type FragmentOf } from "@cellar-assistant/shared";
 import {
   Button,
   Card,
@@ -12,26 +12,15 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
-import { isNil, isNotNil } from "ramda";
+import { isNil } from "ramda";
 import { useEffect } from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
-import { useMutation } from "urql";
+import { updateUserAction } from "@/app/actions/users";
 import type { UserEditFragment } from "./fragments";
 
 interface IFormInput {
   displayName: string;
 }
-
-const updateUserMutation = graphql(`
-  mutation UpdateUser($userId: uuid!, $displayName: String!) {
-    updateUser(
-      pk_columns: { id: $userId }
-      _set: { displayName: $displayName }
-    ) {
-      id
-    }
-  }
-`);
 
 interface EditProfileClientProps {
   userId: string;
@@ -43,8 +32,6 @@ export const EditProfileClient = ({
   userData,
 }: EditProfileClientProps) => {
   if (isNil(userId)) throw new Error("User cannot be null");
-
-  const [_updateUser, updateUserAsync] = useMutation(updateUserMutation);
 
   const {
     reset,
@@ -60,11 +47,12 @@ export const EditProfileClient = ({
       setValue("displayName", userData.displayName);
     }
   }, [isDirty, userData, setValue]);
+
   const onSubmit: SubmitHandler<IFormInput> = async ({ displayName }) => {
     try {
-      const result = await updateUserAsync({ userId, displayName });
-      if (isNotNil(result.error)) {
-        throw Error();
+      const result = await updateUserAction(userId, displayName);
+      if (!result.success) {
+        throw new Error(result.error);
       } else {
         reset({ displayName });
       }

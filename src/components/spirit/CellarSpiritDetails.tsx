@@ -8,6 +8,7 @@ import { Grid, Stack } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
+import { ItemBrands } from "@/components/item/ItemBrands";
 import { ItemCheckIns } from "@/components/item/ItemCheckIns";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImageWithCaptureClient } from "@/components/item/ItemImageWithCaptureClient";
@@ -23,6 +24,7 @@ import {
   type CellarSpiritDetailsFragment,
   CellarSpiritItemFragment,
   SpiritCoreFragment,
+  SpiritRelationshipsFragment,
   SpiritReviewsFragment,
   SpiritUserDataFragment,
   UserWithFriendsFragment,
@@ -64,6 +66,10 @@ export function CellarSpiritDetails({
     spiritData.spirit,
   );
   const spiritReviews = readFragment(SpiritReviewsFragment, spiritData.spirit);
+  const spiritRelationships = readFragment(
+    SpiritRelationshipsFragment,
+    spiritData.spirit,
+  );
 
   // Null safety checks
   if (!spiritCore || !spiritUserData || !spiritReviews) {
@@ -133,6 +139,13 @@ export function CellarSpiritDetails({
             <Stack spacing={2}>
               <AddReview spiritId={spiritCore?.id} />
               <ItemReviews reviews={spiritReviews?.reviews || []} />
+              {spiritRelationships?.brands &&
+                spiritRelationships.brands.length > 0 && (
+                  <ItemBrands
+                    brands={spiritRelationships.brands}
+                    title="Spirit Brands"
+                  />
+                )}
             </Stack>
           </Grid>
         </Grid>

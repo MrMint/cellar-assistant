@@ -1,6 +1,5 @@
 "use client";
 
-import { addItemReview } from "@cellar-assistant/shared/queries";
 import {
   Button,
   Card,
@@ -11,9 +10,9 @@ import {
   Typography,
 } from "@mui/joy";
 import { isNotNil } from "ramda";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Rating } from "react-simple-star-rating";
-import { useMutation } from "urql";
+import { addReviewAction } from "@/app/actions/reviews";
 import { RichTextEditor } from "../common/RichTextEditor";
 
 export type AddReviewResult = {
@@ -59,26 +58,35 @@ export const AddReview = ({
   wineId,
   coffeeId,
 }: AddReviewProps) => {
+  const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [score, setScore] = useState<number>();
   const [text, setText] = useState<string>();
-  const [{ fetching }, addItem] = useMutation(addItemReview);
+
+  const handleRatingClick = (rating: number) => {
+    setScore(rating);
+  };
 
   const dirty = isNotNil(score) || isNotNil(text);
 
-  const handleClick = async () => {
+  const handleClick = () => {
     if (dirty === true) {
-      await addItem({
-        review: {
-          beer_id: beerId,
-          wine_id: wineId,
-          spirit_id: spiritId,
-          coffee_id: coffeeId,
+      startTransition(async () => {
+        const result = await addReviewAction({
+          beerId,
+          wineId,
+          spiritId,
+          coffeeId,
           score,
           text,
-        },
+        });
+
+        if (result.success) {
+          setOpen(false);
+          setScore(undefined);
+          setText(undefined);
+        }
       });
-      setOpen(false);
     }
   };
 
@@ -94,7 +102,8 @@ export const AddReview = ({
         <Typography level="title-lg">Add Review:</Typography>
         <CardContent>
           <Rating
-            onClick={setScore}
+            onClick={handleRatingClick}
+            initialValue={score ?? 0}
             showTooltip
             tooltipDefaultText="Your Score"
             allowFraction
@@ -110,7 +119,7 @@ export const AddReview = ({
               "Very Good+",
               "Outstanding",
             ]}
-            readonly={fetching}
+            readonly={isPending}
           />
         </CardContent>
         <RichTextEditor
@@ -119,7 +128,7 @@ export const AddReview = ({
         />
       </Stack>
       <CardActions>
-        <Button onClick={handleClick} disabled={!dirty} loading={fetching}>
+        <Button onClick={handleClick} disabled={!dirty} loading={isPending}>
           Add
         </Button>
       </CardActions>

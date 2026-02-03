@@ -1,8 +1,13 @@
 import { isNotNil } from "ramda";
 import { fromPromise } from "xstate";
 import { uploadLabelImagesAction } from "@/app/actions/uploadLabelImages";
-import { dataUrlToFile } from "@/utilities";
+import { compressImage, dataUrlToFile } from "@/utilities";
 import type { UploadFilesInput, UploadFilesResult } from "./types";
+
+// Compression settings optimized for AI text recognition while staying under Vercel's 4.5MB limit
+// Higher quality (0.92) preserves fine text on labels; 1400px maintains detail
+const MAX_IMAGE_DIMENSION = 1400;
+const IMAGE_QUALITY = 0.92;
 
 export const uploadFiles = fromPromise(
   async ({
@@ -14,14 +19,26 @@ export const uploadFiles = fromPromise(
     const formData = new FormData();
 
     if (isNotNil(frontLabel)) {
-      const file = dataUrlToFile(frontLabel, "front-label.jpg");
+      // Compress image before upload to avoid payload size limits
+      const compressedFrontLabel = await compressImage(
+        frontLabel,
+        MAX_IMAGE_DIMENSION,
+        IMAGE_QUALITY,
+      );
+      const file = dataUrlToFile(compressedFrontLabel, "front-label.jpg");
       if (isNotNil(file)) {
         formData.append("frontLabel", file);
       }
     }
 
     if (isNotNil(backLabel)) {
-      const file = dataUrlToFile(backLabel, "back-label.jpg");
+      // Compress image before upload to avoid payload size limits
+      const compressedBackLabel = await compressImage(
+        backLabel,
+        MAX_IMAGE_DIMENSION,
+        IMAGE_QUALITY,
+      );
+      const file = dataUrlToFile(compressedBackLabel, "back-label.jpg");
       if (isNotNil(file)) {
         formData.append("backLabel", file);
       }

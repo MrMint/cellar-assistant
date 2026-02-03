@@ -8,18 +8,21 @@ importers:
 
   .:
     dependencies:
+      '@0no-co/graphql.web':
+        specifier: ^1.2.0
+        version: 1.2.0(graphql@16.8.1)
       '@cellar-assistant/shared':
-        specifier: file:./packages/shared
-        version: file:packages/shared(graphql@16.8.1)(typescript@5.9.2)
+        specifier: file:./_packages/shared
+        version: file:_packages/shared(graphql@16.8.1)(typescript@5.9.2)
       '@cellar-assistant/typescript-config':
-        specifier: file:./packages/typescript-config
-        version: file:packages/typescript-config
+        specifier: file:./_packages/typescript-config
+        version: file:_packages/typescript-config
       '@google-cloud/bigquery':
         specifier: 8.1.1
         version: 8.1.1
       '@google/genai':
-        specifier: 1.38.0
-        version: 1.38.0
+        specifier: 1.39.0
+        version: 1.39.0
       '@nhost/nhost-js':
         specifier: 4.2.2
         version: 4.2.2
@@ -77,11 +80,11 @@ packages:
       graphql: ^15.5.0 || ^16.0.0 || ^17.0.0
       typescript: ^5.0.0
 
-  '@cellar-assistant/shared@file:packages/shared':
-    resolution: {directory: packages/shared, type: directory}
+  '@cellar-assistant/shared@file:_packages/shared':
+    resolution: {directory: _packages/shared, type: directory}
 
-  '@cellar-assistant/typescript-config@file:packages/typescript-config':
-    resolution: {directory: packages/typescript-config, type: directory}
+  '@cellar-assistant/typescript-config@file:_packages/typescript-config':
+    resolution: {directory: _packages/typescript-config, type: directory}
 
   '@google-cloud/bigquery@8.1.1':
     resolution: {integrity: sha512-2GHlohfA/VJffTvibMazMsZi6jPRx8MmaMberyDTL8rnhVs/frKSXVVRtLU83uSAy2j/5SD4mOs4jMQgJPON2g==}
@@ -111,8 +114,8 @@ packages:
     resolution: {integrity: sha512-N8qS6dlORGHwk7WjGXKOSsLjIjNINCPicsOX6gyyLiYk7mq3MtII96NZ9N2ahwA2vnkLmZODOIH9rlNniYWvCQ==}
     engines: {node: '>=18'}
 
-  '@google/genai@1.38.0':
-    resolution: {integrity: sha512-V/4CQVQGovvGHuS73lwJwHKR9x33kCij3zz/ReEQ4A7RJaV0U7m4k1mvYhFk55cGZdF5JLKu2S9BTaFuEs5xTA==}
+  '@google/genai@1.39.0':
+    resolution: {integrity: sha512-Vz7AQsOdBeiIcxmXIQNy/hzDvyAOE1lSpWA10itUQza7h3aQFF6QSGaQ7o1GYsjMD3XslK4Ee/Ol0eLhRXb7gA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -207,8 +210,8 @@ packages:
   '@types/node@24.10.1':
     resolution: {integrity: sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==}
 
-  '@types/node@25.0.10':
-    resolution: {integrity: sha512-zWW5KPngR/yvakJgGOmZ5vTBemDoSqF3AcV/LrO5u5wTWyEAVVh+IT39G4gtyAkh3CtTZs8aX/yRM82OfzHJRg==}
+  '@types/node@25.2.0':
+    resolution: {integrity: sha512-DZ8VwRFUNzuqJ5khrvwMXHmvPe+zGayJhr2CDNiKB1WBE1ST8Djl00D0IC4vvNmHMdj6DlbYRIaFE7WHjlDl5w==}
 
   '@types/qs@6.14.0':
     resolution: {integrity: sha512-eOunJqu0K1923aExK6y8p6fsihYEn/BYuQ4g0CxAAgFc4b/ZLN4CrsRZ55srTdqoiLzU2B2evC+apEIxprEzkQ==}
@@ -716,7 +719,7 @@ snapshots:
       graphql: 16.8.1
       typescript: 5.9.2
 
-  '@cellar-assistant/shared@file:packages/shared(graphql@16.8.1)(typescript@5.9.2)':
+  '@cellar-assistant/shared@file:_packages/shared(graphql@16.8.1)(typescript@5.9.2)':
     dependencies:
       gql.tada: 1.9.0(graphql@16.8.1)(typescript@5.9.2)
     transitivePeerDependencies:
@@ -725,7 +728,7 @@ snapshots:
       - graphql
       - typescript
 
-  '@cellar-assistant/typescript-config@file:packages/typescript-config': {}
+  '@cellar-assistant/typescript-config@file:_packages/typescript-config': {}
 
   '@google-cloud/bigquery@8.1.1':
     dependencies:
@@ -768,7 +771,7 @@ snapshots:
 
   '@google-cloud/promisify@5.0.0': {}
 
-  '@google/genai@1.38.0':
+  '@google/genai@1.39.0':
     dependencies:
       google-auth-library: 10.5.0
       protobufjs: 7.5.4
@@ -862,7 +865,7 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
-  '@types/node@25.0.10':
+  '@types/node@25.2.0':
     dependencies:
       undici-types: 7.16.0
 
@@ -1284,7 +1287,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 25.0.10
+      '@types/node': 25.2.0
       long: 5.3.2
 
   ramda@0.32.0: {}

@@ -190,7 +190,6 @@ export default async function RecipeVersionsPage({
         <RecipeVersionsTab
           recipes={recipes}
           canonicalRecipeId={canonicalRecipeId}
-          userId={userId}
           groupId={params.groupId}
         />
       </Suspense>

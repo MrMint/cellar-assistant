@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { includes } from "ramda";
 import { useCallback } from "react";
 import { useClient } from "urql";
+import { linkItemToBrand } from "@/utilities/brand";
 import { Analyzing } from "../common/Analyzing";
 import {
   type OnboardingResult,
@@ -52,6 +53,7 @@ export const CoffeeOnboarding = ({
         cellarId,
         router,
         userId,
+        itemType: "coffees",
       },
     },
   );
@@ -120,6 +122,12 @@ export const CoffeeOnboarding = ({
     }
 
     const itemId = result.data.insert_coffees_one.id;
+
+    // Link brand if available (non-blocking)
+    if (defaults.brand_id) {
+      await linkItemToBrand(urqlClient, itemId, defaults.brand_id, "coffee");
+    }
+
     send({ type: "CONFIRM", itemId });
     return itemId;
   }, [

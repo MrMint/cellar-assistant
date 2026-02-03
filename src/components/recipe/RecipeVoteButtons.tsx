@@ -1,6 +1,5 @@
 "use client";
 
-import { graphql } from "@cellar-assistant/shared";
 import {
   Box,
   Button,
@@ -11,49 +10,14 @@ import {
 } from "@mui/joy";
 import { useState } from "react";
 import { MdThumbDown, MdThumbUp } from "react-icons/md";
-import { useMutation } from "urql";
+import { removeVoteAction, voteRecipeAction } from "@/app/actions/recipes";
 import { breakpointDown, useMediaQuery } from "@/hooks/useMediaQuery";
-
-// GraphQL mutations for voting
-const VoteRecipeMutation = graphql(`
-  mutation VoteRecipe($recipeId: uuid!, $voteType: String!) {
-    insert_recipe_votes_one(
-      object: {
-        recipe_id: $recipeId,
-        vote_type: $voteType
-      },
-      on_conflict: {
-        constraint: recipe_votes_recipe_id_user_id_key,
-        update_columns: [vote_type]
-      }
-    ) {
-      id
-      vote_type
-    }
-  }
-`);
-
-const RemoveVoteMutation = graphql(`
-  mutation RemoveVote($recipeId: uuid!, $userId: uuid!) {
-    delete_recipe_votes(
-      where: {
-        _and: [
-          { recipe_id: { _eq: $recipeId } },
-          { user_id: { _eq: $userId } }
-        ]
-      }
-    ) {
-      affected_rows
-    }
-  }
-`);
 
 export type RecipeVoteButtonsProps = {
   recipeId: string;
   currentVote?: string | null;
   upvotes: number;
   downvotes: number;
-  userId: string;
   size?: "sm" | "md" | "lg";
   orientation?: "horizontal" | "vertical" | "auto";
   showCounts?: boolean;
@@ -65,7 +29,6 @@ export const RecipeVoteButtons = ({
   currentVote,
   upvotes,
   downvotes,
-  userId,
   size = "md",
   orientation = "auto",
   showCounts = true,
@@ -92,9 +55,6 @@ export const RecipeVoteButtons = ({
   const [optimisticUpvotes, setOptimisticUpvotes] = useState(upvotes);
   const [optimisticDownvotes, setOptimisticDownvotes] = useState(downvotes);
 
-  const [, executeVote] = useMutation(VoteRecipeMutation);
-  const [, executeRemoveVote] = useMutation(RemoveVoteMutation);
-
   const handleVote = async (voteType: "upvote" | "downvote") => {
     if (isVoting) return;
 
@@ -115,13 +75,10 @@ export const RecipeVoteButtons = ({
           setOptimisticDownvotes((prev) => prev - 1);
         }
 
-        const result = await executeRemoveVote({
-          recipeId,
-          userId,
-        });
+        const result = await removeVoteAction(recipeId);
 
-        if (result.error) {
-          throw result.error;
+        if (!result.success) {
+          throw new Error(result.error);
         }
       } else {
         // Add or change vote
@@ -139,13 +96,10 @@ export const RecipeVoteButtons = ({
           setOptimisticDownvotes((prev) => prev + 1);
         }
 
-        const result = await executeVote({
-          recipeId,
-          voteType,
-        });
+        const result = await voteRecipeAction(recipeId, voteType);
 
-        if (result.error) {
-          throw result.error;
+        if (!result.success) {
+          throw new Error(result.error);
         }
       }
     } catch (error) {

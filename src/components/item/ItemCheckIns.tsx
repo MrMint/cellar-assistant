@@ -1,6 +1,5 @@
 "use client";
 
-import { addCheckIn, addCheckIns } from "@cellar-assistant/shared/queries";
 import {
   Avatar,
   AvatarGroup,
@@ -22,8 +21,11 @@ import {
 } from "@mui/joy";
 import { format, parseISO } from "date-fns";
 import { groupBy, isEmpty, mapObjIndexed, not, values, without } from "ramda";
-import { useEffect, useState } from "react";
-import { useMutation } from "urql";
+import { useEffect, useState, useTransition } from "react";
+import {
+  addBulkCheckInsAction,
+  addCheckInAction,
+} from "@/app/actions/checkIns";
 
 type User = {
   id: string;
@@ -52,31 +54,26 @@ export const ItemCheckIns = ({
 }: ItemCheckInsProps) => {
   const [open, setOpen] = useState(false);
   const [bulk, setBulk] = useState([] as string[]);
-  const [{ fetching }, addCheckInMutation] = useMutation(addCheckIn);
-  const [{ fetching: bulkFetcing }, addCheckInsMutation] =
-    useMutation(addCheckIns);
+  const [isPending, startTransition] = useTransition();
+  const [isBulkPending, startBulkTransition] = useTransition();
 
-  const handleClickCheckIn = async () => {
-    await addCheckInMutation({
-      checkIn: {
-        user_id: user.id,
-        cellar_item_id: itemId,
-      },
+  const handleClickCheckIn = () => {
+    startTransition(async () => {
+      await addCheckInAction(itemId);
     });
   };
 
-  const handleClickBulk = async () => {
+  const handleClickBulk = () => {
     setOpen(true);
   };
 
-  const handleBulkCheckIn = async () => {
-    await addCheckInsMutation({
-      checkIns: bulk.map((x) => ({
-        user_id: x,
-        cellar_item_id: itemId,
-      })),
+  const handleBulkCheckIn = () => {
+    startBulkTransition(async () => {
+      const result = await addBulkCheckInsAction(itemId, bulk);
+      if (result.success) {
+        setOpen(false);
+      }
     });
-    setOpen(false);
   };
 
   const handleClickBulkUser = (userId: string) => {
@@ -101,7 +98,7 @@ export const ItemCheckIns = ({
             variant="solid"
             color="primary"
             onClick={handleClickCheckIn}
-            loading={fetching}
+            loading={isPending}
             fullWidth
           >
             Check In
@@ -111,7 +108,7 @@ export const ItemCheckIns = ({
               variant="solid"
               color="primary"
               onClick={handleClickBulk}
-              loading={fetching}
+              loading={isPending}
               fullWidth
             >
               Bulk Check In
@@ -173,7 +170,7 @@ export const ItemCheckIns = ({
             <Button
               variant="solid"
               color="primary"
-              loading={bulkFetcing}
+              loading={isBulkPending}
               onClick={handleBulkCheckIn}
               disabled={isEmpty(bulk)}
             >
@@ -182,7 +179,7 @@ export const ItemCheckIns = ({
             <Button
               variant="plain"
               color="neutral"
-              disabled={bulkFetcing}
+              disabled={isBulkPending}
               onClick={() => setOpen(false)}
             >
               Cancel

@@ -33,6 +33,9 @@ type SharedFields = {
   country?: Country_Enum;
   alcohol_content_percentage?: string;
   international_bitterness_unit?: string;
+  brand_id?: string;
+  brand_name?: string;
+  is_new_brand?: boolean;
 };
 
 type IBeerFormInput = {

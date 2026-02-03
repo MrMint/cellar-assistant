@@ -63,6 +63,9 @@ actions:
       kind: ""
       handler: '{{NHOST_FUNCTIONS_URL}}/getVectorForString'
       forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
     permissions:
       - role: user
   - name: item_image_upload
@@ -110,6 +113,9 @@ actions:
       kind: asynchronous
       handler: '{{NHOST_FUNCTIONS_URL}}/refreshPlaces'
       forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
       timeout: 300
       request_transform:
         method: POST
@@ -153,6 +159,9 @@ actions:
       kind: ""
       handler: '{{NHOST_FUNCTIONS_URL}}/searchNearbyPlaces'
       forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
       timeout: 35
       request_transform:
         body:

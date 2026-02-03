@@ -1,16 +1,15 @@
 "use client";
 
 import type { ItemTypeValue } from "@cellar-assistant/shared";
-import {
-  addFavoriteMutation,
-  deleteFavoriteMutation,
-} from "@cellar-assistant/shared/queries";
 import { Card, IconButton, Stack, Typography } from "@mui/joy";
 import { isNil, isNotNil, without } from "ramda";
 import type { MouseEvent } from "react";
+import { useState, useTransition } from "react";
 import { MdFavorite, MdFavoriteBorder } from "react-icons/md";
-import { useMutation } from "urql";
-import { typeToIdKey } from "@/utilities";
+import {
+  addFavoriteAction,
+  deleteFavoriteAction,
+} from "@/app/actions/favorites";
 
 export type ItemDetailsProp = {
   itemId: string;
@@ -29,32 +28,31 @@ const ItemDetails = ({
   subTitlePhrases,
   description,
 }: ItemDetailsProp) => {
-  const [{ fetching: fetchingAdd }, addFavorite] =
-    useMutation(addFavoriteMutation);
-  const [{ fetching: fetchingDelete }, deleteFavorite] = useMutation(
-    deleteFavoriteMutation,
-  );
-  const handleFavoriteClick = async (
+  const [isPending, startTransition] = useTransition();
+  const [localFavoriteId, setLocalFavoriteId] = useState(favoriteId);
+
+  const handleFavoriteClick = (
     event: MouseEvent<HTMLAnchorElement, globalThis.MouseEvent>,
   ) => {
     event.stopPropagation();
-    if (isNil(favoriteId)) {
-      await addFavorite({
-        object: { [typeToIdKey(type)]: itemId },
-      });
-    } else {
-      await deleteFavorite({
-        id: favoriteId,
-      });
-    }
+    startTransition(async () => {
+      if (isNil(localFavoriteId)) {
+        const result = await addFavoriteAction(itemId, type);
+        if (result.success && result.favoriteId) {
+          setLocalFavoriteId(result.favoriteId);
+        }
+      } else {
+        const result = await deleteFavoriteAction(localFavoriteId);
+        if (result.success) {
+          setLocalFavoriteId(undefined);
+        }
+      }
+    });
   };
 
   const favoriteButton = (
-    <IconButton
-      disabled={fetchingAdd || fetchingDelete}
-      onClick={handleFavoriteClick}
-    >
-      {isNotNil(favoriteId) ? (
+    <IconButton disabled={isPending} onClick={handleFavoriteClick}>
+      {isNotNil(localFavoriteId) ? (
         <MdFavorite
           style={{
             color: "red",

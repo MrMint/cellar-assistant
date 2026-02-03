@@ -81,3 +81,17 @@ delete_permissions:
         user_id:
           _eq: X-Hasura-User-Id
     comment: ""
+event_triggers:
+  - name: generate_item_image_vector
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/generateItemImageVector'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET

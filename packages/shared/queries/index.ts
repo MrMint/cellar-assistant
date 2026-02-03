@@ -53,6 +53,9 @@ export const updateCellarItemMutation = graphql(`
   mutation UpdateCellarItem($id: uuid!, $item: cellar_items_set_input!) {
     update_cellar_items_by_pk(pk_columns: { id: $id }, _set: $item) {
       id
+      open_at
+      empty_at
+      percentage_remaining
     }
   }
 `);
@@ -105,47 +108,8 @@ export const updateSakeMutation = graphql(`
   }
 `);
 
-export const addItemReview = graphql(`
-  mutation AddItemReview($review: item_reviews_insert_input!) {
-    insert_item_reviews_one(object: $review) {
-      id
-      beer {
-        id
-      }
-      wine {
-        id
-      }
-      spirit {
-        id
-      }
-    }
-  }
-`);
-
-export const addCheckIn = graphql(`
-  mutation AddCheckIn($checkIn: check_ins_insert_input!) {
-    insert_check_ins_one(object: $checkIn) {
-      id
-      cellar_item {
-        id
-      }
-    }
-  }
-`);
-
-export const addCheckIns = graphql(`
-  mutation AddCheckIns($checkIns: [check_ins_insert_input!]!) {
-    insert_check_ins(objects: $checkIns) {
-      affected_rows
-      returning {
-        id
-        cellar_item {
-          id
-        }
-      }
-    }
-  }
-`);
+// Note: addItemReview, addCheckIn, addCheckIns, addFavoriteMutation,
+// deleteFavoriteMutation mutations moved to server actions
 
 export const getSearchVectorQuery = graphql(`
   query GetSearchVectorQuery($text: String, $image: String) {
@@ -153,30 +117,39 @@ export const getSearchVectorQuery = graphql(`
   }
 `);
 
-export const addFavoriteMutation = graphql(`
-  mutation AddFavoriteMutation($object: item_favorites_insert_input!) {
-    insert_item_favorites_one(object: $object) {
-      id
-      beer {
-        id
-      }
-      wine {
-        id
-      }
-      spirit {
-        id
-      }
-      coffee {
-        id
-      }
-    }
-  }
-`);
+// =============================================================================
+// Brand Linking
+// =============================================================================
 
-export const deleteFavoriteMutation = graphql(`
-  mutation DeleteFavoriteMutation($id: uuid!) {
-    delete_item_favorites_by_pk(id: $id) {
+/**
+ * Link an item to a brand via the item_brands join table
+ * Supports all item types (wine, beer, spirit, coffee, sake)
+ * Use on_conflict to update is_primary if relationship already exists
+ */
+export const linkItemToBrandMutation = graphql(`
+  mutation LinkItemToBrand(
+    $wine_id: uuid
+    $beer_id: uuid
+    $spirit_id: uuid
+    $coffee_id: uuid
+    $sake_id: uuid
+    $brand_id: uuid!
+    $is_primary: Boolean
+  ) {
+    insert_item_brands_one(
+      object: {
+        wine_id: $wine_id
+        beer_id: $beer_id
+        spirit_id: $spirit_id
+        coffee_id: $coffee_id
+        sake_id: $sake_id
+        brand_id: $brand_id
+        is_primary: $is_primary
+      }
+    ) {
       id
+      brand_id
+      is_primary
     }
   }
 `);

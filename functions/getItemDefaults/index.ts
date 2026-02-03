@@ -20,6 +20,12 @@ import {
   validateUserId,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import {
+  type BrandDetails,
+  type BrandMatchCriteria,
+  findOrCreateBrandWithDetails,
+} from "../_utils/recipe-database/brand-management";
+import { BRAND_TYPES } from "../_utils/shared-enums";
 import type { PresignedUrlResponse } from "../_utils/types";
 import { getSchemaForItemType } from "./_schemas";
 import type {
@@ -423,6 +429,22 @@ async function finalizeResults({
   (results as GetItemDefaultsResult & { confidence: number }).confidence =
     confidence;
 
+  // Process brand from AI-extracted data
+  const brandResult = await processBrandFromAIDefaults(
+    aiDefaults,
+    itemType as ItemType,
+    performanceTracker,
+  );
+
+  if (brandResult) {
+    (results as GetItemDefaultsResult & { brand_id: string }).brand_id =
+      brandResult.id;
+    (results as GetItemDefaultsResult & { brand_name: string }).brand_name =
+      brandResult.name;
+    (results as GetItemDefaultsResult & { is_new_brand: boolean }).is_new_brand =
+      brandResult.isNew;
+  }
+
   // Save to database
   const endDbTimer = performanceTracker.startTimer("dbOperationDuration");
   const onboardingResult = await saveOnboardingData({
@@ -435,6 +457,116 @@ async function finalizeResults({
 
   results.item_onboarding_id = onboardingResult.id;
   return results;
+}
+
+/**
+ * Extract brand information from AI defaults and find/create brand
+ */
+async function processBrandFromAIDefaults(
+  aiDefaults: AIDefaults,
+  itemType: ItemType,
+  performanceTracker: ReturnType<typeof createAIPerformanceTracker>,
+): Promise<{ id: string; name: string; isNew: boolean } | null> {
+  // Extract brand name from AI defaults
+  // First try explicit brand_name, then fall back to producer field
+  const brandName = getBrandNameFromDefaults(aiDefaults, itemType);
+
+  if (!brandName || brandName.trim().length === 0) {
+    console.log("🏷️ [processBrand] No brand name detected in AI defaults");
+    return null;
+  }
+
+  console.log(`🏷️ [processBrand] Processing brand: "${brandName}"`);
+
+  // Determine brand type based on item type
+  const brandType = getBrandTypeForItemType(itemType);
+
+  // Build match criteria
+  const criteria: BrandMatchCriteria = {
+    name: brandName,
+    brandType,
+    region: (aiDefaults as { brand_region?: string }).brand_region,
+    country: (aiDefaults as { brand_country?: string }).brand_country,
+  };
+
+  // Build brand details for creation if needed
+  const details: BrandDetails = {
+    name: brandName,
+    description: (aiDefaults as { brand_description?: string }).brand_description,
+    brandType,
+    region: (aiDefaults as { brand_region?: string }).brand_region,
+    country: (aiDefaults as { brand_country?: string }).brand_country,
+    website: (aiDefaults as { brand_website?: string }).brand_website,
+    parentBrandName: (aiDefaults as { parent_brand_name?: string })
+      .parent_brand_name,
+  };
+
+  try {
+    const endBrandTimer = performanceTracker.startTimer("dbOperationDuration");
+    const result = await findOrCreateBrandWithDetails(criteria, details);
+    endBrandTimer();
+
+    console.log(
+      `✅ [processBrand] Brand resolved: "${result.name}" (${result.id})${result.isNew ? " [NEW]" : ""}`,
+    );
+    return result;
+  } catch (error) {
+    // Brand processing failure should not block item onboarding
+    console.warn(`⚠️ [processBrand] Failed to process brand: ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Extract brand name from AI defaults based on item type
+ * Tries explicit brand_name first, then falls back to producer-specific field
+ */
+function getBrandNameFromDefaults(
+  aiDefaults: AIDefaults,
+  itemType: ItemType,
+): string | undefined {
+  // First try explicit brand_name field
+  const explicitBrandName = (aiDefaults as { brand_name?: string }).brand_name;
+  if (explicitBrandName && explicitBrandName.trim().length > 0) {
+    return explicitBrandName.trim();
+  }
+
+  // Fall back to item-type-specific producer field
+  switch (itemType) {
+    case "WINE":
+      return (aiDefaults as { winery?: string }).winery?.trim();
+    case "BEER":
+      return (aiDefaults as { brewery?: string }).brewery?.trim();
+    case "SPIRIT":
+      return (aiDefaults as { distillery?: string }).distillery?.trim();
+    case "COFFEE":
+      return (aiDefaults as { roaster?: string }).roaster?.trim();
+    case "SAKE":
+      // Sake uses "kura" (brewery) as producer - fall back to brand_name which is already checked above
+      return (aiDefaults as { kura?: string }).kura?.trim();
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Map item type to appropriate brand type
+ */
+function getBrandTypeForItemType(itemType: ItemType): string {
+  switch (itemType) {
+    case "WINE":
+      return BRAND_TYPES.WINERY;
+    case "BEER":
+      return BRAND_TYPES.BREWERY;
+    case "SPIRIT":
+      return BRAND_TYPES.DISTILLERY;
+    case "COFFEE":
+      return BRAND_TYPES.ROASTERY;
+    case "SAKE":
+      return BRAND_TYPES.KURA;
+    default:
+      return BRAND_TYPES.OTHER;
+  }
 }
 
 // SaveOnboardingParams is now imported from ./types.ts

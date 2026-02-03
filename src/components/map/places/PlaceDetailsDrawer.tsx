@@ -507,7 +507,14 @@ export function PlaceDetailsDrawer({
     setDragCurrentY(null);
     setIsDragging(false);
     setDragVelocity(0);
-  }, [isDragging, dragStartY, dragCurrentY, dragVelocity, drawerState, onClose]);
+  }, [
+    isDragging,
+    dragStartY,
+    dragCurrentY,
+    dragVelocity,
+    drawerState,
+    onClose,
+  ]);
 
   // Global mouse event handlers for drag continuation
   useEffect(() => {

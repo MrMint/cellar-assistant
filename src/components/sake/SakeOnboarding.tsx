@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { includes } from "ramda";
 import { useCallback } from "react";
 import { useClient } from "urql";
+import { linkItemToBrand } from "@/utilities/brand";
 import { parseNumber } from "@/utilities";
 import { Analyzing } from "../common/Analyzing";
 import {
@@ -50,6 +51,7 @@ export const SakeOnboarding = ({ cellarId, userId }: SakeOnboardingProps) => {
         cellarId,
         router,
         userId,
+        itemType: "sakes",
       },
     },
   );
@@ -124,6 +126,12 @@ export const SakeOnboarding = ({ cellarId, userId }: SakeOnboardingProps) => {
     }
 
     const itemId = result.data.insert_sakes_one.id;
+
+    // Link brand if available (non-blocking)
+    if (defaults.brand_id) {
+      await linkItemToBrand(urqlClient, itemId, defaults.brand_id, "sake");
+    }
+
     send({ type: "CONFIRM", itemId });
     return itemId;
   }, [

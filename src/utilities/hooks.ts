@@ -1,14 +1,54 @@
 import { ITEM_TYPES, type ItemTypeValue } from "@cellar-assistant/shared";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isEmpty, isNotNil } from "ramda";
-import {
-  startTransition,
-  useEffect,
-  useOptimistic,
-  useRef,
-  useState,
-} from "react";
+import { startTransition, useEffect, useOptimistic, useRef } from "react";
 import type { RankingsFilterValue } from "@/components/ranking/RankingsFilter";
+
+const SCROLL_STORAGE_KEY = "scroll-restore";
+
+/**
+ * Hook for restoring scroll position to a specific element after navigation.
+ * Uses sessionStorage to track which element to scroll to, avoiding URL pollution.
+ */
+export const useScrollRestore = () => {
+  const pathname = usePathname();
+  const scrollTargetRef = useRef<HTMLDivElement>(null);
+
+  // Get the stored scroll target ID for this path
+  const getScrollId = (): string | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = sessionStorage.getItem(SCROLL_STORAGE_KEY);
+      if (!stored) return null;
+      const data = JSON.parse(stored);
+      return data.path === pathname ? data.id : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Save the scroll target ID for this path
+  const setScrollId = (id: string) => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(
+      SCROLL_STORAGE_KEY,
+      JSON.stringify({ path: pathname, id }),
+    );
+  };
+
+  const scrollId = getScrollId();
+
+  // Scroll to element on mount if we have a stored target
+  useEffect(() => {
+    if (isNotNil(scrollTargetRef.current)) {
+      scrollTargetRef.current.scrollIntoView({ block: "center" });
+      // Clear after scrolling to prevent re-scrolling on re-renders
+      sessionStorage.removeItem(SCROLL_STORAGE_KEY);
+    }
+  }, []);
+
+  return { scrollId, scrollTargetRef, setScrollId };
+};
 
 export function useInterval(callback: () => void, delay: number) {
   const intervalRef = useRef<number | null>(null);
@@ -27,48 +67,6 @@ export function useInterval(callback: () => void, delay: number) {
   }, [delay]);
   return intervalRef;
 }
-
-const getHash = () =>
-  typeof window !== "undefined"
-    ? decodeURIComponent(window.location.hash.replace("#", ""))
-    : undefined;
-
-export const useHash = () => {
-  const [hash, setHash] = useState(getHash());
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      setHash(getHash());
-    };
-    window.addEventListener("hashchange", handleHashChange);
-    return () => {
-      window.removeEventListener("hashchange", handleHashChange);
-    };
-  }, []);
-
-  return hash;
-};
-
-export const useScrollRestore = () => {
-  const hash = useHash();
-  const scrollTargetRef = useRef<HTMLDivElement>(null);
-
-  const setScrollId = (id: string) => {
-    // TODO switch to simple hash update when nextjs fixes bug
-    // https://github.com/vercel/next.js/issues/56112
-    //window.location.hash = x.item.id;
-    window.history.replaceState(window.history.state, "", `#${id}`);
-  };
-
-  // Scroll to element on navigate back
-  useEffect(() => {
-    if (isNotNil(scrollTargetRef.current)) {
-      scrollTargetRef.current.scrollIntoView({ block: "center" });
-    }
-  }, []);
-
-  return { scrollId: hash, scrollTargetRef, setScrollId };
-};
 
 export const useTypesFilterState = () => {
   const router = useRouter();

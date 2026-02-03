@@ -16,7 +16,7 @@
             "X-Exclude-Invalid": "true"
           }
         },
-        "tadaOutputLocation": "../shared/gql/graphql-env.d.ts"
+        "tadaOutputLocation": "../packages/shared/gql/graphql-env.d.ts"
       }
     ]
   }

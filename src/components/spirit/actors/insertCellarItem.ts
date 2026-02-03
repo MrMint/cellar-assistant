@@ -4,6 +4,7 @@ import {
 } from "@cellar-assistant/shared/queries";
 import { isNil, isNotNil } from "ramda";
 import { fromPromise } from "xstate";
+import { compressImage } from "@/utilities";
 import type {
   InsertCellarItemInput,
   InsertCellarItemResult,
@@ -17,11 +18,13 @@ export const insertCellarItem = fromPromise(
   }): Promise<InsertCellarItemResult> => {
     let imageId: string | undefined;
     if (isNotNil(displayImage)) {
+      // Compress image before upload to avoid payload size limits
+      const compressedImage = await compressImage(displayImage);
       const addImageResult = await urqlClient.mutation(addItemImageMutation, {
         input: {
           item_id: itemId,
           item_type: "SPIRIT",
-          image: displayImage,
+          image: compressedImage,
         },
       });
 

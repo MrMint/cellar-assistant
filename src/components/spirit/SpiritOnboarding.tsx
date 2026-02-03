@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { includes } from "ramda";
 import { useCallback } from "react";
 import { useClient } from "urql";
+import { linkItemToBrand } from "@/utilities/brand";
 import { convertYearToDate, parseNumber } from "@/utilities";
 import { Analyzing } from "../common/Analyzing";
 import {
@@ -53,6 +54,7 @@ export const SpiritOnboarding = ({
         cellarId,
         router,
         userId,
+        itemType: "spirits",
       },
     },
   );
@@ -125,6 +127,12 @@ export const SpiritOnboarding = ({
     }
 
     const itemId = result.data.insert_spirits_one.id;
+
+    // Link brand if available (non-blocking)
+    if (defaults.brand_id) {
+      await linkItemToBrand(urqlClient, itemId, defaults.brand_id, "spirit");
+    }
+
     send({ type: "CONFIRM", itemId });
     return itemId;
   }, [

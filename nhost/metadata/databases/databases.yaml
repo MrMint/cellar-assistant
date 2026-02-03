@@ -13,6 +13,38 @@
       use_prepared_statements: true
   logical_models:
     - fields:
+        - name: id
+          type:
+            nullable: false
+            scalar: uuid
+        - name: name
+          type:
+            nullable: false
+            scalar: text
+        - name: description
+          type:
+            nullable: true
+            scalar: text
+        - name: brand_type
+          type:
+            nullable: true
+            scalar: text
+        - name: similarity_score
+          type:
+            nullable: false
+            scalar: float8
+      name: brand_similarity_result
+      select_permissions:
+        - permission:
+            columns:
+              - id
+              - name
+              - description
+              - brand_type
+              - similarity_score
+            filter: {}
+          role: user
+    - fields:
         - name: beer_id
           type:
             nullable: true
@@ -204,6 +236,32 @@
               schema: public
       returns: item_score
       root_field_name: item_scores
+    - arguments:
+        max_results:
+          description: Maximum number of results to return
+          nullable: true
+          type: integer
+        search_term:
+          description: Brand name to search for
+          nullable: false
+          type: text
+        similarity_threshold:
+          description: Minimum similarity score (0.0-1.0)
+          nullable: true
+          type: float8
+      code: |-
+        SELECT
+          b.id,
+          b.name,
+          b.description,
+          b.brand_type::TEXT,
+          similarity(b.name, {{search_term}})::float8 as similarity_score
+        FROM public.brands b
+        WHERE similarity(b.name, {{search_term}}) >= COALESCE({{similarity_threshold}}, 0.3)
+        ORDER BY similarity_score DESC
+        LIMIT COALESCE({{max_results}}, 10)
+      returns: brand_similarity_result
+      root_field_name: searchBrandsBySimilarity
     - arguments:
         text:
           description: ""

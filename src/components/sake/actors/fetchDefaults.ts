@@ -38,6 +38,9 @@ const getDefaultsQuery = graphql(`
       amino_acid
       vintage
       confidence
+      brand_id
+      brand_name
+      is_new_brand
     }
   }
 `);
@@ -91,6 +94,9 @@ export const fetchDefaults = fromPromise(
         sake_meter_value: sake.sake_meter_value,
         acidity: sake.acidity,
         amino_acid: sake.amino_acid,
+        brand_id: sake.brand_id,
+        brand_name: sake.brand_name,
+        is_new_brand: sake.is_new_brand,
       },
       itemOnboardingId: result.data.sake_defaults.item_onboarding_id,
       confidence: result.data.sake_defaults.confidence ?? 0,

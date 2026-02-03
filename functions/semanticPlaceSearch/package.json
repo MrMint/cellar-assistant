@@ -9,7 +9,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@cellar-assistant/shared": "file:../packages/shared",
+    "@cellar-assistant/shared": "file:../_packages/shared",
     "@nhost/nhost-js": "^3.0.0",
     "express": "^4.18.2",
     "ramda": "^0.29.0"

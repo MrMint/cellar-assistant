@@ -2,10 +2,6 @@
 
 import type { ItemTypeValue } from "@cellar-assistant/shared";
 import {
-  addFavoriteMutation,
-  deleteFavoriteMutation,
-} from "@cellar-assistant/shared/queries";
-import {
   Button,
   CardContent,
   CardOverflow,
@@ -16,13 +12,17 @@ import type { SxProps } from "@mui/joy/styles/types";
 import Image from "next/image";
 import { always, cond, equals, isNil, isNotNil } from "ramda";
 import type { MouseEvent } from "react";
+import { useState, useTransition } from "react";
 import {
   MdFavorite,
   MdFavoriteBorder,
   MdOutlineComment,
   MdStar,
 } from "react-icons/md";
-import { useMutation } from "urql";
+import {
+  addFavoriteAction,
+  deleteFavoriteAction,
+} from "@/app/actions/favorites";
 import { InteractiveCard } from "@/components/common/InteractiveCard";
 import { Link } from "@/components/common/Link";
 import beer1 from "@/images/beer1.png";
@@ -35,7 +35,6 @@ import {
   formatVintage,
   getNextPlaceholder,
   nhostImageLoader,
-  typeToIdKey,
 } from "@/utilities";
 
 const overflowItemStyles: SxProps = {
@@ -79,28 +78,48 @@ export type ItemCardProps = {
 };
 
 export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
-  const [{ fetching: fetchingAdd }, addFavorite] =
-    useMutation(addFavoriteMutation);
-  const [{ fetching: fetchingDelete }, deleteFavorite] = useMutation(
-    deleteFavoriteMutation,
-  );
+  const [isPending, startTransition] = useTransition();
+  const [localFavoriteId, setLocalFavoriteId] = useState(item.favoriteId);
   const fallback = getFallback(type);
 
-  const handleFavoriteClick = async (
+  const handleFavoriteClick = (
     event: MouseEvent<HTMLAnchorElement, globalThis.MouseEvent>,
   ) => {
     event.stopPropagation();
-    if (isNil(item.favoriteId)) {
-      await addFavorite({
-        object: { [typeToIdKey(type)]: item.itemId },
-      });
-    } else {
-      await deleteFavorite({
-        id: item.favoriteId,
-      });
-    }
+    startTransition(async () => {
+      const previousFavoriteId = localFavoriteId;
+
+      try {
+        if (isNil(localFavoriteId)) {
+          // Optimistic update: show as favorited immediately
+          setLocalFavoriteId("pending");
+          const result = await addFavoriteAction(item.itemId, type);
+          if (result.success && result.favoriteId) {
+            setLocalFavoriteId(result.favoriteId);
+          } else {
+            // Revert on failure
+            setLocalFavoriteId(previousFavoriteId);
+            console.error("Failed to add favorite:", result.error);
+          }
+        } else {
+          // Store the current favorite ID before clearing (we know it's defined in this branch)
+          const currentFavoriteId = localFavoriteId;
+          // Optimistic update: show as unfavorited immediately
+          setLocalFavoriteId(undefined);
+          const result = await deleteFavoriteAction(currentFavoriteId);
+          if (!result.success) {
+            // Revert on failure
+            setLocalFavoriteId(currentFavoriteId);
+            console.error("Failed to delete favorite:", result.error);
+          }
+        }
+      } catch (error) {
+        // Revert on unexpected error
+        setLocalFavoriteId(previousFavoriteId);
+        console.error("Error toggling favorite:", error);
+      }
+    });
   };
-  const fetching = fetchingAdd || fetchingDelete;
 
   return (
     <InteractiveCard
@@ -177,9 +196,9 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             variant="soft"
             color="neutral"
             size="sm"
-            loading={fetching}
+            loading={isPending}
             endDecorator={
-              isNotNil(item.favoriteId) ? (
+              isNotNil(localFavoriteId) ? (
                 <MdFavorite
                   style={{
                     color: "red",

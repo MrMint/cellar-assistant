@@ -32,7 +32,7 @@ name = 'OLLAMA_ENDPOINT'
 value = 'http://host.docker.internal:11434'
 
 [hasura]
-version = 'v2.48.5-ce'
+version = 'v2.48.10-ce'
 adminSecret = '{{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}'
 webhookSecret = '{{ secrets.NHOST_WEBHOOK_SECRET }}'
 
@@ -60,9 +60,13 @@ httpPoolSize = 100
 version = 20
 
 [auth]
-version = '0.43.2'
+version = '0.45.0'
 
 [auth.redirections]
+allowedUrls = [
+"https://cellar-assistant.vercel.app/cellars",
+"https://cellar-assistant.mrmint.dev/cellars"
+]
 clientUrl = 'https://cellar-assistant.vercel.app/cellars'
 
 [auth.signUp]
@@ -171,7 +175,7 @@ timeout = 60000
 enabled = false
 
 [postgres]
-version = '17.5-20250728-1'
+version = '18.1-20260113-1'
 
 [postgres.resources]
 [postgres.resources.storage]
@@ -180,7 +184,7 @@ capacity = 10
 [provider]
 
 [storage]
-version = '0.10.0'
+version = '0.11.0'
 
 [observability]
 [observability.grafana]

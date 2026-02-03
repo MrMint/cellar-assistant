@@ -8,6 +8,7 @@ import { Grid, Stack } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { isNil, isNotNil, nth } from "ramda";
 import { CellarItemHeader } from "@/components/item/CellarItemHeader";
+import { ItemBrands } from "@/components/item/ItemBrands";
 import { ItemCheckIns } from "@/components/item/ItemCheckIns";
 import ItemDetails from "@/components/item/ItemDetails";
 import { ItemImageWithCaptureClient } from "@/components/item/ItemImageWithCaptureClient";
@@ -24,6 +25,7 @@ import {
   CellarWineItemFragment,
   UserWithFriendsFragment,
   WineCoreFragment,
+  WineRelationshipsFragment,
   WineReviewsFragment,
   WineUserDataFragment,
 } from "./fragments";
@@ -61,6 +63,10 @@ export function CellarWineDetails({
   const wineCore = readFragment(WineCoreFragment, wineData.wine);
   const wineUserData = readFragment(WineUserDataFragment, wineData.wine);
   const wineReviews = readFragment(WineReviewsFragment, wineData.wine);
+  const wineRelationships = readFragment(
+    WineRelationshipsFragment,
+    wineData.wine,
+  );
 
   // Null safety checks
   if (!wineCore || !wineUserData || !wineReviews) {
@@ -124,6 +130,13 @@ export function CellarWineDetails({
                 emptied={parseDate(itemData?.empty_at)}
               />
               <ItemShare itemId={wineCore?.id} itemType={"WINE"} />
+              {wineRelationships?.brands &&
+                wineRelationships.brands.length > 0 && (
+                  <ItemBrands
+                    brands={wineRelationships.brands}
+                    title="Wineries"
+                  />
+                )}
             </Stack>
           </Grid>
           <Grid xs={12} sm={12} lg={6}>

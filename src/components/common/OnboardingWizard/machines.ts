@@ -26,6 +26,8 @@ export const OnboardingMachine = createMachine(
         cellarId: string;
         router: AppRouterInstance;
         userId: string;
+        /** Item type for routing (wines, beers, spirits, coffees, sakes) */
+        itemType: string;
       };
       context: {
         userId: string;
@@ -39,6 +41,8 @@ export const OnboardingMachine = createMachine(
         itemOnboardingId: string;
         defaults?: DefaultValues;
         existingItemId?: string;
+        /** The cellar_items ID after adding item to cellar (used for redirect) */
+        cellarItemId?: string;
         cellarId: string;
         router: AppRouterInstance;
         retryCount: number;
@@ -46,6 +50,8 @@ export const OnboardingMachine = createMachine(
         confidence?: number;
         /** Whether quick add mode is enabled for this session */
         quickAddEnabled: boolean;
+        /** Item type for routing (wines, beers, spirits, coffees, sakes) */
+        itemType: string;
       };
       events:
         | {
@@ -89,6 +95,7 @@ export const OnboardingMachine = createMachine(
       router: input.router,
       retryCount: 0,
       quickAddEnabled: true, // Enable quick add by default
+      itemType: input.itemType,
     }),
     states: {
       wizard: {
@@ -235,11 +242,12 @@ export const OnboardingMachine = createMachine(
             urqlClient,
             displayImage: displayImageDataUrl,
           }),
-          onDone: [
-            {
-              target: "finalPrompt",
-            },
-          ],
+          onDone: {
+            target: "finalPrompt",
+            actions: assign({
+              cellarItemId: ({ event }) => event.output.itemId,
+            }),
+          },
         },
       },
       finalPrompt: {
@@ -252,7 +260,14 @@ export const OnboardingMachine = createMachine(
           },
           DONE: {
             actions: ({ context }) => {
-              context.router.push(`/cellars/${context.cellarId}/items`);
+              // Redirect to cellar item page if added to cellar, otherwise item page
+              if (context.cellarItemId && context.cellarId) {
+                context.router.push(
+                  `/cellars/${context.cellarId}/${context.itemType}/${context.cellarItemId}`,
+                );
+              } else {
+                context.router.push(`/${context.itemType}/${context.existingItemId}`);
+              }
             },
             target: "done",
           },

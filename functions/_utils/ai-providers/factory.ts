@@ -56,10 +56,12 @@ export async function createAIProvider(): Promise<AIProvider> {
         );
       }
 
+      // Gemini 3 models require the global endpoint - hardcoded since all models are now Gemini 3
+      // See: https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-flash
       cachedProvider = new VertexAIProvider({
         provider: "vertex-ai",
         projectId: process.env.GOOGLE_GCP_PROJECT_ID,
-        location: process.env.GOOGLE_GCP_VERTEX_AI_LOCATION || "us-central1",
+        location: "global",
         credentials,
       });
       break;

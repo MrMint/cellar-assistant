@@ -9,6 +9,18 @@ export type ItemType = "WINE" | "BEER" | "SPIRIT" | "COFFEE";
 // Model quality tiers for provider abstraction
 export type ModelQuality = "low" | "medium" | "high";
 
+// Embedding task types for optimized vector generation
+// See: https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/text-embeddings-api
+export type EmbeddingTaskType =
+  | "RETRIEVAL_QUERY" // For search queries - optimized for finding relevant documents
+  | "RETRIEVAL_DOCUMENT" // For indexing documents - optimized for being searched
+  | "SEMANTIC_SIMILARITY" // For comparing similarity between texts
+  | "CLASSIFICATION" // For classification tasks
+  | "CLUSTERING" // For clustering operations
+  | "QUESTION_ANSWERING" // For Q&A embeddings
+  | "FACT_VERIFICATION" // For fact-checking
+  | "CODE_RETRIEVAL_QUERY"; // For code search
+
 export interface AIProviderConfig {
   provider: "vertex-ai" | "google-ai" | "ollama";
   projectId?: string;
@@ -41,7 +53,7 @@ export interface EmbeddingRequest {
   type: "text" | "image";
   model?: string;
   dimensions?: number;
-  taskType?: "SEMANTIC_SIMILARITY" | "CLASSIFICATION" | "CLUSTERING";
+  taskType?: EmbeddingTaskType;
 }
 
 export interface EmbeddingResponse {
