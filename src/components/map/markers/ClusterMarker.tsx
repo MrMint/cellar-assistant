@@ -29,8 +29,25 @@ export function ClusterMarker({
   const variants = animationVariants || CLUSTER_ANIMATION_VARIANTS;
   const transition = animationTransition || MARKER_ANIMATION_TRANSITION;
 
-  // Calculate cluster size based on point count
-  const size = pointCount < 10 ? 40 : pointCount < 100 ? 50 : 60;
+  // Calculate cluster size based on point count (more granular tiers)
+  const size =
+    pointCount < 10
+      ? 40
+      : pointCount < 100
+        ? 50
+        : pointCount < 1000
+          ? 60
+          : pointCount < 10000
+            ? 70
+            : 80;
+
+  // Format large numbers with abbreviation (e.g., 28329 → "28K")
+  const formatCount = (count: number): string => {
+    if (count >= 1000000) return `${Math.round(count / 1000000)}M`;
+    if (count >= 1000) return `${Math.round(count / 1000)}K`;
+    return String(count);
+  };
+  const displayCount = formatCount(pointCount);
 
   // Colors based on theme
   const colors = getMarkerColors(isDarkMode);
@@ -82,11 +99,12 @@ export function ClusterMarker({
               fontFamily:
                 "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
               fontWeight: "500",
-              fontSize: size >= 50 ? "16px" : size >= 45 ? "14px" : "13px",
+              fontSize:
+                size >= 70 ? "18px" : size >= 50 ? "16px" : size >= 45 ? "14px" : "13px",
               lineHeight: 1,
             }}
           >
-            {pointCount}
+            {displayCount}
           </span>
         </div>
       </motion.div>

@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS public.item_match_suggestions CASCADE;
+CREATE TABLE public.item_match_suggestions (id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY, user_id uuid NOT NULL, beer_id uuid, coffee_id uuid, spirit_id uuid, wine_id uuid, sake_id uuid, confidence_score numeric(3,2) NOT NULL, suggestion_text text, is_processed boolean NOT NULL DEFAULT false, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_beer_id_fkey FOREIGN KEY (beer_id) REFERENCES public.beers(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_coffee_id_fkey FOREIGN KEY (coffee_id) REFERENCES public.coffees(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_spirit_id_fkey FOREIGN KEY (spirit_id) REFERENCES public.spirits(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_wine_id_fkey FOREIGN KEY (wine_id) REFERENCES public.wines(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_sake_id_fkey FOREIGN KEY (sake_id) REFERENCES public.sakes(id);
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT check_single_item_id CHECK (num_nonnulls(beer_id, coffee_id, spirit_id, wine_id) = 1);
+CREATE INDEX idx_item_match_suggestions_user_id ON public.item_match_suggestions(user_id);
+CREATE INDEX idx_item_match_suggestions_sake_id ON public.item_match_suggestions(sake_id);
+CREATE INDEX idx_item_match_suggestions_is_processed ON public.item_match_suggestions(is_processed) WHERE is_processed = false;
+CREATE TRIGGER update_item_match_suggestions_updated_at BEFORE UPDATE ON public.item_match_suggestions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

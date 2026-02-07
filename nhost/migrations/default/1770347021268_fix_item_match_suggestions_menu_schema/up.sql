@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS public.item_match_suggestions CASCADE;
+CREATE TABLE public.item_match_suggestions (id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY, place_menu_item_id uuid NOT NULL, suggested_wine_id uuid, suggested_beer_id uuid, suggested_spirit_id uuid, suggested_coffee_id uuid, suggested_sake_id uuid, suggested_recipe_id uuid, confidence_score numeric(3,2) NOT NULL, match_reasoning text, similarity_metrics jsonb, accepted boolean, rejected boolean, acted_by uuid, acted_at timestamptz, created_at timestamptz DEFAULT now());
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_place_menu_item_id_fkey FOREIGN KEY (place_menu_item_id) REFERENCES public.place_menu_items(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_suggested_wine_id_fkey FOREIGN KEY (suggested_wine_id) REFERENCES public.wines(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_suggested_beer_id_fkey FOREIGN KEY (suggested_beer_id) REFERENCES public.beers(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_suggested_spirit_id_fkey FOREIGN KEY (suggested_spirit_id) REFERENCES public.spirits(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_suggested_coffee_id_fkey FOREIGN KEY (suggested_coffee_id) REFERENCES public.coffees(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_suggested_sake_id_fkey FOREIGN KEY (suggested_sake_id) REFERENCES public.sakes(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_suggested_recipe_id_fkey FOREIGN KEY (suggested_recipe_id) REFERENCES public.recipes(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_acted_by_fkey FOREIGN KEY (acted_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT check_single_suggested_item CHECK (num_nonnulls(suggested_wine_id, suggested_beer_id, suggested_spirit_id, suggested_coffee_id, suggested_sake_id, suggested_recipe_id) = 1);
+CREATE INDEX idx_match_suggestions_pending ON public.item_match_suggestions(place_menu_item_id) WHERE accepted IS NULL AND rejected IS NULL;

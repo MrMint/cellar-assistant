@@ -20,7 +20,6 @@
     "@urql/core": "6.0.1",
     "ajv": "8.17.1",
     "ajv-formats": "3.0.1",
-    "fastest-levenshtein": "1.0.16",
     "form-data": "4.0.5",
     "fuzzball": "2.2.3",
     "gql.tada": "1.9.0",

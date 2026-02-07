@@ -349,7 +349,11 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
         </TabPanel>
 
         <TabPanel value={1}>
-          <MenuScanner placeId={placeData.id} userId={userId} />
+          <MenuScanner
+            placeId={placeData.id}
+            userId={userId}
+            onScanComplete={() => refetch()}
+          />
         </TabPanel>
 
         <TabPanel value={2}>

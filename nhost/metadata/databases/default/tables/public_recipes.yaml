@@ -107,7 +107,6 @@ event_triggers:
       interval_sec: 10
       num_retries: 3
       timeout_sec: 60
-    concurrent_batches: 10
     webhook: '{{NHOST_FUNCTIONS_URL}}/generateRecipeVector'
     headers:
       - name: nhost-webhook-secret

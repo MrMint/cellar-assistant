@@ -103,6 +103,7 @@ export type Barcodes_Update_Column =
 
 // GraphQL generated types that might be missing
 export type Item_Image = Record<string, unknown>; // Placeholder for GraphQL generated type
+export type Menu_Scans = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Beers = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Wines = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Spirits = Record<string, unknown>; // Placeholder for GraphQL generated type

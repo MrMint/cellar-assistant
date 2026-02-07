@@ -35,6 +35,14 @@ object_relationships:
       foreign_key_constraint_on: wine_id
     comment: Wine item match
 array_relationships:
+  - name: item_match_suggestions
+    using:
+      foreign_key_constraint_on:
+        column: place_menu_item_id
+        table:
+          name: item_match_suggestions
+          schema: public
+    comment: AI-suggested matches for this menu item
   - name: menu_item_recipes
     using:
       foreign_key_constraint_on:

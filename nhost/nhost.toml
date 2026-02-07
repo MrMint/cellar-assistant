@@ -28,6 +28,10 @@ name = 'AI_PROVIDER'
 value = '{{ secrets.AI_PROVIDER }}'
 
 [[global.environment]]
+name = 'BIGQUERY_PLACES_TABLE'
+value = '{{ secrets.BIGQUERY_PLACES_TABLE }}'
+
+[[global.environment]]
 name = 'OLLAMA_ENDPOINT'
 value = 'http://host.docker.internal:11434'
 

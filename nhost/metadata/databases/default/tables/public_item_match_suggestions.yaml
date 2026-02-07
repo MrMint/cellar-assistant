@@ -2,75 +2,93 @@ table:
   name: item_match_suggestions
   schema: public
 object_relationships:
-  - name: beer
+  - name: acted_by_user
     using:
-      foreign_key_constraint_on: beer_id
-  - name: coffee
+      foreign_key_constraint_on: acted_by
+  - name: place_menu_item
     using:
-      foreign_key_constraint_on: coffee_id
-  - name: sake
+      foreign_key_constraint_on: place_menu_item_id
+  - name: suggested_beer
     using:
-      foreign_key_constraint_on: sake_id
-  - name: spirit
+      foreign_key_constraint_on: suggested_beer_id
+  - name: suggested_coffee
     using:
-      foreign_key_constraint_on: spirit_id
-  - name: user
+      foreign_key_constraint_on: suggested_coffee_id
+  - name: suggested_recipe
     using:
-      foreign_key_constraint_on: user_id
-  - name: wine
+      foreign_key_constraint_on: suggested_recipe_id
+  - name: suggested_sake
     using:
-      foreign_key_constraint_on: wine_id
+      foreign_key_constraint_on: suggested_sake_id
+  - name: suggested_spirit
+    using:
+      foreign_key_constraint_on: suggested_spirit_id
+  - name: suggested_wine
+    using:
+      foreign_key_constraint_on: suggested_wine_id
 insert_permissions:
   - role: user
     permission:
       check: {}
-      set:
-        user_id: X-Hasura-User-Id
       columns:
-        - beer_id
-        - coffee_id
+        - accepted
         - confidence_score
-        - is_processed
-        - sake_id
-        - spirit_id
-        - suggestion_text
-        - wine_id
+        - match_reasoning
+        - place_menu_item_id
+        - rejected
+        - similarity_metrics
+        - suggested_beer_id
+        - suggested_coffee_id
+        - suggested_recipe_id
+        - suggested_sake_id
+        - suggested_spirit_id
+        - suggested_wine_id
     comment: ""
 select_permissions:
   - role: user
     permission:
       columns:
-        - beer_id
-        - coffee_id
+        - accepted
+        - acted_at
+        - acted_by
         - confidence_score
         - created_at
         - id
-        - is_processed
-        - sake_id
-        - spirit_id
-        - suggestion_text
-        - updated_at
-        - user_id
-        - wine_id
-      filter:
-        user_id:
-          _eq: X-Hasura-User-Id
+        - match_reasoning
+        - place_menu_item_id
+        - rejected
+        - similarity_metrics
+        - suggested_beer_id
+        - suggested_coffee_id
+        - suggested_recipe_id
+        - suggested_sake_id
+        - suggested_spirit_id
+        - suggested_wine_id
+      filter: {}
       allow_aggregations: true
     comment: ""
 update_permissions:
   - role: user
     permission:
       columns:
-        - is_processed
+        - accepted
+        - acted_at
+        - acted_by
+        - rejected
       filter:
-        user_id:
-          _eq: X-Hasura-User-Id
-      check: {}
+        _or:
+          - acted_by:
+              _eq: X-Hasura-User-Id
+          - acted_by:
+              _is_null: true
+      check: null
+      set:
+        acted_by: X-Hasura-User-Id
     comment: ""
 delete_permissions:
   - role: user
     permission:
       filter:
-        user_id:
+        acted_by:
           _eq: X-Hasura-User-Id
     comment: ""

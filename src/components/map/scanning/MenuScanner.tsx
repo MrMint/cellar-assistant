@@ -1,6 +1,5 @@
 "use client";
 
-import { graphql } from "@cellar-assistant/shared";
 import {
   CameraAlt,
   CheckCircle,
@@ -14,6 +13,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   DialogContent,
   DialogTitle,
   LinearProgress,
@@ -23,130 +23,118 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
-import { useState } from "react";
-import { useMutation } from "urql";
-import { useNhostClient } from "@/components/providers/NhostClientProvider";
+import NextLink from "next/link";
+import { useCallback, useRef, useState } from "react";
+
+import {
+  getMenuScanStatus,
+  uploadAndProcessMenuScan,
+} from "@/app/actions/menuScanning";
+import type { MenuScanStatus } from "@/app/actions/menuScanning";
+import { useInterval } from "@/utilities/hooks";
+
 import { CameraCapture } from "../../common/CameraCapture";
 
 interface MenuScannerProps {
   placeId: string;
   userId: string;
+  onScanComplete?: () => void;
 }
 
-interface ScanResult {
-  id: string;
-  processing_status: "pending" | "processing" | "completed" | "failed";
-  items_detected: number;
-  items_matched: number;
-  confidence_score?: number;
-  processing_error?: string;
-}
+type ProcessingStep = "idle" | "uploading" | "analyzing" | "matching" | "done";
 
-const CreateMenuScanMutation = graphql(`
-  mutation CreateMenuScan($scan: menu_scans_insert_input!) {
-    insert_menu_scans_one(object: $scan) {
-      id
-      processing_status
-    }
+function getProcessingStep(status: MenuScanStatus | null): ProcessingStep {
+  if (!status) return "idle";
+  switch (status.processing_status) {
+    case "pending":
+      return "uploading";
+    case "processing":
+      return status.items_detected ? "matching" : "analyzing";
+    case "completed":
+      return "done";
+    case "failed":
+      return "done";
+    default:
+      return "idle";
   }
-`);
+}
 
-export function MenuScanner({ placeId, userId }: MenuScannerProps) {
-  const nhost = useNhostClient();
-  const [, createMenuScan] = useMutation(CreateMenuScanMutation);
+const STEP_LABELS: Record<ProcessingStep, string> = {
+  idle: "",
+  uploading: "Uploading image...",
+  analyzing: "Analyzing menu with AI...",
+  matching: "Matching items to database...",
+  done: "",
+};
+
+export function MenuScanner({
+  placeId,
+  userId,
+  onScanComplete,
+}: MenuScannerProps) {
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [scanId, setScanId] = useState<string | null>(null);
+  const [scanStatus, setScanStatus] = useState<MenuScanStatus | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
-  const [_uploadProgress, _setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const isPollingRef = useRef(false);
 
-  // Upload and process scan
-  const uploadAndProcessScan = async (
-    imageDataUrl: string,
-    placeId: string,
-    userId: string,
-  ) => {
-    try {
-      // Convert data URL to blob
-      const response = await fetch(imageDataUrl);
-      const blob = await response.blob();
+  const processingStep = getProcessingStep(scanStatus);
+  const isComplete = scanStatus?.processing_status === "completed";
+  const isFailed = scanStatus?.processing_status === "failed";
 
-      // Create a file from blob
-      const file = new File([blob], `menu-scan-${Date.now()}.jpg`, {
-        type: "image/jpeg",
+  // Poll for scan status every 2.5 seconds while processing
+  const pollCallback = useCallback(async () => {
+    if (!scanId || !isPollingRef.current) return;
+
+    const status = await getMenuScanStatus(scanId);
+    if (!status) return;
+
+    setScanStatus(status);
+
+    if (
+      status.processing_status === "completed" ||
+      status.processing_status === "failed"
+    ) {
+      isPollingRef.current = false;
+      setIsScanning(false);
+      if (status.processing_status === "completed") {
+        onScanComplete?.();
+      }
+    }
+  }, [scanId, onScanComplete]);
+
+  useInterval(pollCallback, isPollingRef.current ? 2500 : 86400000);
+
+  const startScan = async (file: File) => {
+    setIsScanning(true);
+    setScanStatus(null);
+    setScanId(null);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("placeId", placeId);
+
+    const result = await uploadAndProcessMenuScan(formData);
+
+    if (result.success && result.scanId) {
+      setScanId(result.scanId);
+      setScanStatus({
+        id: result.scanId,
+        processing_status: "pending",
+        items_detected: null,
+        items_matched: null,
+        confidence_score: null,
+        processing_error: null,
+        place_id: placeId,
       });
-
-      // Upload to Nhost storage
-      const {
-        body: {
-          processedFiles: [fileMetadata],
-        },
-        status,
-      } = await nhost.storage.uploadFiles(
-        {
-          "file[]": [file],
-          "bucket-id": "default",
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${nhost.getUserSession()?.accessToken}`,
-          },
-        },
-      );
-
-      if (status < 200 || status >= 300) {
-        throw new Error(`Upload failed with status ${status}`);
-      }
-
-      if (!fileMetadata?.id) {
-        throw new Error("No file ID returned from upload");
-      }
-
-      // Create menu scan record
-      const scanResult = await createMenuScan({
-        scan: {
-          user_id: userId,
-          place_id: placeId,
-          original_image_id: fileMetadata.id,
-          processing_status: "pending",
-        },
-      });
-
-      if (scanResult.error || !scanResult.data?.insert_menu_scans_one) {
-        throw new Error("Failed to create scan record");
-      }
-
-      const scanId = scanResult.data.insert_menu_scans_one.id;
-
-      // Trigger processing function
-      const processingResponse = await fetch("/api/functions/processMenuScan", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          scanId,
-          userId,
-        }),
-      });
-
-      if (!processingResponse.ok) {
-        throw new Error("Failed to process scan");
-      }
-
-      const result = await processingResponse.json();
-
-      return {
-        id: scanId,
-        processing_status: "completed" as const,
-        items_detected: result.itemsDetected || 0,
-        items_matched: 0, // Will be calculated by matching function
-        confidence_score: result.confidenceScore || 0,
-      };
-    } catch (error) {
-      console.error("Scan processing error:", error);
-      throw error;
+      isPollingRef.current = true;
+    } else {
+      setUploadError(result.error || "Failed to start scan");
+      setIsScanning(false);
     }
   };
 
@@ -159,82 +147,45 @@ export function MenuScanner({ placeId, userId }: MenuScannerProps) {
     }
   };
 
-  const handleCameraCapture = (imageDataUrl: string) => {
+  const handleCameraCapture = async (imageDataUrl: string) => {
     if (!userId) return;
 
-    setIsScanning(true);
-    setScanResult(null);
     setShowCamera(false);
 
-    uploadAndProcessScan(imageDataUrl, placeId, userId)
-      .then((result) => setScanResult(result))
-      .catch((_error) => {
-        setScanResult({
-          id: "error",
-          processing_status: "failed",
-          items_detected: 0,
-          items_matched: 0,
-          processing_error: "Failed to process menu scan",
-        });
-      })
-      .finally(() => setIsScanning(false));
+    // Convert data URL to File
+    const response = await fetch(imageDataUrl);
+    const blob = await response.blob();
+    const file = new File([blob], `menu-scan-${Date.now()}.jpg`, {
+      type: "image/jpeg",
+    });
+
+    setSelectedFile(file);
+    setPreviewUrl(imageDataUrl);
+    await startScan(file);
   };
 
   const handleStartScan = async () => {
     if (!selectedFile || !userId) return;
-
-    setIsScanning(true);
-    setScanResult(null);
-
-    try {
-      // Convert file to data URL
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        if (e.target?.result) {
-          try {
-            const result = await uploadAndProcessScan(
-              e.target.result as string,
-              placeId,
-              userId,
-            );
-            setScanResult(result);
-          } catch (_error) {
-            setScanResult({
-              id: "error",
-              processing_status: "failed",
-              items_detected: 0,
-              items_matched: 0,
-              processing_error: "Failed to process menu scan",
-            });
-          }
-        }
-        setIsScanning(false);
-      };
-      reader.readAsDataURL(selectedFile);
-    } catch (_error) {
-      setScanResult({
-        id: "error",
-        processing_status: "failed",
-        items_detected: 0,
-        items_matched: 0,
-        processing_error: "Failed to process menu scan",
-      });
-      setIsScanning(false);
-    }
-  };
-
-  const openCamera = () => {
-    setShowCamera(true);
+    await startScan(selectedFile);
   };
 
   const handleReset = () => {
     setSelectedFile(null);
-    setPreviewUrl(null);
-    setScanResult(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
+    setPreviewUrl(null);
+    setScanId(null);
+    setScanStatus(null);
+    setUploadError(null);
+    isPollingRef.current = false;
   };
+
+  const showCaptureButtons = !selectedFile && !scanStatus && !isScanning;
+  const showPreview =
+    selectedFile && previewUrl && !scanStatus && !isScanning && !uploadError;
+  const showProcessing = isScanning && !isComplete && !isFailed;
+  const showResult = isComplete || isFailed || uploadError;
 
   return (
     <Stack spacing={3}>
@@ -245,18 +196,18 @@ export function MenuScanner({ placeId, userId }: MenuScannerProps) {
           </Typography>
 
           <Typography level="body-md" sx={{ color: "text.secondary", mb: 3 }}>
-            Take a photo of the menu and we'll automatically extract the items
-            for you. Our AI will identify wines, beers, spirits, and coffees and
-            match them to your database.
+            Take a photo of the menu and we&apos;ll automatically extract the
+            items for you. Our AI will identify wines, beers, spirits, and
+            coffees and match them to your database.
           </Typography>
 
-          {!selectedFile && !scanResult && (
+          {showCaptureButtons && (
             <Stack spacing={2}>
               <Stack direction="row" spacing={2}>
                 <Button
                   variant="solid"
                   startDecorator={<CameraAlt />}
-                  onClick={openCamera}
+                  onClick={() => setShowCamera(true)}
                   size="lg"
                 >
                   Take Photo
@@ -287,7 +238,7 @@ export function MenuScanner({ placeId, userId }: MenuScannerProps) {
             </Stack>
           )}
 
-          {selectedFile && previewUrl && !scanResult && (
+          {showPreview && (
             <Stack spacing={3}>
               <Box
                 sx={{
@@ -320,7 +271,7 @@ export function MenuScanner({ placeId, userId }: MenuScannerProps) {
                   disabled={isScanning}
                   size="lg"
                 >
-                  {isScanning ? "Processing..." : "Scan Menu"}
+                  Scan Menu
                 </Button>
 
                 <Button
@@ -334,29 +285,76 @@ export function MenuScanner({ placeId, userId }: MenuScannerProps) {
             </Stack>
           )}
 
-          {isScanning && (
+          {showProcessing && (
             <Stack spacing={2}>
               <LinearProgress />
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ justifyContent: "center", alignItems: "center" }}
+              >
+                {(["uploading", "analyzing", "matching"] as const).map(
+                  (step) => (
+                    <Chip
+                      key={step}
+                      size="sm"
+                      variant={processingStep === step ? "solid" : "outlined"}
+                      color={
+                        processingStep === step
+                          ? "primary"
+                          : (
+                                ["uploading", "analyzing", "matching"] as const
+                              ).indexOf(step) <
+                              (
+                                ["uploading", "analyzing", "matching"] as const
+                              ).indexOf(
+                                processingStep as
+                                  | "uploading"
+                                  | "analyzing"
+                                  | "matching",
+                              )
+                            ? "success"
+                            : "neutral"
+                      }
+                    >
+                      {step === "uploading"
+                        ? "Upload"
+                        : step === "analyzing"
+                          ? "Analyze"
+                          : "Match"}
+                    </Chip>
+                  ),
+                )}
+              </Stack>
               <Typography
                 level="body-sm"
                 sx={{ textAlign: "center", color: "text.secondary" }}
               >
-                Processing your menu image... This may take up to 30 seconds.
+                {STEP_LABELS[processingStep] || "Processing your menu image..."}
               </Typography>
             </Stack>
           )}
 
-          {scanResult && (
+          {showResult && (
             <Stack spacing={2}>
-              {scanResult.processing_status === "completed" ? (
+              {uploadError ? (
+                <Alert color="danger" startDecorator={<ErrorIcon />}>
+                  <Typography level="title-sm">Upload Failed</Typography>
+                  <Typography level="body-sm">{uploadError}</Typography>
+                </Alert>
+              ) : isComplete ? (
                 <Alert color="success" startDecorator={<CheckCircle />}>
                   <Stack spacing={1}>
                     <Typography level="title-sm">Scan Complete!</Typography>
                     <Typography level="body-sm">
-                      Found {scanResult.items_detected} items, matched{" "}
-                      {scanResult.items_matched} to existing database entries.
-                      {scanResult.confidence_score &&
-                        ` Overall confidence: ${(scanResult.confidence_score * 100).toFixed(0)}%`}
+                      Found {scanStatus?.items_detected ?? 0} items
+                      {scanStatus?.items_matched
+                        ? `, matched ${scanStatus.items_matched} to existing database entries`
+                        : ""}
+                      .
+                      {scanStatus?.confidence_score
+                        ? ` Overall confidence: ${(scanStatus.confidence_score * 100).toFixed(0)}%`
+                        : ""}
                     </Typography>
                   </Stack>
                 </Alert>
@@ -364,7 +362,7 @@ export function MenuScanner({ placeId, userId }: MenuScannerProps) {
                 <Alert color="danger" startDecorator={<ErrorIcon />}>
                   <Typography level="title-sm">Scan Failed</Typography>
                   <Typography level="body-sm">
-                    {scanResult.processing_error ||
+                    {scanStatus?.processing_error ||
                       "Failed to process the menu image."}
                   </Typography>
                 </Alert>
@@ -375,11 +373,12 @@ export function MenuScanner({ placeId, userId }: MenuScannerProps) {
                 spacing={2}
                 sx={{ justifyContent: "center" }}
               >
-                {scanResult.processing_status === "completed" && (
+                {isComplete && scanId && (
                   <Button
                     variant="solid"
                     startDecorator={<Visibility />}
-                    href={`/map/scans/${scanResult.id}`}
+                    component={NextLink}
+                    href={`/map/scans/${scanId}`}
                   >
                     View Results
                   </Button>
@@ -401,16 +400,16 @@ export function MenuScanner({ placeId, userId }: MenuScannerProps) {
           </Typography>
           <Stack spacing={1}>
             <Typography level="body-sm">
-              • Ensure the menu text is clear and well-lit
+              Ensure the menu text is clear and well-lit
             </Typography>
             <Typography level="body-sm">
-              • Hold the camera steady to avoid blur
+              Hold the camera steady to avoid blur
             </Typography>
             <Typography level="body-sm">
-              • Take multiple photos if the menu spans several pages
+              Take multiple photos if the menu spans several pages
             </Typography>
             <Typography level="body-sm">
-              • Focus on beverage sections (wine list, beer menu, cocktails)
+              Focus on beverage sections (wine list, beer menu, cocktails)
             </Typography>
           </Stack>
         </CardContent>
