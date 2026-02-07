@@ -183,18 +183,41 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
       case "restaurant":
         return <MdRestaurant {...iconProps} />;
       case "bar":
+      case "cocktail_bar":
+      case "pub":
+      case "beer_bar":
+      case "sports_bar":
+      case "lounge":
+      case "gastropub":
+      case "tapas_bar":
+      case "sake_bar":
+      case "whiskey_bar":
+      case "beer_garden":
         return <MdLocalBar {...iconProps} />;
       case "brewery":
         return <MdSportsBar {...iconProps} />;
       case "cafe":
+      case "coffee_shop":
+      case "coffee_roastery":
         return <MdLocalCafe {...iconProps} />;
       case "winery":
+      case "wine_bar":
+      case "wine_tasting_room":
+      case "distillery":
         return <MdWineBar {...iconProps} />;
       case "hotel":
+      case "resort":
         return <MdHotel {...iconProps} />;
+      case "grocery_store":
       case "grocery":
+      case "supermarket":
+      case "specialty_grocery_store":
+      case "organic_grocery_store":
         return <MdLocalGroceryStore {...iconProps} />;
       case "liquor_store":
+      case "beer_wine_and_spirits":
+      case "beverage_store":
+      case "wine_wholesaler":
         return <MdLiquor {...iconProps} />;
       case "casino":
         return <MdCasino {...iconProps} />;
