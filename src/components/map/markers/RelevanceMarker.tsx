@@ -180,45 +180,55 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
     const iconProps = { size: iconSize };
 
     switch (category?.toLowerCase()) {
-      case "restaurant":
-        return <MdRestaurant {...iconProps} />;
-      case "bar":
-      case "cocktail_bar":
-      case "pub":
+      // Beer bar
       case "beer_bar":
-      case "sports_bar":
-      case "lounge":
-      case "gastropub":
-      case "tapas_bar":
-      case "sake_bar":
-      case "whiskey_bar":
       case "beer_garden":
-        return <MdLocalBar {...iconProps} />;
+      case "sports_bar":
+      case "pub":
       case "brewery":
         return <MdSportsBar {...iconProps} />;
+      // Wine bar
+      case "wine_bar":
+      case "wine_tasting_room":
+      case "winery":
+      case "sake_bar":
+        return <MdWineBar {...iconProps} />;
+      // Cocktail bar
+      case "cocktail_bar":
+      case "lounge":
+      case "bar":
+        return <MdLocalBar {...iconProps} />;
+      // Spirits bar
+      case "whiskey_bar":
+      case "distillery":
+        return <MdLiquor {...iconProps} />;
+      // Coffee
       case "cafe":
       case "coffee_shop":
       case "coffee_roastery":
         return <MdLocalCafe {...iconProps} />;
-      case "winery":
-      case "wine_bar":
-      case "wine_tasting_room":
-      case "distillery":
-        return <MdWineBar {...iconProps} />;
-      case "hotel":
-      case "resort":
-        return <MdHotel {...iconProps} />;
+      // Food
+      case "restaurant":
+      case "gastropub":
+      case "tapas_bar":
+        return <MdRestaurant {...iconProps} />;
+      // Retail (grocery)
       case "grocery_store":
       case "grocery":
       case "supermarket":
       case "specialty_grocery_store":
       case "organic_grocery_store":
         return <MdLocalGroceryStore {...iconProps} />;
+      // Retail (liquor)
       case "liquor_store":
       case "beer_wine_and_spirits":
       case "beverage_store":
       case "wine_wholesaler":
         return <MdLiquor {...iconProps} />;
+      // Other
+      case "hotel":
+      case "resort":
+        return <MdHotel {...iconProps} />;
       case "casino":
         return <MdCasino {...iconProps} />;
       case "nightclub":
