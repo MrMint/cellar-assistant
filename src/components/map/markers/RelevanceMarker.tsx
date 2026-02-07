@@ -76,7 +76,7 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
   // Calculate overall relevance for sizing - now uses server-calculated score
   const calculateOverallRelevance = () => {
     // Use server-calculated overall relevance if available
-    const serverRelevance = (place as any).overallRelevance;
+    const serverRelevance = place.overallRelevance;
     if (serverRelevance !== undefined) {
       // Use centralized configuration for size scaling
       return calculateMarkerSize(serverRelevance);
@@ -84,22 +84,6 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
 
     // Fallback to old logic if server relevance not available
     const hasItemTypeFilters = (filters?.selectedItemTypes?.length ?? 0) > 0;
-    const hasSocialFilter = filters?.socialFilter === true;
-
-    // If social filter is active but no item types selected, use social scoring
-    if (hasSocialFilter && !hasItemTypeFilters) {
-      const allScores = (Object.values(itemTypeScores) as number[]).filter(
-        (score: number) => score > 0,
-      );
-      if (allScores.length === 0) {
-        return 25; // Very small for places with no social relevance
-      }
-      // Use the highest score among all item types for social-only filtering
-      const maxRelevance = Math.max(...allScores);
-
-      // Use centralized configuration for size scaling
-      return calculateMarkerSize(maxRelevance);
-    }
 
     if (!hasItemTypeFilters) {
       return 100; // Default size when no filters

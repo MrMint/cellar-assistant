@@ -2,68 +2,9 @@ import type { ItemType, MapSearchParams, PlaceCategory } from "../types";
 import { ITEM_TYPE_CATEGORY_MAPPINGS } from "./categories";
 import { NAME_KEYWORDS } from "./keywords";
 
-// Precompute category specificity at module load.
-// Specificity measures how exclusively a category maps to a single item type.
-// A coffee_shop (only in coffee mappings) gets specificity ~1.0 for coffee.
-// A hotel (mapped across all item types) gets specificity ~0.26 for coffee.
-// Formula: specificity[category][itemType] = weight[category][itemType] / sum(weight[category][allItemTypes])
-function computeCategorySpecificity(): Record<
-	string,
-	Record<ItemType, number>
-> {
-	const allItemTypes: ItemType[] = [
-		"wine",
-		"beer",
-		"spirit",
-		"coffee",
-		"sake",
-	];
-
-	// Collect each category's weight across all item types
-	const categoryWeights: Record<string, Record<ItemType, number>> = {};
-
-	for (const itemType of allItemTypes) {
-		for (const mapping of ITEM_TYPE_CATEGORY_MAPPINGS[itemType] ?? []) {
-			if (!categoryWeights[mapping.category]) {
-				categoryWeights[mapping.category] = {
-					wine: 0,
-					beer: 0,
-					spirit: 0,
-					coffee: 0,
-					sake: 0,
-				};
-			}
-			categoryWeights[mapping.category][itemType] = mapping.weight;
-		}
-	}
-
-	// Compute specificity for each category-itemType pair
-	const specificity: Record<string, Record<ItemType, number>> = {};
-
-	for (const [category, weights] of Object.entries(categoryWeights)) {
-		const totalWeight = Object.values(weights).reduce(
-			(sum, w) => sum + w,
-			0,
-		);
-		specificity[category] = {
-			wine: 0,
-			beer: 0,
-			spirit: 0,
-			coffee: 0,
-			sake: 0,
-		};
-
-		for (const itemType of allItemTypes) {
-			if (weights[itemType] > 0 && totalWeight > 0) {
-				specificity[category][itemType] = weights[itemType] / totalWeight;
-			}
-		}
-	}
-
-	return specificity;
-}
-
-export const CATEGORY_SPECIFICITY = computeCategorySpecificity();
+// Identity score threshold for SQL pre-filtering.
+// Categories with identityScore >= this value are sent to the database query.
+const IDENTITY_THRESHOLD = 0.5;
 
 // Calculate overall place quality independent of search criteria
 export function calculateOverallQuality(place: any): number {
@@ -134,15 +75,11 @@ export function calculateOverallQuality(place: any): number {
   return Math.min(100, Math.max(0, qualityScore));
 }
 
-// Calculate item type matching scores for ALL item types (enhanced with name keywords and primary category weighting)
+// Calculate item type matching scores for ALL item types using identityScore
 export function calculateItemTypeMatches(
   place: any,
-  _requestedItemTypes?: ItemType[],
-  socialFilter?: boolean,
 ): Record<ItemType, number> {
-  // Always calculate for ALL item types, not just requested ones
   const allItemTypes: ItemType[] = ["wine", "beer", "spirit", "coffee", "sake"];
-  // Initialize all scores
   const scores: Record<ItemType, number> = {
     wine: 0,
     beer: 0,
@@ -151,103 +88,49 @@ export function calculateItemTypeMatches(
     sake: 0,
   };
 
-  // 1. Enhanced name-based keyword detection (non-brand keywords only)
+  // 1. Name-based keyword detection
   const placeName = place.name?.toLowerCase() || "";
 
-  // Track which item types get name bonuses (more selective)
-  const nameMatches: Record<string, boolean> = {};
   Object.entries(NAME_KEYWORDS).forEach(([itemType, keywords]) => {
     const hasNameMatch = keywords.some((keyword) =>
       placeName.includes(keyword),
     );
     if (hasNameMatch) {
-      nameMatches[itemType] = true;
-      scores[itemType as ItemType] += 25; // Reduced from 60 to 25 - name gives bonus, not dominance
+      scores[itemType as ItemType] += 25;
     }
   });
 
-  // 2. Category-based scoring with primary category weighting
+  // 2. Category-based scoring using identityScore with primary category bonus
   const categories = place.categories || [place.primary_category];
 
   allItemTypes.forEach((itemType) => {
-    const categoryWeights = ITEM_TYPE_CATEGORY_MAPPINGS[itemType] || [];
-    let bestMatchWeight = 0;
+    const mappings = ITEM_TYPE_CATEGORY_MAPPINGS[itemType] || [];
+    let bestScore = 0;
 
     categories.forEach((category: any, index: number) => {
       const isPrimary = index === 0 || category === place.primary_category;
-      const multiplier = isPrimary ? 1.5 : 1.0; // 50% bonus for primary category
+      const multiplier = isPrimary ? 1.5 : 1.0;
 
-      // Check each category weight for this item type, applying specificity
-      categoryWeights.forEach((categoryWeight) => {
-        const isMatch = category === categoryWeight.category;
-
-        if (isMatch) {
-          const specificity =
-            CATEGORY_SPECIFICITY[category]?.[itemType] ?? 0;
-          const identityWeight = categoryWeight.weight * specificity;
-          const adjustedWeight = identityWeight * multiplier;
-          bestMatchWeight = Math.max(bestMatchWeight, adjustedWeight);
+      mappings.forEach((mapping) => {
+        if (category === mapping.category) {
+          const adjustedScore = mapping.identityScore * multiplier;
+          bestScore = Math.max(bestScore, adjustedScore);
         }
       });
     });
 
-    // Convert identity-weighted score to percentage (0-100)
-    const categoryScore = Math.min(100, Math.round(bestMatchWeight * 100));
+    // Convert to 0-100 scale
+    const categoryScore = Math.min(100, Math.round(bestScore * 100));
     scores[itemType] += categoryScore;
 
-    // Apply social filtering
-    if (socialFilter === true) {
-      // Check if this place has destination scores indicating it's social across ALL item types
-      let isSocialPlace = false;
-      let maxDestinationScore = 0;
-
-      // Check ALL item types for social scoring, not just the current one
-      const allItemTypes: ItemType[] = [
-        "wine",
-        "beer",
-        "spirit",
-        "coffee",
-        "sake",
-      ];
-      allItemTypes.forEach((checkItemType) => {
-        const categoryWeights =
-          ITEM_TYPE_CATEGORY_MAPPINGS[checkItemType] || [];
-        categories.forEach((category: any) => {
-          const categoryWeight = categoryWeights.find(
-            (cw) => cw.category === category,
-          );
-          if (categoryWeight?.destinationScore) {
-            maxDestinationScore = Math.max(
-              maxDestinationScore,
-              categoryWeight.destinationScore,
-            );
-            if (categoryWeight.destinationScore >= 0.6) {
-              isSocialPlace = true;
-            }
-          }
-        });
-      });
-
-      if (isSocialPlace) {
-        // Give social places a baseline score even if they don't match item type criteria
-        const baselineScore = Math.round(maxDestinationScore * 50); // 0.6-1.0 destination → 30-50 baseline
-        scores[itemType] = Math.max(scores[itemType], baselineScore);
-
-        // Keep social places at their natural score (no boost)
-      } else {
-        // Reduce score for non-social places when social filter is active
-        scores[itemType] = Math.round(scores[itemType] * 0.2); // Dramatically reduce score for non-social places
-      }
-    }
-
-    // Cap final score at 100
+    // Cap at 100
     scores[itemType] = Math.min(100, scores[itemType]);
   });
 
   return scores;
 }
 
-// Legacy function - calculate server-side relevance score and matched item types using weighted categories
+// Legacy function - calculate server-side relevance score and matched item types
 export function calculatePlaceRelevance(
   place: any,
   searchParams: MapSearchParams,
@@ -255,57 +138,35 @@ export function calculatePlaceRelevance(
   const {
     itemTypes = [],
     minRating,
-    visitStatuses = [],
     semanticQuery,
-    socialFilter,
   } = searchParams;
 
   let score = 0;
   let maxScore = 0;
   const matchedItemTypes: ItemType[] = [];
 
-  // Enhanced item type matching (40% weight) using Overture-based weights
+  // Item type matching (40% weight) using identityScore
   if (itemTypes.length > 0) {
     maxScore += 40;
 
     itemTypes.forEach((itemType) => {
-      const categoryWeights = ITEM_TYPE_CATEGORY_MAPPINGS[itemType] || [];
-      let bestMatchWeight = 0;
+      const mappings = ITEM_TYPE_CATEGORY_MAPPINGS[itemType] || [];
+      let bestMatchScore = 0;
       let hasMatch = false;
 
-      // Check each category for this item type
-      categoryWeights.forEach((categoryWeight) => {
+      mappings.forEach((mapping) => {
         const isMatch =
-          place.categories?.includes(categoryWeight.category) ||
-          place.primary_category === categoryWeight.category;
+          place.categories?.includes(mapping.category) ||
+          place.primary_category === mapping.category;
 
         if (isMatch) {
           hasMatch = true;
-          const specificity =
-            CATEGORY_SPECIFICITY[categoryWeight.category]?.[itemType] ?? 0;
-          let adjustedWeight = categoryWeight.weight * specificity;
-
-          // Apply social scoring multiplier if social filtering is active
-          if (socialFilter === true && categoryWeight.destinationScore) {
-            const destScore = categoryWeight.destinationScore;
-            if (destScore >= 0.6) {
-              // Keep social places at their natural weight (no boost)
-            } else {
-              // Apply penalty based on how non-social the place is
-              // destScore 0.0-0.59 → penalty multiplier 0.1-0.59 (lower destScore = higher penalty)
-              const penaltyMultiplier = Math.max(0.1, destScore);
-              adjustedWeight *= penaltyMultiplier;
-            }
-          }
-
-          bestMatchWeight = Math.max(bestMatchWeight, adjustedWeight);
+          bestMatchScore = Math.max(bestMatchScore, mapping.identityScore);
         }
       });
 
       if (hasMatch) {
-        // Score based on the weight of the best matching category
-        // Higher weights (like winery for wine) get higher scores
-        const itemScore = (40 / itemTypes.length) * bestMatchWeight;
+        const itemScore = (40 / itemTypes.length) * bestMatchScore;
         score += itemScore;
         matchedItemTypes.push(itemType);
       }
@@ -325,16 +186,14 @@ export function calculatePlaceRelevance(
     maxScore += 20;
     const totalItems = place.menu_summary.total_items || 0;
     if (totalItems > 0) {
-      // Give higher scores to places with more menu items
       score += Math.min(20, totalItems / 2);
     }
   }
 
-  // Search query relevance (10% weight) - for semantic search
+  // Search query relevance (10% weight)
   if (semanticQuery) {
     maxScore += 10;
-    // This would typically use the confidence score from semantic search
-    score += 10; // Assume semantic matches are relevant
+    score += 10;
   }
 
   const relevanceScore =
@@ -349,60 +208,21 @@ export function calculateOverallRelevance(
   searchParams: MapSearchParams,
   itemTypeScores: Record<ItemType, number>,
 ): number {
-  const { itemTypes = [], socialFilter = false } = searchParams;
+  const { itemTypes = [] } = searchParams;
 
-  // Base logic: if no filters are active, everyone gets default relevance
-  if (!socialFilter && itemTypes.length === 0) {
-    return 100; // Default relevance when no filters
+  if (itemTypes.length === 0) {
+    return 100; // Default relevance when no item type filters
   }
 
-  // If only social filter is active (no item types selected)
-  if (socialFilter && itemTypes.length === 0) {
-    // Use the highest score among all item types for social-only filtering
-    const allScores = (Object.values(itemTypeScores) as number[]).filter(
-      (score: number) => score > 0,
-    );
-    if (allScores.length === 0) {
-      return 5; // Very low relevance for places with no social relevance
-    }
-    return Math.max(...allScores);
+  const relevantScores = itemTypes
+    .map((type: ItemType) => itemTypeScores[type] || 0)
+    .filter((score: number) => score > 0);
+
+  if (relevantScores.length === 0) {
+    return 5; // Very low relevance for non-matching places
   }
 
-  // If item types are selected (with or without social filter)
-  if (itemTypes.length > 0) {
-    const relevantScores = itemTypes
-      .map((type: ItemType) => itemTypeScores[type] || 0)
-      .filter((score: number) => score > 0);
-
-    if (relevantScores.length === 0) {
-      return 5; // Very low relevance for places that don't match selected item types
-    }
-
-    // Use the highest score among selected item types
-    return Math.max(...relevantScores);
-  }
-
-  return 100; // Fallback
-}
-
-// Get weighted categories for more sophisticated relevance scoring
-export function getWeightedCategoriesForItemTypes(
-  itemTypes: ItemType[],
-): Map<PlaceCategory, number> {
-  const weightMap = new Map<PlaceCategory, number>();
-
-  itemTypes.forEach((itemType) => {
-    ITEM_TYPE_CATEGORY_MAPPINGS[itemType]?.forEach((categoryWeight) => {
-      const existing = weightMap.get(categoryWeight.category) || 0;
-      // Use the higher weight if category appears in multiple item types
-      weightMap.set(
-        categoryWeight.category,
-        Math.max(existing, categoryWeight.weight),
-      );
-    });
-  });
-
-  return weightMap;
+  return Math.max(...relevantScores);
 }
 
 export function mapItemTypesToCategories(
@@ -412,10 +232,15 @@ export function mapItemTypesToCategories(
     return undefined; // No filtering when no item types selected
   }
 
+  // Include categories where identityScore meets threshold.
+  // This naturally varies per item type: coffee only passes coffee_shop/cafe/roastery,
+  // while spirits includes bars, lounges, pubs, etc.
   const categorySet = new Set<PlaceCategory>();
   itemTypes.forEach((itemType) => {
-    ITEM_TYPE_CATEGORY_MAPPINGS[itemType]?.forEach((categoryWeight) => {
-      categorySet.add(categoryWeight.category);
+    ITEM_TYPE_CATEGORY_MAPPINGS[itemType]?.forEach((mapping) => {
+      if (mapping.identityScore >= IDENTITY_THRESHOLD) {
+        categorySet.add(mapping.category);
+      }
     });
   });
 

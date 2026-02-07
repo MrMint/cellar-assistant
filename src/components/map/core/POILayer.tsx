@@ -32,8 +32,6 @@ interface POILayerProps {
     minRating?: number;
     searchQuery: string;
     visitStatuses: VisitStatus[];
-    socialFilter?: boolean;
-    minItemCount?: number;
   };
 }
 

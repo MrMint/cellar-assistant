@@ -14,6 +14,8 @@ import {
   useMapFilters,
   useMapUI,
 } from "../hooks/useMapMachine";
+import { useMapSearchParams } from "../hooks/useMapSearchParams";
+import { useSearchParamsSync } from "../hooks/useSearchParamsSync";
 import type { PlaceResult } from "../types";
 import { MapControls } from "./MapControls";
 import { MapPanes } from "./MapPanes";
@@ -114,6 +116,10 @@ export function MapRenderer({ userId }: MapRendererProps) {
   const mapUI = useMapUI();
   const mapActions = useMapActions();
   const mapFilters = useMapFilters();
+
+  // nuqs URL state → XState sync (URL is source of truth for filters)
+  const searchParams = useMapSearchParams();
+  useSearchParamsSync(searchParams);
   const {
     mapItems,
     isLoading: placesLoading,
@@ -337,7 +343,6 @@ export function MapRenderer({ userId }: MapRendererProps) {
             minRating: mapFilters.minRating,
             searchQuery: mapFilters.searchQuery,
             visitStatuses: mapFilters.visitStatuses,
-            socialFilter: mapFilters.socialFilter,
           }}
         />
 

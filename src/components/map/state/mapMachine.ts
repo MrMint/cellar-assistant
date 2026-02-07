@@ -8,7 +8,6 @@ import type {
   MapSearchResults,
   PlaceResult as Place,
   SemanticPlaceResult,
-  SocialFilter,
   UserLocation,
   VisitStatus,
 } from "../types";
@@ -36,7 +35,6 @@ interface MapContext {
   isSemanticSearch: boolean; // Whether current search is semantic vs filter-based
   minRating: number | undefined;
   visitStatuses: VisitStatus[];
-  socialFilter: SocialFilter;
 
   // Data state
   places: Place[];
@@ -67,7 +65,6 @@ type MapEvent =
   | { type: "PERFORM_SEMANTIC_SEARCH"; query: string }
   | { type: "SET_MIN_RATING"; rating: number | undefined }
   | { type: "SET_VISIT_STATUSES"; statuses: VisitStatus[] }
-  | { type: "SET_SOCIAL_FILTER"; socialFilter: SocialFilter }
   | { type: "CLEAR_FILTERS" }
   | { type: "REFRESH_PLACES" }
   | { type: "UPDATE_SELECTED_PLACE"; place: Place }
@@ -83,7 +80,6 @@ const fetchPlacesService = fromPromise(
       itemTypes: ItemType[];
       minRating: number | undefined;
       visitStatuses: VisitStatus[];
-      socialFilter: SocialFilter;
       searchQuery: string;
       isSemanticSearch: boolean;
       userLocation: UserLocation;
@@ -95,7 +91,6 @@ const fetchPlacesService = fromPromise(
       itemTypes,
       minRating,
       visitStatuses,
-      socialFilter,
       searchQuery,
       isSemanticSearch,
       userLocation,
@@ -108,7 +103,6 @@ const fetchPlacesService = fromPromise(
         itemTypes,
         minRating,
         visitStatuses,
-        socialFilter,
         semanticQuery: isSemanticSearch ? searchQuery : undefined,
         limit: 500,
       };
@@ -269,18 +263,12 @@ const actions = {
       event.type === "SET_VISIT_STATUSES" ? event.statuses : [],
   }),
 
-  setSocialFilter: assign({
-    socialFilter: ({ event }) =>
-      event.type === "SET_SOCIAL_FILTER" ? event.socialFilter : false,
-  }),
-
   clearFilters: assign({
     selectedItemTypes: [],
     searchQuery: "",
     isSemanticSearch: false,
     minRating: undefined,
     visitStatuses: [],
-    socialFilter: false,
   }),
 
   setPlaces: assign({
@@ -378,7 +366,6 @@ export const mapMachine = createMachine(
       isSemanticSearch: false,
       minRating: undefined,
       visitStatuses: [],
-      socialFilter: false,
       places: [],
       mapItems: [],
       placesError: null,
@@ -387,7 +374,8 @@ export const mapMachine = createMachine(
     }),
 
     states: {
-      // Map not yet initialized
+      // Map not yet initialized — accept filter events so URL-synced
+      // params (from nuqs) are captured in context before INITIALIZE fires.
       uninitializedMap: {
         on: {
           INITIALIZE: {
@@ -399,6 +387,27 @@ export const mapMachine = createMachine(
           },
           SET_DESKTOP: {
             actions: "setDesktop",
+          },
+          SET_BOUNDS: {
+            actions: "setBounds",
+          },
+          SET_ITEM_TYPES: {
+            actions: "setItemTypes",
+          },
+          TOGGLE_ITEM_TYPE: {
+            actions: "toggleItemType",
+          },
+          SET_MIN_RATING: {
+            actions: "setMinRating",
+          },
+          SET_VISIT_STATUSES: {
+            actions: "setVisitStatuses",
+          },
+          PERFORM_SEMANTIC_SEARCH: {
+            actions: "performSemanticSearch",
+          },
+          SET_SEARCH_QUERY: {
+            actions: "setSearchQuery",
           },
         },
       },
@@ -532,16 +541,6 @@ export const mapMachine = createMachine(
                       actions: "setVisitStatuses",
                     },
                   ],
-                  SET_SOCIAL_FILTER: [
-                    {
-                      target: "loading",
-                      guard: "canFetchPlaces",
-                      actions: ["setSocialFilter", "clearError"],
-                    },
-                    {
-                      actions: "setSocialFilter",
-                    },
-                  ],
                 },
               },
               loading: {
@@ -553,7 +552,6 @@ export const mapMachine = createMachine(
                     itemTypes: context.selectedItemTypes,
                     minRating: context.minRating,
                     visitStatuses: context.visitStatuses,
-                    socialFilter: context.socialFilter,
                     searchQuery: context.searchQuery,
                     isSemanticSearch: context.isSemanticSearch,
                     userLocation: context.userLocation || {
@@ -579,25 +577,43 @@ export const mapMachine = createMachine(
                   },
                 },
                 on: {
-                  // Allow filter changes during loading - they'll trigger new fetch when done
+                  // Filter changes during loading: cancel current fetch and restart
+                  // with updated params. Uses reenter: true because XState v5
+                  // self-transitions are internal by default (no exit/re-enter),
+                  // so without it the invoke would NOT be cancelled and restarted.
                   SET_ITEM_TYPES: {
+                    target: "loading",
+                    reenter: true,
                     actions: "setItemTypes",
                   },
                   TOGGLE_ITEM_TYPE: {
+                    target: "loading",
+                    reenter: true,
                     actions: "toggleItemType",
                   },
-
-                  SET_SEARCH_QUERY: {
-                    actions: "setSearchQuery",
+                  PERFORM_SEMANTIC_SEARCH: {
+                    target: "loading",
+                    reenter: true,
+                    actions: "performSemanticSearch",
                   },
                   SET_MIN_RATING: {
+                    target: "loading",
+                    reenter: true,
                     actions: "setMinRating",
                   },
                   SET_VISIT_STATUSES: {
+                    target: "loading",
+                    reenter: true,
                     actions: "setVisitStatuses",
                   },
                   CLEAR_FILTERS: {
+                    target: "loading",
+                    reenter: true,
                     actions: "clearFilters",
+                  },
+                  // Non-fetch context updates (search query text without triggering fetch)
+                  SET_SEARCH_QUERY: {
+                    actions: "setSearchQuery",
                   },
                 },
               },
@@ -650,7 +666,6 @@ export const mapMachine = createMachine(
           PERFORM_SEMANTIC_SEARCH: { actions: "performSemanticSearch" },
           SET_MIN_RATING: { actions: "setMinRating" },
           SET_VISIT_STATUSES: { actions: "setVisitStatuses" },
-          SET_SOCIAL_FILTER: { actions: "setSocialFilter" },
           CLEAR_FILTERS: { actions: "clearFilters" },
           SET_ERROR: { actions: "setError" },
           CLEAR_ERROR: { actions: "clearError" },

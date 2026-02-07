@@ -3,7 +3,6 @@
 import { graphql } from "@cellar-assistant/shared/gql";
 import { getSearchVectorQuery } from "@cellar-assistant/shared/queries";
 import { isNil } from "ramda";
-import { ITEM_TYPE_CATEGORY_MAPPINGS } from "@/components/map/config/categories";
 import {
   calculateItemTypeMatches,
   calculateOverallQuality,
@@ -20,40 +19,10 @@ import type {
   PlaceCluster,
   PlaceResult,
   SemanticPlaceResult,
-  SocialFilter,
   VisitStatus,
 } from "@/components/map/types";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
-
-/**
- * Helper function to determine if a place is considered a "social" destination
- * based on its category's destination score across all item types.
- * A place is social if any of its categories has a destinationScore >= 0.6
- */
-function isSocialPlace(categories: string[]): boolean {
-  const allItemTypes: ItemType[] = ["wine", "beer", "spirit", "coffee", "sake"];
-
-  return categories.some((category) => {
-    for (const itemType of allItemTypes) {
-      const categoryWeights =
-        ITEM_TYPE_CATEGORY_MAPPINGS[
-          itemType as keyof typeof ITEM_TYPE_CATEGORY_MAPPINGS
-        ] || [];
-      const categoryWeight = categoryWeights.find(
-        (cw: { category: string; destinationScore?: number }) =>
-          cw.category === category,
-      );
-      if (
-        categoryWeight?.destinationScore &&
-        categoryWeight.destinationScore >= 0.6
-      ) {
-        return true;
-      }
-    }
-    return false;
-  });
-}
 
 // Import the existing GraphQL query from the XState machine (legacy)
 const SearchPlacesClusteredQuery = graphql(`
@@ -178,11 +147,7 @@ function transformPlaceResult(
           const overallQuality = calculateOverallQuality(item);
 
           // Always calculate item type scores for all item types (for background color detection)
-          const itemTypeScores = calculateItemTypeMatches(
-            item,
-            searchParams.itemTypes,
-            searchParams.socialFilter,
-          );
+          const itemTypeScores = calculateItemTypeMatches(item);
 
           // Calculate overall relevance score based on all active filters
           const overallRelevance = calculateOverallRelevance(
@@ -276,7 +241,6 @@ export async function searchMapPlaces(
     itemTypes = [],
     minRating,
     visitStatuses = [],
-    socialFilter = false,
     semanticQuery,
     maxSemanticDistance = 0.8,
     limit = 500,
@@ -288,7 +252,6 @@ export async function searchMapPlaces(
     itemTypesLength: itemTypes?.length || 0,
     minRating: minRating || "none",
     visitStatuses: visitStatuses.join(",") || "all",
-    socialFilter: socialFilter || false,
   });
 
   console.log(
@@ -304,7 +267,6 @@ export async function searchMapPlaces(
         itemTypes,
         minRating,
         visitStatuses,
-        socialFilter,
         userId,
         maxSemanticDistance,
         limit,
@@ -317,7 +279,6 @@ export async function searchMapPlaces(
       itemTypes,
       minRating,
       visitStatuses,
-      socialFilter,
       userId,
       limit,
     );
@@ -345,7 +306,6 @@ async function performSemanticSearch(
   itemTypes: ItemType[],
   minRating: number | undefined,
   visitStatuses: VisitStatus[],
-  socialFilter: SocialFilter,
   userId: string,
   maxDistance: number,
   limit: number,
@@ -420,7 +380,6 @@ async function performSemanticSearch(
       itemTypes,
       minRating,
       visitStatuses,
-      socialFilter,
       semanticQuery: query,
     };
 
@@ -464,17 +423,6 @@ async function performSemanticSearch(
       );
     }
 
-    // Apply social filter using consolidated helper function
-    if (socialFilter === true) {
-      const originalCount = semanticResults.length;
-      semanticResults = semanticResults.filter((place) =>
-        isSocialPlace(place.categories),
-      );
-      console.log(
-        `👥 [Server Action] Social filter: ${originalCount} → ${semanticResults.length} places`,
-      );
-    }
-
     // TODO: Visit status filtering is not yet implemented for semantic search
     // This would require fetching user_place_interactions data for each place
     // which adds complexity to the semantic search query. For now, all places
@@ -513,7 +461,6 @@ async function performStandardSearch(
   itemTypes: ItemType[],
   minRating: number | undefined,
   visitStatuses: VisitStatus[],
-  socialFilter: SocialFilter,
   userId: string,
   limit: number,
 ): Promise<MapSearchResults> {
@@ -568,7 +515,6 @@ async function performStandardSearch(
     itemTypes,
     minRating,
     visitStatuses,
-    socialFilter,
   };
 
   // Transform results with relevance calculation
@@ -581,27 +527,9 @@ async function performStandardSearch(
   });
 
   // Extract just the places (non-cluster items) - already transformed with relevance
-  let places: PlaceResult[] = mapItems.filter(
+  const places: PlaceResult[] = mapItems.filter(
     (item): item is PlaceResult => !("is_cluster" in item),
   );
-
-  // Apply social filtering if active using consolidated helper function
-  if (socialFilter === true) {
-    const originalCount = places.length;
-    places = places.filter((place) => {
-      const isSocial = isSocialPlace(place.categories);
-      if (process.env.NODE_ENV === "development") {
-        console.log(
-          `🎯 [Social Filter] ${place.name}: ${isSocial ? "SOCIAL" : "NOT SOCIAL"} (categories: ${place.categories.join(", ")})`,
-        );
-      }
-      return isSocial;
-    });
-
-    console.log(
-      `🎯 [Social Filter] Filtered from ${originalCount} to ${places.length} social places`,
-    );
-  }
 
   const clusters = mapItems.filter(
     (item): item is PlaceCluster => "is_cluster" in item,

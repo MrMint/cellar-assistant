@@ -10,7 +10,6 @@ import type {
   ItemType,
   MapBounds,
   Place,
-  SocialFilter,
   UserLocation,
   VisitStatus,
 } from "../types";
@@ -62,7 +61,6 @@ export function useMapFilters() {
     isSemanticSearch: state.context.isSemanticSearch,
     minRating: state.context.minRating,
     visitStatuses: state.context.visitStatuses,
-    socialFilter: state.context.socialFilter,
   }));
 }
 
@@ -75,68 +73,6 @@ export function useMapData() {
     isLoading: state.matches({ idle: { data: "loading" } }),
     placesError: state.context.placesError,
   }));
-}
-
-// Computed selectors
-export function useFilteredPlaces() {
-  const actorRef = useMapMachineActor();
-  return useSelector(actorRef, (state) => {
-    const { places, searchQuery, minRating, visitStatuses } = state.context;
-
-    return places
-      .filter((place) => {
-        // Search query filter
-        if (searchQuery) {
-          const query = searchQuery.toLowerCase();
-          const searchText = [
-            place.name,
-            place.primary_category,
-            ...place.categories,
-          ]
-            .join(" ")
-            .toLowerCase();
-
-          if (!searchText.includes(query)) {
-            return false;
-          }
-        }
-
-        // Rating filter
-        if (minRating !== undefined && place.rating !== undefined) {
-          if (place.rating < minRating) {
-            return false;
-          }
-        }
-
-        // Visit status filter
-        if (visitStatuses.length > 0) {
-          const hasVisited =
-            place.user_place_interactions?.some(
-              (interaction: { is_visited: boolean }) => interaction.is_visited,
-            ) || false;
-
-          const isNew = !hasVisited;
-
-          const matchesFilter = visitStatuses.some((status) => {
-            if (status === "unvisited" && isNew) return true;
-            if (status === "visited" && hasVisited) return true;
-            return false;
-          });
-
-          if (!matchesFilter) {
-            return false;
-          }
-        }
-
-        return true;
-      })
-      .sort((a, b) => {
-        // Sort by distance by default if available
-        const aDistance = a.location?.coordinates ? 0 : Infinity; // Simplified - would calculate actual distance
-        const bDistance = b.location?.coordinates ? 0 : Infinity;
-        return aDistance - bDistance;
-      });
-  });
 }
 
 export function useMapActions() {
@@ -183,8 +119,6 @@ export function useMapActions() {
         send({ type: "SET_MIN_RATING", rating }),
       setVisitStatuses: (statuses: VisitStatus[]) =>
         send({ type: "SET_VISIT_STATUSES", statuses }),
-      setSocialFilter: (socialFilter: SocialFilter) =>
-        send({ type: "SET_SOCIAL_FILTER", socialFilter }),
       clearFilters: () => send({ type: "CLEAR_FILTERS" }),
 
       // Data actions
@@ -205,7 +139,6 @@ export function useMapState() {
   const ui = useMapUI();
   const filters = useMapFilters();
   const data = useMapData();
-  const filteredPlaces = useFilteredPlaces();
   const actions = useMapActions();
 
   return {
@@ -214,9 +147,6 @@ export function useMapState() {
     ui,
     filters,
     data,
-
-    // Computed values
-    filteredPlaces,
 
     // Raw state and send (use sparingly)
     state,
@@ -231,8 +161,7 @@ export function useMapState() {
         filters.selectedItemTypes.length > 0 ||
         filters.searchQuery.length > 0 ||
         filters.minRating !== undefined ||
-        filters.visitStatuses.length > 0 ||
-        filters.socialFilter === true
+        filters.visitStatuses.length > 0
       );
     },
 
@@ -240,7 +169,6 @@ export function useMapState() {
       selectedItemTypes: filters.selectedItemTypes,
       minRating: filters.minRating,
       searchQuery: filters.searchQuery,
-      minItemCount: 0, // Could be added later
     }),
 
     // State matching helpers
@@ -269,7 +197,6 @@ export function useMapSend() {
  * // Optimized selectors (preferred for child components)
  * const { isDrawerOpen, selectedPlace } = useMapUI();
  * const { places, isLoading } = useMapData();
- * const filteredPlaces = useFilteredPlaces();
  *
  * // Actions only (for control components)
  * const actions = useMapActions();

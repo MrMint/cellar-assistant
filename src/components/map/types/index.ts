@@ -78,14 +78,12 @@ export type PlaceCategory =
 
 export type ItemType = "wine" | "beer" | "spirit" | "coffee" | "sake";
 export type VisitStatus = "visited" | "unvisited" | "favorites";
-export type SocialFilter = boolean; // Filter for social gathering places (true = social only, false = all places)
 
-// Enhanced item-type to category mapping based on Overture Maps analysis
-export interface CategoryWeight {
+// Identity-based category mapping: single score per category-item-type pair
+// identityScore answers: "How central is [item type] to this category's identity?"
+export interface CategoryIdentity {
   category: PlaceCategory;
-  weight: number; // 0.0-1.0, where 1.0 = highest likelihood
-  tier: 1 | 2 | 3; // Tier classification for scoring
-  destinationScore?: number; // 0.0-1.0, how much of a destination/social gathering place this is
+  identityScore: number; // 0.0-1.0, where 1.0 = this IS a [type] place
 }
 
 // ============================================================================
@@ -172,8 +170,6 @@ export interface MapSearchParams {
   itemTypes?: ItemType[];
   minRating?: number;
   visitStatuses?: VisitStatus[];
-  socialFilter?: SocialFilter;
-
   // Semantic search
   semanticQuery?: string;
   maxSemanticDistance?: number;
@@ -204,8 +200,6 @@ export interface MapFilters {
   minRating?: number;
   searchQuery: string;
   visitStatuses: VisitStatus[];
-  socialFilter?: boolean;
-  minItemCount?: number;
 }
 
 // ============================================================================

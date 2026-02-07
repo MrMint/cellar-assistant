@@ -3,7 +3,8 @@
 import { Close, LocationOn, Refresh, Search } from "@mui/icons-material";
 import { Box, Divider, IconButton, Input, Sheet, Stack } from "@mui/joy";
 import { useEffect, useState } from "react";
-import { useMapActions, useMapFilters, useMapUI } from "../hooks/useMapMachine";
+import { useMapUI } from "../hooks/useMapMachine";
+import { useMapSearchParams } from "../hooks/useMapSearchParams";
 import { MapFilter } from "./MapFilter";
 
 interface MapControlsProps {
@@ -56,24 +57,18 @@ export function MapControls({
 }: MapControlsProps) {
   const [isMobile, setIsMobile] = useState(false);
 
-  // XState selectors - automatically optimized re-renders
+  // URL-backed filter state via nuqs
   const {
-    selectedItemTypes,
-    searchQuery,
+    search,
+    itemTypes,
     minRating,
     visitStatuses,
-    socialFilter,
-  } = useMapFilters();
-  const { isDrawerOpen } = useMapUI();
-  const {
+    setSearch,
     setItemTypes,
-    setSearchQuery,
-    performSemanticSearch,
     setMinRating,
     setVisitStatuses,
-    setSocialFilter,
-    closeDrawer,
-  } = useMapActions();
+  } = useMapSearchParams();
+  const { isDrawerOpen } = useMapUI();
 
   // Detect mobile vs desktop for responsive layout
   useEffect(() => {
@@ -135,23 +130,20 @@ export function MapControls({
       >
         <Input
           placeholder="Search places, items, or descriptions..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
           startDecorator={<Search />}
           endDecorator={
-            isDrawerOpen ? (
+            search ? (
               <IconButton
                 variant="plain"
                 color="neutral"
-                onClick={closeDrawer}
+                onClick={() => setSearch("")}
                 size="sm"
                 sx={{
                   minWidth: "auto",
                   minHeight: "auto",
                   padding: "4px",
-                  "&:hover": {
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
-                  },
                 }}
               >
                 <Close sx={{ fontSize: "18px" }} />
@@ -215,18 +207,15 @@ export function MapControls({
               }}
             >
               <MapFilter
-                selectedItemTypes={selectedItemTypes}
+                selectedItemTypes={itemTypes}
                 onItemTypesChange={setItemTypes}
                 counts={counts}
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-                onSemanticSearch={performSemanticSearch}
-                minRating={minRating}
+                searchQuery={search}
+                onSearchQueryChange={setSearch}
+                minRating={minRating ?? undefined}
                 onMinRatingChange={setMinRating}
                 visitStatuses={visitStatuses}
                 onVisitStatusesChange={setVisitStatuses}
-                socialFilter={socialFilter}
-                onSocialFilterChange={setSocialFilter}
               />
 
               {showActions && <Divider orientation="vertical" />}

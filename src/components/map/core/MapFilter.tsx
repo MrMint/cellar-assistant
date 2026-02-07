@@ -19,8 +19,8 @@ import {
   FaGlassWhiskey,
   FaWineGlass,
 } from "react-icons/fa";
-import { MdFilterList, MdGroup } from "react-icons/md";
-import type { ItemType, SocialFilter, VisitStatus } from "../types";
+import { MdFilterList } from "react-icons/md";
+import type { ItemType, VisitStatus } from "../types";
 import { ITEM_TYPES } from "./ItemTypeCategoryMapper";
 
 type MapFilterProps = {
@@ -37,10 +37,9 @@ type MapFilterProps = {
     wineries?: number;
   };
 
-  // Semantic search
+  // Search
   searchQuery?: string;
   onSearchQueryChange: (query: string) => void;
-  onSemanticSearch?: (query: string) => void;
 
   // Rating filter
   minRating?: number;
@@ -49,10 +48,6 @@ type MapFilterProps = {
   // Visit status filter
   visitStatuses?: VisitStatus[];
   onVisitStatusesChange: (statuses: VisitStatus[]) => void;
-
-  // Social filter
-  socialFilter?: SocialFilter;
-  onSocialFilterChange: (filter: SocialFilter) => void;
 };
 
 // Icon mapping for item types
@@ -70,13 +65,10 @@ export const MapFilter: FC<MapFilterProps> = ({
   counts = {},
   searchQuery = "",
   onSearchQueryChange,
-  onSemanticSearch,
   minRating,
   onMinRatingChange,
   visitStatuses = [],
   onVisitStatusesChange,
-  socialFilter = false,
-  onSocialFilterChange,
 }: MapFilterProps) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -171,17 +163,6 @@ export const MapFilter: FC<MapFilterProps> = ({
           spacing={0.5}
           aria-label="additional filters"
         >
-          {/* Social filter button */}
-          <Tooltip title="Social places (bars, restaurants, breweries)">
-            <IconButton
-              color={socialFilter ? "primary" : "neutral"}
-              onClick={() => onSocialFilterChange(!socialFilter)}
-              aria-label="Social places filter"
-            >
-              <MdGroup />
-            </IconButton>
-          </Tooltip>
-
           {/* Advanced filter toggle */}
           <Tooltip title="More filters">
             <IconButton
