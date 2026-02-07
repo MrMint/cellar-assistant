@@ -40,7 +40,7 @@ export interface PlaceDataService {
 }
 
 /** BigQuery fetch batch size */
-export const BIGQUERY_BATCH_SIZE = 100_000;
+export const BIGQUERY_BATCH_SIZE = 5_000;
 
 /** DB upsert batch size */
-export const DB_UPSERT_BATCH_SIZE = 10_000;
+export const DB_UPSERT_BATCH_SIZE = 500;

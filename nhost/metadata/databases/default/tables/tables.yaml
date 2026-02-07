@@ -32,6 +32,7 @@
 - "!include public_item_brands_detailed.yaml"
 - "!include public_item_favorites.yaml"
 - "!include public_item_image.yaml"
+- "!include public_item_match_suggestions.yaml"
 - "!include public_item_onboardings.yaml"
 - "!include public_item_reviews.yaml"
 - "!include public_item_type.yaml"

@@ -179,34 +179,35 @@ export default async (req: Request, res: Response) => {
             similarity_metrics: match.similarityMetrics,
           }));
 
-        // Clear existing suggestions for this menu item
-        await functionMutation(
-          graphql(`
-            mutation ClearExistingSuggestions($menuItemId: uuid!) {
-              delete_item_match_suggestions(
-                where: { place_menu_item_id: { _eq: $menuItemId } }
-              ) {
-                affected_rows
-              }
-            }
-          `),
-          { menuItemId: menuItem.id },
-          { headers: getAdminAuthHeaders() },
-        );
-
-        // Insert new suggestions
         if (suggestions.length > 0) {
-          await functionMutation(
-            graphql(`
-              mutation CreateMatchSuggestions($suggestions: [item_match_suggestions_insert_input!]!) {
-                insert_item_match_suggestions(objects: $suggestions) {
-                  affected_rows
+          // Insert new suggestions first, then delete old ones to avoid data loss
+          // if the insert fails
+          try {
+            await functionMutation(
+              graphql(`
+                mutation ReplaceMatchSuggestions(
+                  $menuItemId: uuid!
+                  $suggestions: [item_match_suggestions_insert_input!]!
+                ) {
+                  delete_item_match_suggestions(
+                    where: { place_menu_item_id: { _eq: $menuItemId } }
+                  ) {
+                    affected_rows
+                  }
+                  insert_item_match_suggestions(objects: $suggestions) {
+                    affected_rows
+                  }
                 }
-              }
-            `),
-            { suggestions },
-            { headers: getAdminAuthHeaders() },
-          );
+              `),
+              { menuItemId: menuItem.id, suggestions },
+              { headers: getAdminAuthHeaders() },
+            );
+          } catch (error) {
+            console.error(
+              `Failed to replace suggestions for menu item ${menuItem.id}:`,
+              error,
+            );
+          }
         }
       }
     }

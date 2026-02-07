@@ -112,7 +112,8 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
 
       if (result.error) {
         console.error("Error toggling favorite:", result.error);
-        alert("Failed to update favorite status");
+        // TODO: Replace with snackbar/toast notification
+        console.error("Failed to update favorite status");
       } else {
         // Refetch data to update UI
         refetch();
@@ -139,7 +140,8 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
 
       if (result.error) {
         console.error("Error marking visited:", result.error);
-        alert("Failed to update visited status");
+        // TODO: Replace with snackbar/toast notification
+        console.error("Failed to update visited status");
       } else {
         // Refetch data to update UI
         refetch();
@@ -263,6 +265,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
             {/* Action buttons */}
             <Stack direction="row" spacing={1}>
               <IconButton
+                aria-label="Toggle favorite"
                 variant={userInteraction?.is_favorite ? "solid" : "outlined"}
                 color="danger"
                 onClick={handleToggleFavorite}
@@ -277,6 +280,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
               </IconButton>
 
               <IconButton
+                aria-label="Mark as visited"
                 variant={userInteraction?.is_visited ? "solid" : "outlined"}
                 color="success"
                 onClick={handleMarkVisited}

@@ -190,12 +190,12 @@ export async function uploadAndProcessMenuScan(
       return { success: false, error: "Not authenticated" };
     }
 
-    const file = formData.get("file") as File;
-    const placeId = formData.get("placeId") as string;
-
-    if (!file) {
+    const fileEntry = formData.get("file");
+    if (!fileEntry || !(fileEntry instanceof File)) {
       return { success: false, error: "No file provided" };
     }
+    const file = fileEntry;
+    const placeId = formData.get("placeId") as string;
 
     if (!placeId) {
       return { success: false, error: "No place ID provided" };
@@ -238,20 +238,44 @@ export async function uploadAndProcessMenuScan(
       return { success: false, error: "Failed to create scan record" };
     }
 
-    // Fire-and-forget: trigger processing function
-    const nhostFunctionUrl =
-      process.env.NHOST_FUNCTION_URL || "https://local.functions.nhost.run";
+    // Trigger processing function and verify it was accepted
+    const nhostFunctionUrl = process.env.NHOST_FUNCTION_URL;
+    if (!nhostFunctionUrl) {
+      console.error("NHOST_FUNCTION_URL is not configured");
+      return { success: false, error: "Server configuration error" };
+    }
 
-    fetch(`${nhostFunctionUrl}/v1/functions/processMenuScan`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET || "",
-      },
-      body: JSON.stringify({ scanId, userId }),
-    }).catch((error) => {
-      console.error("Failed to trigger processMenuScan:", error);
-    });
+    try {
+      const processResponse = await fetch(
+        `${nhostFunctionUrl}/v1/functions/processMenuScan`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET || "",
+          },
+          body: JSON.stringify({ scanId, userId }),
+        },
+      );
+
+      if (!processResponse.ok) {
+        console.error(
+          `processMenuScan returned ${processResponse.status}`,
+        );
+        return {
+          success: false,
+          error: "Failed to start menu processing",
+          scanId,
+        };
+      }
+    } catch (fetchError) {
+      console.error("Failed to trigger processMenuScan:", fetchError);
+      return {
+        success: false,
+        error: "Failed to connect to processing service",
+        scanId,
+      };
+    }
 
     return { success: true, scanId };
   } catch (error) {

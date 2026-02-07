@@ -29,7 +29,11 @@ object_relationships:
 insert_permissions:
   - role: user
     permission:
-      check: {}
+      check:
+        place_menu_item:
+          menu_scan:
+            user_id:
+              _eq: X-Hasura-User-Id
       columns:
         - accepted
         - confidence_score
@@ -43,6 +47,8 @@ insert_permissions:
         - suggested_sake_id
         - suggested_spirit_id
         - suggested_wine_id
+      set:
+        acted_by: X-Hasura-User-Id
     comment: ""
 select_permissions:
   - role: user
@@ -64,7 +70,11 @@ select_permissions:
         - suggested_sake_id
         - suggested_spirit_id
         - suggested_wine_id
-      filter: {}
+      filter:
+        place_menu_item:
+          menu_scan:
+            user_id:
+              _eq: X-Hasura-User-Id
       allow_aggregations: true
     comment: ""
 update_permissions:

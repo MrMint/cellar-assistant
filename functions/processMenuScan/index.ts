@@ -286,10 +286,45 @@ export default async (req: Request, res: Response) => {
         );
       } catch (error) {
         console.error("Failed to save menu items:", error);
+
+        // Mark scan as failed since items were not persisted
+        try {
+          await functionMutation(
+            graphql(`
+              mutation FailScanItemInsertion($scanId: uuid!, $error: String!) {
+                update_menu_scans_by_pk(
+                  pk_columns: { id: $scanId }
+                  _set: {
+                    processing_status: "failed"
+                    processed_at: "now()"
+                    processing_error: $error
+                  }
+                ) {
+                  id
+                }
+              }
+            `),
+            {
+              scanId,
+              error: `Failed to save menu items: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+            { headers: getAdminAuthHeaders() },
+          );
+        } catch (updateError) {
+          console.error(
+            "Failed to update scan to failed status after item insertion error:",
+            updateError,
+          );
+        }
+
+        return res.status(500).json({
+          error: "Failed to save menu items",
+          details: error instanceof Error ? error.message : "Unknown error",
+        });
       }
     }
 
-    // Update scan status to completed
+    // Update scan status to completed with retry to avoid stuck "processing" state
     const completeMutation = graphql(`
       mutation CompleteScanProcessing($scanId: uuid!, $itemsDetected: Int!, $confidence: numeric) {
         update_menu_scans_by_pk(
@@ -306,24 +341,41 @@ export default async (req: Request, res: Response) => {
       }
     `);
 
-    try {
-      await functionMutation(
-        completeMutation,
-        {
-          scanId,
-          itemsDetected: validItems.length,
-          confidence:
-            validItems.length > 0
-              ? validItems.reduce((sum, item) => sum + item.confidence, 0) /
-                validItems.length
-              : 0,
-        },
-        {
+    const completionVars = {
+      scanId,
+      itemsDetected: validItems.length,
+      confidence:
+        validItems.length > 0
+          ? validItems.reduce((sum, item) => sum + item.confidence, 0) /
+            validItems.length
+          : 0,
+    };
+
+    let completionSucceeded = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await functionMutation(completeMutation, completionVars, {
           headers: getAdminAuthHeaders(),
-        },
+        });
+        completionSucceeded = true;
+        break;
+      } catch (error) {
+        console.error(
+          `Failed to update scan completion (attempt ${attempt + 1}/3):`,
+          error,
+        );
+        if (attempt < 2) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 500 * (attempt + 1)),
+          );
+        }
+      }
+    }
+
+    if (!completionSucceeded) {
+      console.error(
+        `CRITICAL: Scan ${scanId} stuck in "processing" — all completion retries failed. Items detected: ${validItems.length}. Manual intervention required.`,
       );
-    } catch (error) {
-      console.error("Failed to update scan completion:", error);
     }
 
     // Note: Item matching is triggered automatically via Hasura event trigger
@@ -392,7 +444,7 @@ function parsePrice(priceString: string): number | null {
   // Extract numeric price from string like "$12.50", "€15", "£8.99", etc.
   const match = priceString.match(/[\d,]+\.?\d*/);
   if (match) {
-    const numericPrice = parseFloat(match[0].replace(",", ""));
+    const numericPrice = parseFloat(match[0].replace(/,/g, ""));
     return Number.isNaN(numericPrice) ? null : numericPrice;
   }
   return null;

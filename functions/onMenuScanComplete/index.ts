@@ -26,6 +26,9 @@ export default async function onMenuScanComplete(
   >,
   res: Response,
 ) {
+  let validatedInput: ReturnType<typeof validateMenuScanCompleteInput> | null =
+    null;
+
   try {
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
@@ -33,7 +36,7 @@ export default async function onMenuScanComplete(
       return res.status(400).send();
     }
 
-    const validatedInput = validateMenuScanCompleteInput(req.body);
+    validatedInput = validateMenuScanCompleteInput(req.body);
     const performanceTracker =
       createPerformanceTracker<ExtendedPerformanceMetrics>();
 
@@ -111,22 +114,16 @@ export default async function onMenuScanComplete(
       matchingResult: result,
     });
   } catch (exception) {
-    // Extract context for error logging
-    let errorContext: Record<string, unknown> = {};
-    try {
-      const context = validateMenuScanCompleteInput(req.body);
-      errorContext = {
-        menuScanId: context.event.data.new.id,
-        placeId:
-          context.event.data.new.place_id ||
-          context.event.data.new.manual_place_override ||
-          context.event.data.new.estimated_place_id,
-      };
-    } catch {
-      errorContext = {
-        hasEventData: !!req.body?.event?.data,
-      };
-    }
+    // Reuse already-validated input for error context instead of re-validating
+    const errorContext: Record<string, unknown> = validatedInput
+      ? {
+          menuScanId: validatedInput.event.data.new.id,
+          placeId:
+            validatedInput.event.data.new.place_id ||
+            validatedInput.event.data.new.manual_place_override ||
+            validatedInput.event.data.new.estimated_place_id,
+        }
+      : { hasEventData: !!req.body?.event?.data };
 
     logError(exception, errorContext, "onMenuScanComplete");
 

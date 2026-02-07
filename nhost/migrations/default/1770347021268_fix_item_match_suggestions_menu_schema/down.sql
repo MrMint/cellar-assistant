@@ -5,8 +5,8 @@ ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_
 ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_coffee_id_fkey FOREIGN KEY (coffee_id) REFERENCES public.coffees(id) ON DELETE CASCADE;
 ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_spirit_id_fkey FOREIGN KEY (spirit_id) REFERENCES public.spirits(id) ON DELETE CASCADE;
 ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_wine_id_fkey FOREIGN KEY (wine_id) REFERENCES public.wines(id) ON DELETE CASCADE;
-ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_sake_id_fkey FOREIGN KEY (sake_id) REFERENCES public.sakes(id);
-ALTER TABLE public.item_match_suggestions ADD CONSTRAINT check_single_item_id CHECK (num_nonnulls(beer_id, coffee_id, spirit_id, wine_id) = 1);
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT item_match_suggestions_sake_id_fkey FOREIGN KEY (sake_id) REFERENCES public.sakes(id) ON DELETE CASCADE;
+ALTER TABLE public.item_match_suggestions ADD CONSTRAINT check_single_item_id CHECK (num_nonnulls(beer_id, coffee_id, sake_id, spirit_id, wine_id) = 1);
 CREATE INDEX idx_item_match_suggestions_user_id ON public.item_match_suggestions(user_id);
 CREATE INDEX idx_item_match_suggestions_sake_id ON public.item_match_suggestions(sake_id);
 CREATE INDEX idx_item_match_suggestions_is_processed ON public.item_match_suggestions(is_processed) WHERE is_processed = false;
