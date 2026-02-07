@@ -2,6 +2,69 @@ import type { ItemType, MapSearchParams, PlaceCategory } from "../types";
 import { ITEM_TYPE_CATEGORY_MAPPINGS } from "./categories";
 import { NAME_KEYWORDS } from "./keywords";
 
+// Precompute category specificity at module load.
+// Specificity measures how exclusively a category maps to a single item type.
+// A coffee_shop (only in coffee mappings) gets specificity ~1.0 for coffee.
+// A hotel (mapped across all item types) gets specificity ~0.26 for coffee.
+// Formula: specificity[category][itemType] = weight[category][itemType] / sum(weight[category][allItemTypes])
+function computeCategorySpecificity(): Record<
+	string,
+	Record<ItemType, number>
+> {
+	const allItemTypes: ItemType[] = [
+		"wine",
+		"beer",
+		"spirit",
+		"coffee",
+		"sake",
+	];
+
+	// Collect each category's weight across all item types
+	const categoryWeights: Record<string, Record<ItemType, number>> = {};
+
+	for (const itemType of allItemTypes) {
+		for (const mapping of ITEM_TYPE_CATEGORY_MAPPINGS[itemType] ?? []) {
+			if (!categoryWeights[mapping.category]) {
+				categoryWeights[mapping.category] = {
+					wine: 0,
+					beer: 0,
+					spirit: 0,
+					coffee: 0,
+					sake: 0,
+				};
+			}
+			categoryWeights[mapping.category][itemType] = mapping.weight;
+		}
+	}
+
+	// Compute specificity for each category-itemType pair
+	const specificity: Record<string, Record<ItemType, number>> = {};
+
+	for (const [category, weights] of Object.entries(categoryWeights)) {
+		const totalWeight = Object.values(weights).reduce(
+			(sum, w) => sum + w,
+			0,
+		);
+		specificity[category] = {
+			wine: 0,
+			beer: 0,
+			spirit: 0,
+			coffee: 0,
+			sake: 0,
+		};
+
+		for (const itemType of allItemTypes) {
+			if (weights[itemType] > 0 && totalWeight > 0) {
+				specificity[category][itemType] = weights[itemType] / totalWeight;
+			}
+		}
+	}
+
+	return specificity;
+}
+
+export const CATEGORY_SPECIFICITY = computeCategorySpecificity();
+
 // Calculate overall place quality independent of search criteria
 export function calculateOverallQuality(place: any): number {
   let score = 0;
@@ -114,18 +177,21 @@ export function calculateItemTypeMatches(
       const isPrimary = index === 0 || category === place.primary_category;
       const multiplier = isPrimary ? 1.5 : 1.0; // 50% bonus for primary category
 
-      // Check each category weight for this item type
+      // Check each category weight for this item type, applying specificity
       categoryWeights.forEach((categoryWeight) => {
         const isMatch = category === categoryWeight.category;
 
         if (isMatch) {
-          const adjustedWeight = categoryWeight.weight * multiplier;
+          const specificity =
+            CATEGORY_SPECIFICITY[category]?.[itemType] ?? 0;
+          const identityWeight = categoryWeight.weight * specificity;
+          const adjustedWeight = identityWeight * multiplier;
           bestMatchWeight = Math.max(bestMatchWeight, adjustedWeight);
         }
       });
     });
 
-    // Convert weight (0.0-1.5) to percentage (0-150, then cap at 100)
+    // Convert identity-weighted score to percentage (0-100)
     const categoryScore = Math.min(100, Math.round(bestMatchWeight * 100));
     scores[itemType] += categoryScore;
 
@@ -215,7 +281,9 @@ export function calculatePlaceRelevance(
 
         if (isMatch) {
           hasMatch = true;
-          let adjustedWeight = categoryWeight.weight;
+          const specificity =
+            CATEGORY_SPECIFICITY[categoryWeight.category]?.[itemType] ?? 0;
+          let adjustedWeight = categoryWeight.weight * specificity;
 
           // Apply social scoring multiplier if social filtering is active
           if (socialFilter === true && categoryWeight.destinationScore) {
@@ -295,7 +363,7 @@ export function calculateOverallRelevance(
       (score: number) => score > 0,
     );
     if (allScores.length === 0) {
-      return 25; // Very low relevance for places with no social relevance
+      return 5; // Very low relevance for places with no social relevance
     }
     return Math.max(...allScores);
   }
@@ -307,7 +375,7 @@ export function calculateOverallRelevance(
       .filter((score: number) => score > 0);
 
     if (relevantScores.length === 0) {
-      return 25; // Very low relevance for places that don't match selected item types
+      return 5; // Very low relevance for places that don't match selected item types
     }
 
     // Use the highest score among selected item types
