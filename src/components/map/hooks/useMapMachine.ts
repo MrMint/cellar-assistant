@@ -13,6 +13,7 @@ import type {
   UserLocation,
   VisitStatus,
 } from "../types";
+import { shallowEqual } from "../utils/shallowEqual";
 
 /**
  * Main hook for using the map machine from context
@@ -30,54 +31,71 @@ export function useMapMachine() {
 // Core map state selectors
 export function useMapCore() {
   const actorRef = useMapMachineActor();
-  return useSelector(actorRef, (state) => ({
-    hasInitialized: state.context.hasInitialized,
-    currentZoom: state.context.currentZoom,
-    isDarkMode: state.context.isDarkMode,
-    isDesktop: state.context.isDesktop,
-    userLocation: state.context.userLocation,
-    bounds: state.context.bounds,
-    isInitialized: state.matches("idle"),
-  }));
+  return useSelector(
+    actorRef,
+    (state) => ({
+      hasInitialized: state.context.hasInitialized,
+      currentZoom: state.context.currentZoom,
+      isDarkMode: state.context.isDarkMode,
+      isDesktop: state.context.isDesktop,
+      userLocation: state.context.userLocation,
+      bounds: state.context.bounds,
+      isInitialized: state.matches("idle"),
+    }),
+    shallowEqual,
+  );
 }
 
 // UI state selectors
 export function useMapUI() {
   const actorRef = useMapMachineActor();
-  return useSelector(actorRef, (state) => ({
-    isDrawerOpen: state.matches({ idle: { drawer: "open" } }),
-    selectedPlace: state.context.selectedPlace,
-    error: state.context.error,
-    hasError: state.matches({ idle: { error: "hasError" } }),
-  }));
+  return useSelector(
+    actorRef,
+    (state) => ({
+      isDrawerOpen: state.matches({ idle: { drawer: "open" } }),
+      selectedPlace: state.context.selectedPlace,
+      error: state.context.error,
+      hasError: state.matches({ idle: { error: "hasError" } }),
+    }),
+    shallowEqual,
+  );
 }
 
 // Filter state selectors
 export function useMapFilters() {
   const actorRef = useMapMachineActor();
-  return useSelector(actorRef, (state) => ({
-    selectedItemTypes: state.context.selectedItemTypes,
-    searchQuery: state.context.searchQuery,
-    isSemanticSearch: state.context.isSemanticSearch,
-    minRating: state.context.minRating,
-    visitStatuses: state.context.visitStatuses,
-  }));
+  return useSelector(
+    actorRef,
+    (state) => ({
+      selectedItemTypes: state.context.selectedItemTypes,
+      searchQuery: state.context.searchQuery,
+      isSemanticSearch: state.context.isSemanticSearch,
+      minRating: state.context.minRating,
+      visitStatuses: state.context.visitStatuses,
+    }),
+    shallowEqual,
+  );
 }
 
 // Data state selectors
 export function useMapData() {
   const actorRef = useMapMachineActor();
-  return useSelector(actorRef, (state) => ({
-    places: state.context.places,
-    mapItems: state.context.mapItems,
-    semanticResults: state.context.semanticResults,
-    isLoading: state.matches({ idle: { data: "loading" } }),
-    placesError: state.context.placesError,
-  }));
+  return useSelector(
+    actorRef,
+    (state) => ({
+      places: state.context.places,
+      mapItems: state.context.mapItems,
+      semanticResults: state.context.semanticResults,
+      isLoading: state.matches({ idle: { data: "loading" } }),
+      placesError: state.context.placesError,
+    }),
+    shallowEqual,
+  );
 }
 
 export function useMapActions() {
-  const [, send] = useMapMachine();
+  const actorRef = useMapMachineActor();
+  const send = actorRef.send;
 
   return useMemo(
     () => ({

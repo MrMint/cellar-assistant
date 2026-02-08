@@ -124,6 +124,22 @@ actions:
         version: 2
     permissions:
       - role: admin
+  - name: seed_category_vectors
+    definition:
+      kind: asynchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/seedCategoryVectors'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 300
+      request_transform:
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: admin
   - name: sake_defaults
     definition:
       kind: ""
@@ -277,6 +293,7 @@ custom_types:
     - name: search_query_info
     - name: search_location_info
     - name: refresh_places_result
+    - name: seed_category_vectors_result
     - name: ProcessRecipePhotoOutput
     - name: ProcessRecipePhotoResult
     - name: MenuAnalysis

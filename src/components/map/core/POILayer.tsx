@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence } from "framer-motion";
-import { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   MARKER_ANIMATION_TRANSITION,
@@ -14,6 +14,8 @@ import { PlaceDetailsDrawer } from "../places/PlaceDetailsDrawer";
 import type { MapDataItem, Place, PlaceCluster, PlaceResult } from "../types";
 import { LabelStyling } from "../utils/labelStyling";
 import type { VisitStatus } from "./MapFilter";
+
+const NOOP = () => {};
 
 interface POILayerProps {
   items: MapDataItem[];
@@ -39,19 +41,19 @@ interface POILayerProps {
  * Combines the best features from POILayerV2 and POILayerClustered
  */
 
-export function POILayer({
+const POILayerComponent: React.FC<POILayerProps> = ({
   items,
   userLocation,
   onPlaceSelect,
   onClusterClick,
   selectedPlace,
   drawerOpen = false,
-  onDrawerClose,
+  onDrawerClose = NOOP,
   isDarkMode = false,
   userId,
   currentZoom = 12,
   filters,
-}: POILayerProps) {
+}) => {
   // Extract places from items
   const places = useMemo(() => {
     return items.filter((item): item is PlaceResult => !("is_cluster" in item));
@@ -152,11 +154,13 @@ export function POILayer({
           <PlaceDetailsDrawer
             place={selectedPlace ?? null}
             open={drawerOpen}
-            onClose={onDrawerClose || (() => {})}
+            onClose={onDrawerClose}
             userId={userId}
           />,
           document.body,
         )}
     </>
   );
-}
+};
+
+export const POILayer = React.memo(POILayerComponent);

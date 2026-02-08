@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import React from "react";
+import React, { useMemo } from "react";
 import {
   MdCasino,
   MdHotel,
@@ -200,19 +200,30 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
   // Calculate scale factor for smooth animations (scale relative to base size)
   const scaleFactor = scaledSize / size;
 
+  // Memoize animate target to avoid Framer Motion re-evaluating on every render
+  const animateTarget = useMemo(
+    () => ({
+      ...variants.visible,
+      scale: scaleFactor,
+    }),
+    [variants.visible, scaleFactor],
+  );
+
+  const transitionConfig = useMemo(
+    () => ({
+      ...transition,
+      scale: { duration: 0.4, ease: "easeInOut" as const },
+    }),
+    [transition],
+  );
+
   return (
     <motion.div
       variants={variants}
       initial="hidden"
-      animate={{
-        ...variants.visible,
-        scale: scaleFactor, // Use scale instead of width/height
-      }}
+      animate={animateTarget}
       exit="exit"
-      transition={{
-        ...transition,
-        scale: { duration: 0.4, ease: "easeInOut" },
-      }}
+      transition={transitionConfig}
       className="relevance-poi-marker"
       role="img"
       aria-label={`POI marker for ${place.name}`}

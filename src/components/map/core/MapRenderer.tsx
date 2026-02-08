@@ -193,6 +193,16 @@ export function MapRenderer({ userId }: MapRendererProps) {
     [mapActions],
   );
 
+  // Handle refresh
+  const handleRefresh = useCallback(() => {
+    mapActions.refreshPlaces();
+  }, [mapActions]);
+
+  // Handle search close
+  const handleSearchClose = useCallback(() => {
+    searchParams.setSearch("");
+  }, [searchParams]);
+
   // Memoize filters to prevent new object reference on every render
   const filters = useMemo(
     () => ({
@@ -389,13 +399,13 @@ export function MapRenderer({ userId }: MapRendererProps) {
             isLoading={placesLoading}
             onPlaceSelect={handlePlaceSelect}
             onCenterOnPlace={handleCenterOnPlace}
-            onClose={() => searchParams.setSearch("")}
+            onClose={handleSearchClose}
           />
         )}
 
       {/* Unified Map Controls XState */}
       <MapControls
-        onRefresh={() => mapActions.refreshPlaces()}
+        onRefresh={handleRefresh}
         onLocationClick={handleLocationClick}
         loading={placesLoading}
       />

@@ -33,6 +33,10 @@ type Mutation {
   refresh_places: refresh_places_result
 }
 
+type Mutation {
+  seed_category_vectors: seed_category_vectors_result
+}
+
 type Query {
   sake_defaults(
     hint: item_defaults_hint!
@@ -272,5 +276,12 @@ type MenuAnalysis {
   restaurant_type: String
   recipes_extracted: Int
   extraction_method: String
+}
+
+type seed_category_vectors_result {
+  success: Boolean!
+  totalLabels: Int
+  successCount: Int
+  errorCount: Int
 }
 
