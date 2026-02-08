@@ -15,7 +15,7 @@
 --   A (highest) = place name
 --   B = categories (includes primary category as first element)
 --   C = locality (city/area)
-ALTER TABLE public.places ADD COLUMN search_text tsvector;
+ALTER TABLE public.places ADD COLUMN IF NOT EXISTS search_text tsvector;
 
 -- Function to update search_text (VOLATILE — accesses mutable row state)
 CREATE OR REPLACE FUNCTION public.update_places_search_text()
@@ -30,6 +30,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to maintain search_text on INSERT/UPDATE
+DROP TRIGGER IF EXISTS trg_places_search_text ON public.places;
 CREATE TRIGGER trg_places_search_text
   BEFORE INSERT OR UPDATE OF name, categories, locality ON public.places
   FOR EACH ROW EXECUTE FUNCTION public.update_places_search_text();
@@ -42,7 +43,7 @@ UPDATE public.places SET search_text =
 WHERE search_text IS NULL;
 
 -- GIN index for fast tsvector queries
-CREATE INDEX idx_places_search_text ON public.places USING GIN (search_text);
+CREATE INDEX IF NOT EXISTS idx_places_search_text ON public.places USING GIN (search_text);
 
 -- =============================================================================
 -- Layer 1B: Trigram Fuzzy Matching on Places
@@ -51,17 +52,17 @@ CREATE INDEX idx_places_search_text ON public.places USING GIN (search_text);
 -- pg_trgm is already enabled (from 1769500000000_add_brand_similarity_search)
 
 -- GIN trigram index on name for fuzzy name search
-CREATE INDEX idx_places_name_trgm ON public.places USING GIN (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_places_name_trgm ON public.places USING GIN (name gin_trgm_ops);
 
 -- GIN trigram index on locality for area search
-CREATE INDEX idx_places_locality_trgm ON public.places USING GIN (locality gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_places_locality_trgm ON public.places USING GIN (locality gin_trgm_ops);
 
 -- =============================================================================
 -- Layer 2: Category Semantic Vectors
 -- =============================================================================
 
 -- Table for pre-embedded category labels (~200 rows)
-CREATE TABLE public.category_vectors (
+CREATE TABLE IF NOT EXISTS public.category_vectors (
   id SERIAL PRIMARY KEY,
   label TEXT NOT NULL UNIQUE,
   label_type TEXT NOT NULL DEFAULT 'category'
@@ -74,12 +75,12 @@ CREATE TABLE public.category_vectors (
 );
 
 -- HNSW cosine index (only ~200 rows, but consistent with place_vectors pattern)
-CREATE INDEX idx_category_vectors_hnsw
+CREATE INDEX IF NOT EXISTS idx_category_vectors_hnsw
   ON public.category_vectors
   USING hnsw (vector halfvec_cosine_ops)
   WITH (m = 16, ef_construction = 64);
 
-CREATE INDEX idx_category_vectors_label_type
+CREATE INDEX IF NOT EXISTS idx_category_vectors_label_type
   ON public.category_vectors (label_type);
 
 -- updated_at trigger
@@ -91,6 +92,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_category_vectors_updated_at ON public.category_vectors;
 CREATE TRIGGER trg_category_vectors_updated_at
   BEFORE UPDATE ON public.category_vectors
   FOR EACH ROW EXECUTE FUNCTION public.update_category_vectors_updated_at();
@@ -117,7 +119,7 @@ GRANT EXECUTE ON FUNCTION public.calculate_category_vector_distance TO nhost_has
 -- =============================================================================
 
 -- Result type for category vector search
-CREATE TABLE public.search_category_vectors_results (
+CREATE TABLE IF NOT EXISTS public.search_category_vectors_results (
   id INTEGER,
   label TEXT,
   label_type TEXT,
@@ -158,7 +160,7 @@ GRANT EXECUTE ON FUNCTION public.search_category_vectors TO nhost_hasura;
 -- =============================================================================
 
 -- Result type for hybrid search (flat, no clustering — semantic queries want ranked results)
-CREATE TABLE public.hybrid_search_results (
+CREATE TABLE IF NOT EXISTS public.hybrid_search_results (
   id UUID,
   name TEXT,
   location GEOGRAPHY(POINT, 4326),
