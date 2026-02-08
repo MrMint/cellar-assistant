@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MAP_CONFIG } from "../config/constants";
 
 interface GeolocationState {
@@ -9,12 +9,16 @@ interface GeolocationState {
   error: string | null;
 }
 
+// Minimum coordinate change to trigger a state update (~11 meters)
+const COORDINATE_EPSILON = 0.0001;
+
 export function useGeolocation() {
   const [state, setState] = useState<GeolocationState>({
     location: null,
     loading: true,
     error: null,
   });
+  const lastCoordsRef = useRef<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -27,11 +31,21 @@ export function useGeolocation() {
     }
 
     const handleSuccess = (position: GeolocationPosition) => {
+      const { latitude, longitude } = position.coords;
+      const prev = lastCoordsRef.current;
+
+      // Skip update if coordinates haven't changed meaningfully
+      if (
+        prev &&
+        Math.abs(prev.latitude - latitude) < COORDINATE_EPSILON &&
+        Math.abs(prev.longitude - longitude) < COORDINATE_EPSILON
+      ) {
+        return;
+      }
+
+      lastCoordsRef.current = { latitude, longitude };
       setState({
-        location: {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        },
+        location: { latitude, longitude },
         loading: false,
         error: null,
       });

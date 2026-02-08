@@ -483,16 +483,11 @@ export const mapMachine = createMachine(
                       actions: "setBounds",
                     },
                   ],
-                  SET_USER_LOCATION: [
-                    {
-                      target: "loading",
-                      guard: "canFetchPlaces",
-                      actions: ["setUserLocation", "clearError"],
-                    },
-                    {
-                      actions: "setUserLocation",
-                    },
-                  ],
+                  // User location updates context only — don't refetch.
+                  // Bounds changes are the sole trigger for data fetches.
+                  SET_USER_LOCATION: {
+                    actions: "setUserLocation",
+                  },
                   SET_ITEM_TYPES: [
                     {
                       target: "loading",
