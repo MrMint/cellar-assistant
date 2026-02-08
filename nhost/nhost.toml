@@ -183,7 +183,7 @@ version = '18.1-20260113-1'
 
 [postgres.resources]
 [postgres.resources.storage]
-capacity = 10
+capacity = 20
 
 [provider]
 
