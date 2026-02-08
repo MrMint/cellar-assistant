@@ -1,4 +1,3 @@
-import "@/styles/poi-labels.css";
 import type { ReactNode } from "react";
 
 interface MapLayoutProps {

@@ -9,9 +9,9 @@ import type { ItemType } from "../types";
 export const ITEM_TYPE_COLORS: Record<ItemType, string> = {
   wine: "#8B0000", // Deep burgundy
   beer: "#DAA520", // Amber gold
-  spirit: "#C0C0C0", // Platinum silver
+  spirit: "#607D8B", // Blue-gray (needs contrast with white icons on pins)
   coffee: "#8B4513", // Rich brown
-  sake: "#E6E6FA", // Lavender (traditional sake color)
+  sake: "#7B1FA2", // Deep purple (needs contrast with white icons on pins)
 } as const;
 
 // Joy UI color schemes for item types (used in UI components)

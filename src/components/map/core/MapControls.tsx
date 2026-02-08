@@ -1,9 +1,16 @@
 "use client";
 
-import { Close, LocationOn, Refresh, Search } from "@mui/icons-material";
+import {
+  Close,
+  DarkMode,
+  LightMode,
+  LocationOn,
+  Refresh,
+  Search,
+} from "@mui/icons-material";
 import { Box, Divider, IconButton, Input, Sheet, Stack } from "@mui/joy";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useMapUI } from "../hooks/useMapMachine";
+import { useMapActions, useMapCore, useMapUI } from "../hooks/useMapMachine";
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
 import { MapFilter } from "./MapFilter";
 
@@ -70,6 +77,8 @@ export function MapControls({
     setVisitStatuses,
   } = useMapSearchParams();
   const { isDrawerOpen } = useMapUI();
+  const { isDarkMode } = useMapCore();
+  const { toggleDarkMode } = useMapActions();
 
   // Helper function to get position styles
   const getPositionStyles = (pos: string) => {
@@ -232,6 +241,16 @@ export function MapControls({
                   <LocationOn />
                 </IconButton>
               )}
+
+              <IconButton
+                variant="soft"
+                color="neutral"
+                onClick={toggleDarkMode}
+                size="sm"
+                title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDarkMode ? <LightMode /> : <DarkMode />}
+              </IconButton>
             </Stack>
           )}
         </Sheet>
