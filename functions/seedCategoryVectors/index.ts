@@ -64,12 +64,11 @@ export default async function seedCategoryVectors(req: Request, res: Response) {
         `🌱 [Seed Category Vectors] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(labels.length / batchSize)}`,
       );
 
-      const generateEmbeddings = aiProvider.generateEmbeddings;
       const results = await Promise.allSettled(
         batch.map(async (labelDef) => {
           const embeddings = await executeWithRetry(
             async () => {
-              const result = await generateEmbeddings({
+              const result = await aiProvider.generateEmbeddings({
                 content: labelDef.embeddingText,
                 type: "text",
                 taskType: "RETRIEVAL_DOCUMENT",
