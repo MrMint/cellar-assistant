@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type React from "react";
-import { useEffect } from "react";
+import React from "react";
 import {
   MdCasino,
   MdHotel,
@@ -33,7 +32,6 @@ interface RelevanceMarkerProps extends BaseMarkerProps {
   size?: number;
   showLabels?: boolean;
   filters?: MapFilters;
-  onZIndexCalculated?: (zIndex: number) => void; // Callback to expose z-index
 }
 
 /**
@@ -56,7 +54,6 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
   animationVariants,
   animationTransition,
   filters,
-  onZIndexCalculated,
 }) => {
   // Use passed animation variants or fall back to defaults
   const variants = animationVariants || PLACE_ANIMATION_VARIANTS;
@@ -136,34 +133,6 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
   };
 
   const backgroundOpacity = calculateOpacity();
-
-  // Calculate z-index based on relevance (higher relevance = higher z-index)
-  const calculateZIndex = () => {
-    const hasActiveFiltering =
-      (filters?.selectedItemTypes?.length ?? 0) > 0 ||
-      (place.overallRelevance !== undefined && place.overallRelevance !== 100);
-    if (!hasActiveFiltering) {
-      return 25; // Default z-index when no filters (middle range)
-    }
-
-    // Scale relevance percentage (20-170) to z-index (1-50)
-    // Higher relevance gets higher z-index so relevant markers appear on top
-    // Keep all POI markers below UI elements (which use 950+)
-    const { MIN: minZIndex, MAX: maxZIndex } = MAP_CONFIG.Z_INDEX.MARKERS;
-    const normalizedRelevance = (relevancePercentage - 20) / (170 - 20); // 20-170 -> 0-1
-    const zIndex = Math.round(
-      minZIndex + normalizedRelevance * (maxZIndex - minZIndex),
-    );
-
-    return Math.max(minZIndex, Math.min(maxZIndex, zIndex));
-  };
-
-  const zIndexValue = calculateZIndex();
-
-  // Expose z-index to parent component
-  useEffect(() => {
-    onZIndexCalculated?.(zIndexValue);
-  }, [zIndexValue, onZIndexCalculated]);
 
   // Get icon for primary category
   const getCategoryIcon = (category: string, iconSize: number) => {
@@ -258,8 +227,21 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
       }}
     >
       {/* Center icon */}
-      <motion.div
-        animate={{
+      {/* Use plain div with CSS transitions instead of motion.div to reduce Framer Motion overhead */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          color: "#fff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "50%",
+          width: getMarkerCircleSize(size),
+          height: getMarkerCircleSize(size),
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          borderWidth: "2px",
+          borderStyle: "solid",
           backgroundColor: mostRelevantItemType
             ? `${ITEM_TYPE_COLORS[mostRelevantItemType]}${Math.round(
                 backgroundOpacity * 255,
@@ -268,31 +250,14 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
                 .padStart(2, "0")}`
             : `rgba(255, 255, 255, ${backgroundOpacity * 0.9})`,
           borderColor: `rgba(255, 255, 255, ${backgroundOpacity * 0.8})`,
-        }}
-        transition={{
-          backgroundColor: { duration: 0.3, ease: "easeOut" },
-          borderColor: { duration: 0.3, ease: "easeOut" },
-        }}
-        style={{
-          position: "relative",
-          zIndex: 2,
-          color: "#fff", // White icon for better contrast
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: "50%",
-          width: getMarkerCircleSize(size), // Use base size, parent scale will handle sizing
-          height: getMarkerCircleSize(size),
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          borderWidth: "2px",
-          borderStyle: "solid",
+          transition: "background-color 0.3s ease-out, border-color 0.3s ease-out",
         }}
       >
         {getCategoryIcon(
           place.primary_category || place.categories?.[0] || "restaurant",
-          getMarkerIconSize(size), // Use base size, parent scale will handle sizing
+          getMarkerIconSize(size),
         )}
-      </motion.div>
+      </div>
 
       {/* Place label */}
       {showLabels && (
@@ -326,6 +291,19 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
   );
 };
 
-export const RelevanceMarker = RelevanceMarkerComponent;
+export const RelevanceMarker = React.memo(
+  RelevanceMarkerComponent,
+  (prev, next) => {
+    return (
+      prev.place.id === next.place.id &&
+      prev.place.overallRelevance === next.place.overallRelevance &&
+      prev.place.itemTypeScores === next.place.itemTypeScores &&
+      prev.place.primary_category === next.place.primary_category &&
+      prev.size === next.size &&
+      prev.showLabels === next.showLabels &&
+      prev.filters === next.filters
+    );
+  },
+);
 
 export default RelevanceMarker;

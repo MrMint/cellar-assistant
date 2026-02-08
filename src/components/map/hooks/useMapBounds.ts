@@ -2,6 +2,7 @@
 
 import type { Map as LeafletMap } from "leaflet";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { MAP_CONFIG } from "../config/constants";
 import type { MapBounds } from "../types";
 import { debounce } from "../utils/debounce";
@@ -9,6 +10,7 @@ import { debounce } from "../utils/debounce";
 export function useMapBounds() {
   const [bounds, setBounds] = useState<MapBounds | undefined>(undefined);
   const mapRef = useRef<LeafletMap | null>(null);
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   // Update bounds from the map instance
   const updateBounds = useCallback((map: LeafletMap) => {
@@ -21,10 +23,15 @@ export function useMapBounds() {
     };
     setBounds(newBounds);
   }, []);
-  // Debounced bounds update to avoid excessive API calls
+
+  // Use longer debounce on mobile to reduce fetches during pan gestures
+  const debounceMs = isMobile
+    ? MAP_CONFIG.TIMING.BOUNDS_UPDATE_DEBOUNCE_MOBILE
+    : MAP_CONFIG.TIMING.BOUNDS_UPDATE_DEBOUNCE;
+
   const debouncedUpdateBounds = useMemo(
-    () => debounce(updateBounds, MAP_CONFIG.TIMING.BOUNDS_UPDATE_DEBOUNCE),
-    [updateBounds],
+    () => debounce(updateBounds, debounceMs),
+    [updateBounds, debounceMs],
   );
 
   // Setup map event listeners

@@ -11,7 +11,6 @@ import { ClusterMarker } from "../markers/ClusterMarker";
 import { PlaceMarker } from "../markers/PlaceMarker";
 import { UserLocationMarker } from "../markers/UserLocationMarker";
 import { PlaceDetailsDrawer } from "../places/PlaceDetailsDrawer";
-// Import types from actions for consistency
 import type { MapDataItem, Place, PlaceCluster, PlaceResult } from "../types";
 import { LabelStyling } from "../utils/labelStyling";
 import type { VisitStatus } from "./MapFilter";
@@ -53,9 +52,16 @@ export function POILayer({
   currentZoom = 12,
   filters,
 }: POILayerProps) {
-  // Extract places from items first (needed for useEffect dependency)
+  // Extract places from items
   const places = useMemo(() => {
     return items.filter((item): item is PlaceResult => !("is_cluster" in item));
+  }, [items]);
+
+  // Memoize clusters array
+  const clusters = useMemo(() => {
+    return items.filter(
+      (item): item is PlaceCluster => "is_cluster" in item && item.is_cluster,
+    );
   }, [items]);
 
   // Inject label styling on mount
@@ -79,11 +85,6 @@ export function POILayer({
     }
   }, [currentZoom]);
 
-  // Get clusters directly from items
-  const clusters = items.filter(
-    (item): item is PlaceCluster => "is_cluster" in item && item.is_cluster,
-  );
-
   // Handle marker click
   const handleMarkerClick = useCallback(
     (place: Place) => {
@@ -92,7 +93,7 @@ export function POILayer({
     [onPlaceSelect],
   );
 
-  // Handle cluster click - navigate to cluster center and zoom in
+  // Handle cluster click - stable callback, center passed via prop
   const handleClusterClick = useCallback(
     (clusterId: number, clusterCenter: [number, number]) => {
       onClusterClick?.(clusterId, clusterCenter);
@@ -100,11 +101,9 @@ export function POILayer({
     [onClusterClick],
   );
 
-  // Remove useMemo to prevent double-renders - inline rendering is actually better here
-
   return (
     <>
-      {/* Render server-side clusters with AnimatePresence */}
+      {/* Render server-side clusters */}
       <AnimatePresence>
         {clusters.map((cluster) => {
           const [longitude, latitude] = cluster.cluster_center.coordinates;
@@ -112,15 +111,12 @@ export function POILayer({
           return (
             <ClusterMarker
               key={`cluster-${cluster.cluster_id}`}
-              position={[latitude, longitude]} // Leaflet expects [lat, lng]
+              position={[latitude, longitude]}
               pointCount={cluster.cluster_count}
               clusterId={cluster.cluster_id}
+              clusterCenter={[longitude, latitude]}
               isDarkMode={isDarkMode}
-              isDensityHigh={false} // Server-side clustering handles density
-              onClusterClick={(id) =>
-                handleClusterClick(id, [longitude, latitude])
-              }
-              // Pass animation variants and transition
+              onClusterClick={handleClusterClick}
               animationVariants={MARKER_ANIMATION_VARIANTS}
               animationTransition={MARKER_ANIMATION_TRANSITION}
             />
@@ -128,23 +124,18 @@ export function POILayer({
         })}
       </AnimatePresence>
 
-      {/* Render filtered individual places with AnimatePresence for smooth transitions */}
+      {/* Render individual places */}
       <AnimatePresence>
-        {places.map((place) => {
-          const [_longitude, _latitude] = place.location.coordinates;
-
-          return (
-            <PlaceMarker
-              key={place.id}
-              place={place}
-              filters={filters}
-              onPlaceClick={handleMarkerClick}
-              // Pass animation variants and transition to PlaceMarker
-              animationVariants={MARKER_ANIMATION_VARIANTS}
-              animationTransition={MARKER_ANIMATION_TRANSITION}
-            />
-          );
-        })}
+        {places.map((place) => (
+          <PlaceMarker
+            key={place.id}
+            place={place}
+            filters={filters}
+            onPlaceClick={handleMarkerClick}
+            animationVariants={MARKER_ANIMATION_VARIANTS}
+            animationTransition={MARKER_ANIMATION_TRANSITION}
+          />
+        ))}
       </AnimatePresence>
 
       {/* Show user location */}

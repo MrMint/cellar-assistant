@@ -1,13 +1,12 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { LatLngExpression } from "leaflet";
-import type React from "react";
-import { useCallback, useState } from "react";
+import React, { useMemo } from "react";
 import {
   MARKER_ANIMATION_TRANSITION,
   PLACE_ANIMATION_VARIANTS,
 } from "../constants/animations";
+import { MAP_CONFIG, calculateMarkerSize } from "../config/constants";
 import type { PlaceMarkerProps } from "../types";
 import ReactPortalMarker from "./ReactPortalMarker";
 import RelevanceMarker from "./RelevanceMarker";
@@ -34,24 +33,37 @@ const PlaceMarkerComponent: React.FC<PlaceMarkerProps> = ({
   const variants = animationVariants || PLACE_ANIMATION_VARIANTS;
   const transition = animationTransition || MARKER_ANIMATION_TRANSITION;
 
-  // State to capture z-index from RelevanceMarker
-  const [zIndexOffset, setZIndexOffset] = useState<number>(25); // Default value
-  const [pane, setPane] = useState<string>("overlayPane"); // Default pane
+  // Compute zIndex and pane directly to avoid state cycle with RelevanceMarker
+  const { zIndexOffset, pane } = useMemo(() => {
+    const hasActiveFiltering =
+      (filters?.selectedItemTypes?.length ?? 0) > 0 ||
+      (place.overallRelevance !== undefined && place.overallRelevance !== 100);
 
-  // Callback to receive z-index from RelevanceMarker
-  const handleZIndexCalculated = useCallback((zIndex: number) => {
-    setZIndexOffset(zIndex);
-
-    // Determine pane based on z-index for better layering control
-    // Use default overlayPane as fallback if custom panes don't exist yet
-    if (zIndex <= 10) {
-      setPane("lowRelevancePane"); // Low relevance markers (z-index 1-10)
-    } else if (zIndex <= 35) {
-      setPane("mediumRelevancePane"); // Medium relevance markers (z-index 11-35)
-    } else {
-      setPane("highRelevancePane"); // High relevance markers (z-index 36-50)
+    if (!hasActiveFiltering) {
+      return { zIndexOffset: 25, pane: "mediumRelevancePane" };
     }
-  }, []);
+
+    let relevancePercentage = 100;
+    if (place.overallRelevance !== undefined) {
+      relevancePercentage = calculateMarkerSize(place.overallRelevance);
+    }
+
+    const { MIN: minZIndex, MAX: maxZIndex } = MAP_CONFIG.Z_INDEX.MARKERS;
+    const normalizedRelevance = (relevancePercentage - 20) / (170 - 20);
+    const zIndex = Math.round(
+      minZIndex + normalizedRelevance * (maxZIndex - minZIndex),
+    );
+    const clampedZIndex = Math.max(minZIndex, Math.min(maxZIndex, zIndex));
+
+    const paneName =
+      clampedZIndex <= 10
+        ? "lowRelevancePane"
+        : clampedZIndex <= 35
+          ? "mediumRelevancePane"
+          : "highRelevancePane";
+
+    return { zIndexOffset: clampedZIndex, pane: paneName };
+  }, [place.overallRelevance, filters?.selectedItemTypes]);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event from bubbling to map
@@ -65,14 +77,16 @@ const PlaceMarkerComponent: React.FC<PlaceMarkerProps> = ({
       zIndexOffset={zIndexOffset}
       pane={pane}
     >
-      <motion.div
-        variants={variants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-        transition={transition}
+      <button
+        type="button"
         onClick={handleClick}
-        style={{ cursor: "pointer" }}
+        style={{
+          cursor: "pointer",
+          background: "none",
+          border: "none",
+          padding: 0,
+          margin: 0,
+        }}
       >
         <RelevanceMarker
           place={place}
@@ -81,11 +95,21 @@ const PlaceMarkerComponent: React.FC<PlaceMarkerProps> = ({
           animationVariants={variants}
           animationTransition={transition}
           filters={filters}
-          onZIndexCalculated={handleZIndexCalculated}
         />
-      </motion.div>
+      </button>
     </ReactPortalMarker>
   );
 };
 
-export const PlaceMarker = PlaceMarkerComponent;
+export const PlaceMarker = React.memo(PlaceMarkerComponent, (prev, next) => {
+  return (
+    prev.place.id === next.place.id &&
+    prev.place.overallRelevance === next.place.overallRelevance &&
+    prev.place.itemTypeScores === next.place.itemTypeScores &&
+    prev.place.primary_category === next.place.primary_category &&
+    prev.size === next.size &&
+    prev.showLabels === next.showLabels &&
+    prev.filters === next.filters &&
+    prev.onPlaceClick === next.onPlaceClick
+  );
+});

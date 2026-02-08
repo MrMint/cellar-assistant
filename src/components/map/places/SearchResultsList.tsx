@@ -12,7 +12,7 @@ import {
   Typography,
 } from "@mui/joy";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { ITEM_TYPE_COLORS } from "../constants/colors";
 import type { ItemType, PlaceResult, SemanticPlaceResult } from "../types";
 
@@ -55,18 +55,9 @@ export function SearchResultsList({
   onCenterOnPlace,
   onClose,
 }: SearchResultsListProps) {
-  const [isDesktop, setIsDesktop] = useState(false);
-  const [sidebarOffset, setSidebarOffset] = useState(0);
-
-  useEffect(() => {
-    const updateLayout = () => {
-      setIsDesktop(window.innerWidth >= 768);
-      setSidebarOffset(window.innerWidth >= 600 ? 56 : 0);
-    };
-    updateLayout();
-    window.addEventListener("resize", updateLayout);
-    return () => window.removeEventListener("resize", updateLayout);
-  }, []);
+  const isDesktop = useMediaQuery("(min-width: 769px)");
+  const hasSidebar = useMediaQuery("(min-width: 600px)");
+  const sidebarOffset = hasSidebar ? 56 : 0;
 
   const handleResultClick = (place: SemanticPlaceResult) => {
     onCenterOnPlace(place);

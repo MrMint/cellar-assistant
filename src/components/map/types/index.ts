@@ -241,7 +241,8 @@ export interface ClusterMarkerProps extends BaseMarkerProps {
   position: [number, number];
   pointCount: number;
   clusterId: number;
+  clusterCenter: [number, number];
   isDarkMode?: boolean;
   isDensityHigh?: boolean;
-  onClusterClick?: (clusterId: number) => void;
+  onClusterClick?: (clusterId: number, center: [number, number]) => void;
 }

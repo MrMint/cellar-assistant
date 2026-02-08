@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type React from "react";
+import React from "react";
 import {
   CLUSTER_ANIMATION_VARIANTS,
   HOVER_SCALE,
@@ -15,16 +15,16 @@ import ReactPortalMarker from "./ReactPortalMarker";
  * Optimized cluster marker component
  * Separated from POILayer for better maintainability
  */
-export function ClusterMarker({
+const ClusterMarkerComponent: React.FC<ClusterMarkerProps> = ({
   position,
   pointCount,
   clusterId,
+  clusterCenter,
   isDarkMode = false,
-  isDensityHigh = false,
   onClusterClick,
   animationVariants,
   animationTransition,
-}: ClusterMarkerProps) {
+}) => {
   // Use passed animation variants or defaults
   const variants = animationVariants || CLUSTER_ANIMATION_VARIANTS;
   const transition = animationTransition || MARKER_ANIMATION_TRANSITION;
@@ -60,7 +60,7 @@ export function ClusterMarker({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onClusterClick?.(clusterId);
+    onClusterClick?.(clusterId, clusterCenter);
   };
 
   return (
@@ -116,4 +116,18 @@ export function ClusterMarker({
       </motion.div>
     </ReactPortalMarker>
   );
-}
+};
+
+export const ClusterMarker = React.memo(
+  ClusterMarkerComponent,
+  (prev, next) => {
+    return (
+      prev.clusterId === next.clusterId &&
+      prev.pointCount === next.pointCount &&
+      prev.position[0] === next.position[0] &&
+      prev.position[1] === next.position[1] &&
+      prev.isDarkMode === next.isDarkMode &&
+      prev.onClusterClick === next.onClusterClick
+    );
+  },
+);

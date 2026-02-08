@@ -193,6 +193,22 @@ export function MapRenderer({ userId }: MapRendererProps) {
     [mapActions],
   );
 
+  // Memoize filters to prevent new object reference on every render
+  const filters = useMemo(
+    () => ({
+      selectedItemTypes: mapFilters.selectedItemTypes,
+      minRating: mapFilters.minRating,
+      searchQuery: mapFilters.searchQuery,
+      visitStatuses: mapFilters.visitStatuses,
+    }),
+    [
+      mapFilters.selectedItemTypes,
+      mapFilters.minRating,
+      mapFilters.searchQuery,
+      mapFilters.visitStatuses,
+    ],
+  );
+
   // Handle centering map on a place (from search results list)
   const handleCenterOnPlace = useCallback(
     (place: PlaceResult) => {
@@ -353,12 +369,7 @@ export function MapRenderer({ userId }: MapRendererProps) {
           isDarkMode={mapCore.isDarkMode}
           userId={userId}
           currentZoom={mapCore.currentZoom}
-          filters={{
-            selectedItemTypes: mapFilters.selectedItemTypes,
-            minRating: mapFilters.minRating,
-            searchQuery: mapFilters.searchQuery,
-            visitStatuses: mapFilters.visitStatuses,
-          }}
+          filters={filters}
         />
 
         {/* Zoom Tracker */}

@@ -2,7 +2,7 @@
 
 import { Close, LocationOn, Refresh, Search } from "@mui/icons-material";
 import { Box, Divider, IconButton, Input, Sheet, Stack } from "@mui/joy";
-import { useEffect, useState } from "react";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useMapUI } from "../hooks/useMapMachine";
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
 import { MapFilter } from "./MapFilter";
@@ -55,7 +55,8 @@ export function MapControls({
     actions: "top-right",
   },
 }: MapControlsProps) {
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobileQuery = useMediaQuery("(max-width: 768px)");
+  const isMobile = variant === "auto" ? isMobileQuery : variant === "mobile";
 
   // URL-backed filter state via nuqs
   const {
@@ -69,21 +70,6 @@ export function MapControls({
     setVisitStatuses,
   } = useMapSearchParams();
   const { isDrawerOpen } = useMapUI();
-
-  // Detect mobile vs desktop for responsive layout
-  useEffect(() => {
-    if (variant === "auto") {
-      const checkIsMobile = () => {
-        setIsMobile(window.innerWidth < 768); // md breakpoint
-      };
-
-      checkIsMobile();
-      window.addEventListener("resize", checkIsMobile);
-      return () => window.removeEventListener("resize", checkIsMobile);
-    } else {
-      setIsMobile(variant === "mobile");
-    }
-  }, [variant]);
 
   // Helper function to get position styles
   const getPositionStyles = (pos: string) => {

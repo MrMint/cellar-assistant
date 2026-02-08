@@ -37,6 +37,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   PlaceDetailsFragment,
   PlaceWithMenuFragment,
@@ -90,7 +91,8 @@ export function PlaceDetailsDrawer({
   const [dragCurrentY, setDragCurrentY] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const [isDesktop, setIsDesktop] = useState(false);
+  const isDesktop = useMediaQuery("(min-width: 769px)");
+  const hasSidebar = useMediaQuery("(min-width: 600px)");
   const [drawerState, setDrawerState] = useState<DrawerState>("half");
   const [dragVelocity, setDragVelocity] = useState(0);
   const [lastDragTime, setLastDragTime] = useState(0);
@@ -298,17 +300,6 @@ export function PlaceDetailsDrawer({
     return baseHeight;
   };
 
-  // Detect desktop vs mobile
-  useEffect(() => {
-    const checkIsDesktop = () => {
-      setIsDesktop(window.innerWidth >= 768); // md breakpoint
-    };
-
-    checkIsDesktop();
-    window.addEventListener("resize", checkIsDesktop);
-
-    return () => window.removeEventListener("resize", checkIsDesktop);
-  }, []);
 
   // Handle entrance - set initial drawer state
   useEffect(() => {
@@ -697,7 +688,7 @@ export function PlaceDetailsDrawer({
               style={{
                 position: "fixed",
                 top: 0,
-                left: window.innerWidth >= 600 ? 56 : 0, // Account for nav bar width on desktop
+                left: hasSidebar ? 56 : 0, // Account for nav bar width on desktop
                 width: 400,
                 height: "100vh",
                 backgroundColor: "var(--joy-palette-background-body)",
