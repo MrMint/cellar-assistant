@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence } from "framer-motion";
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
@@ -12,8 +12,15 @@ import { ClusterMarker } from "../markers/ClusterMarker";
 import { PlaceMarker } from "../markers/PlaceMarker";
 import { UserLocationMarker } from "../markers/UserLocationMarker";
 import { PlaceDetailsDrawer } from "../places/PlaceDetailsDrawer";
-import type { MapDataItem, Place, PlaceCluster, PlaceResult } from "../types";
+import type {
+  MapBounds,
+  MapDataItem,
+  Place,
+  PlaceCluster,
+  PlaceResult,
+} from "../types";
 import { LabelStyling } from "../utils/labelStyling";
+import { filterItemsByViewport } from "../utils/viewportFilter";
 import type { VisitStatus } from "./MapFilter";
 
 const NOOP = () => {};
@@ -35,6 +42,7 @@ interface POILayerProps {
     searchQuery: string;
     visitStatuses: VisitStatus[];
   };
+  viewportBounds?: MapBounds;
 }
 
 /**
@@ -54,18 +62,24 @@ const POILayerComponent: React.FC<POILayerProps> = ({
   userId,
   currentZoom = 12,
   filters,
+  viewportBounds,
 }) => {
-  // Extract places from items
-  const places = useMemo(() => {
-    return items.filter((item): item is PlaceResult => !("is_cluster" in item));
-  }, [items]);
+  // Defer item updates so React can yield between renders on slow devices
+  const deferredItems = useDeferredValue(items);
 
-  // Memoize clusters array
-  const clusters = useMemo(() => {
-    return items.filter(
-      (item): item is PlaceCluster => "is_cluster" in item && item.is_cluster,
-    );
-  }, [items]);
+  // Filter to only items within viewport + buffer, then split into places/clusters
+  const { places, clusters } = useMemo(() => {
+    const visible = filterItemsByViewport(deferredItems, viewportBounds);
+    return {
+      places: visible.filter(
+        (item): item is PlaceResult => !("is_cluster" in item),
+      ),
+      clusters: visible.filter(
+        (item): item is PlaceCluster =>
+          "is_cluster" in item && item.is_cluster,
+      ),
+    };
+  }, [deferredItems, viewportBounds]);
 
   // Inject label styling on mount
   useEffect(() => {

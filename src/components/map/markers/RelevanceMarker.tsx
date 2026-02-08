@@ -62,32 +62,27 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
 
   const itemTypeScores = place.itemTypeScores ?? {};
 
-  // Always find the most relevant item type for background color (server now provides scores for all types)
-  const allItemTypeEntries = Object.entries(itemTypeScores);
-  const mostRelevantItemType =
-    allItemTypeEntries.length > 0
-      ? (allItemTypeEntries.reduce((prev, current) =>
-          Number(current[1]) > Number(prev[1]) ? current : prev,
-        )[0] as ItemType)
-      : null;
+  // Always find the most relevant item type for background color
+  const mostRelevantItemType = useMemo(() => {
+    const entries = Object.entries(itemTypeScores);
+    if (entries.length === 0) return null;
+    return entries.reduce((prev, current) =>
+      Number(current[1]) > Number(prev[1]) ? current : prev,
+    )[0] as ItemType;
+  }, [itemTypeScores]);
 
-  // Calculate overall relevance for sizing - now uses server-calculated score
-  const calculateOverallRelevance = () => {
-    // Use server-calculated overall relevance if available
+  // Calculate overall relevance for sizing - memoized
+  const relevancePercentage = useMemo(() => {
     const serverRelevance = place.overallRelevance;
     if (serverRelevance !== undefined) {
-      // Use centralized configuration for size scaling
       return calculateMarkerSize(serverRelevance);
     }
 
-    // Fallback to old logic if server relevance not available
     const hasItemTypeFilters = (filters?.selectedItemTypes?.length ?? 0) > 0;
-
     if (!hasItemTypeFilters) {
-      return 100; // Default size when no filters
+      return 100;
     }
 
-    // Get scores for selected item types
     const relevantScores = (filters?.selectedItemTypes ?? [])
       .map(
         (type: string) => (itemTypeScores as Record<string, number>)[type] ?? 0,
@@ -95,97 +90,81 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
       .filter((score: number) => score > 0);
 
     if (relevantScores.length === 0) {
-      return 25; // Very small for irrelevant places
+      return 25;
     }
 
-    // Use the highest score among selected types
     const maxRelevance = Math.max(...relevantScores);
+    const minSize = 20;
+    const maxSize = 170;
+    return minSize + (maxRelevance / 100) * (maxSize - minSize);
+  }, [place.overallRelevance, filters?.selectedItemTypes, itemTypeScores]);
 
-    // Scale to create dramatic size differences: 20% to 170% of base size
-    const minSize = 20; // Smallest POI (20% of base) - tiny dots
-    const maxSize = 170; // Largest POI (170% of base) - prominently larger
-    const scaledRelevance =
-      minSize + (maxRelevance / 100) * (maxSize - minSize);
+  const scaleFactor = useMemo(
+    () => relevancePercentage / 100,
+    [relevancePercentage],
+  );
 
-    return scaledRelevance;
-  };
-
-  const relevancePercentage = calculateOverallRelevance();
-  const scaledSize = (size * relevancePercentage) / 100;
-
-  // Calculate opacity based on relevance (0.15 to 1.0 range for extreme contrast)
-  const calculateOpacity = () => {
+  // Calculate opacity based on relevance - memoized
+  const backgroundOpacity = useMemo(() => {
     const hasActiveFiltering =
       (filters?.selectedItemTypes?.length ?? 0) > 0 ||
       (place.overallRelevance !== undefined && place.overallRelevance !== 100);
     if (!hasActiveFiltering) {
-      return 1.0; // Full opacity when no filters
+      return 1.0;
     }
 
-    // Scale relevance percentage (20-170) to opacity (0.15-1.0) - extreme range
     const { MIN: minOpacity, MAX: maxOpacity } = MAP_CONFIG.OPACITY;
-
-    // Normalize relevance to 0-1 range, then scale to opacity range
-    const normalizedRelevance = (relevancePercentage - 20) / (170 - 20); // 20-170 -> 0-1
+    const normalizedRelevance = (relevancePercentage - 20) / (170 - 20);
     const opacity =
       minOpacity + normalizedRelevance * (maxOpacity - minOpacity);
-
     return Math.max(minOpacity, Math.min(maxOpacity, opacity));
-  };
+  }, [filters?.selectedItemTypes, place.overallRelevance, relevancePercentage]);
 
-  const backgroundOpacity = calculateOpacity();
-
-  // Get icon for primary category
-  const getCategoryIcon = (category: string, iconSize: number) => {
+  // Get icon for primary category - memoized
+  const categoryIcon = useMemo(() => {
+    const category =
+      place.primary_category || place.categories?.[0] || "restaurant";
+    const iconSize = getMarkerIconSize(size);
     const iconProps = { size: iconSize };
 
     switch (category?.toLowerCase()) {
-      // Beer bar
       case "beer_bar":
       case "beer_garden":
       case "sports_bar":
       case "pub":
       case "brewery":
         return <MdSportsBar {...iconProps} />;
-      // Wine bar
       case "wine_bar":
       case "wine_tasting_room":
       case "winery":
       case "sake_bar":
         return <MdWineBar {...iconProps} />;
-      // Cocktail bar
       case "cocktail_bar":
       case "lounge":
       case "bar":
         return <MdLocalBar {...iconProps} />;
-      // Spirits bar
       case "whiskey_bar":
       case "distillery":
         return <MdLiquor {...iconProps} />;
-      // Coffee
       case "cafe":
       case "coffee_shop":
       case "coffee_roastery":
         return <MdLocalCafe {...iconProps} />;
-      // Food
       case "restaurant":
       case "gastropub":
       case "tapas_bar":
         return <MdRestaurant {...iconProps} />;
-      // Retail (grocery)
       case "grocery_store":
       case "grocery":
       case "supermarket":
       case "specialty_grocery_store":
       case "organic_grocery_store":
         return <MdLocalGroceryStore {...iconProps} />;
-      // Retail (liquor)
       case "liquor_store":
       case "beer_wine_and_spirits":
       case "beverage_store":
       case "wine_wholesaler":
         return <MdLiquor {...iconProps} />;
-      // Other
       case "hotel":
       case "resort":
         return <MdHotel {...iconProps} />;
@@ -196,10 +175,7 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
       default:
         return <MdRestaurant {...iconProps} />;
     }
-  };
-
-  // Calculate scale factor for smooth animations (scale relative to base size)
-  const scaleFactor = scaledSize / size;
+  }, [place.primary_category, place.categories, size]);
 
   // Memoize animate target to avoid Framer Motion re-evaluating on every render
   const animateTarget = useMemo(
@@ -227,71 +203,79 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
     justifyContent: "center",
   };
 
-  const content = (
-    <>
-      {/* Center icon */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          color: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: "50%",
-          width: getMarkerCircleSize(size),
-          height: getMarkerCircleSize(size),
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          borderWidth: "2px",
-          borderStyle: "solid",
-          backgroundColor: mostRelevantItemType
-            ? `${ITEM_TYPE_COLORS[mostRelevantItemType]}${Math.round(
-                backgroundOpacity * 255,
-              )
-                .toString(16)
-                .padStart(2, "0")}`
-            : `rgba(255, 255, 255, ${backgroundOpacity * 0.9})`,
-          borderColor: `rgba(255, 255, 255, ${backgroundOpacity * 0.8})`,
-          transition: disableAnimations
-            ? undefined
-            : "background-color 0.3s ease-out, border-color 0.3s ease-out",
-        }}
-      >
-        {getCategoryIcon(
-          place.primary_category || place.categories?.[0] || "restaurant",
-          getMarkerIconSize(size),
-        )}
-      </div>
-
-      {/* Place label */}
-      {showLabels && (
+  // Memoize marker content to avoid recreating JSX on every render
+  const content = useMemo(
+    () => (
+      <>
+        {/* Center icon */}
         <div
-          className="poi-label"
           style={{
-            position: "absolute",
-            top: "100%",
-            left: "50%",
-            transform: "translateX(-50%)",
-            marginTop: "-15px",
-            backgroundColor: "rgba(255, 255, 255, 0.95)",
-            color: "#333",
-            padding: "2px 6px",
-            borderRadius: "4px",
-            fontSize: "10px",
-            fontWeight: "500",
-            whiteSpace: "nowrap",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-            border: "1px solid rgba(0,0,0,0.1)",
-            pointerEvents: "none",
-            maxWidth: "120px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
+            position: "relative",
+            zIndex: 2,
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "50%",
+            width: getMarkerCircleSize(size),
+            height: getMarkerCircleSize(size),
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            borderWidth: "2px",
+            borderStyle: "solid",
+            backgroundColor: mostRelevantItemType
+              ? `${ITEM_TYPE_COLORS[mostRelevantItemType]}${Math.round(
+                  backgroundOpacity * 255,
+                )
+                  .toString(16)
+                  .padStart(2, "0")}`
+              : `rgba(255, 255, 255, ${backgroundOpacity * 0.9})`,
+            borderColor: `rgba(255, 255, 255, ${backgroundOpacity * 0.8})`,
+            transition: disableAnimations
+              ? undefined
+              : "background-color 0.3s ease-out, border-color 0.3s ease-out",
           }}
         >
-          {place.name}
+          {categoryIcon}
         </div>
-      )}
-    </>
+
+        {/* Place label */}
+        {showLabels && (
+          <div
+            className="poi-label"
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              marginTop: "-15px",
+              backgroundColor: "rgba(255, 255, 255, 0.95)",
+              color: "#333",
+              padding: "2px 6px",
+              borderRadius: "4px",
+              fontWeight: "500",
+              whiteSpace: "nowrap",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              border: "1px solid rgba(0,0,0,0.1)",
+              pointerEvents: "none",
+              maxWidth: "120px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {place.name}
+          </div>
+        )}
+      </>
+    ),
+    [
+      size,
+      mostRelevantItemType,
+      backgroundOpacity,
+      categoryIcon,
+      showLabels,
+      place.name,
+      disableAnimations,
+    ],
   );
 
   if (disableAnimations) {

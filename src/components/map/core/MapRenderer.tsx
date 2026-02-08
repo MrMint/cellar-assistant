@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useMapBounds } from "../hooks/useMapBounds";
+import { useViewportBounds } from "../hooks/useViewportBounds";
 import {
   useMapActions,
   useMapCore,
@@ -70,7 +71,7 @@ function LocationControl({
   return null;
 }
 
-// Component to set up map bounds tracking
+// Component to set up map bounds tracking (debounced - for server fetches)
 function MapBoundsControl({
   setupMapListeners,
 }: {
@@ -82,6 +83,22 @@ function MapBoundsControl({
     const cleanup = setupMapListeners(map);
     return cleanup;
   }, [map, setupMapListeners]);
+
+  return null;
+}
+
+// Component to set up viewport bounds tracking (non-debounced - for marker virtualization)
+function ViewportBoundsControl({
+  setupViewportListeners,
+}: {
+  setupViewportListeners: (map: LeafletMap) => () => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const cleanup = setupViewportListeners(map);
+    return cleanup;
+  }, [map, setupViewportListeners]);
 
   return null;
 }
@@ -128,8 +145,11 @@ export function MapRenderer({ userId }: MapRendererProps) {
     placesError,
   } = useMapDataFromXState();
 
-  // Map bounds tracking
+  // Map bounds tracking (debounced - for server fetches)
   const { bounds, setupMapListeners } = useMapBounds();
+
+  // Viewport bounds tracking (non-debounced - for marker virtualization)
+  const { viewportBounds, setupViewportListeners } = useViewportBounds();
 
   const { location: userLocation, loading: locationLoading } = useGeolocation();
 
@@ -364,8 +384,11 @@ export function MapRenderer({ userId }: MapRendererProps) {
           onInitialized={handleInitialized}
         />
 
-        {/* Map Bounds Control */}
+        {/* Map Bounds Control (debounced - triggers server fetches) */}
         <MapBoundsControl setupMapListeners={setupMapListeners} />
+
+        {/* Viewport Bounds Control (non-debounced - for marker virtualization) */}
+        <ViewportBoundsControl setupViewportListeners={setupViewportListeners} />
 
         {/* Unified POI Layer */}
         <POILayer
@@ -380,6 +403,7 @@ export function MapRenderer({ userId }: MapRendererProps) {
           userId={userId}
           currentZoom={mapCore.currentZoom}
           filters={filters}
+          viewportBounds={viewportBounds}
         />
 
         {/* Zoom Tracker */}
