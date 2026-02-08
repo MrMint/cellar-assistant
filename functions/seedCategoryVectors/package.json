@@ -1,0 +1,12 @@
+{
+  "name": "seedCategoryVectors",
+  "version": "1.0.0",
+  "description": "Seeds category_vectors table with semantic embeddings for hybrid place search",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

@@ -376,6 +376,11 @@ export default async (req: Request, res: Response) => {
       console.error(
         `CRITICAL: Scan ${scanId} stuck in "processing" — all completion retries failed. Items detected: ${validItems.length}. Manual intervention required.`,
       );
+      return res.status(500).json({
+        error: "Failed to update scan status to completed",
+        scanId,
+        itemsDetected: validItems.length,
+      });
     }
 
     // Note: Item matching is triggered automatically via Hasura event trigger

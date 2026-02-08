@@ -99,6 +99,9 @@ delete_permissions:
   - role: user
     permission:
       filter:
-        acted_by:
-          _eq: X-Hasura-User-Id
+        _or:
+          - acted_by:
+              _eq: X-Hasura-User-Id
+          - acted_by:
+              _is_null: true
     comment: ""

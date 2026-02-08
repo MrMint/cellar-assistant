@@ -259,9 +259,7 @@ export async function uploadAndProcessMenuScan(
       );
 
       if (!processResponse.ok) {
-        console.error(
-          `processMenuScan returned ${processResponse.status}`,
-        );
+        console.error(`processMenuScan returned ${processResponse.status}`);
         return {
           success: false,
           error: "Failed to start menu processing",

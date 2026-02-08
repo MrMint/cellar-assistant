@@ -17,6 +17,7 @@ import {
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
 import { useSearchParamsSync } from "../hooks/useSearchParamsSync";
 import type { PlaceResult } from "../types";
+import { SearchResultsList } from "../places/SearchResultsList";
 import { MapControls } from "./MapControls";
 import { MapPanes } from "./MapPanes";
 import { POILayer } from "./POILayer";
@@ -122,6 +123,7 @@ export function MapRenderer({ userId }: MapRendererProps) {
   useSearchParamsSync(searchParams);
   const {
     mapItems,
+    semanticResults,
     isLoading: placesLoading,
     placesError,
   } = useMapDataFromXState();
@@ -189,6 +191,19 @@ export function MapRenderer({ userId }: MapRendererProps) {
       mapActions.setZoom(zoom);
     },
     [mapActions],
+  );
+
+  // Handle centering map on a place (from search results list)
+  const handleCenterOnPlace = useCallback(
+    (place: PlaceResult) => {
+      if (mapInstance) {
+        const [lng, lat] = place.location.coordinates;
+        mapInstance.flyTo([lat, lng], Math.max(mapInstance.getZoom(), 15), {
+          duration: 0.6,
+        });
+      }
+    },
+    [mapInstance],
   );
 
   // Handle cluster click - center on cluster and zoom in for more granular view
@@ -352,6 +367,20 @@ export function MapRenderer({ userId }: MapRendererProps) {
         {/* Map Click Handler */}
         <MapClickHandler onMapClick={handleMapClick} />
       </MapContainer>
+
+      {/* Search Results List (shown during semantic search) */}
+      {mapFilters.isSemanticSearch &&
+        semanticResults &&
+        semanticResults.length > 0 && (
+          <SearchResultsList
+            results={semanticResults}
+            searchQuery={mapFilters.searchQuery}
+            isLoading={placesLoading}
+            onPlaceSelect={handlePlaceSelect}
+            onCenterOnPlace={handleCenterOnPlace}
+            onClose={() => searchParams.setSearch("")}
+          />
+        )}
 
       {/* Unified Map Controls XState */}
       <MapControls

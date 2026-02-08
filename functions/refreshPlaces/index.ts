@@ -30,9 +30,7 @@ export default async (
     const cancelled =
       cancelResult?.update_place_refresh_jobs?.affected_rows ?? 0;
     if (cancelled > 0) {
-      console.log(
-        `[PlaceRefresh] Cancelled ${cancelled} in-progress job(s)`,
-      );
+      console.log(`[PlaceRefresh] Cancelled ${cancelled} in-progress job(s)`);
     }
 
     // Clear existing places

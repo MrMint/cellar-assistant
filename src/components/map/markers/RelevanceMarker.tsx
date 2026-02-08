@@ -117,7 +117,10 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
 
   // Calculate opacity based on relevance (0.15 to 1.0 range for extreme contrast)
   const calculateOpacity = () => {
-    if (!filters?.selectedItemTypes?.length) {
+    const hasActiveFiltering =
+      (filters?.selectedItemTypes?.length ?? 0) > 0 ||
+      (place.overallRelevance !== undefined && place.overallRelevance !== 100);
+    if (!hasActiveFiltering) {
       return 1.0; // Full opacity when no filters
     }
 
@@ -136,7 +139,10 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
 
   // Calculate z-index based on relevance (higher relevance = higher z-index)
   const calculateZIndex = () => {
-    if (!filters?.selectedItemTypes?.length) {
+    const hasActiveFiltering =
+      (filters?.selectedItemTypes?.length ?? 0) > 0 ||
+      (place.overallRelevance !== undefined && place.overallRelevance !== 100);
+    if (!hasActiveFiltering) {
       return 25; // Default z-index when no filters (middle range)
     }
 

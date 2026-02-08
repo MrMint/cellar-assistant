@@ -76,9 +76,7 @@ export function calculateOverallQuality(place: any): number {
 }
 
 // Calculate item type matching scores for ALL item types using identityScore
-export function calculateItemTypeMatches(
-  place: any,
-): Record<ItemType, number> {
+export function calculateItemTypeMatches(place: any): Record<ItemType, number> {
   const allItemTypes: ItemType[] = ["wine", "beer", "spirit", "coffee", "sake"];
   const scores: Record<ItemType, number> = {
     wine: 0,
@@ -135,11 +133,7 @@ export function calculatePlaceRelevance(
   place: any,
   searchParams: MapSearchParams,
 ): { relevanceScore: number; matchedItemTypes: ItemType[] } {
-  const {
-    itemTypes = [],
-    minRating,
-    semanticQuery,
-  } = searchParams;
+  const { itemTypes = [], minRating, semanticQuery } = searchParams;
 
   let score = 0;
   let maxScore = 0;

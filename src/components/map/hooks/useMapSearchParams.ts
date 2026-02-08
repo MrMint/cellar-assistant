@@ -52,10 +52,7 @@ export function useMapSearchParams() {
     parseAsArrayOf(parseAsString).withDefault([]),
   );
 
-  const [minRating, setMinRating] = useQueryState(
-    "minRating",
-    parseAsInteger,
-  );
+  const [minRating, setMinRating] = useQueryState("minRating", parseAsInteger);
 
   const [rawVisitStatuses, setVisitStatuses] = useQueryState(
     "visitStatuses",

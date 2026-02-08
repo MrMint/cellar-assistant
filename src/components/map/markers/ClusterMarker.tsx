@@ -100,7 +100,13 @@ export function ClusterMarker({
                 "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
               fontWeight: "500",
               fontSize:
-                size >= 70 ? "18px" : size >= 50 ? "16px" : size >= 45 ? "14px" : "13px",
+                size >= 70
+                  ? "18px"
+                  : size >= 50
+                    ? "16px"
+                    : size >= 45
+                      ? "14px"
+                      : "13px",
               lineHeight: 1,
             }}
           >

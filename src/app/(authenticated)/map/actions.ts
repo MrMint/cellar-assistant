@@ -1,8 +1,6 @@
 "use server";
 
 import { graphql } from "@cellar-assistant/shared/gql";
-import { getSearchVectorQuery } from "@cellar-assistant/shared/queries";
-import { isNil } from "ramda";
 import {
   calculateItemTypeMatches,
   calculateOverallQuality,
@@ -21,6 +19,7 @@ import type {
   SemanticPlaceResult,
   VisitStatus,
 } from "@/components/map/types";
+import { getCachedSearchVector } from "@/lib/cache";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
 
@@ -208,12 +207,6 @@ function transformClusterResult(item: any): PlaceCluster {
     }
   }
 
-  // Debug cluster coordinate parsing
-  console.log(
-    `🔧 Cluster ${item.cluster_id} (${item.cluster_count} places): Parsed coordinates [${clusterCoordinates[0]}, ${clusterCoordinates[1]}] (lng, lat)`,
-  );
-  console.log(`🔧 Cluster ${item.cluster_id} raw center:`, item.cluster_center);
-
   return {
     is_cluster: true,
     cluster_id: item.cluster_id,
@@ -242,24 +235,13 @@ export async function searchMapPlaces(
     minRating,
     visitStatuses = [],
     semanticQuery,
-    maxSemanticDistance = 0.8,
     limit = 500,
   } = params;
 
-  console.log(`🗺️ [Server Action] Map search with params:`, {
-    semanticQuery: semanticQuery || "none",
-    itemTypes: itemTypes,
-    itemTypesLength: itemTypes?.length || 0,
-    minRating: minRating || "none",
-    visitStatuses: visitStatuses.join(",") || "all",
-  });
-
-  console.log(
-    `🎯 [Server Action] Will calculate relevance: ${itemTypes && itemTypes.length > 0 ? "YES" : "NO"}`,
-  );
-
   try {
     // Handle semantic search with optional filters (Option C)
+    // Cap semantic search at 50 results — hybrid ranked results are already
+    // sorted by combined_score so pulling more adds noise, not signal.
     if (semanticQuery && semanticQuery.trim().length > 0) {
       return await performSemanticSearch(
         semanticQuery,
@@ -268,8 +250,7 @@ export async function searchMapPlaces(
         minRating,
         visitStatuses,
         userId,
-        maxSemanticDistance,
-        limit,
+        Math.min(limit, 50),
       );
     }
 
@@ -299,7 +280,7 @@ export async function searchMapPlaces(
   }
 }
 
-// Perform semantic search using Nhost function with optional filters (Option C)
+// Perform hybrid search using text + trigram + category semantic matching
 async function performSemanticSearch(
   query: string,
   bounds: MapBounds,
@@ -307,71 +288,50 @@ async function performSemanticSearch(
   minRating: number | undefined,
   visitStatuses: VisitStatus[],
   userId: string,
-  maxDistance: number,
   limit: number,
 ): Promise<MapSearchResults> {
-  console.log(`🔍 [Server Action] Performing semantic search: "${query}"`);
-
   try {
-    // Generate vector for the query
-    const vectorData = await serverQuery(getSearchVectorQuery, {
-      text: query.trim(),
-    });
+    // Generate query vector via Next.js cache (24h TTL, shared across users)
+    const cachedVector = await getCachedSearchVector(query.trim());
+    const queryVector = cachedVector ? JSON.parse(cachedVector) : undefined;
 
-    if (isNil(vectorData?.create_search_vector)) {
-      console.warn(
-        "Failed to generate search vector for semantic place search",
-      );
-      return {
-        places: [],
-        mapItems: [],
-        isSemanticSearch: true,
-        searchMetadata: {
-          itemTypes: [], // Semantic search clears item type filters
-          totalResults: 0,
-          hasMore: false,
-        },
-      };
-    }
-
-    // Call semantic search Nhost function
+    // Call hybrid search Nhost function with pre-computed vector
     const nhostFunctionUrl =
       process.env.NHOST_FUNCTION_URL || "https://local.functions.nhost.run";
 
-    const response = await fetch(
-      `${nhostFunctionUrl}/v1/functions/semanticPlaceSearch`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET || "",
-        },
-        body: JSON.stringify({
-          input: {
-            query: query.trim(),
-            bounds,
-            maxDistance,
-            limit,
-          },
-          session_variables: {
-            "x-hasura-user-id": userId,
-          },
-        }),
+    const response = await fetch(`${nhostFunctionUrl}/v1/hybridPlaceSearch`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET || "",
       },
-    );
+      body: JSON.stringify({
+        input: {
+          query: query.trim(),
+          queryVector,
+          bounds,
+          limit,
+          itemTypes,
+          minRating,
+        },
+        session_variables: {
+          "x-hasura-user-id": userId,
+        },
+      }),
+    });
 
     if (!response.ok) {
       console.error(
-        `Semantic search failed: ${response.status} ${response.statusText}`,
+        `Hybrid search failed: ${response.status} ${response.statusText}`,
       );
-      throw new Error(`Semantic search failed: ${response.status}`);
+      throw new Error(`Hybrid search failed: ${response.status}`);
     }
 
     const result = await response.json();
 
     if (!result.success) {
-      console.warn("Semantic search returned unsuccessful result");
-      throw new Error("Semantic search unsuccessful");
+      console.warn("Hybrid search returned unsuccessful result");
+      throw new Error("Hybrid search unsuccessful");
     }
 
     // Create search parameters for relevance calculation and filtering
@@ -385,58 +345,55 @@ async function performSemanticSearch(
 
     // Transform and apply search parameters for relevance scoring
     let semanticResults: SemanticPlaceResult[] = result.places.map(
-      (place: any) => ({
-        ...transformPlaceResult(place, searchParams), // Apply search params for relevance scoring
-        distance: place.distance || 0,
-        matchReason: "semantic_match" as const,
-        confidenceScore: place.confidenceScore || 0,
-      }),
+      (place: any) => {
+        const transformed = transformPlaceResult(place, searchParams);
+        const confidenceScore = place.confidenceScore ?? 0;
+        return {
+          ...transformed,
+          overallRelevance: confidenceScore, // Hybrid score drives marker sizing
+          distance: place.distance ?? 0,
+          matchReason: "semantic_match" as const,
+          confidenceScore,
+        };
+      },
     );
 
-    console.log(
-      `🔍 [Server Action] Raw semantic search found ${semanticResults.length} places`,
+    // Adaptive threshold: filter weak matches relative to the strongest result
+    const RELATIVE_CUTOFF = 0.33;
+    const ABSOLUTE_MINIMUM = 5; // combined_score > 0.05
+    const topScore = Math.max(
+      ...semanticResults.map((r) => r.confidenceScore),
+      0,
+    );
+    const threshold = Math.max(topScore * RELATIVE_CUTOFF, ABSOLUTE_MINIMUM);
+    semanticResults = semanticResults.filter(
+      (place) => place.confidenceScore >= threshold,
     );
 
-    // Apply filters to semantic results (Option C: semantic + filters)
+    // Apply filters to hybrid results
     if (itemTypes.length > 0) {
-      const originalCount = semanticResults.length;
       semanticResults = semanticResults.filter((place) => {
         const hasItemTypeMatch =
           place.itemTypeScores &&
           itemTypes.some(
-            (itemType) => (place.itemTypeScores?.[itemType] || 0) > 0,
+            (itemType) => (place.itemTypeScores?.[itemType] ?? 0) > 0,
           );
         return hasItemTypeMatch;
       });
-      console.log(
-        `🎯 [Server Action] Item type filter: ${originalCount} → ${semanticResults.length} places`,
-      );
     }
 
-    if (minRating !== undefined) {
-      const originalCount = semanticResults.length;
-      semanticResults = semanticResults.filter(
-        (place) => place.rating !== undefined && place.rating >= minRating,
+    // Normalize overallRelevance so the best result renders at full size/opacity
+    if (semanticResults.length > 0) {
+      const maxConfidence = Math.max(
+        ...semanticResults.map((r) => r.confidenceScore),
       );
-      console.log(
-        `⭐ [Server Action] Rating filter (${minRating}+): ${originalCount} → ${semanticResults.length} places`,
-      );
+      if (maxConfidence > 0) {
+        semanticResults = semanticResults.map((place) => ({
+          ...place,
+          overallRelevance: (place.confidenceScore / maxConfidence) * 100,
+        }));
+      }
     }
-
-    // TODO: Visit status filtering is not yet implemented for semantic search
-    // This would require fetching user_place_interactions data for each place
-    // which adds complexity to the semantic search query. For now, all places
-    // are treated as having no visit status (effectively "new" places).
-    // Future improvement: Add user interaction data to semantic search results
-    if (visitStatuses.length > 0) {
-      console.log(
-        `⚠️ [Server Action] Visit status filter not implemented for semantic search (${visitStatuses.join(",")})`,
-      );
-    }
-
-    console.log(
-      `✅ [Server Action] Final semantic search with filters: ${semanticResults.length} places`,
-    );
 
     return {
       places: semanticResults,
@@ -444,13 +401,13 @@ async function performSemanticSearch(
       semanticResults,
       isSemanticSearch: true,
       searchMetadata: {
-        itemTypes, // Preserve item type filters for Option C
+        itemTypes,
         totalResults: result.places.length,
         hasMore: false,
       },
     };
   } catch (error) {
-    console.error("❌ [Server Action] Semantic search error:", error);
+    console.error("❌ [Server Action] Hybrid search error:", error);
     throw error;
   }
 }
@@ -466,19 +423,6 @@ async function performStandardSearch(
 ): Promise<MapSearchResults> {
   // Perform item type to category mapping on server
   const categories = mapItemTypesToCategories(itemTypes);
-
-  console.log(
-    `🎯 [Server Action] Standard search with itemTypes:`,
-    itemTypes || "none",
-  );
-  console.log(
-    `🎯 [Server Action] Mapped to categories:`,
-    categories || "none (showing all)",
-  );
-  console.log(
-    `🎯 [Server Action] GraphQL categoryFilter will be:`,
-    categories && categories.length > 0 ? `{${categories.join(",")}}` : null,
-  );
 
   // Convert visit statuses to backend format
   let visitStatusFilter: string | null = null;
@@ -534,10 +478,6 @@ async function performStandardSearch(
   const clusters = mapItems.filter(
     (item): item is PlaceCluster => "is_cluster" in item,
   );
-  console.log(
-    `✅ [Server Action] Standard search found ${places.length} places and ${clusters.length} clusters`,
-  );
-
   return {
     places,
     mapItems,
@@ -548,21 +488,4 @@ async function performStandardSearch(
       hasMore: places.length + clusters.length >= limit,
     },
   };
-}
-
-// Legacy compatibility export - redirect to unified function
-export async function searchPlacesByText(params: {
-  query: string;
-  bounds: { west: number; south: number; east: number; north: number };
-  maxDistance?: number;
-  limit?: number;
-}): Promise<SemanticPlaceResult[]> {
-  const results = await searchMapPlaces({
-    bounds: params.bounds,
-    semanticQuery: params.query,
-    maxSemanticDistance: params.maxDistance,
-    limit: params.limit,
-  });
-
-  return results.semanticResults || [];
 }

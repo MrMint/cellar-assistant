@@ -4,38 +4,6 @@ import {
   PlaceWithMenuFragment,
 } from "../shared/fragments/place-fragments";
 
-export const SEARCH_NEARBY_PLACES = graphql(
-  `
-  query SearchNearbyPlaces(
-    $location: geography!
-    $radius: Int = 5000
-    $categories: [String!]
-    $limit: Int = 100
-  ) {
-    search_cached_places_nearby(
-      args: {
-        user_location: $location
-        radius_meters: $radius
-        category_filter: $categories
-        limit_count: $limit
-      }
-    ) {
-      ...PlaceCore
-      distance_meters: calculate_distance(args: { user_location: $location })
-      user_place_interactions {
-        is_favorite
-        is_visited
-        want_to_visit
-        rating
-        notes
-        last_visited_at
-      }
-    }
-  }
-  `,
-  [PlaceCoreFragment],
-);
-
 export const GET_PLACE_DETAILS = graphql(
   `
   query GetPlaceDetails($id: uuid!) {
@@ -145,24 +113,3 @@ export const SUBSCRIBE_PLACE_UPDATES = graphql(
   `,
   [PlaceCoreFragment],
 );
-
-export const SEMANTIC_PLACE_SEARCH = graphql(`
-  mutation SemanticPlaceSearch(
-    $query: String!
-    $bounds: JSONObject!
-    $maxDistance: Float
-    $limit: Int
-  ) {
-    semanticPlaceSearch(
-      input: {
-        query: $query
-        bounds: $bounds
-        maxDistance: $maxDistance
-        limit: $limit
-      }
-    ) {
-      success
-      places
-    }
-  }
-`);

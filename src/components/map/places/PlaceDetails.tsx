@@ -21,6 +21,7 @@ import {
   Chip,
   CircularProgress,
   IconButton,
+  Snackbar,
   Stack,
   Tab,
   TabList,
@@ -52,6 +53,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
   const [isMarkingVisited, setIsMarkingVisited] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [{ data, fetching, error }, refetch] = useQuery({
     query: GET_PLACE_DETAILS,
@@ -112,15 +114,14 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
 
       if (result.error) {
         console.error("Error toggling favorite:", result.error);
-        // TODO: Replace with snackbar/toast notification
-        console.error("Failed to update favorite status");
+        setErrorMessage("Failed to update favorite status");
       } else {
         // Refetch data to update UI
         refetch();
       }
     } catch (error) {
       console.error("Error toggling favorite:", error);
-      alert("Failed to update favorite status");
+      setErrorMessage("Failed to update favorite status");
     } finally {
       setIsTogglingFavorite(false);
     }
@@ -140,15 +141,14 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
 
       if (result.error) {
         console.error("Error marking visited:", result.error);
-        // TODO: Replace with snackbar/toast notification
-        console.error("Failed to update visited status");
+        setErrorMessage("Failed to update visited status");
       } else {
         // Refetch data to update UI
         refetch();
       }
     } catch (error) {
       console.error("Error marking visited:", error);
-      alert("Failed to update visited status");
+      setErrorMessage("Failed to update visited status");
     } finally {
       setIsMarkingVisited(false);
     }
@@ -421,6 +421,16 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
           </Stack>
         </TabPanel>
       </Tabs>
+
+      <Snackbar
+        open={errorMessage !== null}
+        autoHideDuration={4000}
+        onClose={() => setErrorMessage(null)}
+        color="danger"
+        variant="soft"
+      >
+        {errorMessage}
+      </Snackbar>
     </Box>
   );
 }

@@ -1,1 +1,3 @@
+- "!include public_search_category_vectors.yaml"
 - "!include public_search_places_adaptive_cluster.yaml"
+- "!include public_search_places_hybrid.yaml"

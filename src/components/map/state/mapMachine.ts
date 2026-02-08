@@ -220,7 +220,9 @@ const actions = {
   setItemTypes: assign({
     selectedItemTypes: ({ event }) =>
       event.type === "SET_ITEM_TYPES" ? event.itemTypes : [],
-    isSemanticSearch: false, // Reset to filter mode
+    // Preserve semantic mode if there's an active search query
+    isSemanticSearch: ({ context }) =>
+      context.isSemanticSearch && context.searchQuery.trim().length > 0,
   }),
 
   toggleItemType: assign({
@@ -237,7 +239,9 @@ const actions = {
       }
       return context.selectedItemTypes;
     },
-    isSemanticSearch: false, // Reset to filter mode
+    // Preserve semantic mode if there's an active search query
+    isSemanticSearch: ({ context }) =>
+      context.isSemanticSearch && context.searchQuery.trim().length > 0,
   }),
 
   setSearchQuery: assign({
@@ -249,8 +253,7 @@ const actions = {
     searchQuery: ({ event }) =>
       event.type === "PERFORM_SEMANTIC_SEARCH" ? event.query : "",
     isSemanticSearch: true,
-    // Clear item type filters when doing semantic search
-    selectedItemTypes: [],
+    // Preserve selectedItemTypes — they narrow semantic results
   }),
 
   setMinRating: assign({

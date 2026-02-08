@@ -70,6 +70,7 @@ export function useMapData() {
   return useSelector(actorRef, (state) => ({
     places: state.context.places,
     mapItems: state.context.mapItems,
+    semanticResults: state.context.semanticResults,
     isLoading: state.matches({ idle: { data: "loading" } }),
     placesError: state.context.placesError,
   }));

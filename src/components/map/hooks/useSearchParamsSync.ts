@@ -30,9 +30,7 @@ export function useSearchParamsSync(params: MapSearchParamsValues) {
 
   // Sync item types (including initial URL → XState on mount)
   useEffect(() => {
-    if (
-      JSON.stringify(prevItemTypes.current) === JSON.stringify(itemTypes)
-    )
+    if (JSON.stringify(prevItemTypes.current) === JSON.stringify(itemTypes))
       return;
     prevItemTypes.current = itemTypes;
     actions.setItemTypes(itemTypes);

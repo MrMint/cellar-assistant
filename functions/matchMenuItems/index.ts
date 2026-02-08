@@ -180,8 +180,12 @@ export default async (req: Request, res: Response) => {
           }));
 
         if (suggestions.length > 0) {
-          // Insert new suggestions first, then delete old ones to avoid data loss
-          // if the insert fails
+          // Replace suggestions: delete old, then insert new in a single
+          // GraphQL request. Order matters — insert cannot run first because
+          // the delete WHERE clause would also remove the newly inserted rows.
+          // If the insert fails after a successful delete, old suggestions are
+          // lost, but this is an acceptable trade-off for an edge case since
+          // the function will be retried by the event trigger.
           try {
             await functionMutation(
               graphql(`

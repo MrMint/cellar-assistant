@@ -1,0 +1,15 @@
+table:
+  name: search_category_vectors_results
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - label
+        - label_type
+        - associated_categories
+        - metadata
+        - distance
+      filter: {}
+      allow_aggregations: true
