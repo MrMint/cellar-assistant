@@ -1,7 +1,51 @@
 import { graphql } from "@cellar-assistant/shared/gql";
-import { getSearchVectorQuery } from "@cellar-assistant/shared/queries";
-import { isNil } from "ramda";
-import { serverQuery } from "@/lib/urql/server";
+import { getCachedSearchVector } from "@/lib/cache";
+import { adminQuery, serverQuery } from "@/lib/urql/server";
+
+// Semantic recipe search using vector distance via Hasura
+const SemanticRecipeSearchQuery = graphql(`
+  query SemanticRecipeSearch(
+    $queryVector: halfvec!
+    $maxDistance: float8!
+    $limit: Int!
+  ) {
+    recipe_vectors(
+      where: {
+        distance: {
+          arguments: { query_vector: $queryVector }
+          _lte: $maxDistance
+        }
+      }
+      order_by: [
+        {
+          distance: {
+            arguments: { query_vector: $queryVector }
+            order: asc
+          }
+        }
+      ]
+      limit: $limit
+    ) {
+      id
+      recipe_id
+      distance(args: { query_vector: $queryVector })
+      recipe {
+        id
+        name
+        description
+        type
+        difficulty_level
+        prep_time_minutes
+        serving_size
+        image_url
+        created_at
+        ingredients {
+          id
+        }
+      }
+    }
+  }
+`);
 
 // Standard recipe search query
 const SearchRecipesQuery = graphql(`
@@ -135,7 +179,7 @@ export async function searchRecipes(
   }
 }
 
-// Perform semantic search using vector similarity
+// Perform semantic search using vector similarity via Hasura directly
 async function performSemanticRecipeSearch(
   query: string,
   maxDistance: number,
@@ -144,89 +188,57 @@ async function performSemanticRecipeSearch(
   console.log(`🔍 [Recipe Search] Performing semantic search: "${query}"`);
 
   try {
-    // Generate vector for the query
-    const vectorData = await serverQuery(getSearchVectorQuery, {
-      text: query.trim(),
-    });
+    // Generate query vector via Next.js cache (24h TTL, shared across users)
+    const cachedVector = await getCachedSearchVector(query.trim());
 
-    if (isNil(vectorData?.create_search_vector)) {
+    if (!cachedVector) {
       console.warn(
         "Failed to generate search vector for semantic recipe search",
       );
-      // Fall back to text search
       return await performTextRecipeSearch(query, limit);
     }
 
-    // Call semantic recipe search Nhost function
-    const nhostFunctionUrl =
-      process.env.NHOST_FUNCTION_URL || "https://local.functions.nhost.run";
+    const queryVector: number[] = JSON.parse(cachedVector);
+    const queryVectorString = `[${queryVector.join(",")}]`;
 
-    const response = await fetch(
-      `${nhostFunctionUrl}/v1/functions/semanticRecipeSearch`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET || "",
-        },
-        body: JSON.stringify({
-          input: {
-            query: query.trim(),
-            maxDistance,
-            limit,
-          },
-        }),
-      },
-    );
+    // Query recipe_vectors directly via Hasura
+    const searchResult = await adminQuery(SemanticRecipeSearchQuery, {
+      queryVector: queryVectorString,
+      maxDistance,
+      limit,
+    });
 
-    if (!response.ok) {
-      console.error(
-        `Semantic recipe search failed: ${response.status} ${response.statusText}`,
-      );
-      // Fall back to text search
+    if (!searchResult?.recipe_vectors) {
+      console.warn("No results from semantic recipe search");
       return await performTextRecipeSearch(query, limit);
     }
 
-    const result = await response.json();
+    const semanticResults: RecipeSearchResult[] =
+      searchResult.recipe_vectors.map((rv) => {
+        const distance =
+          typeof rv.distance === "number"
+            ? rv.distance
+            : Number(rv.distance) || 0;
+        const similarity = Math.max(0, Math.min(1, 1 - distance / 2));
 
-    if (!result.success) {
-      console.warn("Semantic recipe search returned unsuccessful result");
-      // Fall back to text search
-      return await performTextRecipeSearch(query, limit);
-    }
-
-    const semanticResults: RecipeSearchResult[] = result.recipes.map(
-      (recipe: {
-        id: string;
-        name: string;
-        description?: string;
-        type: "cocktail";
-        difficulty_level?: number;
-        prep_time_minutes?: number;
-        serving_size?: number;
-        image_url?: string;
-        created_at?: string;
-        ingredients?: Array<{ id: string }>;
-        distance?: number;
-        confidenceScore?: number;
-      }) => ({
-        id: recipe.id,
-        name: recipe.name,
-        description: recipe.description,
-        type: recipe.type as "cocktail",
-        difficulty_level: recipe.difficulty_level,
-        prep_time_minutes: recipe.prep_time_minutes,
-        serving_size: recipe.serving_size,
-        image_url: recipe.image_url,
-        created_at: recipe.created_at || new Date().toISOString(),
-        ingredient_count: Array.isArray(recipe.ingredients)
-          ? recipe.ingredients.length
-          : 0,
-        distance: recipe.distance || 0,
-        matchReason: "semantic_match" as const,
-        confidenceScore: recipe.confidenceScore || 0,
-      }),
-    );
+        return {
+          id: rv.recipe.id,
+          name: rv.recipe.name,
+          description: rv.recipe.description || undefined,
+          type: rv.recipe.type as "cocktail",
+          difficulty_level: rv.recipe.difficulty_level || undefined,
+          prep_time_minutes: rv.recipe.prep_time_minutes || undefined,
+          serving_size: rv.recipe.serving_size || undefined,
+          image_url: rv.recipe.image_url || undefined,
+          created_at: rv.recipe.created_at || new Date().toISOString(),
+          ingredient_count: Array.isArray(rv.recipe.ingredients)
+            ? rv.recipe.ingredients.length
+            : 0,
+          distance,
+          matchReason: "semantic_match" as const,
+          confidenceScore: similarity * 100,
+        };
+      });
 
     console.log(
       `✅ [Recipe Search] Semantic search found ${semanticResults.length} recipes`,
@@ -239,7 +251,6 @@ async function performSemanticRecipeSearch(
     };
   } catch (error) {
     console.error("❌ [Recipe Search] Semantic search error:", error);
-    // Fall back to text search
     return await performTextRecipeSearch(query, limit);
   }
 }

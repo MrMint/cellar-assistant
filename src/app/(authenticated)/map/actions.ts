@@ -20,8 +20,94 @@ import type {
   VisitStatus,
 } from "@/components/map/types";
 import { getCachedSearchVector } from "@/lib/cache";
-import { serverQuery } from "@/lib/urql/server";
+import { adminQuery, serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
+
+// Label-type weights for category score aggregation (from seedCategoryVectors)
+type LabelType = "category" | "alias" | "item_type" | "descriptor";
+const LABEL_TYPE_WEIGHTS: Record<LabelType, number> = {
+  category: 1.0,
+  item_type: 0.95,
+  alias: 0.9,
+  descriptor: 0.8,
+};
+
+// Query category vectors for semantic matching via tracked Hasura function
+const SearchCategoryVectorsQuery = graphql(`
+  query SearchCategoryVectors(
+    $queryVector: halfvec!
+    $maxDistance: float8!
+    $limit: Int!
+  ) {
+    searchCategoryVectors(
+      args: {
+        query_vector: $queryVector
+        max_distance: $maxDistance
+        result_limit: $limit
+      }
+    ) {
+      id
+      label
+      label_type
+      associated_categories
+      metadata
+      distance
+    }
+  }
+`);
+
+// Hybrid place search combining text + trigram + category + bounds
+const HybridPlaceSearchQuery = graphql(`
+  query HybridPlaceSearch(
+    $searchQuery: String!
+    $matchedCategories: _text
+    $categoryScores: _float8
+    $westBound: float8
+    $southBound: float8
+    $eastBound: float8
+    $northBound: float8
+    $minRating: float8
+    $resultLimit: Int
+  ) {
+    searchPlacesHybrid(
+      args: {
+        search_query: $searchQuery
+        matched_categories: $matchedCategories
+        category_scores: $categoryScores
+        west_bound: $westBound
+        south_bound: $southBound
+        east_bound: $eastBound
+        north_bound: $northBound
+        min_rating: $minRating
+        result_limit: $resultLimit
+      }
+    ) {
+      id
+      name
+      location
+      primary_category
+      categories
+      confidence
+      street_address
+      locality
+      region
+      postcode
+      country_code
+      phone
+      website
+      email
+      hours
+      price_level
+      rating
+      review_count
+      is_verified
+      text_rank
+      trigram_similarity
+      category_score
+      combined_score
+    }
+  }
+`);
 
 // Import the existing GraphQL query from the XState machine (legacy)
 const SearchPlacesClusteredQuery = graphql(`
@@ -249,7 +335,6 @@ export async function searchMapPlaces(
         itemTypes,
         minRating,
         visitStatuses,
-        userId,
         Math.min(limit, 50),
       );
     }
@@ -281,60 +366,81 @@ export async function searchMapPlaces(
 }
 
 // Perform hybrid search using text + trigram + category semantic matching
+// Calls Hasura directly instead of routing through a Nhost function
 async function performSemanticSearch(
   query: string,
   bounds: MapBounds,
   itemTypes: ItemType[],
   minRating: number | undefined,
   visitStatuses: VisitStatus[],
-  userId: string,
   limit: number,
 ): Promise<MapSearchResults> {
   try {
-    // Generate query vector via Next.js cache (24h TTL, shared across users)
+    // Step 1: Generate query vector via Next.js cache (24h TTL, shared across users)
     const cachedVector = await getCachedSearchVector(query.trim());
-    const queryVector = cachedVector ? JSON.parse(cachedVector) : undefined;
+    const queryVector: number[] | undefined = cachedVector
+      ? JSON.parse(cachedVector)
+      : undefined;
 
-    // Call hybrid search Nhost function with pre-computed vector
-    const nhostFunctionUrl =
-      process.env.NHOST_FUNCTION_URL || "https://local.functions.nhost.run";
+    if (!queryVector || queryVector.length === 0) {
+      throw new Error("Failed to generate query vector");
+    }
 
-    const response = await fetch(`${nhostFunctionUrl}/v1/hybridPlaceSearch`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET || "",
-      },
-      body: JSON.stringify({
-        input: {
-          query: query.trim(),
-          queryVector,
-          bounds,
-          limit,
-          itemTypes,
-          minRating,
-        },
-        session_variables: {
-          "x-hasura-user-id": userId,
-        },
-      }),
+    const queryVectorString = `[${queryVector.join(",")}]`;
+
+    // Step 2: Find matching category vectors via Hasura
+    const categoryResult = await adminQuery(SearchCategoryVectorsQuery, {
+      queryVector: queryVectorString,
+      maxDistance: 0.6,
+      limit: 15,
     });
 
-    if (!response.ok) {
-      console.error(
-        `Hybrid search failed: ${response.status} ${response.statusText}`,
-      );
-      throw new Error(`Hybrid search failed: ${response.status}`);
+    const categoryMatches = categoryResult?.searchCategoryVectors ?? [];
+
+    // Score categories: label-type weighting + quadratic decay
+    const categoryScoreMap = new Map<string, number>();
+    for (const match of categoryMatches) {
+      const distance =
+        typeof match.distance === "number"
+          ? match.distance
+          : Number(match.distance) || 1.0;
+      const rawSimilarity = Math.max(0, 1 - distance / 2);
+      const labelType = (match.label_type ?? "descriptor") as LabelType;
+      const typeWeight = LABEL_TYPE_WEIGHTS[labelType] ?? 0.8;
+      const weightedSimilarity = rawSimilarity * rawSimilarity * typeWeight;
+
+      const categories = match.associated_categories ?? [];
+      for (const cat of categories) {
+        const existing = categoryScoreMap.get(cat) ?? 0;
+        categoryScoreMap.set(cat, Math.max(existing, weightedSimilarity));
+      }
     }
 
-    const result = await response.json();
+    const matchedCategories = Array.from(categoryScoreMap.keys());
+    const categoryScores = matchedCategories.map(
+      (cat) => categoryScoreMap.get(cat) ?? 0,
+    );
 
-    if (!result.success) {
-      console.warn("Hybrid search returned unsuccessful result");
-      throw new Error("Hybrid search unsuccessful");
-    }
+    // Step 3: Execute hybrid search (text + trigram + category + bounds) via Hasura
+    const hybridResult = await adminQuery(HybridPlaceSearchQuery, {
+      searchQuery: query.trim(),
+      matchedCategories:
+        matchedCategories.length > 0
+          ? `{${matchedCategories.join(",")}}`
+          : null,
+      categoryScores:
+        categoryScores.length > 0 ? `{${categoryScores.join(",")}}` : null,
+      westBound: bounds.west,
+      southBound: bounds.south,
+      eastBound: bounds.east,
+      northBound: bounds.north,
+      minRating: minRating ?? null,
+      resultLimit: limit,
+    });
 
-    // Create search parameters for relevance calculation and filtering
+    const rawResults = hybridResult?.searchPlacesHybrid ?? [];
+
+    // Step 4: Transform results
     const searchParams: MapSearchParams = {
       bounds,
       itemTypes,
@@ -343,15 +449,23 @@ async function performSemanticSearch(
       semanticQuery: query,
     };
 
-    // Transform and apply search parameters for relevance scoring
-    let semanticResults: SemanticPlaceResult[] = result.places.map(
+    let semanticResults: SemanticPlaceResult[] = rawResults.map(
       (place: any) => {
+        const combinedScore =
+          typeof place.combined_score === "number"
+            ? place.combined_score
+            : Number(place.combined_score) || 0;
+        const confidenceScore = Math.max(
+          0,
+          Math.min(100, combinedScore * 100),
+        );
+        const distance = Math.max(0, 2 * (1 - combinedScore));
+
         const transformed = transformPlaceResult(place, searchParams);
-        const confidenceScore = place.confidenceScore ?? 0;
         return {
           ...transformed,
-          overallRelevance: confidenceScore, // Hybrid score drives marker sizing
-          distance: place.distance ?? 0,
+          overallRelevance: confidenceScore,
+          distance,
           matchReason: "semantic_match" as const,
           confidenceScore,
         };
@@ -402,7 +516,7 @@ async function performSemanticSearch(
       isSemanticSearch: true,
       searchMetadata: {
         itemTypes,
-        totalResults: result.places.length,
+        totalResults: rawResults.length,
         hasMore: false,
       },
     };
