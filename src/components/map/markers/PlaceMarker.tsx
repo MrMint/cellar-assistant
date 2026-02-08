@@ -23,6 +23,7 @@ const PlaceMarkerComponent: React.FC<PlaceMarkerProps> = ({
   animationVariants,
   animationTransition,
   filters,
+  disableAnimations,
 }) => {
   // Database coordinates should be [lng, lat] (PostGIS standard), convert to [lat, lng] for Leaflet
   const [lng, lat] = place.location.coordinates;
@@ -95,6 +96,7 @@ const PlaceMarkerComponent: React.FC<PlaceMarkerProps> = ({
           animationVariants={variants}
           animationTransition={transition}
           filters={filters}
+          disableAnimations={disableAnimations}
         />
       </button>
     </ReactPortalMarker>
@@ -110,6 +112,7 @@ export const PlaceMarker = React.memo(PlaceMarkerComponent, (prev, next) => {
     prev.size === next.size &&
     prev.showLabels === next.showLabels &&
     prev.filters === next.filters &&
-    prev.onPlaceClick === next.onPlaceClick
+    prev.onPlaceClick === next.onPlaceClick &&
+    prev.disableAnimations === next.disableAnimations
   );
 });

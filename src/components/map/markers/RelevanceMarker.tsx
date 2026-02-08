@@ -54,6 +54,7 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
   animationVariants,
   animationTransition,
   filters,
+  disableAnimations = false,
 }) => {
   // Use passed animation variants or fall back to defaults
   const variants = animationVariants || PLACE_ANIMATION_VARIANTS;
@@ -217,28 +218,18 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
     [transition],
   );
 
-  return (
-    <motion.div
-      variants={variants}
-      initial="hidden"
-      animate={animateTarget}
-      exit="exit"
-      transition={transitionConfig}
-      className="relevance-poi-marker"
-      role="img"
-      aria-label={`POI marker for ${place.name}`}
-      style={{
-        position: "relative",
-        width: size, // Use base size, let scale handle the animation
-        height: size,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        // z-index now handled by Leaflet's zIndexOffset
-      }}
-    >
+  const baseStyle: React.CSSProperties = {
+    position: "relative",
+    width: size,
+    height: size,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+
+  const content = (
+    <>
       {/* Center icon */}
-      {/* Use plain div with CSS transitions instead of motion.div to reduce Framer Motion overhead */}
       <div
         style={{
           position: "relative",
@@ -261,7 +252,9 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
                 .padStart(2, "0")}`
             : `rgba(255, 255, 255, ${backgroundOpacity * 0.9})`,
           borderColor: `rgba(255, 255, 255, ${backgroundOpacity * 0.8})`,
-          transition: "background-color 0.3s ease-out, border-color 0.3s ease-out",
+          transition: disableAnimations
+            ? undefined
+            : "background-color 0.3s ease-out, border-color 0.3s ease-out",
         }}
       >
         {getCategoryIcon(
@@ -279,7 +272,7 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
             top: "100%",
             left: "50%",
             transform: "translateX(-50%)",
-            marginTop: "-15px", // Way closer to confirm it's working
+            marginTop: "-15px",
             backgroundColor: "rgba(255, 255, 255, 0.95)",
             color: "#333",
             padding: "2px 6px",
@@ -298,6 +291,35 @@ const RelevanceMarkerComponent: React.FC<RelevanceMarkerProps> = ({
           {place.name}
         </div>
       )}
+    </>
+  );
+
+  if (disableAnimations) {
+    return (
+      <div
+        className="relevance-poi-marker"
+        role="img"
+        aria-label={`POI marker for ${place.name}`}
+        style={{ ...baseStyle, transform: `scale(${scaleFactor})` }}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      variants={variants}
+      initial="hidden"
+      animate={animateTarget}
+      exit="exit"
+      transition={transitionConfig}
+      className="relevance-poi-marker"
+      role="img"
+      aria-label={`POI marker for ${place.name}`}
+      style={baseStyle}
+    >
+      {content}
     </motion.div>
   );
 };

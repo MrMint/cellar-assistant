@@ -3,6 +3,7 @@
 import { AnimatePresence } from "framer-motion";
 import React, { useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   MARKER_ANIMATION_TRANSITION,
   MARKER_ANIMATION_VARIANTS,
@@ -103,10 +104,13 @@ const POILayerComponent: React.FC<POILayerProps> = ({
     [onClusterClick],
   );
 
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  const Wrapper = isMobile ? React.Fragment : AnimatePresence;
+
   return (
     <>
       {/* Render server-side clusters */}
-      <AnimatePresence>
+      <Wrapper>
         {clusters.map((cluster) => {
           const [longitude, latitude] = cluster.cluster_center.coordinates;
 
@@ -121,13 +125,14 @@ const POILayerComponent: React.FC<POILayerProps> = ({
               onClusterClick={handleClusterClick}
               animationVariants={MARKER_ANIMATION_VARIANTS}
               animationTransition={MARKER_ANIMATION_TRANSITION}
+              disableAnimations={isMobile}
             />
           );
         })}
-      </AnimatePresence>
+      </Wrapper>
 
       {/* Render individual places */}
-      <AnimatePresence>
+      <Wrapper>
         {places.map((place) => (
           <PlaceMarker
             key={place.id}
@@ -136,9 +141,10 @@ const POILayerComponent: React.FC<POILayerProps> = ({
             onPlaceClick={handleMarkerClick}
             animationVariants={MARKER_ANIMATION_VARIANTS}
             animationTransition={MARKER_ANIMATION_TRANSITION}
+            disableAnimations={isMobile}
           />
         ))}
-      </AnimatePresence>
+      </Wrapper>
 
       {/* Show user location */}
       {userLocation && (

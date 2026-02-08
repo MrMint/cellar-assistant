@@ -24,6 +24,7 @@ const ClusterMarkerComponent: React.FC<ClusterMarkerProps> = ({
   onClusterClick,
   animationVariants,
   animationTransition,
+  disableAnimations = false,
 }) => {
   // Use passed animation variants or defaults
   const variants = animationVariants || CLUSTER_ANIMATION_VARIANTS;
@@ -63,57 +64,80 @@ const ClusterMarkerComponent: React.FC<ClusterMarkerProps> = ({
     onClusterClick?.(clusterId, clusterCenter);
   };
 
-  return (
-    <ReactPortalMarker position={position} stableId={`cluster-${clusterId}`}>
-      <motion.div
-        variants={variants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-        transition={transition}
-        whileHover={{ scale: HOVER_SCALE }}
-        onClick={handleClick}
+  const clusterContent = (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        backgroundColor,
+        border: `3px solid ${borderColor}`,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: `0 2px 12px ${shadow}`,
+      }}
+    >
+      <span
         style={{
-          position: "relative",
-          width: size,
-          height: size,
-          cursor: "pointer",
+          color: textColor,
+          fontFamily:
+            "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
+          fontWeight: "500",
+          fontSize:
+            size >= 70
+              ? "18px"
+              : size >= 50
+                ? "16px"
+                : size >= 45
+                  ? "14px"
+                  : "13px",
+          lineHeight: 1,
         }}
       >
-        <div
+        {displayCount}
+      </span>
+    </div>
+  );
+
+  return (
+    <ReactPortalMarker position={position} stableId={`cluster-${clusterId}`}>
+      {disableAnimations ? (
+        <button
+          type="button"
+          onClick={handleClick}
           style={{
-            width: "100%",
-            height: "100%",
-            backgroundColor,
-            border: `3px solid ${borderColor}`,
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: `0 2px 12px ${shadow}`,
+            position: "relative",
+            width: size,
+            height: size,
+            cursor: "pointer",
+            background: "none",
+            border: "none",
+            padding: 0,
+            margin: 0,
           }}
         >
-          <span
-            style={{
-              color: textColor,
-              fontFamily:
-                "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
-              fontWeight: "500",
-              fontSize:
-                size >= 70
-                  ? "18px"
-                  : size >= 50
-                    ? "16px"
-                    : size >= 45
-                      ? "14px"
-                      : "13px",
-              lineHeight: 1,
-            }}
-          >
-            {displayCount}
-          </span>
-        </div>
-      </motion.div>
+          {clusterContent}
+        </button>
+      ) : (
+        <motion.div
+          variants={variants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          transition={transition}
+          whileHover={{ scale: HOVER_SCALE }}
+          onClick={handleClick}
+          style={{
+            position: "relative",
+            width: size,
+            height: size,
+            cursor: "pointer",
+          }}
+        >
+          {clusterContent}
+        </motion.div>
+      )}
     </ReactPortalMarker>
   );
 };
@@ -127,7 +151,8 @@ export const ClusterMarker = React.memo(
       prev.position[0] === next.position[0] &&
       prev.position[1] === next.position[1] &&
       prev.isDarkMode === next.isDarkMode &&
-      prev.onClusterClick === next.onClusterClick
+      prev.onClusterClick === next.onClusterClick &&
+      prev.disableAnimations === next.disableAnimations
     );
   },
 );

@@ -227,6 +227,7 @@ export interface BaseMarkerProps {
   animationTransition?: AnimationTransition;
   isNewlyVisible?: boolean;
   isExiting?: boolean;
+  disableAnimations?: boolean;
 }
 
 export interface PlaceMarkerProps extends BaseMarkerProps {
