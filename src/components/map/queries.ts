@@ -29,7 +29,7 @@ export const TOGGLE_FAVORITE_PLACE = graphql(`
       }
       on_conflict: {
         constraint: unique_user_place
-        update_columns: [is_favorite, updated_at]
+        update_columns: [is_favorite]
       }
     ) {
       id
@@ -44,6 +44,7 @@ export const MARK_PLACE_VISITED = graphql(`
     $placeId: uuid!
     $isVisited: Boolean!
     $visitedAt: timestamptz
+    $visitCount: Int!
   ) {
     insert_user_place_interactions_one(
       object: {
@@ -51,15 +52,14 @@ export const MARK_PLACE_VISITED = graphql(`
         place_id: $placeId
         is_visited: $isVisited
         last_visited_at: $visitedAt
-        visit_count: 1
+        visit_count: $visitCount
       }
       on_conflict: {
         constraint: unique_user_place
         update_columns: [
-          is_visited, 
-          last_visited_at, 
-          visit_count,
-          updated_at
+          is_visited,
+          last_visited_at,
+          visit_count
         ]
       }
     ) {

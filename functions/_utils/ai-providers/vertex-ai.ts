@@ -523,7 +523,7 @@ export class VertexAIProvider implements AIProvider {
     const signatureInput = `${headerEncoded}.${payloadEncoded}`;
 
     // Sign with private key using Node.js crypto
-    const crypto = await import("crypto");
+    const crypto = await import("node:crypto");
     const sign = crypto.createSign("RSA-SHA256");
     sign.update(signatureInput);
     const signature = sign

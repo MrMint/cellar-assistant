@@ -12,8 +12,7 @@ export function useMapBoundsML() {
 
   const handleBoundsChange = useCallback((newBounds: MapBounds) => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    const isMobile =
-      typeof window !== "undefined" && window.innerWidth < 768;
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
     const delay = isMobile ? DEBOUNCE_MOBILE : DEBOUNCE_DESKTOP;
     timerRef.current = setTimeout(() => {
       setBounds(newBounds);

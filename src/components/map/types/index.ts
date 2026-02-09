@@ -201,4 +201,3 @@ export interface MapFilters {
   searchQuery: string;
   visitStatuses: VisitStatus[];
 }
-

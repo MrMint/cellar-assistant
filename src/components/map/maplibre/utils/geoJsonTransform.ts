@@ -184,8 +184,8 @@ function placesToGeoJSON(
       filters.searchQuery.length > 0 ||
       (filters.minRating ?? 0) > 0);
 
-  const poiFeatures: GeoJSON.Feature<GeoJSON.Point, POIFeatureProperties>[] = places.map(
-    (place) => {
+  const poiFeatures: GeoJSON.Feature<GeoJSON.Point, POIFeatureProperties>[] =
+    places.map((place) => {
       const relevance = place.overallRelevance ?? place.relevanceScore ?? 50;
       const dominant = getDominantItemType(place.itemTypeScores);
       const color = dominant
@@ -223,33 +223,40 @@ function placesToGeoJSON(
           website: place.website ?? null,
         },
       };
-    },
-  );
+    });
 
-  const clusterFeatures: GeoJSON.Feature<GeoJSON.Point, ClusterFeatureProperties>[] =
-    clusters.map((cluster) => ({
-      type: "Feature" as const,
+  const clusterFeatures: GeoJSON.Feature<
+    GeoJSON.Point,
+    ClusterFeatureProperties
+  >[] = clusters.map((cluster) => ({
+    type: "Feature" as const,
+    id: `cluster-${cluster.cluster_id}`,
+    geometry: {
+      type: "Point" as const,
+      coordinates: cluster.cluster_center.coordinates,
+    },
+    properties: {
       id: `cluster-${cluster.cluster_id}`,
-      geometry: {
-        type: "Point" as const,
-        coordinates: cluster.cluster_center.coordinates,
-      },
-      properties: {
-        id: `cluster-${cluster.cluster_id}`,
-        isCluster: true as const,
-        clusterId: cluster.cluster_id,
-        pointCount: cluster.cluster_count,
-        displayCount: formatClusterCount(cluster.cluster_count),
-        radius: clusterRadius(cluster.cluster_count),
-        sortKey: 200,
-      },
-    }));
+      isCluster: true as const,
+      clusterId: cluster.cluster_id,
+      pointCount: cluster.cluster_count,
+      displayCount: formatClusterCount(cluster.cluster_count),
+      radius: clusterRadius(cluster.cluster_count),
+      sortKey: 200,
+    },
+  }));
 
   return {
     type: "FeatureCollection" as const,
     features: [
-      ...(poiFeatures as GeoJSON.Feature<GeoJSON.Point, MapFeatureProperties>[]),
-      ...(clusterFeatures as GeoJSON.Feature<GeoJSON.Point, MapFeatureProperties>[]),
+      ...(poiFeatures as GeoJSON.Feature<
+        GeoJSON.Point,
+        MapFeatureProperties
+      >[]),
+      ...(clusterFeatures as GeoJSON.Feature<
+        GeoJSON.Point,
+        MapFeatureProperties
+      >[]),
     ],
   };
 }

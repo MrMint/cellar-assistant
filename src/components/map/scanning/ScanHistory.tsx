@@ -18,9 +18,8 @@ import {
 } from "@mui/joy";
 import NextLink from "next/link";
 import { useEffect, useState } from "react";
-
-import { getUserScanHistory } from "@/app/actions/menuScanning";
 import type { MenuScanSummary } from "@/app/actions/menuScanning";
+import { getUserScanHistory } from "@/app/actions/menuScanning";
 
 const getStatusIcon = (status: string) => {
   switch (status) {

@@ -92,14 +92,166 @@ export function MapControls({
     return positions[pos as keyof typeof positions] || positions["top-left"];
   };
 
-  // Search component
+  // Shared search input
+  const SearchInput = (
+    <Input
+      placeholder={
+        isMobile
+          ? "Search places..."
+          : "Search places, items, or descriptions..."
+      }
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      startDecorator={<Search />}
+      endDecorator={
+        search ? (
+          <IconButton
+            variant="plain"
+            color="neutral"
+            onClick={() => setSearch("")}
+            size="sm"
+            sx={{
+              minWidth: "auto",
+              minHeight: "auto",
+              padding: "4px",
+            }}
+          >
+            <Close sx={{ fontSize: "18px" }} />
+          </IconButton>
+        ) : undefined
+      }
+      sx={{
+        border: "none",
+        boxShadow: "none",
+        backgroundColor: "transparent",
+        "&:hover": { backgroundColor: "transparent" },
+        "&:focus-within": {
+          backgroundColor: "transparent",
+          borderColor: "primary.500",
+          boxShadow: "none",
+        },
+      }}
+      size="sm"
+    />
+  );
+
+  // Shared filter + action controls row
+  const FilterAndActions = (showFilters || showActions) && (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "row",
+        gap: 1,
+        alignItems: "center",
+      }}
+    >
+      {showFilters && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            position: "relative",
+            zIndex: 999,
+          }}
+        >
+          <MapFilter
+            selectedItemTypes={itemTypes}
+            onItemTypesChange={setItemTypes}
+            counts={counts}
+            searchQuery={search}
+            onSearchQueryChange={setSearch}
+            minRating={minRating ?? undefined}
+            onMinRatingChange={setMinRating}
+            visitStatuses={visitStatuses}
+            onVisitStatusesChange={setVisitStatuses}
+          />
+
+          {showActions && <Divider orientation="vertical" />}
+        </Box>
+      )}
+
+      {showActions && (
+        <Stack direction="row" spacing={0.5}>
+          <IconButton
+            variant="soft"
+            color="neutral"
+            onClick={onRefresh}
+            loading={loading}
+            size="sm"
+            title="Refresh places"
+          >
+            <Refresh />
+          </IconButton>
+
+          {onLocationClick && (
+            <IconButton
+              variant="soft"
+              color="neutral"
+              onClick={onLocationClick}
+              size="sm"
+              title="Go to my location"
+            >
+              <LocationOn />
+            </IconButton>
+          )}
+
+          <IconButton
+            variant="soft"
+            color="neutral"
+            onClick={toggleDarkMode}
+            size="sm"
+            title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDarkMode ? <LightMode /> : <DarkMode />}
+          </IconButton>
+        </Stack>
+      )}
+    </Box>
+  );
+
+  // Mobile: single unified container with search + filters
+  if (isMobile) {
+    return (
+      <Box
+        sx={{
+          position: "absolute",
+          zIndex: 1000,
+          top: 8,
+          left: 8,
+          right: 8,
+        }}
+      >
+        <Sheet
+          sx={{
+            p: 1,
+            borderRadius: "md",
+            boxShadow: "md",
+            backgroundColor: "background.surface",
+            border: "1px solid",
+            borderColor: "divider",
+            overflow: "visible",
+          }}
+        >
+          {showSearch && SearchInput}
+          {(showFilters || showActions) && (
+            <>
+              {showSearch && <Divider sx={{ my: 0.5 }} />}
+              {FilterAndActions}
+            </>
+          )}
+        </Sheet>
+      </Box>
+    );
+  }
+
+  // Desktop: separate search and filter containers
   const SearchControl = showSearch ? (
     <Box
       sx={{
         position: "absolute",
         zIndex: 1000,
-        padding: isMobile ? 2 : 0,
-        width: isMobile ? "calc(100% - 32px)" : 375,
+        width: 375,
         ...getPositionStyles(position.search || "top-left"),
       }}
     >
@@ -123,136 +275,30 @@ export function MapControls({
           },
         }}
       >
-        <Input
-          placeholder="Search places, items, or descriptions..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          startDecorator={<Search />}
-          endDecorator={
-            search ? (
-              <IconButton
-                variant="plain"
-                color="neutral"
-                onClick={() => setSearch("")}
-                size="sm"
-                sx={{
-                  minWidth: "auto",
-                  minHeight: "auto",
-                  padding: "4px",
-                }}
-              >
-                <Close sx={{ fontSize: "18px" }} />
-              </IconButton>
-            ) : undefined
-          }
-          sx={{
-            border: "none",
-            boxShadow: "none",
-            backgroundColor: "transparent",
-            "&:hover": { backgroundColor: "transparent" },
-            "&:focus-within": {
-              backgroundColor: "transparent",
-              borderColor: "primary.500",
-              boxShadow: "none",
-            },
-          }}
-          size="sm"
-        />
+        {SearchInput}
       </Sheet>
     </Box>
   ) : null;
 
-  // Filter and action controls
   const FilterAndActionControls =
     showFilters || showActions ? (
       <Box
         sx={{
           position: "absolute",
           zIndex: 1000,
-          padding: isMobile ? 2 : 0,
-          ...getPositionStyles(
-            isMobile
-              ? position.search || "top-left"
-              : position.filters || "top-right",
-          ),
-          ...(isMobile && { top: 80 }), // Add spacing below search when stacked
+          ...getPositionStyles(position.filters || "top-right"),
         }}
       >
         <Sheet
           sx={{
             p: 1,
             borderRadius: "md",
-            display: "flex",
-            flexDirection: "row",
-            gap: 1,
-            alignItems: "center",
             boxShadow: "md",
             backgroundColor: "background.surface",
             overflow: "visible",
           }}
         >
-          {showFilters && (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                position: "relative",
-                zIndex: 999,
-              }}
-            >
-              <MapFilter
-                selectedItemTypes={itemTypes}
-                onItemTypesChange={setItemTypes}
-                counts={counts}
-                searchQuery={search}
-                onSearchQueryChange={setSearch}
-                minRating={minRating ?? undefined}
-                onMinRatingChange={setMinRating}
-                visitStatuses={visitStatuses}
-                onVisitStatusesChange={setVisitStatuses}
-              />
-
-              {showActions && <Divider orientation="vertical" />}
-            </Box>
-          )}
-
-          {showActions && (
-            <Stack direction="row" spacing={1}>
-              <IconButton
-                variant="soft"
-                color="neutral"
-                onClick={onRefresh}
-                loading={loading}
-                size="sm"
-                title="Refresh places"
-              >
-                <Refresh />
-              </IconButton>
-
-              {onLocationClick && (
-                <IconButton
-                  variant="soft"
-                  color="neutral"
-                  onClick={onLocationClick}
-                  size="sm"
-                  title="Go to my location"
-                >
-                  <LocationOn />
-                </IconButton>
-              )}
-
-              <IconButton
-                variant="soft"
-                color="neutral"
-                onClick={toggleDarkMode}
-                size="sm"
-                title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                {isDarkMode ? <LightMode /> : <DarkMode />}
-              </IconButton>
-            </Stack>
-          )}
+          {FilterAndActions}
         </Sheet>
       </Box>
     ) : null;

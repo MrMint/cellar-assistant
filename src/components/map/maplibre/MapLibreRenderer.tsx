@@ -1,44 +1,43 @@
-'use client';
+"use client";
 
-import { Alert, Box } from '@mui/joy';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { Alert, Box } from "@mui/joy";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Map as MapGL,
-  NavigationControl,
   type MapLayerMouseEvent,
   type MapRef,
-} from 'react-map-gl/maplibre';
-import { useGeolocation } from '../hooks/useGeolocation';
+} from "react-map-gl/maplibre";
+import { MapControls } from "../core/MapControls";
+import { useGeolocation } from "../hooks/useGeolocation";
 import {
   useMapActions,
   useMapCore,
   useMapData as useMapDataFromXState,
   useMapFilters,
   useMapUI,
-} from '../hooks/useMapMachine';
-import { useMapSearchParams } from '../hooks/useMapSearchParams';
-import { useSearchParamsSync } from '../hooks/useSearchParamsSync';
-import { MapControls } from '../core/MapControls';
-import { PlaceDetailsDrawer } from '../places/PlaceDetailsDrawer';
-import { SearchResultsList } from '../places/SearchResultsList';
-import type { PlaceResult } from '../types';
-import { INTERACTIVE_LAYER_IDS } from './constants';
-import { useMapBoundsML } from './hooks/useMapBoundsML';
-import { useMapInteraction } from './hooks/useMapInteraction';
-import { loadPOIIcons } from './utils/iconLoader';
-import { POISymbolLayer } from './POISymbolLayer';
-import { UserLocationLayer } from './UserLocationLayer';
+} from "../hooks/useMapMachine";
+import { useMapSearchParams } from "../hooks/useMapSearchParams";
+import { useSearchParamsSync } from "../hooks/useSearchParamsSync";
+import { PlaceDetailsDrawer } from "../places/PlaceDetailsDrawer";
+import { SearchResultsList } from "../places/SearchResultsList";
+import type { PlaceResult } from "../types";
+import { INTERACTIVE_LAYER_IDS } from "./constants";
+import { useMapBoundsML } from "./hooks/useMapBoundsML";
+import { useMapInteraction } from "./hooks/useMapInteraction";
+import { POISymbolLayer } from "./POISymbolLayer";
+import { UserLocationLayer } from "./UserLocationLayer";
+import { loadPOIIcons } from "./utils/iconLoader";
 
 interface MapLibreRendererProps {
   userId: string;
 }
 
 const CARTO_LIGHT_STYLE =
-  'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
 const CARTO_DARK_STYLE =
-  'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 const FALLBACK_CENTER = { longitude: -89.5, latitude: 44.5 };
 
@@ -46,6 +45,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
   const mapRef = useRef<MapRef>(null);
   const hasFlownRef = useRef(false);
   const [iconsLoaded, setIconsLoaded] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   // XState hooks
   const mapCore = useMapCore();
@@ -76,7 +76,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
   const placeLookup = useMemo(() => {
     const lookup = new Map<string, PlaceResult>();
     for (const item of mapItems) {
-      if (!('is_cluster' in item)) {
+      if (!("is_cluster" in item)) {
         lookup.set(item.id, item);
       }
     }
@@ -97,9 +97,11 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     }
   }, [bounds, mapActions]);
 
-  // Fly to user location on first acquisition
+  // Fly to user location once both geolocation and map are ready.
+  // Without mapReady, the effect fires on the same render the Map mounts
+  // but before onLoad — flyTo silently fails on an unloaded map.
   useEffect(() => {
-    if (userLocation && !hasFlownRef.current && mapRef.current) {
+    if (userLocation && !hasFlownRef.current && mapRef.current && mapReady) {
       hasFlownRef.current = true;
       mapRef.current.flyTo({
         center: [userLocation.longitude, userLocation.latitude],
@@ -107,7 +109,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
         duration: 600,
       });
     }
-  }, [userLocation]);
+  }, [userLocation, mapReady]);
 
   // Memoize filters
   const filters = useMemo(
@@ -130,7 +132,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     if (mapUI.selectedPlace && mapItems.length > 0) {
       const updatedPlace = mapItems.find(
         (item): item is PlaceResult =>
-          !('is_cluster' in item) &&
+          !("is_cluster" in item) &&
           (item.id === mapUI.selectedPlace?.id ||
             item.name === mapUI.selectedPlace?.name),
       );
@@ -151,8 +153,8 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
       await loadPOIIcons(map);
       setIconsLoaded(true);
     } catch (err) {
-      console.error('Failed to load map icons:', err);
-      mapActions.setError('Failed to load map icons. Please refresh.');
+      console.error("Failed to load map icons:", err);
+      mapActions.setError("Failed to load map icons. Please refresh.");
       return;
     }
 
@@ -166,6 +168,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     });
     mapActions.setZoom(map.getZoom());
     mapActions.initialize();
+    setMapReady(true);
   }, [mapActions, handleBoundsChange]);
 
   const handleMoveEnd = useCallback(() => {
@@ -229,7 +232,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
       });
     } else if (!userLocation) {
       mapActions.setError(
-        'Location access denied. Please enable location services.',
+        "Location access denied. Please enable location services.",
       );
     }
   }, [userLocation, mapActions]);
@@ -246,19 +249,24 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     }
   }, []);
 
-  // Initial view state — intentionally computed once on first render.
-  // The loading guard (`locationLoading && !userLocation`) ensures
-  // userLocation is resolved before the Map mounts, so the captured
-  // value here is correct (user coords or fallback).
-  const initialViewState = useMemo(
-    () => ({
+  // Capture initial view state once after geolocation resolves.
+  // A ref (not useMemo) is used because useMemo([], []) would compute
+  // on the very first render when userLocation is still null, before the
+  // loading guard returns early. The ref defers the capture until
+  // locationLoading is false, which is when the Map actually mounts.
+  const initialViewStateRef = useRef<{
+    longitude: number;
+    latitude: number;
+    zoom: number;
+  } | null>(null);
+
+  if (!initialViewStateRef.current && !locationLoading) {
+    initialViewStateRef.current = {
       longitude: userLocation?.longitude ?? FALLBACK_CENTER.longitude,
       latitude: userLocation?.latitude ?? FALLBACK_CENTER.latitude,
       zoom: userLocation ? 15 : 8,
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally once
-    [],
-  );
+    };
+  }
 
   const mapStyle = mapCore.isDarkMode ? CARTO_DARK_STYLE : CARTO_LIGHT_STYLE;
 
@@ -267,12 +275,12 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     return (
       <Box
         sx={{
-          height: '100%',
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'background.surface',
+          height: "100%",
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "background.surface",
         }}
       >
         <Alert color="neutral">Getting your location...</Alert>
@@ -281,20 +289,24 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
   }
 
   return (
-    <Box sx={{ height: '100%', width: '100%', position: 'relative' }}>
+    <Box sx={{ height: "100%", width: "100%", position: "relative" }}>
       <MapGL
         ref={mapRef}
-        initialViewState={initialViewState}
+        initialViewState={
+          initialViewStateRef.current ?? {
+            longitude: FALLBACK_CENTER.longitude,
+            latitude: FALLBACK_CENTER.latitude,
+            zoom: 8,
+          }
+        }
         mapStyle={mapStyle}
         onLoad={handleMapLoad}
         onMoveEnd={handleMoveEnd}
         onClick={handleClick}
         interactiveLayerIds={INTERACTIVE_LAYER_IDS as unknown as string[]}
         maxZoom={22}
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: "100%", height: "100%" }}
       >
-        <NavigationControl position="bottom-right" showCompass={false} />
-
         {iconsLoaded && (
           <POISymbolLayer
             items={mapItems}
@@ -311,10 +323,10 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
         <Alert
           color="danger"
           sx={{
-            position: 'absolute',
+            position: "absolute",
             top: 80,
-            left: '50%',
-            transform: 'translateX(-50%)',
+            left: "50%",
+            transform: "translateX(-50%)",
             zIndex: 10,
             maxWidth: 400,
           }}
@@ -333,7 +345,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
             isLoading={placesLoading}
             onPlaceSelect={mapActions.selectPlace}
             onCenterOnPlace={handleCenterOnPlace}
-            onClose={() => searchParams.setSearch('')}
+            onClose={() => searchParams.setSearch("")}
           />
         )}
 

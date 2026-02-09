@@ -24,9 +24,8 @@ import {
 } from "@mui/joy";
 import NextLink from "next/link";
 import { useEffect, useState } from "react";
-
-import { getScanResults } from "@/app/actions/menuScanning";
 import type { MenuScanFullResult } from "@/app/actions/menuScanning";
+import { getScanResults } from "@/app/actions/menuScanning";
 
 interface MenuScanResultsProps {
   scanId: string;

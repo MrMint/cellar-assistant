@@ -1,10 +1,10 @@
 import { Box, Stack, Typography } from "@mui/joy";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { extractItemCounts } from "@/components/cellar/cellarItemsServer";
 import { CellarItemsControls } from "@/components/cellar/CellarItemsControls";
 import { CellarItemsGridServer } from "@/components/cellar/CellarItemsGridServer";
 import { CellarItemsGridSkeleton } from "@/components/cellar/CellarItemsGridSkeleton";
+import { extractItemCounts } from "@/components/cellar/cellarItemsServer";
 import { GetCellarInfoQuery } from "@/components/cellar/fragments";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";

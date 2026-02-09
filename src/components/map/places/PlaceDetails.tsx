@@ -42,7 +42,98 @@ import {
   TOGGLE_FAVORITE_PLACE,
 } from "../queries";
 import { MenuScanner } from "../scanning/MenuScanner";
+import { formatCategoryName } from "./PlaceDetailsContent";
 import { PlaceMenuItems } from "./PlaceMenuItems";
+
+const DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+function formatTime(time: string): string {
+  const hours = Number.parseInt(time.slice(0, 2), 10);
+  const minutes = time.slice(2);
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+  return `${displayHours}:${minutes} ${period}`;
+}
+
+function HoursDisplay({ hours }: { hours: unknown }) {
+  // Handle string hours (e.g. "Mon-Fri 9-5")
+  if (typeof hours === "string") {
+    return (
+      <Typography level="body-sm" sx={{ mt: 1 }}>
+        {hours}
+      </Typography>
+    );
+  }
+
+  // Handle structured hours with periods array
+  if (
+    hours &&
+    typeof hours === "object" &&
+    "periods" in hours &&
+    Array.isArray((hours as { periods: unknown[] }).periods)
+  ) {
+    const periods = (
+      hours as {
+        periods: Array<{
+          open: { day: number; time: string };
+          close?: { day: number; time: string };
+        }>;
+      }
+    ).periods;
+
+    // Group periods by day
+    const byDay = new Map<number, typeof periods>();
+    for (const period of periods) {
+      const day = period.open.day;
+      const existing = byDay.get(day) ?? [];
+      existing.push(period);
+      byDay.set(day, existing);
+    }
+
+    return (
+      <Stack spacing={0.5} sx={{ mt: 1 }}>
+        {Array.from({ length: 7 }, (_, i) => {
+          const dayPeriods = byDay.get(i);
+          return (
+            <Stack key={DAY_NAMES[i]} direction="row" spacing={2}>
+              <Typography
+                level="body-sm"
+                sx={{ minWidth: 90, fontWeight: "md" }}
+              >
+                {DAY_NAMES[i]}
+              </Typography>
+              <Typography level="body-sm" sx={{ color: "text.secondary" }}>
+                {dayPeriods
+                  ? dayPeriods
+                      .map(
+                        (p) =>
+                          `${formatTime(p.open.time)}${p.close ? ` – ${formatTime(p.close.time)}` : " – Open"}`,
+                      )
+                      .join(", ")
+                  : "Closed"}
+              </Typography>
+            </Stack>
+          );
+        })}
+      </Stack>
+    );
+  }
+
+  // Fallback: display as readable text
+  return (
+    <Typography level="body-sm" sx={{ mt: 1 }}>
+      {String(hours)}
+    </Typography>
+  );
+}
 
 interface PlaceDetailsProps {
   placeId: string;
@@ -131,12 +222,16 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
     if (!userId || !placeData) return;
 
     setIsMarkingVisited(true);
+    const willBeVisited = !userInteraction?.is_visited;
     try {
       const result = await markVisited({
         userId,
         placeId: placeData.id,
-        isVisited: !userInteraction?.is_visited,
+        isVisited: willBeVisited,
         visitedAt: new Date().toISOString(),
+        visitCount: willBeVisited
+          ? (userInteraction?.visit_count ?? 0) + 1
+          : (userInteraction?.visit_count ?? 0),
       });
 
       if (result.error) {
@@ -220,7 +315,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                 >
                   {placeData.categories.map((category: string) => (
                     <Chip key={category} variant="soft" size="sm">
-                      {category}
+                      {formatCategoryName(category)}
                     </Chip>
                   ))}
                 </Stack>
@@ -368,11 +463,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                   <Typography level="title-md" startDecorator={<Schedule />}>
                     Hours
                   </Typography>
-                  <Typography level="body-sm" sx={{ mt: 1 }}>
-                    {typeof placeData.hours === "string"
-                      ? String(placeData.hours)
-                      : JSON.stringify(placeData.hours)}
-                  </Typography>
+                  <HoursDisplay hours={placeData.hours} />
                 </CardContent>
               </Card>
             )}
@@ -384,13 +475,15 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                   {placeData.primary_category && (
                     <Typography level="body-sm">
                       <strong>Primary Category:</strong>{" "}
-                      {placeData.primary_category}
+                      {formatCategoryName(placeData.primary_category)}
                     </Typography>
                   )}
                   {placeData.categories && placeData.categories.length > 0 && (
                     <Typography level="body-sm">
                       <strong>Categories:</strong>{" "}
-                      {placeData.categories.join(", ")}
+                      {placeData.categories
+                        .map((c: string) => formatCategoryName(c))
+                        .join(", ")}
                     </Typography>
                   )}
                   {placeData.confidence && (

@@ -11,9 +11,7 @@ interface MapViewProps {
 
 const MapLibreRenderer = dynamic(
   () =>
-    import("../maplibre/MapLibreRenderer").then(
-      (mod) => mod.MapLibreRenderer,
-    ),
+    import("../maplibre/MapLibreRenderer").then((mod) => mod.MapLibreRenderer),
   {
     ssr: false,
     loading: () => (

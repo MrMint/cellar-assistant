@@ -125,10 +125,16 @@ export const MapFilter: FC<MapFilterProps> = ({
       ref={filterRef}
       sx={{ position: "relative" }}
     >
-      {/* Item type filters */}
+      {/* Item type filters + more filters toggle */}
       <Sheet
         variant="outlined"
-        sx={{ borderRadius: "md", display: "flex", gap: 2, p: 0.5 }}
+        sx={{
+          borderRadius: "md",
+          display: "flex",
+          alignItems: "center",
+          gap: 0.5,
+          p: 0.5,
+        }}
       >
         <ToggleButtonGroup
           variant="plain"
@@ -151,51 +157,43 @@ export const MapFilter: FC<MapFilterProps> = ({
             );
           })}
         </ToggleButtonGroup>
-      </Sheet>
 
-      {/* Additional filters */}
-      <Sheet
-        variant="outlined"
-        sx={{ borderRadius: "md", display: "flex", gap: 2, p: 0.5 }}
-      >
-        <ToggleButtonGroup
-          variant="plain"
-          spacing={0.5}
-          aria-label="additional filters"
-        >
-          {/* Advanced filter toggle */}
-          <Tooltip title="More filters">
-            <IconButton
-              color={
-                minRating !== undefined || visitStatuses.length > 0
-                  ? "primary"
-                  : "neutral"
-              }
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              sx={{
-                position: "relative",
-              }}
-            >
-              <MdFilterList />
-              {/* Active filter indicator */}
-              {(minRating !== undefined || visitStatuses.length > 0) &&
-                !showAdvanced && (
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      top: 4,
-                      right: 4,
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      backgroundColor: "primary.500",
-                      zIndex: 1,
-                    }}
-                  />
-                )}
-            </IconButton>
-          </Tooltip>
-        </ToggleButtonGroup>
+        <Divider orientation="vertical" />
+
+        {/* Advanced filter toggle */}
+        <Tooltip title="More filters">
+          <IconButton
+            color={
+              minRating !== undefined || visitStatuses.length > 0
+                ? "primary"
+                : "neutral"
+            }
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            size="sm"
+            aria-label="More filters"
+            sx={{
+              position: "relative",
+            }}
+          >
+            <MdFilterList />
+            {/* Active filter indicator */}
+            {(minRating !== undefined || visitStatuses.length > 0) &&
+              !showAdvanced && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    top: 4,
+                    right: 4,
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    backgroundColor: "primary.500",
+                    zIndex: 1,
+                  }}
+                />
+              )}
+          </IconButton>
+        </Tooltip>
       </Sheet>
 
       {/* Advanced filters popup */}

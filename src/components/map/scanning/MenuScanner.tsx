@@ -25,12 +25,11 @@ import {
 } from "@mui/joy";
 import NextLink from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-
+import type { MenuScanStatus } from "@/app/actions/menuScanning";
 import {
   getMenuScanStatus,
   uploadAndProcessMenuScan,
 } from "@/app/actions/menuScanning";
-import type { MenuScanStatus } from "@/app/actions/menuScanning";
 import { useInterval } from "@/utilities/hooks";
 
 import { CameraCapture } from "../../common/CameraCapture";

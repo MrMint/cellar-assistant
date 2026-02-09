@@ -1,8 +1,8 @@
 "use client";
 
+import type { MapLayerMouseEvent } from "maplibre-gl";
 import { useEffect } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import type { MapLayerMouseEvent } from "maplibre-gl";
 import { INTERACTIVE_LAYER_IDS, SOURCE_IDS } from "../constants";
 
 /**

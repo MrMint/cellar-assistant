@@ -1,7 +1,7 @@
-import { BigQuery } from "@google-cloud/bigquery";
 import { graphql } from "@cellar-assistant/shared/gql/graphql";
-import { functionQuery, getAdminAuthHeaders } from "../../_utils/urql-client";
+import { BigQuery } from "@google-cloud/bigquery";
 import { hasProperty, isRecord } from "../../_utils/types";
+import { functionQuery, getAdminAuthHeaders } from "../../_utils/urql-client";
 import type {
   FetchPlacesBatchOptions,
   PlaceBatchResult,

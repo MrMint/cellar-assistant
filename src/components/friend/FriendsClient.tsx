@@ -21,8 +21,8 @@ import {
   insertFriendRequest,
   rejectFriendRequest,
   removeFriend,
-  searchUsers,
   type SearchUsersData,
+  searchUsers,
 } from "./actions";
 
 interface FriendsClientProps {

@@ -18,7 +18,9 @@ export function useGeolocation() {
     loading: true,
     error: null,
   });
-  const lastCoordsRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const lastCoordsRef = useRef<{ latitude: number; longitude: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!navigator.geolocation) {

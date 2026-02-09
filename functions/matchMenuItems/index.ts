@@ -5,13 +5,13 @@ import {
 import type { Request, Response } from "express";
 import { AUTH_ERROR_RESPONSE, requireAuth } from "../_utils/auth-middleware";
 import {
-  calculateEnhancedConfidence,
-  determineMatchReason,
-} from "../_utils/item-matching/confidence-scoring";
-import {
   shouldVerifyWithAI,
   verifyMatchesWithAI,
 } from "../_utils/item-matching/ai-verification";
+import {
+  calculateEnhancedConfidence,
+  determineMatchReason,
+} from "../_utils/item-matching/confidence-scoring";
 import { searchRecipesByVector } from "../_utils/item-matching/recipe-search";
 import { calculateStringSimilarity } from "../_utils/item-matching/search-utils";
 import { searchSpecificItems } from "../_utils/item-matching/specific-search";

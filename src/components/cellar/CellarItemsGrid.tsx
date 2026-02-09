@@ -1,10 +1,10 @@
 "use client";
 
 import { Grid } from "@mui/joy";
-import type { TransformedCellarItem } from "./cellarItemsServer";
 import { ItemCard } from "@/components/item/ItemCard";
 import { formatItemType } from "@/utilities";
 import { useScrollRestore } from "@/utilities/hooks";
+import type { TransformedCellarItem } from "./cellarItemsServer";
 
 interface CellarItemsGridProps {
   items: TransformedCellarItem[];

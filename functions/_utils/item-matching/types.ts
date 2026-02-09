@@ -4,11 +4,11 @@
 
 import type { ItemTypeValue, ResultOf } from "@cellar-assistant/shared";
 import type {
-  SEARCH_WINES_TEXT_QUERY,
   SEARCH_BEERS_TEXT_QUERY,
-  SEARCH_SPIRITS_TEXT_QUERY,
   SEARCH_COFFEES_TEXT_QUERY,
   SEARCH_SAKES_TEXT_QUERY,
+  SEARCH_SPIRITS_TEXT_QUERY,
+  SEARCH_WINES_TEXT_QUERY,
 } from "../search-queries";
 
 export interface ItemMatchRequest {

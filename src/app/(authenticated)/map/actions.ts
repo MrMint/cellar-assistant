@@ -455,10 +455,7 @@ async function performSemanticSearch(
           typeof place.combined_score === "number"
             ? place.combined_score
             : Number(place.combined_score) || 0;
-        const confidenceScore = Math.max(
-          0,
-          Math.min(100, combinedScore * 100),
-        );
+        const confidenceScore = Math.max(0, Math.min(100, combinedScore * 100));
         const distance = Math.max(0, 2 * (1 - combinedScore));
 
         const transformed = transformPlaceResult(place, searchParams);

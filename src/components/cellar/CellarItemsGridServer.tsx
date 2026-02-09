@@ -1,13 +1,13 @@
 import type { ItemTypeValue } from "@cellar-assistant/shared";
+import { serverQuery } from "@/lib/urql/server";
+import { CellarItemsGrid } from "./CellarItemsGrid";
 import {
   buildItemsWhereClause,
   generateSearchVector,
   sortCellarItems,
   transformCellarItems,
 } from "./cellarItemsServer";
-import { CellarItemsGrid } from "./CellarItemsGrid";
 import { GetCellarItemsQuery } from "./queries";
-import { serverQuery } from "@/lib/urql/server";
 
 interface CellarItemsGridServerProps {
   cellarId: string;
