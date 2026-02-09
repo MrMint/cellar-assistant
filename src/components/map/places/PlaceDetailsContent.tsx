@@ -36,7 +36,9 @@ import Image from "next/image";
 import Link from "next/link";
 import type React from "react";
 import { useState } from "react";
+import { MdFormatListNumbered } from "react-icons/md";
 import { useMutation } from "urql";
+import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
 import { MARK_PLACE_VISITED, TOGGLE_FAVORITE_PLACE } from "../queries";
 import { PlaceMenuItems } from "./PlaceMenuItems";
 
@@ -201,6 +203,8 @@ export function PlaceDetailsContent({
     message: string;
     color: "success" | "danger" | "neutral";
   } | null>(null);
+
+  const [tierListModalOpen, setTierListModalOpen] = useState(false);
 
   const [, toggleFavorite] = useMutation(TOGGLE_FAVORITE_PLACE);
   const [, markVisited] = useMutation(MARK_PLACE_VISITED);
@@ -489,6 +493,7 @@ export function PlaceDetailsContent({
             onShare={handleShare}
             onToggleFavorite={handleToggleFavorite}
             onMarkVisited={handleMarkVisited}
+            onAddToTierList={() => setTierListModalOpen(true)}
           />
         ) : (
           <MobileActions
@@ -503,6 +508,7 @@ export function PlaceDetailsContent({
             onShare={handleShare}
             onToggleFavorite={handleToggleFavorite}
             onMarkVisited={handleMarkVisited}
+            onAddToTierList={() => setTierListModalOpen(true)}
           />
         )}
       </Box>
@@ -645,6 +651,14 @@ export function PlaceDetailsContent({
       >
         {feedback?.message}
       </Snackbar>
+
+      {/* Add to Tier List Modal */}
+      <AddToTierListModal
+        open={tierListModalOpen}
+        onClose={() => setTierListModalOpen(false)}
+        placeId={place.id}
+        placeName={place.name}
+      />
     </>
   );
 }
@@ -662,6 +676,7 @@ interface ActionProps {
   onShare: (e: React.MouseEvent) => void;
   onToggleFavorite: (e: React.MouseEvent) => void;
   onMarkVisited: (e: React.MouseEvent) => void;
+  onAddToTierList: (e: React.MouseEvent) => void;
 }
 
 function DesktopActions({
@@ -675,6 +690,7 @@ function DesktopActions({
   onShare,
   onToggleFavorite,
   onMarkVisited,
+  onAddToTierList,
 }: ActionProps) {
   return (
     <Stack spacing={2}>
@@ -752,6 +768,16 @@ function DesktopActions({
           Share
         </Button>
       </Stack>
+
+      <Button
+        variant="outlined"
+        color="neutral"
+        startDecorator={<MdFormatListNumbered />}
+        fullWidth
+        onClick={onAddToTierList}
+      >
+        Add to Tier List
+      </Button>
     </Stack>
   );
 }
@@ -774,6 +800,7 @@ function MobileActions({
   onShare,
   onToggleFavorite,
   onMarkVisited,
+  onAddToTierList,
 }: MobileActionProps) {
   return (
     <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
@@ -868,6 +895,18 @@ function MobileActions({
               aria-label="Share"
             >
               <Share />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Add to Tier List" placement="top">
+            <IconButton
+              variant="outlined"
+              color="neutral"
+              size="sm"
+              onClick={onAddToTierList}
+              aria-label="Add to Tier List"
+            >
+              <MdFormatListNumbered />
             </IconButton>
           </Tooltip>
         </>

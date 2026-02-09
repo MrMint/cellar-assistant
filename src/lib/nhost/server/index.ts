@@ -122,19 +122,18 @@ export async function handleNhostMiddleware(
 
   const timeUntilExpiry = exp - now;
 
-  // Token is expired
-  if (timeUntilExpiry <= 0) {
-    const response = redirectCallback();
-    response.cookies.delete("nhostSession");
-    return response;
-  }
-
   // Token is valid and not expiring soon - just pass through
   if (timeUntilExpiry > 60) {
     return NextResponse.next();
   }
 
-  // Token expires within 60 seconds - try to refresh
+  // Token is expired or expiring within 60 seconds - try to refresh
+  if (!sessionData?.refreshToken) {
+    const response = redirectCallback();
+    response.cookies.delete("nhostSession");
+    return response;
+  }
+
   const nhost = createServerClient({
     ...getNhostConfig(),
     storage: {
@@ -145,7 +144,7 @@ export async function handleNhostMiddleware(
   });
 
   try {
-    const refreshedSession = await nhost.refreshSession(60);
+    const refreshedSession = await nhost.refreshSession();
 
     if (!refreshedSession) {
       const response = redirectCallback();
@@ -164,7 +163,13 @@ export async function handleNhostMiddleware(
     });
     return response;
   } catch {
-    // Refresh failed but token is still valid for a bit - allow through
-    return NextResponse.next();
+    // Refresh failed - token is either expired or refresh token is invalid
+    if (timeUntilExpiry > 0) {
+      // Access token still valid, allow through despite refresh failure
+      return NextResponse.next();
+    }
+    const response = redirectCallback();
+    response.cookies.delete("nhostSession");
+    return response;
   }
 }

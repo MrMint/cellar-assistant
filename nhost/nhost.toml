@@ -96,10 +96,10 @@ rating = 'g'
 
 [auth.session]
 [auth.session.accessToken]
-expiresIn = 900
+expiresIn = 3600
 
 [auth.session.refreshToken]
-expiresIn = 43200
+expiresIn = 2592000
 
 [auth.method]
 [auth.method.anonymous]

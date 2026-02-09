@@ -34,6 +34,7 @@ export function useMapCore() {
   return useSelector(
     actorRef,
     (state) => ({
+      userId: state.context.userId,
       hasInitialized: state.context.hasInitialized,
       currentZoom: state.context.currentZoom,
       isDarkMode: state.context.isDarkMode,
@@ -138,6 +139,8 @@ export function useMapActions() {
         send({ type: "SET_MIN_RATING", rating }),
       setVisitStatuses: (statuses: VisitStatus[]) =>
         send({ type: "SET_VISIT_STATUSES", statuses }),
+      setTierListIds: (tierListIds: string[]) =>
+        send({ type: "SET_TIER_LIST_IDS", tierListIds }),
       clearFilters: () => send({ type: "CLEAR_FILTERS" }),
 
       // Data actions

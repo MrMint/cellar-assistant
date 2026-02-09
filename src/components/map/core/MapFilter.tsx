@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Divider,
   IconButton,
   Sheet,
@@ -20,6 +21,7 @@ import {
   FaWineGlass,
 } from "react-icons/fa";
 import { MdFilterList } from "react-icons/md";
+import type { TierListFilterOption } from "../hooks/useTierListFilter";
 import type { ItemType, VisitStatus } from "../types";
 import { ITEM_TYPES } from "./ItemTypeCategoryMapper";
 
@@ -48,6 +50,16 @@ type MapFilterProps = {
   // Visit status filter
   visitStatuses?: VisitStatus[];
   onVisitStatusesChange: (statuses: VisitStatus[]) => void;
+
+  // Tier list filter
+  tierLists?: TierListFilterOption[];
+  selectedTierListIds?: string[];
+  onTierListsChange?: (tierListIds: string[]) => void;
+  tierListsLoading?: boolean;
+  isTierListFilterActive?: boolean;
+
+  // Layout
+  isMobile?: boolean;
 };
 
 // Icon mapping for item types
@@ -69,6 +81,12 @@ export const MapFilter: FC<MapFilterProps> = ({
   onMinRatingChange,
   visitStatuses = [],
   onVisitStatusesChange,
+  tierLists = [],
+  selectedTierListIds = [],
+  onTierListsChange,
+  tierListsLoading = false,
+  isTierListFilterActive = false,
+  isMobile = false,
 }: MapFilterProps) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -164,7 +182,9 @@ export const MapFilter: FC<MapFilterProps> = ({
         <Tooltip title="More filters">
           <IconButton
             color={
-              minRating !== undefined || visitStatuses.length > 0
+              minRating !== undefined ||
+              visitStatuses.length > 0 ||
+              isTierListFilterActive
                 ? "primary"
                 : "neutral"
             }
@@ -177,7 +197,9 @@ export const MapFilter: FC<MapFilterProps> = ({
           >
             <MdFilterList />
             {/* Active filter indicator */}
-            {(minRating !== undefined || visitStatuses.length > 0) &&
+            {(minRating !== undefined ||
+              visitStatuses.length > 0 ||
+              isTierListFilterActive) &&
               !showAdvanced && (
                 <Box
                   sx={{
@@ -200,9 +222,9 @@ export const MapFilter: FC<MapFilterProps> = ({
       {showAdvanced && (
         <Box
           sx={{
-            position: "absolute",
-            top: "100%",
-            right: 0,
+            position: isMobile ? "fixed" : "absolute",
+            top: isMobile ? "auto" : "100%",
+            ...(isMobile ? { left: 8, right: 8 } : { right: 0 }),
             mt: 1,
             zIndex: 1200,
           }}
@@ -212,8 +234,8 @@ export const MapFilter: FC<MapFilterProps> = ({
               p: 2,
               borderRadius: "md",
               boxShadow: "lg",
-              minWidth: 320,
-              maxWidth: 400,
+              minWidth: isMobile ? "auto" : 320,
+              maxWidth: isMobile ? "none" : 400,
               border: "1px solid",
               borderColor: "divider",
               backgroundColor: "background.surface",
@@ -360,8 +382,107 @@ export const MapFilter: FC<MapFilterProps> = ({
                 )}
               </Box>
 
+              {/* Tier list filter */}
+              {(tierLists.length > 0 || tierListsLoading) && (
+                <>
+                  <Divider />
+                  <Box>
+                    <Typography
+                      level="body-sm"
+                      sx={{ mb: 1, fontWeight: "md" }}
+                    >
+                      Tier Lists
+                    </Typography>
+                    {tierListsLoading ? (
+                      <CircularProgress size="sm" />
+                    ) : (
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        flexWrap="wrap"
+                        useFlexGap
+                      >
+                        {tierLists.map((tierList) => {
+                          const isSelected = selectedTierListIds.includes(
+                            tierList.id,
+                          );
+                          return (
+                            <Button
+                              key={tierList.id}
+                              variant={isSelected ? "solid" : "outlined"}
+                              color="primary"
+                              size="sm"
+                              onClick={() => {
+                                if (!onTierListsChange) return;
+                                if (isSelected) {
+                                  onTierListsChange(
+                                    selectedTierListIds.filter(
+                                      (id) => id !== tierList.id,
+                                    ),
+                                  );
+                                } else {
+                                  onTierListsChange([
+                                    ...selectedTierListIds,
+                                    tierList.id,
+                                  ]);
+                                }
+                              }}
+                            >
+                              {tierList.name}
+                            </Button>
+                          );
+                        })}
+                      </Stack>
+                    )}
+                    {isTierListFilterActive && (
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ mt: 1 }}
+                        flexWrap="wrap"
+                        useFlexGap
+                      >
+                        {selectedTierListIds.map((id) => {
+                          const tl = tierLists.find((t) => t.id === id);
+                          if (!tl) return null;
+                          return (
+                            <Chip
+                              key={id}
+                              variant="soft"
+                              color="primary"
+                              size="sm"
+                              endDecorator={
+                                <IconButton
+                                  size="sm"
+                                  variant="plain"
+                                  color="neutral"
+                                  onClick={() => {
+                                    onTierListsChange?.(
+                                      selectedTierListIds.filter(
+                                        (tid) => tid !== id,
+                                      ),
+                                    );
+                                  }}
+                                  sx={{ ml: 0.5 }}
+                                >
+                                  x
+                                </IconButton>
+                              }
+                            >
+                              {tl.name}
+                            </Chip>
+                          );
+                        })}
+                      </Stack>
+                    )}
+                  </Box>
+                </>
+              )}
+
               {/* Clear all filters button */}
-              {(minRating !== undefined || visitStatuses.length > 0) && (
+              {(minRating !== undefined ||
+                visitStatuses.length > 0 ||
+                isTierListFilterActive) && (
                 <>
                   <Divider />
                   <Button
@@ -371,6 +492,9 @@ export const MapFilter: FC<MapFilterProps> = ({
                     onClick={() => {
                       onMinRatingChange(undefined);
                       onVisitStatusesChange([]);
+                      onTierListsChange?.(
+                        tierLists.map((tl) => tl.id),
+                      );
                     }}
                     sx={{ alignSelf: "center" }}
                   >

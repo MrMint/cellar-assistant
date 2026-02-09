@@ -67,6 +67,8 @@
 - "!include public_search_category_vectors_results.yaml"
 - "!include public_spirit_type.yaml"
 - "!include public_spirits.yaml"
+- "!include public_tier_list_items.yaml"
+- "!include public_tier_lists.yaml"
 - "!include public_user_place_interactions.yaml"
 - "!include public_wine_style.yaml"
 - "!include public_wine_variety.yaml"

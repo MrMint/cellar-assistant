@@ -9,9 +9,11 @@ import {
   Search,
 } from "@mui/icons-material";
 import { Box, Divider, IconButton, Input, Sheet, Stack } from "@mui/joy";
+import { useCallback } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useMapActions, useMapCore, useMapUI } from "../hooks/useMapMachine";
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
+import { useTierListFilter } from "../hooks/useTierListFilter";
 import { MapFilter } from "./MapFilter";
 
 interface MapControlsProps {
@@ -71,13 +73,31 @@ export function MapControls({
     itemTypes,
     minRating,
     visitStatuses,
+    tierLists: tierListIds,
     setSearch,
     setItemTypes,
     setMinRating,
     setVisitStatuses,
+    setTierLists,
   } = useMapSearchParams();
+
+  // Initialize tier lists in URL on first data load so toggles work correctly
+  const handleTierListInit = useCallback(
+    (ids: string[]) => setTierLists(ids),
+    [setTierLists],
+  );
+
+  // Core state (userId needed for tier list query)
+  const { userId, isDarkMode } = useMapCore();
+
+  // Tier list filter data
+  const {
+    tierLists: tierListOptions,
+    effectiveSelectedIds,
+    isFilterActive: isTierListFilterActive,
+    loading: tierListsLoading,
+  } = useTierListFilter(tierListIds, handleTierListInit, userId);
   const { isDrawerOpen } = useMapUI();
-  const { isDarkMode } = useMapCore();
   const { toggleDarkMode } = useMapActions();
 
   // Helper function to get position styles
@@ -143,6 +163,7 @@ export function MapControls({
         flexDirection: "row",
         gap: 1,
         alignItems: "center",
+        flexWrap: isMobile ? "wrap" : "nowrap",
       }}
     >
       {showFilters && (
@@ -153,6 +174,7 @@ export function MapControls({
             gap: 1,
             position: "relative",
             zIndex: 999,
+            minWidth: 0,
           }}
         >
           <MapFilter
@@ -165,6 +187,12 @@ export function MapControls({
             onMinRatingChange={setMinRating}
             visitStatuses={visitStatuses}
             onVisitStatusesChange={setVisitStatuses}
+            tierLists={tierListOptions}
+            selectedTierListIds={effectiveSelectedIds}
+            onTierListsChange={setTierLists}
+            tierListsLoading={tierListsLoading}
+            isTierListFilterActive={isTierListFilterActive}
+            isMobile={isMobile}
           />
 
           {showActions && <Divider orientation="vertical" />}

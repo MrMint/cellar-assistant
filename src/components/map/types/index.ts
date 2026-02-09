@@ -170,6 +170,7 @@ export interface MapSearchParams {
   itemTypes?: ItemType[];
   minRating?: number;
   visitStatuses?: VisitStatus[];
+  tierListIds?: string[];
   // Semantic search
   semanticQuery?: string;
   maxSemanticDistance?: number;

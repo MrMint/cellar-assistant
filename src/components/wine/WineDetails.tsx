@@ -14,6 +14,7 @@ import { ItemImage } from "@/components/item/ItemImage";
 import { ItemRecipes } from "@/components/item/ItemRecipes";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
+import { ItemTierLists } from "@/components/item/ItemTierLists";
 import { CompactRecipeRecommendations } from "@/components/recipe/RecipeRecommendations";
 import { AddReview } from "@/components/review/AddReview";
 import wine1 from "@/images/wine1.png";
@@ -97,6 +98,7 @@ export function WineDetails({
                   co_owners: x.cellar.co_owners.map((y) => y.user),
                 }))}
               />
+              <ItemTierLists entityId={coreData.id} entityType="wine" />
             </Stack>
           </Grid>
           <Grid xs={12} sm={12} lg={6}>

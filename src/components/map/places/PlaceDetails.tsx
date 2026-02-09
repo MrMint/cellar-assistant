@@ -41,6 +41,7 @@ import {
   MARK_PLACE_VISITED,
   TOGGLE_FAVORITE_PLACE,
 } from "../queries";
+import { ItemTierLists } from "../../item/ItemTierLists";
 import { MenuScanner } from "../scanning/MenuScanner";
 import { formatCategoryName } from "./PlaceDetailsContent";
 import { PlaceMenuItems } from "./PlaceMenuItems";
@@ -403,6 +404,11 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Tier lists this place belongs to */}
+      <Box sx={{ mb: 3 }}>
+        <ItemTierLists entityId={placeData.id} entityType="place" />
+      </Box>
 
       {/* Content tabs */}
       <Tabs

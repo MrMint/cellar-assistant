@@ -59,12 +59,18 @@ export function useMapSearchParams() {
     parseAsArrayOf(parseAsString).withDefault([]),
   );
 
+  const [rawTierLists, setTierLists] = useQueryState(
+    "tierLists",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
+
   const clearAllFilters = useCallback(() => {
     setSearch(null);
     setItemTypes(null);
     setMinRating(null);
     setVisitStatuses(null);
-  }, [setSearch, setItemTypes, setMinRating, setVisitStatuses]);
+    setTierLists(null);
+  }, [setSearch, setItemTypes, setMinRating, setVisitStatuses, setTierLists]);
 
   return {
     // Values (validated)
@@ -72,6 +78,7 @@ export function useMapSearchParams() {
     itemTypes: parseItemTypes(rawItemTypes),
     minRating,
     visitStatuses: parseVisitStatuses(rawVisitStatuses),
+    tierLists: rawTierLists,
 
     // Setters
     setSearch: (value: string) => setSearch(value || null),
@@ -81,6 +88,8 @@ export function useMapSearchParams() {
       setMinRating(value ?? null),
     setVisitStatuses: (value: VisitStatus[]) =>
       setVisitStatuses(value.length > 0 ? value : null),
+    setTierLists: (value: string[]) =>
+      setTierLists(value.length > 0 ? value : null),
 
     // Clear all
     clearAllFilters,

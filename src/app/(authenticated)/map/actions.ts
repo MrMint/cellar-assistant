@@ -23,6 +23,21 @@ import { getCachedSearchVector } from "@/lib/cache";
 import { adminQuery, serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
 
+// UUID v4 regex for validating tier list IDs from URL params
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Format a validated string array as a PostgreSQL array literal, or null. */
+function toPgArray(
+  values: string[] | undefined,
+  validate?: RegExp,
+): string | null {
+  if (!values || values.length === 0) return null;
+  const safe = validate ? values.filter((v) => validate.test(v)) : values;
+  if (safe.length === 0) return null;
+  return `{${safe.join(",")}}`;
+}
+
 // Label-type weights for category score aggregation (from seedCategoryVectors)
 type LabelType = "category" | "alias" | "item_type" | "descriptor";
 const LABEL_TYPE_WEIGHTS: Record<LabelType, number> = {
@@ -68,6 +83,7 @@ const HybridPlaceSearchQuery = graphql(`
     $northBound: float8
     $minRating: float8
     $resultLimit: Int
+    $tierListIds: _uuid
   ) {
     searchPlacesHybrid(
       args: {
@@ -80,6 +96,7 @@ const HybridPlaceSearchQuery = graphql(`
         north_bound: $northBound
         min_rating: $minRating
         result_limit: $resultLimit
+        tier_list_ids: $tierListIds
       }
     ) {
       id
@@ -113,7 +130,7 @@ const HybridPlaceSearchQuery = graphql(`
 const SearchPlacesClusteredQuery = graphql(`
   query SearchPlacesClustered(
     $westBound: float8!
-    $southBound: float8!  
+    $southBound: float8!
     $eastBound: float8!
     $northBound: float8!
     $categoryFilter: _text
@@ -121,6 +138,7 @@ const SearchPlacesClusteredQuery = graphql(`
     $visitStatusFilter: String
     $filterUserId: uuid
     $resultLimit: Int
+    $tierListIds: _uuid
   ) {
     searchPlacesAdaptiveCluster(
       args: {
@@ -133,6 +151,7 @@ const SearchPlacesClusteredQuery = graphql(`
         visit_status_filter: $visitStatusFilter
         filter_user_id: $filterUserId
         result_limit: $resultLimit
+        tier_list_ids: $tierListIds
       }
     ) {
       is_cluster
@@ -320,6 +339,7 @@ export async function searchMapPlaces(
     itemTypes = [],
     minRating,
     visitStatuses = [],
+    tierListIds,
     semanticQuery,
     limit = 500,
   } = params;
@@ -336,6 +356,7 @@ export async function searchMapPlaces(
         minRating,
         visitStatuses,
         Math.min(limit, 50),
+        tierListIds,
       );
     }
 
@@ -347,6 +368,7 @@ export async function searchMapPlaces(
       visitStatuses,
       userId,
       limit,
+      tierListIds,
     );
   } catch (error) {
     console.error("❌ [Server Action] Map search error:", error);
@@ -374,6 +396,7 @@ async function performSemanticSearch(
   minRating: number | undefined,
   visitStatuses: VisitStatus[],
   limit: number,
+  tierListIds?: string[],
 ): Promise<MapSearchResults> {
   try {
     // Step 1: Generate query vector via Next.js cache (24h TTL, shared across users)
@@ -436,6 +459,7 @@ async function performSemanticSearch(
       northBound: bounds.north,
       minRating: minRating ?? null,
       resultLimit: limit,
+      tierListIds: toPgArray(tierListIds, UUID_RE),
     });
 
     const rawResults = hybridResult?.searchPlacesHybrid ?? [];
@@ -531,6 +555,7 @@ async function performStandardSearch(
   visitStatuses: VisitStatus[],
   userId: string,
   limit: number,
+  tierListIds?: string[],
 ): Promise<MapSearchResults> {
   // Perform item type to category mapping on server
   const categories = mapItemTypesToCategories(itemTypes);
@@ -550,12 +575,12 @@ async function performStandardSearch(
     southBound: bounds.south,
     eastBound: bounds.east,
     northBound: bounds.north,
-    categoryFilter:
-      categories && categories.length > 0 ? `{${categories.join(",")}}` : null,
+    categoryFilter: toPgArray(categories),
     minRating: minRating || null,
     visitStatusFilter,
     filterUserId: userId,
     resultLimit: limit,
+    tierListIds: toPgArray(tierListIds, UUID_RE),
   });
 
   if (!searchResult?.searchPlacesAdaptiveCluster) {

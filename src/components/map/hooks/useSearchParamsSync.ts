@@ -9,6 +9,7 @@ interface MapSearchParamsValues {
   itemTypes: ItemType[];
   minRating: number | null;
   visitStatuses: VisitStatus[];
+  tierLists: string[];
 }
 
 /**
@@ -20,13 +21,14 @@ interface MapSearchParamsValues {
  * then tracks subsequent changes via prev refs.
  */
 export function useSearchParamsSync(params: MapSearchParamsValues) {
-  const { search, itemTypes, minRating, visitStatuses } = params;
+  const { search, itemTypes, minRating, visitStatuses, tierLists } = params;
   const actions = useMapActions();
 
   const prevSearch = useRef<string | undefined>(undefined);
   const prevItemTypes = useRef<ItemType[] | undefined>(undefined);
   const prevMinRating = useRef<number | null | undefined>(undefined);
   const prevVisitStatuses = useRef<VisitStatus[] | undefined>(undefined);
+  const prevTierLists = useRef<string[] | undefined>(undefined);
 
   // Sync item types (including initial URL → XState on mount)
   useEffect(() => {
@@ -53,6 +55,14 @@ export function useSearchParamsSync(params: MapSearchParamsValues) {
     prevVisitStatuses.current = visitStatuses;
     actions.setVisitStatuses(visitStatuses);
   }, [visitStatuses, actions]);
+
+  // Sync tier list IDs
+  useEffect(() => {
+    if (JSON.stringify(prevTierLists.current) === JSON.stringify(tierLists))
+      return;
+    prevTierLists.current = tierLists;
+    actions.setTierListIds(tierLists);
+  }, [tierLists, actions]);
 
   // Sync search — semantic search when non-empty, refresh when cleared
   useEffect(() => {

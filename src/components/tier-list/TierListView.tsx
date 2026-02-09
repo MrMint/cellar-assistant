@@ -1,0 +1,785 @@
+"use client";
+
+import {
+  Box,
+  Card,
+  IconButton,
+  Modal,
+  ModalDialog,
+  Button,
+  Sheet,
+  Typography,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
+} from "@mui/joy";
+import Link from "next/link";
+import { memo, useState, useMemo, useCallback, useRef, useId } from "react";
+import { MdDelete, MdDragIndicator, MdStar } from "react-icons/md";
+import { FaCrown } from "react-icons/fa";
+import { AiFillTrophy } from "react-icons/ai";
+import {
+  removeItemFromTierListAction,
+  reorderBandAction,
+} from "@/app/actions/tierLists";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  closestCenter,
+  type DragStartEvent,
+  type DragOverEvent,
+  type DragEndEvent,
+  type UniqueIdentifier,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { CSS } from "@dnd-kit/utilities";
+import { BANDS, BAND_LABELS, BAND_COLORS } from "./constants";
+import type { TierListItemDisplay } from "./types";
+
+// =============================================================================
+// Types
+// =============================================================================
+
+interface TierListViewProps {
+  tierListId: string;
+  items: TierListItemDisplay[];
+  isOwner: boolean;
+}
+
+// =============================================================================
+// Band Configuration
+// =============================================================================
+
+const VERTICAL_MODIFIERS = [restrictToVerticalAxis];
+const NO_MODIFIERS: typeof VERTICAL_MODIFIERS = [];
+
+// =============================================================================
+// Rank Badge — Strava-style: crown for #1, trophies for 2-10, plain for 11+
+// =============================================================================
+
+const TROPHY_COLOR = "#E5A100";
+
+const BADGE_WIDTH = 32;
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 1) {
+    return (
+      <Box
+        sx={{
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: BADGE_WIDTH,
+        }}
+      >
+        <FaCrown style={{ fontSize: 28, color: TROPHY_COLOR }} />
+      </Box>
+    );
+  }
+
+  if (rank <= 10) {
+    return (
+      <Box
+        sx={{
+          position: "relative",
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: BADGE_WIDTH,
+        }}
+      >
+        <AiFillTrophy style={{ fontSize: 32, color: TROPHY_COLOR }} />
+        <Typography
+          level="body-xs"
+          sx={{
+            position: "absolute",
+            fontWeight: 800,
+            fontSize: "0.75rem",
+            lineHeight: 1,
+            color: "#fff",
+            top: "42%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          {rank}
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Typography
+      level="body-sm"
+      sx={{
+        color: "text.secondary",
+        fontWeight: "xl",
+        flexShrink: 0,
+        width: BADGE_WIDTH,
+        textAlign: "center",
+      }}
+    >
+      {rank}
+    </Typography>
+  );
+}
+
+// =============================================================================
+// Sortable TierListItem — split into DnD wrapper + memoized content
+// =============================================================================
+
+// Inner content — does NOT consume DndContext, so React.memo actually prevents
+// re-renders during drag when only the wrapper's transform/transition change.
+interface TierListItemContentProps {
+  item: TierListItemDisplay;
+  rank: number;
+  isOwner: boolean;
+  onRemove: (itemId: string, name: string) => void;
+}
+
+const TierListItemContent = memo(function TierListItemContent({
+  item,
+  rank,
+  isOwner,
+  onRemove,
+}: TierListItemContentProps) {
+  return (
+    <>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography
+          level="title-sm"
+          component={Link}
+          href={item.href}
+          sx={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            display: "block",
+            color: "inherit",
+            textDecoration: "none",
+            "&:hover": {
+              textDecoration: "underline",
+            },
+          }}
+        >
+          {item.name}
+        </Typography>
+        {item.subtitle && (
+          <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
+            {item.subtitle}
+          </Typography>
+        )}
+      </Box>
+
+      {item.reviewScore != null && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.25,
+            flexShrink: 0,
+            color: "warning.500",
+          }}
+        >
+          <MdStar style={{ fontSize: 14 }} />
+          <Typography level="body-xs" sx={{ fontWeight: "lg", color: "inherit" }}>
+            {item.reviewScore}
+          </Typography>
+        </Box>
+      )}
+
+      <RankBadge rank={rank} />
+
+      {isOwner && (
+        <IconButton
+          variant="plain"
+          color="neutral"
+          size="sm"
+          onClick={() => onRemove(item.id, item.name)}
+          aria-label={`Remove ${item.name}`}
+          sx={{ flexShrink: 0 }}
+        >
+          <MdDelete />
+        </IconButton>
+      )}
+    </>
+  );
+});
+
+// Thin wrapper — subscribes to DndContext via useSortable (must re-render on
+// every drag frame), but delegates actual content rendering to the memoized
+// TierListItemContent which skips reconciliation for inactive items.
+interface SortableTierListItemProps {
+  item: TierListItemDisplay;
+  rank: number;
+  isOwner: boolean;
+  onRemove: (itemId: string, name: string) => void;
+}
+
+const SortableTierListItem = memo(function SortableTierListItem({
+  item,
+  rank,
+  isOwner,
+  onRemove,
+}: SortableTierListItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: item.id,
+    disabled: !isOwner,
+  });
+
+  // Dynamic values change every frame during drag — use inline style to
+  // bypass Emotion's CSS class generation on each animation frame.
+  const dynamicStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform) ?? undefined,
+    transition: transition ?? undefined,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  return (
+    <Sheet
+      ref={setNodeRef}
+      variant="outlined"
+      style={dynamicStyle}
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        px: 1.5,
+        py: 0.75,
+        borderRadius: "sm",
+        boxShadow: "xs",
+        "&:hover": {
+          boxShadow: "sm",
+        },
+      }}
+    >
+      {isOwner && (
+        <Box
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            cursor: "grab",
+            touchAction: "none",
+            color: "neutral.400",
+            flexShrink: 0,
+          }}
+        >
+          <MdDragIndicator style={{ fontSize: 20 }} />
+        </Box>
+      )}
+
+      <TierListItemContent
+        item={item}
+        rank={rank}
+        isOwner={isOwner}
+        onRemove={onRemove}
+      />
+    </Sheet>
+  );
+});
+
+// =============================================================================
+// DragOverlay item — elevated Card
+// =============================================================================
+
+const DragOverlayItem = memo(function DragOverlayItem({
+  item,
+}: { item: TierListItemDisplay }) {
+  return (
+    <Card
+      variant="outlined"
+      size="sm"
+      sx={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 1,
+        px: 1.5,
+        py: 0.75,
+        boxShadow: "lg",
+        cursor: "grabbing",
+      }}
+    >
+      <MdDragIndicator
+        style={{ fontSize: 20, color: "var(--joy-palette-neutral-400)" }}
+      />
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography
+          level="title-sm"
+          sx={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {item.name}
+        </Typography>
+        {item.subtitle && (
+          <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
+            {item.subtitle}
+          </Typography>
+        )}
+      </Box>
+    </Card>
+  );
+});
+
+// =============================================================================
+// TierBand — band label + drop zone with items
+// =============================================================================
+
+// Static band label — no DnD context dependency, fully memoized by band number.
+const BandLabel = memo(function BandLabel({ band }: { band: number }) {
+  const color = BAND_COLORS[band];
+  const label = BAND_LABELS[band];
+  return (
+    <Sheet
+      variant="soft"
+      sx={{
+        width: 32,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRight: "3px solid",
+        borderColor: color,
+        backgroundColor: `${color}14`,
+        py: 0.5,
+        minHeight: 88,
+      }}
+    >
+      <Typography
+        level="body-xs"
+        sx={{
+          color,
+          fontWeight: "lg",
+          writingMode: "vertical-rl",
+          textOrientation: "mixed",
+          transform: "rotate(180deg)",
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+          userSelect: "none",
+        }}
+      >
+        {label}
+      </Typography>
+    </Sheet>
+  );
+});
+
+interface TierBandProps {
+  band: number;
+  itemIds: string[];
+  itemMap: Map<string, TierListItemDisplay>;
+  rankOffset: number;
+  isOwner: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onRemove: (itemId: string, name: string) => void;
+}
+
+const TierBand = memo(function TierBand({
+  band,
+  itemIds,
+  itemMap,
+  rankOffset,
+  isOwner,
+  isFirst,
+  isLast,
+  onRemove,
+}: TierBandProps) {
+  const hasItems = itemIds.length > 0;
+  const { setNodeRef } = useDroppable({ id: `band-${band}` });
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        borderBottom: isLast ? undefined : "2px solid",
+        borderColor: `${BAND_COLORS[band]}66`,
+        borderTopLeftRadius: isFirst ? "lg" : 0,
+        borderTopRightRadius: isFirst ? "lg" : 0,
+        borderBottomLeftRadius: isLast ? "lg" : 0,
+        borderBottomRightRadius: isLast ? "lg" : 0,
+        overflow: "hidden",
+      }}
+    >
+      <BandLabel band={band} />
+
+      {/* Items column */}
+      <Box ref={setNodeRef} sx={{ flex: 1, minWidth: 0 }}>
+        <SortableContext
+          id={`band-${band}`}
+          items={itemIds}
+          strategy={verticalListSortingStrategy}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 0.75,
+              p: 1,
+              minHeight: hasItems ? undefined : 80,
+            }}
+          >
+            {itemIds.map((itemId, index) => {
+              const item = itemMap.get(itemId);
+              if (!item) return null;
+              return (
+                <SortableTierListItem
+                  key={itemId}
+                  item={item}
+                  rank={rankOffset + index + 1}
+                  isOwner={isOwner}
+                  onRemove={onRemove}
+                />
+              );
+            })}
+          </Box>
+        </SortableContext>
+      </Box>
+    </Box>
+  );
+});
+
+// =============================================================================
+// Main TierListView
+// =============================================================================
+
+export function TierListView({ tierListId, items, isOwner }: TierListViewProps) {
+  const dndId = useId();
+
+  const [removeTarget, setRemoveTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
+  const { initialBandMap, itemMap } = useMemo(() => {
+    const map = new Map<string, TierListItemDisplay>();
+    const bands: Record<number, string[]> = {};
+
+    for (const band of BANDS) {
+      bands[band] = [];
+    }
+
+    for (const item of items) {
+      map.set(item.id, item);
+      if (bands[item.band]) {
+        bands[item.band].push(item.id);
+      }
+    }
+
+    return { initialBandMap: bands, itemMap: map };
+  }, [items]);
+
+  const [bandMap, setBandMap] =
+    useState<Record<number, string[]>>(initialBandMap);
+
+  const prevItemsRef = useRef(items);
+  if (items !== prevItemsRef.current) {
+    prevItemsRef.current = items;
+    setBandMap(initialBandMap);
+  }
+
+  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: { distance: 8 },
+  });
+  const touchSensor = useSensor(TouchSensor, {
+    activationConstraint: { delay: 250, tolerance: 5 },
+  });
+  const keyboardSensor = useSensor(KeyboardSensor, {
+    coordinateGetter: sortableKeyboardCoordinates,
+  });
+  const sensors = useSensors(pointerSensor, touchSensor, keyboardSensor);
+
+  // ---------------------------------------------------------------------------
+  // Refs for latest state — read by DnD callbacks to keep them stable.
+  // Without refs, every bandMap change would recreate all callbacks,
+  // causing DndContext to re-render and cascade to all useSortable/useDroppable
+  // consumers (18 items + 6 bands). With refs, callbacks are created once.
+  // ---------------------------------------------------------------------------
+  const bandMapRef = useRef(bandMap);
+  bandMapRef.current = bandMap;
+
+  const initialBandMapRef = useRef(initialBandMap);
+  initialBandMapRef.current = initialBandMap;
+
+  // Stable helpers — read from refs, never recreated
+  const findBandForItem = useCallback(
+    (id: UniqueIdentifier): number | null => {
+      const map = bandMapRef.current;
+      const str = String(id);
+      for (const band of BANDS) {
+        if (map[band]?.includes(str)) return band;
+      }
+      return null;
+    },
+    [],
+  );
+
+  const findBandFromContainerId = useCallback(
+    (id: UniqueIdentifier): number | null => {
+      const str = String(id);
+      if (str.startsWith("band-")) {
+        const band = Number(str.replace("band-", ""));
+        if (BANDS.includes(band as (typeof BANDS)[number])) {
+          return band;
+        }
+      }
+      return findBandForItem(id);
+    },
+    [findBandForItem],
+  );
+
+  // Track which band the drag started from (before handleDragOver moves it)
+  const dragSourceBandRef = useRef<number | null>(null);
+
+  // Stable DnD handlers — no bandMap/itemToBand in deps
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      setActiveId(event.active.id);
+      dragSourceBandRef.current = findBandForItem(event.active.id);
+    },
+    [findBandForItem],
+  );
+
+  const handleDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const { active, over } = event;
+      if (!over) return;
+
+      const activeBand = findBandForItem(active.id);
+      const overBand = findBandFromContainerId(over.id);
+
+      if (activeBand === null || overBand === null) return;
+
+      if (activeBand !== overBand) {
+        // Cross-band: move item from source to destination
+        setBandMap((prev) => {
+          const sourceItems = prev[activeBand].filter(
+            (id) => id !== String(active.id),
+          );
+          const destItems = [...prev[overBand]];
+
+          const overIndex = destItems.indexOf(String(over.id));
+          if (overIndex >= 0) {
+            destItems.splice(overIndex, 0, String(active.id));
+          } else {
+            destItems.push(String(active.id));
+          }
+
+          return {
+            ...prev,
+            [activeBand]: sourceItems,
+            [overBand]: destItems,
+          };
+        });
+      } else {
+        // Same-band reorder during drag (e.g. after a cross-band transfer)
+        setBandMap((prev) => {
+          const items = prev[activeBand];
+          const activeIndex = items.indexOf(String(active.id));
+          const overIndex = items.indexOf(String(over.id));
+          if (activeIndex < 0 || overIndex < 0 || activeIndex === overIndex) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [activeBand]: arrayMove(items, activeIndex, overIndex),
+          };
+        });
+      }
+    },
+    [findBandForItem, findBandFromContainerId],
+  );
+
+  // Build sequential position updates (0, 1, 2…) for an entire band.
+  const buildBandUpdates = useCallback(
+    (bandItems: string[], band: number) =>
+      bandItems.map((id, i) => ({ id, band, position: i })),
+    [],
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveId(null);
+
+      if (!over) {
+        // Dropped outside any droppable — revert to pre-drag state
+        dragSourceBandRef.current = null;
+        setBandMap(initialBandMapRef.current);
+        return;
+      }
+
+      const map = bandMapRef.current;
+      const sourceBand = dragSourceBandRef.current;
+      const destBand = findBandForItem(active.id);
+      dragSourceBandRef.current = null;
+
+      if (sourceBand === null || destBand === null) return;
+
+      // Final position adjustment within the destination band
+      const destItems = map[destBand];
+      const activeIndex = destItems.indexOf(String(active.id));
+      const overIndex = destItems.indexOf(String(over.id));
+
+      let finalDestItems = destItems;
+      if (activeIndex >= 0 && overIndex >= 0 && activeIndex !== overIndex) {
+        finalDestItems = arrayMove(destItems, activeIndex, overIndex);
+        setBandMap((prev) => ({ ...prev, [destBand]: finalDestItems }));
+      }
+
+      if (sourceBand === destBand) {
+        // Within-band reorder — only persist if position changed
+        if (finalDestItems !== destItems) {
+          reorderBandAction(buildBandUpdates(finalDestItems, destBand));
+        }
+      } else {
+        // Cross-band: handleDragOver already moved the item in state.
+        // Renumber both source and destination bands with sequential positions.
+        const updates = [
+          ...buildBandUpdates(map[sourceBand] ?? [], sourceBand),
+          ...buildBandUpdates(finalDestItems, destBand),
+        ];
+        reorderBandAction(updates);
+      }
+    },
+    [findBandForItem, buildBandUpdates],
+  );
+
+  const handleDragCancel = useCallback(() => {
+    setActiveId(null);
+    dragSourceBandRef.current = null;
+    setBandMap(initialBandMapRef.current);
+  }, []);
+
+  const handleRemoveClick = useCallback((itemId: string, name: string) => {
+    setRemoveTarget({ id: itemId, name });
+  }, []);
+
+  const handleConfirmRemove = useCallback(async () => {
+    if (!removeTarget) return;
+    // Optimistically remove from local state for instant feedback
+    setBandMap((prev) => {
+      const next = { ...prev };
+      for (const band of BANDS) {
+        const items = next[band];
+        if (items?.includes(removeTarget.id)) {
+          next[band] = items.filter((id) => id !== removeTarget.id);
+          break;
+        }
+      }
+      return next;
+    });
+    setRemoveTarget(null);
+    removeItemFromTierListAction(removeTarget.id, tierListId);
+  }, [removeTarget, tierListId]);
+
+  const activeItem = activeId ? itemMap.get(String(activeId)) : null;
+
+  return (
+    <>
+      <DndContext
+        id={dndId}
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        modifiers={isOwner ? VERTICAL_MODIFIERS : NO_MODIFIERS}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <Sheet
+          variant="outlined"
+          sx={{
+            borderRadius: "lg",
+            overflow: "hidden",
+            boxShadow: "sm",
+          }}
+        >
+          {BANDS.map((band, index) => {
+            // Compute rank offset: count of items in all higher bands
+            let rankOffset = 0;
+            for (let i = 0; i < index; i++) {
+              rankOffset += (bandMap[BANDS[i]] ?? []).length;
+            }
+            return (
+              <TierBand
+                key={band}
+                band={band}
+                itemIds={bandMap[band] ?? []}
+                itemMap={itemMap}
+                rankOffset={rankOffset}
+                isOwner={isOwner}
+                isFirst={index === 0}
+                isLast={index === BANDS.length - 1}
+                onRemove={handleRemoveClick}
+              />
+            );
+          })}
+        </Sheet>
+
+        <DragOverlay>
+          {activeItem ? <DragOverlayItem item={activeItem} /> : null}
+        </DragOverlay>
+      </DndContext>
+
+      <Modal open={removeTarget !== null} onClose={() => setRemoveTarget(null)}>
+        <ModalDialog variant="outlined" role="alertdialog">
+          <DialogTitle>Remove from tier list?</DialogTitle>
+          <Divider />
+          <DialogContent>
+            Remove <strong>{removeTarget?.name}</strong> from this tier list?
+            This won&apos;t delete the item itself.
+          </DialogContent>
+          <DialogActions>
+            <Button
+              variant="solid"
+              color="danger"
+              onClick={handleConfirmRemove}
+            >
+              Remove
+            </Button>
+            <Button
+              variant="plain"
+              color="neutral"
+              onClick={() => setRemoveTarget(null)}
+            >
+              Cancel
+            </Button>
+          </DialogActions>
+        </ModalDialog>
+      </Modal>
+    </>
+  );
+}

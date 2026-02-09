@@ -35,6 +35,7 @@ interface MapContext {
   isSemanticSearch: boolean; // Whether current search is semantic vs filter-based
   minRating: number | undefined;
   visitStatuses: VisitStatus[];
+  tierListIds: string[];
 
   // Data state
   places: Place[];
@@ -65,6 +66,7 @@ type MapEvent =
   | { type: "PERFORM_SEMANTIC_SEARCH"; query: string }
   | { type: "SET_MIN_RATING"; rating: number | undefined }
   | { type: "SET_VISIT_STATUSES"; statuses: VisitStatus[] }
+  | { type: "SET_TIER_LIST_IDS"; tierListIds: string[] }
   | { type: "CLEAR_FILTERS" }
   | { type: "REFRESH_PLACES" }
   | { type: "UPDATE_SELECTED_PLACE"; place: Place }
@@ -80,6 +82,7 @@ const fetchPlacesService = fromPromise(
       itemTypes: ItemType[];
       minRating: number | undefined;
       visitStatuses: VisitStatus[];
+      tierListIds: string[];
       searchQuery: string;
       isSemanticSearch: boolean;
       userLocation: UserLocation;
@@ -91,6 +94,7 @@ const fetchPlacesService = fromPromise(
       itemTypes,
       minRating,
       visitStatuses,
+      tierListIds,
       searchQuery,
       isSemanticSearch,
       userLocation,
@@ -103,6 +107,7 @@ const fetchPlacesService = fromPromise(
         itemTypes,
         minRating,
         visitStatuses,
+        tierListIds: tierListIds.length > 0 ? tierListIds : undefined,
         semanticQuery: isSemanticSearch ? searchQuery : undefined,
         limit: 500,
       };
@@ -266,12 +271,18 @@ const actions = {
       event.type === "SET_VISIT_STATUSES" ? event.statuses : [],
   }),
 
+  setTierListIds: assign({
+    tierListIds: ({ event }) =>
+      event.type === "SET_TIER_LIST_IDS" ? event.tierListIds : [],
+  }),
+
   clearFilters: assign({
     selectedItemTypes: [],
     searchQuery: "",
     isSemanticSearch: false,
     minRating: undefined,
     visitStatuses: [],
+    tierListIds: [],
   }),
 
   setPlaces: assign({
@@ -369,6 +380,7 @@ export const mapMachine = createMachine(
       isSemanticSearch: false,
       minRating: undefined,
       visitStatuses: [],
+      tierListIds: [],
       places: [],
       mapItems: [],
       placesError: null,
@@ -405,6 +417,9 @@ export const mapMachine = createMachine(
           },
           SET_VISIT_STATUSES: {
             actions: "setVisitStatuses",
+          },
+          SET_TIER_LIST_IDS: {
+            actions: "setTierListIds",
           },
           PERFORM_SEMANTIC_SEARCH: {
             actions: "performSemanticSearch",
@@ -539,6 +554,16 @@ export const mapMachine = createMachine(
                       actions: "setVisitStatuses",
                     },
                   ],
+                  SET_TIER_LIST_IDS: [
+                    {
+                      target: "loading",
+                      guard: "canFetchPlaces",
+                      actions: ["setTierListIds", "clearError"],
+                    },
+                    {
+                      actions: "setTierListIds",
+                    },
+                  ],
                 },
               },
               loading: {
@@ -550,6 +575,7 @@ export const mapMachine = createMachine(
                     itemTypes: context.selectedItemTypes,
                     minRating: context.minRating,
                     visitStatuses: context.visitStatuses,
+                    tierListIds: context.tierListIds,
                     searchQuery: context.searchQuery,
                     isSemanticSearch: context.isSemanticSearch,
                     userLocation: context.userLocation || {
@@ -603,6 +629,11 @@ export const mapMachine = createMachine(
                     target: "loading",
                     reenter: true,
                     actions: "setVisitStatuses",
+                  },
+                  SET_TIER_LIST_IDS: {
+                    target: "loading",
+                    reenter: true,
+                    actions: "setTierListIds",
                   },
                   CLEAR_FILTERS: {
                     target: "loading",
@@ -664,6 +695,7 @@ export const mapMachine = createMachine(
           PERFORM_SEMANTIC_SEARCH: { actions: "performSemanticSearch" },
           SET_MIN_RATING: { actions: "setMinRating" },
           SET_VISIT_STATUSES: { actions: "setVisitStatuses" },
+          SET_TIER_LIST_IDS: { actions: "setTierListIds" },
           CLEAR_FILTERS: { actions: "clearFilters" },
           SET_ERROR: { actions: "setError" },
           CLEAR_ERROR: { actions: "clearError" },
