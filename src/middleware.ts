@@ -129,7 +129,13 @@ export async function middleware(request: NextRequest) {
 
   // Use Nhost's handleNhostMiddleware for authentication
   return handleNhostMiddleware(request, () => {
-    return NextResponse.redirect(new URL("/sign-in", request.url));
+    const signInUrl = new URL("/sign-in", request.url);
+    const returnTo = request.nextUrl.pathname + request.nextUrl.search;
+    // Only pass returnTo for non-default routes
+    if (returnTo !== "/" && returnTo !== "/cellars") {
+      signInUrl.searchParams.set("returnTo", returnTo);
+    }
+    return NextResponse.redirect(signInUrl);
   });
 }
 

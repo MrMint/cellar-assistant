@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createNhostClient } from "@/lib/nhost/server";
+import { sanitizeReturnTo } from "@/utilities/sanitize-return-to";
 
 export async function revalidateAfterAuthChange() {
   revalidatePath("/", "layout");
@@ -23,6 +24,8 @@ export async function signOut() {
 export async function signIn(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
+  const returnTo =
+    sanitizeReturnTo(formData.get("returnTo") as string) ?? "/cellars";
 
   if (!email || !password) {
     throw new Error("Email and password are required");
@@ -53,7 +56,7 @@ export async function signIn(formData: FormData) {
       });
 
       revalidatePath("/", "layout");
-      redirect("/cellars");
+      redirect(returnTo);
     }
 
     throw new Error("Sign in failed - no session created");
@@ -92,12 +95,14 @@ export async function signUp(formData: FormData) {
 export async function getProviderSignInUrl(
   provider: "google" | "discord" | "facebook",
   origin: string,
+  returnTo?: string,
 ) {
   const nhost = await createNhostClient();
+  const destination = sanitizeReturnTo(returnTo) ?? "/cellars";
 
   try {
     const url = nhost.auth.signInProviderURL(provider, {
-      redirectTo: `${origin}/cellars`,
+      redirectTo: `${origin}${destination}`,
     });
     return url;
   } catch (error) {
