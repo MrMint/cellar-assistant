@@ -40,25 +40,25 @@ const PLACEHOLDER_VARIANT: "typewriter" | "fade" = "typewriter";
 
 const MAP_SEARCH_EXAMPLES_DESKTOP = [
   "Search places...",
-  "cozy wine bar",
-  "craft brewery with food",
-  "good coffee nearby",
-  "Starbucks",
-  "speakeasy cocktail bar",
-  "rooftop bar",
-  "Total Wine",
-  "date night spot",
-  "natural wine",
+  "cozy wine bar...",
+  "craft brewery with food...",
+  "good coffee nearby...",
+  "Starbucks...",
+  "speakeasy cocktail bar...",
+  "rooftop bar...",
+  "Total Wine...",
+  "date night spot...",
+  "natural wine...",
 ];
 
 const MAP_SEARCH_EXAMPLES_MOBILE = [
   "Search places...",
-  "wine bar",
-  "craft beer",
-  "Starbucks",
-  "good coffee",
-  "cocktail spot",
-  "happy hour",
+  "wine bar...",
+  "craft beer...",
+  "Starbucks...",
+  "good coffee...",
+  "cocktail spot...",
+  "happy hour...",
 ];
 
 interface MapControlsProps {

@@ -1,4 +1,4 @@
-import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { getMultipleEnumOptions } from "@/lib/enums/server";
 import { EnumProvider } from "@/components/providers/EnumProvider";
 import { SpiritOnboarding } from "@/components/spirit/SpiritOnboarding";
 import { createEnumQueryFn } from "@/lib/urql/server";

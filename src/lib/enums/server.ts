@@ -1,8 +1,8 @@
 import { unstable_cache } from "next/cache";
 import { cache } from "react";
-import { GET_ENUM_VALUES } from "./provider";
-import type { EnumKey, EnumValue } from "./registry";
-import { ENUM_REGISTRY } from "./registry";
+import { GET_ENUM_VALUES } from "@cellar-assistant/shared/enums/provider";
+import type { EnumKey, EnumValue } from "@cellar-assistant/shared/enums/registry";
+import { ENUM_REGISTRY } from "@cellar-assistant/shared/enums/registry";
 
 export interface EnumOption<T extends string = string> {
   value: T;

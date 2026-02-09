@@ -1,4 +1,4 @@
-import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { getMultipleEnumOptions } from "@/lib/enums/server";
 import { notFound } from "next/navigation";
 import { BeerForm } from "@/components/beer/BeerForm";
 import { GetBeerEditQuery } from "@/components/beer/fragments";

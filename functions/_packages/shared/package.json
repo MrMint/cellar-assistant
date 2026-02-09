@@ -5,6 +5,17 @@
   "main": "./index.ts",
   "module": "./index.ts",
   "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./gql": "./gql/index.ts",
+    "./gql/graphql": "./gql/graphql.ts",
+    "./utility": "./utility/index.ts",
+    "./queries": "./queries/index.ts",
+    "./enums": "./enums/index.ts",
+    "./enums/provider": "./enums/provider.ts",
+    "./enums/registry": "./enums/registry.ts",
+    "./places": "./places/index.ts"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

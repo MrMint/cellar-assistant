@@ -1,4 +1,4 @@
-import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { getMultipleEnumOptions } from "@/lib/enums/server";
 import { CoffeeOnboarding } from "@/components/coffee/CoffeeOnboarding";
 import { EnumProvider } from "@/components/providers/EnumProvider";
 import { createEnumQueryFn } from "@/lib/urql/server";
