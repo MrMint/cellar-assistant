@@ -1,12 +1,12 @@
 "use client";
 
 import {
+  AddLocationAlt,
   Close,
   DarkMode,
   Language,
   LightMode,
   LocationOn,
-  Refresh,
   Search,
 } from "@mui/icons-material";
 import {
@@ -18,17 +18,52 @@ import {
   Stack,
   Tooltip,
 } from "@mui/joy";
+import { useEffect, useRef, useState } from "react";
+import { AnimatedPlaceholder } from "@/components/common/AnimatedPlaceholder";
+import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useMapActions, useMapCore, useMapUI } from "../hooks/useMapMachine";
+import {
+  useMapActions,
+  useMapCore,
+  useMapData,
+  useMapPinPlacement,
+  useMapUI,
+} from "../hooks/useMapMachine";
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
 import { useTierListFilter } from "../hooks/useTierListFilter";
 import { MapFilter } from "./MapFilter";
 
+const SEARCH_DEBOUNCE_MS = 1500;
+
+// Toggle between "typewriter" and "fade" to compare animation styles
+const PLACEHOLDER_VARIANT: "typewriter" | "fade" = "typewriter";
+
+const MAP_SEARCH_EXAMPLES_DESKTOP = [
+  "Search places...",
+  "cozy wine bar",
+  "craft brewery with food",
+  "good coffee nearby",
+  "Starbucks",
+  "speakeasy cocktail bar",
+  "rooftop bar",
+  "Total Wine",
+  "date night spot",
+  "natural wine",
+];
+
+const MAP_SEARCH_EXAMPLES_MOBILE = [
+  "Search places...",
+  "wine bar",
+  "craft beer",
+  "Starbucks",
+  "good coffee",
+  "cocktail spot",
+  "happy hour",
+];
+
 interface MapControlsProps {
   // Action props
-  onRefresh: () => void;
   onLocationClick?: () => void;
-  loading?: boolean;
 
   // Data props (for counts)
   counts?: {
@@ -58,9 +93,7 @@ interface MapControlsProps {
  * - Optimized re-renders through granular selectors
  */
 export function MapControls({
-  onRefresh,
   onLocationClick,
-  loading = false,
   counts,
   variant = "auto",
   showSearch = true,
@@ -91,6 +124,51 @@ export function MapControls({
     setGlobalSearch,
   } = useMapSearchParams();
 
+  // Decouple input value from URL state to prevent text reversion during typing.
+  // Local state updates instantly; URL state is debounced to reduce expensive
+  // semantic search calls (embedding generation + vector query).
+  const [inputValue, setInputValue] = useState(search);
+  const [isFocused, setIsFocused] = useState(false);
+  const isLocalChange = useRef(false);
+
+  // Animated placeholder examples
+  const examples = isMobile
+    ? MAP_SEARCH_EXAMPLES_MOBILE
+    : MAP_SEARCH_EXAMPLES_DESKTOP;
+  const isPlaceholderActive = !isFocused && !inputValue;
+
+  const typewriterPlaceholder = useAnimatedPlaceholder({
+    examples,
+    enabled: isPlaceholderActive && PLACEHOLDER_VARIANT === "typewriter",
+  });
+
+  // Sync external → local (clear button, URL navigation, back/forward)
+  useEffect(() => {
+    if (!isLocalChange.current) {
+      setInputValue(search);
+    }
+    isLocalChange.current = false;
+  }, [search]);
+
+  // Debounced sync local → URL (triggers semantic search via useSearchParamsSync)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(inputValue);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [inputValue, setSearch]);
+
+  const handleSearchChange = (value: string) => {
+    isLocalChange.current = true;
+    setInputValue(value);
+  };
+
+  const handleSearchClear = () => {
+    isLocalChange.current = true;
+    setInputValue("");
+    setSearch(""); // bypass debounce for instant clear
+  };
+
   // Core state (userId needed for tier list query)
   const { userId, isDarkMode } = useMapCore();
 
@@ -102,7 +180,10 @@ export function MapControls({
     loading: tierListsLoading,
   } = useTierListFilter(tierListIds, userId);
   const { isDrawerOpen } = useMapUI();
-  const { toggleDarkMode } = useMapActions();
+  const { isLoading } = useMapData();
+  const { toggleDarkMode, enterPinPlacement, exitPinPlacement } =
+    useMapActions();
+  const { isPlacing } = useMapPinPlacement();
 
   // Helper function to get position styles
   const getPositionStyles = (pos: string) => {
@@ -117,67 +198,97 @@ export function MapControls({
   };
 
   // Shared search input
+  const fallbackPlaceholder = "Search places...";
+
   const SearchInput = (
-    <Input
-      placeholder={
-        isMobile
-          ? "Search places..."
-          : "Search places, items, or descriptions..."
-      }
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      startDecorator={<Search />}
-      endDecorator={
-        <Stack direction="row" spacing={0} sx={{ alignItems: "center" }}>
-          {search && (
-            <IconButton
-              variant="plain"
-              color="neutral"
-              onClick={() => setSearch("")}
+    <Box sx={{ position: "relative" }}>
+      <Input
+        placeholder={
+          PLACEHOLDER_VARIANT === "typewriter"
+            ? isPlaceholderActive
+              ? typewriterPlaceholder
+              : fallbackPlaceholder
+            : isPlaceholderActive && PLACEHOLDER_VARIANT === "fade"
+              ? ""
+              : fallbackPlaceholder
+        }
+        value={inputValue}
+        onChange={(e) => handleSearchChange(e.target.value)}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        startDecorator={
+          <Search
+            sx={{
+              ...(isLoading && {
+                animation: "pulse 1.5s ease-in-out infinite",
+                "@keyframes pulse": {
+                  "0%, 100%": { opacity: 1 },
+                  "50%": { opacity: 0.3 },
+                },
+              }),
+            }}
+          />
+        }
+        endDecorator={
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+            {inputValue && (
+              <IconButton
+                variant="plain"
+                color="neutral"
+                onClick={handleSearchClear}
+                size="sm"
+                sx={{
+                  minWidth: "auto",
+                  minHeight: "auto",
+                  padding: "4px",
+                }}
+              >
+                <Close sx={{ fontSize: "18px" }} />
+              </IconButton>
+            )}
+            <Tooltip
+              title={
+                globalSearch ? "Searching globally" : "Searching in viewport"
+              }
+              variant="soft"
               size="sm"
-              sx={{
-                minWidth: "auto",
-                minHeight: "auto",
-                padding: "4px",
-              }}
             >
-              <Close sx={{ fontSize: "18px" }} />
-            </IconButton>
-          )}
-          <Tooltip
-            title={globalSearch ? "Searching globally" : "Searching in viewport"}
-            variant="soft"
-            size="sm"
-          >
-            <IconButton
-              variant={globalSearch ? "soft" : "plain"}
-              color={globalSearch ? "primary" : "neutral"}
-              onClick={() => setGlobalSearch(!globalSearch)}
-              size="sm"
-              sx={{
-                minWidth: "auto",
-                minHeight: "auto",
-                padding: "4px",
-              }}
-            >
-              <Language sx={{ fontSize: "18px" }} />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      }
-      sx={{
-        border: "none",
-        boxShadow: "none",
-        backgroundColor: "transparent",
-        "&:hover": { backgroundColor: "transparent" },
-        "&:focus-within": {
-          backgroundColor: "transparent",
-          borderColor: "primary.500",
+              <IconButton
+                variant={globalSearch ? "soft" : "plain"}
+                color={globalSearch ? "primary" : "neutral"}
+                onClick={() => setGlobalSearch(!globalSearch)}
+                size="sm"
+                sx={{
+                  minWidth: "auto",
+                  minHeight: "auto",
+                  padding: "4px",
+                }}
+              >
+                <Language sx={{ fontSize: "18px" }} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        }
+        sx={{
+          border: "none",
           boxShadow: "none",
-        },
-      }}
-      size="sm"
-    />
+          backgroundColor: "transparent",
+          "&:hover": { backgroundColor: "transparent" },
+          "&:focus-within": {
+            backgroundColor: "transparent",
+            borderColor: "primary.500",
+            boxShadow: "none",
+          },
+        }}
+        size="sm"
+      />
+      {PLACEHOLDER_VARIANT === "fade" && (
+        <AnimatedPlaceholder
+          examples={examples}
+          enabled={isPlaceholderActive}
+        />
+      )}
+    </Box>
   );
 
   // Shared filter + action controls row
@@ -228,13 +339,12 @@ export function MapControls({
         <Stack direction="row" spacing={0.5}>
           <IconButton
             variant="soft"
-            color="neutral"
-            onClick={onRefresh}
-            loading={loading}
+            color={isPlacing ? "danger" : "primary"}
+            onClick={isPlacing ? exitPinPlacement : enterPinPlacement}
             size="sm"
-            title="Refresh places"
+            title={isPlacing ? "Cancel adding place" : "Add a new place"}
           >
-            <Refresh />
+            {isPlacing ? <Close /> : <AddLocationAlt />}
           </IconButton>
 
           {onLocationClick && (
@@ -410,11 +520,7 @@ export function FullMapControls(props: MapControlsProps) {
  * ```tsx
  * // Must be wrapped in MapMachineProvider
  * <MapMachineProvider userId={userId} urqlClient={client}>
- *   <UnifiedMapControlsXState
- *     onRefresh={handleRefresh}
- *     onLocationClick={handleLocation}
- *     loading={isLoading}
- *   />
+ *   <MapControls onLocationClick={handleLocation} />
  * </MapMachineProvider>
  * ```
  */

@@ -186,7 +186,7 @@ function placesToGeoJSON(
 
   const poiFeatures: GeoJSON.Feature<GeoJSON.Point, POIFeatureProperties>[] =
     places.map((place) => {
-      const relevance = place.overallRelevance ?? place.relevanceScore ?? 50;
+      const relevance = place.overallRelevance ?? 50;
       const dominant = getDominantItemType(place.itemTypeScores);
       const color = dominant
         ? ITEM_TYPE_COLORS[dominant]

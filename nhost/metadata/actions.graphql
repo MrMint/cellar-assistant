@@ -34,7 +34,9 @@ type Mutation {
 }
 
 type Mutation {
-  seed_category_vectors: seed_category_vectors_result
+  reviewUserPlace(
+    input: ReviewUserPlaceInput!
+  ): ReviewUserPlaceOutput
 }
 
 type Query {
@@ -278,10 +280,26 @@ type MenuAnalysis {
   extraction_method: String
 }
 
-type seed_category_vectors_result {
-  success: Boolean!
-  totalLabels: Int
-  successCount: Int
-  errorCount: Int
+input ReviewUserPlaceInput {
+  name: String!
+  categories: [String!]!
+  latitude: Float!
+  longitude: Float!
+  street_address: String
+  locality: String
+  region: String
+  country_code: String
+  phone: String
+  website: String
+  description: String
+}
+
+type ReviewUserPlaceOutput {
+  approved: Boolean!
+  confidence_adjustment: Float!
+  enriched_description: String
+  suggested_categories: [String!]
+  rejection_reason: String
+  flags: [String!]!
 }
 

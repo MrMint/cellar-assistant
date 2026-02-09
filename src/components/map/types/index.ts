@@ -5,6 +5,8 @@
  * This is the SINGLE SOURCE OF TRUTH for all map-related types
  */
 
+import type { UserPlaceCategory } from "@cellar-assistant/shared";
+
 // ============================================================================
 // Core Types
 // ============================================================================
@@ -25,33 +27,10 @@ export interface UserLocation {
 // Category & Filter Types
 // ============================================================================
 
-// Comprehensive PlaceCategory based on Overture Maps analysis
-// All 44 high-priority categories from the research
+// User-selectable categories come from shared; Overture Maps data adds more.
 export type PlaceCategory =
-  // Tier 1: Essential Categories (10)
-  | "restaurant"
-  | "bar"
-  | "cafe"
-  | "coffee_shop"
-  | "liquor_store"
-  | "winery"
-  | "brewery"
-  | "cocktail_bar"
-  | "wine_bar"
-  | "distillery"
-  // Tier 2: High Priority Categories (11)
-  | "pub"
-  | "beer_bar"
-  | "sports_bar"
-  | "lounge"
-  | "gastropub"
-  | "tapas_bar"
-  | "sake_bar"
-  | "whiskey_bar"
-  | "beer_garden"
-  | "wine_tasting_room"
-  | "coffee_roastery"
-  // Tier 3: Restaurant Types (8) - Strong beverage focus
+  | UserPlaceCategory
+  // Overture-only: Restaurant Types
   | "steakhouse"
   | "italian_restaurant"
   | "french_restaurant"
@@ -60,21 +39,17 @@ export type PlaceCategory =
   | "mexican_restaurant"
   | "thai_restaurant"
   | "chinese_restaurant"
-  // Tier 4: Retail Categories (7) - Beverage retail
+  // Overture-only: Retail
   | "grocery_store"
   | "supermarket"
   | "specialty_grocery_store"
   | "organic_grocery_store"
-  | "beer_wine_and_spirits"
   | "wine_wholesaler"
-  | "beverage_store"
-  // Tier 5: Hotels/Entertainment (4) - Massive venue counts
+  // Overture-only: Hotels/Entertainment
   | "hotel"
   | "resort"
   | "casino"
-  | "music_venue"
-  // Additional categories
-  | "specialty_store";
+  | "music_venue";
 
 export type ItemType = "wine" | "beer" | "spirit" | "coffee" | "sake";
 export type VisitStatus = "visited" | "unvisited" | "favorites";
@@ -124,9 +99,6 @@ export interface PlaceResult {
   overallQuality?: number; // 0-100 overall place quality score
   itemTypeScores?: Record<ItemType, number>; // 0-100 score for each item type
   overallRelevance?: number; // 0-100 overall relevance based on active filters
-  // Legacy fields (deprecated - use new scoring system)
-  relevanceScore?: number; // 0-100 based on how well it matches the search criteria
-  matchedItemTypes?: ItemType[]; // Which item types this place matches
 }
 
 // Alias for backward compatibility
@@ -159,6 +131,16 @@ export interface SemanticPlaceResult extends PlaceResult {
 }
 
 // ============================================================================
+// Geocoding Types
+// ============================================================================
+
+export interface GeocodedLocation {
+  latitude: number;
+  longitude: number;
+  displayName: string;
+}
+
+// ============================================================================
 // Search Types
 // ============================================================================
 
@@ -173,7 +155,6 @@ export interface MapSearchParams {
   tierListIds?: string[];
   // Semantic search
   semanticQuery?: string;
-  maxSemanticDistance?: number;
   /** When true, semantic search ignores viewport bounds (searches globally). Default true. */
   globalSearch?: boolean;
 
@@ -187,6 +168,7 @@ export interface MapSearchResults {
   mapItems: MapDataItem[];
   semanticResults?: SemanticPlaceResult[];
   isSemanticSearch: boolean;
+  geocodeResult?: GeocodedLocation;
   searchMetadata: {
     itemTypes: ItemType[];
     totalResults: number;

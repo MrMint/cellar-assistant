@@ -5,6 +5,8 @@
 export const CacheTags = {
   // Global tags
   searchVectors: "search-vectors",
+  geocode: "geocode",
+  reverseGeocode: "reverse-geocode",
   items: "items",
   reviews: "reviews",
 

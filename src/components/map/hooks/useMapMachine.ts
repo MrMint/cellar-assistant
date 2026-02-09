@@ -90,6 +90,19 @@ export function useMapData() {
       semanticResults: state.context.semanticResults,
       isLoading: state.matches({ idle: { data: "loading" } }),
       placesError: state.context.placesError,
+      geocodeTarget: state.context.geocodeTarget,
+    }),
+    shallowEqual,
+  );
+}
+
+// Pin placement state selector
+export function useMapPinPlacement() {
+  const actorRef = useMapMachineActor();
+  return useSelector(
+    actorRef,
+    (state) => ({
+      isPlacing: state.matches({ idle: { pinPlacement: "placing" } }),
     }),
     shallowEqual,
   );
@@ -146,8 +159,15 @@ export function useMapActions() {
         send({ type: "SET_GLOBAL_SEARCH", globalSearch }),
       clearFilters: () => send({ type: "CLEAR_FILTERS" }),
 
+      // Geocode actions
+      clearGeocodeTarget: () => send({ type: "CLEAR_GEOCODE_TARGET" }),
+
       // Data actions
       refreshPlaces: () => send({ type: "REFRESH_PLACES" }),
+
+      // Pin placement actions
+      enterPinPlacement: () => send({ type: "ENTER_PIN_PLACEMENT" }),
+      exitPinPlacement: () => send({ type: "EXIT_PIN_PLACEMENT" }),
     }),
     [send],
   );

@@ -24,6 +24,7 @@
 - "!include public_coffee_species.yaml"
 - "!include public_coffees.yaml"
 - "!include public_country.yaml"
+- "!include public_duplicate_place_results.yaml"
 - "!include public_friend_request_status.yaml"
 - "!include public_friend_requests.yaml"
 - "!include public_friends.yaml"

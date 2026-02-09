@@ -1,6 +1,7 @@
 import { assign, createMachine, fromPromise } from "xstate";
 import { searchMapPlaces } from "@/app/(authenticated)/map/actions";
 import type {
+  GeocodedLocation,
   ItemType,
   MapBounds,
   MapDataItem,
@@ -46,6 +47,9 @@ interface MapContext {
   // Semantic search results (now handled by unified service)
   semanticResults: SemanticPlaceResult[];
   semanticError: string | null;
+
+  // Geocode navigation target (set when address search resolves)
+  geocodeTarget?: GeocodedLocation;
 }
 
 // Events (actions that can trigger state changes)
@@ -72,7 +76,10 @@ type MapEvent =
   | { type: "CLEAR_FILTERS" }
   | { type: "REFRESH_PLACES" }
   | { type: "UPDATE_SELECTED_PLACE"; place: Place }
-  | { type: "MAP_CLICK" };
+  | { type: "CLEAR_GEOCODE_TARGET" }
+  | { type: "MAP_CLICK" }
+  | { type: "ENTER_PIN_PLACEMENT" }
+  | { type: "EXIT_PIN_PLACEMENT" };
 
 // Services (side effects)
 const fetchPlacesService = fromPromise(
@@ -88,7 +95,6 @@ const fetchPlacesService = fromPromise(
       searchQuery: string;
       isSemanticSearch: boolean;
       globalSearch: boolean;
-      userLocation: UserLocation;
       userId: string;
     };
   }) => {
@@ -101,7 +107,6 @@ const fetchPlacesService = fromPromise(
       searchQuery,
       isSemanticSearch,
       globalSearch,
-      userLocation,
       userId,
     } = input;
 
@@ -127,6 +132,7 @@ const fetchPlacesService = fromPromise(
         mapItems: result.mapItems,
         semanticResults: result.semanticResults,
         isSemanticSearch: result.isSemanticSearch,
+        geocodeResult: result.geocodeResult,
       };
     } catch (error) {
       console.error("Error fetching places:", error);
@@ -310,25 +316,51 @@ const actions = {
 
   setPlaces: assign({
     places: ({ event }) => {
-      // Extract places from the service result
       if (event.type === "xstate.done.actor.fetchPlaces") {
         return event.output.places;
       }
       return [];
     },
     mapItems: ({ event }) => {
-      // Extract mapItems from the service result
       if (event.type === "xstate.done.actor.fetchPlaces") {
         return event.output.mapItems;
       }
       return [];
     },
     semanticResults: ({ event }) => {
-      // Extract semantic results from the unified service
       if (event.type === "xstate.done.actor.fetchPlaces") {
         return event.output.semanticResults || [];
       }
       return [];
+    },
+    // When the server returns a geocode result, store it so the map can fly there.
+    // Clear semantic search mode — the bounded search will fill in nearby places.
+    geocodeTarget: ({ event }) => {
+      if (event.type === "xstate.done.actor.fetchPlaces") {
+        return event.output.geocodeResult ?? undefined;
+      }
+      return undefined;
+    },
+    isSemanticSearch: ({ context, event }) => {
+      if (event.type === "xstate.done.actor.fetchPlaces" && event.output.geocodeResult) {
+        return false;
+      }
+      return context.isSemanticSearch;
+    },
+    globalSearch: ({ context, event }) => {
+      if (event.type === "xstate.done.actor.fetchPlaces" && event.output.geocodeResult) {
+        return false;
+      }
+      return context.globalSearch;
+    },
+    // Clear the search bar text when a geocode resolves — the user searched
+    // for an address, the map flew there, and the bounded query will show
+    // nearby places. Keeping stale address text would be confusing.
+    searchQuery: ({ context, event }) => {
+      if (event.type === "xstate.done.actor.fetchPlaces" && event.output.geocodeResult) {
+        return "";
+      }
+      return context.searchQuery;
     },
     placesError: null,
     semanticError: null,
@@ -365,6 +397,10 @@ const actions = {
       }
       return context.selectedPlace;
     },
+  }),
+
+  clearGeocodeTarget: assign({
+    geocodeTarget: undefined,
   }),
 
   clearSemanticResults: assign({
@@ -410,6 +446,7 @@ export const mapMachine = createMachine(
       placesError: null,
       semanticResults: [],
       semanticError: null,
+      geocodeTarget: undefined,
     }),
 
     states: {
@@ -484,6 +521,10 @@ export const mapMachine = createMachine(
                     target: "closed",
                     actions: "clearSelection",
                   },
+                  ENTER_PIN_PLACEMENT: {
+                    target: "closed",
+                    actions: "clearSelection",
+                  },
                   SELECT_PLACE: {
                     actions: "selectPlace", // Stay open, just change selection
                   },
@@ -540,6 +581,9 @@ export const mapMachine = createMachine(
                   // Bounds changes are the sole trigger for data fetches.
                   SET_USER_LOCATION: {
                     actions: "setUserLocation",
+                  },
+                  CLEAR_GEOCODE_TARGET: {
+                    actions: "clearGeocodeTarget",
                   },
                   SET_ITEM_TYPES: [
                     {
@@ -629,17 +673,6 @@ export const mapMachine = createMachine(
                     searchQuery: context.searchQuery,
                     isSemanticSearch: context.isSemanticSearch,
                     globalSearch: context.globalSearch,
-                    userLocation: context.userLocation || {
-                      // Default to center of bounds if no user location
-                      latitude:
-                        ((context.bounds?.north ?? 0) +
-                          (context.bounds?.south ?? 0)) /
-                        2,
-                      longitude:
-                        ((context.bounds?.east ?? 0) +
-                          (context.bounds?.west ?? 0)) /
-                        2,
-                    },
                     userId: context.userId,
                   }),
                   onDone: {
@@ -746,6 +779,30 @@ export const mapMachine = createMachine(
                       event.type === "SET_ERROR" && event.error === null,
                     actions: "clearError",
                   },
+                },
+              },
+            },
+          },
+
+          // Pin placement sub-state (Uber-style "add place" flow)
+          pinPlacement: {
+            initial: "inactive",
+            states: {
+              inactive: {
+                on: {
+                  ENTER_PIN_PLACEMENT: {
+                    target: "placing",
+                    actions: ["clearSelection"],
+                  },
+                },
+              },
+              placing: {
+                on: {
+                  EXIT_PIN_PLACEMENT: {
+                    target: "inactive",
+                  },
+                  // Absorb map clicks while placing — don't select places
+                  MAP_CLICK: {},
                 },
               },
             },

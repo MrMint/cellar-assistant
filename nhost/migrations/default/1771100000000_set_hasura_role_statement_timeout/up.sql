@@ -1,5 +1,5 @@
--- Set a 10-second statement timeout on the nhost_hasura role.
--- This caps all queries Hasura runs on behalf of users, preventing
--- runaway map/search queries from exhausting PostgreSQL shared memory.
--- Admin and maintenance operations use different roles and are unaffected.
-ALTER ROLE nhost_hasura SET statement_timeout = '10s';
+-- REVERTED: Role-level statement timeout was too blunt — it caused DDL
+-- migrations to fail and doesn't allow per-query granularity.
+-- The timeout is now reset (undone by migration 1770656365000).
+-- This migration is kept as a no-op so Hasura's migration history stays consistent.
+SELECT 1;

@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/joy";
 import { AnimatePresence, motion } from "framer-motion";
+import { useCallback, useRef, useState } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { ITEM_TYPE_COLORS } from "../constants/colors";
 import type { ItemType, PlaceResult, SemanticPlaceResult } from "../types";
@@ -23,6 +24,7 @@ interface SearchResultsListProps {
   onPlaceSelect: (place: PlaceResult) => void;
   onCenterOnPlace: (place: PlaceResult) => void;
   onClose: () => void;
+  isDetailOpen?: boolean;
 }
 
 function formatCategoryName(category: string) {
@@ -54,10 +56,35 @@ export function SearchResultsList({
   onPlaceSelect,
   onCenterOnPlace,
   onClose,
+  isDetailOpen = false,
 }: SearchResultsListProps) {
   const isDesktop = useMediaQuery("(min-width: 769px)");
   const hasSidebar = useMediaQuery("(min-width: 600px)");
   const sidebarOffset = hasSidebar ? 56 : 0;
+
+  // Swipe-down-to-dismiss state for mobile drag handle
+  const dragStartYRef = useRef<number | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+
+  const handleDragTouchStart = useCallback((e: React.TouchEvent) => {
+    dragStartYRef.current = e.touches[0].clientY;
+    setDragOffset(0);
+  }, []);
+
+  const handleDragTouchMove = useCallback((e: React.TouchEvent) => {
+    if (dragStartYRef.current === null) return;
+    const delta = e.touches[0].clientY - dragStartYRef.current;
+    // Only allow downward drag
+    setDragOffset(Math.max(0, delta));
+  }, []);
+
+  const handleDragTouchEnd = useCallback(() => {
+    if (dragOffset > 80) {
+      onClose();
+    }
+    dragStartYRef.current = null;
+    setDragOffset(0);
+  }, [dragOffset, onClose]);
 
   const handleResultClick = (place: SemanticPlaceResult) => {
     onCenterOnPlace(place);
@@ -70,13 +97,17 @@ export function SearchResultsList({
         <motion.div
           key="desktop"
           initial={{ x: -400, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
+          animate={
+            isDetailOpen
+              ? { x: -20, opacity: 0.4 }
+              : { x: 0, opacity: 1 }
+          }
           exit={{ x: -400, opacity: 0 }}
           transition={{
             type: "spring",
-            stiffness: 500,
-            damping: 35,
-            opacity: { duration: 0.15 },
+            stiffness: 400,
+            damping: 30,
+            opacity: { duration: 0.2 },
           }}
           style={{
             position: "fixed",
@@ -90,6 +121,7 @@ export function SearchResultsList({
             borderRight: "1px solid var(--joy-palette-divider)",
             display: "flex",
             flexDirection: "column",
+            pointerEvents: isDetailOpen ? "none" : "auto",
           }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
@@ -162,13 +194,17 @@ export function SearchResultsList({
       <motion.div
         key="mobile"
         initial={{ y: "100%", opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+        animate={
+          isDetailOpen
+            ? { y: 40, opacity: 0.5 }
+            : { y: 0, opacity: 1 }
+        }
         exit={{ y: "100%", opacity: 0 }}
         transition={{
           type: "spring",
-          stiffness: 500,
-          damping: 35,
-          opacity: { duration: 0.15 },
+          stiffness: 400,
+          damping: 30,
+          opacity: { duration: 0.2 },
         }}
         style={{
           position: "fixed",
@@ -183,6 +219,8 @@ export function SearchResultsList({
           zIndex: 1099,
           display: "flex",
           flexDirection: "column",
+          pointerEvents: isDetailOpen ? "none" : "auto",
+          transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
         }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
@@ -190,20 +228,26 @@ export function SearchResultsList({
       >
         {/* Drag handle */}
         <Box
+          onTouchStart={handleDragTouchStart}
+          onTouchMove={handleDragTouchMove}
+          onTouchEnd={handleDragTouchEnd}
           sx={{
             width: "100%",
             display: "flex",
             justifyContent: "center",
             py: 1,
             flexShrink: 0,
+            cursor: "grab",
+            touchAction: "none",
           }}
         >
           <Box
             sx={{
               width: 48,
               height: 5,
-              backgroundColor: "neutral.400",
+              backgroundColor: dragOffset > 0 ? "neutral.500" : "neutral.400",
               borderRadius: 3,
+              transition: "background-color 0.15s ease",
             }}
           />
         </Box>

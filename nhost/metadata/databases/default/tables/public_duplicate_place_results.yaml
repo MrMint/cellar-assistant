@@ -1,0 +1,8 @@
+table:
+  name: duplicate_place_results
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns: '*'
+      filter: {}

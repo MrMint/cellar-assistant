@@ -114,9 +114,9 @@ const UserMenu = ({ user, placement, onSignOut }: UserMenuProps) => (
 const NAV_ITEMS: NavItem[] = [
   { href: "/cellars", icon: <MdWarehouse />, title: "Cellars" },
   { href: "/search", icon: <MdSearch />, title: "Search" },
+  { href: "/map", icon: <MdMap />, title: "Map" },
   { href: "/tier-lists", icon: <MdFormatListNumbered />, title: "Tier Lists" },
   { href: "/rankings", icon: <FaRankingStar />, title: "Rankings" },
-  { href: "/map", icon: <MdMap />, title: "Map" },
   { href: "/favorites", icon: <MdFavorite />, title: "Favorites" },
   { href: "/recipes", icon: <MdMenuBook />, title: "Recipes" },
   { href: "/friends", icon: <MdGroup />, title: "Friends" },
@@ -164,8 +164,8 @@ const NavigationList = ({
   </List>
 );
 
-// Width of each nav icon button slot (icon + padding)
-const ITEM_WIDTH = 48;
+// Width of each nav icon button slot (icon + ListItem padding)
+const ITEM_WIDTH = 60;
 // Reserve space for the "more" button + user avatar
 const RESERVED_WIDTH = ITEM_WIDTH * 2;
 
@@ -219,7 +219,11 @@ const MobileNavigationList = ({
       <List
         orientation="horizontal"
         size="sm"
-        sx={{ flexWrap: "nowrap", width: "100%" }}
+        sx={{
+          flexWrap: "nowrap",
+          width: "100%",
+          justifyContent: "space-evenly",
+        }}
       >
         {visibleItems.map((item) => (
           <NavigationItem
@@ -262,7 +266,6 @@ const MobileNavigationList = ({
             </Dropdown>
           </ListItem>
         )}
-        <Box flexGrow={1} />
         <UserMenu user={user} placement="top-start" onSignOut={onSignOut} />
       </List>
     </Box>

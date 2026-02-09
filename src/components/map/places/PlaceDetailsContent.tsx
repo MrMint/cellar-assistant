@@ -159,7 +159,7 @@ function getOpenStatusWithHours(openingHours: Place["opening_hours"]): {
   return { text: isOpen ? "Open" : "Closed", isOpen };
 }
 
-function getCategoryIcon(category: string) {
+export function getCategoryIcon(category: string) {
   switch (category) {
     case "restaurant":
       return Restaurant;

@@ -3,7 +3,14 @@
 import { readFragment } from "@cellar-assistant/shared/gql";
 import { Alert, Box, CircularProgress } from "@mui/joy";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { useQuery } from "urql";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
@@ -52,6 +59,10 @@ function resolveNextState(
   return current;
 }
 
+export interface PlaceDetailsDrawerRef {
+  collapse: () => void;
+}
+
 interface PlaceDetailsDrawerProps {
   place: Place | null;
   open: boolean;
@@ -59,12 +70,10 @@ interface PlaceDetailsDrawerProps {
   userId: string;
 }
 
-export function PlaceDetailsDrawer({
-  place,
-  open,
-  onClose,
-  userId,
-}: PlaceDetailsDrawerProps) {
+export const PlaceDetailsDrawer = forwardRef<
+  PlaceDetailsDrawerRef,
+  PlaceDetailsDrawerProps
+>(function PlaceDetailsDrawer({ place, open, onClose, userId }, ref) {
   const [dragStartY, setDragStartY] = useState<number | null>(null);
   const [dragCurrentY, setDragCurrentY] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -76,6 +85,10 @@ export function PlaceDetailsDrawer({
   const [lastDragTime, setLastDragTime] = useState(0);
   const drawerRef = useRef<HTMLDivElement>(null);
   const justDraggedRef = useRef(false);
+
+  useImperativeHandle(ref, () => ({
+    collapse: () => setDrawerState("collapsed"),
+  }));
 
   // Fetch detailed place data with menu items
   const [{ data: placeDetails, fetching: loadingDetails, error }, refetch] =
@@ -184,6 +197,7 @@ export function PlaceDetailsDrawer({
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (dragStartY === null) return;
+    e.preventDefault();
     const currentY = e.touches[0].clientY;
     const now = Date.now();
     const timeDiff = now - lastDragTime;
@@ -331,6 +345,7 @@ export function PlaceDetailsDrawer({
               overflowY: "auto",
               borderRight: "1px solid var(--joy-palette-divider)",
               cursor: "default",
+              overscrollBehavior: "contain",
             }}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
@@ -368,31 +383,7 @@ export function PlaceDetailsDrawer({
   // ── Mobile Layout ───────────────────────────────────────────────────
 
   return (
-    <>
-      {/* Backdrop */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.2)",
-              zIndex: 1099,
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Bottom sheet */}
-      <AnimatePresence>
+    <AnimatePresence>
         {open && (
           <motion.div
             initial={{ y: "100%", opacity: 0 }}
@@ -421,6 +412,7 @@ export function PlaceDetailsDrawer({
               boxShadow: "0 -8px 32px rgba(0,0,0,0.15)",
               cursor: "default",
               overflow: "hidden",
+              overscrollBehavior: "contain",
             }}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseMove={(e) => e.stopPropagation()}
@@ -454,6 +446,7 @@ export function PlaceDetailsDrawer({
                   py: 1.5,
                   cursor: isDragging ? "grabbing" : "grab",
                   userSelect: "none",
+                  touchAction: "none",
                 }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
@@ -499,7 +492,6 @@ export function PlaceDetailsDrawer({
             </Box>
           </motion.div>
         )}
-      </AnimatePresence>
-    </>
+    </AnimatePresence>
   );
-}
+});

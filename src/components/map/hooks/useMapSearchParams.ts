@@ -37,15 +37,14 @@ function parseVisitStatuses(raw: string[]): VisitStatus[] {
 
 /**
  * Hook providing nuqs-backed URL state for all map filter parameters.
- * Search is debounced at 500ms; other filters update immediately.
+ * Search updates URL immediately; debouncing is handled at the component level
+ * (MapControls) to decouple the input value from URL state and prevent text reversion.
  * Values are validated against known types before being returned.
  */
 export function useMapSearchParams() {
   const [search, setSearch] = useQueryState(
     "search",
-    parseAsString.withDefault("").withOptions({
-      throttleMs: 500,
-    }),
+    parseAsString.withDefault(""),
   );
 
   const [rawItemTypes, setItemTypes] = useQueryState(
@@ -64,6 +63,9 @@ export function useMapSearchParams() {
     "tierLists",
     parseAsArrayOf(parseAsString).withDefault([]),
   );
+
+  // Deep-link to a specific place (e.g. after creating one)
+  const [placeId, setPlaceId] = useQueryState("placeId", parseAsString);
 
   // Global search defaults to true — semantic search ignores viewport bounds
   const [globalSearch, setGlobalSearchRaw] = useQueryState(
@@ -94,6 +96,7 @@ export function useMapSearchParams() {
     minRating,
     visitStatuses: parseVisitStatuses(rawVisitStatuses),
     tierLists: rawTierLists,
+    placeId,
     globalSearch,
 
     // Setters
@@ -106,6 +109,10 @@ export function useMapSearchParams() {
       setVisitStatuses(value.length > 0 ? value : null),
     setTierLists: (value: string[]) =>
       setTierLists(value.length > 0 ? value : null),
+    setPlaceId: (
+      value: string | null,
+      options?: { history?: "push" | "replace" },
+    ) => setPlaceId(value, options),
     setGlobalSearch: (value: boolean) =>
       setGlobalSearchRaw(value ? null : false),
 

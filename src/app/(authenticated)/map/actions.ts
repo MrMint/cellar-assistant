@@ -1,11 +1,11 @@
 "use server";
 
+import type { ResultOf } from "@cellar-assistant/shared";
 import { graphql } from "@cellar-assistant/shared/gql";
 import {
   calculateItemTypeMatches,
   calculateOverallQuality,
   calculateOverallRelevance,
-  calculatePlaceRelevance,
   mapItemTypesToCategories,
 } from "@/components/map/config/scoring";
 import type {
@@ -19,7 +19,7 @@ import type {
   SemanticPlaceResult,
   VisitStatus,
 } from "@/components/map/types";
-import { getCachedSearchVector } from "@/lib/cache";
+import { getCachedGeocode, getCachedSearchVector } from "@/lib/cache";
 import { adminQuery, serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
 
@@ -36,6 +36,20 @@ function toPgArray(
   const safe = validate ? values.filter((v) => validate.test(v)) : values;
   if (safe.length === 0) return null;
   return `{${safe.join(",")}}`;
+}
+
+/**
+ * Heuristic: does the query look like a street address?
+ * If true, we try geocoding before falling back to semantic search.
+ */
+function looksLikeAddress(query: string): boolean {
+  // Starts with a number (e.g., "123 Main St", "2136 N High St")
+  if (/^\d+\s/.test(query)) return true;
+  // Contains a US zip code
+  if (/\b\d{5}(-\d{4})?\b/.test(query)) return true;
+  // Number + comma pattern (e.g., "Elm St 42, Berlin")
+  if (/,\s*[A-Za-z]/.test(query) && /\d/.test(query)) return true;
+  return false;
 }
 
 // Label-type weights for category score aggregation (from seedCategoryVectors)
@@ -185,9 +199,17 @@ const SearchPlacesClusteredQuery = graphql(`
   }
 `);
 
+// Derived element types from the GraphQL queries (via gql.tada)
+type ClusteredItem = NonNullable<
+  ResultOf<typeof SearchPlacesClusteredQuery>["searchPlacesAdaptiveCluster"]
+>[number];
+type HybridItem = NonNullable<
+  ResultOf<typeof HybridPlaceSearchQuery>["searchPlacesHybrid"]
+>[number];
+
 // Transform raw query results to our standard format with relevance calculation
 function transformPlaceResult(
-  item: any,
+  item: ClusteredItem | HybridItem,
   searchParams?: MapSearchParams,
 ): PlaceResult {
   // Parse location coordinates from native PostGIS geometry object
@@ -195,24 +217,28 @@ function transformPlaceResult(
   // instead of JSON strings, eliminating the need for client-side JSON parsing.
   // PostGIS geography/geometry types are returned by GraphQL as objects with coordinates property.
   let coordinates: [number, number] = [0, 0];
-  if (item.location?.coordinates && Array.isArray(item.location.coordinates)) {
+  const loc = item.location as
+    | { coordinates: [number, number] }
+    | string
+    | null;
+  if (loc && typeof loc === "object" && "coordinates" in loc && Array.isArray(loc.coordinates)) {
     // Native PostGIS geometry object with coordinates array
-    coordinates = item.location.coordinates;
-  } else if (typeof item.location === "string") {
+    coordinates = loc.coordinates;
+  } else if (typeof loc === "string") {
     try {
       // Fallback: parse JSON string for backward compatibility (legacy function)
-      const locationData = JSON.parse(item.location);
+      const locationData = JSON.parse(loc);
       if (locationData.coordinates && Array.isArray(locationData.coordinates)) {
         coordinates = locationData.coordinates;
       }
     } catch (error) {
       console.error(
         `Failed to parse location for ${item.name}:`,
-        item.location,
+        loc,
         error,
       );
       // Fallback: try to parse as POINT string format
-      const match = item.location.match(/POINT\(([^)]+)\)/);
+      const match = loc.match(/POINT\(([^)]+)\)/);
       if (match) {
         const [lng, lat] = match[1].split(" ").map(Number);
         coordinates = [lng, lat];
@@ -220,91 +246,70 @@ function transformPlaceResult(
     }
   }
 
+  // Calculate scoring when search params are provided
+  const scoring = searchParams
+    ? (() => {
+        const overallQuality = calculateOverallQuality(item);
+        const itemTypeScores = calculateItemTypeMatches(item);
+        const overallRelevance = calculateOverallRelevance(
+          searchParams,
+          itemTypeScores,
+        );
+        return { overallQuality, itemTypeScores, overallRelevance };
+      })()
+    : undefined;
+
   return {
-    id: item.id,
-    name: item.name || "Unknown Place",
-    primary_category: item.primary_category || "unknown",
+    id: item.id ?? "",
+    name: item.name ?? "Unknown Place",
+    primary_category: item.primary_category ?? "unknown",
     categories: Array.isArray(item.categories)
       ? item.categories
-      : [item.primary_category || "unknown"],
+      : [item.primary_category ?? "unknown"],
     location: { coordinates },
-    rating: item.rating,
-    price_level: item.price_level,
-    street_address: item.street_address,
-    locality: item.locality,
-    region: item.region,
-    postcode: item.postcode,
-    country_code: item.country_code,
-    phone: item.phone,
-    website: item.website,
-    email: item.email,
+    rating: item.rating ?? undefined,
+    price_level: item.price_level ?? undefined,
+    street_address: item.street_address ?? undefined,
+    locality: item.locality ?? undefined,
+    region: item.region ?? undefined,
+    postcode: item.postcode ?? undefined,
+    country_code: (item.country_code as string) ?? undefined,
+    phone: item.phone ?? undefined,
+    website: item.website ?? undefined,
+    email: item.email ?? undefined,
     hours: item.hours,
-    confidence: item.confidence,
-    is_verified: item.is_verified,
-    viewport_area_km2: item.viewport_area_km2,
-    density_per_km2: item.density_per_km2,
-    clustering_applied: item.clustering_applied,
-    // Add enhanced dual scoring system
-    ...(searchParams
-      ? (() => {
-          // Always calculate overall quality
-          const overallQuality = calculateOverallQuality(item);
-
-          // Always calculate item type scores for all item types (for background color detection)
-          const itemTypeScores = calculateItemTypeMatches(item);
-
-          // Calculate overall relevance score based on all active filters
-          const overallRelevance = calculateOverallRelevance(
-            searchParams,
-            itemTypeScores,
-          );
-
-          // Legacy support: calculate old relevance score for backward compatibility
-          const { relevanceScore, matchedItemTypes } =
-            searchParams.itemTypes && searchParams.itemTypes.length > 0
-              ? calculatePlaceRelevance(item, searchParams)
-              : { relevanceScore: undefined, matchedItemTypes: [] };
-
-          return {
-            overallQuality,
-            itemTypeScores,
-            overallRelevance, // New server-calculated overall relevance
-            // Legacy fields for backward compatibility
-            relevanceScore,
-            matchedItemTypes,
-          };
-        })()
-      : {}),
+    confidence: item.confidence ?? undefined,
+    is_verified: item.is_verified ?? undefined,
+    viewport_area_km2: "viewport_area_km2" in item ? (item.viewport_area_km2 ?? undefined) : undefined,
+    density_per_km2: "density_per_km2" in item ? (item.density_per_km2 ?? undefined) : undefined,
+    clustering_applied: "clustering_applied" in item ? (item.clustering_applied ?? undefined) : undefined,
+    ...scoring,
   };
 }
 
-function transformClusterResult(item: any): PlaceCluster {
+function transformClusterResult(item: ClusteredItem): PlaceCluster {
   // Parse cluster center coordinates from native PostGIS geometry object
-  // NOTE: The searchPlacesAdaptiveCluster function returns native PostGIS geometry types
-  // instead of JSON strings, eliminating the need for client-side JSON parsing.
   let clusterCoordinates: [number, number] = [0, 0];
+  const center = item.cluster_center as
+    | { coordinates: [number, number] }
+    | string
+    | null;
 
-  if (
-    item.cluster_center?.coordinates &&
-    Array.isArray(item.cluster_center.coordinates)
-  ) {
-    // Native PostGIS geometry object with coordinates array
-    clusterCoordinates = item.cluster_center.coordinates;
-  } else if (typeof item.cluster_center === "string") {
+  if (center && typeof center === "object" && "coordinates" in center && Array.isArray(center.coordinates)) {
+    clusterCoordinates = center.coordinates;
+  } else if (typeof center === "string") {
     try {
-      // Fallback: parse JSON string for backward compatibility (legacy function)
-      const locationData = JSON.parse(item.cluster_center);
+      const locationData = JSON.parse(center);
       if (locationData.coordinates && Array.isArray(locationData.coordinates)) {
         clusterCoordinates = locationData.coordinates;
       }
     } catch (error) {
       console.error(
         `Failed to parse cluster_center for cluster ${item.cluster_id}:`,
-        item.cluster_center,
+        center,
         error,
       );
-      // Fallback: try to parse as POINT string format
-      const match = item.cluster_center.match(/POINT\(([^)]+)\)/);
+      const match = center.match(/POINT\(([^)]+)\)/);
       if (match) {
         const [lng, lat] = match[1].split(" ").map(Number);
         clusterCoordinates = [lng, lat];
@@ -314,13 +319,13 @@ function transformClusterResult(item: any): PlaceCluster {
 
   return {
     is_cluster: true,
-    cluster_id: item.cluster_id,
-    cluster_count: item.cluster_count,
+    cluster_id: item.cluster_id ?? 0,
+    cluster_count: item.cluster_count ?? 0,
     cluster_center: { coordinates: clusterCoordinates },
     cluster_bounds: item.cluster_bounds,
-    viewport_area_km2: item.viewport_area_km2,
-    density_per_km2: item.density_per_km2,
-    clustering_applied: item.clustering_applied,
+    viewport_area_km2: item.viewport_area_km2 ?? undefined,
+    density_per_km2: item.density_per_km2 ?? undefined,
+    clustering_applied: item.clustering_applied ?? undefined,
   };
 }
 
@@ -345,47 +350,58 @@ export async function searchMapPlaces(
     limit = 500,
   } = params;
 
-  try {
-    // Handle semantic search with optional filters (Option C)
-    // Cap semantic search at 50 results — hybrid ranked results are already
-    // sorted by combined_score so pulling more adds noise, not signal.
-    if (semanticQuery && semanticQuery.trim().length > 0) {
-      return await performSemanticSearch(
-        semanticQuery,
-        globalSearch ? undefined : bounds,
-        itemTypes,
-        minRating,
-        visitStatuses,
-        Math.min(limit, 50),
-        tierListIds,
-      );
-    }
+  const trimmedQuery = semanticQuery?.trim();
 
-    // Handle standard filtering search
-    return await performStandardSearch(
-      bounds,
+  // Try geocoding first if the query looks like an address.
+  // On success, return coordinates so the client can fly the map there
+  // and let the standard bounded search fill in nearby places.
+  // Wrapped in its own try/catch so geocode failures fall through gracefully.
+  if (trimmedQuery && looksLikeAddress(trimmedQuery)) {
+    try {
+      const geocode = await getCachedGeocode(trimmedQuery);
+      if (geocode) {
+        return {
+          places: [],
+          mapItems: [],
+          isSemanticSearch: false,
+          geocodeResult: geocode,
+          searchMetadata: {
+            itemTypes,
+            totalResults: 0,
+            hasMore: false,
+          },
+        };
+      }
+    } catch (err) {
+      console.warn("Geocode failed, falling through to semantic search:", err);
+    }
+  }
+
+  // Handle semantic search with optional filters
+  // Cap semantic search at 50 results — hybrid ranked results are already
+  // sorted by combined_score so pulling more adds noise, not signal.
+  if (trimmedQuery && trimmedQuery.length > 0) {
+    return await performSemanticSearch(
+      trimmedQuery,
+      globalSearch ? undefined : bounds,
       itemTypes,
       minRating,
       visitStatuses,
-      userId,
-      limit,
+      Math.min(limit, 50),
       tierListIds,
     );
-  } catch (error) {
-    console.error("❌ [Server Action] Map search error:", error);
-
-    // Return empty results on error instead of throwing
-    return {
-      places: [],
-      mapItems: [],
-      isSemanticSearch: !!semanticQuery,
-      searchMetadata: {
-        itemTypes: itemTypes || [],
-        totalResults: 0,
-        hasMore: false,
-      },
-    };
   }
+
+  // Handle standard filtering search
+  return await performStandardSearch(
+    bounds,
+    itemTypes,
+    minRating,
+    visitStatuses,
+    userId,
+    limit,
+    tierListIds,
+  );
 }
 
 // Perform hybrid search using text + trigram + category semantic matching
@@ -395,157 +411,149 @@ async function performSemanticSearch(
   bounds: MapBounds | undefined,
   itemTypes: ItemType[],
   minRating: number | undefined,
-  visitStatuses: VisitStatus[],
+  _visitStatuses: VisitStatus[],
   limit: number,
   tierListIds?: string[],
 ): Promise<MapSearchResults> {
-  try {
-    // Step 1: Generate query vector via Next.js cache (24h TTL, shared across users)
-    const cachedVector = await getCachedSearchVector(query.trim());
-    const queryVector: number[] | undefined = cachedVector
-      ? JSON.parse(cachedVector)
-      : undefined;
+  // Step 1: Generate query vector via Next.js cache (24h TTL, shared across users)
+  const cachedVector = await getCachedSearchVector(query);
+  const queryVector: number[] | undefined = cachedVector
+    ? JSON.parse(cachedVector)
+    : undefined;
 
-    if (!queryVector || queryVector.length === 0) {
-      throw new Error("Failed to generate query vector");
-    }
-
-    const queryVectorString = `[${queryVector.join(",")}]`;
-
-    // Step 2: Find matching category vectors via Hasura
-    const categoryResult = await adminQuery(SearchCategoryVectorsQuery, {
-      queryVector: queryVectorString,
-      maxDistance: 0.6,
-      limit: 15,
-    });
-
-    const categoryMatches = categoryResult?.searchCategoryVectors ?? [];
-
-    // Score categories: label-type weighting + quadratic decay
-    const categoryScoreMap = new Map<string, number>();
-    for (const match of categoryMatches) {
-      const distance =
-        typeof match.distance === "number"
-          ? match.distance
-          : Number(match.distance) || 1.0;
-      const rawSimilarity = Math.max(0, 1 - distance / 2);
-      const labelType = (match.label_type ?? "descriptor") as LabelType;
-      const typeWeight = LABEL_TYPE_WEIGHTS[labelType] ?? 0.8;
-      const weightedSimilarity = rawSimilarity * rawSimilarity * typeWeight;
-
-      const categories = match.associated_categories ?? [];
-      for (const cat of categories) {
-        const existing = categoryScoreMap.get(cat) ?? 0;
-        categoryScoreMap.set(cat, Math.max(existing, weightedSimilarity));
-      }
-    }
-
-    const matchedCategories = Array.from(categoryScoreMap.keys());
-    const categoryScores = matchedCategories.map(
-      (cat) => categoryScoreMap.get(cat) ?? 0,
-    );
-
-    // Step 3: Execute hybrid search (text + trigram + category + bounds) via Hasura
-    const hybridResult = await adminQuery(HybridPlaceSearchQuery, {
-      searchQuery: query.trim(),
-      matchedCategories:
-        matchedCategories.length > 0
-          ? `{${matchedCategories.join(",")}}`
-          : null,
-      categoryScores:
-        categoryScores.length > 0 ? `{${categoryScores.join(",")}}` : null,
-      westBound: bounds?.west ?? null,
-      southBound: bounds?.south ?? null,
-      eastBound: bounds?.east ?? null,
-      northBound: bounds?.north ?? null,
-      minRating: minRating ?? null,
-      resultLimit: limit,
-      tierListIds: toPgArray(tierListIds, UUID_RE),
-    });
-
-    const rawResults = hybridResult?.searchPlacesHybrid ?? [];
-
-    // Step 4: Transform results
-    const searchParams: MapSearchParams = {
-      bounds: bounds ?? { north: 0, south: 0, east: 0, west: 0 },
-      itemTypes,
-      minRating,
-      visitStatuses,
-      semanticQuery: query,
-    };
-
-    let semanticResults: SemanticPlaceResult[] = rawResults.map(
-      (place: any) => {
-        const combinedScore =
-          typeof place.combined_score === "number"
-            ? place.combined_score
-            : Number(place.combined_score) || 0;
-        const confidenceScore = Math.max(0, Math.min(100, combinedScore * 100));
-        const distance = Math.max(0, 2 * (1 - combinedScore));
-
-        const transformed = transformPlaceResult(place, searchParams);
-        return {
-          ...transformed,
-          overallRelevance: confidenceScore,
-          distance,
-          matchReason: "semantic_match" as const,
-          confidenceScore,
-        };
-      },
-    );
-
-    // Adaptive threshold: filter weak matches relative to the strongest result
-    const RELATIVE_CUTOFF = 0.33;
-    const ABSOLUTE_MINIMUM = 5; // combined_score > 0.05
-    const topScore = Math.max(
-      ...semanticResults.map((r) => r.confidenceScore),
-      0,
-    );
-    const threshold = Math.max(topScore * RELATIVE_CUTOFF, ABSOLUTE_MINIMUM);
-    semanticResults = semanticResults.filter(
-      (place) => place.confidenceScore >= threshold,
-    );
-
-    // Apply filters to hybrid results
-    if (itemTypes.length > 0) {
-      semanticResults = semanticResults.filter((place) => {
-        const hasItemTypeMatch =
-          place.itemTypeScores &&
-          itemTypes.some(
-            (itemType) => (place.itemTypeScores?.[itemType] ?? 0) > 0,
-          );
-        return hasItemTypeMatch;
-      });
-    }
-
-    // Normalize overallRelevance so the best result renders at full size/opacity
-    if (semanticResults.length > 0) {
-      const maxConfidence = Math.max(
-        ...semanticResults.map((r) => r.confidenceScore),
-      );
-      if (maxConfidence > 0) {
-        semanticResults = semanticResults.map((place) => ({
-          ...place,
-          overallRelevance: (place.confidenceScore / maxConfidence) * 100,
-        }));
-      }
-    }
-
-    return {
-      places: semanticResults,
-      mapItems: semanticResults,
-      semanticResults,
-      isSemanticSearch: true,
-      searchMetadata: {
-        itemTypes,
-        totalResults: rawResults.length,
-        hasMore: false,
-      },
-    };
-  } catch (error) {
-    console.error("❌ [Server Action] Hybrid search error:", error);
-    throw error;
+  if (!queryVector || queryVector.length === 0) {
+    throw new Error("Failed to generate query vector");
   }
+
+  const queryVectorString = `[${queryVector.join(",")}]`;
+
+  // Step 2: Find matching category vectors via Hasura
+  const categoryResult = await adminQuery(SearchCategoryVectorsQuery, {
+    queryVector: queryVectorString,
+    maxDistance: 0.6,
+    limit: 15,
+  });
+
+  const categoryMatches = categoryResult?.searchCategoryVectors ?? [];
+
+  // Score categories: label-type weighting + quadratic decay
+  const categoryScoreMap = new Map<string, number>();
+  for (const match of categoryMatches) {
+    const distance =
+      typeof match.distance === "number"
+        ? match.distance
+        : Number(match.distance) || 1.0;
+    const rawSimilarity = Math.max(0, 1 - distance / 2);
+    const labelType = (match.label_type ?? "descriptor") as LabelType;
+    const typeWeight = LABEL_TYPE_WEIGHTS[labelType] ?? 0.8;
+    const weightedSimilarity = rawSimilarity * rawSimilarity * typeWeight;
+
+    const categories = match.associated_categories ?? [];
+    for (const cat of categories) {
+      const existing = categoryScoreMap.get(cat) ?? 0;
+      categoryScoreMap.set(cat, Math.max(existing, weightedSimilarity));
+    }
+  }
+
+  const matchedCategories = Array.from(categoryScoreMap.keys());
+  const categoryScores = matchedCategories.map(
+    (cat) => categoryScoreMap.get(cat) ?? 0,
+  );
+
+  // Step 3: Execute hybrid search (text + trigram + category + bounds) via Hasura
+  const hybridResult = await adminQuery(HybridPlaceSearchQuery, {
+    searchQuery: query,
+    matchedCategories:
+      matchedCategories.length > 0
+        ? `{${matchedCategories.join(",")}}`
+        : null,
+    categoryScores:
+      categoryScores.length > 0 ? `{${categoryScores.join(",")}}` : null,
+    westBound: bounds?.west ?? null,
+    southBound: bounds?.south ?? null,
+    eastBound: bounds?.east ?? null,
+    northBound: bounds?.north ?? null,
+    minRating: minRating ?? null,
+    resultLimit: limit,
+    tierListIds: toPgArray(tierListIds, UUID_RE),
+  });
+
+  const rawResults = hybridResult?.searchPlacesHybrid ?? [];
+
+  // Step 4: Transform results
+  const searchParams: MapSearchParams = {
+    bounds: bounds ?? { north: 0, south: 0, east: 0, west: 0 },
+    itemTypes,
+    minRating,
+    semanticQuery: query,
+  };
+
+  let semanticResults: SemanticPlaceResult[] = rawResults.map((place) => {
+    const combinedScore =
+      typeof place.combined_score === "number"
+        ? place.combined_score
+        : Number(place.combined_score) || 0;
+    const confidenceScore = Math.max(0, Math.min(100, combinedScore * 100));
+    const distance = Math.max(0, 2 * (1 - combinedScore));
+
+    const transformed = transformPlaceResult(place, searchParams);
+    return {
+      ...transformed,
+      overallRelevance: confidenceScore,
+      distance,
+      matchReason: "semantic_match" as const,
+      confidenceScore,
+    };
+  });
+
+  // Adaptive threshold: filter weak matches relative to the strongest result
+  const RELATIVE_CUTOFF = 0.33;
+  const ABSOLUTE_MINIMUM = 5; // combined_score > 0.05
+  const topScore = Math.max(
+    ...semanticResults.map((r) => r.confidenceScore),
+    0,
+  );
+  const threshold = Math.max(topScore * RELATIVE_CUTOFF, ABSOLUTE_MINIMUM);
+  semanticResults = semanticResults.filter(
+    (place) => place.confidenceScore >= threshold,
+  );
+
+  // Apply filters to hybrid results
+  if (itemTypes.length > 0) {
+    semanticResults = semanticResults.filter((place) => {
+      const hasItemTypeMatch =
+        place.itemTypeScores &&
+        itemTypes.some(
+          (itemType) => (place.itemTypeScores?.[itemType] ?? 0) > 0,
+        );
+      return hasItemTypeMatch;
+    });
+  }
+
+  // Normalize overallRelevance so the best result renders at full size/opacity
+  if (semanticResults.length > 0) {
+    const maxConfidence = Math.max(
+      ...semanticResults.map((r) => r.confidenceScore),
+    );
+    if (maxConfidence > 0) {
+      semanticResults = semanticResults.map((place) => ({
+        ...place,
+        overallRelevance: (place.confidenceScore / maxConfidence) * 100,
+      }));
+    }
+  }
+
+  return {
+    places: semanticResults,
+    mapItems: semanticResults,
+    semanticResults,
+    isSemanticSearch: true,
+    searchMetadata: {
+      itemTypes,
+      totalResults: rawResults.length,
+      hasMore: false,
+    },
+  };
 }
 
 // Perform standard GraphQL clustering search
@@ -577,7 +585,7 @@ async function performStandardSearch(
     eastBound: bounds.east,
     northBound: bounds.north,
     categoryFilter: toPgArray(categories),
-    minRating: minRating || null,
+    minRating: minRating ?? null,
     visitStatusFilter,
     filterUserId: userId,
     resultLimit: limit,
@@ -599,12 +607,11 @@ async function performStandardSearch(
   };
 
   // Transform results with relevance calculation
-  const mapItems: MapDataItem[] = clusteringResults.map((item: any) => {
+  const mapItems: MapDataItem[] = clusteringResults.map((item) => {
     if (item.is_cluster) {
       return transformClusterResult(item);
-    } else {
-      return transformPlaceResult(item, searchParams); // Include searchParams for relevance calculation
     }
+    return transformPlaceResult(item, searchParams);
   });
 
   // Extract just the places (non-cluster items) - already transformed with relevance
