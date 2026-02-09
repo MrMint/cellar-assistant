@@ -2,27 +2,27 @@ table:
   name: tier_list_items
   schema: public
 object_relationships:
-  - name: tier_list
-    using:
-      foreign_key_constraint_on: tier_list_id
-  - name: place
-    using:
-      foreign_key_constraint_on: place_id
-  - name: wine
-    using:
-      foreign_key_constraint_on: wine_id
   - name: beer
     using:
       foreign_key_constraint_on: beer_id
-  - name: spirit
-    using:
-      foreign_key_constraint_on: spirit_id
   - name: coffee
     using:
       foreign_key_constraint_on: coffee_id
+  - name: place
+    using:
+      foreign_key_constraint_on: place_id
   - name: sake
     using:
       foreign_key_constraint_on: sake_id
+  - name: spirit
+    using:
+      foreign_key_constraint_on: spirit_id
+  - name: tier_list
+    using:
+      foreign_key_constraint_on: tier_list_id
+  - name: wine
+    using:
+      foreign_key_constraint_on: wine_id
 insert_permissions:
   - role: user
     permission:

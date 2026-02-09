@@ -341,6 +341,7 @@ export async function searchMapPlaces(
     visitStatuses = [],
     tierListIds,
     semanticQuery,
+    globalSearch = true,
     limit = 500,
   } = params;
 
@@ -351,7 +352,7 @@ export async function searchMapPlaces(
     if (semanticQuery && semanticQuery.trim().length > 0) {
       return await performSemanticSearch(
         semanticQuery,
-        bounds,
+        globalSearch ? undefined : bounds,
         itemTypes,
         minRating,
         visitStatuses,
@@ -391,7 +392,7 @@ export async function searchMapPlaces(
 // Calls Hasura directly instead of routing through a Nhost function
 async function performSemanticSearch(
   query: string,
-  bounds: MapBounds,
+  bounds: MapBounds | undefined,
   itemTypes: ItemType[],
   minRating: number | undefined,
   visitStatuses: VisitStatus[],
@@ -453,10 +454,10 @@ async function performSemanticSearch(
           : null,
       categoryScores:
         categoryScores.length > 0 ? `{${categoryScores.join(",")}}` : null,
-      westBound: bounds.west,
-      southBound: bounds.south,
-      eastBound: bounds.east,
-      northBound: bounds.north,
+      westBound: bounds?.west ?? null,
+      southBound: bounds?.south ?? null,
+      eastBound: bounds?.east ?? null,
+      northBound: bounds?.north ?? null,
       minRating: minRating ?? null,
       resultLimit: limit,
       tierListIds: toPgArray(tierListIds, UUID_RE),
@@ -466,7 +467,7 @@ async function performSemanticSearch(
 
     // Step 4: Transform results
     const searchParams: MapSearchParams = {
-      bounds,
+      bounds: bounds ?? { north: 0, south: 0, east: 0, west: 0 },
       itemTypes,
       minRating,
       visitStatuses,

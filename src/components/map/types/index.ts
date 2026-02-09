@@ -174,6 +174,8 @@ export interface MapSearchParams {
   // Semantic search
   semanticQuery?: string;
   maxSemanticDistance?: number;
+  /** When true, semantic search ignores viewport bounds (searches globally). Default true. */
+  globalSearch?: boolean;
 
   // General options
   limit?: number;

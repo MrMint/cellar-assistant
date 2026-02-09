@@ -3,8 +3,8 @@
 import { useCallback, useRef, useState } from "react";
 import type { MapBounds } from "../../types";
 
-const DEBOUNCE_DESKTOP = 300;
-const DEBOUNCE_MOBILE = 500;
+const DEBOUNCE_DESKTOP = 500;
+const DEBOUNCE_MOBILE = 600;
 
 export function useMapBoundsML() {
   const [bounds, setBounds] = useState<MapBounds | undefined>();

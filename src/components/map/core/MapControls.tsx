@@ -3,13 +3,21 @@
 import {
   Close,
   DarkMode,
+  Language,
   LightMode,
   LocationOn,
   Refresh,
   Search,
 } from "@mui/icons-material";
-import { Box, Divider, IconButton, Input, Sheet, Stack } from "@mui/joy";
-import { useCallback } from "react";
+import {
+  Box,
+  Divider,
+  IconButton,
+  Input,
+  Sheet,
+  Stack,
+  Tooltip,
+} from "@mui/joy";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useMapActions, useMapCore, useMapUI } from "../hooks/useMapMachine";
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
@@ -74,18 +82,14 @@ export function MapControls({
     minRating,
     visitStatuses,
     tierLists: tierListIds,
+    globalSearch,
     setSearch,
     setItemTypes,
     setMinRating,
     setVisitStatuses,
     setTierLists,
+    setGlobalSearch,
   } = useMapSearchParams();
-
-  // Initialize tier lists in URL on first data load so toggles work correctly
-  const handleTierListInit = useCallback(
-    (ids: string[]) => setTierLists(ids),
-    [setTierLists],
-  );
 
   // Core state (userId needed for tier list query)
   const { userId, isDarkMode } = useMapCore();
@@ -96,7 +100,7 @@ export function MapControls({
     effectiveSelectedIds,
     isFilterActive: isTierListFilterActive,
     loading: tierListsLoading,
-  } = useTierListFilter(tierListIds, handleTierListInit, userId);
+  } = useTierListFilter(tierListIds, userId);
   const { isDrawerOpen } = useMapUI();
   const { toggleDarkMode } = useMapActions();
 
@@ -124,21 +128,42 @@ export function MapControls({
       onChange={(e) => setSearch(e.target.value)}
       startDecorator={<Search />}
       endDecorator={
-        search ? (
-          <IconButton
-            variant="plain"
-            color="neutral"
-            onClick={() => setSearch("")}
+        <Stack direction="row" spacing={0} sx={{ alignItems: "center" }}>
+          {search && (
+            <IconButton
+              variant="plain"
+              color="neutral"
+              onClick={() => setSearch("")}
+              size="sm"
+              sx={{
+                minWidth: "auto",
+                minHeight: "auto",
+                padding: "4px",
+              }}
+            >
+              <Close sx={{ fontSize: "18px" }} />
+            </IconButton>
+          )}
+          <Tooltip
+            title={globalSearch ? "Searching globally" : "Searching in viewport"}
+            variant="soft"
             size="sm"
-            sx={{
-              minWidth: "auto",
-              minHeight: "auto",
-              padding: "4px",
-            }}
           >
-            <Close sx={{ fontSize: "18px" }} />
-          </IconButton>
-        ) : undefined
+            <IconButton
+              variant={globalSearch ? "soft" : "plain"}
+              color={globalSearch ? "primary" : "neutral"}
+              onClick={() => setGlobalSearch(!globalSearch)}
+              size="sm"
+              sx={{
+                minWidth: "auto",
+                minHeight: "auto",
+                padding: "4px",
+              }}
+            >
+              <Language sx={{ fontSize: "18px" }} />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       }
       sx={{
         border: "none",
@@ -278,8 +303,9 @@ export function MapControls({
     <Box
       sx={{
         position: "absolute",
-        zIndex: 1000,
-        width: 375,
+        zIndex: 1001,
+        width: "calc(50% - 24px)",
+        maxWidth: 375,
         ...getPositionStyles(position.search || "top-left"),
       }}
     >

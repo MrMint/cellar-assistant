@@ -1,7 +1,7 @@
 "use client";
 
 import { graphql } from "@cellar-assistant/shared";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "urql";
 
 const GetUserPlaceTierListsQuery = graphql(`
@@ -23,7 +23,6 @@ export interface TierListFilterOption {
 
 export function useTierListFilter(
   selectedTierListIds: string[],
-  onInitialize?: (ids: string[]) => void,
   userId?: string,
 ) {
   const [{ data, fetching }] = useQuery({
@@ -31,8 +30,6 @@ export function useTierListFilter(
     variables: { userId: userId ?? "" },
     pause: !userId,
   });
-
-  const [initialized, setInitialized] = useState(false);
 
   const tierLists: TierListFilterOption[] = useMemo(() => {
     if (!data?.tier_lists) return [];
@@ -47,33 +44,9 @@ export function useTierListFilter(
     [tierLists],
   );
 
-  // On first data load, if no URL param exists, write all tier list IDs
-  // to the URL so subsequent toggles work correctly.
-  useEffect(() => {
-    if (
-      !initialized &&
-      selectedTierListIds.length === 0 &&
-      allTierListIds.length > 0 &&
-      onInitialize
-    ) {
-      setInitialized(true);
-      onInitialize(allTierListIds);
-    }
-  }, [initialized, selectedTierListIds, allTierListIds, onInitialize]);
-
-  // Before initialization, default to all selected to avoid a flash
-  // of unfiltered places. Once initialized is true, only use the
-  // explicit URL param value.
-  const effectiveSelectedIds = useMemo(() => {
-    if (
-      !initialized &&
-      selectedTierListIds.length === 0 &&
-      tierLists.length > 0
-    ) {
-      return allTierListIds;
-    }
-    return selectedTierListIds;
-  }, [initialized, selectedTierListIds, tierLists, allTierListIds]);
+  // Default to no tier list filtering — show all places.
+  // Users can opt in to tier list filtering via the UI.
+  const effectiveSelectedIds = selectedTierListIds;
 
   // Whether the filter is actively restricting results
   // (not all tier lists are selected, meaning some are deselected)

@@ -71,6 +71,7 @@ export function useMapFilters() {
       selectedItemTypes: state.context.selectedItemTypes,
       searchQuery: state.context.searchQuery,
       isSemanticSearch: state.context.isSemanticSearch,
+      globalSearch: state.context.globalSearch,
       minRating: state.context.minRating,
       visitStatuses: state.context.visitStatuses,
     }),
@@ -141,6 +142,8 @@ export function useMapActions() {
         send({ type: "SET_VISIT_STATUSES", statuses }),
       setTierListIds: (tierListIds: string[]) =>
         send({ type: "SET_TIER_LIST_IDS", tierListIds }),
+      setGlobalSearch: (globalSearch: boolean) =>
+        send({ type: "SET_GLOBAL_SEARCH", globalSearch }),
       clearFilters: () => send({ type: "CLEAR_FILTERS" }),
 
       // Data actions

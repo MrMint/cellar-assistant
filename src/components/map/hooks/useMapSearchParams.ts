@@ -2,6 +2,7 @@
 
 import {
   parseAsArrayOf,
+  parseAsBoolean,
   parseAsInteger,
   parseAsString,
   useQueryState,
@@ -64,13 +65,27 @@ export function useMapSearchParams() {
     parseAsArrayOf(parseAsString).withDefault([]),
   );
 
+  // Global search defaults to true — semantic search ignores viewport bounds
+  const [globalSearch, setGlobalSearchRaw] = useQueryState(
+    "global",
+    parseAsBoolean.withDefault(true),
+  );
+
   const clearAllFilters = useCallback(() => {
     setSearch(null);
     setItemTypes(null);
     setMinRating(null);
     setVisitStatuses(null);
     setTierLists(null);
-  }, [setSearch, setItemTypes, setMinRating, setVisitStatuses, setTierLists]);
+    setGlobalSearchRaw(null);
+  }, [
+    setSearch,
+    setItemTypes,
+    setMinRating,
+    setVisitStatuses,
+    setTierLists,
+    setGlobalSearchRaw,
+  ]);
 
   return {
     // Values (validated)
@@ -79,6 +94,7 @@ export function useMapSearchParams() {
     minRating,
     visitStatuses: parseVisitStatuses(rawVisitStatuses),
     tierLists: rawTierLists,
+    globalSearch,
 
     // Setters
     setSearch: (value: string) => setSearch(value || null),
@@ -90,6 +106,8 @@ export function useMapSearchParams() {
       setVisitStatuses(value.length > 0 ? value : null),
     setTierLists: (value: string[]) =>
       setTierLists(value.length > 0 ? value : null),
+    setGlobalSearch: (value: boolean) =>
+      setGlobalSearchRaw(value ? null : false),
 
     // Clear all
     clearAllFilters,

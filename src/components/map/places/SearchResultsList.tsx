@@ -68,6 +68,7 @@ export function SearchResultsList({
     return (
       <AnimatePresence>
         <motion.div
+          key="desktop"
           initial={{ x: -400, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: -400, opacity: 0 }}
@@ -159,6 +160,7 @@ export function SearchResultsList({
   return (
     <AnimatePresence>
       <motion.div
+        key="mobile"
         initial={{ y: "100%", opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: "100%", opacity: 0 }}

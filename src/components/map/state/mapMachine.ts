@@ -33,6 +33,7 @@ interface MapContext {
   selectedItemTypes: ItemType[];
   searchQuery: string;
   isSemanticSearch: boolean; // Whether current search is semantic vs filter-based
+  globalSearch: boolean; // When true, semantic search ignores viewport bounds
   minRating: number | undefined;
   visitStatuses: VisitStatus[];
   tierListIds: string[];
@@ -67,6 +68,7 @@ type MapEvent =
   | { type: "SET_MIN_RATING"; rating: number | undefined }
   | { type: "SET_VISIT_STATUSES"; statuses: VisitStatus[] }
   | { type: "SET_TIER_LIST_IDS"; tierListIds: string[] }
+  | { type: "SET_GLOBAL_SEARCH"; globalSearch: boolean }
   | { type: "CLEAR_FILTERS" }
   | { type: "REFRESH_PLACES" }
   | { type: "UPDATE_SELECTED_PLACE"; place: Place }
@@ -85,6 +87,7 @@ const fetchPlacesService = fromPromise(
       tierListIds: string[];
       searchQuery: string;
       isSemanticSearch: boolean;
+      globalSearch: boolean;
       userLocation: UserLocation;
       userId: string;
     };
@@ -97,6 +100,7 @@ const fetchPlacesService = fromPromise(
       tierListIds,
       searchQuery,
       isSemanticSearch,
+      globalSearch,
       userLocation,
       userId,
     } = input;
@@ -109,6 +113,7 @@ const fetchPlacesService = fromPromise(
         visitStatuses,
         tierListIds: tierListIds.length > 0 ? tierListIds : undefined,
         semanticQuery: isSemanticSearch ? searchQuery : undefined,
+        globalSearch: isSemanticSearch ? globalSearch : false,
         limit: 500,
       };
 
@@ -162,6 +167,18 @@ const guards = {
     const boundsToCheck =
       event.type === "SET_BOUNDS" ? event.bounds : context.bounds;
     return boundsToCheck !== undefined;
+  },
+
+  // Skip refetch on bounds change when global semantic search is active
+  shouldFetchOnBoundsChange: ({
+    context,
+  }: {
+    context: MapContext;
+    event: MapEvent;
+  }) => {
+    // If global semantic search is active, bounds changes don't need a refetch
+    if (context.isSemanticSearch && context.globalSearch) return false;
+    return true;
   },
 
   hasError: ({ context }: { context: MapContext }) => context.error !== null,
@@ -276,10 +293,16 @@ const actions = {
       event.type === "SET_TIER_LIST_IDS" ? event.tierListIds : [],
   }),
 
+  setGlobalSearch: assign({
+    globalSearch: ({ event }) =>
+      event.type === "SET_GLOBAL_SEARCH" ? event.globalSearch : true,
+  }),
+
   clearFilters: assign({
     selectedItemTypes: [],
     searchQuery: "",
     isSemanticSearch: false,
+    globalSearch: true,
     minRating: undefined,
     visitStatuses: [],
     tierListIds: [],
@@ -378,6 +401,7 @@ export const mapMachine = createMachine(
 
       searchQuery: "",
       isSemanticSearch: false,
+      globalSearch: true,
       minRating: undefined,
       visitStatuses: [],
       tierListIds: [],
@@ -420,6 +444,9 @@ export const mapMachine = createMachine(
           },
           SET_TIER_LIST_IDS: {
             actions: "setTierListIds",
+          },
+          SET_GLOBAL_SEARCH: {
+            actions: "setGlobalSearch",
           },
           PERFORM_SEMANTIC_SEARCH: {
             actions: "performSemanticSearch",
@@ -491,7 +518,18 @@ export const mapMachine = createMachine(
                   SET_BOUNDS: [
                     {
                       target: "loading",
-                      guard: "canFetchPlaces",
+                      guard: ({ context, event }) => {
+                        // Must have bounds and not be in global semantic mode
+                        const boundsToCheck =
+                          event.type === "SET_BOUNDS"
+                            ? event.bounds
+                            : context.bounds;
+                        if (boundsToCheck === undefined) return false;
+                        // Skip refetch when global semantic search is active
+                        if (context.isSemanticSearch && context.globalSearch)
+                          return false;
+                        return true;
+                      },
                       actions: ["setBounds", "clearError"],
                     },
                     {
@@ -564,6 +602,18 @@ export const mapMachine = createMachine(
                       actions: "setTierListIds",
                     },
                   ],
+                  SET_GLOBAL_SEARCH: [
+                    {
+                      target: "loading",
+                      guard: ({ context }) =>
+                        context.bounds !== undefined &&
+                        context.isSemanticSearch,
+                      actions: ["setGlobalSearch", "clearError"],
+                    },
+                    {
+                      actions: "setGlobalSearch",
+                    },
+                  ],
                 },
               },
               loading: {
@@ -578,6 +628,7 @@ export const mapMachine = createMachine(
                     tierListIds: context.tierListIds,
                     searchQuery: context.searchQuery,
                     isSemanticSearch: context.isSemanticSearch,
+                    globalSearch: context.globalSearch,
                     userLocation: context.userLocation || {
                       // Default to center of bounds if no user location
                       latitude:
@@ -601,10 +652,23 @@ export const mapMachine = createMachine(
                   },
                 },
                 on: {
-                  // Filter changes during loading: cancel current fetch and restart
-                  // with updated params. Uses reenter: true because XState v5
+                  // Bounds/filter changes during loading: cancel current fetch and
+                  // restart with updated params. Uses reenter: true because XState v5
                   // self-transitions are internal by default (no exit/re-enter),
                   // so without it the invoke would NOT be cancelled and restarted.
+                  SET_BOUNDS: [
+                    {
+                      target: "loading",
+                      reenter: true,
+                      guard: ({ context }) =>
+                        !(context.isSemanticSearch && context.globalSearch),
+                      actions: "setBounds",
+                    },
+                    {
+                      // Global semantic search: just store bounds, don't restart fetch
+                      actions: "setBounds",
+                    },
+                  ],
                   SET_ITEM_TYPES: {
                     target: "loading",
                     reenter: true,
@@ -634,6 +698,11 @@ export const mapMachine = createMachine(
                     target: "loading",
                     reenter: true,
                     actions: "setTierListIds",
+                  },
+                  SET_GLOBAL_SEARCH: {
+                    target: "loading",
+                    reenter: true,
+                    actions: "setGlobalSearch",
                   },
                   CLEAR_FILTERS: {
                     target: "loading",
@@ -693,6 +762,7 @@ export const mapMachine = createMachine(
           TOGGLE_ITEM_TYPE: { actions: "toggleItemType" },
           SET_SEARCH_QUERY: { actions: "setSearchQuery" },
           PERFORM_SEMANTIC_SEARCH: { actions: "performSemanticSearch" },
+          SET_GLOBAL_SEARCH: { actions: "setGlobalSearch" },
           SET_MIN_RATING: { actions: "setMinRating" },
           SET_VISIT_STATUSES: { actions: "setVisitStatuses" },
           SET_TIER_LIST_IDS: { actions: "setTierListIds" },
