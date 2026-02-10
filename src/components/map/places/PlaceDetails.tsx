@@ -789,6 +789,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
         onClose={() => setTierListModalOpen(false)}
         placeId={placeData.id}
         placeName={placeData.name}
+        userId={userId}
       />
     </Box>
   );

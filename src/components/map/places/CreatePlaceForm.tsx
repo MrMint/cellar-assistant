@@ -238,7 +238,10 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
       region: data.region || undefined,
       postcode: data.postcode || undefined,
       country_code: data.country_code.trim().toUpperCase() || undefined,
-      phone: data.phone || undefined,
+      phone:
+        data.phone && isValidPhoneNumber(data.phone)
+          ? data.phone
+          : undefined,
       website: normalizedWebsite ?? undefined,
       description: data.description || undefined,
     };
@@ -475,10 +478,12 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
             name="phone"
             control={control}
             rules={{
-              validate: (value) =>
-                !value ||
-                isValidPhoneNumber(value) ||
-                "Enter a valid phone number",
+              validate: (value) => {
+                if (!value || value.replace(/\D/g, "").length <= 3) return true;
+                return (
+                  isValidPhoneNumber(value) || "Enter a valid phone number"
+                );
+              },
             }}
             render={({ field }) => (
               <FormControl error={!!errors.phone}>

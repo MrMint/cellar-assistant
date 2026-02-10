@@ -658,6 +658,7 @@ export function PlaceDetailsContent({
         onClose={() => setTierListModalOpen(false)}
         placeId={place.id}
         placeName={place.name}
+        userId={userId}
       />
     </>
   );

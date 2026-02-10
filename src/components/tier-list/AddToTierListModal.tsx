@@ -32,6 +32,7 @@ interface AddToTierListModalProps {
   onClose: () => void;
   placeId: string;
   placeName: string;
+  userId: string;
   existingRating?: number | null;
 }
 
@@ -44,10 +45,11 @@ export function AddToTierListModal({
   onClose,
   placeId,
   placeName,
+  userId,
 }: AddToTierListModalProps) {
   const [{ data, fetching }] = useQuery({
     query: GetTierListsForPlaceQuery,
-    variables: { placeId },
+    variables: { placeId, userId },
     pause: !open,
   });
 

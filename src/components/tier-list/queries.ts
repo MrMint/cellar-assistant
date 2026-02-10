@@ -52,9 +52,12 @@ export const GetTierListEditQuery = graphql(
  * Used by the "Add to Tier List" modal
  */
 export const GetTierListsForPlaceQuery = graphql(`
-  query GetTierListsForPlace($placeId: uuid!) {
+  query GetTierListsForPlace($placeId: uuid!, $userId: uuid!) {
     tier_lists(
-      where: { list_type: { _eq: "place" } }
+      where: {
+        list_type: { _eq: "place" }
+        created_by_id: { _eq: $userId }
+      }
       order_by: { updated_at: desc }
     ) {
       id
@@ -76,6 +79,7 @@ export const GetTierListsForPlaceQuery = graphql(`
 export const GetTierListsForItemQuery = graphql(`
   query GetTierListsForItem(
     $listType: String!
+    $userId: uuid!
     $wineId: uuid
     $beerId: uuid
     $spiritId: uuid
@@ -83,7 +87,10 @@ export const GetTierListsForItemQuery = graphql(`
     $sakeId: uuid
   ) {
     tier_lists(
-      where: { list_type: { _eq: $listType } }
+      where: {
+        list_type: { _eq: $listType }
+        created_by_id: { _eq: $userId }
+      }
       order_by: { updated_at: desc }
     ) {
       id
