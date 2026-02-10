@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.50.0](https://github.com/MrMint/cellar-assistant/compare/v0.49.0...v0.50.0) (2026-02-10)
+
+
+### Features
+
+* Adds caching to search vectors ([d761a73](https://github.com/MrMint/cellar-assistant/commit/d761a731541461ff792e30fda5a510b15d2c2b77))
+* Implements tier lists ([478d1d2](https://github.com/MrMint/cellar-assistant/commit/478d1d201fff9346461ddcce0eba65d4c6fb6aea))
+* Improve map clustering at high zoom ([392eee1](https://github.com/MrMint/cellar-assistant/commit/392eee1da5f76f409c3c95705b97ccebbe6e7537))
+* Improves categorization and map clustering ([b259824](https://github.com/MrMint/cellar-assistant/commit/b2598249c25455686e81bd195bd32352f0dc6a57))
+* Improves place item scoring ([23f618e](https://github.com/MrMint/cellar-assistant/commit/23f618e48400cb916a417a8550d542f4aeac2287))
+* Map and menu match improvements ([a641a47](https://github.com/MrMint/cellar-assistant/commit/a641a47abddb5e5a9195e5387962c1a72c5d4ca5))
+* Map improvements ([1ad6a0c](https://github.com/MrMint/cellar-assistant/commit/1ad6a0c85aef97db1fb2591fad8f8ddb45978d69))
+* Map mobile UX improvements ([bc018c1](https://github.com/MrMint/cellar-assistant/commit/bc018c12e120a7d363f2a009baae51ba3492b02a))
+* Map render performance improvements ([acde1a5](https://github.com/MrMint/cellar-assistant/commit/acde1a5c7e22fd337c3b3514d89da9ba8b9313d3))
+* Marker poi changes ([c21a326](https://github.com/MrMint/cellar-assistant/commit/c21a326f7526b7fd05b7cf419f8732720ac8f119))
+* Migrates to maplibre-gl ([d1f71a5](https://github.com/MrMint/cellar-assistant/commit/d1f71a55ab304687a21a1635876958b4b5c73de1))
+* Moves cellar items page server side ([49f4cc1](https://github.com/MrMint/cellar-assistant/commit/49f4cc176625712bdd72e98eea9e71b2a44b99ed))
+* Perf tweaks ([e306137](https://github.com/MrMint/cellar-assistant/commit/e3061374d9855b4d680566698bbb81b334f4c3a7))
+* Semantic map search ([0ce3f99](https://github.com/MrMint/cellar-assistant/commit/0ce3f991e67d15cc6bfd1f64c6ec7369639ae702))
+* Tier list lock & More map improvements ([444a271](https://github.com/MrMint/cellar-assistant/commit/444a271d38739753c97eaabda49396615547f287))
+* Updates map poi markers ([4a79e46](https://github.com/MrMint/cellar-assistant/commit/4a79e464e47a3c65457730be23936c983a16e544))
+
+
+### Bug Fixes
+
+* Bumps to 20gb ([a54846d](https://github.com/MrMint/cellar-assistant/commit/a54846da7a8dab7b0eb6be12cbbf1c82aabb2e81))
+* Disables animations on mobile ([fdeee23](https://github.com/MrMint/cellar-assistant/commit/fdeee236a57162cb48b372e2a06728dc0a7c7c94))
+* Fixes bug in category seed ([165c9ef](https://github.com/MrMint/cellar-assistant/commit/165c9ef0bee819de4dc642d4c1733abf4b14d7cf))
+* Fixes build error and redirect ([d649f27](https://github.com/MrMint/cellar-assistant/commit/d649f2764b6480b6549d986af7595a9224a1518a))
+* Fixes friend page ([e367e0e](https://github.com/MrMint/cellar-assistant/commit/e367e0e9597a511537b352d6e455e4bc2066ada1))
+* Fixes migration ([d37a6f7](https://github.com/MrMint/cellar-assistant/commit/d37a6f7bba2a64eb2228761b08fcdb1cace625de))
+* Fixes partial migration ([70dda7d](https://github.com/MrMint/cellar-assistant/commit/70dda7df302225b26ec269e55b6e96323a1e944d))
+* Fixes perf ([b136b1b](https://github.com/MrMint/cellar-assistant/commit/b136b1b44612852ebc234b12565867f3c00a99e6))
+* Fixes semantic search ([31ed638](https://github.com/MrMint/cellar-assistant/commit/31ed6385a7b9f52108810802a82390dc8589dadf))
+* Fixing vercel build errors ([1835c00](https://github.com/MrMint/cellar-assistant/commit/1835c00ce6e22ac6e0e423a6d7100e2359f8418a))
+* Mobile perf issues ([e0f7d78](https://github.com/MrMint/cellar-assistant/commit/e0f7d78d41c873027884eafb064b6b52c48aed46))
+* More perf hacks ([12d6c6f](https://github.com/MrMint/cellar-assistant/commit/12d6c6f083cf18671f73e046bd08504aeb61bdaf))
+* More perf improvements ([b150622](https://github.com/MrMint/cellar-assistant/commit/b1506228c50e43e33a20ec7bef1d6c1ecab1382e))
+* Reduces place refresh batch sizes ([47f38d3](https://github.com/MrMint/cellar-assistant/commit/47f38d34ae451f20baa0e135a51d9cbc6a74dea9))
+
 ## [0.49.0](https://github.com/MrMint/cellar-assistant/compare/v0.48.9...v0.49.0) (2026-02-03)
 
 
