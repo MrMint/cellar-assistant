@@ -50,6 +50,10 @@ interface MapContext {
 
   // Geocode navigation target (set when address search resolves)
   geocodeTarget?: GeocodedLocation;
+
+  // Queue flag: when true, a refetch is needed after the current in-flight fetch completes.
+  // This prevents multiple parallel DB queries during rapid panning.
+  pendingRefresh: boolean;
 }
 
 // Events (actions that can trigger state changes)
@@ -406,6 +410,14 @@ const actions = {
     geocodeTarget: undefined,
   }),
 
+  setPendingRefresh: assign({
+    pendingRefresh: true,
+  }),
+
+  clearPendingRefresh: assign({
+    pendingRefresh: false,
+  }),
+
   clearSemanticResults: assign({
     semanticResults: [],
     semanticError: null,
@@ -450,6 +462,7 @@ export const mapMachine = createMachine(
       semanticResults: [],
       semanticError: null,
       geocodeTarget: undefined,
+      pendingRefresh: false,
     }),
 
     states: {
@@ -678,72 +691,97 @@ export const mapMachine = createMachine(
                     globalSearch: context.globalSearch,
                     userId: context.userId,
                   }),
-                  onDone: {
-                    target: "idle",
-                    actions: "setPlaces",
-                  },
-                  onError: {
-                    target: "idle",
-                    actions: "setPlacesError",
-                  },
-                },
-                on: {
-                  // Bounds/filter changes during loading: cancel current fetch and
-                  // restart with updated params. Uses reenter: true because XState v5
-                  // self-transitions are internal by default (no exit/re-enter),
-                  // so without it the invoke would NOT be cancelled and restarted.
-                  SET_BOUNDS: [
+                  onDone: [
                     {
+                      // Pending bounds change queued during this fetch — immediately
+                      // re-fetch with updated context instead of going idle.
                       target: "loading",
                       reenter: true,
-                      guard: ({ context }) =>
-                        !(context.isSemanticSearch && context.globalSearch),
-                      actions: "setBounds",
+                      guard: ({ context }) => context.pendingRefresh,
+                      actions: ["setPlaces", "clearPendingRefresh"],
                     },
                     {
-                      // Global semantic search: just store bounds, don't restart fetch
+                      target: "idle",
+                      actions: "setPlaces",
+                    },
+                  ],
+                  onError: [
+                    {
+                      // Even if this fetch failed, the pending bounds represent a
+                      // different query that may succeed — try it. Skip setPlacesError
+                      // to avoid a flash of the stale error before the next fetch clears it.
+                      target: "loading",
+                      reenter: true,
+                      guard: ({ context }) => context.pendingRefresh,
+                      actions: "clearPendingRefresh",
+                    },
+                    {
+                      target: "idle",
+                      actions: "setPlacesError",
+                    },
+                  ],
+                },
+                on: {
+                  // Bounds changes during loading: DON'T cancel the in-flight fetch.
+                  // Instead, store updated bounds and flag a pending refresh. When the
+                  // current fetch completes, we'll immediately start a new one with the
+                  // latest bounds. This guarantees at most 1 DB query in-flight at a time,
+                  // preventing parallel query pile-up during rapid mobile panning.
+                  SET_BOUNDS: [
+                    {
+                      guard: ({ context }) =>
+                        !(context.isSemanticSearch && context.globalSearch),
+                      actions: ["setBounds", "setPendingRefresh"],
+                    },
+                    {
+                      // Global semantic search: just store bounds, no fetch needed
                       actions: "setBounds",
                     },
                   ],
+                  // Filter changes during loading: cancel current fetch and restart
+                  // with updated params. These are deliberate user actions that should
+                  // feel immediate. Uses reenter: true because XState v5 self-transitions
+                  // are internal by default (no exit/re-enter), so without it the invoke
+                  // would NOT be cancelled and restarted.
                   SET_ITEM_TYPES: {
                     target: "loading",
                     reenter: true,
-                    actions: "setItemTypes",
+                    actions: ["setItemTypes", "clearPendingRefresh"],
                   },
                   TOGGLE_ITEM_TYPE: {
                     target: "loading",
                     reenter: true,
-                    actions: "toggleItemType",
+                    actions: ["toggleItemType", "clearPendingRefresh"],
                   },
                   PERFORM_SEMANTIC_SEARCH: {
                     target: "loading",
                     reenter: true,
-                    actions: "performSemanticSearch",
+                    actions: ["performSemanticSearch", "clearPendingRefresh"],
                   },
                   SET_MIN_RATING: {
                     target: "loading",
                     reenter: true,
-                    actions: "setMinRating",
+                    actions: ["setMinRating", "clearPendingRefresh"],
                   },
                   SET_VISIT_STATUSES: {
                     target: "loading",
                     reenter: true,
-                    actions: "setVisitStatuses",
+                    actions: ["setVisitStatuses", "clearPendingRefresh"],
                   },
                   SET_TIER_LIST_IDS: {
                     target: "loading",
                     reenter: true,
-                    actions: "setTierListIds",
+                    actions: ["setTierListIds", "clearPendingRefresh"],
                   },
                   SET_GLOBAL_SEARCH: {
                     target: "loading",
                     reenter: true,
-                    actions: "setGlobalSearch",
+                    actions: ["setGlobalSearch", "clearPendingRefresh"],
                   },
                   CLEAR_FILTERS: {
                     target: "loading",
                     reenter: true,
-                    actions: "clearFilters",
+                    actions: ["clearFilters", "clearPendingRefresh"],
                   },
                   // Non-fetch context updates (search query text without triggering fetch)
                   SET_SEARCH_QUERY: {
