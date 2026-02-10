@@ -137,6 +137,9 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
   // ── Place selection / drawer close with URL history ────────────────
   const handleSelectPlace = useCallback(
     (place: PlaceResult) => {
+      if (!isDesktop) {
+        detailDrawerRef.current?.setMiddle();
+      }
       const isAlreadyOpen = isDrawerOpenRef.current;
       mapActions.selectPlace(place);
       setPlaceIdRef.current(place.id, {
@@ -146,7 +149,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
         placeIdPushedRef.current = true;
       }
     },
-    [mapActions],
+    [isDesktop, mapActions],
   );
 
   const handleCloseDrawer = useCallback(() => {
@@ -219,6 +222,9 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
 
     fetchPlaceByIdAction(placeId).then((place) => {
       if (place) {
+        if (!isDesktop) {
+          detailDrawerRef.current?.setMiddle();
+        }
         mapActions.selectPlace(place as PlaceResult);
         const [lng, lat] = place.location.coordinates;
         mapRef.current?.flyTo({
@@ -249,15 +255,14 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
 
   // Preserve selected place when mapItems update
   useEffect(() => {
-    if (mapUI.selectedPlace && mapItems.length > 0) {
+    const selectedPlace = mapUI.selectedPlace;
+    if (selectedPlace && mapItems.length > 0) {
       const updatedPlace = mapItems.find(
         (item): item is PlaceResult =>
-          !("is_cluster" in item) &&
-          (item.id === mapUI.selectedPlace?.id ||
-            item.name === mapUI.selectedPlace?.name),
+          !("is_cluster" in item) && item.id === selectedPlace.id,
       );
 
-      if (updatedPlace && updatedPlace !== mapUI.selectedPlace) {
+      if (updatedPlace && updatedPlace !== selectedPlace) {
         mapActions.updateSelectedPlace(updatedPlace);
       }
     }
@@ -361,7 +366,16 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
         }
       }
     },
-    [isPlacing, mapUI.isDrawerOpen, mapUI.selectedPlace, handleCloseDrawer, handleSelectPlace, placeLookup, isDesktop, hasSidebar],
+    [
+      isPlacing,
+      mapUI.isDrawerOpen,
+      mapUI.selectedPlace,
+      handleCloseDrawer,
+      handleSelectPlace,
+      placeLookup,
+      isDesktop,
+      hasSidebar,
+    ],
   );
 
   const handleLocationClick = useCallback(() => {
@@ -382,9 +396,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     const center = mapRef.current?.getCenter();
     if (center) {
       mapActions.exitPinPlacement();
-      router.push(
-        `/map/create-place?lat=${center.lat}&lng=${center.lng}`,
-      );
+      router.push(`/map/create-place?lat=${center.lat}&lng=${center.lng}`);
     }
   }, [mapActions, router]);
 
@@ -467,6 +479,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
             items={mapItems}
             filters={filters}
             isDarkMode={mapCore.isDarkMode}
+            currentZoom={mapCore.currentZoom}
           />
         )}
 

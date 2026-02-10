@@ -1,0 +1,2 @@
+ALTER TABLE public.tier_lists
+ADD COLUMN IF NOT EXISTS is_editing_locked BOOLEAN NOT NULL DEFAULT FALSE;

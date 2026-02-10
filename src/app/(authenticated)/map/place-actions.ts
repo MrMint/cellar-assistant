@@ -1,6 +1,11 @@
 "use server";
 
 import { graphql } from "@cellar-assistant/shared/gql";
+import {
+  type CountryCode,
+  isSupportedCountry,
+  parsePhoneNumberFromString,
+} from "libphonenumber-js";
 import { revalidatePath } from "next/cache";
 import { getCachedReverseGeocode } from "@/lib/cache";
 import { adminQuery, serverMutation, serverQuery } from "@/lib/urql/server";
@@ -148,6 +153,40 @@ const INSERT_PLACE = graphql(`
   }
 `);
 
+const WEBSITE_PROTOCOL_RE = /^https?:\/\//i;
+const WEBSITE_MAX_LENGTH = 2048;
+
+function normalizeCountryCode(value?: string): CountryCode | null {
+  const normalized = value?.trim().toUpperCase() ?? "";
+  if (!normalized) return null;
+  if (!/^[A-Z]{2}$/.test(normalized)) return null;
+  if (!isSupportedCountry(normalized as CountryCode)) return null;
+  return normalized as CountryCode;
+}
+
+function normalizeWebsite(value?: string): string | null {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return null;
+  if (trimmed.length > WEBSITE_MAX_LENGTH) return null;
+
+  const candidate = WEBSITE_PROTOCOL_RE.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(candidate);
+    if (
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      !parsed.hostname.includes(".")
+    ) {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 // =============================================================================
 // Server Actions
 // =============================================================================
@@ -191,8 +230,19 @@ export async function checkDuplicatePlacesAction(
 
     const duplicates: DuplicatePlace[] =
       data.findDuplicatePlaces
-        ?.filter((d): d is typeof d & { id: string; name: string; similarity: number; distance_m: number } =>
-          d.id != null && d.name != null && d.similarity != null && d.distance_m != null
+        ?.filter(
+          (
+            d,
+          ): d is typeof d & {
+            id: string;
+            name: string;
+            similarity: number;
+            distance_m: number;
+          } =>
+            d.id != null &&
+            d.name != null &&
+            d.similarity != null &&
+            d.distance_m != null,
         )
         .map((d) => ({
           id: d.id,
@@ -270,7 +320,12 @@ export async function fetchPlaceByIdAction(placeId: string) {
       | { coordinates: [number, number] }
       | string
       | null;
-    if (loc && typeof loc === "object" && "coordinates" in loc && Array.isArray(loc.coordinates)) {
+    if (
+      loc &&
+      typeof loc === "object" &&
+      "coordinates" in loc &&
+      Array.isArray(loc.coordinates)
+    ) {
       coordinates = loc.coordinates;
     } else if (typeof loc === "string") {
       try {
@@ -327,20 +382,56 @@ export async function createUserPlaceAction(
   // 0. Input validation
   const trimmedName = input.name.trim();
   if (trimmedName.length < 2 || trimmedName.length > 200) {
-    return { success: false, error: "Place name must be between 2 and 200 characters." };
+    return {
+      success: false,
+      error: "Place name must be between 2 and 200 characters.",
+    };
   }
   if (input.description && input.description.length > 1000) {
-    return { success: false, error: "Description must be under 1000 characters." };
+    return {
+      success: false,
+      error: "Description must be under 1000 characters.",
+    };
   }
   if (input.categories.length === 0) {
     return { success: false, error: "At least one category is required." };
   }
 
-  // Normalize website URL
-  let website = input.website?.trim() || null;
-  if (website && !/^https?:\/\//i.test(website)) {
-    website = `https://${website}`;
+  const trimmedCountryCode = input.country_code?.trim() ?? "";
+  const countryCode = normalizeCountryCode(input.country_code);
+  if (trimmedCountryCode && !countryCode) {
+    return {
+      success: false,
+      error: "Country code must be a valid 2-letter code.",
+    };
   }
+
+  const trimmedPhone = input.phone?.trim() ?? "";
+  let phone: string | null = null;
+  if (trimmedPhone) {
+    const parsedPhone = parsePhoneNumberFromString(
+      trimmedPhone,
+      countryCode ?? undefined,
+    );
+    if (!parsedPhone || !parsedPhone.isValid()) {
+      return { success: false, error: "Enter a valid phone number." };
+    }
+    phone = parsedPhone.number;
+  }
+
+  const trimmedWebsite = input.website?.trim() ?? "";
+  const website = normalizeWebsite(input.website);
+  if (trimmedWebsite && !website) {
+    return { success: false, error: "Enter a valid website URL." };
+  }
+
+  const normalizedInput: CreatePlaceInput = {
+    ...input,
+    name: trimmedName,
+    country_code: countryCode ?? undefined,
+    phone: phone ?? undefined,
+    website: website ?? undefined,
+  };
 
   // 1. Rate limit: max 25 places per 24 hours
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -353,7 +444,8 @@ export async function createUserPlaceAction(
     if (count >= 25) {
       return {
         success: false,
-        error: "You can add up to 25 places per day. Please try again tomorrow.",
+        error:
+          "You can add up to 25 places per day. Please try again tomorrow.",
       };
     }
   } catch (error) {
@@ -364,9 +456,9 @@ export async function createUserPlaceAction(
   // 2. Server-side duplicate re-check (stricter than client-side)
   try {
     const { duplicates } = await checkDuplicatePlacesAction(
-      input.name,
-      input.latitude,
-      input.longitude,
+      normalizedInput.name,
+      normalizedInput.latitude,
+      normalizedInput.longitude,
     );
     const highMatch = duplicates.find(
       (d) => d.similarity > 0.7 && d.distance_m < 50,
@@ -385,8 +477,8 @@ export async function createUserPlaceAction(
 
   // 3. AI review (optional, graceful degradation)
   let confidence = 0.5;
-  let description = input.description;
-  const aiReview = await callAIReview(input);
+  let description = normalizedInput.description;
+  const aiReview = await callAIReview(normalizedInput);
 
   if (aiReview) {
     if (!aiReview.approved) {
@@ -397,7 +489,10 @@ export async function createUserPlaceAction(
           "This place submission was not approved. Please check the details and try again.",
       };
     }
-    confidence = Math.max(0.1, Math.min(0.9, 0.5 + aiReview.confidence_adjustment));
+    confidence = Math.max(
+      0.1,
+      Math.min(0.9, 0.5 + aiReview.confidence_adjustment),
+    );
     if (aiReview.enriched_description && !description) {
       description = aiReview.enriched_description;
     }
@@ -407,20 +502,20 @@ export async function createUserPlaceAction(
   try {
     const location = {
       type: "Point" as const,
-      coordinates: [input.longitude, input.latitude],
+      coordinates: [normalizedInput.longitude, normalizedInput.latitude],
     };
 
     const result = await serverMutation(INSERT_PLACE, {
       object: {
         name: trimmedName,
-        categories: input.categories,
+        categories: normalizedInput.categories,
         location,
-        street_address: input.street_address?.trim() || null,
-        locality: input.locality?.trim() || null,
-        region: input.region?.trim() || null,
-        postcode: input.postcode?.trim() || null,
-        country_code: input.country_code?.trim() || null,
-        phone: input.phone?.trim() || null,
+        street_address: normalizedInput.street_address?.trim() || null,
+        locality: normalizedInput.locality?.trim() || null,
+        region: normalizedInput.region?.trim() || null,
+        postcode: normalizedInput.postcode?.trim() || null,
+        country_code: countryCode,
+        phone,
         website,
         description: description?.trim() || null,
         confidence,

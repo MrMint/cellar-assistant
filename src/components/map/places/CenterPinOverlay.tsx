@@ -3,6 +3,8 @@
 import { Box, Button, IconButton, Sheet, Stack, Typography } from "@mui/joy";
 import { Close } from "@mui/icons-material";
 
+const MOBILE_NAV_CLEARANCE = "80px";
+
 interface CenterPinOverlayProps {
   onConfirm: () => void;
   onCancel: () => void;
@@ -68,11 +70,15 @@ export function CenterPinOverlay({
       <Box
         sx={{
           position: "absolute",
-          bottom: { xs: 24, md: 24 },
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 1100,
-          width: { xs: "calc(100% - 32px)", md: "auto" },
+          bottom: {
+            xs: `calc(${MOBILE_NAV_CLEARANCE} + env(safe-area-inset-bottom, 0px))`,
+            md: 24,
+          },
+          left: { xs: 16, md: "50%" },
+          right: { xs: 16, md: "auto" },
+          transform: { xs: "none", md: "translateX(-50%)" },
+          zIndex: 1250,
+          width: { xs: "auto", md: "auto" },
           maxWidth: 400,
         }}
       >

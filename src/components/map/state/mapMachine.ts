@@ -154,10 +154,7 @@ const guards = {
     event: MapEvent;
   }) => {
     if (event.type === "UPDATE_SELECTED_PLACE" && context.selectedPlace) {
-      return (
-        context.selectedPlace.id === event.place.id ||
-        context.selectedPlace.name === event.place.name
-      );
+      return context.selectedPlace.id === event.place.id;
     }
     return false;
   },
@@ -342,13 +339,19 @@ const actions = {
       return undefined;
     },
     isSemanticSearch: ({ context, event }) => {
-      if (event.type === "xstate.done.actor.fetchPlaces" && event.output.geocodeResult) {
+      if (
+        event.type === "xstate.done.actor.fetchPlaces" &&
+        event.output.geocodeResult
+      ) {
         return false;
       }
       return context.isSemanticSearch;
     },
     globalSearch: ({ context, event }) => {
-      if (event.type === "xstate.done.actor.fetchPlaces" && event.output.geocodeResult) {
+      if (
+        event.type === "xstate.done.actor.fetchPlaces" &&
+        event.output.geocodeResult
+      ) {
         return false;
       }
       return context.globalSearch;
@@ -357,7 +360,10 @@ const actions = {
     // for an address, the map flew there, and the bounded query will show
     // nearby places. Keeping stale address text would be confusing.
     searchQuery: ({ context, event }) => {
-      if (event.type === "xstate.done.actor.fetchPlaces" && event.output.geocodeResult) {
+      if (
+        event.type === "xstate.done.actor.fetchPlaces" &&
+        event.output.geocodeResult
+      ) {
         return "";
       }
       return context.searchQuery;
@@ -388,10 +394,7 @@ const actions = {
   updateSelectedPlace: assign({
     selectedPlace: ({ context, event }) => {
       if (event.type === "UPDATE_SELECTED_PLACE" && context.selectedPlace) {
-        if (
-          context.selectedPlace.id === event.place.id ||
-          context.selectedPlace.name === event.place.name
-        ) {
+        if (context.selectedPlace.id === event.place.id) {
           return event.place;
         }
       }

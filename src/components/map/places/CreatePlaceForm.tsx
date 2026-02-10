@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  formatCategoryLabel,
+  PLACE_CATEGORY_TIERS,
+  type UserPlaceCategory,
+} from "@cellar-assistant/shared";
 import { ArrowBack, MyLocation } from "@mui/icons-material";
 import {
   Alert,
@@ -18,21 +23,22 @@ import {
   Textarea,
   Typography,
 } from "@mui/joy";
+import type { CountryCode } from "libphonenumber-js";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import {
+  isSupportedCountry,
+  isValidPhoneNumber,
+} from "react-phone-number-input";
+import PhoneInput from "react-phone-number-input/input";
+import {
   type CreatePlaceInput,
-  type DuplicatePlace,
   checkDuplicatePlacesAction,
   createUserPlaceAction,
+  type DuplicatePlace,
   reverseGeocodeAction,
 } from "@/app/(authenticated)/map/place-actions";
-import {
-  formatCategoryLabel,
-  PLACE_CATEGORY_TIERS,
-  type UserPlaceCategory,
-} from "@cellar-assistant/shared";
 import { DuplicatePlaceCheck } from "./DuplicatePlaceCheck";
 
 // =============================================================================
@@ -57,6 +63,37 @@ const CATEGORY_OPTIONS: CategoryOption[] = [
     tier: "Retail",
   })),
 ];
+
+const WEBSITE_PROTOCOL_RE = /^https?:\/\//i;
+
+function normalizeWebsite(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const candidate = WEBSITE_PROTOCOL_RE.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(candidate);
+    if (
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      !parsed.hostname.includes(".")
+    ) {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function toSupportedCountryCode(value: string): CountryCode | undefined {
+  const normalized = value.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) return undefined;
+  if (!isSupportedCountry(normalized)) return undefined;
+  return normalized as CountryCode;
+}
 
 // =============================================================================
 // Form Types
@@ -84,10 +121,7 @@ interface CreatePlaceFormProps {
 // Component
 // =============================================================================
 
-export function CreatePlaceForm({
-  latitude,
-  longitude,
-}: CreatePlaceFormProps) {
+export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -118,6 +152,8 @@ export function CreatePlaceForm({
   });
 
   const nameValue = watch("name");
+  const countryCodeValue = watch("country_code");
+  const phoneCountry = toSupportedCountryCode(countryCodeValue) ?? "US";
 
   // Auto-fill address from reverse geocode on mount
   useEffect(() => {
@@ -125,11 +161,14 @@ export function CreatePlaceForm({
     reverseGeocodeAction(latitude, longitude)
       .then((result) => {
         if (result) {
-          if (result.street_address) setValue("street_address", result.street_address);
+          if (result.street_address)
+            setValue("street_address", result.street_address);
           if (result.locality) setValue("locality", result.locality);
           if (result.region) setValue("region", result.region);
           if (result.postcode) setValue("postcode", result.postcode);
-          if (result.country_code) setValue("country_code", result.country_code);
+          if (result.country_code) {
+            setValue("country_code", result.country_code.toUpperCase());
+          }
         }
       })
       .finally(() => setAddressLoading(false));
@@ -187,6 +226,7 @@ export function CreatePlaceForm({
 
   const onSubmit: SubmitHandler<FormFields> = async (data) => {
     setServerError(null);
+    const normalizedWebsite = normalizeWebsite(data.website);
 
     const input: CreatePlaceInput = {
       name: data.name,
@@ -197,9 +237,9 @@ export function CreatePlaceForm({
       locality: data.locality || undefined,
       region: data.region || undefined,
       postcode: data.postcode || undefined,
-      country_code: data.country_code || undefined,
+      country_code: data.country_code.trim().toUpperCase() || undefined,
       phone: data.phone || undefined,
-      website: data.website || undefined,
+      website: normalizedWebsite ?? undefined,
       description: data.description || undefined,
     };
 
@@ -263,7 +303,10 @@ export function CreatePlaceForm({
           control={control}
           rules={{
             required: "Place name is required",
-            maxLength: { value: 200, message: "Name must be under 200 characters" },
+            maxLength: {
+              value: 200,
+              message: "Name must be under 200 characters",
+            },
           }}
           render={({ field }) => (
             <FormControl error={!!errors.name}>
@@ -281,8 +324,7 @@ export function CreatePlaceForm({
           name="categories"
           control={control}
           rules={{
-            validate: (v) =>
-              v.length > 0 || "Select at least one category",
+            validate: (v) => v.length > 0 || "Select at least one category",
           }}
           render={({ field }) => (
             <FormControl error={!!errors.categories}>
@@ -317,7 +359,12 @@ export function CreatePlaceForm({
               variant="soft"
               color="neutral"
               size="sm"
-              startDecorator={<CircularProgress size="sm" sx={{ "--CircularProgress-size": "14px" }} />}
+              startDecorator={
+                <CircularProgress
+                  size="sm"
+                  sx={{ "--CircularProgress-size": "14px" }}
+                />
+              }
             >
               Loading address...
             </Chip>
@@ -382,10 +429,31 @@ export function CreatePlaceForm({
           <Controller
             name="country_code"
             control={control}
+            rules={{
+              validate: (value) => {
+                const trimmed = value.trim();
+                if (!trimmed) return true;
+                return (
+                  toSupportedCountryCode(trimmed) != null ||
+                  "Use a valid 2-letter country code"
+                );
+              },
+            }}
             render={({ field }) => (
-              <FormControl>
+              <FormControl error={!!errors.country_code}>
                 <FormLabel>Country Code</FormLabel>
-                <Input {...field} placeholder="US" size="sm" />
+                <Input
+                  {...field}
+                  value={field.value}
+                  onChange={(event) =>
+                    field.onChange(event.target.value.toUpperCase().slice(0, 2))
+                  }
+                  placeholder="US"
+                  size="sm"
+                />
+                {errors.country_code && (
+                  <FormHelperText>{errors.country_code.message}</FormHelperText>
+                )}
               </FormControl>
             )}
           />
@@ -406,10 +474,47 @@ export function CreatePlaceForm({
           <Controller
             name="phone"
             control={control}
+            rules={{
+              validate: (value) =>
+                !value ||
+                isValidPhoneNumber(value) ||
+                "Enter a valid phone number",
+            }}
             render={({ field }) => (
-              <FormControl>
+              <FormControl error={!!errors.phone}>
                 <FormLabel>Phone</FormLabel>
-                <Input {...field} type="tel" placeholder="+1 555-123-4567" size="sm" />
+                <Box
+                  sx={{
+                    border: "1px solid",
+                    borderColor: errors.phone
+                      ? "danger.outlinedBorder"
+                      : "neutral.outlinedBorder",
+                    borderRadius: "sm",
+                    px: 1.5,
+                    py: 1,
+                    "& input": {
+                      width: "100%",
+                      border: "none",
+                      outline: "none",
+                      font: "inherit",
+                      background: "transparent",
+                    },
+                  }}
+                >
+                  <PhoneInput
+                    country={phoneCountry}
+                    international
+                    withCountryCallingCode
+                    value={field.value || undefined}
+                    onChange={(value) => field.onChange(value ?? "")}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    placeholder="+1 555 123 4567"
+                  />
+                </Box>
+                {errors.phone && (
+                  <FormHelperText>{errors.phone.message}</FormHelperText>
+                )}
               </FormControl>
             )}
           />
@@ -418,15 +523,29 @@ export function CreatePlaceForm({
             name="website"
             control={control}
             rules={{
-              pattern: {
-                value: /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}/i,
-                message: "Enter a valid URL",
-              },
+              validate: (value) =>
+                !value.trim() ||
+                normalizeWebsite(value) != null ||
+                "Enter a valid URL",
             }}
             render={({ field }) => (
               <FormControl error={!!errors.website}>
                 <FormLabel>Website</FormLabel>
-                <Input {...field} placeholder="https://example.com" size="sm" />
+                <Input
+                  {...field}
+                  placeholder="https://example.com"
+                  size="sm"
+                  onBlur={(event) => {
+                    field.onBlur();
+                    const normalized = normalizeWebsite(event.target.value);
+                    if (normalized) {
+                      setValue("website", normalized, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }
+                  }}
+                />
                 {errors.website && (
                   <FormHelperText>{errors.website.message}</FormHelperText>
                 )}
@@ -440,7 +559,10 @@ export function CreatePlaceForm({
           name="description"
           control={control}
           rules={{
-            maxLength: { value: 1000, message: "Description must be under 1000 characters" },
+            maxLength: {
+              value: 1000,
+              message: "Description must be under 1000 characters",
+            },
           }}
           render={({ field }) => (
             <FormControl error={!!errors.description}>
@@ -463,10 +585,7 @@ export function CreatePlaceForm({
         <Button
           type="submit"
           loading={loading}
-          disabled={
-            loading ||
-            (duplicates.length > 0 && !duplicatesConfirmed)
-          }
+          disabled={loading || (duplicates.length > 0 && !duplicatesConfirmed)}
           size="lg"
           sx={{ mt: 1 }}
         >

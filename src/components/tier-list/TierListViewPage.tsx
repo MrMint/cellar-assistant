@@ -10,14 +10,16 @@ import {
   Typography,
 } from "@mui/joy";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   MdEdit,
-  MdLock,
   MdGroup,
+  MdLock,
+  MdLockOpen,
   MdPublic,
   MdShare,
 } from "react-icons/md";
+import { setTierListEditingLockAction } from "@/app/actions/tierLists";
 import { TierListView } from "./TierListView";
 import type { TierListData } from "./types";
 
@@ -36,6 +38,12 @@ export function TierListViewPage({ data }: TierListViewPageProps) {
   const PrivacyIcon = privacyInfo.icon;
 
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [isEditingLocked, setIsEditingLocked] = useState(data.isEditingLocked);
+  const [isSavingEditingLock, setIsSavingEditingLock] = useState(false);
+
+  useEffect(() => {
+    setIsEditingLocked(data.isEditingLocked);
+  }, [data.isEditingLocked]);
 
   const handleShare = useCallback(async () => {
     const url = `${window.location.origin}/tier-lists/${data.id}`;
@@ -56,6 +64,28 @@ export function TierListViewPage({ data }: TierListViewPageProps) {
       // User cancelled share
     }
   }, [data.id, data.name]);
+
+  const handleToggleEditingLock = useCallback(async () => {
+    if (!data.isOwner || isSavingEditingLock) return;
+
+    const previousLocked = isEditingLocked;
+    const nextLocked = !previousLocked;
+
+    setIsEditingLocked(nextLocked);
+    setIsSavingEditingLock(true);
+
+    const result = await setTierListEditingLockAction(data.id, nextLocked);
+    setIsSavingEditingLock(false);
+
+    if (!result.success) {
+      setIsEditingLocked(previousLocked);
+      setFeedback(result.error ?? "Failed to update editing lock");
+      return;
+    }
+
+    setIsEditingLocked(result.isEditingLocked ?? nextLocked);
+    setFeedback(nextLocked ? "Editing locked" : "Editing unlocked");
+  }, [data.id, data.isOwner, isEditingLocked, isSavingEditingLock]);
 
   return (
     <Box sx={{ maxWidth: 800, mx: "auto", px: { xs: 1, sm: 2 } }}>
@@ -83,7 +113,10 @@ export function TierListViewPage({ data }: TierListViewPageProps) {
               >
                 {privacyInfo.label}
               </Chip>
-              <Typography level="body-xs" sx={{ color: "text.tertiary", alignSelf: "center" }}>
+              <Typography
+                level="body-xs"
+                sx={{ color: "text.tertiary", alignSelf: "center" }}
+              >
                 {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
               </Typography>
             </Stack>
@@ -98,6 +131,21 @@ export function TierListViewPage({ data }: TierListViewPageProps) {
                   onClick={handleShare}
                 >
                   <MdShare />
+                </IconButton>
+              </Tooltip>
+            )}
+            {data.isOwner && (
+              <Tooltip
+                title={isEditingLocked ? "Unlock editing" : "Lock editing"}
+              >
+                <IconButton
+                  variant={isEditingLocked ? "solid" : "outlined"}
+                  color={isEditingLocked ? "warning" : "neutral"}
+                  size="sm"
+                  onClick={handleToggleEditingLock}
+                  disabled={isSavingEditingLock}
+                >
+                  {isEditingLocked ? <MdLock /> : <MdLockOpen />}
                 </IconButton>
               </Tooltip>
             )}
@@ -122,6 +170,7 @@ export function TierListViewPage({ data }: TierListViewPageProps) {
           tierListId={data.id}
           items={data.items}
           isOwner={data.isOwner}
+          isEditingLocked={isEditingLocked}
         />
       </Stack>
 

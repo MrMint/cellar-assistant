@@ -1,53 +1,54 @@
 "use client";
 
 import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  type DragOverEvent,
+  DragOverlay,
+  type DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  type UniqueIdentifier,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   Box,
+  Button,
   Card,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   IconButton,
   Modal,
   ModalDialog,
-  Button,
   Sheet,
   Typography,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Divider,
 } from "@mui/joy";
 import Link from "next/link";
-import { memo, useState, useMemo, useCallback, useRef, useId } from "react";
-import { MdDelete, MdDragIndicator, MdStar } from "react-icons/md";
-import { FaCrown } from "react-icons/fa";
+import { useRouter } from "next/navigation";
+import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
 import { AiFillTrophy } from "react-icons/ai";
+import { FaCrown } from "react-icons/fa";
+import { MdDelete, MdDragIndicator, MdStar } from "react-icons/md";
 import {
   removeItemFromTierListAction,
   reorderBandAction,
 } from "@/app/actions/tierLists";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  TouchSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
-  closestCenter,
-  type DragStartEvent,
-  type DragOverEvent,
-  type DragEndEvent,
-  type UniqueIdentifier,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-  sortableKeyboardCoordinates,
-} from "@dnd-kit/sortable";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { CSS } from "@dnd-kit/utilities";
-import { BANDS, BAND_LABELS, BAND_COLORS } from "./constants";
+import { BAND_COLORS, BAND_LABELS, BANDS } from "./constants";
 import type { TierListItemDisplay } from "./types";
 
 // =============================================================================
@@ -58,6 +59,7 @@ interface TierListViewProps {
   tierListId: string;
   items: TierListItemDisplay[];
   isOwner: boolean;
+  isEditingLocked?: boolean;
 }
 
 // =============================================================================
@@ -149,14 +151,14 @@ function RankBadge({ rank }: { rank: number }) {
 interface TierListItemContentProps {
   item: TierListItemDisplay;
   rank: number;
-  isOwner: boolean;
+  canEdit: boolean;
   onRemove: (itemId: string, name: string) => void;
 }
 
 const TierListItemContent = memo(function TierListItemContent({
   item,
   rank,
-  isOwner,
+  canEdit,
   onRemove,
 }: TierListItemContentProps) {
   return (
@@ -198,7 +200,10 @@ const TierListItemContent = memo(function TierListItemContent({
           }}
         >
           <MdStar style={{ fontSize: 14 }} />
-          <Typography level="body-xs" sx={{ fontWeight: "lg", color: "inherit" }}>
+          <Typography
+            level="body-xs"
+            sx={{ fontWeight: "lg", color: "inherit" }}
+          >
             {item.reviewScore}
           </Typography>
         </Box>
@@ -206,7 +211,7 @@ const TierListItemContent = memo(function TierListItemContent({
 
       <RankBadge rank={rank} />
 
-      {isOwner && (
+      {canEdit && (
         <IconButton
           variant="plain"
           color="neutral"
@@ -228,14 +233,14 @@ const TierListItemContent = memo(function TierListItemContent({
 interface SortableTierListItemProps {
   item: TierListItemDisplay;
   rank: number;
-  isOwner: boolean;
+  canEdit: boolean;
   onRemove: (itemId: string, name: string) => void;
 }
 
 const SortableTierListItem = memo(function SortableTierListItem({
   item,
   rank,
-  isOwner,
+  canEdit,
   onRemove,
 }: SortableTierListItemProps) {
   const {
@@ -248,7 +253,7 @@ const SortableTierListItem = memo(function SortableTierListItem({
     isDragging,
   } = useSortable({
     id: item.id,
-    disabled: !isOwner,
+    disabled: !canEdit,
   });
 
   // Dynamic values change every frame during drag — use inline style to
@@ -277,7 +282,7 @@ const SortableTierListItem = memo(function SortableTierListItem({
         },
       }}
     >
-      {isOwner && (
+      {canEdit && (
         <Box
           ref={setActivatorNodeRef}
           {...attributes}
@@ -298,7 +303,7 @@ const SortableTierListItem = memo(function SortableTierListItem({
       <TierListItemContent
         item={item}
         rank={rank}
-        isOwner={isOwner}
+        canEdit={canEdit}
         onRemove={onRemove}
       />
     </Sheet>
@@ -311,7 +316,9 @@ const SortableTierListItem = memo(function SortableTierListItem({
 
 const DragOverlayItem = memo(function DragOverlayItem({
   item,
-}: { item: TierListItemDisplay }) {
+}: {
+  item: TierListItemDisplay;
+}) {
   return (
     <Card
       variant="outlined"
@@ -399,7 +406,7 @@ interface TierBandProps {
   itemIds: string[];
   itemMap: Map<string, TierListItemDisplay>;
   rankOffset: number;
-  isOwner: boolean;
+  canEdit: boolean;
   isFirst: boolean;
   isLast: boolean;
   onRemove: (itemId: string, name: string) => void;
@@ -410,7 +417,7 @@ const TierBand = memo(function TierBand({
   itemIds,
   itemMap,
   rankOffset,
-  isOwner,
+  canEdit,
   isFirst,
   isLast,
   onRemove,
@@ -457,7 +464,7 @@ const TierBand = memo(function TierBand({
                   key={itemId}
                   item={item}
                   rank={rankOffset + index + 1}
-                  isOwner={isOwner}
+                  canEdit={canEdit}
                   onRemove={onRemove}
                 />
               );
@@ -473,8 +480,15 @@ const TierBand = memo(function TierBand({
 // Main TierListView
 // =============================================================================
 
-export function TierListView({ tierListId, items, isOwner }: TierListViewProps) {
+export function TierListView({
+  tierListId,
+  items,
+  isOwner,
+  isEditingLocked = false,
+}: TierListViewProps) {
   const dndId = useId();
+  const router = useRouter();
+  const canEdit = isOwner && !isEditingLocked;
 
   const [removeTarget, setRemoveTarget] = useState<{
     id: string;
@@ -534,17 +548,14 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
   initialBandMapRef.current = initialBandMap;
 
   // Stable helpers — read from refs, never recreated
-  const findBandForItem = useCallback(
-    (id: UniqueIdentifier): number | null => {
-      const map = bandMapRef.current;
-      const str = String(id);
-      for (const band of BANDS) {
-        if (map[band]?.includes(str)) return band;
-      }
-      return null;
-    },
-    [],
-  );
+  const findBandForItem = useCallback((id: UniqueIdentifier): number | null => {
+    const map = bandMapRef.current;
+    const str = String(id);
+    for (const band of BANDS) {
+      if (map[band]?.includes(str)) return band;
+    }
+    return null;
+  }, []);
 
   const findBandFromContainerId = useCallback(
     (id: UniqueIdentifier): number | null => {
@@ -566,14 +577,16 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
   // Stable DnD handlers — no bandMap/itemToBand in deps
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
+      if (!canEdit) return;
       setActiveId(event.active.id);
       dragSourceBandRef.current = findBandForItem(event.active.id);
     },
-    [findBandForItem],
+    [findBandForItem, canEdit],
   );
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
+      if (!canEdit) return;
       const { active, over } = event;
       if (!over) return;
 
@@ -619,7 +632,7 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
         });
       }
     },
-    [findBandForItem, findBandFromContainerId],
+    [findBandForItem, findBandFromContainerId, canEdit],
   );
 
   // Build sequential position updates (0, 1, 2…) for an entire band.
@@ -631,6 +644,12 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      if (!canEdit) {
+        setActiveId(null);
+        dragSourceBandRef.current = null;
+        return;
+      }
+
       const { active, over } = event;
       setActiveId(null);
 
@@ -662,7 +681,15 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
       if (sourceBand === destBand) {
         // Within-band reorder — only persist if position changed
         if (finalDestItems !== destItems) {
-          reorderBandAction(buildBandUpdates(finalDestItems, destBand));
+          void (async () => {
+            const result = await reorderBandAction(
+              buildBandUpdates(finalDestItems, destBand),
+              tierListId,
+            );
+            if (result.success) {
+              router.refresh();
+            }
+          })();
         }
       } else {
         // Cross-band: handleDragOver already moved the item in state.
@@ -671,10 +698,15 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
           ...buildBandUpdates(map[sourceBand] ?? [], sourceBand),
           ...buildBandUpdates(finalDestItems, destBand),
         ];
-        reorderBandAction(updates);
+        void (async () => {
+          const result = await reorderBandAction(updates, tierListId);
+          if (result.success) {
+            router.refresh();
+          }
+        })();
       }
     },
-    [findBandForItem, buildBandUpdates],
+    [findBandForItem, buildBandUpdates, tierListId, router, canEdit],
   );
 
   const handleDragCancel = useCallback(() => {
@@ -688,7 +720,7 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
   }, []);
 
   const handleConfirmRemove = useCallback(async () => {
-    if (!removeTarget) return;
+    if (!canEdit || !removeTarget) return;
     // Optimistically remove from local state for instant feedback
     setBandMap((prev) => {
       const next = { ...prev };
@@ -702,8 +734,14 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
       return next;
     });
     setRemoveTarget(null);
-    removeItemFromTierListAction(removeTarget.id, tierListId);
-  }, [removeTarget, tierListId]);
+    const result = await removeItemFromTierListAction(
+      removeTarget.id,
+      tierListId,
+    );
+    if (result.success) {
+      router.refresh();
+    }
+  }, [removeTarget, tierListId, router, canEdit]);
 
   const activeItem = activeId ? itemMap.get(String(activeId)) : null;
 
@@ -713,7 +751,7 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
         id={dndId}
         sensors={sensors}
         collisionDetection={closestCenter}
-        modifiers={isOwner ? VERTICAL_MODIFIERS : NO_MODIFIERS}
+        modifiers={canEdit ? VERTICAL_MODIFIERS : NO_MODIFIERS}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
@@ -740,7 +778,7 @@ export function TierListView({ tierListId, items, isOwner }: TierListViewProps) 
                 itemIds={bandMap[band] ?? []}
                 itemMap={itemMap}
                 rankOffset={rankOffset}
-                isOwner={isOwner}
+                canEdit={canEdit}
                 isFirst={index === 0}
                 isLast={index === BANDS.length - 1}
                 onRemove={handleRemoveClick}

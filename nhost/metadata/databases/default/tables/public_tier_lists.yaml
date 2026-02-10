@@ -32,6 +32,7 @@ select_permissions:
         - name
         - description
         - created_by_id
+        - is_editing_locked
         - privacy
         - list_type
         - created_at
@@ -56,6 +57,7 @@ update_permissions:
       columns:
         - name
         - description
+        - is_editing_locked
         - privacy
       filter:
         created_by_id:

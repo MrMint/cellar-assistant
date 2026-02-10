@@ -3,7 +3,7 @@
 import type { MapLayerMouseEvent } from "maplibre-gl";
 import { useEffect } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { INTERACTIVE_LAYER_IDS, SOURCE_IDS } from "../constants";
+import { INTERACTIVE_LAYER_IDS, LAYER_IDS, SOURCE_IDS } from "../constants";
 
 /**
  * Wires pointer-cursor and hover feature-state on interactive layers.
@@ -22,38 +22,43 @@ export function useMapInteraction(
     const map = mapRef.current?.getMap();
     if (!map) return;
 
-    let hoveredId: string | number | null = null;
+    let hoveredPoiId: string | number | null = null;
 
     const handleMouseEnter = () => {
       map.getCanvas().style.cursor = "pointer";
     };
 
     const handleMouseMove = (e: MapLayerMouseEvent) => {
-      if (hoveredId !== null) {
+      if (hoveredPoiId !== null) {
         map.setFeatureState(
-          { source: SOURCE_IDS.POIS, id: hoveredId },
+          { source: SOURCE_IDS.POIS, id: hoveredPoiId },
           { hover: false },
         );
+        hoveredPoiId = null;
       }
-      if (e.features?.[0]) {
-        hoveredId = e.features[0].id ?? e.features[0].properties?.id;
-        if (hoveredId !== null) {
-          map.setFeatureState(
-            { source: SOURCE_IDS.POIS, id: hoveredId },
-            { hover: true },
-          );
-        }
+
+      const feature = e.features?.[0];
+      if (!feature || feature.layer.id !== LAYER_IDS.POI_PINS) {
+        return;
+      }
+
+      hoveredPoiId = feature.id ?? feature.properties?.id;
+      if (hoveredPoiId !== null) {
+        map.setFeatureState(
+          { source: SOURCE_IDS.POIS, id: hoveredPoiId },
+          { hover: true },
+        );
       }
     };
 
     const handleMouseLeave = () => {
       map.getCanvas().style.cursor = "";
-      if (hoveredId !== null) {
+      if (hoveredPoiId !== null) {
         map.setFeatureState(
-          { source: SOURCE_IDS.POIS, id: hoveredId },
+          { source: SOURCE_IDS.POIS, id: hoveredPoiId },
           { hover: false },
         );
-        hoveredId = null;
+        hoveredPoiId = null;
       }
     };
 

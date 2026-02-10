@@ -21,6 +21,7 @@ export interface TierListData {
   privacy: string;
   listType: string;
   isOwner: boolean;
+  isEditingLocked: boolean;
   itemCount: number;
   items: TierListItemDisplay[];
 }

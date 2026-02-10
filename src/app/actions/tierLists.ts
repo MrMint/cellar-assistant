@@ -1,6 +1,8 @@
 "use server";
 
 import { graphql, type Permission_Type_Enum } from "@cellar-assistant/shared";
+import type { TadaDocumentNode } from "gql.tada";
+import { parse } from "graphql";
 import { revalidatePath } from "next/cache";
 import { serverMutation } from "@/lib/urql/server";
 import { getOptionalServerUser } from "@/utilities/auth-server";
@@ -112,6 +114,33 @@ const updateItemPositionMutation = graphql(`
   }
 `);
 
+type SetTierListEditingLockMutationResult = {
+  update_tier_lists_by_pk: {
+    id: string;
+    is_editing_locked: boolean;
+  } | null;
+};
+
+type SetTierListEditingLockMutationVariables = {
+  id: string;
+  isEditingLocked: boolean;
+};
+
+const setTierListEditingLockMutation = parse(`
+  mutation SetTierListEditingLock($id: uuid!, $isEditingLocked: Boolean!) {
+    update_tier_lists_by_pk(
+      pk_columns: { id: $id }
+      _set: { is_editing_locked: $isEditingLocked }
+    ) {
+      id
+      is_editing_locked
+    }
+  }
+`) as unknown as TadaDocumentNode<
+  SetTierListEditingLockMutationResult,
+  SetTierListEditingLockMutationVariables
+>;
+
 // =============================================================================
 // Result Types
 // =============================================================================
@@ -125,6 +154,12 @@ export type TierListResult = {
 export type TierListItemResult = {
   success: boolean;
   tierListItemId?: string;
+  error?: string;
+};
+
+export type TierListEditingLockResult = {
+  success: boolean;
+  isEditingLocked?: boolean;
   error?: string;
 };
 
@@ -243,6 +278,44 @@ export async function deleteTierListAction(
   }
 }
 
+export async function setTierListEditingLockAction(
+  id: string,
+  isEditingLocked: boolean,
+): Promise<TierListEditingLockResult> {
+  const user = await getOptionalServerUser();
+
+  if (!user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  try {
+    const result = await serverMutation(setTierListEditingLockMutation, {
+      id,
+      isEditingLocked,
+    });
+
+    if (!result.update_tier_lists_by_pk) {
+      return { success: false, error: "Tier list not found or not authorized" };
+    }
+
+    revalidatePath(`/tier-lists/${id}`, "page");
+
+    return {
+      success: true,
+      isEditingLocked: result.update_tier_lists_by_pk.is_editing_locked,
+    };
+  } catch (error) {
+    console.error("Failed to set tier list editing lock:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to update tier list editing lock",
+    };
+  }
+}
+
 export async function addItemToTierListAction(
   tierListId: string,
   entityId: string,
@@ -330,10 +403,12 @@ export async function removeItemFromTierListAction(
  * Accepts the full set of items whose band/position changed and updates them
  * concurrently. Positions are clean sequential integers (0, 1, 2…).
  * Uses Promise.allSettled to detect and report partial failures.
- * No revalidation — optimistic client state is authoritative during the session.
+ * Revalidates the detail route so App Router back/forward navigation
+ * does not restore stale pre-mutation payloads.
  */
 export async function reorderBandAction(
   updates: Array<{ id: string; band: number; position: number }>,
+  tierListId: string,
 ): Promise<TierListItemResult> {
   const user = await getOptionalServerUser();
 
@@ -365,6 +440,8 @@ export async function reorderBandAction(
       error: `Failed to update ${failures.length} of ${updates.length} items`,
     };
   }
+
+  revalidatePath(`/tier-lists/${tierListId}`, "page");
 
   return { success: true };
 }

@@ -1,20 +1,43 @@
 import { readFragment } from "@cellar-assistant/shared";
-import { TierListViewPage } from "@/components/tier-list/TierListViewPage";
-import {
-  GetTierListQuery,
-  GetUserItemReviewsQuery,
-} from "@/components/tier-list/queries";
+import type { TadaDocumentNode } from "gql.tada";
+import { parse } from "graphql";
+import { notFound } from "next/navigation";
 import {
   TierListFullFragment,
   TierListItemFragment,
 } from "@/components/tier-list/fragments";
+import {
+  GetTierListQuery,
+  GetUserItemReviewsQuery,
+} from "@/components/tier-list/queries";
+import { TierListViewPage } from "@/components/tier-list/TierListViewPage";
 import type {
   TierListData,
   TierListItemDisplay,
 } from "@/components/tier-list/types";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
-import { notFound } from "next/navigation";
+
+type GetTierListEditingLockQueryResult = {
+  tier_lists_by_pk: {
+    is_editing_locked: boolean;
+  } | null;
+};
+
+type GetTierListEditingLockQueryVariables = {
+  id: string;
+};
+
+const getTierListEditingLockQuery = parse(`
+  query GetTierListEditingLock($id: uuid!) {
+    tier_lists_by_pk(id: $id) {
+      is_editing_locked
+    }
+  }
+`) as unknown as TadaDocumentNode<
+  GetTierListEditingLockQueryResult,
+  GetTierListEditingLockQueryVariables
+>;
 
 function formatCategoryName(category: string): string {
   return category
@@ -65,7 +88,10 @@ function getEntityId(item: {
 export default async function TierListPage({ params }: Props) {
   const { tierListId } = await params;
   const userId = await getServerUserId();
-  const rawData = await serverQuery(GetTierListQuery, { id: tierListId });
+  const [rawData, lockData] = await Promise.all([
+    serverQuery(GetTierListQuery, { id: tierListId }),
+    serverQuery(getTierListEditingLockQuery, { id: tierListId }),
+  ]);
 
   if (!rawData.tier_lists_by_pk) {
     notFound();
@@ -107,7 +133,12 @@ export default async function TierListPage({ params }: Props) {
 
   // Fetch user's review scores for non-place items (server-side, no $userId in fragments)
   const hasItems =
-    wineIds.length + beerIds.length + spiritIds.length + coffeeIds.length + sakeIds.length > 0;
+    wineIds.length +
+      beerIds.length +
+      spiritIds.length +
+      coffeeIds.length +
+      sakeIds.length >
+    0;
 
   const reviewScoreMap = new Map<string, number>();
 
@@ -144,7 +175,11 @@ export default async function TierListPage({ params }: Props) {
       const formattedCategory = item.place.primary_category
         ? formatCategoryName(item.place.primary_category)
         : null;
-      subtitle = [formattedCategory, item.place.locality, item.place.country_code]
+      subtitle = [
+        formattedCategory,
+        item.place.locality,
+        item.place.country_code,
+      ]
         .filter(Boolean)
         .join(" · ");
       reviewScore = item.place.user_place_interactions[0]?.rating ?? null;
@@ -192,6 +227,7 @@ export default async function TierListPage({ params }: Props) {
     privacy: tierList.privacy,
     listType: tierList.list_type,
     isOwner: tierList.created_by_id === userId,
+    isEditingLocked: lockData.tier_lists_by_pk?.is_editing_locked ?? false,
     itemCount: items.length,
     items,
   };

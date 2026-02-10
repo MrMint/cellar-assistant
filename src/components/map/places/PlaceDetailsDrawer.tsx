@@ -61,6 +61,7 @@ function resolveNextState(
 
 export interface PlaceDetailsDrawerRef {
   collapse: () => void;
+  setMiddle: () => void;
 }
 
 interface PlaceDetailsDrawerProps {
@@ -88,6 +89,7 @@ export const PlaceDetailsDrawer = forwardRef<
 
   useImperativeHandle(ref, () => ({
     collapse: () => setDrawerState("collapsed"),
+    setMiddle: () => setDrawerState("half"),
   }));
 
   // Fetch detailed place data with menu items
