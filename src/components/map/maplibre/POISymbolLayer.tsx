@@ -20,7 +20,7 @@ interface POISymbolLayerProps {
   currentZoom?: number;
 }
 
-const ENTER_EXIT_ANIMATION_MS = 300;
+const ENTER_EXIT_ANIMATION_MS = 200;
 const CLUSTER_SOURCE_ID = `${SOURCE_IDS.POIS}-clusters`;
 const transition = { duration: ENTER_EXIT_ANIMATION_MS, delay: 0 } as const;
 const CLUSTER_MATCH_DISTANCE_PX = 34;
@@ -127,6 +127,8 @@ function useTransitionedCollection(
   const renderedFeaturesRef = useRef(renderedFeatures);
   const animationRafRef = useRef<number | null>(null);
   const cycleRef = useRef(0);
+  const clusterSpatialMatching = options?.clusterSpatialMatching === true;
+  const matchZoom = options?.currentZoom ?? 12;
 
   const setRenderedAndRef = (
     next:
@@ -149,8 +151,6 @@ function useTransitionedCollection(
     }
 
     const previousFeatures = renderedFeaturesRef.current;
-    const clusterSpatialMatching = options?.clusterSpatialMatching === true;
-    const matchZoom = options?.currentZoom ?? 12;
     const previousById = new Map<string, TransitionedFeature>();
     for (const feature of previousFeatures) {
       previousById.set(featureKey(feature), feature);
@@ -168,6 +168,7 @@ function useTransitionedCollection(
       startPointCount: number | null;
       targetPointCount: number | null;
       removeAtEnd: boolean;
+      isStatic: boolean;
     };
 
     const animated: AnimatedFeature[] = [];
@@ -293,12 +294,22 @@ function useTransitionedCollection(
         ? getClusterPointCount(previous)
         : getClusterPointCount(feature);
       const targetPointCount = getClusterPointCount(feature);
+      const startOpacity = previous?.properties.transitionOpacity ?? 0;
+      const targetOpacity = 1;
+      const isStatic =
+        !(
+          startOpacity !== targetOpacity ||
+          startCoordinates[0] !== targetCoordinates[0] ||
+          startCoordinates[1] !== targetCoordinates[1] ||
+          startRadius !== targetRadius ||
+          startPointCount !== targetPointCount
+        );
 
       animated.push({
         animationKey,
         feature,
-        startOpacity: previous?.properties.transitionOpacity ?? 0,
-        targetOpacity: 1,
+        startOpacity,
+        targetOpacity,
         startCoordinates,
         targetCoordinates,
         startRadius,
@@ -306,6 +317,7 @@ function useTransitionedCollection(
         startPointCount,
         targetPointCount,
         removeAtEnd: false,
+        isStatic,
       });
     }
 
@@ -331,6 +343,7 @@ function useTransitionedCollection(
           startPointCount: previousPointCount,
           targetPointCount: previousPointCount,
           removeAtEnd: true,
+          isStatic: false,
         });
       }
     }
@@ -371,18 +384,29 @@ function useTransitionedCollection(
       );
     };
 
+    const staticByKey = new Map<string, TransitionedFeature>();
+    for (const item of animated) {
+      if (item.isStatic && !item.removeAtEnd) {
+        staticByKey.set(item.animationKey, featureAtProgress(item, 1));
+      }
+    }
+
+    const dynamicItems = animated.filter((item) => !item.isStatic);
+
     setRenderedAndRef(
-      animated.map((item) => featureAtProgress(item, 0)),
+      animated
+        .map((item) =>
+          item.isStatic
+            ? staticByKey.get(item.animationKey)
+            : featureAtProgress(item, 0),
+        )
+        .filter(
+          (feature): feature is TransitionedFeature =>
+            !!feature && feature.properties.transitionOpacity > 0.001,
+        ),
     );
 
-    const hasAnimation = animated.some(
-      (item) =>
-        item.startOpacity !== item.targetOpacity ||
-        item.startCoordinates[0] !== item.targetCoordinates[0] ||
-        item.startCoordinates[1] !== item.targetCoordinates[1] ||
-        item.startRadius !== item.targetRadius ||
-        item.startPointCount !== item.targetPointCount,
-    );
+    const hasAnimation = dynamicItems.length > 0;
 
     if (!hasAnimation) {
       setRenderedAndRef(
@@ -400,8 +424,15 @@ function useTransitionedCollection(
 
       setRenderedAndRef(
         animated
-          .map((item) => featureAtProgress(item, progress))
-          .filter((feature) => feature.properties.transitionOpacity > 0.001),
+          .map((item) =>
+            item.isStatic
+              ? staticByKey.get(item.animationKey)
+              : featureAtProgress(item, progress),
+          )
+          .filter(
+            (feature): feature is TransitionedFeature =>
+              !!feature && feature.properties.transitionOpacity > 0.001,
+          ),
       );
 
       if (progress < 1) {
@@ -418,7 +449,7 @@ function useTransitionedCollection(
     };
 
     animationRafRef.current = window.requestAnimationFrame(tick);
-  }, [nextFeatures]);
+  }, [nextFeatures, clusterSpatialMatching, matchZoom]);
 
   useEffect(
     () => () => {

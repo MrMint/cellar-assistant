@@ -45,20 +45,25 @@ const MAP_SEARCH_EXAMPLES_DESKTOP = [
   "good coffee nearby...",
   "Starbucks...",
   "speakeasy cocktail bar...",
+  "123 Sesame Street, NY 10023...",
   "rooftop bar...",
+  "Hooper's Store, Sesame St 10023...",
   "Total Wine...",
   "date night spot...",
   "natural wine...",
+  "Oscar's Trash Can, Sesame St 10023...",
 ];
 
 const MAP_SEARCH_EXAMPLES_MOBILE = [
   "Search places...",
   "wine bar...",
   "craft beer...",
+  "123 Sesame St, NY 10023...",
   "Starbucks...",
   "good coffee...",
   "cocktail spot...",
   "happy hour...",
+  "Hooper's Store, 10023...",
 ];
 
 interface MapControlsProps {
