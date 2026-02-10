@@ -89,6 +89,14 @@ function cloneBandMap(map: BandMap): BandMap {
   return cloned;
 }
 
+function areStringArraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 function parseBandFromContainerId(id: unknown): number | null {
   if (typeof id !== "string" || !id.startsWith("band-")) {
     return null;
@@ -629,18 +637,20 @@ export function TierListView({
       if (activeBand !== overBand) {
         // Cross-band: move item from source to destination
         setBandMap((prev) => {
-          const sourceItems = (prev[activeBand] ?? []).filter(
-            (id) => id !== activeId,
-          );
-          const destItems = (prev[overBand] ?? []).filter(
-            (id) => id !== activeId,
-          );
+          const prevSourceItems = prev[activeBand] ?? [];
+          const prevDestItems = prev[overBand] ?? [];
+          const sourceItems = prevSourceItems.filter((id) => id !== activeId);
+          const destItems = prevDestItems.filter((id) => id !== activeId);
 
           const overIndex = destItems.indexOf(String(over.id));
-          if (overIndex >= 0) {
-            destItems.splice(overIndex, 0, activeId);
-          } else {
-            destItems.push(activeId);
+          const insertionIndex = overIndex >= 0 ? overIndex : destItems.length;
+          destItems.splice(insertionIndex, 0, activeId);
+
+          if (
+            areStringArraysEqual(sourceItems, prevSourceItems) &&
+            areStringArraysEqual(destItems, prevDestItems)
+          ) {
+            return prev;
           }
 
           return {

@@ -80,6 +80,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
   const mapRef = useRef<MapRef>(null);
   const detailDrawerRef = useRef<PlaceDetailsDrawerRef>(null);
   const hasFlownRef = useRef(false);
+  const isManualSelectionRef = useRef(false);
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
 
@@ -142,6 +143,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
       }
       const isAlreadyOpen = isDrawerOpenRef.current;
       mapActions.selectPlace(place);
+      isManualSelectionRef.current = true;
       setPlaceIdRef.current(place.id, {
         history: isAlreadyOpen ? "replace" : "push",
       });
@@ -213,29 +215,43 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     }
   }, [geocodeTarget, mapReady, mapActions]);
 
-  // Deep-link: fetch and select a place when placeId is in the URL
+  // Deep-link: fetch and select a place when placeId is in the URL.
+  // Only fires for true deep links (URL navigation, back/forward, direct entry).
+  // Programmatic selections via handleSelectPlace set isManualSelectionRef
+  // so this effect skips them (the click handler already flew there).
   const deepLinkHandledRef = useRef<string | null>(null);
+  const placeId = searchParams.placeId;
   useEffect(() => {
-    const { placeId } = searchParams;
     if (!placeId || !mapReady || deepLinkHandledRef.current === placeId) return;
     deepLinkHandledRef.current = placeId;
 
+    // Skip if this placeId was set programmatically (click/search result)
+    if (isManualSelectionRef.current) {
+      isManualSelectionRef.current = false;
+      return;
+    }
+
+    // True deep link — fetch and fly
+    let cancelled = false;
     fetchPlaceByIdAction(placeId).then((place) => {
-      if (place) {
-        if (!isDesktop) {
-          detailDrawerRef.current?.setMiddle();
-        }
-        mapActions.selectPlace(place as PlaceResult);
-        const [lng, lat] = place.location.coordinates;
-        mapRef.current?.flyTo({
-          center: [lng, lat],
-          zoom: 16,
-          duration: 800,
-          offset: getDrawerOffset(isDesktop, hasSidebar),
-        });
+      if (cancelled || !place) return;
+      if (!isDesktop) {
+        detailDrawerRef.current?.setMiddle();
       }
+      mapActions.selectPlace(place as PlaceResult);
+      const [lng, lat] = place.location.coordinates;
+      mapRef.current?.flyTo({
+        center: [lng, lat],
+        zoom: 16,
+        duration: 800,
+        offset: getDrawerOffset(isDesktop, hasSidebar),
+      });
     });
-  }, [searchParams, mapReady, mapActions, isDesktop, hasSidebar]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [placeId, mapReady, mapActions, isDesktop, hasSidebar]);
 
   // Memoize filters
   const filters = useMemo(
