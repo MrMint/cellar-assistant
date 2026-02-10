@@ -84,12 +84,18 @@ export function ItemTierLists({ entityId, entityType }: ItemTierListsProps) {
               alignItems="center"
               justifyContent="space-between"
             >
-              <Link
-                href={`/tier-lists/${item.tier_list.id}`}
-                sx={{ textDecoration: "none" }}
-              >
-                <Typography level="title-sm">{item.tier_list.name}</Typography>
-              </Link>
+              {item.tier_list ? (
+                <Link
+                  href={`/tier-lists/${item.tier_list.id}`}
+                  sx={{ textDecoration: "none" }}
+                >
+                  <Typography level="title-sm">
+                    {item.tier_list.name}
+                  </Typography>
+                </Link>
+              ) : (
+                <Typography level="title-sm">Unknown list</Typography>
+              )}
               <Chip
                 size="sm"
                 variant="soft"

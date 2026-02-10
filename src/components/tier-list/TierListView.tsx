@@ -36,11 +36,21 @@ import {
   Modal,
   ModalDialog,
   Sheet,
+  Snackbar,
   Typography,
 } from "@mui/joy";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { memo, useCallback, useId, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AiFillTrophy } from "react-icons/ai";
 import { FaCrown } from "react-icons/fa";
 import { MdDelete, MdDragIndicator, MdStar } from "react-icons/md";
@@ -62,12 +72,30 @@ interface TierListViewProps {
   isEditingLocked?: boolean;
 }
 
+type BandMap = Record<number, string[]>;
+
 // =============================================================================
 // Band Configuration
 // =============================================================================
 
 const VERTICAL_MODIFIERS = [restrictToVerticalAxis];
 const NO_MODIFIERS: typeof VERTICAL_MODIFIERS = [];
+
+function cloneBandMap(map: BandMap): BandMap {
+  const cloned: BandMap = {};
+  for (const band of BANDS) {
+    cloned[band] = [...(map[band] ?? [])];
+  }
+  return cloned;
+}
+
+function parseBandFromContainerId(id: unknown): number | null {
+  if (typeof id !== "string" || !id.startsWith("band-")) {
+    return null;
+  }
+  const band = Number(id.slice(5));
+  return BANDS.includes(band as (typeof BANDS)[number]) ? band : null;
+}
 
 // =============================================================================
 // Rank Badge — Strava-style: crown for #1, trophies for 2-10, plain for 11+
@@ -494,6 +522,7 @@ export function TierListView({
     id: string;
     name: string;
   } | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const { initialBandMap, itemMap } = useMemo(() => {
     const map = new Map<string, TierListItemDisplay>();
@@ -513,14 +542,11 @@ export function TierListView({
     return { initialBandMap: bands, itemMap: map };
   }, [items]);
 
-  const [bandMap, setBandMap] =
-    useState<Record<number, string[]>>(initialBandMap);
+  const [bandMap, setBandMap] = useState<BandMap>(initialBandMap);
 
-  const prevItemsRef = useRef(items);
-  if (items !== prevItemsRef.current) {
-    prevItemsRef.current = items;
+  useLayoutEffect(() => {
     setBandMap(initialBandMap);
-  }
+  }, [initialBandMap]);
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
 
@@ -546,6 +572,14 @@ export function TierListView({
 
   const initialBandMapRef = useRef(initialBandMap);
   initialBandMapRef.current = initialBandMap;
+  const dragInitialBandMapRef = useRef<BandMap | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Stable helpers — read from refs, never recreated
   const findBandForItem = useCallback((id: UniqueIdentifier): number | null => {
@@ -558,17 +592,8 @@ export function TierListView({
   }, []);
 
   const findBandFromContainerId = useCallback(
-    (id: UniqueIdentifier): number | null => {
-      const str = String(id);
-      if (str.startsWith("band-")) {
-        const band = Number(str.replace("band-", ""));
-        if (BANDS.includes(band as (typeof BANDS)[number])) {
-          return band;
-        }
-      }
-      return findBandForItem(id);
-    },
-    [findBandForItem],
+    (id: unknown): number | null => parseBandFromContainerId(id),
+    [],
   );
 
   // Track which band the drag started from (before handleDragOver moves it)
@@ -579,6 +604,7 @@ export function TierListView({
     (event: DragStartEvent) => {
       if (!canEdit) return;
       setActiveId(event.active.id);
+      dragInitialBandMapRef.current = cloneBandMap(bandMapRef.current);
       dragSourceBandRef.current = findBandForItem(event.active.id);
     },
     [findBandForItem, canEdit],
@@ -590,24 +616,31 @@ export function TierListView({
       const { active, over } = event;
       if (!over) return;
 
+      const overContainerId = over.data.current?.sortable?.containerId;
       const activeBand = findBandForItem(active.id);
-      const overBand = findBandFromContainerId(over.id);
+      const overBand =
+        findBandFromContainerId(overContainerId) ??
+        findBandFromContainerId(over.id) ??
+        findBandForItem(over.id);
 
       if (activeBand === null || overBand === null) return;
+      const activeId = String(active.id);
 
       if (activeBand !== overBand) {
         // Cross-band: move item from source to destination
         setBandMap((prev) => {
-          const sourceItems = prev[activeBand].filter(
-            (id) => id !== String(active.id),
+          const sourceItems = (prev[activeBand] ?? []).filter(
+            (id) => id !== activeId,
           );
-          const destItems = [...prev[overBand]];
+          const destItems = (prev[overBand] ?? []).filter(
+            (id) => id !== activeId,
+          );
 
           const overIndex = destItems.indexOf(String(over.id));
           if (overIndex >= 0) {
-            destItems.splice(overIndex, 0, String(active.id));
+            destItems.splice(overIndex, 0, activeId);
           } else {
-            destItems.push(String(active.id));
+            destItems.push(activeId);
           }
 
           return {
@@ -619,9 +652,12 @@ export function TierListView({
       } else {
         // Same-band reorder during drag (e.g. after a cross-band transfer)
         setBandMap((prev) => {
-          const items = prev[activeBand];
-          const activeIndex = items.indexOf(String(active.id));
-          const overIndex = items.indexOf(String(over.id));
+          const items = prev[activeBand] ?? [];
+          const activeIndex = items.indexOf(activeId);
+          let overIndex = items.indexOf(String(over.id));
+          if (overIndex < 0 && String(over.id).startsWith("band-")) {
+            overIndex = items.length - 1;
+          }
           if (activeIndex < 0 || overIndex < 0 || activeIndex === overIndex) {
             return prev;
           }
@@ -636,9 +672,20 @@ export function TierListView({
   );
 
   // Build sequential position updates (0, 1, 2…) for an entire band.
-  const buildBandUpdates = useCallback(
-    (bandItems: string[], band: number) =>
-      bandItems.map((id, i) => ({ id, band, position: i })),
+  const buildBandDiffUpdates = useCallback(
+    (beforeBandItems: string[], afterBandItems: string[], band: number) => {
+      const beforePositions = new Map(
+        beforeBandItems.map((id, i) => [id, i] as const),
+      );
+      const updates: Array<{ id: string; band: number; position: number }> = [];
+      for (let i = 0; i < afterBandItems.length; i++) {
+        const id = afterBandItems[i];
+        if (beforePositions.get(id) !== i) {
+          updates.push({ id, band, position: i });
+        }
+      }
+      return updates;
+    },
     [],
   );
 
@@ -647,72 +694,112 @@ export function TierListView({
       if (!canEdit) {
         setActiveId(null);
         dragSourceBandRef.current = null;
+        dragInitialBandMapRef.current = null;
         return;
       }
 
       const { active, over } = event;
       setActiveId(null);
+      const preDragMap = dragInitialBandMapRef.current;
+      dragInitialBandMapRef.current = null;
 
       if (!over) {
         // Dropped outside any droppable — revert to pre-drag state
         dragSourceBandRef.current = null;
-        setBandMap(initialBandMapRef.current);
+        setBandMap(cloneBandMap(preDragMap ?? initialBandMapRef.current));
         return;
       }
 
       const map = bandMapRef.current;
       const sourceBand = dragSourceBandRef.current;
-      const destBand = findBandForItem(active.id);
+      const overContainerId = over.data.current?.sortable?.containerId;
+      const destBand =
+        findBandFromContainerId(overContainerId) ??
+        findBandFromContainerId(over.id) ??
+        findBandForItem(active.id);
       dragSourceBandRef.current = null;
 
-      if (sourceBand === null || destBand === null) return;
+      if (sourceBand === null || destBand === null) {
+        setBandMap(cloneBandMap(preDragMap ?? initialBandMapRef.current));
+        return;
+      }
 
       // Final position adjustment within the destination band
-      const destItems = map[destBand];
-      const activeIndex = destItems.indexOf(String(active.id));
-      const overIndex = destItems.indexOf(String(over.id));
+      const activeId = String(active.id);
+      const destItems = map[destBand] ?? [];
+      const activeIndex = destItems.indexOf(activeId);
+      let overIndex = destItems.indexOf(String(over.id));
+      const overIsBandContainer = String(over.id).startsWith("band-");
 
+      let finalMap: BandMap = map;
       let finalDestItems = destItems;
-      if (activeIndex >= 0 && overIndex >= 0 && activeIndex !== overIndex) {
-        finalDestItems = arrayMove(destItems, activeIndex, overIndex);
-        setBandMap((prev) => ({ ...prev, [destBand]: finalDestItems }));
+
+      if (sourceBand !== destBand && activeIndex < 0) {
+        const sourceItems = (map[sourceBand] ?? []).filter(
+          (id) => id !== activeId,
+        );
+        const nextDestItems = [...destItems];
+        const insertionIndex =
+          overIndex >= 0 ? overIndex : nextDestItems.length;
+        nextDestItems.splice(insertionIndex, 0, activeId);
+        finalDestItems = nextDestItems;
+        finalMap = {
+          ...map,
+          [sourceBand]: sourceItems,
+          [destBand]: nextDestItems,
+        };
+        setBandMap(finalMap);
+      } else {
+        if (overIndex < 0 && overIsBandContainer) {
+          overIndex = destItems.length - 1;
+        }
+        if (activeIndex >= 0 && overIndex >= 0 && activeIndex !== overIndex) {
+          finalDestItems = arrayMove(destItems, activeIndex, overIndex);
+          finalMap = { ...map, [destBand]: finalDestItems };
+          setBandMap(finalMap);
+        }
       }
 
-      if (sourceBand === destBand) {
-        // Within-band reorder — only persist if position changed
-        if (finalDestItems !== destItems) {
-          void (async () => {
-            const result = await reorderBandAction(
-              buildBandUpdates(finalDestItems, destBand),
-              tierListId,
-            );
-            if (result.success) {
-              router.refresh();
-            }
-          })();
-        }
-      } else {
-        // Cross-band: handleDragOver already moved the item in state.
-        // Renumber both source and destination bands with sequential positions.
-        const updates = [
-          ...buildBandUpdates(map[sourceBand] ?? [], sourceBand),
-          ...buildBandUpdates(finalDestItems, destBand),
-        ];
-        void (async () => {
-          const result = await reorderBandAction(updates, tierListId);
-          if (result.success) {
-            router.refresh();
-          }
-        })();
+      const beforeMap = preDragMap ?? map;
+      const bandsToDiff =
+        sourceBand === destBand ? [destBand] : [sourceBand, destBand];
+      const updates = bandsToDiff.flatMap((band) =>
+        buildBandDiffUpdates(beforeMap[band] ?? [], finalMap[band] ?? [], band),
+      );
+
+      if (updates.length === 0) {
+        return;
       }
+
+      const rollbackMap = cloneBandMap(beforeMap);
+      void (async () => {
+        const result = await reorderBandAction(updates, tierListId);
+        if (!isMountedRef.current) return;
+        if (result.success) {
+          router.refresh();
+        } else {
+          setBandMap(rollbackMap);
+          setFeedback(result.error ?? "Failed to persist reorder");
+        }
+      })();
     },
-    [findBandForItem, buildBandUpdates, tierListId, router, canEdit],
+    [
+      findBandForItem,
+      findBandFromContainerId,
+      buildBandDiffUpdates,
+      tierListId,
+      router,
+      canEdit,
+    ],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null);
     dragSourceBandRef.current = null;
-    setBandMap(initialBandMapRef.current);
+    setBandMap(
+      cloneBandMap(dragInitialBandMapRef.current ?? initialBandMapRef.current),
+    );
+    dragInitialBandMapRef.current = null;
   }, []);
 
   const handleRemoveClick = useCallback((itemId: string, name: string) => {
@@ -721,6 +808,7 @@ export function TierListView({
 
   const handleConfirmRemove = useCallback(async () => {
     if (!canEdit || !removeTarget) return;
+    const rollbackMap = cloneBandMap(bandMapRef.current);
     // Optimistically remove from local state for instant feedback
     setBandMap((prev) => {
       const next = { ...prev };
@@ -738,8 +826,12 @@ export function TierListView({
       removeTarget.id,
       tierListId,
     );
+    if (!isMountedRef.current) return;
     if (result.success) {
       router.refresh();
+    } else {
+      setBandMap(rollbackMap);
+      setFeedback(result.error ?? "Failed to remove item");
     }
   }, [removeTarget, tierListId, router, canEdit]);
 
@@ -818,6 +910,17 @@ export function TierListView({
           </DialogActions>
         </ModalDialog>
       </Modal>
+
+      <Snackbar
+        open={feedback !== null}
+        autoHideDuration={3000}
+        onClose={() => setFeedback(null)}
+        color="danger"
+        variant="soft"
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        {feedback}
+      </Snackbar>
     </>
   );
 }

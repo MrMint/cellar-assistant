@@ -4,7 +4,7 @@ import { graphql, type Permission_Type_Enum } from "@cellar-assistant/shared";
 import type { TadaDocumentNode } from "gql.tada";
 import { parse } from "graphql";
 import { revalidatePath } from "next/cache";
-import { serverMutation } from "@/lib/urql/server";
+import { serverMutation, serverQuery } from "@/lib/urql/server";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 
 // =============================================================================
@@ -110,6 +110,20 @@ const updateItemPositionMutation = graphql(`
       id
       band
       position
+    }
+  }
+`);
+
+const getBandMaxPositionQuery = graphql(`
+  query GetBandMaxPosition($tierListId: uuid!, $band: Int!) {
+    tier_list_items_aggregate(
+      where: { tier_list_id: { _eq: $tierListId }, band: { _eq: $band } }
+    ) {
+      aggregate {
+        max {
+          position
+        }
+      }
     }
   }
 `);
@@ -332,22 +346,38 @@ export async function addItemToTierListAction(
   if (!isValidListType(entityType)) {
     return { success: false, error: `Unknown entity type: ${entityType}` };
   }
+  if (!Number.isInteger(band) || band < 0 || band > 5) {
+    return { success: false, error: "Invalid band" };
+  }
 
   const entityFkField = `${entityType}_id` as const;
-  const item = {
-    tier_list_id: tierListId,
-    band,
-    position,
-    place_id: undefined as string | undefined,
-    wine_id: undefined as string | undefined,
-    beer_id: undefined as string | undefined,
-    spirit_id: undefined as string | undefined,
-    coffee_id: undefined as string | undefined,
-    sake_id: undefined as string | undefined,
-    [entityFkField]: entityId,
-  };
 
   try {
+    const maxPositionData = await serverQuery(getBandMaxPositionQuery, {
+      tierListId,
+      band,
+    });
+    const nextPosition =
+      (maxPositionData.tier_list_items_aggregate.aggregate?.max?.position ??
+        -1) + 1;
+    const resolvedPosition =
+      Number.isInteger(position) && position > nextPosition
+        ? position
+        : nextPosition;
+
+    const item = {
+      tier_list_id: tierListId,
+      band,
+      position: resolvedPosition,
+      place_id: undefined as string | undefined,
+      wine_id: undefined as string | undefined,
+      beer_id: undefined as string | undefined,
+      spirit_id: undefined as string | undefined,
+      coffee_id: undefined as string | undefined,
+      sake_id: undefined as string | undefined,
+      [entityFkField]: entityId,
+    };
+
     const result = await serverMutation(addItemToTierListMutation, { item });
 
     revalidatePath(`/tier-lists/${tierListId}`, "page");
@@ -415,9 +445,27 @@ export async function reorderBandAction(
   if (!user) {
     return { success: false, error: "Not authenticated" };
   }
+  if (updates.length === 0) {
+    return { success: true };
+  }
+
+  const normalizedUpdates = Array.from(
+    new Map(updates.map((u) => [u.id, u])).values(),
+  ).filter(
+    (u) =>
+      Number.isInteger(u.band) &&
+      u.band >= 0 &&
+      u.band <= 5 &&
+      Number.isInteger(u.position) &&
+      u.position >= 0,
+  );
+
+  if (normalizedUpdates.length === 0) {
+    return { success: false, error: "No valid updates to apply" };
+  }
 
   const results = await Promise.allSettled(
-    updates.map((u) =>
+    normalizedUpdates.map((u) =>
       serverMutation(updateItemPositionMutation, {
         id: u.id,
         band: u.band,
@@ -432,12 +480,26 @@ export async function reorderBandAction(
 
   if (failures.length > 0) {
     console.error(
-      `Failed to reorder ${failures.length}/${updates.length} items:`,
+      `Failed to reorder ${failures.length}/${normalizedUpdates.length} items:`,
       failures.map((f) => f.reason),
     );
     return {
       success: false,
-      error: `Failed to update ${failures.length} of ${updates.length} items`,
+      error: `Failed to update ${failures.length} of ${normalizedUpdates.length} items`,
+    };
+  }
+
+  const missing = results.filter(
+    (r) =>
+      r.status === "fulfilled" && r.value.update_tier_list_items_by_pk == null,
+  );
+  if (missing.length > 0) {
+    console.error(
+      `Reorder applied to ${normalizedUpdates.length - missing.length}/${normalizedUpdates.length} items; ${missing.length} rows were not updated`,
+    );
+    return {
+      success: false,
+      error: `Failed to update ${missing.length} of ${normalizedUpdates.length} items`,
     };
   }
 

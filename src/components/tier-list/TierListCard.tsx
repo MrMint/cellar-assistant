@@ -29,6 +29,8 @@ export function TierListCard({ tierList }: TierListCardProps) {
   const PrivacyIcon = privacyIcons[tierList.privacy] ?? MdLock;
   const itemCount = tierList.items_aggregate.aggregate?.count ?? 0;
   const typeLabel = listTypeLabels[tierList.list_type] ?? tierList.list_type;
+  const creatorName = tierList.createdBy?.displayName ?? "Unknown user";
+  const creatorInitial = creatorName.charAt(0).toUpperCase();
 
   return (
     <Link
@@ -89,14 +91,14 @@ export function TierListCard({ tierList }: TierListCardProps) {
 
             <Stack direction="row" spacing={1} alignItems="center">
               <Avatar
-                src={tierList.createdBy.avatarUrl}
+                src={tierList.createdBy?.avatarUrl ?? undefined}
                 size="sm"
                 sx={{ width: 20, height: 20 }}
               >
-                {tierList.createdBy.displayName?.charAt(0)?.toUpperCase()}
+                {creatorInitial}
               </Avatar>
               <Typography level="body-xs" sx={{ color: "text.secondary" }}>
-                {tierList.createdBy.displayName}
+                {creatorName}
               </Typography>
             </Stack>
           </Stack>

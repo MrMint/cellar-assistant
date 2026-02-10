@@ -13,6 +13,7 @@ import {
   ListItemDecorator,
   Modal,
   ModalDialog,
+  Snackbar,
   Stack,
   Typography,
 } from "@mui/joy";
@@ -54,6 +55,7 @@ export function AddToTierListModal({
   });
 
   const [addingToListId, setAddingToListId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const tierLists = data?.tier_lists ?? [];
 
@@ -61,8 +63,18 @@ export function AddToTierListModal({
     async (tierListId: string) => {
       setAddingToListId(tierListId);
       try {
-        await addItemToTierListAction(tierListId, placeId, "place", 0, 0);
-        onClose();
+        const result = await addItemToTierListAction(
+          tierListId,
+          placeId,
+          "place",
+          0,
+          0,
+        );
+        if (result.success) {
+          onClose();
+        } else {
+          setError(result.error ?? "Failed to add item to tier list");
+        }
       } finally {
         setAddingToListId(null);
       }
@@ -71,90 +83,103 @@ export function AddToTierListModal({
   );
 
   return (
-    <Modal open={open} onClose={onClose}>
-      <ModalDialog variant="outlined" sx={{ maxWidth: 420, width: "100%" }}>
-        <DialogTitle>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <MdFormatListNumbered style={{ fontSize: 20 }} />
-            <span>Add to Tier List</span>
-          </Stack>
-        </DialogTitle>
-        <Divider />
-        <DialogContent>
-          <Stack spacing={2}>
-            <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-              Add <strong>{placeName}</strong> to a tier list
-            </Typography>
-
-            {fetching ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                <CircularProgress size="sm" />
-              </Box>
-            ) : tierLists.length === 0 ? (
-              <Typography
-                level="body-sm"
-                sx={{ color: "text.tertiary", textAlign: "center", py: 2 }}
-              >
-                No place tier lists yet. Create one first.
+    <>
+      <Modal open={open} onClose={onClose}>
+        <ModalDialog variant="outlined" sx={{ maxWidth: 420, width: "100%" }}>
+          <DialogTitle>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <MdFormatListNumbered style={{ fontSize: 20 }} />
+              <span>Add to Tier List</span>
+            </Stack>
+          </DialogTitle>
+          <Divider />
+          <DialogContent>
+            <Stack spacing={2}>
+              <Typography level="body-sm" sx={{ color: "text.secondary" }}>
+                Add <strong>{placeName}</strong> to a tier list
               </Typography>
-            ) : (
-              <List
-                size="sm"
-                variant="outlined"
-                sx={{ borderRadius: "md", overflow: "hidden" }}
-              >
-                {tierLists.map((tl) => {
-                  const alreadyIn = tl.items.length > 0;
-                  const isAdding = addingToListId === tl.id;
-                  return (
-                    <ListItem key={tl.id}>
-                      <ListItemButton
-                        onClick={() => handleAddToList(tl.id)}
-                        disabled={alreadyIn || addingToListId != null}
-                        sx={{
-                          borderRadius: "sm",
-                          ...(alreadyIn && {
-                            bgcolor: "success.softBg",
-                            "&.Mui-disabled": { opacity: 1 },
-                          }),
-                        }}
-                      >
-                        <ListItemDecorator>
-                          {isAdding ? (
-                            <CircularProgress
-                              size="sm"
-                              sx={{ "--CircularProgress-size": "20px" }}
-                            />
-                          ) : alreadyIn ? (
-                            <MdCheck
-                              style={{
-                                color: "var(--joy-palette-success-500)",
-                              }}
-                            />
-                          ) : (
-                            <MdFormatListNumbered />
-                          )}
-                        </ListItemDecorator>
-                        <ListItemContent>
-                          <Typography level="title-sm">{tl.name}</Typography>
-                          {alreadyIn && (
-                            <Typography
-                              level="body-xs"
-                              sx={{ color: "success.600" }}
-                            >
-                              Already added ({BAND_LABELS[tl.items[0].band]})
-                            </Typography>
-                          )}
-                        </ListItemContent>
-                      </ListItemButton>
-                    </ListItem>
-                  );
-                })}
-              </List>
-            )}
-          </Stack>
-        </DialogContent>
-      </ModalDialog>
-    </Modal>
+
+              {fetching ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                  <CircularProgress size="sm" />
+                </Box>
+              ) : tierLists.length === 0 ? (
+                <Typography
+                  level="body-sm"
+                  sx={{ color: "text.tertiary", textAlign: "center", py: 2 }}
+                >
+                  No place tier lists yet. Create one first.
+                </Typography>
+              ) : (
+                <List
+                  size="sm"
+                  variant="outlined"
+                  sx={{ borderRadius: "md", overflow: "hidden" }}
+                >
+                  {tierLists.map((tl) => {
+                    const alreadyIn = tl.items.length > 0;
+                    const isAdding = addingToListId === tl.id;
+                    return (
+                      <ListItem key={tl.id}>
+                        <ListItemButton
+                          onClick={() => handleAddToList(tl.id)}
+                          disabled={alreadyIn || addingToListId != null}
+                          sx={{
+                            borderRadius: "sm",
+                            ...(alreadyIn && {
+                              bgcolor: "success.softBg",
+                              "&.Mui-disabled": { opacity: 1 },
+                            }),
+                          }}
+                        >
+                          <ListItemDecorator>
+                            {isAdding ? (
+                              <CircularProgress
+                                size="sm"
+                                sx={{ "--CircularProgress-size": "20px" }}
+                              />
+                            ) : alreadyIn ? (
+                              <MdCheck
+                                style={{
+                                  color: "var(--joy-palette-success-500)",
+                                }}
+                              />
+                            ) : (
+                              <MdFormatListNumbered />
+                            )}
+                          </ListItemDecorator>
+                          <ListItemContent>
+                            <Typography level="title-sm">{tl.name}</Typography>
+                            {alreadyIn && (
+                              <Typography
+                                level="body-xs"
+                                sx={{ color: "success.600" }}
+                              >
+                                Already added ({BAND_LABELS[tl.items[0].band]})
+                              </Typography>
+                            )}
+                          </ListItemContent>
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              )}
+            </Stack>
+          </DialogContent>
+        </ModalDialog>
+      </Modal>
+
+      <Snackbar
+        open={error !== null}
+        autoHideDuration={3000}
+        onClose={() => setError(null)}
+        color="danger"
+        variant="soft"
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        {error}
+      </Snackbar>
+    </>
   );
 }
