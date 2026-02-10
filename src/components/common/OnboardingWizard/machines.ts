@@ -266,7 +266,9 @@ export const OnboardingMachine = createMachine(
                   `/cellars/${context.cellarId}/${context.itemType}/${context.cellarItemId}`,
                 );
               } else {
-                context.router.push(`/${context.itemType}/${context.existingItemId}`);
+                context.router.push(
+                  `/${context.itemType}/${context.existingItemId}`,
+                );
               }
             },
             target: "done",

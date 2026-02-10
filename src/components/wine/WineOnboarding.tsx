@@ -14,8 +14,8 @@ import { useRouter } from "next/navigation";
 import { includes } from "ramda";
 import { useCallback } from "react";
 import { useClient } from "urql";
-import { linkItemToBrand } from "@/utilities/brand";
 import { convertYearToDate, parseNumber } from "@/utilities";
+import { linkItemToBrand } from "@/utilities/brand";
 import { Analyzing } from "../common/Analyzing";
 import {
   type OnboardingResult,

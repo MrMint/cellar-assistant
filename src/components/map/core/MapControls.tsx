@@ -1,16 +1,74 @@
 "use client";
 
-import { Close, LocationOn, Refresh, Search } from "@mui/icons-material";
-import { Box, Divider, IconButton, Input, Sheet, Stack } from "@mui/joy";
-import { useEffect, useState } from "react";
-import { useMapActions, useMapFilters, useMapUI } from "../hooks/useMapMachine";
+import {
+  AddLocationAlt,
+  Close,
+  DarkMode,
+  Language,
+  LightMode,
+  LocationOn,
+  Search,
+} from "@mui/icons-material";
+import {
+  Box,
+  Divider,
+  IconButton,
+  Input,
+  Sheet,
+  Stack,
+  Tooltip,
+} from "@mui/joy";
+import { useEffect, useRef, useState } from "react";
+import { AnimatedPlaceholder } from "@/components/common/AnimatedPlaceholder";
+import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import {
+  useMapActions,
+  useMapCore,
+  useMapData,
+  useMapPinPlacement,
+  useMapUI,
+} from "../hooks/useMapMachine";
+import { useMapSearchParams } from "../hooks/useMapSearchParams";
+import { useTierListFilter } from "../hooks/useTierListFilter";
 import { MapFilter } from "./MapFilter";
+
+const SEARCH_DEBOUNCE_MS = 1500;
+
+// Toggle between "typewriter" and "fade" to compare animation styles
+const PLACEHOLDER_VARIANT: "typewriter" | "fade" = "typewriter";
+
+const MAP_SEARCH_EXAMPLES_DESKTOP = [
+  "Search places...",
+  "cozy wine bar...",
+  "craft brewery with food...",
+  "good coffee nearby...",
+  "Starbucks...",
+  "speakeasy cocktail bar...",
+  "123 Sesame Street, NY 10023...",
+  "rooftop bar...",
+  "Hooper's Store, Sesame St 10023...",
+  "Total Wine...",
+  "date night spot...",
+  "natural wine...",
+  "Oscar's Trash Can, Sesame St 10023...",
+];
+
+const MAP_SEARCH_EXAMPLES_MOBILE = [
+  "Search places...",
+  "wine bar...",
+  "craft beer...",
+  "123 Sesame St, NY 10023...",
+  "Starbucks...",
+  "good coffee...",
+  "cocktail spot...",
+  "happy hour...",
+  "Hooper's Store, 10023...",
+];
 
 interface MapControlsProps {
   // Action props
-  onRefresh: () => void;
   onLocationClick?: () => void;
-  loading?: boolean;
 
   // Data props (for counts)
   counts?: {
@@ -40,9 +98,7 @@ interface MapControlsProps {
  * - Optimized re-renders through granular selectors
  */
 export function MapControls({
-  onRefresh,
   onLocationClick,
-  loading = false,
   counts,
   variant = "auto",
   showSearch = true,
@@ -54,41 +110,85 @@ export function MapControls({
     actions: "top-right",
   },
 }: MapControlsProps) {
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobileQuery = useMediaQuery("(max-width: 768px)");
+  const isMobile = variant === "auto" ? isMobileQuery : variant === "mobile";
 
-  // XState selectors - automatically optimized re-renders
+  // URL-backed filter state via nuqs
   const {
-    selectedItemTypes,
-    searchQuery,
+    search,
+    itemTypes,
     minRating,
     visitStatuses,
-    socialFilter,
-  } = useMapFilters();
-  const { isDrawerOpen } = useMapUI();
-  const {
+    tierLists: tierListIds,
+    globalSearch,
+    setSearch,
     setItemTypes,
-    setSearchQuery,
-    performSemanticSearch,
     setMinRating,
     setVisitStatuses,
-    setSocialFilter,
-    closeDrawer,
-  } = useMapActions();
+    setTierLists,
+    setGlobalSearch,
+  } = useMapSearchParams();
 
-  // Detect mobile vs desktop for responsive layout
+  // Decouple input value from URL state to prevent text reversion during typing.
+  // Local state updates instantly; URL state is debounced to reduce expensive
+  // semantic search calls (embedding generation + vector query).
+  const [inputValue, setInputValue] = useState(search);
+  const [isFocused, setIsFocused] = useState(false);
+  const isLocalChange = useRef(false);
+
+  // Animated placeholder examples
+  const examples = isMobile
+    ? MAP_SEARCH_EXAMPLES_MOBILE
+    : MAP_SEARCH_EXAMPLES_DESKTOP;
+  const isPlaceholderActive = !isFocused && !inputValue;
+
+  const typewriterPlaceholder = useAnimatedPlaceholder({
+    examples,
+    enabled: isPlaceholderActive && PLACEHOLDER_VARIANT === "typewriter",
+  });
+
+  // Sync external → local (clear button, URL navigation, back/forward)
   useEffect(() => {
-    if (variant === "auto") {
-      const checkIsMobile = () => {
-        setIsMobile(window.innerWidth < 768); // md breakpoint
-      };
-
-      checkIsMobile();
-      window.addEventListener("resize", checkIsMobile);
-      return () => window.removeEventListener("resize", checkIsMobile);
-    } else {
-      setIsMobile(variant === "mobile");
+    if (!isLocalChange.current) {
+      setInputValue(search);
     }
-  }, [variant]);
+    isLocalChange.current = false;
+  }, [search]);
+
+  // Debounced sync local → URL (triggers semantic search via useSearchParamsSync)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(inputValue);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [inputValue, setSearch]);
+
+  const handleSearchChange = (value: string) => {
+    isLocalChange.current = true;
+    setInputValue(value);
+  };
+
+  const handleSearchClear = () => {
+    isLocalChange.current = true;
+    setInputValue("");
+    setSearch(""); // bypass debounce for instant clear
+  };
+
+  // Core state (userId needed for tier list query)
+  const { userId, isDarkMode } = useMapCore();
+
+  // Tier list filter data
+  const {
+    tierLists: tierListOptions,
+    effectiveSelectedIds,
+    isFilterActive: isTierListFilterActive,
+    loading: tierListsLoading,
+  } = useTierListFilter(tierListIds, userId);
+  const { isDrawerOpen } = useMapUI();
+  const { isLoading } = useMapData();
+  const { toggleDarkMode, enterPinPlacement, exitPinPlacement } =
+    useMapActions();
+  const { isPlacing } = useMapPinPlacement();
 
   // Helper function to get position styles
   const getPositionStyles = (pos: string) => {
@@ -102,14 +202,225 @@ export function MapControls({
     return positions[pos as keyof typeof positions] || positions["top-left"];
   };
 
-  // Search component
+  // Shared search input
+  const fallbackPlaceholder = "Search places...";
+
+  const SearchInput = (
+    <Box sx={{ position: "relative" }}>
+      <Input
+        placeholder={
+          PLACEHOLDER_VARIANT === "typewriter"
+            ? isPlaceholderActive
+              ? typewriterPlaceholder
+              : fallbackPlaceholder
+            : isPlaceholderActive && PLACEHOLDER_VARIANT === "fade"
+              ? ""
+              : fallbackPlaceholder
+        }
+        value={inputValue}
+        onChange={(e) => handleSearchChange(e.target.value)}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        startDecorator={
+          <Search
+            sx={{
+              ...(isLoading && {
+                animation: "pulse 1.5s ease-in-out infinite",
+                "@keyframes pulse": {
+                  "0%, 100%": { opacity: 1 },
+                  "50%": { opacity: 0.3 },
+                },
+              }),
+            }}
+          />
+        }
+        endDecorator={
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+            {inputValue && (
+              <IconButton
+                variant="plain"
+                color="neutral"
+                onClick={handleSearchClear}
+                size="sm"
+                sx={{
+                  minWidth: "auto",
+                  minHeight: "auto",
+                  padding: "4px",
+                }}
+              >
+                <Close sx={{ fontSize: "18px" }} />
+              </IconButton>
+            )}
+            <Tooltip
+              title={
+                globalSearch ? "Searching globally" : "Searching in viewport"
+              }
+              variant="soft"
+              size="sm"
+            >
+              <IconButton
+                variant={globalSearch ? "soft" : "plain"}
+                color={globalSearch ? "primary" : "neutral"}
+                onClick={() => setGlobalSearch(!globalSearch)}
+                size="sm"
+                sx={{
+                  minWidth: "auto",
+                  minHeight: "auto",
+                  padding: "4px",
+                }}
+              >
+                <Language sx={{ fontSize: "18px" }} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        }
+        sx={{
+          border: "none",
+          boxShadow: "none",
+          backgroundColor: "transparent",
+          "&:hover": { backgroundColor: "transparent" },
+          "&:focus-within": {
+            backgroundColor: "transparent",
+            borderColor: "primary.500",
+            boxShadow: "none",
+          },
+        }}
+        size="sm"
+      />
+      {PLACEHOLDER_VARIANT === "fade" && (
+        <AnimatedPlaceholder
+          examples={examples}
+          enabled={isPlaceholderActive}
+        />
+      )}
+    </Box>
+  );
+
+  // Shared filter + action controls row
+  const FilterAndActions = (showFilters || showActions) && (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "row",
+        gap: 1,
+        alignItems: "center",
+        flexWrap: isMobile ? "wrap" : "nowrap",
+      }}
+    >
+      {showFilters && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            position: "relative",
+            zIndex: 999,
+            minWidth: 0,
+          }}
+        >
+          <MapFilter
+            selectedItemTypes={itemTypes}
+            onItemTypesChange={setItemTypes}
+            counts={counts}
+            searchQuery={search}
+            onSearchQueryChange={setSearch}
+            minRating={minRating ?? undefined}
+            onMinRatingChange={setMinRating}
+            visitStatuses={visitStatuses}
+            onVisitStatusesChange={setVisitStatuses}
+            tierLists={tierListOptions}
+            selectedTierListIds={effectiveSelectedIds}
+            onTierListsChange={setTierLists}
+            tierListsLoading={tierListsLoading}
+            isTierListFilterActive={isTierListFilterActive}
+            isMobile={isMobile}
+          />
+
+          {showActions && <Divider orientation="vertical" />}
+        </Box>
+      )}
+
+      {showActions && (
+        <Stack direction="row" spacing={0.5}>
+          <IconButton
+            variant="soft"
+            color={isPlacing ? "danger" : "primary"}
+            onClick={isPlacing ? exitPinPlacement : enterPinPlacement}
+            size="sm"
+            title={isPlacing ? "Cancel adding place" : "Add a new place"}
+          >
+            {isPlacing ? <Close /> : <AddLocationAlt />}
+          </IconButton>
+
+          {onLocationClick && (
+            <IconButton
+              variant="soft"
+              color="neutral"
+              onClick={onLocationClick}
+              size="sm"
+              title="Go to my location"
+            >
+              <LocationOn />
+            </IconButton>
+          )}
+
+          <IconButton
+            variant="soft"
+            color="neutral"
+            onClick={toggleDarkMode}
+            size="sm"
+            title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDarkMode ? <LightMode /> : <DarkMode />}
+          </IconButton>
+        </Stack>
+      )}
+    </Box>
+  );
+
+  // Mobile: single unified container with search + filters
+  if (isMobile) {
+    return (
+      <Box
+        sx={{
+          position: "absolute",
+          zIndex: 1000,
+          top: 8,
+          left: 8,
+          right: 8,
+        }}
+      >
+        <Sheet
+          sx={{
+            p: 1,
+            borderRadius: "md",
+            boxShadow: "md",
+            backgroundColor: "background.surface",
+            border: "1px solid",
+            borderColor: "divider",
+            overflow: "visible",
+          }}
+        >
+          {showSearch && SearchInput}
+          {(showFilters || showActions) && (
+            <>
+              {showSearch && <Divider sx={{ my: 0.5 }} />}
+              {FilterAndActions}
+            </>
+          )}
+        </Sheet>
+      </Box>
+    );
+  }
+
+  // Desktop: separate search and filter containers
   const SearchControl = showSearch ? (
     <Box
       sx={{
         position: "absolute",
-        zIndex: 1000,
-        padding: isMobile ? 2 : 0,
-        width: isMobile ? "calc(100% - 32px)" : 375,
+        zIndex: 1001,
+        width: "calc(50% - 24px)",
+        maxWidth: 375,
         ...getPositionStyles(position.search || "top-left"),
       }}
     >
@@ -133,132 +444,30 @@ export function MapControls({
           },
         }}
       >
-        <Input
-          placeholder="Search places, items, or descriptions..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          startDecorator={<Search />}
-          endDecorator={
-            isDrawerOpen ? (
-              <IconButton
-                variant="plain"
-                color="neutral"
-                onClick={closeDrawer}
-                size="sm"
-                sx={{
-                  minWidth: "auto",
-                  minHeight: "auto",
-                  padding: "4px",
-                  "&:hover": {
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
-                  },
-                }}
-              >
-                <Close sx={{ fontSize: "18px" }} />
-              </IconButton>
-            ) : undefined
-          }
-          sx={{
-            border: "none",
-            boxShadow: "none",
-            backgroundColor: "transparent",
-            "&:hover": { backgroundColor: "transparent" },
-            "&:focus-within": {
-              backgroundColor: "transparent",
-              borderColor: "primary.500",
-              boxShadow: "none",
-            },
-          }}
-          size="sm"
-        />
+        {SearchInput}
       </Sheet>
     </Box>
   ) : null;
 
-  // Filter and action controls
   const FilterAndActionControls =
     showFilters || showActions ? (
       <Box
         sx={{
           position: "absolute",
           zIndex: 1000,
-          padding: isMobile ? 2 : 0,
-          ...getPositionStyles(
-            isMobile
-              ? position.search || "top-left"
-              : position.filters || "top-right",
-          ),
-          ...(isMobile && { top: 80 }), // Add spacing below search when stacked
+          ...getPositionStyles(position.filters || "top-right"),
         }}
       >
         <Sheet
           sx={{
             p: 1,
             borderRadius: "md",
-            display: "flex",
-            flexDirection: "row",
-            gap: 1,
-            alignItems: "center",
             boxShadow: "md",
             backgroundColor: "background.surface",
             overflow: "visible",
           }}
         >
-          {showFilters && (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                position: "relative",
-                zIndex: 999,
-              }}
-            >
-              <MapFilter
-                selectedItemTypes={selectedItemTypes}
-                onItemTypesChange={setItemTypes}
-                counts={counts}
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-                onSemanticSearch={performSemanticSearch}
-                minRating={minRating}
-                onMinRatingChange={setMinRating}
-                visitStatuses={visitStatuses}
-                onVisitStatusesChange={setVisitStatuses}
-                socialFilter={socialFilter}
-                onSocialFilterChange={setSocialFilter}
-              />
-
-              {showActions && <Divider orientation="vertical" />}
-            </Box>
-          )}
-
-          {showActions && (
-            <Stack direction="row" spacing={1}>
-              <IconButton
-                variant="soft"
-                color="neutral"
-                onClick={onRefresh}
-                loading={loading}
-                size="sm"
-                title="Refresh places"
-              >
-                <Refresh />
-              </IconButton>
-
-              {onLocationClick && (
-                <IconButton
-                  variant="soft"
-                  color="neutral"
-                  onClick={onLocationClick}
-                  size="sm"
-                  title="Go to my location"
-                >
-                  <LocationOn />
-                </IconButton>
-              )}
-            </Stack>
-          )}
+          {FilterAndActions}
         </Sheet>
       </Box>
     ) : null;
@@ -316,11 +525,7 @@ export function FullMapControls(props: MapControlsProps) {
  * ```tsx
  * // Must be wrapped in MapMachineProvider
  * <MapMachineProvider userId={userId} urqlClient={client}>
- *   <UnifiedMapControlsXState
- *     onRefresh={handleRefresh}
- *     onLocationClick={handleLocation}
- *     loading={isLoading}
- *   />
+ *   <MapControls onLocationClick={handleLocation} />
  * </MapMachineProvider>
  * ```
  */

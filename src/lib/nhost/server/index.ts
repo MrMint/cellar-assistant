@@ -2,13 +2,32 @@ import { createServerClient, type NhostClient } from "@nhost/nhost-js";
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 
+// Helper to get Nhost service URLs for local development
+// The SDK's fallback URL pattern is broken for local dev (uses local.*.local.nhost.run)
+function getNhostConfig() {
+  const subdomain = process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN || "local";
+  const region = process.env.NEXT_PUBLIC_NHOST_REGION;
+
+  if (!region) {
+    // Local development - provide explicit URLs
+    return {
+      authUrl: `https://${subdomain}.auth.nhost.run/v1`,
+      storageUrl: `https://${subdomain}.storage.nhost.run/v1`,
+      graphqlUrl: `https://${subdomain}.graphql.nhost.run/v1`,
+      functionsUrl: `https://${subdomain}.functions.nhost.run/v1`,
+    };
+  }
+
+  // Production - use subdomain/region
+  return { subdomain, region };
+}
+
 // Create Nhost client for server components
 export async function createNhostClient(): Promise<NhostClient> {
   const cookieStore = await cookies();
 
   return createServerClient({
-    subdomain: process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN!,
-    region: process.env.NEXT_PUBLIC_NHOST_REGION || undefined,
+    ...getNhostConfig(),
     storage: {
       // Server component storage - matches official pattern
       get: () => {
@@ -103,22 +122,20 @@ export async function handleNhostMiddleware(
 
   const timeUntilExpiry = exp - now;
 
-  // Token is expired
-  if (timeUntilExpiry <= 0) {
-    const response = redirectCallback();
-    response.cookies.delete("nhostSession");
-    return response;
-  }
-
   // Token is valid and not expiring soon - just pass through
   if (timeUntilExpiry > 60) {
     return NextResponse.next();
   }
 
-  // Token expires within 60 seconds - try to refresh
+  // Token is expired or expiring within 60 seconds - try to refresh
+  if (!sessionData?.refreshToken) {
+    const response = redirectCallback();
+    response.cookies.delete("nhostSession");
+    return response;
+  }
+
   const nhost = createServerClient({
-    subdomain: process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN!,
-    region: process.env.NEXT_PUBLIC_NHOST_REGION || undefined,
+    ...getNhostConfig(),
     storage: {
       get: () => sessionData,
       set: () => {},
@@ -127,7 +144,7 @@ export async function handleNhostMiddleware(
   });
 
   try {
-    const refreshedSession = await nhost.refreshSession(60);
+    const refreshedSession = await nhost.refreshSession();
 
     if (!refreshedSession) {
       const response = redirectCallback();
@@ -146,7 +163,13 @@ export async function handleNhostMiddleware(
     });
     return response;
   } catch {
-    // Refresh failed but token is still valid for a bit - allow through
-    return NextResponse.next();
+    // Refresh failed - token is either expired or refresh token is invalid
+    if (timeUntilExpiry > 0) {
+      // Access token still valid, allow through despite refresh failure
+      return NextResponse.next();
+    }
+    const response = redirectCallback();
+    response.cookies.delete("nhostSession");
+    return response;
   }
 }

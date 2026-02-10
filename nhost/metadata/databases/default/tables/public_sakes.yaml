@@ -44,13 +44,6 @@ array_relationships:
         table:
           name: item_vectors
           schema: public
-  - name: match_suggestions
-    using:
-      foreign_key_constraint_on:
-        column: sake_id
-        table:
-          name: item_match_suggestions
-          schema: public
   - name: recipe_ingredients
     using:
       foreign_key_constraint_on:
@@ -159,7 +152,6 @@ event_triggers:
       interval_sec: 10
       num_retries: 3
       timeout_sec: 60
-    concurrent_batches: 10
     webhook: '{{NHOST_FUNCTIONS_URL}}/generateItemVector'
     headers:
       - name: nhost-webhook-secret

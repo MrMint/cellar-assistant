@@ -1,15 +1,7 @@
 /**
  * Function-specific types for matchMenuItems
- *
- * This module defines all types related to menu item matching using gql.tada
- * utilities to extract types directly from GraphQL operations.
  */
 
-import {
-  graphql,
-  type ResultOf,
-  type VariablesOf,
-} from "@cellar-assistant/shared/gql/graphql";
 import {
   FunctionValidationError,
   isNonEmptyString,
@@ -19,154 +11,6 @@ import {
   validateOptionalField,
   validateRequiredField,
 } from "../_utils/function-types";
-
-// =============================================================================
-// GraphQL Operation Definitions
-// =============================================================================
-
-/**
- * GraphQL operations for menu item matching
- */
-const GET_MENU_ITEM_QUERY = graphql(`
-  query GetMenuItem($id: uuid!) {
-    place_menu_items_by_pk(id: $id) {
-      id
-      menu_item_name
-      menu_item_description
-      detected_item_type
-      confidence_score
-      extracted_attributes
-      place_id
-      place {
-        id
-        name
-      }
-    }
-  }
-`);
-
-const GET_UNMATCHED_MENU_ITEMS_QUERY = graphql(`
-  query GetUnmatchedMenuItems($placeId: uuid!) {
-    place_menu_items(
-      where: {
-        place_id: { _eq: $placeId }
-        item_match_suggestions: { _is_null: true }
-      }
-    ) {
-      id
-      menu_item_name
-      menu_item_description
-      detected_item_type
-      confidence_score
-      extracted_attributes
-    }
-  }
-`);
-
-const CLEAR_EXISTING_SUGGESTIONS_MUTATION = graphql(`
-  mutation ClearExistingSuggestions($menuItemId: uuid!) {
-    delete_item_match_suggestions(
-      where: { menu_item_id: { _eq: $menuItemId } }
-    ) {
-      affected_rows
-    }
-  }
-`);
-
-const CREATE_MATCH_SUGGESTIONS_MUTATION = graphql(`
-  mutation CreateMatchSuggestions($suggestions: [item_match_suggestions_insert_input!]!) {
-    insert_item_match_suggestions(objects: $suggestions) {
-      affected_rows
-      returning {
-        id
-        menu_item_id
-        item_id
-        item_type
-        confidence_score
-        reasoning
-        similarity_metrics
-      }
-    }
-  }
-`);
-
-const GET_ITEMS_BY_TYPE_QUERY = graphql(`
-  query GetItemsByType($itemType: String!) {
-    wines(limit: 1000, where: { name: { _is_null: false } }) @include(if: $itemType == "wine") {
-      id
-      name
-      style
-      variety
-      country
-      region
-      producer_name
-      alcohol_content_percentage
-    }
-    beers(limit: 1000, where: { name: { _is_null: false } }) @include(if: $itemType == "beer") {
-      id
-      name
-      style
-      country
-      region
-      producer_name
-      alcohol_content_percentage
-    }
-    spirits(limit: 1000, where: { name: { _is_null: false } }) @include(if: $itemType == "spirit") {
-      id
-      name
-      type
-      country
-      region
-      producer_name
-      alcohol_content_percentage
-    }
-    coffees(limit: 1000, where: { name: { _is_null: false } }) @include(if: $itemType == "coffee") {
-      id
-      name
-      roast_level
-      species
-      country
-      region
-      producer_name
-    }
-  }
-`);
-
-// =============================================================================
-// Extracted Types
-// =============================================================================
-
-/**
- * Input types for menu item matching operations
- */
-export type GetMenuItemInput = VariablesOf<typeof GET_MENU_ITEM_QUERY>;
-export type GetUnmatchedMenuItemsInput = VariablesOf<
-  typeof GET_UNMATCHED_MENU_ITEMS_QUERY
->;
-export type ClearExistingSuggestionsInput = VariablesOf<
-  typeof CLEAR_EXISTING_SUGGESTIONS_MUTATION
->;
-export type CreateMatchSuggestionsInput = VariablesOf<
-  typeof CREATE_MATCH_SUGGESTIONS_MUTATION
->;
-export type GetItemsByTypeInput = VariablesOf<typeof GET_ITEMS_BY_TYPE_QUERY>;
-
-/**
- * Output types for menu item matching operations
- */
-export type GetMenuItemOutput = ResultOf<
-  typeof GET_MENU_ITEM_QUERY
->["place_menu_items_by_pk"];
-export type GetUnmatchedMenuItemsOutput = ResultOf<
-  typeof GET_UNMATCHED_MENU_ITEMS_QUERY
->["place_menu_items"];
-export type ClearExistingSuggestionsOutput = ResultOf<
-  typeof CLEAR_EXISTING_SUGGESTIONS_MUTATION
->["delete_item_match_suggestions"];
-export type CreateMatchSuggestionsOutput = ResultOf<
-  typeof CREATE_MATCH_SUGGESTIONS_MUTATION
->["insert_item_match_suggestions"];
-export type GetItemsByTypeOutput = ResultOf<typeof GET_ITEMS_BY_TYPE_QUERY>;
 
 // =============================================================================
 // Function-specific Types
@@ -192,25 +36,6 @@ export interface MenuItemData {
   detected_item_type: string;
   confidence_score: number;
   extracted_attributes: Record<string, unknown>;
-}
-
-/**
- * Database item structure
- */
-export interface DatabaseItem {
-  id: string;
-  name: string;
-  [key: string]: unknown;
-}
-
-/**
- * Items grouped by type response
- */
-export interface ItemsByTypeResponse {
-  wines?: DatabaseItem[];
-  beers?: DatabaseItem[];
-  spirits?: DatabaseItem[];
-  coffees?: DatabaseItem[];
 }
 
 /**

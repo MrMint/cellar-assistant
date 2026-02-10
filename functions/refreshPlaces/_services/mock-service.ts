@@ -1,8 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { PlaceData, PlaceDataService } from "./_types";
+import type {
+  FetchPlacesBatchOptions,
+  PlaceBatchResult,
+  PlaceData,
+  PlaceDataService,
+} from "./_types";
+import { BIGQUERY_BATCH_SIZE } from "./_types";
 
-// Wisconsin places data structure from the JSON file
 interface WisconsinPlace {
   overture_id: string;
   name: string;
@@ -43,9 +48,13 @@ export class MockPlaceDataService implements PlaceDataService {
       const rawData = fs.readFileSync(filePath, "utf8");
       const wisconsinData: WisconsinPlace[] = JSON.parse(rawData);
 
-      // Transform Wisconsin data to our PlaceData format
       this.wisconsinPlaces = wisconsinData.map((place) =>
         this.transformWisconsinPlace(place),
+      );
+
+      // Sort by overture_id for consistent keyset pagination
+      this.wisconsinPlaces.sort((a, b) =>
+        a.overture_id.localeCompare(b.overture_id),
       );
 
       console.log(
@@ -56,38 +65,18 @@ export class MockPlaceDataService implements PlaceDataService {
         "[MockPlaceDataService] Failed to load Wisconsin data, falling back to hardcoded data:",
         error,
       );
-      // Fallback to a few hardcoded places if file loading fails
       this.wisconsinPlaces = this.getFallbackPlaces();
     }
   }
 
   private transformWisconsinPlace(place: WisconsinPlace): PlaceData {
-    // Extract alternate categories
     const alternateCategories =
-      place.alternate_categories?.list?.map((cat) => cat.element) || [];
-
-    // Extract address - use first address if available
+      place.alternate_categories?.list?.map((cat) => cat.element) ?? [];
     const firstAddress = place.addresses?.list?.[0]?.element;
-    const address = firstAddress
-      ? {
-          freeform: firstAddress.freeform,
-          locality: firstAddress.locality,
-          postcode: firstAddress.postcode,
-          region: firstAddress.region,
-          country: firstAddress.country,
-        }
-      : null;
-
-    // Extract phone - use first phone if available
-    const phone = place.phone_list?.[0]?.element || null;
-
-    // Extract website - use first website if available
-    const website = place.websites?.list?.[0]?.element || null;
 
     return {
       overture_id: place.overture_id,
       name: place.name,
-      common_names: null, // Wisconsin data doesn't seem to have common_names
       primary_category: place.primary_category,
       categories:
         alternateCategories.length > 0
@@ -96,10 +85,14 @@ export class MockPlaceDataService implements PlaceDataService {
       confidence: place.confidence,
       latitude: place.latitude,
       longitude: place.longitude,
-      address,
-      phone,
-      website,
-      brand_name: null, // Wisconsin data doesn't seem to have brand_name
+      address_freeform: firstAddress?.freeform ?? null,
+      address_locality: firstAddress?.locality ?? null,
+      address_region: firstAddress?.region ?? null,
+      address_postcode: firstAddress?.postcode ?? null,
+      address_country: firstAddress?.country ?? null,
+      phone: place.phone_list?.[0]?.element ?? null,
+      website: place.websites?.list?.[0]?.element ?? null,
+      brand_name: null,
     };
   }
 
@@ -113,7 +106,7 @@ export class MockPlaceDataService implements PlaceDataService {
         confidence: 0.85,
         latitude: 44.5,
         longitude: -89.5,
-        address: { freeform: "Somewhere in Wisconsin" },
+        address_freeform: "Somewhere in Wisconsin",
         phone: null,
         website: null,
         brand_name: null,
@@ -121,32 +114,33 @@ export class MockPlaceDataService implements PlaceDataService {
     ];
   }
 
-  async fetchPlaces(categories: string[]): Promise<PlaceData[]> {
-    console.log(
-      `[MockPlaceDataService] Fetching Wisconsin data for categories: ${categories.join(", ")}`,
-    );
+  async fetchPlacesBatch(
+    options: FetchPlacesBatchOptions = {},
+  ): Promise<PlaceBatchResult> {
+    const { cursor, limit = BIGQUERY_BATCH_SIZE } = options;
 
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Filter Wisconsin places by categories if specified
-    if (categories.length > 0) {
-      const filteredPlaces = this.wisconsinPlaces.filter(
-        (place) =>
-          categories.includes(place.primary_category) ||
-          place.categories.some((cat: string) => categories.includes(cat)),
+    let startIndex = 0;
+    if (cursor) {
+      const cursorIndex = this.wisconsinPlaces.findIndex(
+        (p) => p.overture_id === cursor,
       );
-
-      console.log(
-        `[MockPlaceDataService] Returning ${filteredPlaces.length} filtered Wisconsin places`,
-      );
-      return filteredPlaces;
+      if (cursorIndex !== -1) {
+        startIndex = cursorIndex + 1;
+      }
     }
 
+    const batch = this.wisconsinPlaces.slice(startIndex, startIndex + limit);
+    const lastId =
+      batch.length > 0 ? batch[batch.length - 1].overture_id : null;
+    const hasMore = startIndex + limit < this.wisconsinPlaces.length;
+
     console.log(
-      `[MockPlaceDataService] Returning all ${this.wisconsinPlaces.length} Wisconsin places`,
+      `[MockPlaceDataService] Returning ${batch.length} places, hasMore=${hasMore}`,
     );
-    return this.wisconsinPlaces;
+
+    return { places: batch, lastId, hasMore };
   }
 
   getName(): string {

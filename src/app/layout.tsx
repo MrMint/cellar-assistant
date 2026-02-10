@@ -1,11 +1,10 @@
 import "@fontsource/inter";
-import "leaflet/dist/leaflet.css";
-import "@/styles/google-maps.css";
 import { Box } from "@mui/joy";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import NhostClientProvider from "@/components/providers/NhostClientProvider";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -23,17 +22,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <NhostClientProvider>
-          <Box
-            sx={{
-              display: "flex",
-              height: "100vh",
-              width: "100vw",
-            }}
-          >
-            {children}
-          </Box>
-        </NhostClientProvider>
+        <NuqsAdapter>
+          <NhostClientProvider>
+            <Box
+              sx={{
+                display: "flex",
+                height: "100vh",
+                width: "100vw",
+              }}
+            >
+              {children}
+            </Box>
+          </NhostClientProvider>
+        </NuqsAdapter>
         <Analytics />
         <SpeedInsights />
       </body>

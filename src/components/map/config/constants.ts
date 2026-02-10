@@ -67,6 +67,7 @@ export const MAP_CONFIG = {
   TIMING: {
     GEOLOCATION_TIMEOUT: 10000, // 10 seconds
     BOUNDS_UPDATE_DEBOUNCE: 300, // 300ms
+    BOUNDS_UPDATE_DEBOUNCE_MOBILE: 500, // 500ms — longer on mobile for smoother panning
     SEARCH_DEBOUNCE: 500, // 500ms
   },
 

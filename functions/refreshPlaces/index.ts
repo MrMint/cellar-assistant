@@ -1,14 +1,10 @@
 import type { Request, Response } from "express";
 import { AUTH_ERROR_RESPONSE, validateAuth } from "../_utils/auth-middleware";
 import { functionMutation, getAdminAuthHeaders } from "../_utils/urql-client";
-import type { PlaceData } from "./_services";
-import { createPlaceDataService } from "./_services";
 import {
-  ALL_CATEGORIES,
+  CANCEL_ACTIVE_JOBS_MUTATION,
   CLEAR_PLACES_MUTATION,
-  DEFAULT_BATCH_SIZE,
-  INSERT_PLACES_MUTATION,
-  type PlaceInsertData,
+  CREATE_JOB_MUTATION,
   type RefreshPlacesResponse,
 } from "./_types.js";
 
@@ -16,7 +12,6 @@ export default async (
   req: Request,
   res: Response,
 ): Promise<Response<RefreshPlacesResponse>> => {
-  // Require authentication for this destructive operation
   if (!validateAuth(req)) {
     return res
       .status(401)
@@ -24,18 +19,21 @@ export default async (
   }
 
   try {
-    console.log("[PlaceRefresh] Starting weekly full refresh...");
-    const startTime = Date.now();
+    console.log("[PlaceRefresh] Starting place refresh job...");
 
-    // Create the appropriate data service based on environment
-    const placeDataService = createPlaceDataService();
-    console.log(`[PlaceRefresh] Using ${placeDataService.getName()}`);
+    // Cancel any in-progress jobs so their queued events become no-ops
+    const cancelResult = await functionMutation(
+      CANCEL_ACTIVE_JOBS_MUTATION,
+      {},
+      { headers: getAdminAuthHeaders() },
+    );
+    const cancelled =
+      cancelResult?.update_place_refresh_jobs?.affected_rows ?? 0;
+    if (cancelled > 0) {
+      console.log(`[PlaceRefresh] Cancelled ${cancelled} in-progress job(s)`);
+    }
 
-    // Fetch places data from the configured service
-    // Spread ALL_CATEGORIES to convert from readonly array to mutable array
-    const places = await placeDataService.fetchPlaces([...ALL_CATEGORIES]);
-
-    // Clear existing data and insert new data
+    // Clear existing places
     console.log("[PlaceRefresh] Clearing existing places...");
     await functionMutation(
       CLEAR_PLACES_MUTATION,
@@ -43,65 +41,25 @@ export default async (
       { headers: getAdminAuthHeaders() },
     );
 
-    // Batch insert new data (split into chunks to avoid GraphQL limits)
-    const BATCH_SIZE = DEFAULT_BATCH_SIZE;
-    let totalInserted = 0;
+    // Create job row — Hasura event trigger will pick it up
+    const data = await functionMutation(
+      CREATE_JOB_MUTATION,
+      {},
+      { headers: getAdminAuthHeaders() },
+    );
 
-    for (let i = 0; i < places.length; i += BATCH_SIZE) {
-      const batch = places.slice(i, i + BATCH_SIZE);
-
-      // Prepare batch for insertion - match the consolidated schema
-      // Note: primary_category is a GENERATED column, so we don't include it
-      const insertData: PlaceInsertData[] = batch.map(
-        (place: PlaceData): PlaceInsertData => ({
-          overture_id: place.overture_id,
-          name: place.name,
-          display_name: place.name,
-          categories: place.categories, // primary_category will be generated from categories[1]
-          confidence: place.confidence,
-          location: {
-            type: "Point" as const,
-            coordinates: [place.longitude, place.latitude],
-          },
-          // Optional fields from the consolidated schema
-          street_address: null,
-          locality: null,
-          region: null,
-          postcode: null,
-          country_code: null,
-          phone: place.phone ?? null,
-          website: place.website ?? null,
-          email: null,
-          is_active: true,
-          is_verified: false,
-          access_count: 0,
-          first_cached_reason: "bulk_refresh",
-        }),
-      );
-
-      const data = await functionMutation(
-        INSERT_PLACES_MUTATION,
-        { places: insertData },
-        { headers: getAdminAuthHeaders() },
-      );
-
-      totalInserted += data?.insert_places?.affected_rows || 0;
-      console.log(
-        `[PlaceRefresh] Inserted batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(places.length / BATCH_SIZE)}`,
-      );
+    const jobId = data?.insert_place_refresh_jobs_one?.id;
+    if (!jobId) {
+      throw new Error("Failed to create refresh job");
     }
 
-    const duration = Date.now() - startTime;
-    console.log(
-      `[PlaceRefresh] Complete! ${totalInserted} places refreshed in ${duration}ms`,
-    );
+    console.log(`[PlaceRefresh] Job created: ${jobId}`);
 
     return res.json({
       success: true,
-      places_refreshed: totalInserted,
-      duration_ms: duration,
-      categories_included: ALL_CATEGORIES.length,
-      data_source: placeDataService.getName(),
+      job_id: jobId,
+      message:
+        "Place refresh job started. Batches will process via event triggers.",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

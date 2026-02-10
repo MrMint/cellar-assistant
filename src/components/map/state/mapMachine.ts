@@ -1,6 +1,7 @@
 import { assign, createMachine, fromPromise } from "xstate";
 import { searchMapPlaces } from "@/app/(authenticated)/map/actions";
 import type {
+  GeocodedLocation,
   ItemType,
   MapBounds,
   MapDataItem,
@@ -8,7 +9,6 @@ import type {
   MapSearchResults,
   PlaceResult as Place,
   SemanticPlaceResult,
-  SocialFilter,
   UserLocation,
   VisitStatus,
 } from "../types";
@@ -34,9 +34,10 @@ interface MapContext {
   selectedItemTypes: ItemType[];
   searchQuery: string;
   isSemanticSearch: boolean; // Whether current search is semantic vs filter-based
+  globalSearch: boolean; // When true, semantic search ignores viewport bounds
   minRating: number | undefined;
   visitStatuses: VisitStatus[];
-  socialFilter: SocialFilter;
+  tierListIds: string[];
 
   // Data state
   places: Place[];
@@ -46,6 +47,9 @@ interface MapContext {
   // Semantic search results (now handled by unified service)
   semanticResults: SemanticPlaceResult[];
   semanticError: string | null;
+
+  // Geocode navigation target (set when address search resolves)
+  geocodeTarget?: GeocodedLocation;
 }
 
 // Events (actions that can trigger state changes)
@@ -67,11 +71,15 @@ type MapEvent =
   | { type: "PERFORM_SEMANTIC_SEARCH"; query: string }
   | { type: "SET_MIN_RATING"; rating: number | undefined }
   | { type: "SET_VISIT_STATUSES"; statuses: VisitStatus[] }
-  | { type: "SET_SOCIAL_FILTER"; socialFilter: SocialFilter }
+  | { type: "SET_TIER_LIST_IDS"; tierListIds: string[] }
+  | { type: "SET_GLOBAL_SEARCH"; globalSearch: boolean }
   | { type: "CLEAR_FILTERS" }
   | { type: "REFRESH_PLACES" }
   | { type: "UPDATE_SELECTED_PLACE"; place: Place }
-  | { type: "MAP_CLICK" };
+  | { type: "CLEAR_GEOCODE_TARGET" }
+  | { type: "MAP_CLICK" }
+  | { type: "ENTER_PIN_PLACEMENT" }
+  | { type: "EXIT_PIN_PLACEMENT" };
 
 // Services (side effects)
 const fetchPlacesService = fromPromise(
@@ -83,10 +91,10 @@ const fetchPlacesService = fromPromise(
       itemTypes: ItemType[];
       minRating: number | undefined;
       visitStatuses: VisitStatus[];
-      socialFilter: SocialFilter;
+      tierListIds: string[];
       searchQuery: string;
       isSemanticSearch: boolean;
-      userLocation: UserLocation;
+      globalSearch: boolean;
       userId: string;
     };
   }) => {
@@ -95,10 +103,10 @@ const fetchPlacesService = fromPromise(
       itemTypes,
       minRating,
       visitStatuses,
-      socialFilter,
+      tierListIds,
       searchQuery,
       isSemanticSearch,
-      userLocation,
+      globalSearch,
       userId,
     } = input;
 
@@ -108,8 +116,9 @@ const fetchPlacesService = fromPromise(
         itemTypes,
         minRating,
         visitStatuses,
-        socialFilter,
+        tierListIds: tierListIds.length > 0 ? tierListIds : undefined,
         semanticQuery: isSemanticSearch ? searchQuery : undefined,
+        globalSearch: isSemanticSearch ? globalSearch : false,
         limit: 500,
       };
 
@@ -123,6 +132,7 @@ const fetchPlacesService = fromPromise(
         mapItems: result.mapItems,
         semanticResults: result.semanticResults,
         isSemanticSearch: result.isSemanticSearch,
+        geocodeResult: result.geocodeResult,
       };
     } catch (error) {
       console.error("Error fetching places:", error);
@@ -144,10 +154,7 @@ const guards = {
     event: MapEvent;
   }) => {
     if (event.type === "UPDATE_SELECTED_PLACE" && context.selectedPlace) {
-      return (
-        context.selectedPlace.id === event.place.id ||
-        context.selectedPlace.name === event.place.name
-      );
+      return context.selectedPlace.id === event.place.id;
     }
     return false;
   },
@@ -163,6 +170,18 @@ const guards = {
     const boundsToCheck =
       event.type === "SET_BOUNDS" ? event.bounds : context.bounds;
     return boundsToCheck !== undefined;
+  },
+
+  // Skip refetch on bounds change when global semantic search is active
+  shouldFetchOnBoundsChange: ({
+    context,
+  }: {
+    context: MapContext;
+    event: MapEvent;
+  }) => {
+    // If global semantic search is active, bounds changes don't need a refetch
+    if (context.isSemanticSearch && context.globalSearch) return false;
+    return true;
   },
 
   hasError: ({ context }: { context: MapContext }) => context.error !== null,
@@ -226,7 +245,9 @@ const actions = {
   setItemTypes: assign({
     selectedItemTypes: ({ event }) =>
       event.type === "SET_ITEM_TYPES" ? event.itemTypes : [],
-    isSemanticSearch: false, // Reset to filter mode
+    // Preserve semantic mode if there's an active search query
+    isSemanticSearch: ({ context }) =>
+      context.isSemanticSearch && context.searchQuery.trim().length > 0,
   }),
 
   toggleItemType: assign({
@@ -243,7 +264,9 @@ const actions = {
       }
       return context.selectedItemTypes;
     },
-    isSemanticSearch: false, // Reset to filter mode
+    // Preserve semantic mode if there's an active search query
+    isSemanticSearch: ({ context }) =>
+      context.isSemanticSearch && context.searchQuery.trim().length > 0,
   }),
 
   setSearchQuery: assign({
@@ -255,8 +278,7 @@ const actions = {
     searchQuery: ({ event }) =>
       event.type === "PERFORM_SEMANTIC_SEARCH" ? event.query : "",
     isSemanticSearch: true,
-    // Clear item type filters when doing semantic search
-    selectedItemTypes: [],
+    // Preserve selectedItemTypes — they narrow semantic results
   }),
 
   setMinRating: assign({
@@ -269,41 +291,82 @@ const actions = {
       event.type === "SET_VISIT_STATUSES" ? event.statuses : [],
   }),
 
-  setSocialFilter: assign({
-    socialFilter: ({ event }) =>
-      event.type === "SET_SOCIAL_FILTER" ? event.socialFilter : false,
+  setTierListIds: assign({
+    tierListIds: ({ event }) =>
+      event.type === "SET_TIER_LIST_IDS" ? event.tierListIds : [],
+  }),
+
+  setGlobalSearch: assign({
+    globalSearch: ({ event }) =>
+      event.type === "SET_GLOBAL_SEARCH" ? event.globalSearch : true,
   }),
 
   clearFilters: assign({
     selectedItemTypes: [],
     searchQuery: "",
     isSemanticSearch: false,
+    globalSearch: true,
     minRating: undefined,
     visitStatuses: [],
-    socialFilter: false,
+    tierListIds: [],
   }),
 
   setPlaces: assign({
     places: ({ event }) => {
-      // Extract places from the service result
       if (event.type === "xstate.done.actor.fetchPlaces") {
         return event.output.places;
       }
       return [];
     },
     mapItems: ({ event }) => {
-      // Extract mapItems from the service result
       if (event.type === "xstate.done.actor.fetchPlaces") {
         return event.output.mapItems;
       }
       return [];
     },
     semanticResults: ({ event }) => {
-      // Extract semantic results from the unified service
       if (event.type === "xstate.done.actor.fetchPlaces") {
         return event.output.semanticResults || [];
       }
       return [];
+    },
+    // When the server returns a geocode result, store it so the map can fly there.
+    // Clear semantic search mode — the bounded search will fill in nearby places.
+    geocodeTarget: ({ event }) => {
+      if (event.type === "xstate.done.actor.fetchPlaces") {
+        return event.output.geocodeResult ?? undefined;
+      }
+      return undefined;
+    },
+    isSemanticSearch: ({ context, event }) => {
+      if (
+        event.type === "xstate.done.actor.fetchPlaces" &&
+        event.output.geocodeResult
+      ) {
+        return false;
+      }
+      return context.isSemanticSearch;
+    },
+    globalSearch: ({ context, event }) => {
+      if (
+        event.type === "xstate.done.actor.fetchPlaces" &&
+        event.output.geocodeResult
+      ) {
+        return false;
+      }
+      return context.globalSearch;
+    },
+    // Clear the search bar text when a geocode resolves — the user searched
+    // for an address, the map flew there, and the bounded query will show
+    // nearby places. Keeping stale address text would be confusing.
+    searchQuery: ({ context, event }) => {
+      if (
+        event.type === "xstate.done.actor.fetchPlaces" &&
+        event.output.geocodeResult
+      ) {
+        return "";
+      }
+      return context.searchQuery;
     },
     placesError: null,
     semanticError: null,
@@ -331,15 +394,16 @@ const actions = {
   updateSelectedPlace: assign({
     selectedPlace: ({ context, event }) => {
       if (event.type === "UPDATE_SELECTED_PLACE" && context.selectedPlace) {
-        if (
-          context.selectedPlace.id === event.place.id ||
-          context.selectedPlace.name === event.place.name
-        ) {
+        if (context.selectedPlace.id === event.place.id) {
           return event.place;
         }
       }
       return context.selectedPlace;
     },
+  }),
+
+  clearGeocodeTarget: assign({
+    geocodeTarget: undefined,
   }),
 
   clearSemanticResults: assign({
@@ -376,18 +440,21 @@ export const mapMachine = createMachine(
 
       searchQuery: "",
       isSemanticSearch: false,
+      globalSearch: true,
       minRating: undefined,
       visitStatuses: [],
-      socialFilter: false,
+      tierListIds: [],
       places: [],
       mapItems: [],
       placesError: null,
       semanticResults: [],
       semanticError: null,
+      geocodeTarget: undefined,
     }),
 
     states: {
-      // Map not yet initialized
+      // Map not yet initialized — accept filter events so URL-synced
+      // params (from nuqs) are captured in context before INITIALIZE fires.
       uninitializedMap: {
         on: {
           INITIALIZE: {
@@ -399,6 +466,33 @@ export const mapMachine = createMachine(
           },
           SET_DESKTOP: {
             actions: "setDesktop",
+          },
+          SET_BOUNDS: {
+            actions: "setBounds",
+          },
+          SET_ITEM_TYPES: {
+            actions: "setItemTypes",
+          },
+          TOGGLE_ITEM_TYPE: {
+            actions: "toggleItemType",
+          },
+          SET_MIN_RATING: {
+            actions: "setMinRating",
+          },
+          SET_VISIT_STATUSES: {
+            actions: "setVisitStatuses",
+          },
+          SET_TIER_LIST_IDS: {
+            actions: "setTierListIds",
+          },
+          SET_GLOBAL_SEARCH: {
+            actions: "setGlobalSearch",
+          },
+          PERFORM_SEMANTIC_SEARCH: {
+            actions: "performSemanticSearch",
+          },
+          SET_SEARCH_QUERY: {
+            actions: "setSearchQuery",
           },
         },
       },
@@ -427,6 +521,10 @@ export const mapMachine = createMachine(
                     actions: "clearSelection",
                   },
                   MAP_CLICK: {
+                    target: "closed",
+                    actions: "clearSelection",
+                  },
+                  ENTER_PIN_PLACEMENT: {
                     target: "closed",
                     actions: "clearSelection",
                   },
@@ -464,23 +562,32 @@ export const mapMachine = createMachine(
                   SET_BOUNDS: [
                     {
                       target: "loading",
-                      guard: "canFetchPlaces",
+                      guard: ({ context, event }) => {
+                        // Must have bounds and not be in global semantic mode
+                        const boundsToCheck =
+                          event.type === "SET_BOUNDS"
+                            ? event.bounds
+                            : context.bounds;
+                        if (boundsToCheck === undefined) return false;
+                        // Skip refetch when global semantic search is active
+                        if (context.isSemanticSearch && context.globalSearch)
+                          return false;
+                        return true;
+                      },
                       actions: ["setBounds", "clearError"],
                     },
                     {
                       actions: "setBounds",
                     },
                   ],
-                  SET_USER_LOCATION: [
-                    {
-                      target: "loading",
-                      guard: "canFetchPlaces",
-                      actions: ["setUserLocation", "clearError"],
-                    },
-                    {
-                      actions: "setUserLocation",
-                    },
-                  ],
+                  // User location updates context only — don't refetch.
+                  // Bounds changes are the sole trigger for data fetches.
+                  SET_USER_LOCATION: {
+                    actions: "setUserLocation",
+                  },
+                  CLEAR_GEOCODE_TARGET: {
+                    actions: "clearGeocodeTarget",
+                  },
                   SET_ITEM_TYPES: [
                     {
                       target: "loading",
@@ -532,14 +639,26 @@ export const mapMachine = createMachine(
                       actions: "setVisitStatuses",
                     },
                   ],
-                  SET_SOCIAL_FILTER: [
+                  SET_TIER_LIST_IDS: [
                     {
                       target: "loading",
                       guard: "canFetchPlaces",
-                      actions: ["setSocialFilter", "clearError"],
+                      actions: ["setTierListIds", "clearError"],
                     },
                     {
-                      actions: "setSocialFilter",
+                      actions: "setTierListIds",
+                    },
+                  ],
+                  SET_GLOBAL_SEARCH: [
+                    {
+                      target: "loading",
+                      guard: ({ context }) =>
+                        context.bounds !== undefined &&
+                        context.isSemanticSearch,
+                      actions: ["setGlobalSearch", "clearError"],
+                    },
+                    {
+                      actions: "setGlobalSearch",
                     },
                   ],
                 },
@@ -553,20 +672,10 @@ export const mapMachine = createMachine(
                     itemTypes: context.selectedItemTypes,
                     minRating: context.minRating,
                     visitStatuses: context.visitStatuses,
-                    socialFilter: context.socialFilter,
+                    tierListIds: context.tierListIds,
                     searchQuery: context.searchQuery,
                     isSemanticSearch: context.isSemanticSearch,
-                    userLocation: context.userLocation || {
-                      // Default to center of bounds if no user location
-                      latitude:
-                        ((context.bounds?.north ?? 0) +
-                          (context.bounds?.south ?? 0)) /
-                        2,
-                      longitude:
-                        ((context.bounds?.east ?? 0) +
-                          (context.bounds?.west ?? 0)) /
-                        2,
-                    },
+                    globalSearch: context.globalSearch,
                     userId: context.userId,
                   }),
                   onDone: {
@@ -579,25 +688,66 @@ export const mapMachine = createMachine(
                   },
                 },
                 on: {
-                  // Allow filter changes during loading - they'll trigger new fetch when done
+                  // Bounds/filter changes during loading: cancel current fetch and
+                  // restart with updated params. Uses reenter: true because XState v5
+                  // self-transitions are internal by default (no exit/re-enter),
+                  // so without it the invoke would NOT be cancelled and restarted.
+                  SET_BOUNDS: [
+                    {
+                      target: "loading",
+                      reenter: true,
+                      guard: ({ context }) =>
+                        !(context.isSemanticSearch && context.globalSearch),
+                      actions: "setBounds",
+                    },
+                    {
+                      // Global semantic search: just store bounds, don't restart fetch
+                      actions: "setBounds",
+                    },
+                  ],
                   SET_ITEM_TYPES: {
+                    target: "loading",
+                    reenter: true,
                     actions: "setItemTypes",
                   },
                   TOGGLE_ITEM_TYPE: {
+                    target: "loading",
+                    reenter: true,
                     actions: "toggleItemType",
                   },
-
-                  SET_SEARCH_QUERY: {
-                    actions: "setSearchQuery",
+                  PERFORM_SEMANTIC_SEARCH: {
+                    target: "loading",
+                    reenter: true,
+                    actions: "performSemanticSearch",
                   },
                   SET_MIN_RATING: {
+                    target: "loading",
+                    reenter: true,
                     actions: "setMinRating",
                   },
                   SET_VISIT_STATUSES: {
+                    target: "loading",
+                    reenter: true,
                     actions: "setVisitStatuses",
                   },
+                  SET_TIER_LIST_IDS: {
+                    target: "loading",
+                    reenter: true,
+                    actions: "setTierListIds",
+                  },
+                  SET_GLOBAL_SEARCH: {
+                    target: "loading",
+                    reenter: true,
+                    actions: "setGlobalSearch",
+                  },
                   CLEAR_FILTERS: {
+                    target: "loading",
+                    reenter: true,
                     actions: "clearFilters",
+                  },
+                  // Non-fetch context updates (search query text without triggering fetch)
+                  SET_SEARCH_QUERY: {
+                    actions: "setSearchQuery",
                   },
                 },
               },
@@ -636,6 +786,30 @@ export const mapMachine = createMachine(
               },
             },
           },
+
+          // Pin placement sub-state (Uber-style "add place" flow)
+          pinPlacement: {
+            initial: "inactive",
+            states: {
+              inactive: {
+                on: {
+                  ENTER_PIN_PLACEMENT: {
+                    target: "placing",
+                    actions: ["clearSelection"],
+                  },
+                },
+              },
+              placing: {
+                on: {
+                  EXIT_PIN_PLACEMENT: {
+                    target: "inactive",
+                  },
+                  // Absorb map clicks while placing — don't select places
+                  MAP_CLICK: {},
+                },
+              },
+            },
+          },
         },
 
         // Global events that work across all sub-states
@@ -648,9 +822,10 @@ export const mapMachine = createMachine(
           TOGGLE_ITEM_TYPE: { actions: "toggleItemType" },
           SET_SEARCH_QUERY: { actions: "setSearchQuery" },
           PERFORM_SEMANTIC_SEARCH: { actions: "performSemanticSearch" },
+          SET_GLOBAL_SEARCH: { actions: "setGlobalSearch" },
           SET_MIN_RATING: { actions: "setMinRating" },
           SET_VISIT_STATUSES: { actions: "setVisitStatuses" },
-          SET_SOCIAL_FILTER: { actions: "setSocialFilter" },
+          SET_TIER_LIST_IDS: { actions: "setTierListIds" },
           CLEAR_FILTERS: { actions: "clearFilters" },
           SET_ERROR: { actions: "setError" },
           CLEAR_ERROR: { actions: "clearError" },

@@ -4,8 +4,8 @@ import type { ItemTypeValue } from "@cellar-assistant/shared";
 import { graphql } from "@cellar-assistant/shared";
 import { revalidatePath } from "next/cache";
 import { serverMutation } from "@/lib/urql/server";
-import { getOptionalServerUser } from "@/utilities/auth-server";
 import { typeToIdKey } from "@/utilities";
+import { getOptionalServerUser } from "@/utilities/auth-server";
 
 const addFavoriteMutation = graphql(`
   mutation AddFavoriteMutation($object: item_favorites_insert_input!) {

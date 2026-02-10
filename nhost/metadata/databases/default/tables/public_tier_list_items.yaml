@@ -1,0 +1,98 @@
+table:
+  name: tier_list_items
+  schema: public
+object_relationships:
+  - name: beer
+    using:
+      foreign_key_constraint_on: beer_id
+  - name: coffee
+    using:
+      foreign_key_constraint_on: coffee_id
+  - name: place
+    using:
+      foreign_key_constraint_on: place_id
+  - name: sake
+    using:
+      foreign_key_constraint_on: sake_id
+  - name: spirit
+    using:
+      foreign_key_constraint_on: spirit_id
+  - name: tier_list
+    using:
+      foreign_key_constraint_on: tier_list_id
+  - name: wine
+    using:
+      foreign_key_constraint_on: wine_id
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        tier_list:
+          created_by_id:
+            _eq: X-Hasura-User-Id
+      columns:
+        - tier_list_id
+        - band
+        - position
+        - notes
+        - place_id
+        - wine_id
+        - beer_id
+        - spirit_id
+        - coffee_id
+        - sake_id
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - tier_list_id
+        - band
+        - position
+        - notes
+        - place_id
+        - wine_id
+        - beer_id
+        - spirit_id
+        - coffee_id
+        - sake_id
+        - type
+        - created_at
+        - updated_at
+      filter:
+        tier_list:
+          _or:
+            - privacy:
+                _eq: PUBLIC
+            - _and:
+                - privacy:
+                    _eq: FRIENDS
+                - createdBy:
+                    friends:
+                      friend_id:
+                        _eq: X-Hasura-User-Id
+            - created_by_id:
+                _eq: X-Hasura-User-Id
+      allow_aggregations: true
+update_permissions:
+  - role: user
+    permission:
+      columns:
+        - band
+        - position
+        - notes
+      filter:
+        tier_list:
+          created_by_id:
+            _eq: X-Hasura-User-Id
+      check:
+        tier_list:
+          created_by_id:
+            _eq: X-Hasura-User-Id
+delete_permissions:
+  - role: user
+    permission:
+      filter:
+        tier_list:
+          created_by_id:
+            _eq: X-Hasura-User-Id

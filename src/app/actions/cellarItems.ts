@@ -114,9 +114,7 @@ export async function updateCellarItemPercentageAction(
     return {
       success: false,
       error:
-        error instanceof Error
-          ? error.message
-          : "Failed to update cellar item",
+        error instanceof Error ? error.message : "Failed to update cellar item",
     };
   }
 }

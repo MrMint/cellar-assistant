@@ -1,0 +1,9 @@
+function:
+  name: search_places_hybrid
+  schema: public
+configuration:
+  custom_name: searchPlacesHybrid
+  custom_root_fields: {}
+  exposed_as: query
+permissions:
+  - role: user

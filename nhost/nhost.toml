@@ -28,6 +28,10 @@ name = 'AI_PROVIDER'
 value = '{{ secrets.AI_PROVIDER }}'
 
 [[global.environment]]
+name = 'BIGQUERY_PLACES_TABLE'
+value = '{{ secrets.BIGQUERY_PLACES_TABLE }}'
+
+[[global.environment]]
 name = 'OLLAMA_ENDPOINT'
 value = 'http://host.docker.internal:11434'
 
@@ -92,10 +96,10 @@ rating = 'g'
 
 [auth.session]
 [auth.session.accessToken]
-expiresIn = 900
+expiresIn = 3600
 
 [auth.session.refreshToken]
-expiresIn = 43200
+expiresIn = 2592000
 
 [auth.method]
 [auth.method.anonymous]
@@ -179,7 +183,7 @@ version = '18.1-20260113-1'
 
 [postgres.resources]
 [postgres.resources.storage]
-capacity = 10
+capacity = 20
 
 [provider]
 

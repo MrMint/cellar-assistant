@@ -11,7 +11,7 @@ import {
   formatSpiritType,
   formatWineStyle,
   formatWineVariety,
-} from "@cellar-assistant/shared/utility/index.js";
+} from "@cellar-assistant/shared/utility";
 import {
   DESCRIPTION_KEYWORDS,
   EMBEDDING_CONFIGS,

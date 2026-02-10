@@ -57,10 +57,7 @@ describe("RecipeVoteButtons", () => {
     fireEvent.click(upvoteButton);
 
     await waitFor(() => {
-      expect(mockVoteRecipeAction).toHaveBeenCalledWith(
-        "recipe-123",
-        "upvote",
-      );
+      expect(mockVoteRecipeAction).toHaveBeenCalledWith("recipe-123", "upvote");
     });
   });
 

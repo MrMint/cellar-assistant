@@ -114,9 +114,7 @@ export async function addBulkCheckInsAction(
     return {
       success: false,
       error:
-        error instanceof Error
-          ? error.message
-          : "Failed to add bulk check-ins",
+        error instanceof Error ? error.message : "Failed to add bulk check-ins",
     };
   }
 }

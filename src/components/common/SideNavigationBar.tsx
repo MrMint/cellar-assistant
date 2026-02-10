@@ -16,13 +16,21 @@ import {
   type TooltipProps,
 } from "@mui/joy";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { FaRankingStar } from "react-icons/fa6";
 import {
   MdFavorite,
+  MdFormatListNumbered,
   MdGroup,
   MdMap,
   MdMenuBook,
+  MdMoreHoriz,
   MdSearch,
   MdWarehouse,
 } from "react-icons/md";
@@ -105,11 +113,12 @@ const UserMenu = ({ user, placement, onSignOut }: UserMenuProps) => (
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/cellars", icon: <MdWarehouse />, title: "Cellars" },
-  { href: "/map", icon: <MdMap />, title: "Map" },
   { href: "/search", icon: <MdSearch />, title: "Search" },
-  { href: "/recipes", icon: <MdMenuBook />, title: "Recipes" },
+  { href: "/map", icon: <MdMap />, title: "Map" },
+  { href: "/tier-lists", icon: <MdFormatListNumbered />, title: "Tier Lists" },
   { href: "/rankings", icon: <FaRankingStar />, title: "Rankings" },
   { href: "/favorites", icon: <MdFavorite />, title: "Favorites" },
+  { href: "/recipes", icon: <MdMenuBook />, title: "Recipes" },
   { href: "/friends", icon: <MdGroup />, title: "Friends" },
 ];
 
@@ -155,6 +164,114 @@ const NavigationList = ({
   </List>
 );
 
+// Width of each nav icon button slot (icon + ListItem padding)
+const ITEM_WIDTH = 60;
+// Reserve space for the "more" button + user avatar
+const RESERVED_WIDTH = ITEM_WIDTH * 2;
+
+type MobileNavigationListProps = {
+  navItems: NavItem[];
+  pathname: string;
+  user: ServerUser;
+  onSignOut: () => Promise<void>;
+};
+
+const MobileNavigationList = ({
+  navItems,
+  pathname,
+  user,
+  onSignOut,
+}: MobileNavigationListProps) => {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(4);
+
+  const measure = useCallback(() => {
+    if (!wrapperRef.current) return;
+    const width = wrapperRef.current.offsetWidth;
+    const maxVisible = Math.floor((width - RESERVED_WIDTH) / ITEM_WIDTH);
+    setVisibleCount(Math.max(1, Math.min(maxVisible, navItems.length)));
+  }, [navItems.length]);
+
+  useEffect(() => {
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (wrapperRef.current) {
+      observer.observe(wrapperRef.current);
+    }
+    return () => observer.disconnect();
+  }, [measure]);
+
+  const needsOverflow = visibleCount < navItems.length;
+  const visibleItems = needsOverflow
+    ? navItems.slice(0, visibleCount)
+    : navItems;
+  const overflowItems = needsOverflow ? navItems.slice(visibleCount) : [];
+
+  return (
+    <Box
+      ref={wrapperRef}
+      sx={{
+        display: { xs: "flex", sm: "none" },
+        width: "100%",
+        overflow: "hidden",
+      }}
+    >
+      <List
+        orientation="horizontal"
+        size="sm"
+        sx={{
+          flexWrap: "nowrap",
+          width: "100%",
+          justifyContent: "space-evenly",
+        }}
+      >
+        {visibleItems.map((item) => (
+          <NavigationItem
+            key={item.href}
+            item={item}
+            pathname={pathname}
+            placement="top"
+          />
+        ))}
+        {needsOverflow && (
+          <ListItem>
+            <Dropdown>
+              <MenuButton
+                slots={{ root: IconButton }}
+                slotProps={{ root: { size: "lg" } }}
+              >
+                <MdMoreHoriz />
+              </MenuButton>
+              <Menu size="lg" placement="top-start">
+                {overflowItems.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <MenuItem
+                      key={item.href}
+                      component={Link}
+                      href={item.href}
+                      selected={isActive}
+                    >
+                      <Box
+                        component="span"
+                        sx={{ mr: 1, display: "flex", alignItems: "center" }}
+                      >
+                        {item.icon}
+                      </Box>
+                      {item.title}
+                    </MenuItem>
+                  );
+                })}
+              </Menu>
+            </Dropdown>
+          </ListItem>
+        )}
+        <UserMenu user={user} placement="top-start" onSignOut={onSignOut} />
+      </List>
+    </Box>
+  );
+};
+
 interface SideNavigationBarProps {
   user: ServerUser;
 }
@@ -180,14 +297,10 @@ const SideNavigationBar = ({ user }: SideNavigationBarProps) => {
         position: "relative", // Required for z-index to work
       })}
     >
-      {/* Mobile horizontal navigation */}
-      <NavigationList
-        orientation="horizontal"
-        display={{ xs: "flex", sm: "none" }}
+      {/* Mobile horizontal navigation with overflow menu */}
+      <MobileNavigationList
         navItems={NAV_ITEMS}
         pathname={pathname}
-        tooltipPlacement="top"
-        menuPlacement="top-start"
         user={user}
         onSignOut={handleSignOut}
       />

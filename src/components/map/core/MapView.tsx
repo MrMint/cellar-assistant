@@ -9,9 +9,9 @@ interface MapViewProps {
   userId: string;
 }
 
-// Dynamic import to prevent SSR issues with Leaflet
-const MapRenderer = dynamic(
-  () => import("./MapRenderer").then((mod) => mod.MapRenderer),
+const MapLibreRenderer = dynamic(
+  () =>
+    import("../maplibre/MapLibreRenderer").then((mod) => mod.MapLibreRenderer),
   {
     ssr: false,
     loading: () => (
@@ -33,10 +33,9 @@ const MapRenderer = dynamic(
 
 export function MapView({ userId }: MapViewProps) {
   const urqlClient = useClient();
-
   return (
     <MapMachineProvider userId={userId} urqlClient={urqlClient}>
-      <MapRenderer userId={userId} />
+      <MapLibreRenderer userId={userId} />
     </MapMachineProvider>
   );
 }

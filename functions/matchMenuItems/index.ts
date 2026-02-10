@@ -1,27 +1,53 @@
-import { graphql, ITEM_TYPES } from "@cellar-assistant/shared/gql/graphql";
+import {
+  graphql,
+  type ItemTypeValue,
+} from "@cellar-assistant/shared/gql/graphql";
 import type { Request, Response } from "express";
-import { distance } from "fastest-levenshtein";
-import { createFunctionNhostClient } from "../_utils";
 import { AUTH_ERROR_RESPONSE, requireAuth } from "../_utils/auth-middleware";
-import { isString } from "../_utils/types";
+import {
+  shouldVerifyWithAI,
+  verifyMatchesWithAI,
+} from "../_utils/item-matching/ai-verification";
+import {
+  calculateEnhancedConfidence,
+  determineMatchReason,
+} from "../_utils/item-matching/confidence-scoring";
+import { searchRecipesByVector } from "../_utils/item-matching/recipe-search";
+import { calculateStringSimilarity } from "../_utils/item-matching/search-utils";
+import { searchSpecificItems } from "../_utils/item-matching/specific-search";
+import type {
+  ItemMatchRequest,
+  SearchResult,
+} from "../_utils/item-matching/types";
 import {
   functionMutation,
   functionQuery,
   getAdminAuthHeaders,
 } from "../_utils/urql-client";
 
-// Lowercase version for GraphQL queries (legacy format)
-const ITEM_TYPES_LOWERCASE = ITEM_TYPES.map((t) => t.toLowerCase());
-
 import type {
-  DatabaseItem,
-  ItemsByTypeResponse,
   MatchMenuItemsRequest,
   MatchResult,
   MenuItemData,
 } from "./_types";
 
-// All interfaces are now imported from ./types.ts
+const VALID_ITEM_TYPES = [
+  "wine",
+  "beer",
+  "spirit",
+  "coffee",
+  "sake",
+  "cocktail",
+] as const;
+
+const ITEM_TYPE_SUGGESTION_COLUMN: Record<string, string> = {
+  wine: "suggested_wine_id",
+  beer: "suggested_beer_id",
+  spirit: "suggested_spirit_id",
+  coffee: "suggested_coffee_id",
+  sake: "suggested_sake_id",
+  cocktail: "suggested_recipe_id",
+};
 
 export default async (req: Request, res: Response) => {
   if (req.method !== "POST") {
@@ -31,10 +57,7 @@ export default async (req: Request, res: Response) => {
   // Validate authentication first
   const authResult = requireAuth(req);
   if (authResult.isAuthenticated === false) {
-    console.error(
-      "🚫 [matchMenuItems] Authentication failed:",
-      authResult.error,
-    );
+    console.error("[matchMenuItems] Authentication failed:", authResult.error);
     return res.status(401).json(AUTH_ERROR_RESPONSE);
   }
 
@@ -44,16 +67,11 @@ export default async (req: Request, res: Response) => {
     batchProcess = false,
   }: MatchMenuItemsRequest = req.body;
 
-  // Use authenticated userId from auth validation
-  const _userId = authResult.userId;
-
   if (!menuItemId && !placeId) {
     return res
       .status(400)
       .json({ error: "Must provide either menuItemId or placeId" });
   }
-
-  const nhost = createFunctionNhostClient();
 
   try {
     // Get menu items to process
@@ -89,7 +107,12 @@ export default async (req: Request, res: Response) => {
         }
       }
     } else if (placeId) {
-      // Process all unmatched items for a place
+      // Process all unmatched items for a place.
+      // Note: cocktails don't have a direct FK on place_menu_items — they
+      // match via item_match_suggestions.suggested_recipe_id. This filter
+      // only excludes items with direct FK matches, so cocktails will
+      // always be included for (re-)matching, which is the desired behavior
+      // since their match state lives in the suggestions table.
       const itemsData = await functionQuery(
         graphql(`
           query GetUnmatchedMenuItems($placeId: uuid!, $itemTypes: [String!]!) {
@@ -113,7 +136,7 @@ export default async (req: Request, res: Response) => {
             }
           }
         `),
-        { placeId, itemTypes: ITEM_TYPES_LOWERCASE },
+        { placeId, itemTypes: VALID_ITEM_TYPES },
         { headers: getAdminAuthHeaders() },
       );
 
@@ -137,7 +160,7 @@ export default async (req: Request, res: Response) => {
 
     // Process each menu item
     for (const menuItem of menuItems) {
-      const matches = await findMatches(menuItem, nhost);
+      const matches = await findMatches(menuItem);
       results.push({
         menuItemId: menuItem.id,
         matches,
@@ -145,42 +168,50 @@ export default async (req: Request, res: Response) => {
 
       // Save match suggestions to database
       if (matches.length > 0) {
-        const suggestions = matches.slice(0, 5).map((match) => ({
-          place_menu_item_id: menuItem.id,
-          [`suggested_${match.itemType}_id`]: match.itemId,
-          confidence_score: match.confidence,
-          match_reasoning: match.reasoning,
-          similarity_metrics: match.similarityMetrics,
-        }));
+        const suggestions = matches
+          .slice(0, 5)
+          .filter((match) => ITEM_TYPE_SUGGESTION_COLUMN[match.itemType])
+          .map((match) => ({
+            place_menu_item_id: menuItem.id,
+            [ITEM_TYPE_SUGGESTION_COLUMN[match.itemType]]: match.itemId,
+            confidence_score: match.confidence,
+            match_reasoning: match.reasoning,
+            similarity_metrics: match.similarityMetrics,
+          }));
 
-        // Clear existing suggestions for this menu item
-        await functionMutation(
-          graphql(`
-            mutation ClearExistingSuggestions($menuItemId: uuid!) {
-              delete_item_match_suggestions(
-                where: { place_menu_item_id: { _eq: $menuItemId } }
-              ) {
-                affected_rows
-              }
-            }
-          `),
-          { menuItemId: menuItem.id },
-          { headers: getAdminAuthHeaders() },
-        );
-
-        // Insert new suggestions
         if (suggestions.length > 0) {
-          await functionMutation(
-            graphql(`
-              mutation CreateMatchSuggestions($suggestions: [item_match_suggestions_insert_input!]!) {
-                insert_item_match_suggestions(objects: $suggestions) {
-                  affected_rows
+          // Replace suggestions: delete old, then insert new in a single
+          // GraphQL request. Order matters — insert cannot run first because
+          // the delete WHERE clause would also remove the newly inserted rows.
+          // If the insert fails after a successful delete, old suggestions are
+          // lost, but this is an acceptable trade-off for an edge case since
+          // the function will be retried by the event trigger.
+          try {
+            await functionMutation(
+              graphql(`
+                mutation ReplaceMatchSuggestions(
+                  $menuItemId: uuid!
+                  $suggestions: [item_match_suggestions_insert_input!]!
+                ) {
+                  delete_item_match_suggestions(
+                    where: { place_menu_item_id: { _eq: $menuItemId } }
+                  ) {
+                    affected_rows
+                  }
+                  insert_item_match_suggestions(objects: $suggestions) {
+                    affected_rows
+                  }
                 }
-              }
-            `),
-            { suggestions },
-            { headers: getAdminAuthHeaders() },
-          );
+              `),
+              { menuItemId: menuItem.id, suggestions },
+              { headers: getAdminAuthHeaders() },
+            );
+          } catch (error) {
+            console.error(
+              `Failed to replace suggestions for menu item ${menuItem.id}:`,
+              error,
+            );
+          }
         }
       }
     }
@@ -200,7 +231,7 @@ export default async (req: Request, res: Response) => {
       itemsProcessed: menuItems.length,
       totalMatches,
       highConfidenceMatches,
-      results: batchProcess ? [] : results, // Don't return full results for batch processing
+      results: batchProcess ? [] : results,
     });
   } catch (error) {
     console.error("Item matching error:", error);
@@ -211,10 +242,15 @@ export default async (req: Request, res: Response) => {
   }
 };
 
-async function findMatches(
-  menuItem: MenuItemData,
-  nhost: ReturnType<typeof createFunctionNhostClient>,
-): Promise<
+/**
+ * Find matches for a menu item using vector similarity search.
+ *
+ * 1. Build search text from menu item name + description + attributes
+ * 2. Call searchSpecificItems() for vector/text similarity search
+ * 3. Score results with calculateEnhancedConfidence() for attribute boosts
+ * 4. Return top matches above confidence threshold
+ */
+async function findMatches(menuItem: MenuItemData): Promise<
   Array<{
     itemId: string;
     itemType: string;
@@ -230,362 +266,301 @@ async function findMatches(
   const {
     detected_item_type: itemType,
     menu_item_name: name,
+    menu_item_description: description,
     extracted_attributes: attributes,
   } = menuItem;
 
-  if (!ITEM_TYPES_LOWERCASE.includes(itemType)) {
+  if (!VALID_ITEM_TYPES.includes(itemType)) {
     return [];
   }
 
-  // Get candidate items from database
-  const candidates = await getCandidateItems(itemType, name, attributes, nhost);
+  // Build search text from all available menu item data
+  const searchTerms = buildMenuItemSearchTerms(name, description, attributes);
 
-  if (candidates.length === 0) {
+  // Branch: cocktails search recipe_vectors, others search item_vectors
+  let searchResults: SearchResult[];
+
+  if (itemType === "cocktail") {
+    searchResults = await searchRecipesByVector(searchTerms, 10, 0.5);
+  } else {
+    const filters = buildFiltersFromAttributes(itemType, attributes);
+    searchResults = await searchSpecificItems({
+      itemType: itemType.toUpperCase() as ItemTypeValue,
+      searchTerms,
+      filters,
+      limit: 10,
+      similarityThreshold: 0.5,
+    });
+  }
+
+  if (searchResults.length === 0) {
     return [];
   }
 
-  // Calculate similarity scores
-  const matches = candidates.map((candidate) => {
-    const nameScore = calculateNameSimilarity(name, candidate.name);
-    const attributeScore = calculateAttributeSimilarity(
-      itemType,
-      attributes,
-      candidate,
+  // Keep a lookup map for AI verification candidate details
+  const searchResultMap = new Map(searchResults.map((r) => [r.id, r]));
+
+  // Build an ItemMatchRequest for enhanced confidence scoring
+  const matchRequest = buildMatchRequest(name, itemType, attributes);
+
+  // Score each result with enhanced confidence
+  const matches = searchResults.map((result) => {
+    const enhancedConfidence = calculateEnhancedConfidence(
+      matchRequest,
+      result,
     );
-    const overallScore = nameScore * 0.6 + attributeScore * 0.4;
+    const matchReason = determineMatchReason(matchRequest, result);
+
+    // Compute name similarity for the similarityMetrics breakdown
+    const nameScore = calculateStringSimilarity(
+      name.toLowerCase(),
+      result.name.toLowerCase(),
+    );
+    const baseScore = result.similarity_score ?? 0;
+    const attributeBoost = enhancedConfidence - baseScore;
 
     return {
-      itemId: candidate.id,
+      itemId: result.id,
       itemType,
-      confidence: overallScore,
-      reasoning: generateMatchReasoning(
+      confidence: enhancedConfidence,
+      reasoning: formatMatchReasoning(
+        matchReason,
         nameScore,
-        attributeScore,
-        itemType,
-        attributes,
-        candidate,
+        enhancedConfidence,
       ),
       similarityMetrics: {
         nameScore,
-        attributeScore,
-        overallScore,
+        attributeScore: Math.max(0, attributeBoost),
+        overallScore: enhancedConfidence,
       },
     };
   });
 
-  // Return matches above threshold, sorted by confidence
-  return matches
-    .filter((match) => match.confidence > 0.6)
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, 10);
-}
+  // Pre-filter and sort for AI verification
+  const sortedMatches = matches
+    .filter((m) => m.confidence > 0.4)
+    .sort((a, b) => b.confidence - a.confidence);
 
-async function getCandidateItems(
-  itemType: string,
-  name: string,
-  attributes: Record<string, unknown>,
-  _nhost: ReturnType<typeof createFunctionNhostClient>,
-): Promise<DatabaseItem[]> {
-  const _tableName = `${itemType}s`;
+  // AI verification for ambiguous matches (0.4–0.9 confidence band)
+  if (
+    shouldVerifyWithAI(sortedMatches[0]?.confidence ?? 0, sortedMatches.length)
+  ) {
+    const verification = await verifyMatchesWithAI(
+      {
+        name,
+        search_name: attributes.search_name as string | undefined,
+        description,
+        itemType,
+        attributes,
+      },
+      sortedMatches.slice(0, 5).map((m) => {
+        const sr = searchResultMap.get(m.itemId);
+        return {
+          id: m.itemId,
+          name: sr?.name ?? "",
+          brand_name: sr?.brand_name,
+          country: sr?.country,
+          vintage: sr?.vintage,
+          style: sr?.style as string | undefined,
+          variety: sr?.variety as string | undefined,
+          alcohol_content_percentage: sr?.alcohol_content_percentage,
+          originalConfidence: m.confidence,
+        };
+      }),
+    );
 
-  // Build query based on item type - dynamic query selection requires flexible typing
-  // Each query has different variable requirements based on item type
-  let query: ReturnType<typeof graphql>;
-  let variables: Record<string, unknown> = {};
-
-  switch (itemType) {
-    case "wine":
-      query = graphql(`
-        query FindWineCandidates($namePattern: String, $vintage: Int, $variety: String) {
-          wines(
-            where: {
-              _or: [
-                { name: { _ilike: $namePattern } }
-                { 
-                  _and: [
-                    { vintage: { _eq: $vintage } }
-                    { variety: { _eq: $variety } }
-                  ]
-                }
-              ]
-            }
-            limit: 50
-          ) {
-            id
-            name
-            vintage
-            variety
-            winery_id
-            region
-            alcohol_content_percentage
-          }
-        }
-      `);
-      variables = {
-        namePattern: `%${name.split(" ").join("%")}%`,
-        vintage: attributes.vintage,
-        variety: attributes.variety,
-      };
-      break;
-
-    case "beer":
-      query = graphql(`
-        query FindBeerCandidates($namePattern: String, $brewery: String, $style: String) {
-          beers(
-            where: {
-              _or: [
-                { name: { _ilike: $namePattern } }
-                { brewery: { _ilike: $brewery } }
-                { style: { _eq: $style } }
-              ]
-            }
-            limit: 50
-          ) {
-            id
-            name
-            brewery
-            style
-            alcohol_content_percentage
-            international_bitterness_unit
-            vintage
-          }
-        }
-      `);
-      variables = {
-        namePattern: `%${name.split(" ").join("%")}%`,
-        brewery: attributes.brewery ? `%${attributes.brewery}%` : null,
-        style: attributes.style,
-      };
-      break;
-
-    case "spirit":
-      query = graphql(`
-        query FindSpiritCandidates($namePattern: String, $distillery: String, $age: Int) {
-          spirits(
-            where: {
-              _or: [
-                { name: { _ilike: $namePattern } }
-                { distillery: { _ilike: $distillery } }
-                { age: { _eq: $age } }
-              ]
-            }
-            limit: 50
-          ) {
-            id
-            name
-            distillery
-            age
-            alcohol_content_percentage
-            type {
-              name
-            }
-          }
-        }
-      `);
-      variables = {
-        namePattern: `%${name.split(" ").join("%")}%`,
-        distillery: attributes.distillery ? `%${attributes.distillery}%` : null,
-        age: attributes.age,
-      };
-      break;
-
-    case "coffee":
-      query = graphql(`
-        query FindCoffeeCandidates($namePattern: String, $roaster: String, $origin: String) {
-          coffees(
-            where: {
-              _or: [
-                { name: { _ilike: $namePattern } }
-                { roaster: { _ilike: $roaster } }
-                { origin: { _eq: $origin } }
-              ]
-            }
-            limit: 50
-          ) {
-            id
-            name
-            roaster
-            origin
-            roast_level
-            processing_method
-          }
-        }
-      `);
-      variables = {
-        namePattern: `%${name.split(" ").join("%")}%`,
-        roaster: attributes.roaster ? `%${attributes.roaster}%` : null,
-        origin: attributes.origin,
-      };
-      break;
-  }
-
-  // Dynamic query with runtime-determined variables - type assertion required for flexible matching
-  const data = await functionQuery(
-    query,
-    variables as Parameters<typeof functionQuery>[1],
-    { headers: getAdminAuthHeaders() },
-  );
-
-  // Type-safe access to the data based on item type
-  const typedData = data as ItemsByTypeResponse;
-  switch (itemType) {
-    case "wine":
-      return typedData.wines || [];
-    case "beer":
-      return typedData.beers || [];
-    case "spirit":
-      return typedData.spirits || [];
-    case "coffee":
-      return typedData.coffees || [];
-    default:
-      return [];
-  }
-}
-
-function calculateNameSimilarity(name1: string, name2: string): number {
-  const norm1 = normalize(name1);
-  const norm2 = normalize(name2);
-
-  // Exact match
-  if (norm1 === norm2) return 1.0;
-
-  // Levenshtein distance
-  const maxLen = Math.max(norm1.length, norm2.length);
-  const dist = distance(norm1, norm2);
-  const levenScore = Math.max(0, 1 - dist / maxLen);
-
-  // Token overlap
-  const tokens1 = new Set(norm1.split(" "));
-  const tokens2 = new Set(norm2.split(" "));
-  const intersection = new Set(
-    Array.from(tokens1).filter((x) => tokens2.has(x)),
-  );
-  const union = new Set([...Array.from(tokens1), ...Array.from(tokens2)]);
-  const tokenScore = intersection.size / union.size;
-
-  // Combined score
-  return levenScore * 0.6 + tokenScore * 0.4;
-}
-
-function calculateAttributeSimilarity(
-  itemType: string,
-  menuAttrs: Record<string, any>,
-  dbItem: DatabaseItem,
-): number {
-  const relevantAttrs: Record<string, string[]> = {
-    wine: ["vintage", "variety", "region", "alcohol_content_percentage"],
-    beer: [
-      "brewery",
-      "style",
-      "alcohol_content_percentage",
-      "international_bitterness_unit",
-    ],
-    spirit: ["distillery", "age", "alcohol_content_percentage", "type"],
-    coffee: ["roaster", "origin", "roast_level", "processing_method"],
-  };
-
-  const attrs = relevantAttrs[itemType] || [];
-  let matchCount = 0;
-  let totalAttrs = 0;
-
-  for (const attr of attrs) {
-    const menuValue = menuAttrs[attr];
-    const dbValue = dbItem[attr] || dbItem[attr.replace("_", "")]; // Handle naming differences
-
-    if (menuValue != null && dbValue != null) {
-      totalAttrs++;
-
-      if (typeof menuValue === "string" && typeof dbValue === "string") {
-        if (normalize(menuValue) === normalize(dbValue)) {
-          matchCount++;
-        }
-      } else if (menuValue === dbValue) {
-        matchCount++;
-      } else if (typeof menuValue === "number" && typeof dbValue === "number") {
-        // Allow for small numeric differences
-        if (Math.abs(menuValue - dbValue) <= 0.5) {
-          matchCount++;
+    // Apply AI-adjusted confidence scores
+    for (const candidate of verification.candidates) {
+      const match = sortedMatches.find((m) => m.itemId === candidate.id);
+      if (match) {
+        match.confidence = candidate.adjustedConfidence;
+        match.similarityMetrics.overallScore = candidate.adjustedConfidence;
+        if (verification.bestMatchId === candidate.id) {
+          match.reasoning = `AI verified: ${verification.reasoning}`;
         }
       }
     }
   }
 
-  return totalAttrs > 0 ? matchCount / totalAttrs : 0;
+  // Final filter, sort, and return
+  return sortedMatches
+    .filter((match) => match.confidence > 0.6)
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 10);
 }
 
-function generateMatchReasoning(
-  nameScore: number,
-  attributeScore: number,
+/**
+ * Build search text from menu item data for embedding generation.
+ */
+function buildMenuItemSearchTerms(
+  name: string,
+  description: string | undefined,
+  attributes: Record<string, unknown>,
+): string {
+  // Prefer AI-generated search_name for better embedding quality
+  const primaryName =
+    typeof attributes.search_name === "string" &&
+    attributes.search_name.trim().length > 0
+      ? attributes.search_name
+      : name;
+  const parts: string[] = [primaryName];
+
+  if (description) {
+    parts.push(description);
+  }
+
+  // Add key attribute values as search context
+  const attributeKeys = [
+    "variety",
+    "style",
+    "vintage",
+    "brewery",
+    "distillery",
+    "roaster",
+    "origin",
+    "region",
+    "country",
+    "producer",
+    "winery",
+    "grape",
+  ];
+
+  for (const key of attributeKeys) {
+    const value = attributes[key];
+    if (value && typeof value === "string") {
+      parts.push(value);
+    }
+  }
+
+  return parts.filter(Boolean).join(" ");
+}
+
+/**
+ * Build filter parameters from extracted attributes for the search query.
+ */
+function buildFiltersFromAttributes(
   itemType: string,
-  menuAttrs: Record<string, any>,
-  dbItem: DatabaseItem,
+  attributes: Record<string, unknown>,
+): {
+  category?: string;
+  country?: string;
+  alcohol_content?: number;
+  vintage?: string;
+  style?: string;
+  variety?: string;
+} {
+  const filters: Record<string, string | number | undefined> = {};
+
+  if (typeof attributes.country === "string") {
+    filters.country = attributes.country;
+  }
+
+  switch (itemType) {
+    case "wine":
+      if (typeof attributes.vintage === "string")
+        filters.vintage = attributes.vintage;
+      if (typeof attributes.variety === "string")
+        filters.variety = attributes.variety;
+      if (typeof attributes.style === "string")
+        filters.style = attributes.style;
+      break;
+    case "beer":
+      if (typeof attributes.style === "string")
+        filters.style = attributes.style;
+      break;
+    case "spirit":
+      if (typeof attributes.style === "string")
+        filters.style = attributes.style;
+      break;
+    case "coffee":
+      if (typeof attributes.style === "string")
+        filters.style = attributes.style;
+      break;
+    case "sake":
+      if (typeof attributes.style === "string")
+        filters.style = attributes.style;
+      if (typeof attributes.variety === "string")
+        filters.variety = attributes.variety;
+      break;
+  }
+
+  return filters;
+}
+
+/**
+ * Build an ItemMatchRequest from menu item data for confidence scoring.
+ */
+function buildMatchRequest(
+  name: string,
+  itemType: string,
+  attributes: Record<string, unknown>,
+): ItemMatchRequest {
+  // "COCKTAIL" is not a valid ItemTypeValue — use "generic" for confidence
+  // scoring so calculateEnhancedConfidence falls through to default handling
+  const upperType = itemType.toUpperCase();
+  const itemTypeValue: ItemTypeValue | "generic" =
+    upperType === "COCKTAIL" ? "generic" : (upperType as ItemTypeValue);
+
+  return {
+    name,
+    item_type: itemTypeValue,
+    brand_name: (attributes.brewery ??
+      attributes.distillery ??
+      attributes.winery ??
+      attributes.roaster ??
+      attributes.producer) as string | undefined,
+    country: attributes.country as string | undefined,
+    vintage: attributes.vintage as string | undefined,
+    style: (attributes.style ?? attributes.cocktail_style) as
+      | string
+      | undefined,
+    variety: attributes.variety as string | undefined,
+    alcohol_content: attributes.alcohol_content as number | undefined,
+    region: attributes.region as string | undefined,
+    category: attributes.category as string | undefined,
+    description: (attributes.description ?? attributes.ingredients) as
+      | string
+      | undefined,
+  };
+}
+
+/**
+ * Format the match reasoning into a human-readable string.
+ */
+function formatMatchReasoning(
+  matchReason: string,
+  nameScore: number,
+  confidence: number,
 ): string {
   const reasons: string[] = [];
 
-  if (nameScore > 0.8) {
+  switch (matchReason) {
+    case "exact_name":
+      reasons.push("Exact name match");
+      break;
+    case "exact_brand":
+      reasons.push("Exact brand match");
+      break;
+    case "brand_similarity":
+      reasons.push("Brand similarity");
+      break;
+    case "category_match":
+      reasons.push("Category match");
+      break;
+    case "semantic_similarity":
+      reasons.push("Semantic similarity");
+      break;
+  }
+
+  if (nameScore > 0.8 && matchReason !== "exact_name") {
     reasons.push("Strong name similarity");
-  } else if (nameScore > 0.6) {
+  } else if (nameScore > 0.6 && matchReason !== "exact_name") {
     reasons.push("Moderate name similarity");
   }
 
-  if (attributeScore > 0.8) {
-    reasons.push("High attribute match");
-  } else if (attributeScore > 0.6) {
-    reasons.push("Partial attribute match");
+  if (confidence > 0.8) {
+    reasons.push("High overall confidence");
   }
 
-  // Add specific matches
-  switch (itemType) {
-    case "wine":
-      if (menuAttrs.vintage === dbItem.vintage) reasons.push("Vintage match");
-      if (
-        menuAttrs.variety &&
-        isString(dbItem.variety) &&
-        normalize(menuAttrs.variety) === normalize(dbItem.variety)
-      ) {
-        reasons.push("Grape variety match");
-      }
-      break;
-    case "beer":
-      if (
-        menuAttrs.brewery &&
-        isString(dbItem.brewery) &&
-        normalize(menuAttrs.brewery) === normalize(dbItem.brewery)
-      ) {
-        reasons.push("Brewery match");
-      }
-      if (menuAttrs.style === dbItem.style) reasons.push("Style match");
-      break;
-    case "spirit":
-      if (
-        menuAttrs.distillery &&
-        isString(dbItem.distillery) &&
-        normalize(menuAttrs.distillery) === normalize(dbItem.distillery)
-      ) {
-        reasons.push("Distillery match");
-      }
-      if (menuAttrs.age === dbItem.age) reasons.push("Age match");
-      break;
-    case "coffee":
-      if (
-        menuAttrs.roaster &&
-        isString(dbItem.roaster) &&
-        normalize(menuAttrs.roaster) === normalize(dbItem.roaster)
-      ) {
-        reasons.push("Roaster match");
-      }
-      if (menuAttrs.origin === dbItem.origin) reasons.push("Origin match");
-      break;
-  }
-
-  return reasons.length > 0 ? reasons.join(", ") : "Basic similarity detected";
-}
-
-function normalize(str: string): string {
-  return str
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return reasons.length > 0 ? reasons.join(", ") : "Vector similarity match";
 }

@@ -4,6 +4,8 @@ import { InstallPwaDialog } from "@/components/common/InstallPwaDialog";
 import SideNavigationBar from "@/components/common/SideNavigationBar";
 import { getServerUser } from "@/utilities/auth-server";
 
+export const dynamic = "force-dynamic";
+
 export default async function AuthenticatedLayout({
   children,
 }: {

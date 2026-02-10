@@ -108,6 +108,38 @@ actions:
         version: 2
     permissions:
       - role: user
+  - name: reviewUserPlace
+    definition:
+      kind: synchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/reviewUserPlace'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 15
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "name": {{$body.input.input.name}},
+              "categories": {{$body.input.input.categories}},
+              "latitude": {{$body.input.input.latitude}},
+              "longitude": {{$body.input.input.longitude}},
+              "street_address": {{$body.input.input?.street_address}},
+              "locality": {{$body.input.input?.locality}},
+              "region": {{$body.input.input?.region}},
+              "country_code": {{$body.input.input?.country_code}},
+              "phone": {{$body.input.input?.phone}},
+              "website": {{$body.input.input?.website}},
+              "description": {{$body.input.input?.description}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
   - name: refresh_places
     definition:
       kind: asynchronous
@@ -265,6 +297,7 @@ custom_types:
     - name: item_image_upload_input
     - name: search_nearby_places_input
     - name: ProcessRecipePhotoInput
+    - name: ReviewUserPlaceInput
   objects:
     - name: wine_defaults_result
     - name: beer_defaults_result
@@ -280,4 +313,5 @@ custom_types:
     - name: ProcessRecipePhotoOutput
     - name: ProcessRecipePhotoResult
     - name: MenuAnalysis
+    - name: ReviewUserPlaceOutput
   scalars: []

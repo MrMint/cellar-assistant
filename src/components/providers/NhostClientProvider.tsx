@@ -39,18 +39,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const lastRefreshTokenIdRef = useRef<string | null>(null);
   const router = useRouter();
 
-  const nhost = useMemo(
-    () =>
-      createClient({
-        region: process.env.NEXT_PUBLIC_NHOST_REGION || "local",
-        subdomain: process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN || "local",
-        storage: new CookieStorage({
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-        }),
+  const nhost = useMemo(() => {
+    const subdomain = process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN || "local";
+    const region = process.env.NEXT_PUBLIC_NHOST_REGION;
+
+    // For local development (no region), provide explicit URLs
+    // The SDK's fallback URL pattern is broken for local dev
+    const isLocal = !region;
+    const baseConfig = isLocal
+      ? {
+          authUrl: `https://${subdomain}.auth.nhost.run/v1`,
+          storageUrl: `https://${subdomain}.storage.nhost.run/v1`,
+          graphqlUrl: `https://${subdomain}.graphql.nhost.run/v1`,
+          functionsUrl: `https://${subdomain}.functions.nhost.run/v1`,
+        }
+      : {
+          subdomain,
+          region,
+        };
+
+    return createClient({
+      ...baseConfig,
+      storage: new CookieStorage({
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
       }),
-    [],
-  );
+    });
+  }, []);
 
   useEffect(() => {
     const initializeAuth = async () => {

@@ -1,0 +1,32 @@
+table:
+  name: hybrid_search_results
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - name
+        - location
+        - primary_category
+        - categories
+        - confidence
+        - street_address
+        - locality
+        - region
+        - postcode
+        - country_code
+        - phone
+        - website
+        - email
+        - hours
+        - price_level
+        - rating
+        - review_count
+        - is_verified
+        - text_rank
+        - trigram_similarity
+        - category_score
+        - combined_score
+      filter: {}
+      allow_aggregations: true

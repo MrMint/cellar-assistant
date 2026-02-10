@@ -1,4 +1,4 @@
-import { getMultipleEnumOptions } from "@cellar-assistant/shared/enums/server";
+import { getMultipleEnumOptions } from "@/lib/enums/server";
 import { notFound } from "next/navigation";
 import { CoffeeForm } from "@/components/coffee/CoffeeForm";
 import { GetCoffeeEditQuery } from "@/components/coffee/fragments";

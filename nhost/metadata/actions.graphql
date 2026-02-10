@@ -33,6 +33,12 @@ type Mutation {
   refresh_places: refresh_places_result
 }
 
+type Mutation {
+  reviewUserPlace(
+    input: ReviewUserPlaceInput!
+  ): ReviewUserPlaceOutput
+}
+
 type Query {
   sake_defaults(
     hint: item_defaults_hint!
@@ -272,5 +278,28 @@ type MenuAnalysis {
   restaurant_type: String
   recipes_extracted: Int
   extraction_method: String
+}
+
+input ReviewUserPlaceInput {
+  name: String!
+  categories: [String!]!
+  latitude: Float!
+  longitude: Float!
+  street_address: String
+  locality: String
+  region: String
+  country_code: String
+  phone: String
+  website: String
+  description: String
+}
+
+type ReviewUserPlaceOutput {
+  approved: Boolean!
+  confidence_adjustment: Float!
+  enriched_description: String
+  suggested_categories: [String!]
+  rejection_reason: String
+  flags: [String!]!
 }
 

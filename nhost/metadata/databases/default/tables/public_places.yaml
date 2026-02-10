@@ -1,6 +1,10 @@
 table:
   name: places
   schema: public
+object_relationships:
+  - name: created_by_user
+    using:
+      foreign_key_constraint_on: created_by
 array_relationships:
   - name: cellar_items
     using:
@@ -66,6 +70,32 @@ array_relationships:
           name: user_place_interactions
           schema: public
     comment: User interactions with this place
+insert_permissions:
+  - role: user
+    permission:
+      check:
+        created_by:
+          _eq: X-Hasura-User-Id
+      set:
+        created_by: x-hasura-User-Id
+        is_verified: false
+        source: user
+      columns:
+        - name
+        - categories
+        - location
+        - street_address
+        - locality
+        - region
+        - postcode
+        - country_code
+        - phone
+        - website
+        - email
+        - hours
+        - confidence
+        - description
+    comment: Allow users to create places - auto-set created_by, source=user, is_verified=false
 select_permissions:
   - role: user
     permission:
@@ -99,6 +129,9 @@ select_permissions:
         - created_at
         - updated_at
         - last_sync_at
+        - created_by
+        - source
+        - description
       filter: {}
       allow_aggregations: true
-    comment: Allow users to view all places data
+    comment: Allow users to view all places data including user-created places

@@ -1,0 +1,24 @@
+table:
+  name: category_vectors
+  schema: public
+computed_fields:
+  - name: distance
+    definition:
+      function:
+        name: calculate_category_vector_distance
+        schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - label
+        - label_type
+        - associated_categories
+        - metadata
+        - created_at
+        - updated_at
+      computed_fields:
+        - distance
+      filter: {}
+      allow_aggregations: true

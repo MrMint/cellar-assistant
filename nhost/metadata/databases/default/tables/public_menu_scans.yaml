@@ -89,3 +89,18 @@ delete_permissions:
         user_id:
           _eq: X-Hasura-User-Id
     comment: ""
+event_triggers:
+  - name: match_menu_items_on_scan_complete
+    definition:
+      enable_manual: true
+      update:
+        columns:
+          - processing_status
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/onMenuScanComplete'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET

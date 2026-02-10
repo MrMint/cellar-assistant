@@ -13,6 +13,7 @@ import { ItemHeaderServer } from "@/components/item/ItemHeaderServer";
 import { ItemImage } from "@/components/item/ItemImage";
 import { ItemReviews } from "@/components/item/ItemReviews";
 import { ItemShare } from "@/components/item/ItemShare";
+import { ItemTierLists } from "@/components/item/ItemTierLists";
 import { AddReview } from "@/components/review/AddReview";
 import beer1 from "@/images/beer1.png";
 import { formatAsPercentage, formatVintage } from "@/utilities";
@@ -91,6 +92,7 @@ export function BeerDetails({ beer, cellars, itemId }: BeerDetailsProps) {
               {relationships?.brands && relationships.brands.length > 0 && (
                 <ItemBrands brands={relationships.brands} title="Breweries" />
               )}
+              <ItemTierLists entityId={coreData.id} entityType="beer" />
             </Stack>
           </Grid>
           <Grid xs={12} sm={12} lg={6}>

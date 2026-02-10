@@ -12,15 +12,18 @@ export function ConditionalPaddingWrapper({
 }: ConditionalPaddingWrapperProps) {
   const pathname = usePathname();
 
-  // Remove padding for the map page
-  const isMapPage = pathname === "/map";
+  // All /map/* routes handle their own padding
+  const isMapRoute = pathname.startsWith("/map");
+  // Only the map canvas itself needs hidden overflow
+  const isMapCanvas = pathname === "/map";
 
   return (
     <Box
       sx={{
         flexGrow: 1,
-        padding: isMapPage ? 0 : "1rem",
-        overflowY: isMapPage ? "hidden" : "auto",
+        minHeight: 0,
+        padding: isMapRoute ? 0 : "1rem",
+        overflowY: isMapCanvas ? "hidden" : "auto",
         overflowX: "hidden",
       }}
     >

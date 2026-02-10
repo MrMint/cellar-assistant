@@ -24,7 +24,6 @@ export const NAME_KEYWORDS: Record<ItemType, string[]> = {
     "cappuccino",
     "roastery",
     "beans",
-    "brew",
   ],
   sake: [
     "sake",

@@ -8,8 +8,6 @@ export const UserCoreFragment = graphql(`
     id
     displayName
     avatarUrl
-    email
-    created_at
   }
 `);
 
