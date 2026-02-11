@@ -6,25 +6,33 @@ import {
   IconButton,
   Snackbar,
   Stack,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
   Tooltip,
   Typography,
 } from "@mui/joy";
 import Link from "next/link";
+import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { useCallback, useEffect, useState } from "react";
 import {
   MdEdit,
   MdGroup,
   MdLock,
   MdLockOpen,
+  MdMap,
   MdPublic,
   MdShare,
 } from "react-icons/md";
 import { setTierListEditingLockAction } from "@/app/actions/tierLists";
+import { TierListInsightsPanel } from "./insights/TierListInsightsPanel";
 import { TierListView } from "./TierListView";
-import type { TierListData } from "./types";
+import type { TierListData, TierListInsightsData } from "./types";
 
 interface TierListViewPageProps {
   data: TierListData;
+  insightsData: TierListInsightsData;
 }
 
 const privacyLabels: Record<string, { icon: typeof MdLock; label: string }> = {
@@ -33,7 +41,16 @@ const privacyLabels: Record<string, { icon: typeof MdLock; label: string }> = {
   PUBLIC: { icon: MdPublic, label: "Public" },
 };
 
-export function TierListViewPage({ data }: TierListViewPageProps) {
+export function TierListViewPage({
+  data,
+  insightsData,
+}: TierListViewPageProps) {
+  const TAB_VALUES = ["rankings", "insights"] as const;
+  const [tab, setTab] = useQueryState(
+    "tab",
+    parseAsStringLiteral(TAB_VALUES).withDefault("rankings"),
+  );
+
   const privacyInfo = privacyLabels[data.privacy] ?? privacyLabels.PRIVATE;
   const PrivacyIcon = privacyInfo.icon;
 
@@ -122,6 +139,19 @@ export function TierListViewPage({ data }: TierListViewPageProps) {
             </Stack>
           </Box>
           <Stack direction="row" spacing={0.5}>
+            {data.listType === "place" && (
+              <Tooltip title="View on map">
+                <IconButton
+                  component={Link}
+                  href={`/map?tierLists=${data.id}`}
+                  variant="outlined"
+                  color="neutral"
+                  size="sm"
+                >
+                  <MdMap />
+                </IconButton>
+              </Tooltip>
+            )}
             {data.privacy !== "PRIVATE" && (
               <Tooltip title="Share">
                 <IconButton
@@ -165,13 +195,64 @@ export function TierListViewPage({ data }: TierListViewPageProps) {
           </Stack>
         </Stack>
 
-        {/* Tier List DnD View */}
-        <TierListView
-          tierListId={data.id}
-          items={data.items}
-          isOwner={data.isOwner}
-          isEditingLocked={isEditingLocked}
-        />
+        {/* Tabs: Rankings + Insights */}
+        <Tabs
+          value={tab}
+          onChange={(_e, v) => setTab(v as typeof tab)}
+          sx={{ backgroundColor: "transparent" }}
+        >
+          <TabList
+            disableUnderline
+            sx={{
+              gap: 1,
+              borderRadius: "md",
+              backgroundColor: "background.level1",
+              p: 0.5,
+            }}
+          >
+            <Tab
+              value="rankings"
+              disableIndicator
+              sx={{
+                flex: 1,
+                borderRadius: "sm",
+                fontWeight: "md",
+                "&[aria-selected='true']": {
+                  backgroundColor: "background.surface",
+                  boxShadow: "sm",
+                },
+              }}
+            >
+              Rankings
+            </Tab>
+            <Tab
+              value="insights"
+              disableIndicator
+              sx={{
+                flex: 1,
+                borderRadius: "sm",
+                fontWeight: "md",
+                "&[aria-selected='true']": {
+                  backgroundColor: "background.surface",
+                  boxShadow: "sm",
+                },
+              }}
+            >
+              Insights
+            </Tab>
+          </TabList>
+          <TabPanel value="rankings" sx={{ px: 0 }}>
+            <TierListView
+              tierListId={data.id}
+              items={data.items}
+              isOwner={data.isOwner}
+              isEditingLocked={isEditingLocked}
+            />
+          </TabPanel>
+          <TabPanel value="insights" sx={{ px: 0 }}>
+            <TierListInsightsPanel insights={insightsData} />
+          </TabPanel>
+        </Tabs>
       </Stack>
 
       <Snackbar

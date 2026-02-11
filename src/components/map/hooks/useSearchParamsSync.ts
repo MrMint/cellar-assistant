@@ -22,8 +22,14 @@ interface MapSearchParamsValues {
  * then tracks subsequent changes via prev refs.
  */
 export function useSearchParamsSync(params: MapSearchParamsValues) {
-  const { search, itemTypes, minRating, visitStatuses, tierLists, globalSearch } =
-    params;
+  const {
+    search,
+    itemTypes,
+    minRating,
+    visitStatuses,
+    tierLists,
+    globalSearch,
+  } = params;
   const actions = useMapActions();
 
   const prevSearch = useRef<string | undefined>(undefined);

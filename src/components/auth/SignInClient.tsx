@@ -120,9 +120,7 @@ export function SignInClient({ returnTo }: { returnTo?: string }) {
         </Stack>
         <Divider>or</Divider>
         <form action={handleSubmit}>
-          {returnTo && (
-            <input type="hidden" name="returnTo" value={returnTo} />
-          )}
+          {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
           <Stack gap={2} sx={{ mt: 2 }}>
             <FormControl required error={!!error}>
               <FormLabel>Email</FormLabel>

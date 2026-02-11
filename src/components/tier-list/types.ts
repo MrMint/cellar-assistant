@@ -25,3 +25,31 @@ export interface TierListData {
   itemCount: number;
   items: TierListItemDisplay[];
 }
+
+/** Enriched item data for insights computation (resolved server-side) */
+export interface TierListInsightsItem {
+  id: string;
+  band: number;
+  name: string;
+  countryCode: string | null;
+  region: string | null;
+  primaryCategory: string | null;
+}
+
+/** AI-generated narrative stored in DB */
+export interface TierListAIInsights {
+  palateProfile: string;
+  blindSpots: string;
+  hotTake?: string;
+  archetype?: string;
+  archetypeDescription?: string;
+  recommendation?: string;
+  generatedAt: string;
+}
+
+/** Full data for the Insights tab */
+export interface TierListInsightsData {
+  items: TierListInsightsItem[];
+  aiInsights: TierListAIInsights | null;
+  contentUpdatedAt: string | null;
+}

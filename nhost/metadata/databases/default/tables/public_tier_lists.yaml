@@ -32,11 +32,14 @@ select_permissions:
         - name
         - description
         - created_by_id
-        - is_editing_locked
         - privacy
         - list_type
+        - is_editing_locked
         - created_at
         - updated_at
+        - content_updated_at
+        - ai_insights
+        - insights_generated_at
       filter:
         _or:
           - privacy:
@@ -57,8 +60,8 @@ update_permissions:
       columns:
         - name
         - description
-        - is_editing_locked
         - privacy
+        - is_editing_locked
       filter:
         created_by_id:
           _eq: X-Hasura-User-Id
@@ -69,3 +72,18 @@ delete_permissions:
       filter:
         created_by_id:
           _eq: X-Hasura-User-Id
+event_triggers:
+  - name: generate_tier_list_insights
+    definition:
+      enable_manual: true
+      update:
+        columns:
+          - content_updated_at
+    retry_conf:
+      interval_sec: 30
+      num_retries: 1
+      timeout_sec: 120
+    webhook: '{{NHOST_FUNCTIONS_URL}}/generateTierListInsights'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET

@@ -109,7 +109,13 @@ export const getCachedGeocode = unstable_cache(
 
       // Only accept specific-enough results (house, street, or locality)
       const resultType = feature.properties.type;
-      const specificTypes = ["house", "street", "locality", "district", "postcode"];
+      const specificTypes = [
+        "house",
+        "street",
+        "locality",
+        "district",
+        "postcode",
+      ];
       if (resultType && !specificTypes.includes(resultType)) return null;
 
       const [lng, lat] = feature.geometry.coordinates;

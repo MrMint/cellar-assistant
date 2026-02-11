@@ -239,9 +239,7 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
       postcode: data.postcode || undefined,
       country_code: data.country_code.trim().toUpperCase() || undefined,
       phone:
-        data.phone && isValidPhoneNumber(data.phone)
-          ? data.phone
-          : undefined,
+        data.phone && isValidPhoneNumber(data.phone) ? data.phone : undefined,
       website: normalizedWebsite ?? undefined,
       description: data.description || undefined,
     };

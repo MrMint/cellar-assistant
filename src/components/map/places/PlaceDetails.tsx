@@ -502,10 +502,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
 
           {/* Visit info */}
           {userInteraction?.last_visited_at && (
-            <Typography
-              level="body-xs"
-              sx={{ mt: 2, color: "text.tertiary" }}
-            >
+            <Typography level="body-xs" sx={{ mt: 2, color: "text.tertiary" }}>
               Last visited:{" "}
               {new Date(userInteraction.last_visited_at).toLocaleDateString()}
               {userInteraction.visit_count != null &&
@@ -644,7 +641,9 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                 >
                   <Language sx={{ fontSize: 20, color: "text.secondary" }} />
                   <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                    {placeData.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                    {placeData.website
+                      .replace(/^https?:\/\//, "")
+                      .replace(/\/$/, "")}
                   </Typography>
                 </Stack>
               )}
@@ -692,12 +691,9 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                 <Typography level="title-lg" sx={{ mb: 1 }}>
                   No menu discovered yet
                 </Typography>
-                <Typography
-                  level="body-md"
-                  sx={{ color: "text.secondary" }}
-                >
-                  Scan a menu at this location using the &quot;Camera
-                  Scan&quot; tab above.
+                <Typography level="body-md" sx={{ color: "text.secondary" }}>
+                  Scan a menu at this location using the &quot;Camera Scan&quot;
+                  tab above.
                 </Typography>
               </Box>
             )}
@@ -716,10 +712,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
               {placeData.hours != null && (
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography
-                      level="title-md"
-                      startDecorator={<Schedule />}
-                    >
+                    <Typography level="title-md" startDecorator={<Schedule />}>
                       Hours
                     </Typography>
                     <HoursDisplay hours={placeData.hours} />

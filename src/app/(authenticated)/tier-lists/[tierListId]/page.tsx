@@ -13,6 +13,8 @@ import {
 import { TierListViewPage } from "@/components/tier-list/TierListViewPage";
 import type {
   TierListData,
+  TierListInsightsData,
+  TierListInsightsItem,
   TierListItemDisplay,
 } from "@/components/tier-list/types";
 import { serverQuery } from "@/lib/urql/server";
@@ -39,15 +41,7 @@ const getTierListEditingLockQuery = parse(`
   GetTierListEditingLockQueryVariables
 >;
 
-function formatCategoryName(category: string): string {
-  return category
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-}
+import { formatCategoryName } from "@/components/tier-list/utils";
 
 type Props = {
   params: Promise<{ tierListId: string }>;
@@ -220,6 +214,46 @@ export default async function TierListPage({ params }: Props) {
     };
   });
 
+  // Build insights items for place-type lists
+  const insightsItems: TierListInsightsItem[] = resolvedItems
+    .filter((item) => item.place != null)
+    .map((item) => ({
+      id: item.id,
+      band: item.band,
+      name: item.place?.display_name ?? item.place?.name ?? "Unknown",
+      countryCode: (item.place?.country_code as string) ?? null,
+      region: (item.place?.region as string) ?? null,
+      primaryCategory: (item.place?.primary_category as string) ?? null,
+    }));
+
+  // Parse AI insights from JSONB if available
+  const rawInsights = tierList.ai_insights as {
+    palateProfile?: string;
+    blindSpots?: string;
+    hotTake?: string;
+    archetype?: string;
+    archetypeDescription?: string;
+    recommendation?: string;
+    generatedAt?: string;
+  } | null;
+
+  const insightsData: TierListInsightsData = {
+    items: insightsItems,
+    aiInsights:
+      rawInsights?.palateProfile && rawInsights?.blindSpots
+        ? {
+            palateProfile: rawInsights.palateProfile,
+            blindSpots: rawInsights.blindSpots,
+            hotTake: rawInsights.hotTake,
+            archetype: rawInsights.archetype,
+            archetypeDescription: rawInsights.archetypeDescription,
+            recommendation: rawInsights.recommendation,
+            generatedAt: rawInsights.generatedAt ?? "",
+          }
+        : null,
+    contentUpdatedAt: (tierList.content_updated_at as string) ?? null,
+  };
+
   const data: TierListData = {
     id: tierList.id,
     name: tierList.name,
@@ -232,5 +266,5 @@ export default async function TierListPage({ params }: Props) {
     items,
   };
 
-  return <TierListViewPage data={data} />;
+  return <TierListViewPage data={data} insightsData={insightsData} />;
 }

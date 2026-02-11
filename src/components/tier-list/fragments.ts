@@ -11,6 +11,9 @@ export const TierListCoreFragment = graphql(`
     created_by_id
     privacy
     list_type
+    ai_insights
+    insights_generated_at
+    content_updated_at
     created_at
     updated_at
   }
@@ -62,7 +65,9 @@ export const TierListItemFragment = graphql(`
       name
       display_name
       primary_category
+      categories
       locality
+      region
       country_code
       user_place_interactions {
         rating

@@ -39,7 +39,10 @@ type TransitionedProperties = MapFeatureProperties & {
   animatedRadius?: number;
   animatedPointCount?: number;
 };
-type TransitionedFeature = GeoJSON.Feature<GeoJSON.Point, TransitionedProperties>;
+type TransitionedFeature = GeoJSON.Feature<
+  GeoJSON.Point,
+  TransitionedProperties
+>;
 type TransitionedCollection = GeoJSON.FeatureCollection<
   GeoJSON.Point,
   TransitionedProperties
@@ -51,7 +54,10 @@ type TransitionOptions = {
 
 function isClusterFeature(
   feature: BaseFeature | TransitionedFeature,
-): feature is GeoJSON.Feature<GeoJSON.Point, MapFeatureProperties & { isCluster: true }> {
+): feature is GeoJSON.Feature<
+  GeoJSON.Point,
+  MapFeatureProperties & { isCluster: true }
+> {
   return feature.properties.isCluster === true;
 }
 
@@ -63,7 +69,9 @@ function featureKey(feature: BaseFeature | TransitionedFeature): string {
   return String(candidate);
 }
 
-function getClusterRadius(feature: BaseFeature | TransitionedFeature): number | null {
+function getClusterRadius(
+  feature: BaseFeature | TransitionedFeature,
+): number | null {
   if (!isClusterFeature(feature)) return null;
   const props = feature.properties as MapFeatureProperties &
     Partial<TransitionedProperties>;
@@ -121,9 +129,9 @@ function useTransitionedCollection(
   nextFeatures: BaseFeature[],
   options?: TransitionOptions,
 ) {
-  const [renderedFeatures, setRenderedFeatures] = useState<TransitionedFeature[]>(
-    () => nextFeatures.map((feature) => withTransitionOpacity(feature, 1)),
-  );
+  const [renderedFeatures, setRenderedFeatures] = useState<
+    TransitionedFeature[]
+  >(() => nextFeatures.map((feature) => withTransitionOpacity(feature, 1)));
   const renderedFeaturesRef = useRef(renderedFeatures);
   const animationRafRef = useRef<number | null>(null);
   const cycleRef = useRef(0);
@@ -276,10 +284,7 @@ function useTransitionedCollection(
         previous?.properties.isCluster === true;
 
       const startCoordinates: [number, number] = shouldMorphCluster
-        ? [
-            previous.geometry.coordinates[0],
-            previous.geometry.coordinates[1],
-          ]
+        ? [previous.geometry.coordinates[0], previous.geometry.coordinates[1]]
         : [feature.geometry.coordinates[0], feature.geometry.coordinates[1]];
       const targetCoordinates: [number, number] = [
         feature.geometry.coordinates[0],
@@ -296,14 +301,13 @@ function useTransitionedCollection(
       const targetPointCount = getClusterPointCount(feature);
       const startOpacity = previous?.properties.transitionOpacity ?? 0;
       const targetOpacity = 1;
-      const isStatic =
-        !(
-          startOpacity !== targetOpacity ||
-          startCoordinates[0] !== targetCoordinates[0] ||
-          startCoordinates[1] !== targetCoordinates[1] ||
-          startRadius !== targetRadius ||
-          startPointCount !== targetPointCount
-        );
+      const isStatic = !(
+        startOpacity !== targetOpacity ||
+        startCoordinates[0] !== targetCoordinates[0] ||
+        startCoordinates[1] !== targetCoordinates[1] ||
+        startRadius !== targetRadius ||
+        startPointCount !== targetPointCount
+      );
 
       animated.push({
         animationKey,
@@ -365,14 +369,14 @@ function useTransitionedCollection(
         typeof item.startRadius === "number" &&
         typeof item.targetRadius === "number"
           ? item.startRadius + (item.targetRadius - item.startRadius) * progress
-          : item.targetRadius ?? item.startRadius;
+          : (item.targetRadius ?? item.startRadius);
 
       const animatedPointCount =
         typeof item.startPointCount === "number" &&
         typeof item.targetPointCount === "number"
           ? item.startPointCount +
             (item.targetPointCount - item.startPointCount) * progress
-          : item.targetPointCount ?? item.startPointCount;
+          : (item.targetPointCount ?? item.startPointCount);
 
       return withTransitionOpacity(
         item.feature,
@@ -493,7 +497,11 @@ const clusterGlowLayer: CircleLayerSpecification = {
   type: "circle",
   source: CLUSTER_SOURCE_ID,
   paint: {
-    "circle-radius": ["*", ["coalesce", ["get", "animatedRadius"], ["get", "radius"]], 2.2],
+    "circle-radius": [
+      "*",
+      ["coalesce", ["get", "animatedRadius"], ["get", "radius"]],
+      2.2,
+    ],
     "circle-radius-transition": transition,
     "circle-color": "#5c6bc0",
     "circle-blur": 1,
@@ -584,11 +592,7 @@ export function POISymbolLayer({
       source: SOURCE_IDS.POIS,
       layout: poiLayout,
       paint: {
-        "icon-opacity": [
-          "*",
-          ["get", "opacity"],
-          ["get", "transitionOpacity"],
-        ],
+        "icon-opacity": ["*", ["get", "opacity"], ["get", "transitionOpacity"]],
         "icon-opacity-transition": transition,
         "text-color": isDarkMode
           ? [
@@ -605,11 +609,7 @@ export function POISymbolLayer({
             ],
         "text-halo-color": isDarkMode ? "rgba(0, 0, 0, 0.8)" : "#fff",
         "text-halo-width": 1.5,
-        "text-opacity": [
-          "*",
-          ["get", "opacity"],
-          ["get", "transitionOpacity"],
-        ],
+        "text-opacity": ["*", ["get", "opacity"], ["get", "transitionOpacity"]],
         "text-opacity-transition": transition,
         "text-translate": [0, -19],
       },

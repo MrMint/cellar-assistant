@@ -108,6 +108,22 @@ actions:
         version: 2
     permissions:
       - role: user
+  - name: refresh_places
+    definition:
+      kind: asynchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/refreshPlaces'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 300
+      request_transform:
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: admin
   - name: reviewUserPlace
     definition:
       kind: synchronous
@@ -140,22 +156,6 @@ actions:
         version: 2
     permissions:
       - role: user
-  - name: refresh_places
-    definition:
-      kind: asynchronous
-      handler: '{{NHOST_FUNCTIONS_URL}}/refreshPlaces'
-      forward_client_headers: true
-      headers:
-        - name: nhost-webhook-secret
-          value_from_env: NHOST_WEBHOOK_SECRET
-      timeout: 300
-      request_transform:
-        method: POST
-        query_params: {}
-        template_engine: Kriti
-        version: 2
-    permissions:
-      - role: admin
   - name: sake_defaults
     definition:
       kind: ""

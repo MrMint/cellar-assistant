@@ -98,9 +98,7 @@ export function SearchResultsList({
           key="desktop"
           initial={{ x: -400, opacity: 0 }}
           animate={
-            isDetailOpen
-              ? { x: -20, opacity: 0.4 }
-              : { x: 0, opacity: 1 }
+            isDetailOpen ? { x: -20, opacity: 0.4 } : { x: 0, opacity: 1 }
           }
           exit={{ x: -400, opacity: 0 }}
           transition={{
@@ -194,11 +192,7 @@ export function SearchResultsList({
       <motion.div
         key="mobile"
         initial={{ y: "100%", opacity: 0 }}
-        animate={
-          isDetailOpen
-            ? { y: 40, opacity: 0.5 }
-            : { y: 0, opacity: 1 }
-        }
+        animate={isDetailOpen ? { y: 40, opacity: 0.5 } : { y: 0, opacity: 1 }}
         exit={{ y: "100%", opacity: 0 }}
         transition={{
           type: "spring",

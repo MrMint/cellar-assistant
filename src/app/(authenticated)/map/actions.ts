@@ -221,7 +221,12 @@ function transformPlaceResult(
     | { coordinates: [number, number] }
     | string
     | null;
-  if (loc && typeof loc === "object" && "coordinates" in loc && Array.isArray(loc.coordinates)) {
+  if (
+    loc &&
+    typeof loc === "object" &&
+    "coordinates" in loc &&
+    Array.isArray(loc.coordinates)
+  ) {
     // Native PostGIS geometry object with coordinates array
     coordinates = loc.coordinates;
   } else if (typeof loc === "string") {
@@ -232,11 +237,7 @@ function transformPlaceResult(
         coordinates = locationData.coordinates;
       }
     } catch (error) {
-      console.error(
-        `Failed to parse location for ${item.name}:`,
-        loc,
-        error,
-      );
+      console.error(`Failed to parse location for ${item.name}:`, loc, error);
       // Fallback: try to parse as POINT string format
       const match = loc.match(/POINT\(([^)]+)\)/);
       if (match) {
@@ -280,9 +281,18 @@ function transformPlaceResult(
     hours: item.hours,
     confidence: item.confidence ?? undefined,
     is_verified: item.is_verified ?? undefined,
-    viewport_area_km2: "viewport_area_km2" in item ? (item.viewport_area_km2 ?? undefined) : undefined,
-    density_per_km2: "density_per_km2" in item ? (item.density_per_km2 ?? undefined) : undefined,
-    clustering_applied: "clustering_applied" in item ? (item.clustering_applied ?? undefined) : undefined,
+    viewport_area_km2:
+      "viewport_area_km2" in item
+        ? (item.viewport_area_km2 ?? undefined)
+        : undefined,
+    density_per_km2:
+      "density_per_km2" in item
+        ? (item.density_per_km2 ?? undefined)
+        : undefined,
+    clustering_applied:
+      "clustering_applied" in item
+        ? (item.clustering_applied ?? undefined)
+        : undefined,
     ...scoring,
   };
 }
@@ -295,7 +305,12 @@ function transformClusterResult(item: ClusteredItem): PlaceCluster {
     | string
     | null;
 
-  if (center && typeof center === "object" && "coordinates" in center && Array.isArray(center.coordinates)) {
+  if (
+    center &&
+    typeof center === "object" &&
+    "coordinates" in center &&
+    Array.isArray(center.coordinates)
+  ) {
     clusterCoordinates = center.coordinates;
   } else if (typeof center === "string") {
     try {
@@ -464,9 +479,7 @@ async function performSemanticSearch(
   const hybridResult = await adminQuery(HybridPlaceSearchQuery, {
     searchQuery: query,
     matchedCategories:
-      matchedCategories.length > 0
-        ? `{${matchedCategories.join(",")}}`
-        : null,
+      matchedCategories.length > 0 ? `{${matchedCategories.join(",")}}` : null,
     categoryScores:
       categoryScores.length > 0 ? `{${categoryScores.join(",")}}` : null,
     westBound: bounds?.west ?? null,

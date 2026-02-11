@@ -386,114 +386,113 @@ export const PlaceDetailsDrawer = forwardRef<
 
   return (
     <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ y: "100%", opacity: 0 }}
-            animate={{
-              y: 0,
-              opacity: 1,
-              height: getDragAdjustedHeight(drawerState, getDragOffset()),
-            }}
-            exit={{ y: "100%", opacity: 0 }}
-            transition={{
-              type: "spring",
-              stiffness: 550,
-              damping: 40,
-              opacity: { duration: 0.15 },
-              height: { type: "spring", stiffness: 400, damping: 30 },
-            }}
-            style={{
-              position: "fixed",
-              bottom: MOBILE_NAV_HEIGHT,
-              left: 0,
-              right: 0,
-              zIndex: 1100,
-              backgroundColor: "var(--joy-palette-background-body)",
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
-              boxShadow: "0 -8px 32px rgba(0,0,0,0.15)",
+      {open && (
+        <motion.div
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{
+            y: 0,
+            opacity: 1,
+            height: getDragAdjustedHeight(drawerState, getDragOffset()),
+          }}
+          exit={{ y: "100%", opacity: 0 }}
+          transition={{
+            type: "spring",
+            stiffness: 550,
+            damping: 40,
+            opacity: { duration: 0.15 },
+            height: { type: "spring", stiffness: 400, damping: 30 },
+          }}
+          style={{
+            position: "fixed",
+            bottom: MOBILE_NAV_HEIGHT,
+            left: 0,
+            right: 0,
+            zIndex: 1100,
+            backgroundColor: "var(--joy-palette-background-body)",
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+            boxShadow: "0 -8px 32px rgba(0,0,0,0.15)",
+            cursor: "default",
+            overflow: "hidden",
+            overscrollBehavior: "contain",
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseMove={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
+          <Box
+            ref={drawerRef}
+            data-drawer-content
+            sx={{
+              p: 0,
+              display: "flex",
+              flexDirection: "column",
+              pointerEvents: "auto",
               cursor: "default",
+              height: "100%",
               overflow: "hidden",
-              overscrollBehavior: "contain",
             }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseMove={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
+            onTouchEnd={handleTouchTap}
           >
+            {/* Drag handle */}
             <Box
-              ref={drawerRef}
-              data-drawer-content
+              data-drag-handle
               sx={{
-                p: 0,
+                width: "100%",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                py: 1.5,
+                cursor: isDragging ? "grabbing" : "grab",
+                userSelect: "none",
+                touchAction: "none",
+              }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+            >
+              <Box
+                sx={{
+                  width: 48,
+                  height: 5,
+                  backgroundColor: isDragging ? "neutral.500" : "neutral.400",
+                  borderRadius: 3,
+                  transition: "background-color 0.2s ease, transform 0.2s ease",
+                  "&:hover": {
+                    backgroundColor: "neutral.500",
+                    transform: "scaleX(1.1)",
+                  },
+                }}
+              />
+            </Box>
+
+            {/* Content */}
+            <Box
+              sx={{
+                flex: 1,
                 display: "flex",
                 flexDirection: "column",
-                pointerEvents: "auto",
-                cursor: "default",
-                height: "100%",
                 overflow: "hidden",
+                opacity: isDragging
+                  ? Math.max(0.5, 1 - getDragOffset() / 200)
+                  : 1,
               }}
-              onTouchEnd={handleTouchTap}
             >
-              {/* Drag handle */}
-              <Box
-                data-drag-handle
-                sx={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  py: 1.5,
-                  cursor: isDragging ? "grabbing" : "grab",
-                  userSelect: "none",
-                  touchAction: "none",
-                }}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-              >
-                <Box
-                  sx={{
-                    width: 48,
-                    height: 5,
-                    backgroundColor: isDragging ? "neutral.500" : "neutral.400",
-                    borderRadius: 3,
-                    transition:
-                      "background-color 0.2s ease, transform 0.2s ease",
-                    "&:hover": {
-                      backgroundColor: "neutral.500",
-                      transform: "scaleX(1.1)",
-                    },
-                  }}
-                />
-              </Box>
-
-              {/* Content */}
-              <Box
-                sx={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden",
-                  opacity: isDragging
-                    ? Math.max(0.5, 1 - getDragOffset() / 200)
-                    : 1,
-                }}
-              >
-                <PlaceDetailsContent
-                  {...contentProps}
-                  variant="mobile"
-                  drawerState={drawerState}
-                />
-              </Box>
+              <PlaceDetailsContent
+                {...contentProps}
+                variant="mobile"
+                drawerState={drawerState}
+              />
             </Box>
-          </motion.div>
-        )}
+          </Box>
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 });

@@ -5,10 +5,7 @@ import type { SymbolLayerSpecification } from "react-map-gl/maplibre";
 import { Layer, Source } from "react-map-gl/maplibre";
 import type { PlaceResult } from "../types";
 import { LAYER_IDS, SOURCE_IDS } from "./constants";
-import {
-  categoryToIcon,
-  getDominantItemType,
-} from "./utils/geoJsonTransform";
+import { categoryToIcon, getDominantItemType } from "./utils/geoJsonTransform";
 
 interface SelectedPlaceLayerProps {
   selectedPlace: PlaceResult | null;
@@ -82,11 +79,7 @@ export function SelectedPlaceLayer({
   );
 
   return (
-    <Source
-      id={SOURCE_IDS.SELECTED_PLACE}
-      type="geojson"
-      data={geoJson}
-    >
+    <Source id={SOURCE_IDS.SELECTED_PLACE} type="geojson" data={geoJson}>
       <Layer {...pinLayer} />
     </Source>
   );

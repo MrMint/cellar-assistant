@@ -7,6 +7,8 @@
   "types": "./index.ts",
   "exports": {
     ".": "./index.ts",
+    "./constants": "./constants/index.ts",
+    "./constants/bands": "./constants/bands.ts",
     "./gql": "./gql/index.ts",
     "./gql/graphql": "./gql/graphql.ts",
     "./utility": "./utility/index.ts",

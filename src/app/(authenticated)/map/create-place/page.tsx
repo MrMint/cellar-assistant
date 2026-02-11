@@ -32,10 +32,7 @@ export default async function CreatePlacePage({
       <Typography level="h3" sx={{ mb: 3 }}>
         Add a new place
       </Typography>
-      <CreatePlaceForm
-        latitude={lat}
-        longitude={lng}
-      />
+      <CreatePlaceForm latitude={lat} longitude={lng} />
     </Box>
   );
 }
