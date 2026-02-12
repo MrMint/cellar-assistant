@@ -10,10 +10,11 @@ import {
   type MapLayerMouseEvent,
   type MapRef,
 } from "react-map-gl/maplibre";
-import { fetchPlaceByIdAction } from "@/app/(authenticated)/map/place-actions";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { MapControls } from "../core/MapControls";
 import { useGeolocation } from "../hooks/useGeolocation";
+import { useMapDeepLink } from "../hooks/useMapDeepLink";
+import { useMapInitialFlight } from "../hooks/useMapInitialFlight";
 import {
   useMapActions,
   useMapCore,
@@ -22,6 +23,7 @@ import {
   useMapPinPlacement,
   useMapUI,
 } from "../hooks/useMapMachine";
+import { useMapPlaceSelection } from "../hooks/useMapPlaceSelection";
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
 import { useSearchParamsSync } from "../hooks/useSearchParamsSync";
 import { CenterPinOverlay } from "../places/CenterPinOverlay";
@@ -31,6 +33,7 @@ import {
 } from "../places/PlaceDetailsDrawer";
 import { SearchResultsList } from "../places/SearchResultsList";
 import type { PlaceResult } from "../types";
+import { getDrawerOffset } from "../utils/layout";
 import { INTERACTIVE_LAYER_IDS } from "./constants";
 import { useMapBoundsML } from "./hooks/useMapBoundsML";
 import { useMapInteraction } from "./hooks/useMapInteraction";
@@ -48,39 +51,9 @@ const CARTO_LIGHT_STYLE =
 const CARTO_DARK_STYLE =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-const FALLBACK_CENTER = { longitude: -89.5, latitude: 44.5 };
-
-const DETAIL_PANEL_WIDTH = 400;
-const SIDEBAR_WIDTH = 56;
-const MOBILE_NAV_HEIGHT = 50;
-
-/**
- * Compute pixel offset so flyTo centers the place on the visible
- * (unobscured) portion of the map, accounting for the detail panel.
- */
-function getDrawerOffset(
-  isDesktop: boolean,
-  hasSidebar: boolean,
-): [number, number] {
-  if (typeof window === "undefined") return [0, 0];
-
-  if (isDesktop) {
-    // Detail panel covers the left side of the viewport
-    const panelWidth = (hasSidebar ? SIDEBAR_WIDTH : 0) + DETAIL_PANEL_WIDTH;
-    return [panelWidth / 2, 0];
-  }
-
-  // Mobile: bottom sheet at "half" covers ~50% of available height
-  const vh = window.innerHeight;
-  const sheetHeight = (vh - MOBILE_NAV_HEIGHT) * 0.5;
-  return [0, -(MOBILE_NAV_HEIGHT + sheetHeight) / 2];
-}
-
 export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
   const mapRef = useRef<MapRef>(null);
   const detailDrawerRef = useRef<PlaceDetailsDrawerRef>(null);
-  const hasFlownRef = useRef(false);
-  const isManualSelectionRef = useRef(false);
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
 
@@ -89,7 +62,6 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
   const mapUI = useMapUI();
   const mapActions = useMapActions();
   const mapFilters = useMapFilters();
-
   const { isPlacing } = useMapPinPlacement();
   const router = useRouter();
   const isDesktop = useMediaQuery("(min-width: 769px)");
@@ -107,24 +79,39 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     geocodeTarget,
   } = useMapDataFromXState();
 
-  // New MapLibre-specific hooks
+  // MapLibre-specific hooks
   const { bounds, handleBoundsChange } = useMapBoundsML();
   useMapInteraction(mapRef, iconsLoaded);
 
-  // ── URL history management for place selection ──────────────────────
-  const placeIdPushedRef = useRef(false);
-  const setPlaceIdRef = useRef(searchParams.setPlaceId);
-  setPlaceIdRef.current = searchParams.setPlaceId;
-  const isDrawerOpenRef = useRef(mapUI.isDrawerOpen);
-  isDrawerOpenRef.current = mapUI.isDrawerOpen;
-  const currentPlaceIdRef = useRef(searchParams.placeId);
-  currentPlaceIdRef.current = searchParams.placeId;
-
-  // Geolocation
+  // Geolocation (survives remounts via module-level store)
   const { location: userLocation, loading: locationLoading } = useGeolocation();
 
-  // Place lookup map — replaces placeJson serialization.
-  // On click we look up the full PlaceResult by ID instead of parsing JSON.
+  // Initial flight + view state
+  const { initialViewState, isLocationReady } = useMapInitialFlight({
+    mapRef,
+    mapReady,
+    userLocation,
+    locationLoading,
+  });
+
+  // Place selection ↔ URL coordination
+  const { handleSelectPlace, handleCloseDrawer, isManualSelectionRef } =
+    useMapPlaceSelection({
+      isDesktop,
+      detailDrawerRef,
+    });
+
+  // Deep link: URL placeId → fetch + fly
+  useMapDeepLink({
+    mapRef,
+    detailDrawerRef,
+    mapReady,
+    isDesktop,
+    hasSidebar,
+    isManualSelectionRef,
+  });
+
+  // Place lookup map — on click we look up the full PlaceResult by ID
   const placeLookup = useMemo(() => {
     const lookup = new Map<string, PlaceResult>();
     for (const item of mapItems) {
@@ -135,44 +122,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     return lookup;
   }, [mapItems]);
 
-  // ── Place selection / drawer close with URL history ────────────────
-  const handleSelectPlace = useCallback(
-    (place: PlaceResult) => {
-      if (!isDesktop) {
-        detailDrawerRef.current?.setMiddle();
-      }
-      const isAlreadyOpen = isDrawerOpenRef.current;
-      mapActions.selectPlace(place);
-      isManualSelectionRef.current = true;
-      setPlaceIdRef.current(place.id, {
-        history: isAlreadyOpen ? "replace" : "push",
-      });
-      if (!isAlreadyOpen) {
-        placeIdPushedRef.current = true;
-      }
-    },
-    [isDesktop, mapActions],
-  );
-
-  const handleCloseDrawer = useCallback(() => {
-    mapActions.closeDrawer();
-    if (currentPlaceIdRef.current) {
-      if (placeIdPushedRef.current) {
-        placeIdPushedRef.current = false;
-        window.history.back();
-      } else {
-        setPlaceIdRef.current(null);
-      }
-    }
-  }, [mapActions]);
-
-  // Sync: browser back removes placeId → close drawer
-  useEffect(() => {
-    if (!searchParams.placeId && mapUI.isDrawerOpen) {
-      mapActions.closeDrawer();
-      placeIdPushedRef.current = false;
-    }
-  }, [searchParams.placeId, mapUI.isDrawerOpen, mapActions]);
+  // ── Sync effects ─────────────────────────────────────────────────────
 
   // Update XState when userLocation changes
   useEffect(() => {
@@ -188,20 +138,6 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     }
   }, [bounds, mapActions]);
 
-  // Fly to user location once both geolocation and map are ready.
-  // Without mapReady, the effect fires on the same render the Map mounts
-  // but before onLoad — flyTo silently fails on an unloaded map.
-  useEffect(() => {
-    if (userLocation && !hasFlownRef.current && mapRef.current && mapReady) {
-      hasFlownRef.current = true;
-      mapRef.current.flyTo({
-        center: [userLocation.longitude, userLocation.latitude],
-        zoom: 15,
-        duration: 600,
-      });
-    }
-  }, [userLocation, mapReady]);
-
   // Fly to geocoded address when an address search resolves.
   // After flyTo completes, onMoveEnd fires → bounds update → bounded search.
   useEffect(() => {
@@ -214,44 +150,6 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
       mapActions.clearGeocodeTarget();
     }
   }, [geocodeTarget, mapReady, mapActions]);
-
-  // Deep-link: fetch and select a place when placeId is in the URL.
-  // Only fires for true deep links (URL navigation, back/forward, direct entry).
-  // Programmatic selections via handleSelectPlace set isManualSelectionRef
-  // so this effect skips them (the click handler already flew there).
-  const deepLinkHandledRef = useRef<string | null>(null);
-  const placeId = searchParams.placeId;
-  useEffect(() => {
-    if (!placeId || !mapReady || deepLinkHandledRef.current === placeId) return;
-    deepLinkHandledRef.current = placeId;
-
-    // Skip if this placeId was set programmatically (click/search result)
-    if (isManualSelectionRef.current) {
-      isManualSelectionRef.current = false;
-      return;
-    }
-
-    // True deep link — fetch and fly
-    let cancelled = false;
-    fetchPlaceByIdAction(placeId).then((place) => {
-      if (cancelled || !place) return;
-      if (!isDesktop) {
-        detailDrawerRef.current?.setMiddle();
-      }
-      mapActions.selectPlace(place as PlaceResult);
-      const [lng, lat] = place.location.coordinates;
-      mapRef.current?.flyTo({
-        center: [lng, lat],
-        zoom: 16,
-        duration: 800,
-        offset: getDrawerOffset(isDesktop, hasSidebar),
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [placeId, mapReady, mapActions, isDesktop, hasSidebar]);
 
   // Memoize filters
   const filters = useMemo(
@@ -284,7 +182,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     }
   }, [mapItems, mapUI.selectedPlace, mapActions]);
 
-  // --- Event handlers ---
+  // ── Event handlers ───────────────────────────────────────────────────
 
   const handleMapLoad = useCallback(async () => {
     const map = mapRef.current?.getMap();
@@ -432,29 +330,10 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     [isDesktop, hasSidebar],
   );
 
-  // Capture initial view state once after geolocation resolves.
-  // A ref (not useMemo) is used because useMemo([], []) would compute
-  // on the very first render when userLocation is still null, before the
-  // loading guard returns early. The ref defers the capture until
-  // locationLoading is false, which is when the Map actually mounts.
-  const initialViewStateRef = useRef<{
-    longitude: number;
-    latitude: number;
-    zoom: number;
-  } | null>(null);
-
-  if (!initialViewStateRef.current && !locationLoading) {
-    initialViewStateRef.current = {
-      longitude: userLocation?.longitude ?? FALLBACK_CENTER.longitude,
-      latitude: userLocation?.latitude ?? FALLBACK_CENTER.latitude,
-      zoom: userLocation ? 15 : 8,
-    };
-  }
-
   const mapStyle = mapCore.isDarkMode ? CARTO_DARK_STYLE : CARTO_LIGHT_STYLE;
 
   // Location loading state
-  if (locationLoading && !userLocation) {
+  if (!isLocationReady) {
     return (
       <Box
         sx={{
@@ -475,13 +354,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     <Box sx={{ height: "100%", width: "100%", position: "relative" }}>
       <MapGL
         ref={mapRef}
-        initialViewState={
-          initialViewStateRef.current ?? {
-            longitude: FALLBACK_CENTER.longitude,
-            latitude: FALLBACK_CENTER.latitude,
-            zoom: 8,
-          }
-        }
+        initialViewState={initialViewState}
         mapStyle={mapStyle}
         onLoad={handleMapLoad}
         onMoveEnd={handleMoveEnd}

@@ -53,7 +53,9 @@ export function useMapUI() {
   return useSelector(
     actorRef,
     (state) => ({
-      isDrawerOpen: state.matches({ idle: { drawer: "open" } }),
+      // Derived from context — the drawer sub-state was removed.
+      // Drawer is "open" whenever a place is selected.
+      isDrawerOpen: state.context.selectedPlace !== null,
       selectedPlace: state.context.selectedPlace,
       error: state.context.error,
       hasError: state.matches({ idle: { error: "hasError" } }),
@@ -218,7 +220,7 @@ export function useMapState() {
 
     // State matching helpers
     isInitialized: () => state.matches("idle"),
-    isDrawerOpen: () => state.matches({ idle: { drawer: "open" } }),
+    isDrawerOpen: () => state.context.selectedPlace !== null,
     isLoadingPlaces: () => state.matches({ idle: { data: "loading" } }),
     hasError: () => state.matches({ idle: { error: "hasError" } }),
   };

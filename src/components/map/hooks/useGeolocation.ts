@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { MAP_CONFIG } from "../config/constants";
 
 interface GeolocationState {
@@ -12,45 +12,68 @@ interface GeolocationState {
 // Minimum coordinate change to trigger a state update (~11 meters)
 const COORDINATE_EPSILON = 0.0001;
 
-export function useGeolocation() {
-  const [state, setState] = useState<GeolocationState>({
+const SERVER_SNAPSHOT: GeolocationState = {
+  location: null,
+  loading: true,
+  error: null,
+};
+
+/**
+ * Module-level geolocation store.
+ * Lazily subscribes to the Geolocation API on first consumer and
+ * persists across component remounts — a React 18 useSyncExternalStore
+ * pattern that naturally survives Suspense re-suspensions and
+ * component tree remounts without losing position data.
+ */
+function createGeolocationStore() {
+  let state: GeolocationState = {
     location: null,
     loading: true,
     error: null,
-  });
-  const lastCoordsRef = useRef<{ latitude: number; longitude: number } | null>(
-    null,
-  );
+  };
+  let lastCoords: { latitude: number; longitude: number } | null = null;
+  const listeners = new Set<() => void>();
+  let initialized = false;
 
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setState({
+  function emit() {
+    listeners.forEach((listener) => {
+      listener();
+    });
+  }
+
+  function start() {
+    if (initialized) return;
+    initialized = true;
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      state = {
         location: null,
         loading: false,
         error: "Geolocation is not supported by this browser",
-      });
+      };
+      emit();
       return;
     }
 
     const handleSuccess = (position: GeolocationPosition) => {
       const { latitude, longitude } = position.coords;
-      const prev = lastCoordsRef.current;
 
       // Skip update if coordinates haven't changed meaningfully
       if (
-        prev &&
-        Math.abs(prev.latitude - latitude) < COORDINATE_EPSILON &&
-        Math.abs(prev.longitude - longitude) < COORDINATE_EPSILON
+        lastCoords &&
+        Math.abs(lastCoords.latitude - latitude) < COORDINATE_EPSILON &&
+        Math.abs(lastCoords.longitude - longitude) < COORDINATE_EPSILON
       ) {
         return;
       }
 
-      lastCoordsRef.current = { latitude, longitude };
-      setState({
+      lastCoords = { latitude, longitude };
+      state = {
         location: { latitude, longitude },
         loading: false,
         error: null,
-      });
+      };
+      emit();
     };
 
     const handleError = (error: GeolocationPositionError) => {
@@ -68,11 +91,12 @@ export function useGeolocation() {
           break;
       }
 
-      setState({
+      state = {
         location: null,
         loading: false,
         error: errorMessage,
-      });
+      };
+      emit();
     };
 
     const options = {
@@ -88,16 +112,32 @@ export function useGeolocation() {
     );
 
     // Watch position changes
-    const watchId = navigator.geolocation.watchPosition(
-      handleSuccess,
-      handleError,
-      options,
-    );
+    navigator.geolocation.watchPosition(handleSuccess, handleError, options);
+  }
 
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-    };
-  }, []);
+  return {
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      start(); // Lazily initialize on first subscription
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    getSnapshot() {
+      return state;
+    },
+    getServerSnapshot() {
+      return SERVER_SNAPSHOT;
+    },
+  };
+}
 
-  return state;
+const geolocationStore = createGeolocationStore();
+
+export function useGeolocation() {
+  return useSyncExternalStore(
+    geolocationStore.subscribe,
+    geolocationStore.getSnapshot,
+    geolocationStore.getServerSnapshot,
+  );
 }

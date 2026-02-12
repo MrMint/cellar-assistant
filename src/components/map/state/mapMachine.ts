@@ -276,6 +276,21 @@ const actions = {
   setSearchQuery: assign({
     searchQuery: ({ event }) =>
       event.type === "SET_SEARCH_QUERY" ? event.query : "",
+    // When the search query is cleared, also exit semantic search mode
+    // so the next REFRESH_PLACES runs a standard bounded filter search
+    // instead of a semantic search with an empty query.
+    isSemanticSearch: ({ context, event }) => {
+      if (event.type === "SET_SEARCH_QUERY" && event.query === "") {
+        return false;
+      }
+      return context.isSemanticSearch;
+    },
+    semanticResults: ({ context, event }) => {
+      if (event.type === "SET_SEARCH_QUERY" && event.query === "") {
+        return [];
+      }
+      return context.semanticResults;
+    },
   }),
 
   performSemanticSearch: assign({
@@ -477,6 +492,9 @@ export const mapMachine = createMachine(
           SET_USER_LOCATION: {
             actions: "setUserLocation",
           },
+          SELECT_PLACE: {
+            actions: "selectPlace",
+          },
           SET_DESKTOP: {
             actions: "setDesktop",
           },
@@ -515,44 +533,6 @@ export const mapMachine = createMachine(
         type: "parallel",
 
         states: {
-          // Drawer sub-state
-          drawer: {
-            initial: "closed",
-            states: {
-              closed: {
-                on: {
-                  SELECT_PLACE: {
-                    target: "open",
-                    actions: "selectPlace",
-                  },
-                },
-              },
-              open: {
-                on: {
-                  CLOSE_DRAWER: {
-                    target: "closed",
-                    actions: "clearSelection",
-                  },
-                  MAP_CLICK: {
-                    target: "closed",
-                    actions: "clearSelection",
-                  },
-                  ENTER_PIN_PLACEMENT: {
-                    target: "closed",
-                    actions: "clearSelection",
-                  },
-                  SELECT_PLACE: {
-                    actions: "selectPlace", // Stay open, just change selection
-                  },
-                  UPDATE_SELECTED_PLACE: {
-                    guard: "isPlaceSelected",
-                    actions: "updateSelectedPlace",
-                  },
-                },
-              },
-            },
-          },
-
           // Data loading sub-state
           data: {
             initial: "idle",
@@ -672,6 +652,19 @@ export const mapMachine = createMachine(
                     },
                     {
                       actions: "setGlobalSearch",
+                    },
+                  ],
+                  SET_SEARCH_QUERY: {
+                    actions: "setSearchQuery",
+                  },
+                  CLEAR_FILTERS: [
+                    {
+                      target: "loading",
+                      guard: "canFetchPlaces",
+                      actions: ["clearFilters", "clearError"],
+                    },
+                    {
+                      actions: "clearFilters",
                     },
                   ],
                 },
@@ -850,21 +843,27 @@ export const mapMachine = createMachine(
           },
         },
 
-        // Global events that work across all sub-states
+        // Global events that work across all sub-states.
+        // Place selection events live here (replacing the old drawer sub-state).
+        // Drawer open/closed is now derived from selectedPlace !== null.
+        // Filter events are NOT here — they're fully handled by the data
+        // sub-state (both data.idle and data.loading), which also manages
+        // fetch triggering. Keeping them only there avoids redundant actions.
         on: {
+          // Place selection (was in drawer sub-state)
+          SELECT_PLACE: { actions: "selectPlace" },
+          CLOSE_DRAWER: { actions: "clearSelection" },
+          MAP_CLICK: { actions: "clearSelection" },
+          UPDATE_SELECTED_PLACE: {
+            guard: "isPlaceSelected",
+            actions: "updateSelectedPlace",
+          },
+
+          // Core map events
           SET_ZOOM: { actions: "setZoom" },
           TOGGLE_DARK_MODE: { actions: "toggleDarkMode" },
           SET_DARK_MODE: { actions: "setDarkMode" },
           SET_DESKTOP: { actions: "setDesktop" },
-          SET_ITEM_TYPES: { actions: "setItemTypes" },
-          TOGGLE_ITEM_TYPE: { actions: "toggleItemType" },
-          SET_SEARCH_QUERY: { actions: "setSearchQuery" },
-          PERFORM_SEMANTIC_SEARCH: { actions: "performSemanticSearch" },
-          SET_GLOBAL_SEARCH: { actions: "setGlobalSearch" },
-          SET_MIN_RATING: { actions: "setMinRating" },
-          SET_VISIT_STATUSES: { actions: "setVisitStatuses" },
-          SET_TIER_LIST_IDS: { actions: "setTierListIds" },
-          CLEAR_FILTERS: { actions: "clearFilters" },
           SET_ERROR: { actions: "setError" },
           CLEAR_ERROR: { actions: "clearError" },
         },
