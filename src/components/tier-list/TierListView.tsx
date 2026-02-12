@@ -551,12 +551,16 @@ export function TierListView({
   }, [items]);
 
   const [bandMap, setBandMap] = useState<BandMap>(initialBandMap);
-
-  useLayoutEffect(() => {
-    setBandMap(initialBandMap);
-  }, [initialBandMap]);
-
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+
+  // Sync server-provided bandMap when items prop changes, but skip during
+  // an active drag — otherwise router.refresh() from a prior reorder can
+  // reset bandMap mid-drag, causing the dragged item to jump or disappear.
+  useLayoutEffect(() => {
+    if (activeId === null) {
+      setBandMap(initialBandMap);
+    }
+  }, [initialBandMap, activeId]);
 
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: { distance: 8 },
@@ -632,51 +636,41 @@ export function TierListView({
         findBandForItem(over.id);
 
       if (activeBand === null || overBand === null) return;
+
+      // Only handle cross-band transfers in handleDragOver.
+      // Same-band reordering is handled visually by SortableContext transforms
+      // and committed in handleDragEnd. Doing same-band arrayMove here causes
+      // infinite re-render loops (React error #185) because each setBandMap
+      // triggers a re-render → dnd-kit recalculates → fires handleDragOver
+      // again with swapped indices → another setBandMap → infinite loop.
+      if (activeBand === overBand) return;
+
       const activeId = String(active.id);
 
-      if (activeBand !== overBand) {
-        // Cross-band: move item from source to destination
-        setBandMap((prev) => {
-          const prevSourceItems = prev[activeBand] ?? [];
-          const prevDestItems = prev[overBand] ?? [];
-          const sourceItems = prevSourceItems.filter((id) => id !== activeId);
-          const destItems = prevDestItems.filter((id) => id !== activeId);
+      // Cross-band: move item from source to destination
+      setBandMap((prev) => {
+        const prevSourceItems = prev[activeBand] ?? [];
+        const prevDestItems = prev[overBand] ?? [];
+        const sourceItems = prevSourceItems.filter((id) => id !== activeId);
+        const destItems = prevDestItems.filter((id) => id !== activeId);
 
-          const overIndex = destItems.indexOf(String(over.id));
-          const insertionIndex = overIndex >= 0 ? overIndex : destItems.length;
-          destItems.splice(insertionIndex, 0, activeId);
+        const overIndex = destItems.indexOf(String(over.id));
+        const insertionIndex = overIndex >= 0 ? overIndex : destItems.length;
+        destItems.splice(insertionIndex, 0, activeId);
 
-          if (
-            areStringArraysEqual(sourceItems, prevSourceItems) &&
-            areStringArraysEqual(destItems, prevDestItems)
-          ) {
-            return prev;
-          }
+        if (
+          areStringArraysEqual(sourceItems, prevSourceItems) &&
+          areStringArraysEqual(destItems, prevDestItems)
+        ) {
+          return prev;
+        }
 
-          return {
-            ...prev,
-            [activeBand]: sourceItems,
-            [overBand]: destItems,
-          };
-        });
-      } else {
-        // Same-band reorder during drag (e.g. after a cross-band transfer)
-        setBandMap((prev) => {
-          const items = prev[activeBand] ?? [];
-          const activeIndex = items.indexOf(activeId);
-          let overIndex = items.indexOf(String(over.id));
-          if (overIndex < 0 && String(over.id).startsWith("band-")) {
-            overIndex = items.length - 1;
-          }
-          if (activeIndex < 0 || overIndex < 0 || activeIndex === overIndex) {
-            return prev;
-          }
-          return {
-            ...prev,
-            [activeBand]: arrayMove(items, activeIndex, overIndex),
-          };
-        });
-      }
+        return {
+          ...prev,
+          [activeBand]: sourceItems,
+          [overBand]: destItems,
+        };
+      });
     },
     [findBandForItem, findBandFromContainerId, canEdit],
   );
