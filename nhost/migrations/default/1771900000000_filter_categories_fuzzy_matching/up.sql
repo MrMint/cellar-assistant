@@ -1,40 +1,19 @@
--- Improvements to search_places_hybrid scoring and fuzzy matching:
+-- Adds filter_categories parameter and fuzzy name matching to search_places_hybrid.
 --
--- 1. Normalized text_rank: ts_rank_cd() returns raw values ~0.001-0.15,
---    making its 35% weight effectively useless (~0.005 contribution).
---    Normalizing to 0-1 within the result set via a max_text CTE makes
---    full-text search actually differentiate between better/worse matches.
+-- 1. filter_categories: pushes item type filters into SQL so every CTE only
+--    scans relevant places, improving quality and performance on global searches.
 --
--- 2. Category enrichment for text-matched places: the category_matches CTE
---    has a LIMIT (~150) but there can be millions of places in a category.
---    Text/trgm-matched places that happen to not be in the LIMIT-constrained
---    category results were getting category_score=0 even when they belong to
---    the searched category. A category_enrich CTE fixes this by looking up
---    the actual category score for the small text/trgm matched set (~250 max).
+-- 2. Fuzzy name matching (three-pronged candidate generation in trgm_matches):
+--    a) ILIKE on name — exact substring matches (GIN idx_places_name_trgm)
+--    b) ILIKE on normalized name (non-alphanumeric stripped) — handles missing
+--       spaces, hyphens, apostrophes (GIN idx_places_name_compact_trgm)
+--    c) <% word_similarity operator — character-level typos (GIN idx_places_name_trgm)
 --
--- 3. Pre-filter by place type (filter_categories): when the user has selected
---    specific item type filters (e.g. coffee), push that filter into the SQL
---    so every CTE only scans relevant places. This dramatically improves both
---    quality (all 50 results are type-relevant) and performance on global
---    searches (scans ~1M coffee shops instead of 7M total places).
---
--- 4. Fuzzy name matching: three-pronged candidate generation in trgm_matches:
---    a) ILIKE on name — catches exact substring matches (GIN idx_places_name_trgm)
---    b) ILIKE on normalized name (non-alphanumeric stripped) — catches missing spaces,
---       hyphens, apostrophes, etc. like "alwadi" → "Al Wadi", "mcdonalds" → "McDonald's"
---       (GIN idx_places_name_compact_trgm expression index)
---    c) <% word_similarity operator (default 0.6 threshold) — catches character-level
---       typos where word_similarity >= 0.6 (reuses GIN idx_places_name_trgm)
---    PostgreSQL merges all three via BitmapOr, keeping total time ~9-18ms.
---    Scoring uses word_similarity() instead of similarity() for better partial
---    match scores (e.g., "alwadi" vs "Al Wadi Coffee House": 0.50 vs 0.22).
+-- 3. word_similarity() replaces similarity() for better partial match scoring.
 
 -- Expression index for normalized name matching (strips all non-alphanumeric chars).
--- Handles missing spaces ("alwadi" → "Al Wadi"), hyphens ("jeangeorges" → "Jean-Georges"),
--- apostrophes ("mcdonalds" → "McDonald's"), periods ("stlouis" → "St. Louis"), etc.
-DROP INDEX IF EXISTS idx_places_name_compact_trgm;
-CREATE INDEX idx_places_name_compact_trgm
-ON public.places USING gin (regexp_replace(lower(name), '[^a-z0-9]', '', 'g') gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_places_name_compact_trgm
+ON public.places USING gin ((regexp_replace(lower(name), '[^a-z0-9]', '', 'g')) gin_trgm_ops);
 
 -- Drop old 10-param overload so CREATE OR REPLACE creates the new 11-param version
 -- (adding a DEFAULT parameter changes the signature, so Postgres treats it as a new function)

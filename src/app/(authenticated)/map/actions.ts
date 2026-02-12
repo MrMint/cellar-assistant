@@ -98,6 +98,7 @@ const HybridPlaceSearchQuery = graphql(`
     $minRating: float8
     $resultLimit: Int
     $tierListIds: _uuid
+    $filterCategories: _text
   ) {
     searchPlacesHybrid(
       args: {
@@ -111,6 +112,7 @@ const HybridPlaceSearchQuery = graphql(`
         min_rating: $minRating
         result_limit: $resultLimit
         tier_list_ids: $tierListIds
+        filter_categories: $filterCategories
       }
     ) {
       id
@@ -476,6 +478,9 @@ async function performSemanticSearch(
   );
 
   // Step 3: Execute hybrid search (text + trigram + category + bounds) via Hasura
+  // Push item type filters into SQL so each CTE only scans relevant places,
+  // improving both result quality and performance on global searches.
+  const filterCategories = mapItemTypesToCategories(itemTypes);
   const hybridResult = await adminQuery(HybridPlaceSearchQuery, {
     searchQuery: query,
     matchedCategories:
@@ -489,6 +494,10 @@ async function performSemanticSearch(
     minRating: minRating ?? null,
     resultLimit: limit,
     tierListIds: toPgArray(tierListIds, UUID_RE),
+    filterCategories:
+      filterCategories && filterCategories.length > 0
+        ? `{${filterCategories.join(",")}}`
+        : null,
   });
 
   const rawResults = hybridResult?.searchPlacesHybrid ?? [];

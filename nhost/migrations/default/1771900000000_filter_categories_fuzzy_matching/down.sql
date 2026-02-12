@@ -1,5 +1,5 @@
--- Revert to version from 1771600000000_name_match_boost (name boost only,
--- no text_rank normalization, no category enrichment, no filter_categories, no fuzzy matching)
+-- Revert to the version currently on production (10-param, no filter_categories,
+-- no fuzzy matching, uses similarity() instead of word_similarity())
 
 -- Drop the expression index for space-stripped name matching
 DROP INDEX IF EXISTS idx_places_name_compact_trgm;
@@ -102,27 +102,64 @@ BEGIN
   merged AS (
     SELECT
       COALESCE(tm.id, tg.id, cm.id) AS place_id,
-      COALESCE(tm.rank_score, 0.0)::FLOAT8 AS text_rank,
+      COALESCE(tm.rank_score, 0.0)::FLOAT8 AS raw_text_rank,
       COALESCE(tg.sim_score, 0.0)::FLOAT8 AS trigram_similarity,
-      COALESCE(cm.cat_score, 0.0)::FLOAT8 AS category_score,
-      (
-        COALESCE(tm.rank_score, 0.0) * 0.35 +
-        COALESCE(tg.sim_score, 0.0) * 0.25 +
-        COALESCE(cm.cat_score, 0.0) * 0.40 +
-        CASE
-          WHEN COALESCE(tg.sim_score, 0.0) >= 0.5
-            THEN POWER(COALESCE(tg.sim_score, 0.0), 2) * 0.5
-          ELSE 0.0
-        END
-      )::FLOAT8 AS combined_score
+      COALESCE(cm.cat_score, 0.0)::FLOAT8 AS category_score
     FROM text_matches tm
     FULL OUTER JOIN trgm_matches tg ON tm.id = tg.id
     FULL OUTER JOIN category_matches cm ON COALESCE(tm.id, tg.id) = cm.id
   ),
+  category_enrich AS (
+    SELECT
+      m.place_id,
+      LEAST(1.0, scores.cat_score * CASE
+        WHEN p.primary_category = ANY(matched_categories) THEN 1.15
+        ELSE 1.0
+      END) AS cat_score
+    FROM merged m
+    JOIN public.places p ON p.id = m.place_id
+    CROSS JOIN LATERAL (
+      SELECT COALESCE(MAX(
+        CASE
+          WHEN category_scores IS NOT NULL AND array_position(matched_categories, cat) IS NOT NULL
+          THEN category_scores[array_position(matched_categories, cat)]
+          ELSE 0.5
+        END
+      ), 0) AS cat_score
+      FROM unnest(p.categories) AS cat
+      WHERE cat = ANY(matched_categories)
+    ) scores
+    WHERE has_categories
+      AND m.category_score = 0.0
+      AND (m.raw_text_rank > 0 OR m.trigram_similarity > 0)
+  ),
+  max_text AS (
+    SELECT GREATEST(MAX(raw_text_rank), 0.001) AS val FROM merged
+  ),
+  scored AS (
+    SELECT
+      m.place_id,
+      (m.raw_text_rank / mt.val)::FLOAT8 AS text_rank,
+      m.trigram_similarity,
+      GREATEST(m.category_score, COALESCE(ce.cat_score, 0.0))::FLOAT8 AS category_score,
+      (
+        (m.raw_text_rank / mt.val) * 0.35 +
+        m.trigram_similarity * 0.25 +
+        GREATEST(m.category_score, COALESCE(ce.cat_score, 0.0)) * 0.40 +
+        CASE
+          WHEN m.trigram_similarity >= 0.5
+            THEN POWER(m.trigram_similarity, 2) * 0.5
+          ELSE 0.0
+        END
+      )::FLOAT8 AS combined_score
+    FROM merged m
+    CROSS JOIN max_text mt
+    LEFT JOIN category_enrich ce ON m.place_id = ce.place_id
+  ),
   deduped AS (
     SELECT DISTINCT ON (place_id)
       place_id, text_rank, trigram_similarity, category_score, combined_score
-    FROM merged
+    FROM scored
     ORDER BY place_id, combined_score DESC
   )
   SELECT
