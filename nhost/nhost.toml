@@ -68,10 +68,10 @@ version = '0.45.0'
 
 [auth.redirections]
 allowedUrls = [
-"https://cellar-assistant.vercel.app/cellars",
-"https://cellar-assistant.mrmint.dev/cellars"
+"https://cellar-assistant.vercel.app",
+"https://cellar-assistant.mrmint.dev"
 ]
-clientUrl = 'https://cellar-assistant.vercel.app/cellars'
+clientUrl = 'https://cellar-assistant.vercel.app'
 
 [auth.signUp]
 enabled = true
