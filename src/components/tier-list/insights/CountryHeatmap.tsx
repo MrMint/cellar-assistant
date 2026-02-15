@@ -161,7 +161,7 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
   // Update colors when entries change without recreating the map
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !loaded) return;
+    if (!map || !loaded || !map.isStyleLoaded()) return;
 
     map.setPaintProperty(
       "country-fills",
