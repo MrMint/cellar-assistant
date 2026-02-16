@@ -46,9 +46,7 @@ function CustomTooltip({
   );
 }
 
-export function CategoryDonutChart({
-  distribution,
-}: CategoryDonutChartProps) {
+export function CategoryDonutChart({ distribution }: CategoryDonutChartProps) {
   const total = distribution.reduce((sum, d) => sum + d.count, 0);
 
   if (distribution.length === 0) return null;
@@ -104,8 +102,7 @@ export function CategoryDonutChart({
                   width: 10,
                   height: 10,
                   borderRadius: "50%",
-                  backgroundColor:
-                    CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+                  backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
                   flexShrink: 0,
                 }}
               />
@@ -134,10 +131,7 @@ export function CategoryDonutChart({
               </Typography>
             </Stack>
           ))}
-          <Typography
-            level="body-xs"
-            sx={{ color: "text.tertiary", pt: 0.5 }}
-          >
+          <Typography level="body-xs" sx={{ color: "text.tertiary", pt: 0.5 }}>
             {total} total
           </Typography>
         </Stack>

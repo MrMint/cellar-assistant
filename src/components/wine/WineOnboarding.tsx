@@ -25,12 +25,13 @@ import { FinalPrompt } from "../common/OnboardingWizard/FinalPrompt";
 import { OnboardingMachine } from "../common/OnboardingWizard/machines";
 import { QuickAddCard } from "../common/QuickAddCard";
 import { Searching } from "../common/Searching";
+import { uploadItemImage } from "../common/OnboardingWizard/actors/uploadItemImage";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
 import { WineForm, type WineFormDefaultValues } from "./WineForm";
 
 type WineOnboardingProps = {
-  cellarId: string;
+  cellarId?: string;
   userId: string;
 };
 
@@ -43,6 +44,7 @@ export const WineOnboarding = ({ cellarId, userId }: WineOnboardingProps) => {
       actors: {
         fetchDefaults,
         insertCellarItem,
+        uploadItemImage,
       },
     }),
     {
@@ -161,7 +163,7 @@ export const WineOnboarding = ({ cellarId, userId }: WineOnboardingProps) => {
           </Grid>
         )}
         {(state.value === "addItemToCellar" ||
-          state.value === "addExisting") && (
+          state.value === "uploadImage") && (
           <Grid xs={12} sm={6}>
             <Searching />
           </Grid>

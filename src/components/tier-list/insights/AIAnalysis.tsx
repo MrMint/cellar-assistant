@@ -1,6 +1,14 @@
 "use client";
 
-import { Box, Card, CardContent, Chip, Skeleton, Stack, Typography } from "@mui/joy";
+import {
+  Box,
+  Card,
+  CardContent,
+  Chip,
+  Skeleton,
+  Stack,
+  Typography,
+} from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import {
@@ -23,7 +31,11 @@ interface AIAnalysisProps {
   contentUpdatedAt: string | null;
 }
 
-export function AIAnalysis({ insights, itemCount, contentUpdatedAt }: AIAnalysisProps) {
+export function AIAnalysis({
+  insights,
+  itemCount,
+  contentUpdatedAt,
+}: AIAnalysisProps) {
   const router = useRouter();
   const pollCount = useRef(0);
 
@@ -119,7 +131,12 @@ export function AIAnalysis({ insights, itemCount, contentUpdatedAt }: AIAnalysis
       {insights.hotTake && (
         <Card variant="outlined">
           <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ mb: 1 }}
+            >
               <MdLocalFireDepartment />
               <Typography level="title-sm">Hot Take</Typography>
             </Stack>
@@ -164,7 +181,12 @@ export function AIAnalysis({ insights, itemCount, contentUpdatedAt }: AIAnalysis
       {insights.recommendation && (
         <Card variant="outlined">
           <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ mb: 1 }}
+            >
               <MdRestaurant />
               <Typography level="title-sm">Try This Next</Typography>
             </Stack>

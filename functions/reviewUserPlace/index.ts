@@ -55,11 +55,9 @@ export default async (req: Request, res: Response) => {
     input.latitude == null ||
     input.longitude == null
   ) {
-    return res
-      .status(400)
-      .json({
-        error: "Missing required fields: name, categories, latitude, longitude",
-      });
+    return res.status(400).json({
+      error: "Missing required fields: name, categories, latitude, longitude",
+    });
   }
 
   try {

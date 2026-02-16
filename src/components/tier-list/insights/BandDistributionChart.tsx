@@ -52,8 +52,7 @@ export function BandDistributionChart({
 
   // Filter to only bands with items for a cleaner chart, but keep all if <=3 bands have items
   const filledBands = distribution.filter((d) => d.count > 0);
-  const chartData =
-    filledBands.length <= 2 ? distribution : filledBands;
+  const chartData = filledBands.length <= 2 ? distribution : filledBands;
 
   return (
     <Stack spacing={1.5}>

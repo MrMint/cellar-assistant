@@ -1,3 +1,4 @@
+import type { ItemTypeValue } from "@cellar-assistant/shared";
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { isEmpty, isNil, isNotNil, not } from "ramda";
 import type { Client } from "urql";
@@ -13,8 +14,18 @@ import type {
   InsertCellarItemInput,
   InsertCellarItemResult,
   UploadFilesInput,
+  UploadItemImageInput,
+  UploadItemImageResult,
 } from "./actors/types";
 import { uploadFiles } from "./actors/uploadFiles";
+
+const ROUTE_TO_ITEM_TYPE: Record<string, ItemTypeValue> = {
+  wines: "WINE",
+  beers: "BEER",
+  spirits: "SPIRIT",
+  coffees: "COFFEE",
+  sakes: "SAKE",
+};
 
 export const OnboardingMachine = createMachine(
   {
@@ -23,7 +34,7 @@ export const OnboardingMachine = createMachine(
     types: {} as {
       input: {
         urqlClient: Client;
-        cellarId: string;
+        cellarId?: string;
         router: AppRouterInstance;
         userId: string;
         /** Item type for routing (wines, beers, spirits, coffees, sakes) */
@@ -43,7 +54,7 @@ export const OnboardingMachine = createMachine(
         existingItemId?: string;
         /** The cellar_items ID after adding item to cellar (used for redirect) */
         cellarItemId?: string;
-        cellarId: string;
+        cellarId?: string;
         router: AppRouterInstance;
         retryCount: number;
         /** AI analysis confidence score (0-1) */
@@ -85,6 +96,13 @@ export const OnboardingMachine = createMachine(
               DefaultValuesResult<DefaultValues>,
               FetchDefaultsInput
             >;
+          }
+        | {
+            src: "uploadItemImage";
+            logic: PromiseActorLogic<
+              UploadItemImageResult,
+              UploadItemImageInput
+            >;
           };
     },
     context: ({ input }) => ({
@@ -113,12 +131,21 @@ export const OnboardingMachine = createMachine(
               target: "upload",
             },
             {
-              guard: ({ event }) => isNotNil(event.existingItemId),
+              guard: ({ event, context }) =>
+                isNotNil(event.existingItemId) && isNotNil(context.cellarId),
               actions: assign({
                 existingItemId: ({ event }) => event.existingItemId,
                 displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
               }),
               target: "addItemToCellar",
+            },
+            {
+              guard: ({ event }) => isNotNil(event.existingItemId),
+              actions: assign({
+                existingItemId: ({ event }) => event.existingItemId,
+                displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
+              }),
+              target: "uploadImage",
             },
           ],
         },
@@ -202,12 +229,21 @@ export const OnboardingMachine = createMachine(
         // Note: Auto-confirm is handled by the QuickAddCard component
         // which creates the item and sends CONFIRM with itemId
         on: {
-          CONFIRM: {
-            actions: assign({
-              existingItemId: ({ event }) => event.itemId,
-            }),
-            target: "addItemToCellar",
-          },
+          CONFIRM: [
+            {
+              guard: ({ context }) => isNotNil(context.cellarId),
+              actions: assign({
+                existingItemId: ({ event }) => event.itemId,
+              }),
+              target: "addItemToCellar",
+            },
+            {
+              actions: assign({
+                existingItemId: ({ event }) => event.itemId,
+              }),
+              target: "uploadImage",
+            },
+          ],
           EDIT: {
             target: "form",
             actions: assign({
@@ -218,12 +254,21 @@ export const OnboardingMachine = createMachine(
       },
       form: {
         on: {
-          CREATED: {
-            actions: assign({
-              existingItemId: ({ event }) => event.itemId,
-            }),
-            target: "addItemToCellar",
-          },
+          CREATED: [
+            {
+              guard: ({ context }) => isNotNil(context.cellarId),
+              actions: assign({
+                existingItemId: ({ event }) => event.itemId,
+              }),
+              target: "addItemToCellar",
+            },
+            {
+              actions: assign({
+                existingItemId: ({ event }) => event.itemId,
+              }),
+              target: "uploadImage",
+            },
+          ],
         },
       },
       addItemToCellar: {
@@ -238,7 +283,7 @@ export const OnboardingMachine = createMachine(
             },
           }) => ({
             itemId: existingItemId ?? "",
-            cellarId,
+            cellarId: cellarId ?? "",
             urqlClient,
             displayImage: displayImageDataUrl,
           }),
@@ -250,11 +295,39 @@ export const OnboardingMachine = createMachine(
           },
         },
       },
+      uploadImage: {
+        invoke: {
+          src: "uploadItemImage",
+          input: ({
+            context: {
+              existingItemId,
+              displayImageDataUrl,
+              urqlClient,
+              itemType,
+            },
+          }) => ({
+            itemId: existingItemId ?? "",
+            itemType: ROUTE_TO_ITEM_TYPE[itemType] ?? "WINE",
+            displayImage: displayImageDataUrl,
+            urqlClient,
+          }),
+          onDone: {
+            target: "finalPrompt",
+          },
+          onError: {
+            target: "finalPrompt",
+          },
+        },
+      },
       finalPrompt: {
         on: {
           ADD_ANOTHER: {
             actions: ({ context }) => {
-              context.router.push(`/cellars/${context.cellarId}/items/add`);
+              if (context.cellarId) {
+                context.router.push(`/cellars/${context.cellarId}/items/add`);
+              } else {
+                context.router.push("/add");
+              }
             },
             target: "done",
           },

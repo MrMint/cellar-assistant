@@ -1,6 +1,8 @@
 import type { ItemTypeValue } from "@cellar-assistant/shared";
 import type { Client } from "urql";
 import type { BeerFormDefaultValues } from "@/components/beer/BeerForm";
+import type { CoffeeFormDefaultValues } from "@/components/coffee/CoffeeForm";
+import type { SakeFormDefaultValues } from "@/components/sake/SakeForm";
 import type { SpiritFormDefaultValues } from "@/components/spirit/SpiritForm";
 import type { WineFormDefaultValues } from "@/components/wine/WineForm";
 import type { Barcode } from "@/constants";
@@ -48,14 +50,27 @@ export type FetchDefaultsInput = {
 
 export type DefaultValues =
   | BeerFormDefaultValues
-  | WineFormDefaultValues
-  | SpiritFormDefaultValues;
+  | CoffeeFormDefaultValues
+  | SakeFormDefaultValues
+  | SpiritFormDefaultValues
+  | WineFormDefaultValues;
 
 export interface DefaultValuesResult<T extends DefaultValues> {
   defaults: T;
   itemOnboardingId: string;
   confidence: number;
 }
+
+export type UploadItemImageInput = {
+  urqlClient: Client;
+  itemId: string;
+  itemType: ItemTypeValue;
+  displayImage?: string;
+};
+
+export type UploadItemImageResult = {
+  imageId?: string;
+};
 
 export type BarcodeSearchResult = {
   id: string;

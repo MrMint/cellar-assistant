@@ -89,7 +89,8 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
       .map((e) => COUNTRY_CENTROIDS[e.countryCode])
       .filter(Boolean) as [number, number][];
 
-    if (coords.length === 0) return { center: [0, 20] as [number, number], zoom: 0.8 };
+    if (coords.length === 0)
+      return { center: [0, 20] as [number, number], zoom: 0.8 };
     if (coords.length === 1) return { center: coords[0], zoom: 2.5 };
 
     const lngs = coords.map((c) => c[0]);

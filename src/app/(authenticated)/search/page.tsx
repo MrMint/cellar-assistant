@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Card,
   CardCover,
   Grid,
@@ -7,7 +8,9 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import Link from "next/link";
 import { Suspense } from "react";
+import { MdAdd } from "react-icons/md";
 import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
 import { ItemCard } from "@/components/item/ItemCard";
 import { ClientSearchInterface } from "@/components/search/ClientSearchInterface";
@@ -83,9 +86,16 @@ export default async function Search({ searchParams }: SearchPageProps) {
           <Stack spacing={2}>
             <Typography level="title-lg">Image search results</Typography>
             {imageNoResults ? (
-              <Typography level="body-lg" sx={{ textAlign: "center", py: 4 }}>
-                No items found matching the image
-              </Typography>
+              <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
+                <Typography level="body-lg" sx={{ textAlign: "center" }}>
+                  No items found matching the image
+                </Typography>
+                <Link href="/add" style={{ textDecoration: "none" }}>
+                  <Button variant="outlined" startDecorator={<MdAdd />}>
+                    Add an item
+                  </Button>
+                </Link>
+              </Stack>
             ) : (
               <Grid container spacing={2}>
                 {imageResults.map((item: BarcodeSearchResult) => (
@@ -113,9 +123,16 @@ export default async function Search({ searchParams }: SearchPageProps) {
           <Stack spacing={2}>
             <Typography level="title-lg">Barcode search results</Typography>
             {barcodeNoResults ? (
-              <Typography level="body-lg" sx={{ textAlign: "center", py: 4 }}>
-                No items found matching the barcode
-              </Typography>
+              <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
+                <Typography level="body-lg" sx={{ textAlign: "center" }}>
+                  No items found matching the barcode
+                </Typography>
+                <Link href="/add" style={{ textDecoration: "none" }}>
+                  <Button variant="outlined" startDecorator={<MdAdd />}>
+                    Add an item
+                  </Button>
+                </Link>
+              </Stack>
             ) : (
               <Grid container spacing={2}>
                 {barcodeResults.map((item: BarcodeSearchResult) => (

@@ -26,10 +26,10 @@ type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee" | "Sake";
 
 type AddItemTypeCardProps = {
   type: ItemType;
-  cellarId: string;
+  href: string;
 };
 
-const AddItemTypeCard = ({ type, cellarId }: AddItemTypeCardProps) => (
+const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
   <InteractiveCard>
     <CardOverflow>
       <AspectRatio ratio="1">
@@ -71,11 +71,7 @@ const AddItemTypeCard = ({ type, cellarId }: AddItemTypeCardProps) => (
       </AspectRatio>
     </CardOverflow>
     <CardContent>
-      <Link
-        component={NextLink}
-        overlay
-        href={`/cellars/${cellarId}/${type.toLowerCase()}s/add`}
-      >
+      <Link component={NextLink} overlay href={href}>
         <Typography level="title-lg" flexGrow={1} textAlign="center">
           {type}
         </Typography>
@@ -98,26 +94,30 @@ const getCellarQuery = graphql(`
 `);
 
 interface AddItemClientProps {
-  cellarId: string;
+  cellarId?: string;
   userId: string;
 }
 
 export function AddItemClient({ cellarId, userId }: AddItemClientProps) {
   const [{ data, fetching }] = useQuery({
     query: getCellarQuery,
-    variables: { cellarId },
+    variables: { cellarId: cellarId ?? "" },
+    pause: !cellarId,
   });
 
   const cellar = data?.cellars_by_pk;
   const canAdd =
+    !cellarId ||
     cellar?.created_by_id === userId ||
     cellar?.co_owners?.map((x) => x.user_id).includes(userId) === true;
 
   return (
     <Box>
       <Stack spacing={4}>
-        <Typography level="h2">Add an item to {cellar?.name}</Typography>
-        {!fetching && !canAdd && (
+        <Typography level="h2">
+          {cellarId ? `Add an item to ${cellar?.name}` : "Add an item"}
+        </Typography>
+        {cellarId && !fetching && !canAdd && (
           <Typography level="body-md">
             You do not have permission to add items to this cellar.
           </Typography>
@@ -127,7 +127,14 @@ export function AddItemClient({ cellarId, userId }: AddItemClientProps) {
             ["Wine", "Beer", "Spirit", "Coffee", "Sake"] satisfies ItemType[]
           ).map((x) => (
             <Grid key={x} xs={6} sm={6} md={4} lg={2}>
-              <AddItemTypeCard type={x} cellarId={cellarId} />
+              <AddItemTypeCard
+                type={x}
+                href={
+                  cellarId
+                    ? `/cellars/${cellarId}/${x.toLowerCase()}s/add`
+                    : `/add/${x.toLowerCase()}s`
+                }
+              />
             </Grid>
           ))}
         </Grid>

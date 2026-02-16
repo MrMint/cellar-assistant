@@ -77,10 +77,7 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
       const counts = new Map<string, number>();
       for (const item of items) {
         if (item.countryCode) {
-          counts.set(
-            item.countryCode,
-            (counts.get(item.countryCode) ?? 0) + 1,
-          );
+          counts.set(item.countryCode, (counts.get(item.countryCode) ?? 0) + 1);
         }
       }
       return Array.from(counts.values()).some((c) => c >= 10);
@@ -89,10 +86,7 @@ const BADGE_DEFINITIONS: BadgeDefinition[] = [
       const counts = new Map<string, number>();
       for (const item of items) {
         if (item.countryCode) {
-          counts.set(
-            item.countryCode,
-            (counts.get(item.countryCode) ?? 0) + 1,
-          );
+          counts.set(item.countryCode, (counts.get(item.countryCode) ?? 0) + 1);
         }
       }
       const max = Math.max(0, ...Array.from(counts.values()));

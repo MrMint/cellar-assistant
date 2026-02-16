@@ -198,8 +198,7 @@ export function PalatePassport({ stats }: PalatePassportProps) {
         </Stack>
         {closestUnearned?.progress && (
           <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
-            {closestUnearned.progress.target -
-              closestUnearned.progress.current}{" "}
+            {closestUnearned.progress.target - closestUnearned.progress.current}{" "}
             away from{" "}
             <Typography
               component="span"

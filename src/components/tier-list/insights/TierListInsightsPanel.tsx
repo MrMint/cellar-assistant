@@ -142,10 +142,7 @@ export function TierListInsightsPanel({
             <Skeleton variant="text" level="body-sm" />
             <Skeleton variant="text" level="body-sm" />
             <Skeleton variant="text" level="body-sm" width="60%" />
-            <Typography
-              level="body-xs"
-              sx={{ color: "text.tertiary", mt: 1 }}
-            >
+            <Typography level="body-xs" sx={{ color: "text.tertiary", mt: 1 }}>
               Your personalized insights are being generated...
             </Typography>
           </CardContent>
@@ -276,8 +273,7 @@ export function TierListInsightsPanel({
             })}
           </Typography>
           {insights.contentUpdatedAt &&
-            new Date(insights.contentUpdatedAt) >
-              new Date(ai.generatedAt) && (
+            new Date(insights.contentUpdatedAt) > new Date(ai.generatedAt) && (
               <Stack
                 direction="row"
                 spacing={0.5}

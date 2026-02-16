@@ -1,6 +1,11 @@
 "use client";
 
-import { type MutableRefObject, type RefObject, useEffect, useRef } from "react";
+import {
+  type MutableRefObject,
+  type RefObject,
+  useEffect,
+  useRef,
+} from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { fetchPlaceByIdAction } from "@/app/(authenticated)/map/place-actions";
 import type { PlaceDetailsDrawerRef } from "../places/PlaceDetailsDrawer";
