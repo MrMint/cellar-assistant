@@ -5,6 +5,13 @@ object_relationships:
   - name: created_by_user
     using:
       foreign_key_constraint_on: created_by
+  - name: google_enrichment
+    using:
+      foreign_key_constraint_on:
+        column: place_id
+        table:
+          name: place_google_enrichments
+          schema: public
 array_relationships:
   - name: cellar_items
     using:
@@ -22,6 +29,14 @@ array_relationships:
           name: menu_scans
           schema: public
     comment: Menu scans estimated for this place
+  - name: google_photos
+    using:
+      foreign_key_constraint_on:
+        column: place_id
+        table:
+          name: place_google_photos
+          schema: public
+    comment: Google Photos for this place
   - name: manual_menu_scans
     using:
       foreign_key_constraint_on:
@@ -82,6 +97,7 @@ insert_permissions:
         source: user
       columns:
         - name
+        - google_place_id
         - categories
         - location
         - street_address
@@ -102,6 +118,7 @@ select_permissions:
       columns:
         - id
         - overture_id
+        - google_place_id
         - name
         - display_name
         - categories

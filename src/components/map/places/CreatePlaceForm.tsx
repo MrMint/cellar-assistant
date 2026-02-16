@@ -5,7 +5,7 @@ import {
   PLACE_CATEGORY_TIERS,
   type UserPlaceCategory,
 } from "@cellar-assistant/shared";
-import { ArrowBack, MyLocation } from "@mui/icons-material";
+import { MdArrowBack, MdMyLocation } from "react-icons/md";
 import {
   Alert,
   Autocomplete,
@@ -37,9 +37,15 @@ import {
   checkDuplicatePlacesAction,
   createUserPlaceAction,
   type DuplicatePlace,
+  enrichPlaceAction,
+  type GoogleAutocompleteSuggestion,
+  type GoogleNearbyPlace,
+  googleNearbySearchAction,
   reverseGeocodeAction,
 } from "@/app/(authenticated)/map/place-actions";
 import { DuplicatePlaceCheck } from "./DuplicatePlaceCheck";
+import { GooglePlaceSearch } from "./GooglePlaceSearch";
+import { GooglePlaceSuggestions } from "./GooglePlaceSuggestions";
 
 // =============================================================================
 // Category Options
@@ -130,6 +136,15 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
   const [addressLoading, setAddressLoading] = useState(true);
   const duplicateCheckTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
+  // Google Places state
+  const [googlePlaces, setGooglePlaces] = useState<GoogleNearbyPlace[]>([]);
+  const [googlePlacesLoading, setGooglePlacesLoading] = useState(true);
+  const [googlePlacesDismissed, setGooglePlacesDismissed] = useState(false);
+  const [selectedGooglePlaceId, setSelectedGooglePlaceId] = useState<
+    string | null
+  >(null);
+  const [enriching, setEnriching] = useState(false);
+
   const {
     control,
     handleSubmit,
@@ -155,11 +170,14 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
   const countryCodeValue = watch("country_code");
   const phoneCountry = toSupportedCountryCode(countryCodeValue) ?? "US";
 
-  // Auto-fill address from reverse geocode on mount
+  // Auto-fill address from reverse geocode + fetch Google nearby places on mount
   useEffect(() => {
+    let cancelled = false;
+
     setAddressLoading(true);
     reverseGeocodeAction(latitude, longitude)
       .then((result) => {
+        if (cancelled) return;
         if (result) {
           if (result.street_address)
             setValue("street_address", result.street_address);
@@ -171,7 +189,26 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
           }
         }
       })
-      .finally(() => setAddressLoading(false));
+      .finally(() => {
+        if (!cancelled) setAddressLoading(false);
+      });
+
+    // Fetch nearby Google places in parallel
+    setGooglePlacesLoading(true);
+    googleNearbySearchAction(latitude, longitude)
+      .then((result) => {
+        if (!cancelled) setGooglePlaces(result.places);
+      })
+      .catch(() => {
+        // Silently fail — user can still fill form manually
+      })
+      .finally(() => {
+        if (!cancelled) setGooglePlacesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [latitude, longitude, setValue]);
 
   // Debounced duplicate check on name change
@@ -224,6 +261,62 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
     setDuplicatesConfirmed(true);
   }, []);
 
+  // Pre-fill form from Google Place enrichment data
+  const prefillFromGoogle = useCallback(
+    async (googlePlaceId: string) => {
+      setEnriching(true);
+      try {
+        const result = await enrichPlaceAction({ googlePlaceId });
+        if (result.success && result.enrichment) {
+          const e = result.enrichment;
+          setValue("name", e.name, { shouldDirty: true });
+          if (e.phone) setValue("phone", e.phone, { shouldDirty: true });
+          if (e.website) setValue("website", e.website, { shouldDirty: true });
+          if (e.editorialSummary)
+            setValue("description", e.editorialSummary, { shouldDirty: true });
+
+          // Map Google types to our category options
+          const matchedCategories = CATEGORY_OPTIONS.filter((cat) =>
+            e.types.some(
+              (t) =>
+                t === cat.value ||
+                t.replace(/_/g, " ") === cat.label.toLowerCase(),
+            ),
+          );
+          if (matchedCategories.length > 0) {
+            setValue("categories", matchedCategories, { shouldDirty: true });
+          }
+
+          setSelectedGooglePlaceId(googlePlaceId);
+        }
+      } catch {
+        // Silently fail — user can still fill form manually
+      } finally {
+        setEnriching(false);
+      }
+    },
+    [setValue],
+  );
+
+  const handleGooglePlaceSelect = useCallback(
+    (place: GoogleNearbyPlace) => {
+      setGooglePlacesDismissed(true);
+      prefillFromGoogle(place.googlePlaceId);
+    },
+    [prefillFromGoogle],
+  );
+
+  const handleGoogleAutocompleteSuggestionSelect = useCallback(
+    (suggestion: GoogleAutocompleteSuggestion) => {
+      prefillFromGoogle(suggestion.googlePlaceId);
+    },
+    [prefillFromGoogle],
+  );
+
+  const handleGoogleDismiss = useCallback(() => {
+    setGooglePlacesDismissed(true);
+  }, []);
+
   const onSubmit: SubmitHandler<FormFields> = async (data) => {
     setServerError(null);
     const normalizedWebsite = normalizeWebsite(data.website);
@@ -242,6 +335,7 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
         data.phone && isValidPhoneNumber(data.phone) ? data.phone : undefined,
       website: normalizedWebsite ?? undefined,
       description: data.description || undefined,
+      google_place_id: selectedGooglePlaceId ?? undefined,
     };
 
     startTransition(async () => {
@@ -272,17 +366,61 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
             size="sm"
             onClick={() => router.push("/map")}
           >
-            <ArrowBack />
+            <MdArrowBack />
           </IconButton>
           <Chip
             variant="soft"
             color="neutral"
-            startDecorator={<MyLocation />}
+            startDecorator={<MdMyLocation />}
             size="sm"
           >
             {latitude.toFixed(5)}, {longitude.toFixed(5)}
           </Chip>
         </Stack>
+
+        {/* Google Places suggestions */}
+        {!googlePlacesDismissed && (
+          <GooglePlaceSuggestions
+            places={googlePlaces}
+            loading={googlePlacesLoading}
+            onSelect={handleGooglePlaceSelect}
+            onDismiss={handleGoogleDismiss}
+          />
+        )}
+
+        {/* Google autocomplete search (shown after suggestions dismissed) */}
+        {googlePlacesDismissed && !selectedGooglePlaceId && (
+          <GooglePlaceSearch
+            latitude={latitude}
+            longitude={longitude}
+            onSelect={handleGoogleAutocompleteSuggestionSelect}
+            disabled={enriching}
+          />
+        )}
+
+        {/* Pre-filled indicator */}
+        {selectedGooglePlaceId && (
+          <Chip variant="soft" color="success" size="sm">
+            Pre-filled from Google
+          </Chip>
+        )}
+
+        {/* Enriching indicator */}
+        {enriching && (
+          <Chip
+            variant="soft"
+            color="neutral"
+            size="sm"
+            startDecorator={
+              <CircularProgress
+                size="sm"
+                sx={{ "--CircularProgress-size": "14px" }}
+              />
+            }
+          >
+            Fetching place details...
+          </Chip>
+        )}
 
         {/* Duplicate check */}
         <DuplicatePlaceCheck

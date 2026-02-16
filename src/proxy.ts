@@ -58,27 +58,27 @@ async function exchangeRefreshToken(
     const result = await nhost.auth.refreshToken({ refreshToken });
 
     if (result.status !== 200 || !result.body) {
-      console.error("[Middleware] Token exchange failed:", result.status);
+      console.error("[Proxy] Token exchange failed:", result.status);
       return null;
     }
 
     // Validate the session structure before returning
     if (!isValidSession(result.body)) {
-      console.error("[Middleware] Invalid session structure received");
+      console.error("[Proxy] Invalid session structure received");
       return null;
     }
 
     return result.body;
   } catch (error) {
-    console.error("[Middleware] Token exchange error:", error);
+    console.error("[Proxy] Token exchange error:", error);
     return null;
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
-  // Skip middleware for public routes and static files
+  // Skip proxy for public routes and static files
   if (
     path.startsWith("/_next") ||
     path.startsWith("/sign-in") ||
@@ -104,7 +104,7 @@ export async function middleware(request: NextRequest) {
       const requestOrigin = request.nextUrl.origin;
       if (cleanUrl.origin !== requestOrigin) {
         console.error(
-          "[Middleware] Blocked cross-origin redirect:",
+          "[Proxy] Blocked cross-origin redirect:",
           cleanUrl.origin,
         );
         return NextResponse.redirect(new URL("/cellars", request.url));
@@ -150,5 +150,4 @@ export const config = {
      */
     "/((?!_next/static|_next/image|favicon.ico|sign-in|sign-up|forgot-password|verify).*)",
   ],
-  runtime: "nodejs",
 };

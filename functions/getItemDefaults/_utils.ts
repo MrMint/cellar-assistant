@@ -650,6 +650,7 @@ export function buildItemAnalysisPrompt(
     BEER: "beer bottle or can",
     SPIRIT: "spirit or liquor bottle",
     COFFEE: "coffee bag or package",
+    SAKE: "sake bottle or container",
   };
 
   const sections = [

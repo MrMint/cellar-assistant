@@ -1,0 +1,32 @@
+table:
+  name: place_google_enrichments
+  schema: public
+object_relationships:
+  - name: place
+    using:
+      foreign_key_constraint_on: place_id
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - place_id
+        - google_place_id
+        - google_name
+        - google_formatted_address
+        - google_rating
+        - google_user_ratings_total
+        - google_price_level
+        - google_website
+        - google_phone
+        - google_opening_hours
+        - google_types
+        - google_business_status
+        - google_editorial_summary
+        - photo_references
+        - attributions
+        - resolved_via
+        - details_fetched_at
+        - photos_fetched_at
+        - created_at
+        - updated_at
+      filter: {}

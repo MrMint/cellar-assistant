@@ -2,26 +2,27 @@
 
 import { readFragment } from "@cellar-assistant/shared/gql";
 import {
-  CheckCircle,
-  Coffee,
-  Directions,
-  Favorite,
-  FavoriteBorder,
-  Language,
-  LocalBar,
-  Map as MapIcon,
-  Phone,
-  Place as PlaceIcon,
-  RadioButtonUnchecked,
-  Restaurant,
-  Schedule,
-  Share,
-  SportsBar,
-  Star,
-  WineBar as Wine,
-} from "@mui/icons-material";
+  MdCheckCircle,
+  MdCoffee,
+  MdDirections,
+  MdFavorite,
+  MdFavoriteBorder,
+  MdLanguage,
+  MdLocalBar,
+  MdMap,
+  MdPhone,
+  MdPlace,
+  MdRadioButtonUnchecked,
+  MdRestaurant,
+  MdSchedule,
+  MdShare,
+  MdSportsBar,
+  MdStar,
+  MdWineBar,
+} from "react-icons/md";
 import {
   Alert,
+  AspectRatio,
   Box,
   Button,
   Card,
@@ -37,6 +38,7 @@ import {
   Tabs,
   Typography,
 } from "@mui/joy";
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { MdFormatListNumbered } from "react-icons/md";
@@ -53,8 +55,15 @@ import {
   MARK_PLACE_VISITED,
   TOGGLE_FAVORITE_PLACE,
 } from "../queries";
+import { usePlaceEnrichment } from "@/hooks/usePlaceEnrichment";
+import type { PlaceEnrichment, PlaceGooglePhoto } from "@/types/places";
+import { nhostImageLoader } from "@/utilities";
 import { MenuScanner } from "../scanning/MenuScanner";
-import { formatCategoryName } from "./PlaceDetailsContent";
+import {
+  formatCategoryName,
+  formatTimeString,
+  getPriceLevelText,
+} from "./place-utils";
 import { PlaceMenuItems } from "./PlaceMenuItems";
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -71,39 +80,47 @@ const DAY_NAMES = [
 
 // ── Utilities ──────────────────────────────────────────────────────────
 
-function formatTime(time: string): string {
-  const hours = Number.parseInt(time.slice(0, 2), 10);
-  const minutes = time.slice(2);
-  const period = hours >= 12 ? "PM" : "AM";
-  const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-  return `${displayHours}:${minutes} ${period}`;
-}
-
 function getCategoryIcon(category: string) {
   switch (category) {
     case "restaurant":
-      return Restaurant;
+      return MdRestaurant;
     case "bar":
     case "pub":
-      return LocalBar;
+      return MdLocalBar;
     case "cafe":
     case "coffee_shop":
-      return Coffee;
+      return MdCoffee;
     case "brewery":
-      return SportsBar;
+      return MdSportsBar;
     case "winery":
-      return Wine;
+      return MdWineBar;
     default:
-      return PlaceIcon;
+      return MdPlace;
   }
 }
 
-function getPriceLevelText(level?: number | null) {
-  if (!level) return null;
-  return "$".repeat(level);
-}
-
 // ── Sub-components ─────────────────────────────────────────────────────
+
+/** Format an opening-hours point to a display string like "9:00 AM". */
+function formatOpeningPoint(point: {
+  hour?: number;
+  minute?: number;
+  time?: string;
+}): string {
+  // Google Places API (New): { hour, minute }
+  if (point.hour != null) {
+    const hours = point.hour;
+    const minutes = String(point.minute ?? 0).padStart(2, "0");
+    const period = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+    return `${displayHours}:${minutes} ${period}`;
+  }
+  // Legacy format: { time: "0900" }
+  if (point.time) {
+    return formatTimeString(point.time);
+  }
+  return "";
+}
 
 function HoursDisplay({ hours }: { hours: unknown }) {
   if (typeof hours === "string") {
@@ -114,6 +131,35 @@ function HoursDisplay({ hours }: { hours: unknown }) {
     );
   }
 
+  // Google Places API (New) includes weekdayDescriptions — use them directly
+  if (
+    hours &&
+    typeof hours === "object" &&
+    "weekdayDescriptions" in hours &&
+    Array.isArray(
+      (hours as { weekdayDescriptions: unknown[] }).weekdayDescriptions,
+    )
+  ) {
+    const descriptions = (hours as { weekdayDescriptions: string[] })
+      .weekdayDescriptions;
+    if (descriptions.length > 0) {
+      return (
+        <Stack spacing={0.5} sx={{ mt: 1 }}>
+          {descriptions.map((desc) => (
+            <Typography
+              key={desc}
+              level="body-sm"
+              sx={{ color: "text.secondary" }}
+            >
+              {desc}
+            </Typography>
+          ))}
+        </Stack>
+      );
+    }
+  }
+
+  // Fall back to parsing periods
   if (
     hours &&
     typeof hours === "object" &&
@@ -121,8 +167,8 @@ function HoursDisplay({ hours }: { hours: unknown }) {
     Array.isArray((hours as { periods: unknown[] }).periods)
   ) {
     type HourPeriod = {
-      open: { day: number; time: string };
-      close?: { day: number; time: string };
+      open: { day: number; hour?: number; minute?: number; time?: string };
+      close?: { day: number; hour?: number; minute?: number; time?: string };
     };
     const periods = (hours as { periods: HourPeriod[] }).periods;
 
@@ -151,7 +197,7 @@ function HoursDisplay({ hours }: { hours: unknown }) {
                   ? dayPeriods
                       .map(
                         (p) =>
-                          `${formatTime(p.open.time)}${p.close ? ` – ${formatTime(p.close.time)}` : " – Open"}`,
+                          `${formatOpeningPoint(p.open)}${p.close ? ` – ${formatOpeningPoint(p.close)}` : " – Open"}`,
                       )
                       .join(", ")
                   : "Closed"}
@@ -175,9 +221,16 @@ function HoursDisplay({ hours }: { hours: unknown }) {
 interface PlaceDetailsProps {
   placeId: string;
   userId: string;
+  serverEnrichment?: PlaceEnrichment | null;
+  serverPhotos?: PlaceGooglePhoto[];
 }
 
-export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
+export function PlaceDetails({
+  placeId,
+  userId,
+  serverEnrichment,
+  serverPhotos,
+}: PlaceDetailsProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
   const [isMarkingVisited, setIsMarkingVisited] = useState(false);
@@ -226,6 +279,16 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
   const currentMenu = placeWithMenu?.place_menus?.[0];
   const menuItems = currentMenu?.place_menu_items ?? [];
 
+  // Use server-provided enrichment if available, otherwise fetch client-side
+  const {
+    enrichment: clientEnrichment,
+    photos: clientPhotos,
+    isEnriching,
+  } = usePlaceEnrichment(serverEnrichment !== undefined ? undefined : placeId);
+  const enrichment = serverEnrichment ?? clientEnrichment;
+  const googlePhotos =
+    serverPhotos && serverPhotos.length > 0 ? serverPhotos : clientPhotos;
+
   // ── Action Handlers ────────────────────────────────────────────────
 
   const handleDirections = () => {
@@ -240,14 +303,16 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
   };
 
   const handleCall = () => {
-    if (!placeData?.phone) return;
-    const cleanPhone = placeData.phone.replace(/[^\d+]/g, "");
+    const phone = enrichment?.phone ?? placeData?.phone;
+    if (!phone) return;
+    const cleanPhone = phone.replace(/[^\d+]/g, "");
     window.open(`tel:${cleanPhone}`, "_self");
   };
 
   const handleWebsite = () => {
-    if (!placeData?.website) return;
-    let url = placeData.website;
+    const website = enrichment?.website ?? placeData?.website;
+    if (!website) return;
+    let url = website;
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = `https://${url}`;
     }
@@ -372,6 +437,23 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
 
   // ── Derived ────────────────────────────────────────────────────────
 
+  // Merge Google enrichment data (Google takes precedence when available)
+  const mergedRating = enrichment?.rating ?? placeData.rating;
+  const mergedPriceLevel = enrichment?.priceLevel ?? placeData.price_level;
+  const mergedPhone = enrichment?.phone ?? placeData.phone;
+  const mergedWebsite = enrichment?.website ?? placeData.website;
+
+  const openNow = (() => {
+    const hours = enrichment?.openingHours;
+    if (!hours || typeof hours !== "object") return null;
+    const h = hours as Record<string, unknown>;
+    // Google Places API (New) uses camelCase: openNow
+    if ("openNow" in h) return (h.openNow as boolean) ?? null;
+    // Legacy format uses snake_case: open_now
+    if ("open_now" in h) return (h.open_now as boolean) ?? null;
+    return null;
+  })();
+
   const MainCategoryIcon = getCategoryIcon(
     placeData.primary_category ?? placeData.categories[0],
   );
@@ -402,7 +484,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                 flexShrink: 0,
               }}
             >
-              <MainCategoryIcon sx={{ fontSize: 28 }} />
+              <MainCategoryIcon size={28} />
             </Box>
 
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -426,23 +508,41 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                 alignItems="center"
                 sx={{ mb: 1, flexWrap: "wrap" }}
               >
-                {placeData.rating != null && (
+                {mergedRating != null && (
                   <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Star sx={{ fontSize: 18, color: "warning.400" }} />
+                    <MdStar size={18} style={{ color: "var(--joy-palette-warning-400)" }} />
                     <Typography level="body-sm" sx={{ fontWeight: "md" }}>
-                      {placeData.rating.toFixed(1)}
-                      {placeData.review_count != null &&
-                        ` (${placeData.review_count})`}
+                      {mergedRating.toFixed(1)}
+                      {(enrichment?.userRatingsTotal ??
+                        placeData.review_count) != null &&
+                        ` (${enrichment?.userRatingsTotal ?? placeData.review_count})`}
                     </Typography>
                   </Stack>
                 )}
-                {placeData.price_level != null && (
+                {mergedPriceLevel != null && (
                   <Typography
                     level="body-sm"
                     sx={{ color: "success.600", fontWeight: "md" }}
                   >
-                    {getPriceLevelText(placeData.price_level)}
+                    {getPriceLevelText(mergedPriceLevel)}
                   </Typography>
+                )}
+                {openNow != null && (
+                  <Typography
+                    level="body-sm"
+                    sx={{
+                      color: openNow ? "success.600" : "danger.600",
+                      fontWeight: "md",
+                    }}
+                  >
+                    {openNow ? "Open" : "Closed"}
+                  </Typography>
+                )}
+                {isEnriching && (
+                  <CircularProgress
+                    size="sm"
+                    sx={{ "--CircularProgress-size": "16px" }}
+                  />
                 )}
                 {placeData.is_verified && (
                   <Chip size="sm" variant="soft" color="success">
@@ -466,8 +566,9 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                       "&:hover .address-text": { color: "primary.500" },
                     }}
                   >
-                    <MapIcon
-                      sx={{ fontSize: 18, color: "primary.500", flexShrink: 0 }}
+                    <MdMap
+                      size={18}
+                      style={{ color: "var(--joy-palette-primary-500)", flexShrink: 0 }}
                     />
                     <Typography
                       className="address-text"
@@ -513,6 +614,39 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
         </CardContent>
       </Card>
 
+      {/* Business Status Warning */}
+      {enrichment?.businessStatus &&
+        (enrichment.businessStatus === "CLOSED_TEMPORARILY" ||
+          enrichment.businessStatus === "CLOSED_PERMANENTLY") && (
+          <Alert
+            color={
+              enrichment.businessStatus === "CLOSED_PERMANENTLY"
+                ? "danger"
+                : "warning"
+            }
+            sx={{ mb: 3 }}
+          >
+            {enrichment.businessStatus === "CLOSED_PERMANENTLY"
+              ? "This place is permanently closed"
+              : "This place is temporarily closed"}
+          </Alert>
+        )}
+
+      {/* Google Photo */}
+      {googlePhotos.length > 0 && (
+        <Card sx={{ mb: 3, p: 0, overflow: "hidden" }}>
+          <AspectRatio ratio="16/9">
+            <Image
+              loader={nhostImageLoader}
+              src={googlePhotos[0].storageFileId}
+              alt={placeData.name}
+              fill
+              style={{ objectFit: "cover" }}
+            />
+          </AspectRatio>
+        </Card>
+      )}
+
       {/* Action Buttons */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -520,7 +654,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
             <Button
               variant="solid"
               color="primary"
-              startDecorator={<Directions />}
+              startDecorator={<MdDirections />}
               fullWidth
               onClick={handleDirections}
             >
@@ -531,8 +665,8 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
               <Button
                 variant="outlined"
                 color="neutral"
-                startDecorator={<Phone />}
-                disabled={!placeData.phone}
+                startDecorator={<MdPhone />}
+                disabled={!mergedPhone}
                 sx={{ flex: 1 }}
                 onClick={handleCall}
               >
@@ -541,8 +675,8 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
               <Button
                 variant="outlined"
                 color="neutral"
-                startDecorator={<Language />}
-                disabled={!placeData.website}
+                startDecorator={<MdLanguage />}
+                disabled={!mergedWebsite}
                 sx={{ flex: 1 }}
                 onClick={handleWebsite}
               >
@@ -556,9 +690,9 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                 color={userInteraction?.is_favorite ? "danger" : "neutral"}
                 startDecorator={
                   userInteraction?.is_favorite ? (
-                    <Favorite />
+                    <MdFavorite />
                   ) : (
-                    <FavoriteBorder />
+                    <MdFavoriteBorder />
                   )
                 }
                 onClick={handleToggleFavorite}
@@ -573,9 +707,9 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                 color={userInteraction?.is_visited ? "success" : "neutral"}
                 startDecorator={
                   userInteraction?.is_visited ? (
-                    <CheckCircle />
+                    <MdCheckCircle />
                   ) : (
-                    <RadioButtonUnchecked />
+                    <MdRadioButtonUnchecked />
                   )
                 }
                 onClick={handleMarkVisited}
@@ -591,7 +725,7 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
               <Button
                 variant="outlined"
                 color="neutral"
-                startDecorator={<Share />}
+                startDecorator={<MdShare />}
                 sx={{ flex: 1 }}
                 onClick={handleShare}
               >
@@ -611,12 +745,23 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
         </CardContent>
       </Card>
 
+      {/* Editorial Summary */}
+      {enrichment?.editorialSummary && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography level="body-md" sx={{ fontStyle: "italic" }}>
+              {enrichment.editorialSummary}
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Contact Info */}
-      {(placeData.phone || placeData.website) && (
+      {(mergedPhone || mergedWebsite) && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Stack spacing={1.5}>
-              {placeData.phone && (
+              {mergedPhone && (
                 <Stack
                   direction="row"
                   spacing={2}
@@ -624,14 +769,14 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                   sx={{ cursor: "pointer" }}
                   onClick={handleCall}
                 >
-                  <Phone sx={{ fontSize: 20, color: "text.secondary" }} />
+                  <MdPhone size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
                   <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                    {placeData.phone}
+                    {mergedPhone}
                   </Typography>
                 </Stack>
               )}
-              {placeData.phone && placeData.website && <Divider />}
-              {placeData.website && (
+              {mergedPhone && mergedWebsite && <Divider />}
+              {mergedWebsite && (
                 <Stack
                   direction="row"
                   spacing={2}
@@ -639,9 +784,9 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                   sx={{ cursor: "pointer" }}
                   onClick={handleWebsite}
                 >
-                  <Language sx={{ fontSize: 20, color: "text.secondary" }} />
+                  <MdLanguage size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
                   <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                    {placeData.website
+                    {mergedWebsite
                       .replace(/^https?:\/\//, "")
                       .replace(/\/$/, "")}
                   </Typography>
@@ -656,6 +801,13 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
       <Box sx={{ mb: 3 }}>
         <ItemTierLists entityId={placeData.id} entityType="place" />
       </Box>
+
+      {/* Google Attribution */}
+      {enrichment && (
+        <Typography level="body-xs" sx={{ color: "text.tertiary", mb: 1 }}>
+          Powered by Google
+        </Typography>
+      )}
 
       {/* Content tabs */}
       <Card>
@@ -685,8 +837,9 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
               />
             ) : (
               <Box sx={{ textAlign: "center", py: 4 }}>
-                <Restaurant
-                  sx={{ fontSize: 48, color: "text.tertiary", mb: 2 }}
+                <MdRestaurant
+                  size={48}
+                  style={{ color: "var(--joy-palette-text-tertiary)", marginBottom: 16 }}
                 />
                 <Typography level="title-lg" sx={{ mb: 1 }}>
                   No menu discovered yet
@@ -709,13 +862,15 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
 
           <TabPanel value={2}>
             <Stack spacing={2}>
-              {placeData.hours != null && (
+              {(enrichment?.openingHours ?? placeData.hours) != null && (
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography level="title-md" startDecorator={<Schedule />}>
+                    <Typography level="title-md" startDecorator={<MdSchedule />}>
                       Hours
                     </Typography>
-                    <HoursDisplay hours={placeData.hours} />
+                    <HoursDisplay
+                      hours={enrichment?.openingHours ?? placeData.hours}
+                    />
                   </CardContent>
                 </Card>
               )}
@@ -745,10 +900,10 @@ export function PlaceDetails({ placeId, userId }: PlaceDetailsProps) {
                         {(placeData.confidence * 100).toFixed(0)}%
                       </Typography>
                     )}
-                    {placeData.price_level != null && (
+                    {mergedPriceLevel != null && (
                       <Typography level="body-sm">
                         <strong>Price Level:</strong>{" "}
-                        {"$".repeat(placeData.price_level)}
+                        {"$".repeat(mergedPriceLevel)}
                       </Typography>
                     )}
                     {placeData.is_verified && (

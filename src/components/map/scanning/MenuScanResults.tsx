@@ -1,16 +1,16 @@
 "use client";
 
 import {
-  ArrowBack,
-  CheckCircle,
-  Coffee,
-  Error as ErrorIcon,
-  Help,
-  LocalBar,
-  MonetizationOn,
-  SportsBar,
-  WineBar,
-} from "@mui/icons-material";
+  MdArrowBack,
+  MdCheckCircle,
+  MdCoffee,
+  MdError,
+  MdHelp,
+  MdLocalBar,
+  MdMonetizationOn,
+  MdSportsBar,
+  MdWineBar,
+} from "react-icons/md";
 import {
   Alert,
   Box,
@@ -34,15 +34,15 @@ interface MenuScanResultsProps {
 const getItemIcon = (type?: string | null) => {
   switch (type) {
     case "wine":
-      return <WineBar />;
+      return <MdWineBar />;
     case "beer":
-      return <SportsBar />;
+      return <MdSportsBar />;
     case "spirit":
-      return <LocalBar />;
+      return <MdLocalBar />;
     case "coffee":
-      return <Coffee />;
+      return <MdCoffee />;
     default:
-      return <Help />;
+      return <MdHelp />;
   }
 };
 
@@ -112,7 +112,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
   if (error || !result) {
     return (
       <Box sx={{ p: 2 }}>
-        <Alert color="danger" startDecorator={<ErrorIcon />}>
+        <Alert color="danger" startDecorator={<MdError />}>
           {error || "Scan not found"}
         </Alert>
       </Box>
@@ -265,7 +265,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
 
                               {matchedItem ? (
                                 <Alert color="success" size="sm" sx={{ mt: 1 }}>
-                                  <CheckCircle sx={{ fontSize: 16 }} />
+                                  <MdCheckCircle size={16} />
                                   Matched to: {matchedItem.name}
                                 </Alert>
                               ) : (
@@ -291,9 +291,11 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                                 alignItems="center"
                                 spacing={0.5}
                               >
-                                <MonetizationOn
-                                  fontSize="small"
-                                  sx={{ color: "text.secondary" }}
+                                <MdMonetizationOn
+                                  size={20}
+                                  style={{
+                                    color: "var(--joy-palette-text-secondary)",
+                                  }}
                                 />
                                 <Typography level="body-sm" fontWeight="lg">
                                   ${item.menu_item_price}
@@ -316,7 +318,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
       {scan.place && (
         <Button
           variant="outlined"
-          startDecorator={<ArrowBack />}
+          startDecorator={<MdArrowBack />}
           component={NextLink}
           href={`/map?placeId=${scan.place_id}`}
         >

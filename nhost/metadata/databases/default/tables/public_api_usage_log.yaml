@@ -1,0 +1,19 @@
+table:
+  name: api_usage_log
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - service
+        - endpoint
+        - estimated_cost_cents
+        - entity_id
+        - entity_type
+        - triggered_by
+        - metadata
+        - created_at
+      filter:
+        triggered_by:
+          _eq: X-Hasura-User-Id

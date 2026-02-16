@@ -1,0 +1,13 @@
+table:
+  name: api_budget_config
+  schema: public
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - service
+        - endpoint
+        - monthly_budget_cents
+        - is_enabled
+        - free_tier_monthly_requests
+      filter: {}

@@ -68,6 +68,80 @@ actions:
           value_from_env: NHOST_WEBHOOK_SECRET
     permissions:
       - role: user
+  - name: enrich_place_from_google
+    definition:
+      kind: synchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/enrichPlaceFromGoogle'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 60
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "placeId": {{$body.input.input?.placeId}},
+              "googlePlaceId": {{$body.input.input?.googlePlaceId}},
+              "maxPhotos": {{$body.input.input?.maxPhotos}},
+              "triggeredBy": {{$body.session_variables.x-hasura-user-id}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
+  - name: google_autocomplete
+    definition:
+      kind: synchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/googlePlacesAutocomplete'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 15
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "input": {{$body.input.input.input}},
+              "latitude": {{$body.input.input.latitude}},
+              "longitude": {{$body.input.input.longitude}},
+              "triggeredBy": {{$body.session_variables.x-hasura-user-id}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
+  - name: google_nearby_search
+    definition:
+      kind: synchronous
+      handler: '{{NHOST_FUNCTIONS_URL}}/googlePlacesNearbySearch'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 15
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "latitude": {{$body.input.input.latitude}},
+              "longitude": {{$body.input.input.longitude}},
+              "triggeredBy": {{$body.session_variables.x-hasura-user-id}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
   - name: item_image_upload
     definition:
       kind: synchronous
@@ -298,6 +372,9 @@ custom_types:
     - name: search_nearby_places_input
     - name: ProcessRecipePhotoInput
     - name: ReviewUserPlaceInput
+    - name: GoogleNearbySearchInput
+    - name: GoogleAutocompleteInput
+    - name: EnrichPlaceFromGoogleInput
   objects:
     - name: wine_defaults_result
     - name: beer_defaults_result
@@ -314,4 +391,11 @@ custom_types:
     - name: ProcessRecipePhotoResult
     - name: MenuAnalysis
     - name: ReviewUserPlaceOutput
+    - name: GoogleNearbySearchOutput
+    - name: GoogleNearbyPlace
+    - name: GoogleAutocompleteOutput
+    - name: GoogleAutocompleteSuggestion
+    - name: EnrichPlaceFromGoogleOutput
+    - name: GoogleEnrichmentData
+    - name: GooglePlacePhotoResult
   scalars: []

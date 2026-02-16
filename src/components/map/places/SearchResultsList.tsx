@@ -1,6 +1,6 @@
 "use client";
 
-import { Close, Place as PlaceIcon, Star } from "@mui/icons-material";
+import { MdClose, MdPlace, MdStar } from "react-icons/md";
 import {
   Box,
   Card,
@@ -16,6 +16,7 @@ import { useCallback, useRef, useState } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { ITEM_TYPE_COLORS } from "../constants/colors";
 import type { ItemType, PlaceResult, SemanticPlaceResult } from "../types";
+import { formatCategoryName } from "./place-utils";
 
 interface SearchResultsListProps {
   results: SemanticPlaceResult[];
@@ -25,16 +26,6 @@ interface SearchResultsListProps {
   onCenterOnPlace: (place: PlaceResult) => void;
   onClose: () => void;
   isDetailOpen?: boolean;
-}
-
-function formatCategoryName(category: string) {
-  return category
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
 }
 
 function getMostRelevantItemType(
@@ -151,7 +142,7 @@ export function SearchResultsList({
                 size="sm"
                 onClick={onClose}
               >
-                <Close />
+                <MdClose />
               </IconButton>
             </Stack>
             <Stack direction="row" spacing={1} alignItems="center">
@@ -271,7 +262,7 @@ export function SearchResultsList({
               size="sm"
               onClick={onClose}
             >
-              <Close />
+              <MdClose />
             </IconButton>
           </Stack>
           <Stack direction="row" spacing={1} alignItems="center">
@@ -348,7 +339,7 @@ function ResultCard({
               flexShrink: 0,
             }}
           >
-            <PlaceIcon sx={{ fontSize: compact ? 18 : 20 }} />
+            <MdPlace size={compact ? 18 : 20} />
           </Box>
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -368,7 +359,10 @@ function ResultCard({
             >
               {place.rating && (
                 <Stack direction="row" spacing={0.25} alignItems="center">
-                  <Star sx={{ fontSize: 14, color: "warning.400" }} />
+                  <MdStar
+                    size={14}
+                    style={{ color: "var(--joy-palette-warning-400)" }}
+                  />
                   <Typography level="body-xs" sx={{ fontWeight: "md" }}>
                     {place.rating.toFixed(1)}
                   </Typography>

@@ -1,3 +1,5 @@
+import { withSerwist } from "@serwist/turbopack";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // React Strict Mode disabled to prevent development-mode double-renders that cause flashing
@@ -67,4 +69,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default withSerwist(nextConfig);

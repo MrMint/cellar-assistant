@@ -18,6 +18,7 @@ import {
   PlaceWithMenuFragment,
 } from "../../shared/fragments/place-fragments";
 import { GET_PLACE_DETAILS } from "../queries";
+import { usePlaceEnrichment } from "@/hooks/usePlaceEnrichment";
 import type { DrawerState, Place } from "./PlaceDetailsContent";
 import { PlaceDetailsContent } from "./PlaceDetailsContent";
 
@@ -114,6 +115,13 @@ export const PlaceDetailsDrawer = forwardRef<
   const currentMenu = placeWithMenu?.place_menus?.[0];
   const menuItems = currentMenu?.place_menu_items ?? [];
   const hasMenuItems = menuItems.length > 0;
+
+  // Lazy Google enrichment
+  const {
+    enrichment,
+    photos: googlePhotos,
+    isEnriching,
+  } = usePlaceEnrichment(open ? place?.id : undefined);
 
   // ── Drawer Height & Drag Logic ──────────────────────────────────────
 
@@ -317,6 +325,9 @@ export const PlaceDetailsDrawer = forwardRef<
     userId,
     onClose,
     refetch,
+    enrichment,
+    isEnriching,
+    googlePhotos,
   } as const;
 
   // ── Desktop Layout ──────────────────────────────────────────────────

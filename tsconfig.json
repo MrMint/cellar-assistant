@@ -1,6 +1,7 @@
 {
   "extends": "@cellar-assistant/typescript-config/nextjs.json",
   "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext", "webworker"],
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -11,6 +12,7 @@
     "functions",
     "packages",
     "**/*.test.ts",
-    "**/*.test.tsx"
+    "**/*.test.tsx",
+    "public/sw.js"
   ]
 }

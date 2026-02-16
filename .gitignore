@@ -46,3 +46,7 @@ next-env.d.ts
 .secrets
 
 functions/node_modules/
+
+# Serwist service worker (generated)
+public/sw*
+public/swe-worker*

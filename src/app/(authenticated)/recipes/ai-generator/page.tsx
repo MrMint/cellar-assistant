@@ -2,13 +2,13 @@
 
 import { graphql } from "@cellar-assistant/shared";
 import {
-  AutoFixHigh,
-  PhotoCamera,
-  Psychology,
-  Speed,
-  TrendingUp,
-  Visibility,
-} from "@mui/icons-material";
+  MdAutoFixHigh,
+  MdPhotoCamera,
+  MdPsychology,
+  MdSpeed,
+  MdTrendingUp,
+  MdVisibility,
+} from "react-icons/md";
 import {
   Box,
   Card,
@@ -153,7 +153,12 @@ export default function AIRecipeGeneratorPage() {
                   <Box
                     sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}
                   >
-                    <Psychology sx={{ color: "primary.500", mt: 0.5 }} />
+                    <MdPsychology
+                      style={{
+                        color: "var(--joy-palette-primary-500)",
+                        marginTop: 4,
+                      }}
+                    />
                     <Box>
                       <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
                         Smart Vision Analysis
@@ -171,7 +176,12 @@ export default function AIRecipeGeneratorPage() {
                   <Box
                     sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}
                   >
-                    <AutoFixHigh sx={{ color: "primary.500", mt: 0.5 }} />
+                    <MdAutoFixHigh
+                      style={{
+                        color: "var(--joy-palette-primary-500)",
+                        marginTop: 4,
+                      }}
+                    />
                     <Box>
                       <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
                         Ingredient Classification
@@ -189,7 +199,12 @@ export default function AIRecipeGeneratorPage() {
                   <Box
                     sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}
                   >
-                    <Speed sx={{ color: "primary.500", mt: 0.5 }} />
+                    <MdSpeed
+                      style={{
+                        color: "var(--joy-palette-primary-500)",
+                        marginTop: 4,
+                      }}
+                    />
                     <Box>
                       <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
                         Instant Processing
@@ -206,7 +221,12 @@ export default function AIRecipeGeneratorPage() {
                   <Box
                     sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}
                   >
-                    <Visibility sx={{ color: "primary.500", mt: 0.5 }} />
+                    <MdVisibility
+                      style={{
+                        color: "var(--joy-palette-primary-500)",
+                        marginTop: 4,
+                      }}
+                    />
                     <Box>
                       <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
                         Quality Assurance
@@ -348,8 +368,12 @@ export default function AIRecipeGeneratorPage() {
           <Grid xs={12} md={3}>
             <Card variant="outlined" sx={{ height: "100%" }}>
               <CardContent sx={{ textAlign: "center" }}>
-                <PhotoCamera
-                  sx={{ fontSize: 40, color: "primary.500", mb: 2 }}
+                <MdPhotoCamera
+                  size={40}
+                  style={{
+                    color: "var(--joy-palette-primary-500)",
+                    marginBottom: 16,
+                  }}
                 />
                 <Typography level="h4" sx={{ mb: 1 }}>
                   1. Upload Photo
@@ -365,8 +389,12 @@ export default function AIRecipeGeneratorPage() {
           <Grid xs={12} md={3}>
             <Card variant="outlined" sx={{ height: "100%" }}>
               <CardContent sx={{ textAlign: "center" }}>
-                <Psychology
-                  sx={{ fontSize: 40, color: "primary.500", mb: 2 }}
+                <MdPsychology
+                  size={40}
+                  style={{
+                    color: "var(--joy-palette-primary-500)",
+                    marginBottom: 16,
+                  }}
                 />
                 <Typography level="h4" sx={{ mb: 1 }}>
                   2. AI Analysis
@@ -382,8 +410,12 @@ export default function AIRecipeGeneratorPage() {
           <Grid xs={12} md={3}>
             <Card variant="outlined" sx={{ height: "100%" }}>
               <CardContent sx={{ textAlign: "center" }}>
-                <AutoFixHigh
-                  sx={{ fontSize: 40, color: "primary.500", mb: 2 }}
+                <MdAutoFixHigh
+                  size={40}
+                  style={{
+                    color: "var(--joy-palette-primary-500)",
+                    marginBottom: 16,
+                  }}
                 />
                 <Typography level="h4" sx={{ mb: 1 }}>
                   3. Smart Matching
@@ -398,8 +430,12 @@ export default function AIRecipeGeneratorPage() {
           <Grid xs={12} md={3}>
             <Card variant="outlined" sx={{ height: "100%" }}>
               <CardContent sx={{ textAlign: "center" }}>
-                <TrendingUp
-                  sx={{ fontSize: 40, color: "primary.500", mb: 2 }}
+                <MdTrendingUp
+                  size={40}
+                  style={{
+                    color: "var(--joy-palette-primary-500)",
+                    marginBottom: 16,
+                  }}
                 />
                 <Typography level="h4" sx={{ mb: 1 }}>
                   4. Ready to Cook

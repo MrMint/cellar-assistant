@@ -104,9 +104,11 @@ export async function searchRecipesByVector(
       return [];
     }
 
-    const results: SearchResult[] = searchResult.recipe_vectors
-      .map((result) => {
-        const recipe = result.recipe;
+    const results: SearchResult[] = (
+      searchResult.recipe_vectors as Array<Record<string, unknown>>
+    )
+      .map((result: Record<string, unknown>): SearchResult | null => {
+        const recipe = result.recipe as Record<string, unknown> | null;
         if (!recipe) return null;
 
         const distance =
@@ -132,22 +134,25 @@ export async function searchRecipesByVector(
           name: recipe.name as string,
           brand_name: recipeGroup?.name ?? null,
           category: recipeGroup?.category ?? null,
-          country: null,
-          vintage: null,
-          alcohol_content_percentage: null,
+          country: null as string | null,
+          vintage: null as string | number | null,
+          alcohol_content_percentage: null as number | null,
           similarity_score: similarity,
           // Extra recipe-specific fields for confidence scoring
           description: recipe.description,
           type: recipe.type,
           base_spirit: recipeGroup?.base_spirit ?? null,
           itemType: "cocktail",
-        } satisfies SearchResult;
+        };
       })
       .filter(
-        (r): r is SearchResult =>
+        (r: SearchResult | null): r is SearchResult =>
           r !== null && (r.similarity_score ?? 0) >= similarityThreshold,
       )
-      .sort((a, b) => (b.similarity_score ?? 0) - (a.similarity_score ?? 0))
+      .sort(
+        (a: SearchResult, b: SearchResult) =>
+          (b.similarity_score ?? 0) - (a.similarity_score ?? 0),
+      )
       .slice(0, limit);
 
     console.log(

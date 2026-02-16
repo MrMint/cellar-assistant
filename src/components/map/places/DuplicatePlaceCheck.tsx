@@ -1,6 +1,6 @@
 "use client";
 
-import { Place } from "@mui/icons-material";
+import { MdPlace } from "react-icons/md";
 import {
   Box,
   Button,
@@ -43,7 +43,7 @@ export function DuplicatePlaceCheck({
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Place fontSize="small" color="action" />
+                  <MdPlace size={20} />
                   <Typography level="title-sm" noWrap>
                     {dup.name}
                   </Typography>

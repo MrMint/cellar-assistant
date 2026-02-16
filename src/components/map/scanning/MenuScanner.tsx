@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  CameraAlt,
-  CheckCircle,
-  Error as ErrorIcon,
-  PhotoLibrary,
-  Visibility,
-} from "@mui/icons-material";
+  MdCameraAlt,
+  MdCheckCircle,
+  MdError,
+  MdPhotoLibrary,
+  MdVisibility,
+} from "react-icons/md";
 import {
   Alert,
   Box,
@@ -218,7 +218,7 @@ export function MenuScanner({
               <Stack direction="row" spacing={2}>
                 <Button
                   variant="solid"
-                  startDecorator={<CameraAlt />}
+                  startDecorator={<MdCameraAlt />}
                   onClick={() => setShowCamera(true)}
                   size="lg"
                 >
@@ -227,7 +227,7 @@ export function MenuScanner({
 
                 <Button
                   variant="outlined"
-                  startDecorator={<PhotoLibrary />}
+                  startDecorator={<MdPhotoLibrary />}
                   component="label"
                   size="lg"
                 >
@@ -350,12 +350,12 @@ export function MenuScanner({
           {showResult && (
             <Stack spacing={2}>
               {uploadError ? (
-                <Alert color="danger" startDecorator={<ErrorIcon />}>
+                <Alert color="danger" startDecorator={<MdError />}>
                   <Typography level="title-sm">Upload Failed</Typography>
                   <Typography level="body-sm">{uploadError}</Typography>
                 </Alert>
               ) : isComplete ? (
-                <Alert color="success" startDecorator={<CheckCircle />}>
+                <Alert color="success" startDecorator={<MdCheckCircle />}>
                   <Stack spacing={1}>
                     <Typography level="title-sm">Scan Complete!</Typography>
                     <Typography level="body-sm">
@@ -371,7 +371,7 @@ export function MenuScanner({
                   </Stack>
                 </Alert>
               ) : (
-                <Alert color="danger" startDecorator={<ErrorIcon />}>
+                <Alert color="danger" startDecorator={<MdError />}>
                   <Typography level="title-sm">Scan Failed</Typography>
                   <Typography level="body-sm">
                     {scanStatus?.processing_error ||
@@ -388,7 +388,7 @@ export function MenuScanner({
                 {isComplete && scanId && (
                   <Button
                     variant="solid"
-                    startDecorator={<Visibility />}
+                    startDecorator={<MdVisibility />}
                     component={NextLink}
                     href={`/map/scans/${scanId}`}
                   >

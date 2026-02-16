@@ -9,6 +9,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { getCachedReverseGeocode } from "@/lib/cache";
 import { adminQuery, serverMutation, serverQuery } from "@/lib/urql/server";
+import type { PlaceEnrichment, PlaceGooglePhoto } from "@/types/places";
 import { getServerUserId } from "@/utilities/auth-server";
 
 // =============================================================================
@@ -28,6 +29,30 @@ export interface CreatePlaceInput {
   phone?: string;
   website?: string;
   description?: string;
+  google_place_id?: string;
+}
+
+export interface GoogleNearbyPlace {
+  googlePlaceId: string;
+  name: string;
+  address: string;
+  types: string[];
+  location: { latitude: number; longitude: number };
+}
+
+export interface GoogleAutocompleteSuggestion {
+  googlePlaceId: string;
+  name: string;
+  secondaryText: string;
+  types: string[];
+}
+
+export interface GoogleEnrichmentResult {
+  success: boolean;
+  enrichment: PlaceEnrichment | null;
+  photos?: PlaceGooglePhoto[];
+  cached?: boolean;
+  reason?: string;
 }
 
 export interface CreatePlaceResult {
@@ -366,6 +391,206 @@ export async function fetchPlaceByIdAction(placeId: string) {
   }
 }
 
+// =============================================================================
+// Google Places GraphQL Mutations (Hasura Actions)
+// =============================================================================
+
+const GOOGLE_NEARBY_SEARCH = graphql(`
+  mutation GoogleNearbySearch($input: GoogleNearbySearchInput!) {
+    google_nearby_search(input: $input) {
+      success
+      budgetExhausted
+      places {
+        googlePlaceId
+        name
+        address
+        types
+        latitude
+        longitude
+      }
+    }
+  }
+`);
+
+const GOOGLE_AUTOCOMPLETE = graphql(`
+  mutation GoogleAutocomplete($input: GoogleAutocompleteInput!) {
+    google_autocomplete(input: $input) {
+      success
+      budgetExhausted
+      suggestions {
+        googlePlaceId
+        name
+        secondaryText
+        types
+      }
+    }
+  }
+`);
+
+const ENRICH_PLACE_FROM_GOOGLE = graphql(`
+  mutation EnrichPlaceFromGoogle($input: EnrichPlaceFromGoogleInput!) {
+    enrich_place_from_google(input: $input) {
+      success
+      cached
+      reason
+      enrichment {
+        googlePlaceId
+        name
+        formattedAddress
+        rating
+        userRatingsTotal
+        priceLevel
+        website
+        phone
+        openingHours
+        types
+        businessStatus
+        editorialSummary
+        photoReferences
+        attributions
+      }
+      photos {
+        id
+        storageFileId
+        displayOrder
+      }
+    }
+  }
+`);
+
+// =============================================================================
+// Google Places Server Actions
+// =============================================================================
+
+/**
+ * Search for nearby Google Places around coordinates.
+ * Called on create-place page load (parallel with reverse geocode).
+ */
+export async function googleNearbySearchAction(
+  latitude: number,
+  longitude: number,
+): Promise<{
+  places: GoogleNearbyPlace[];
+  budgetExhausted: boolean;
+}> {
+  await getServerUserId();
+
+  try {
+    const data = await serverMutation(GOOGLE_NEARBY_SEARCH, {
+      input: { latitude, longitude },
+    });
+
+    const result = data.google_nearby_search;
+    return {
+      places:
+        result?.places?.map((p) => ({
+          googlePlaceId: p.googlePlaceId,
+          name: p.name,
+          address: p.address,
+          types: [...p.types],
+          location: { latitude: p.latitude, longitude: p.longitude },
+        })) ?? [],
+      budgetExhausted: result?.budgetExhausted ?? false,
+    };
+  } catch (error) {
+    console.error("Google nearby search failed:", error);
+    return { places: [], budgetExhausted: false };
+  }
+}
+
+/**
+ * Google Places Autocomplete. Called as user types in the name field (debounced).
+ */
+export async function googleAutocompleteAction(
+  input: string,
+  latitude: number,
+  longitude: number,
+): Promise<{
+  suggestions: GoogleAutocompleteSuggestion[];
+  budgetExhausted: boolean;
+}> {
+  await getServerUserId();
+
+  try {
+    const data = await serverMutation(GOOGLE_AUTOCOMPLETE, {
+      input: { input, latitude, longitude },
+    });
+
+    const result = data.google_autocomplete;
+    return {
+      suggestions:
+        result?.suggestions?.map((s) => ({
+          googlePlaceId: s.googlePlaceId,
+          name: s.name,
+          secondaryText: s.secondaryText,
+          types: [...s.types],
+        })) ?? [],
+      budgetExhausted: result?.budgetExhausted ?? false,
+    };
+  } catch (error) {
+    console.error("Google autocomplete failed:", error);
+    return { suggestions: [], budgetExhausted: false };
+  }
+}
+
+/**
+ * Enrich a place with Google Place Details.
+ * Can be called with either a placeId (existing place) or googlePlaceId (new place).
+ */
+export async function enrichPlaceAction(params: {
+  placeId?: string;
+  googlePlaceId?: string;
+}): Promise<GoogleEnrichmentResult> {
+  await getServerUserId();
+
+  try {
+    const data = await serverMutation(ENRICH_PLACE_FROM_GOOGLE, {
+      input: {
+        placeId: params.placeId,
+        googlePlaceId: params.googlePlaceId,
+      },
+    });
+
+    const result = data.enrich_place_from_google;
+    if (!result) {
+      return { success: false, enrichment: null, reason: "No response" };
+    }
+
+    return {
+      success: result.success,
+      enrichment: result.enrichment
+        ? {
+            googlePlaceId: result.enrichment.googlePlaceId,
+            name: result.enrichment.name,
+            formattedAddress: result.enrichment.formattedAddress ?? null,
+            rating: result.enrichment.rating ?? null,
+            userRatingsTotal: result.enrichment.userRatingsTotal ?? null,
+            priceLevel: result.enrichment.priceLevel ?? null,
+            website: result.enrichment.website ?? null,
+            phone: result.enrichment.phone ?? null,
+            openingHours: result.enrichment.openingHours,
+            types: [...(result.enrichment.types ?? [])],
+            businessStatus: result.enrichment.businessStatus ?? null,
+            editorialSummary: result.enrichment.editorialSummary ?? null,
+            photoReferences: result.enrichment.photoReferences as unknown[],
+            attributions: result.enrichment.attributions as unknown[],
+          }
+        : null,
+      photos:
+        result.photos?.map((p) => ({
+          id: p.id,
+          storageFileId: p.storageFileId,
+          displayOrder: p.displayOrder,
+        })) ?? [],
+      cached: result.cached ?? undefined,
+      reason: result.reason ?? undefined,
+    };
+  } catch (error) {
+    console.error("Enrich place failed:", error);
+    return { success: false, enrichment: null, reason: "Mutation failed" };
+  }
+}
+
 /**
  * Create a user-submitted place with full data quality pipeline:
  * 1. Auth + rate limit check
@@ -519,6 +744,7 @@ export async function createUserPlaceAction(
         website,
         description: description?.trim() || null,
         confidence,
+        google_place_id: normalizedInput.google_place_id ?? null,
       },
     });
 

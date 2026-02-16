@@ -18,6 +18,24 @@ type Query {
 }
 
 type Mutation {
+  enrich_place_from_google(
+    input: EnrichPlaceFromGoogleInput!
+  ): EnrichPlaceFromGoogleOutput
+}
+
+type Mutation {
+  google_autocomplete(
+    input: GoogleAutocompleteInput!
+  ): GoogleAutocompleteOutput
+}
+
+type Mutation {
+  google_nearby_search(
+    input: GoogleNearbySearchInput!
+  ): GoogleNearbySearchOutput
+}
+
+type Mutation {
   item_image_upload(
     input: item_image_upload_input!
   ): item_image_upload_result
@@ -118,6 +136,23 @@ input ReviewUserPlaceInput {
   phone: String
   website: String
   description: String
+}
+
+input GoogleNearbySearchInput {
+  latitude: Float!
+  longitude: Float!
+}
+
+input GoogleAutocompleteInput {
+  input: String!
+  latitude: Float!
+  longitude: Float!
+}
+
+input EnrichPlaceFromGoogleInput {
+  placeId: String
+  googlePlaceId: String
+  maxPhotos: Int
 }
 
 type wine_defaults_result {
@@ -301,5 +336,64 @@ type ReviewUserPlaceOutput {
   suggested_categories: [String!]
   rejection_reason: String
   flags: [String!]!
+}
+
+type GoogleNearbySearchOutput {
+  success: Boolean!
+  places: [GoogleNearbyPlace!]!
+  budgetExhausted: Boolean!
+}
+
+type GoogleNearbyPlace {
+  googlePlaceId: String!
+  name: String!
+  address: String!
+  types: [String!]!
+  latitude: Float!
+  longitude: Float!
+}
+
+type GoogleAutocompleteOutput {
+  success: Boolean!
+  suggestions: [GoogleAutocompleteSuggestion!]!
+  budgetExhausted: Boolean!
+}
+
+type GoogleAutocompleteSuggestion {
+  googlePlaceId: String!
+  name: String!
+  secondaryText: String!
+  types: [String!]!
+}
+
+type EnrichPlaceFromGoogleOutput {
+  success: Boolean!
+  enrichment: GoogleEnrichmentData
+  cached: Boolean
+  reason: String
+  photos: [GooglePlacePhotoResult!]
+}
+
+type GoogleEnrichmentData {
+  googlePlaceId: String!
+  name: String!
+  formattedAddress: String
+  rating: Float
+  userRatingsTotal: Int
+  priceLevel: Int
+  website: String
+  phone: String
+  openingHours: jsonb
+  types: [String!]!
+  businessStatus: String
+  editorialSummary: String
+  photoReferences: jsonb
+  attributions: jsonb
+}
+
+type GooglePlacePhotoResult {
+  id: String!
+  storageFileId: String!
+  displayOrder: Int!
 }
 

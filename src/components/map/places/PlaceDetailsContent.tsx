@@ -1,25 +1,6 @@
 "use client";
 
 import {
-  CheckCircle,
-  Close,
-  Coffee,
-  Directions,
-  Favorite,
-  FavoriteBorder,
-  Language,
-  LocalBar,
-  MenuBook,
-  Phone,
-  Place as PlaceIcon,
-  RadioButtonUnchecked,
-  Restaurant,
-  Share,
-  SportsBar,
-  Star,
-  WineBar as Wine,
-} from "@mui/icons-material";
-import {
   Alert,
   AspectRatio,
   Box,
@@ -36,10 +17,36 @@ import Image from "next/image";
 import Link from "next/link";
 import type React from "react";
 import { useState } from "react";
-import { MdFormatListNumbered } from "react-icons/md";
+import {
+  MdCheckCircle,
+  MdClose,
+  MdCoffee,
+  MdDirections,
+  MdFavorite,
+  MdFavoriteBorder,
+  MdFormatListNumbered,
+  MdLanguage,
+  MdLocalBar,
+  MdMenuBook,
+  MdPhone,
+  MdPlace,
+  MdRadioButtonUnchecked,
+  MdRestaurant,
+  MdShare,
+  MdSportsBar,
+  MdStar,
+  MdWineBar,
+} from "react-icons/md";
 import { useMutation } from "urql";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
+import type { PlaceEnrichment, PlaceGooglePhoto } from "@/types/places";
+import { nhostImageLoader } from "@/utilities";
 import { MARK_PLACE_VISITED, TOGGLE_FAVORITE_PLACE } from "../queries";
+import {
+  formatCategoryName,
+  formatTimeString,
+  getPriceLevelText,
+} from "./place-utils";
 import { PlaceMenuItems } from "./PlaceMenuItems";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -84,27 +91,12 @@ interface PlaceDetailsContentProps {
   drawerState?: DrawerState;
   onClose: () => void;
   refetch: () => void;
+  enrichment?: PlaceEnrichment | null;
+  isEnriching?: boolean;
+  googlePhotos?: PlaceGooglePhoto[];
 }
 
 // ── Formatting Utilities ───────────────────────────────────────────────
-
-export function formatCategoryName(category: string): string {
-  return category
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function formatTimeString(time: string): string {
-  const hours = Number.parseInt(time.slice(0, 2), 10);
-  const minutes = time.slice(2);
-  const period = hours >= 12 ? "PM" : "AM";
-  const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-  return `${displayHours}:${minutes} ${period}`;
-}
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -162,25 +154,20 @@ function getOpenStatusWithHours(openingHours: Place["opening_hours"]): {
 export function getCategoryIcon(category: string) {
   switch (category) {
     case "restaurant":
-      return Restaurant;
+      return MdRestaurant;
     case "bar":
     case "pub":
-      return LocalBar;
+      return MdLocalBar;
     case "cafe":
     case "coffee_shop":
-      return Coffee;
+      return MdCoffee;
     case "brewery":
-      return SportsBar;
+      return MdSportsBar;
     case "winery":
-      return Wine;
+      return MdWineBar;
     default:
-      return PlaceIcon;
+      return MdPlace;
   }
-}
-
-function getPriceLevelText(level?: number) {
-  if (!level) return null;
-  return "$".repeat(level);
 }
 
 // ── Component ──────────────────────────────────────────────────────────
@@ -196,7 +183,22 @@ export function PlaceDetailsContent({
   drawerState,
   onClose,
   refetch,
+  enrichment,
+  isEnriching,
+  googlePhotos,
 }: PlaceDetailsContentProps) {
+  // Merge Google enrichment data with existing place data (Google takes precedence)
+  const mergedRating = enrichment?.rating ?? place.rating;
+  const mergedPriceLevel = enrichment?.priceLevel ?? place.price_level;
+  const mergedPhone = enrichment?.phone ?? place.phone;
+  const mergedWebsite = enrichment?.website ?? place.website;
+  const mergedPlace = {
+    ...place,
+    rating: mergedRating,
+    price_level: mergedPriceLevel,
+    phone: mergedPhone,
+    website: mergedWebsite,
+  };
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
   const [isMarkingVisited, setIsMarkingVisited] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -229,15 +231,15 @@ export function PlaceDetailsContent({
 
   const handleCall = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!place.phone) return;
-    const cleanPhone = place.phone.replace(/[^\d+]/g, "");
+    if (!mergedPlace.phone) return;
+    const cleanPhone = mergedPlace.phone.replace(/[^\d+]/g, "");
     window.open(`tel:${cleanPhone}`, "_self");
   };
 
   const handleWebsite = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!place.website) return;
-    let url = place.website;
+    if (!mergedPlace.website) return;
+    let url = mergedPlace.website;
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = `https://${url}`;
     }
@@ -345,6 +347,8 @@ export function PlaceDetailsContent({
     ? getOpenStatusWithHours(place.opening_hours)
     : null;
   const maxCategories = isDesktop ? 4 : 3;
+  const editorialSummary = enrichment?.editorialSummary;
+  const ratingCount = enrichment?.userRatingsTotal;
 
   // ── Render ─────────────────────────────────────────────────────────
 
@@ -365,7 +369,7 @@ export function PlaceDetailsContent({
             color: "primary.600",
           }}
         >
-          <MainCategoryIcon sx={{ fontSize: 24 }} />
+          <MainCategoryIcon size={24} />
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -388,20 +392,21 @@ export function PlaceDetailsContent({
             alignItems="center"
             sx={{ mb: 1, flexWrap: "wrap" }}
           >
-            {place.rating && (
+            {mergedPlace.rating && (
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <Star sx={{ fontSize: 16, color: "warning.400" }} />
+                <MdStar size={16} style={{ color: "var(--joy-palette-warning-400)" }} />
                 <Typography level="body-sm" sx={{ fontWeight: "md" }}>
-                  {place.rating.toFixed(1)}
+                  {mergedPlace.rating.toFixed(1)}
+                  {ratingCount ? ` (${ratingCount})` : ""}
                 </Typography>
               </Stack>
             )}
-            {place.price_level && (
+            {mergedPlace.price_level && (
               <Typography
                 level="body-sm"
                 sx={{ color: "success.600", fontWeight: "md" }}
               >
-                {getPriceLevelText(place.price_level)}
+                {getPriceLevelText(mergedPlace.price_level)}
               </Typography>
             )}
             {openStatus && (
@@ -436,26 +441,63 @@ export function PlaceDetailsContent({
           aria-label="Close place details"
           sx={{ alignSelf: "flex-start" }}
         >
-          <Close />
+          <MdClose />
         </IconButton>
       </Stack>
 
+      {/* Business Status Warning */}
+      {!isCompact &&
+        enrichment?.businessStatus &&
+        (enrichment.businessStatus === "CLOSED_TEMPORARILY" ||
+          enrichment.businessStatus === "CLOSED_PERMANENTLY") && (
+          <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
+            <Alert
+              color={
+                enrichment.businessStatus === "CLOSED_PERMANENTLY"
+                  ? "danger"
+                  : "warning"
+              }
+              size="sm"
+            >
+              {enrichment.businessStatus === "CLOSED_PERMANENTLY"
+                ? "This place is permanently closed"
+                : "This place is temporarily closed"}
+            </Alert>
+          </Box>
+        )}
+
       {/* Photo — hidden when collapsed */}
-      {!isCompact && place.photos && place.photos.length > 0 && (
-        <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
-          <AspectRatio
-            ratio={isDesktop ? "16/9" : "21/9"}
-            sx={{ borderRadius: "md" }}
-          >
-            <Image
-              src={place.photos[0]}
-              alt={place.name}
-              fill
-              style={{ objectFit: "cover" }}
-            />
-          </AspectRatio>
-        </Box>
-      )}
+      {!isCompact &&
+        (googlePhotos && googlePhotos.length > 0 ? (
+          <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
+            <AspectRatio
+              ratio={isDesktop ? "16/9" : "21/9"}
+              sx={{ borderRadius: "md" }}
+            >
+              <Image
+                loader={nhostImageLoader}
+                src={googlePhotos[0].storageFileId}
+                alt={place.name}
+                fill
+                style={{ objectFit: "cover" }}
+              />
+            </AspectRatio>
+          </Box>
+        ) : place.photos && place.photos.length > 0 ? (
+          <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
+            <AspectRatio
+              ratio={isDesktop ? "16/9" : "21/9"}
+              sx={{ borderRadius: "md" }}
+            >
+              <Image
+                src={place.photos[0]}
+                alt={place.name}
+                fill
+                style={{ objectFit: "cover" }}
+              />
+            </AspectRatio>
+          </Box>
+        ) : null)}
 
       {/* Categories — hidden when collapsed */}
       {!isCompact && place.categories.length > 0 && (
@@ -483,7 +525,7 @@ export function PlaceDetailsContent({
       <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
         {isDesktop ? (
           <DesktopActions
-            place={place}
+            place={mergedPlace}
             userInteraction={userInteraction}
             isTogglingFavorite={isTogglingFavorite}
             isMarkingVisited={isMarkingVisited}
@@ -497,7 +539,7 @@ export function PlaceDetailsContent({
           />
         ) : (
           <MobileActions
-            place={place}
+            place={mergedPlace}
             userInteraction={userInteraction}
             isCompact={isCompact}
             isTogglingFavorite={isTogglingFavorite}
@@ -513,8 +555,49 @@ export function PlaceDetailsContent({
         )}
       </Box>
 
+      {/* Editorial Summary — from Google enrichment */}
+      {!isCompact && editorialSummary && (
+        <Box
+          sx={{
+            px: isDesktop ? 0 : 2,
+            pb: 2,
+            pt: 2,
+            borderTop: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <Typography
+            level="body-sm"
+            sx={{ color: "text.secondary", fontStyle: "italic" }}
+          >
+            {editorialSummary}
+          </Typography>
+        </Box>
+      )}
+
+      {/* Enriching indicator */}
+      {isEnriching && (
+        <Box
+          sx={{
+            px: isDesktop ? 0 : 2,
+            pb: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <CircularProgress
+            size="sm"
+            sx={{ "--CircularProgress-size": "14px" }}
+          />
+          <Typography level="body-xs" color="neutral">
+            Loading additional details...
+          </Typography>
+        </Box>
+      )}
+
       {/* Contact Info — hidden when collapsed */}
-      {!isCompact && (place.phone || place.website) && (
+      {!isCompact && (mergedPlace.phone || mergedPlace.website) && (
         <Box
           sx={{
             px: isDesktop ? 0 : 2,
@@ -525,7 +608,7 @@ export function PlaceDetailsContent({
           }}
         >
           <Stack spacing={2}>
-            {place.phone && (
+            {mergedPlace.phone && (
               <Stack
                 direction="row"
                 spacing={2}
@@ -533,13 +616,13 @@ export function PlaceDetailsContent({
                 sx={{ cursor: "pointer" }}
                 onClick={handleCall}
               >
-                <Phone sx={{ fontSize: 20, color: "text.secondary" }} />
+                <MdPhone size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
                 <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                  {place.phone}
+                  {mergedPlace.phone}
                 </Typography>
               </Stack>
             )}
-            {place.website && (
+            {mergedPlace.website && (
               <Stack
                 direction="row"
                 spacing={2}
@@ -547,7 +630,7 @@ export function PlaceDetailsContent({
                 sx={{ cursor: "pointer" }}
                 onClick={handleWebsite}
               >
-                <Language sx={{ fontSize: 20, color: "text.secondary" }} />
+                <MdLanguage size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
                 <Typography level="body-sm" sx={{ color: "primary.500" }}>
                   Visit website
                 </Typography>
@@ -579,7 +662,7 @@ export function PlaceDetailsContent({
             alignItems="center"
             sx={{ mb: 2, flexShrink: 0 }}
           >
-            <MenuBook sx={{ fontSize: 20, color: "text.secondary" }} />
+            <MdMenuBook size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
             <Typography level="title-md">Menu Items</Typography>
             {hasMenuItems && (
               <Chip size="sm" variant="soft" color="primary">
@@ -637,6 +720,15 @@ export function PlaceDetailsContent({
               </Link>
             </Alert>
           )}
+        </Box>
+      )}
+
+      {/* Google Attribution */}
+      {!isCompact && enrichment && (
+        <Box sx={{ px: isDesktop ? 0 : 2, pb: 1 }}>
+          <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
+            Powered by Google
+          </Typography>
         </Box>
       )}
 
@@ -698,7 +790,7 @@ function DesktopActions({
       <Button
         variant="solid"
         color="primary"
-        startDecorator={<Directions />}
+        startDecorator={<MdDirections />}
         fullWidth
         onClick={onDirections}
       >
@@ -709,7 +801,7 @@ function DesktopActions({
         <Button
           variant="outlined"
           color="neutral"
-          startDecorator={<Phone />}
+          startDecorator={<MdPhone />}
           disabled={!place.phone}
           sx={{ flex: 1 }}
           onClick={onCall}
@@ -719,7 +811,7 @@ function DesktopActions({
         <Button
           variant="outlined"
           color="neutral"
-          startDecorator={<Language />}
+          startDecorator={<MdLanguage />}
           disabled={!place.website}
           sx={{ flex: 1 }}
           onClick={onWebsite}
@@ -733,7 +825,7 @@ function DesktopActions({
           variant={userInteraction?.is_favorite ? "solid" : "outlined"}
           color={userInteraction?.is_favorite ? "danger" : "neutral"}
           startDecorator={
-            userInteraction?.is_favorite ? <Favorite /> : <FavoriteBorder />
+            userInteraction?.is_favorite ? <MdFavorite /> : <MdFavoriteBorder />
           }
           onClick={onToggleFavorite}
           loading={isTogglingFavorite}
@@ -747,9 +839,9 @@ function DesktopActions({
           color={userInteraction?.is_visited ? "success" : "neutral"}
           startDecorator={
             userInteraction?.is_visited ? (
-              <CheckCircle />
+              <MdCheckCircle />
             ) : (
-              <RadioButtonUnchecked />
+              <MdRadioButtonUnchecked />
             )
           }
           onClick={onMarkVisited}
@@ -762,7 +854,7 @@ function DesktopActions({
         <Button
           variant="outlined"
           color="neutral"
-          startDecorator={<Share />}
+          startDecorator={<MdShare />}
           onClick={onShare}
           sx={{ flex: 1 }}
         >
@@ -808,7 +900,7 @@ function MobileActions({
       <Button
         variant="solid"
         color="primary"
-        startDecorator={<Directions />}
+        startDecorator={<MdDirections />}
         size="sm"
         sx={{ flex: "1 1 auto", minWidth: "fit-content" }}
         onClick={onDirections}
@@ -821,7 +913,7 @@ function MobileActions({
           <Button
             variant="outlined"
             color="neutral"
-            startDecorator={<Phone />}
+            startDecorator={<MdPhone />}
             size="sm"
             disabled={!place.phone}
             onClick={onCall}
@@ -831,7 +923,7 @@ function MobileActions({
           <Button
             variant="outlined"
             color="neutral"
-            startDecorator={<Language />}
+            startDecorator={<MdLanguage />}
             size="sm"
             disabled={!place.website}
             onClick={onWebsite}
@@ -854,7 +946,7 @@ function MobileActions({
                 userInteraction?.is_favorite ? "Remove from saved" : "Save"
               }
             >
-              {userInteraction?.is_favorite ? <Favorite /> : <FavoriteBorder />}
+              {userInteraction?.is_favorite ? <MdFavorite /> : <MdFavoriteBorder />}
             </IconButton>
           </Tooltip>
 
@@ -880,9 +972,9 @@ function MobileActions({
               }
             >
               {userInteraction?.is_visited ? (
-                <CheckCircle />
+                <MdCheckCircle />
               ) : (
-                <RadioButtonUnchecked />
+                <MdRadioButtonUnchecked />
               )}
             </IconButton>
           </Tooltip>
@@ -895,7 +987,7 @@ function MobileActions({
               onClick={onShare}
               aria-label="Share"
             >
-              <Share />
+              <MdShare />
             </IconButton>
           </Tooltip>
 

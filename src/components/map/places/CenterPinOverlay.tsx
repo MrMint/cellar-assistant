@@ -1,7 +1,7 @@
 "use client";
 
 import { Box, Button, IconButton, Sheet, Stack, Typography } from "@mui/joy";
-import { Close } from "@mui/icons-material";
+import { MdClose } from "react-icons/md";
 
 const MOBILE_NAV_CLEARANCE = "80px";
 
@@ -109,7 +109,7 @@ export function CenterPinOverlay({
                 color="neutral"
                 onClick={onCancel}
               >
-                <Close />
+                <MdClose />
               </IconButton>
             </Stack>
           </Stack>

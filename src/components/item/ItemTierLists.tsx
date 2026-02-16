@@ -1,7 +1,7 @@
 "use client";
 
 import { graphql } from "@cellar-assistant/shared";
-import { FormatListNumbered } from "@mui/icons-material";
+import { MdFormatListNumbered } from "react-icons/md";
 import { Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
 import { useQuery } from "urql";
 import { Link } from "../common/Link";
@@ -72,7 +72,7 @@ export function ItemTierLists({ entityId, entityType }: ItemTierListsProps) {
     <Card>
       <CardContent>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-          <FormatListNumbered fontSize="small" />
+          <MdFormatListNumbered size={20} />
           <Typography level="title-lg">On Lists</Typography>
         </Stack>
         <Stack spacing={1}>

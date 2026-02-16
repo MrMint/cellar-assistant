@@ -1,0 +1,24 @@
+table:
+  name: place_google_photos
+  schema: public
+object_relationships:
+  - name: place
+    using:
+      foreign_key_constraint_on: place_id
+  - name: storage_file
+    using:
+      foreign_key_constraint_on: storage_file_id
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - place_id
+        - google_photo_name
+        - storage_file_id
+        - width
+        - height
+        - attributions
+        - display_order
+        - created_at
+      filter: {}

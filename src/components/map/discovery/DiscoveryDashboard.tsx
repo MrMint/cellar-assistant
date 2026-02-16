@@ -1,18 +1,18 @@
 "use client";
 
 import {
-  AccessTime,
-  Check,
-  Close,
-  Coffee,
-  Favorite,
-  LocalBar,
-  LocationOn,
-  Restaurant,
-  SportsBar,
-  Visibility,
-  WineBar,
-} from "@mui/icons-material";
+  MdAccessTime,
+  MdCheck,
+  MdClose,
+  MdCoffee,
+  MdFavorite,
+  MdLocalBar,
+  MdLocationOn,
+  MdRestaurant,
+  MdSportsBar,
+  MdVisibility,
+  MdWineBar,
+} from "react-icons/md";
 import {
   Alert,
   Badge,
@@ -255,15 +255,19 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
   const getItemIcon = (type?: string) => {
     switch (type) {
       case "wine":
-        return <WineBar sx={{ color: "danger.500" }} />;
+        return <MdWineBar style={{ color: "var(--joy-palette-danger-500)" }} />;
       case "beer":
-        return <SportsBar sx={{ color: "warning.500" }} />;
+        return (
+          <MdSportsBar style={{ color: "var(--joy-palette-warning-500)" }} />
+        );
       case "spirit":
-        return <LocalBar sx={{ color: "neutral.500" }} />;
+        return (
+          <MdLocalBar style={{ color: "var(--joy-palette-neutral-500)" }} />
+        );
       case "coffee":
-        return <Coffee sx={{ color: "success.500" }} />;
+        return <MdCoffee style={{ color: "var(--joy-palette-success-500)" }} />;
       default:
-        return <Restaurant />;
+        return <MdRestaurant />;
     }
   };
 
@@ -324,7 +328,13 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
             {pendingMatches.length === 0 ? (
               <Card>
                 <CardContent sx={{ textAlign: "center", py: 4 }}>
-                  <Check sx={{ fontSize: 48, color: "success.500", mb: 2 }} />
+                  <MdCheck
+                    size={48}
+                    style={{
+                      color: "var(--joy-palette-success-500)",
+                      marginBottom: 16,
+                    }}
+                  />
                   <Typography level="h4">All caught up!</Typography>
                   <Typography level="body-md" sx={{ color: "text.secondary" }}>
                     No pending matches to review right now.
@@ -372,9 +382,11 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                                 alignItems="center"
                                 sx={{ mt: 0.5 }}
                               >
-                                <LocationOn
-                                  fontSize="small"
-                                  sx={{ color: "text.secondary" }}
+                                <MdLocationOn
+                                  size={20}
+                                  style={{
+                                    color: "var(--joy-palette-text-secondary)",
+                                  }}
                                 />
                                 <Typography
                                   level="body-sm"
@@ -420,7 +432,7 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                             <Button
                               size="sm"
                               variant="outlined"
-                              startDecorator={<Visibility />}
+                              startDecorator={<MdVisibility />}
                               href={`/places/${menuItem.place.id}`}
                             >
                               View Place
@@ -429,7 +441,7 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                               size="sm"
                               color="danger"
                               variant="outlined"
-                              startDecorator={<Close />}
+                              startDecorator={<MdClose />}
                               onClick={() =>
                                 handleProcessMatch(suggestion.id, false)
                               }
@@ -439,7 +451,7 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                             <Button
                               size="sm"
                               color="success"
-                              startDecorator={<Check />}
+                              startDecorator={<MdCheck />}
                               onClick={() =>
                                 handleProcessMatch(suggestion.id, true)
                               }
@@ -463,8 +475,12 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
             {recentAdditions.length === 0 ? (
               <Card>
                 <CardContent sx={{ textAlign: "center", py: 4 }}>
-                  <Restaurant
-                    sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}
+                  <MdRestaurant
+                    size={48}
+                    style={{
+                      color: "var(--joy-palette-text-secondary)",
+                      marginBottom: 16,
+                    }}
                   />
                   <Typography level="h4">No discoveries yet</Typography>
                   <Typography level="body-md" sx={{ color: "text.secondary" }}>
@@ -507,9 +523,11 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                               alignItems="center"
                               sx={{ mt: 0.5 }}
                             >
-                              <LocationOn
-                                fontSize="small"
-                                sx={{ color: "text.secondary" }}
+                              <MdLocationOn
+                                size={20}
+                                style={{
+                                  color: "var(--joy-palette-text-secondary)",
+                                }}
                               />
                               <Typography
                                 level="body-sm"
@@ -525,9 +543,11 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                             alignItems="center"
                             sx={{ mt: 0.5 }}
                           >
-                            <AccessTime
-                              fontSize="small"
-                              sx={{ color: "text.secondary" }}
+                            <MdAccessTime
+                              size={20}
+                              style={{
+                                color: "var(--joy-palette-text-secondary)",
+                              }}
                             />
                             <Typography
                               level="body-xs"
@@ -548,7 +568,7 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                         <Button
                           size="sm"
                           variant="outlined"
-                          startDecorator={<Visibility />}
+                          startDecorator={<MdVisibility />}
                           href={`/${itemType}s/${discoveredItem.id}`}
                         >
                           View Item
@@ -568,8 +588,12 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
             {savedPlaces.length === 0 ? (
               <Card>
                 <CardContent sx={{ textAlign: "center", py: 4 }}>
-                  <Favorite
-                    sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}
+                  <MdFavorite
+                    size={48}
+                    style={{
+                      color: "var(--joy-palette-text-secondary)",
+                      marginBottom: 16,
+                    }}
                   />
                   <Typography level="h4">No saved places</Typography>
                   <Typography level="body-md" sx={{ color: "text.secondary" }}>
@@ -601,8 +625,11 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                               {place.name}
                             </Typography>
                             {interaction.is_favorite && (
-                              <Favorite
-                                sx={{ fontSize: 16, color: "danger.500" }}
+                              <MdFavorite
+                                size={16}
+                                style={{
+                                  color: "var(--joy-palette-danger-500)",
+                                }}
                               />
                             )}
                           </Stack>
@@ -613,9 +640,11 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                             alignItems="center"
                             sx={{ mt: 0.5 }}
                           >
-                            <LocationOn
-                              fontSize="small"
-                              sx={{ color: "text.secondary" }}
+                            <MdLocationOn
+                              size={20}
+                              style={{
+                                color: "var(--joy-palette-text-secondary)",
+                              }}
                             />
                             <Typography
                               level="body-sm"
@@ -667,7 +696,7 @@ export function DiscoveryDashboard({ userId }: DiscoveryDashboardProps) {
                         <Button
                           size="sm"
                           variant="outlined"
-                          startDecorator={<Visibility />}
+                          startDecorator={<MdVisibility />}
                           href={`/places/${place.id}`}
                         >
                           View Details

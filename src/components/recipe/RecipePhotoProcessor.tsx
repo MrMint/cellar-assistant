@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  CheckCircle,
-  Error as ErrorIcon,
-  PhotoCamera,
-} from "@mui/icons-material";
+import { MdCheckCircle, MdError, MdPhotoCamera } from "react-icons/md";
 import {
   Alert,
   Box,
@@ -91,7 +87,7 @@ export function RecipePhotoProcessor({
         <Stack spacing={3}>
           {/* Header */}
           <Box>
-            <Typography level="h3" startDecorator={<PhotoCamera />}>
+            <Typography level="h3" startDecorator={<MdPhotoCamera />}>
               AI Recipe Generator
             </Typography>
             <Typography level="body-sm" sx={{ color: "text.tertiary" }}>
@@ -112,7 +108,7 @@ export function RecipePhotoProcessor({
             <Button
               variant="outlined"
               onClick={() => fileInputRef.current?.click()}
-              startDecorator={<PhotoCamera />}
+              startDecorator={<MdPhotoCamera />}
               fullWidth
               disabled={isProcessing}
             >
@@ -162,7 +158,7 @@ export function RecipePhotoProcessor({
 
           {/* Error Display */}
           {error && (
-            <Alert color="danger" startDecorator={<ErrorIcon />}>
+            <Alert color="danger" startDecorator={<MdError />}>
               <Box>
                 <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
                   Processing Failed
@@ -180,7 +176,7 @@ export function RecipePhotoProcessor({
               <Alert
                 color={result.success ? "success" : "warning"}
                 startDecorator={
-                  result.success ? <CheckCircle /> : <ErrorIcon />
+                  result.success ? <MdCheckCircle /> : <MdError />
                 }
               >
                 <Box>

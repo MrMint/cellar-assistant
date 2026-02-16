@@ -1,4 +1,4 @@
-import { Check, Close, Place, Star } from "@mui/icons-material";
+import { MdCheck, MdClose, MdPlace, MdStar } from "react-icons/md";
 import {
   Autocomplete,
   Box,
@@ -348,7 +348,7 @@ export const MapFilter: FC<MapFilterProps> = ({
                               onClick={() => onMinRatingChange(undefined)}
                               sx={{ ml: 0.5 }}
                             >
-                              <Close sx={{ fontSize: 14 }} />
+                              <MdClose size={14} />
                             </IconButton>
                           }
                         >
@@ -374,7 +374,7 @@ export const MapFilter: FC<MapFilterProps> = ({
                               }}
                               sx={{ ml: 0.5 }}
                             >
-                              <Close sx={{ fontSize: 14 }} />
+                              <MdClose size={14} />
                             </IconButton>
                           }
                         >
@@ -406,7 +406,7 @@ export const MapFilter: FC<MapFilterProps> = ({
                                   }}
                                   sx={{ ml: 0.5 }}
                                 >
-                                  <Close sx={{ fontSize: 14 }} />
+                                  <MdClose size={14} />
                                 </IconButton>
                               }
                             >
@@ -440,7 +440,7 @@ export const MapFilter: FC<MapFilterProps> = ({
                         color="warning"
                         size="sm"
                         onClick={() => onMinRatingChange(rating)}
-                        startDecorator={<Star sx={{ fontSize: 16 }} />}
+                        startDecorator={<MdStar size={16} />}
                         sx={{ minWidth: "auto", px: 1.25, flexShrink: 0 }}
                       >
                         {rating}+
@@ -469,7 +469,7 @@ export const MapFilter: FC<MapFilterProps> = ({
                       variant={visitMode === "unvisited" ? "solid" : "outlined"}
                       color="primary"
                       size="sm"
-                      startDecorator={<Place />}
+                      startDecorator={<MdPlace />}
                       onClick={() => setVisitMode("unvisited")}
                     >
                       New Places
@@ -478,7 +478,7 @@ export const MapFilter: FC<MapFilterProps> = ({
                       variant={visitMode === "visited" ? "solid" : "outlined"}
                       color="success"
                       size="sm"
-                      startDecorator={<Check />}
+                      startDecorator={<MdCheck />}
                       onClick={() => setVisitMode("visited")}
                     >
                       Visited

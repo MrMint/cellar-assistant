@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  CheckCircle,
-  Error as ErrorIcon,
-  HourglassEmpty,
-  PhotoCamera,
-  Settings,
-} from "@mui/icons-material";
+  MdCheckCircle,
+  MdError,
+  MdHourglassEmpty,
+  MdPhotoCamera,
+  MdSettings,
+} from "react-icons/md";
 import {
   Box,
   Card,
@@ -24,13 +24,13 @@ import { getUserScanHistory } from "@/app/actions/menuScanning";
 const getStatusIcon = (status: string) => {
   switch (status) {
     case "completed":
-      return <CheckCircle fontSize="small" />;
+      return <MdCheckCircle size={20} />;
     case "processing":
-      return <Settings fontSize="small" />;
+      return <MdSettings size={20} />;
     case "failed":
-      return <ErrorIcon fontSize="small" />;
+      return <MdError size={20} />;
     default:
-      return <HourglassEmpty fontSize="small" />;
+      return <MdHourglassEmpty size={20} />;
   }
 };
 
@@ -79,7 +79,13 @@ export function ScanHistory() {
     return (
       <Card>
         <CardContent sx={{ textAlign: "center", py: 6 }}>
-          <PhotoCamera sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+          <MdPhotoCamera
+            size={48}
+            style={{
+              color: "var(--joy-palette-text-secondary)",
+              marginBottom: 16,
+            }}
+          />
           <Typography level="h4" sx={{ mb: 1 }}>
             No menu scans yet
           </Typography>

@@ -1,14 +1,14 @@
 "use client";
 
 import {
-  AddLocationAlt,
-  Close,
-  DarkMode,
-  Language,
-  LightMode,
-  LocationOn,
-  Search,
-} from "@mui/icons-material";
+  MdAddLocationAlt,
+  MdClose,
+  MdDarkMode,
+  MdLanguage,
+  MdLightMode,
+  MdLocationOn,
+  MdSearch,
+} from "react-icons/md";
 import {
   Box,
   Divider,
@@ -222,7 +222,8 @@ export function MapControls({
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         startDecorator={
-          <Search
+          <Box
+            component="span"
             sx={{
               ...(isLoading && {
                 animation: "pulse 1.5s ease-in-out infinite",
@@ -232,7 +233,9 @@ export function MapControls({
                 },
               }),
             }}
-          />
+          >
+            <MdSearch />
+          </Box>
         }
         endDecorator={
           <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
@@ -248,7 +251,7 @@ export function MapControls({
                   padding: "4px",
                 }}
               >
-                <Close sx={{ fontSize: "18px" }} />
+                <MdClose size={18} />
               </IconButton>
             )}
             <Tooltip
@@ -269,7 +272,7 @@ export function MapControls({
                   padding: "4px",
                 }}
               >
-                <Language sx={{ fontSize: "18px" }} />
+                <MdLanguage size={18} />
               </IconButton>
             </Tooltip>
           </Stack>
@@ -349,7 +352,7 @@ export function MapControls({
             size="sm"
             title={isPlacing ? "Cancel adding place" : "Add a new place"}
           >
-            {isPlacing ? <Close /> : <AddLocationAlt />}
+            {isPlacing ? <MdClose /> : <MdAddLocationAlt />}
           </IconButton>
 
           {onLocationClick && (
@@ -360,7 +363,7 @@ export function MapControls({
               size="sm"
               title="Go to my location"
             >
-              <LocationOn />
+              <MdLocationOn />
             </IconButton>
           )}
 
@@ -371,7 +374,7 @@ export function MapControls({
             size="sm"
             title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           >
-            {isDarkMode ? <LightMode /> : <DarkMode />}
+            {isDarkMode ? <MdLightMode /> : <MdDarkMode />}
           </IconButton>
         </Stack>
       )}

@@ -2,15 +2,15 @@
 
 import { type FragmentOf, readFragment } from "@cellar-assistant/shared/gql";
 import {
-  Add,
-  CheckCircle,
-  Coffee,
-  Help,
-  LocalBar,
-  MonetizationOn,
-  SportsBar,
-  WineBar,
-} from "@mui/icons-material";
+  MdAdd,
+  MdCheckCircle,
+  MdCoffee,
+  MdHelp,
+  MdLocalBar,
+  MdMonetizationOn,
+  MdSportsBar,
+  MdWineBar,
+} from "react-icons/md";
 import {
   Alert,
   Box,
@@ -109,15 +109,15 @@ export function PlaceMenuItems({
   const getItemIcon = (type?: string | null) => {
     switch (type) {
       case "wine":
-        return <WineBar />;
+        return <MdWineBar />;
       case "beer":
-        return <SportsBar />;
+        return <MdSportsBar />;
       case "spirit":
-        return <LocalBar />;
+        return <MdLocalBar />;
       case "coffee":
-        return <Coffee />;
+        return <MdCoffee />;
       default:
-        return <Help />;
+        return <MdHelp />;
     }
   };
 
@@ -258,12 +258,12 @@ export function PlaceMenuItems({
                               {/* Match status */}
                               {matchedItem ? (
                                 <Alert color="success" size="sm" sx={{ mt: 1 }}>
-                                  <CheckCircle sx={{ fontSize: 16 }} />
+                                  <MdCheckCircle size={16} />
                                   Matched to: {matchedItem.name}
                                 </Alert>
                               ) : suggestion ? (
                                 <Alert color="warning" size="sm" sx={{ mt: 1 }}>
-                                  <Help sx={{ fontSize: 16 }} />
+                                  <MdHelp size={16} />
                                   Suggested match:{" "}
                                   {(suggestion.suggested_wine?.name ||
                                     suggestion.suggested_beer?.name ||
@@ -290,9 +290,11 @@ export function PlaceMenuItems({
                                 alignItems="center"
                                 spacing={0.5}
                               >
-                                <MonetizationOn
-                                  fontSize="small"
-                                  sx={{ color: "text.secondary" }}
+                                <MdMonetizationOn
+                                  size={20}
+                                  style={{
+                                    color: "var(--joy-palette-text-secondary)",
+                                  }}
                                 />
                                 <Typography level="body-sm" fontWeight="lg">
                                   ${item.menu_item_price}
@@ -305,7 +307,7 @@ export function PlaceMenuItems({
                           <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
                             <Button
                               size="sm"
-                              startDecorator={<Add />}
+                              startDecorator={<MdAdd />}
                               onClick={() => handleAddToCellar(item)}
                             >
                               Add to Cellar
@@ -423,7 +425,7 @@ export function PlaceMenuItems({
 
               <Button
                 size="lg"
-                startDecorator={<Add />}
+                startDecorator={<MdAdd />}
                 onClick={() => {
                   handleAddToCellar(selectedItem);
                   setSelectedItem(null);
