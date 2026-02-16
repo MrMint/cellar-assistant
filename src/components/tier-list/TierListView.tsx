@@ -552,15 +552,23 @@ export function TierListView({
 
   const [bandMap, setBandMap] = useState<BandMap>(initialBandMap);
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
 
-  // Sync server-provided bandMap when items prop changes, but skip during
-  // an active drag — otherwise router.refresh() from a prior reorder can
-  // reset bandMap mid-drag, causing the dragged item to jump or disappear.
+  // Sync server-provided bandMap when items prop changes (e.g. after
+  // router.refresh()), but skip during an active drag to avoid resetting
+  // the dragged item's position mid-flight.
+  //
+  // IMPORTANT: activeId is read via ref, NOT included in deps. Including it
+  // would cause the effect to fire on drag-end (activeId: uuid → null),
+  // overwriting the optimistic bandMap from handleDragEnd with stale server
+  // data before the browser paints — making items visually snap back.
   useLayoutEffect(() => {
-    if (activeId === null) {
+    if (activeIdRef.current === null) {
       setBandMap(initialBandMap);
     }
-  }, [initialBandMap, activeId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBandMap]);
 
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: { distance: 8 },
