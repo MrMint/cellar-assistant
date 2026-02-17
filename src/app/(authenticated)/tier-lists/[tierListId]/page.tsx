@@ -164,6 +164,9 @@ export default async function TierListPage({ params }: Props) {
     let subtitle = "";
     let reviewScore: number | null = null;
 
+    let publicRating: number | null = null;
+    let publicRatingCount: number | null = null;
+
     if (item.place) {
       name = item.place.display_name ?? item.place.name;
       const formattedCategory = item.place.primary_category
@@ -177,6 +180,9 @@ export default async function TierListPage({ params }: Props) {
         .filter(Boolean)
         .join(" · ");
       reviewScore = item.place.user_place_interactions[0]?.rating ?? null;
+      publicRating = item.place.google_enrichment?.google_rating ?? null;
+      publicRatingCount =
+        item.place.google_enrichment?.google_user_ratings_total ?? null;
     } else if (item.wine) {
       name = item.wine.name;
       subtitle = [item.wine.variety, item.wine.vintage, item.wine.country]
@@ -211,6 +217,8 @@ export default async function TierListPage({ params }: Props) {
       subtitle,
       href: getItemHref(item),
       reviewScore,
+      publicRating,
+      publicRatingCount,
     };
   });
 

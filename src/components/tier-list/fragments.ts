@@ -72,6 +72,10 @@ export const TierListItemFragment = graphql(`
       user_place_interactions {
         rating
       }
+      google_enrichment {
+        google_rating
+        google_user_ratings_total
+      }
     }
     wine {
       id

@@ -10,6 +10,10 @@ export interface TierListPlaceItem {
   locality: string | null;
   primaryCategory: string | null;
   categories: string[] | null;
+  publicRating: number | null;
+  publicRatingCount: number | null;
+  priceLevel: number | null;
+  editorialSummary: string | null;
 }
 
 export const TIER_LIST_INSIGHTS_SCHEMA: JSONSchema7 = {
@@ -62,6 +66,14 @@ export function buildInsightsPrompt(
   items: TierListPlaceItem[],
   meta: TierListMeta,
 ): string {
+  const priceLevelLabels: Record<number, string> = {
+    0: "Free",
+    1: "$",
+    2: "$$",
+    3: "$$$",
+    4: "$$$$",
+  };
+
   const itemsSummary = items
     .map((item, index) => {
       const bandLabel = BAND_LABELS[item.band] ?? "Unrated";
@@ -70,7 +82,23 @@ export function buildInsightsPrompt(
         .join(", ");
       const cats =
         item.categories?.join(", ") ?? item.primaryCategory ?? "unknown";
-      return `${index + 1}. ${item.name} [${bandLabel}, #${item.position + 1} in tier] (${cats}${location ? ` | ${location}` : ""})`;
+
+      const publicParts: string[] = [];
+      if (item.publicRating != null) {
+        const reviewCount = item.publicRatingCount
+          ? ` from ${item.publicRatingCount.toLocaleString()} reviews`
+          : "";
+        publicParts.push(`Public rating: ${item.publicRating}/5${reviewCount}`);
+      }
+      if (item.priceLevel != null) {
+        publicParts.push(
+          priceLevelLabels[item.priceLevel] ?? `$${item.priceLevel}`,
+        );
+      }
+      const publicSuffix =
+        publicParts.length > 0 ? ` {${publicParts.join(", ")}}` : "";
+
+      return `${index + 1}. ${item.name} [${bandLabel}, #${item.position + 1} in tier] (${cats}${location ? ` | ${location}` : ""})${publicSuffix}`;
     })
     .join("\n");
 
@@ -100,6 +128,25 @@ export function buildInsightsPrompt(
           ? "cautious (heavy in the middle)"
           : "balanced (spread across tiers)";
 
+  // Public rating statistics
+  const itemsWithPublicRating = items.filter((i) => i.publicRating != null);
+  const avgPublicRating =
+    itemsWithPublicRating.length > 0
+      ? (
+          itemsWithPublicRating.reduce(
+            (sum, i) => sum + (i.publicRating ?? 0),
+            0,
+          ) / itemsWithPublicRating.length
+        ).toFixed(1)
+      : null;
+  const itemsWithPrice = items.filter((i) => i.priceLevel != null);
+
+  // Editorial summaries for context
+  const editorialSummaries = items
+    .filter((i) => i.editorialSummary)
+    .map((i) => `- ${i.name}: ${i.editorialSummary}`)
+    .join("\n");
+
   return `You are a witty food and drink culture writer with the observational humor of Anthony Bourdain and the analytical eye of a sommelier. You write personalized insights that feel like a perceptive friend roasting someone affectionately — warm but sharp, always grounded in specifics.
 
 You are analyzing a user's ranked tier list of places (restaurants, bars, cafes, etc.).
@@ -123,12 +170,32 @@ ${itemsSummary}
 - Mediocre (2): ${items.filter((i) => i.band === 2).length}
 - Bad (1): ${items.filter((i) => i.band === 1).length}
 - Unrated (0): ${items.filter((i) => i.band === 0).length}
+${
+  itemsWithPublicRating.length > 0
+    ? `
+## Public Ratings Data
+- Places with public ratings: ${itemsWithPublicRating.length}/${total}
+- Average public rating across listed places: ${avgPublicRating}/5${itemsWithPrice.length > 0 ? `\n- Places with price data: ${itemsWithPrice.length}` : ""}
+
+Use the public ratings to compare the user's personal rankings against crowd consensus. Do they favor hidden gems (low public rating, high tier) or crowd favorites (high public rating, high tier)? Do they disagree with the crowd on any specific places? This contrast is one of the most revealing signals about a rater's personality.`
+    : ""
+}${
+  editorialSummaries
+    ? `
+
+## What These Places Are Known For
+${editorialSummaries}
+
+Use the editorial summaries to understand what each place actually is — this lets you make more specific, grounded observations instead of relying only on category labels.`
+    : ""
+}
 
 ## What to generate
 
 First, internally analyze the data. Look for:
 - The 2-3 most striking patterns (cuisine preferences, geographic clusters, rating tendencies)
 - Any surprising contradictions or outliers (e.g. a dive bar rated above a fine dining spot)
+- Where the user's rankings diverge from or align with public ratings — this reveals whether they follow the crowd or trust their own palate
 - What the distribution shape and city/country clustering reveal about the rater
 
 Then generate these six fields:
@@ -160,38 +227,6 @@ Then generate these six fields:
 - The word "eclectic" (overused in this context)
 - Repeating the same observation across multiple fields — each field should surface a different insight. If the hotTake highlights a specific ranking contrast, the palateProfile should focus on a different pattern
 - Recommending specific venue names — you don't know what exists
-
-## Examples of excellent output
-
-### For a diverse, multi-category list:
-
-palateProfile: "You're a creature of comfort with impeccable taste in Italian food — your top 3 are all trattorias and you've never rated a pasta-focused spot below Good. But throw in a Thai restaurant and suddenly you turn into the harshest critic in the room."
-
-palateProfile: "You rate like someone who's been everywhere and remembers everything. 12 countries, no pattern — except that street food consistently outranks fine dining in your world. If it has a Michelin star, you're suspicious."
-
-blindSpots: "Your list is almost entirely Western European and East Asian — you haven't ventured into Middle Eastern, African, or South American territory yet. A proper Lebanese meze spread or Ethiopian injera platter could be your next obsession."
-
-hotTake: "You rated Taqueria El Paisa above three separate French bistros, and honestly, that tells me everything I need to know about you."
-
-archetype: "The Neighborhood Loyalist"
-archetypeDescription: "You've found your spots in Portland and you're sticking with them — 6 of your top 10 are within the same city, and you clearly believe the best meal is the one you can walk to."
-
-recommendation: "Given your love of no-frills izakayas and hole-in-the-wall noodle shops, you'd probably go wild for Korean pojangmacha-style tent bars — cheap soju, killer street food, zero pretension."
-
-### For a focused, single-category list (e.g. coffee shops, pizza places, cocktail bars):
-
-palateProfile: "Every dollar you spend on caffeine is a vote for the independent roaster over the regional chain. The craft matters more than the commute — you'll drive across town for a properly dialed-in pour-over but won't cross the street for a drive-through latte."
-
-blindSpots: "Your list is locked into the roaster-centric model, but you haven't explored the neighborhood cafe where the vibe and the pastry case matter as much as the single-origin beans. International preparation styles like Turkish coffee or Vietnamese phin drip would test your palate in a completely different way."
-
-hotTake: "The fact that a gas station coffee shop made it to Very Good while two cocktail bars sit in Mediocre is the kind of energy the world needs."
-
-archetype: "The Micro-Batch Loyalist"
-archetypeDescription: "You have meticulously mapped the local landscape, separating the true craftsmen from the commercial names by focusing on technique and sourcing over brand recognition."
-
-recommendation: "Your obsession with extraction precision would translate perfectly to a formal Gongfu tea ceremony, where temperature and steep time are everything. Closer to home, seek out shops experimenting with anaerobic fermentation beans to push your flavor boundaries."
-
-**Important**: The examples above illustrate tone, structure, and specificity only. Your output must be entirely original and derived from the user's actual data. Do not reuse any specific suggestions, cuisine types, archetype names, or recommendations from the examples — every insight should be freshly constructed from the patterns you observe in this particular tier list.
 
 Use the band labels: 5=Outstanding, 4=Very Good, 3=Good, 2=Mediocre, 1=Bad, 0=Unrated.`;
 }

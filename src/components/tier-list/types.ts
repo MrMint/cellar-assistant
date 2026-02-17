@@ -12,6 +12,8 @@ export interface TierListItemDisplay {
   subtitle: string;
   href: string;
   reviewScore: number | null;
+  publicRating: number | null;
+  publicRatingCount: number | null;
 }
 
 export interface TierListData {

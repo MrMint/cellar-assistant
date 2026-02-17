@@ -40,6 +40,12 @@ const GetTierListForInsightsQuery = graphql(`
           locality
           region
           country_code
+          google_enrichment {
+            google_rating
+            google_user_ratings_total
+            google_price_level
+            google_editorial_summary
+          }
         }
       }
     }
@@ -150,16 +156,23 @@ export default async function generateTierListInsights(
     // Filter to place items only
     const placeItems: TierListPlaceItem[] = tierList.items
       .filter((item) => item.place != null)
-      .map((item) => ({
-        name: item.place?.display_name ?? item.place?.name ?? "Unknown",
-        band: item.band,
-        position: item.position,
-        countryCode: item.place?.country_code ?? null,
-        region: item.place?.region ?? null,
-        locality: item.place?.locality ?? null,
-        primaryCategory: item.place?.primary_category ?? null,
-        categories: (item.place?.categories as string[] | null) ?? null,
-      }));
+      .map((item) => {
+        const enrichment = item.place?.google_enrichment;
+        return {
+          name: item.place?.display_name ?? item.place?.name ?? "Unknown",
+          band: item.band,
+          position: item.position,
+          countryCode: item.place?.country_code ?? null,
+          region: item.place?.region ?? null,
+          locality: item.place?.locality ?? null,
+          primaryCategory: item.place?.primary_category ?? null,
+          categories: (item.place?.categories as string[] | null) ?? null,
+          publicRating: enrichment?.google_rating ?? null,
+          publicRatingCount: enrichment?.google_user_ratings_total ?? null,
+          priceLevel: enrichment?.google_price_level ?? null,
+          editorialSummary: enrichment?.google_editorial_summary ?? null,
+        };
+      });
 
     // Minimum items check
     if (placeItems.length < MIN_ITEMS) {

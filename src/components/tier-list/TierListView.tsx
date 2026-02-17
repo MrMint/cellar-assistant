@@ -53,7 +53,7 @@ import {
 } from "react";
 import { AiFillTrophy } from "react-icons/ai";
 import { FaCrown } from "react-icons/fa";
-import { MdDelete, MdDragIndicator, MdStar } from "react-icons/md";
+import { MdDelete, MdDragIndicator, MdPeople, MdStar } from "react-icons/md";
 import {
   removeItemFromTierListAction,
   reorderBandAction,
@@ -80,6 +80,11 @@ type BandMap = Record<number, string[]>;
 
 const VERTICAL_MODIFIERS = [restrictToVerticalAxis];
 const NO_MODIFIERS: typeof VERTICAL_MODIFIERS = [];
+
+function formatRatingCount(count: number): string {
+  if (count >= 1000) return `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(count);
+}
 
 function cloneBandMap(map: BandMap): BandMap {
   const cloned: BandMap = {};
@@ -225,23 +230,60 @@ const TierListItemContent = memo(function TierListItemContent({
         )}
       </Box>
 
-      {item.reviewScore != null && (
+      {(item.reviewScore != null || item.publicRating != null) && (
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 0.25,
+            gap: 1,
             flexShrink: 0,
-            color: "warning.500",
           }}
         >
-          <MdStar style={{ fontSize: 14 }} />
-          <Typography
-            level="body-xs"
-            sx={{ fontWeight: "lg", color: "inherit" }}
-          >
-            {item.reviewScore}
-          </Typography>
+          {item.reviewScore != null && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.25,
+                color: "warning.500",
+              }}
+            >
+              <MdStar style={{ fontSize: 14 }} />
+              <Typography
+                level="body-xs"
+                sx={{ fontWeight: "lg", color: "inherit" }}
+              >
+                {item.reviewScore}
+              </Typography>
+            </Box>
+          )}
+          {item.publicRating != null && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.25,
+                color: "neutral.500",
+              }}
+            >
+              <MdPeople style={{ fontSize: 13 }} />
+              <Typography
+                level="body-xs"
+                sx={{ fontWeight: "md", color: "inherit" }}
+              >
+                {item.publicRating}
+                {item.publicRatingCount != null && (
+                  <Typography
+                    component="span"
+                    level="body-xs"
+                    sx={{ color: "neutral.400", ml: 0.25 }}
+                  >
+                    ({formatRatingCount(item.publicRatingCount)})
+                  </Typography>
+                )}
+              </Typography>
+            </Box>
+          )}
         </Box>
       )}
 
