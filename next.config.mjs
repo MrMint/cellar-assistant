@@ -12,6 +12,15 @@ const nextConfig = {
       bodySizeLimit: "10mb",
     },
   },
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "s.gravatar.com" },
+      { protocol: "https", hostname: "cdn.discordapp.com" },
+      { protocol: "https", hostname: "platform-lookaside.fbsbx.com" },
+      { protocol: "https", hostname: "graph.facebook.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+    ],
+  },
   logging: {
     fetches: {
       fullUrl: true,

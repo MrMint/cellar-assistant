@@ -1,6 +1,5 @@
 import {
   AspectRatio,
-  Avatar,
   AvatarGroup,
   CardOverflow,
   IconButton,
@@ -11,6 +10,7 @@ import {
 import Image from "next/image";
 import { isNil, isNotNil } from "ramda";
 import { MdEdit } from "react-icons/md";
+import { UserAvatar } from "../common/UserAvatar";
 import cellar1 from "@/images/cellar1.png";
 import cellar2 from "@/images/cellar2.png";
 import cellar3 from "@/images/cellar3.png";
@@ -77,11 +77,11 @@ export const CellarCard = ({
         )}
         <AvatarGroup>
           <Tooltip title={cellar.createdBy.displayName}>
-            <Avatar src={cellar.createdBy.avatarUrl} size="sm" />
+            <UserAvatar avatarUrl={cellar.createdBy.avatarUrl} displayName={cellar.createdBy.displayName} size="sm" />
           </Tooltip>
           {cellar.coOwners.map((x) => (
             <Tooltip key={x.id} title={x.displayName}>
-              <Avatar src={x.avatarUrl} alt={x.displayName} size="sm" />
+              <UserAvatar avatarUrl={x.avatarUrl} displayName={x.displayName} size="sm" />
             </Tooltip>
           ))}
         </AvatarGroup>

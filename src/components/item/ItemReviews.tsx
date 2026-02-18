@@ -5,7 +5,6 @@ import {
   AccordionDetails,
   AccordionGroup,
   AccordionSummary,
-  Avatar,
   Card,
   ListItemContent,
   Typography,
@@ -14,6 +13,7 @@ import { format, parseISO } from "date-fns";
 import { isEmpty, isNotNil, not } from "ramda";
 import { Rating } from "react-simple-star-rating";
 import { RichTextDisplay } from "../common/RichTextDisplay";
+import { UserAvatar } from "../common/UserAvatar";
 
 export type Review = {
   id: string;
@@ -52,7 +52,7 @@ export const ItemReviews = ({ reviews }: ItemReviewsProps) => {
           {reviews.map((x) => (
             <Accordion key={x.id}>
               <AccordionSummary>
-                <Avatar src={x.user.avatarUrl} />
+                <UserAvatar avatarUrl={x.user.avatarUrl} displayName={x.user.displayName} />
                 <ListItemContent>
                   <Typography level="title-md">{x.user.displayName}</Typography>
                   <Rating

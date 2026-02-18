@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Avatar,
   Box,
   Dropdown,
   IconButton,
@@ -37,6 +36,7 @@ import {
 import { signOut } from "@/lib/auth/actions";
 import type { ServerUser } from "@/utilities/auth-server";
 import { Link } from "./Link";
+import { UserAvatar } from "./UserAvatar";
 
 const NavLinkIconButton = styled(IconButton)(({ theme }) => ({
   color: theme.palette.text.secondary,
@@ -95,11 +95,11 @@ const UserMenu = ({ user, placement, onSignOut }: UserMenuProps) => (
   <ListItem>
     <Dropdown>
       <MenuButton slots={{ root: IconButton }}>
-        <Avatar src={user.avatarUrl || undefined} size="sm">
-          {!user.avatarUrl &&
-            (user.displayName?.charAt(0)?.toUpperCase() ||
-              user.email.charAt(0).toUpperCase())}
-        </Avatar>
+        <UserAvatar
+          avatarUrl={user.avatarUrl}
+          displayName={user.displayName ?? user.email}
+          size="sm"
+        />
       </MenuButton>
       <Menu size="lg" placement={placement}>
         <MenuItem component={Link} href="/users/edit">

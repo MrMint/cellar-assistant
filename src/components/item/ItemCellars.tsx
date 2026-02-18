@@ -1,5 +1,4 @@
 import {
-  Avatar,
   AvatarGroup,
   Card,
   ListDivider,
@@ -10,6 +9,7 @@ import {
 } from "@mui/joy";
 import { isEmpty, not } from "ramda";
 import { Link } from "../common/Link";
+import { UserAvatar } from "../common/UserAvatar";
 
 type user = {
   id: string;
@@ -45,7 +45,7 @@ export const ItemCellars = ({ cellars }: ItemCellarsProps) => {
               <AvatarGroup>
                 {cellar.co_owners.concat([cellar.createdBy]).map((x) => (
                   <Tooltip key={x.id} title={x.displayName}>
-                    <Avatar src={x.avatarUrl} size="sm" />
+                    <UserAvatar avatarUrl={x.avatarUrl} displayName={x.displayName} size="sm" />
                   </Tooltip>
                 ))}
               </AvatarGroup>

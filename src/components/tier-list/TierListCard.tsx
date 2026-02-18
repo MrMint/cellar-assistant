@@ -1,9 +1,10 @@
 "use client";
 
 import type { FragmentOf } from "@cellar-assistant/shared";
-import { Avatar, Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
+import { Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
 import Link from "next/link";
 import { MdGroup, MdLock, MdPublic } from "react-icons/md";
+import { UserAvatar } from "../common/UserAvatar";
 import type { TierListCardFragment } from "./fragments";
 
 type TierListCardProps = {
@@ -30,7 +31,6 @@ export function TierListCard({ tierList }: TierListCardProps) {
   const itemCount = tierList.items_aggregate.aggregate?.count ?? 0;
   const typeLabel = listTypeLabels[tierList.list_type] ?? tierList.list_type;
   const creatorName = tierList.createdBy?.displayName ?? "Unknown user";
-  const creatorInitial = creatorName.charAt(0).toUpperCase();
 
   return (
     <Link
@@ -90,13 +90,12 @@ export function TierListCard({ tierList }: TierListCardProps) {
             </Stack>
 
             <Stack direction="row" spacing={1} alignItems="center">
-              <Avatar
-                src={tierList.createdBy?.avatarUrl ?? undefined}
+              <UserAvatar
+                avatarUrl={tierList.createdBy?.avatarUrl}
+                displayName={creatorName}
                 size="sm"
                 sx={{ width: 20, height: 20 }}
-              >
-                {creatorInitial}
-              </Avatar>
+              />
               <Typography level="body-xs" sx={{ color: "text.secondary" }}>
                 {creatorName}
               </Typography>

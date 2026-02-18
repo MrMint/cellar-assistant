@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Avatar,
   AvatarGroup,
   Button,
   Card,
@@ -26,6 +25,7 @@ import {
   addBulkCheckInsAction,
   addCheckInAction,
 } from "@/app/actions/checkIns";
+import { UserAvatar } from "../common/UserAvatar";
 
 type User = {
   id: string;
@@ -131,7 +131,7 @@ export const ItemCheckIns = ({
                   <AvatarGroup>
                     {x.map((y) => (
                       <Tooltip key={y.id} title={y.user.displayName}>
-                        <Avatar src={y.user.avatarUrl} />
+                        <UserAvatar avatarUrl={y.user.avatarUrl} displayName={y.user.displayName} />
                       </Tooltip>
                     ))}
                   </AvatarGroup>
@@ -155,7 +155,7 @@ export const ItemCheckIns = ({
                   <ListItemDecorator>
                     <Checkbox readOnly checked={bulk.includes(user.id)} />
                   </ListItemDecorator>
-                  <Avatar src={user.avatarUrl} />
+                  <UserAvatar avatarUrl={user.avatarUrl} displayName={user.displayName} />
                   <ListItemContent>
                     <Typography level="title-md">{user.displayName}</Typography>
                   </ListItemContent>

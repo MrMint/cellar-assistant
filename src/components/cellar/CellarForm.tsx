@@ -2,7 +2,6 @@
 
 import type { Permission_Type_Enum } from "@cellar-assistant/shared";
 import {
-  Avatar,
   Box,
   Button,
   FormControl,
@@ -18,6 +17,7 @@ import {
 import { isNil, isNotNil } from "ramda";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { addCellarAction, editCellarAction } from "@/app/actions/cellars";
+import { UserAvatar } from "../common/UserAvatar";
 import { EnumSelect } from "@/components/forms/EnumSelect";
 
 interface IFormInput {
@@ -121,7 +121,7 @@ export const CellarForm = ({
                   {friends.map((x) => (
                     <Option key={x.id} value={x.id}>
                       <ListItemDecorator>
-                        <Avatar size="sm" src={x.avatarUrl} />
+                        <UserAvatar avatarUrl={x.avatarUrl} displayName={x.displayName} size="sm" />
                       </ListItemDecorator>
                       {x.displayName}
                     </Option>

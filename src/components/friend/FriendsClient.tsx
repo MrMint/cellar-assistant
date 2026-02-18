@@ -2,7 +2,6 @@
 
 import { readFragment } from "@cellar-assistant/shared";
 import {
-  Avatar,
   Button,
   Card,
   Grid,
@@ -14,6 +13,7 @@ import {
 import { useState, useTransition } from "react";
 import { MdDelete } from "react-icons/md";
 import { DebounceInput } from "@/components/common/DebouncedInput";
+import { UserAvatar } from "../common/UserAvatar";
 import { UserCoreFragment } from "../shared/fragments/user-core";
 import {
   acceptFriendRequest,
@@ -118,7 +118,7 @@ export const FriendsClient = ({ initialData }: FriendsClientProps) => {
               .map((x) => x.friend)
               .map((x) => (
                 <ListItem variant="outlined" key={x.id}>
-                  <Avatar src={x.avatarUrl ?? undefined} />
+                  <UserAvatar avatarUrl={x.avatarUrl} displayName={x.displayName} />
                   <ListItemContent>
                     <Typography level="title-md">{x.displayName}</Typography>
                   </ListItemContent>
@@ -150,7 +150,7 @@ export const FriendsClient = ({ initialData }: FriendsClientProps) => {
               const userData = readFragment(UserCoreFragment, user);
               return (
                 <ListItem variant="outlined" key={userData.id}>
-                  <Avatar src={userData.avatarUrl ?? undefined} />
+                  <UserAvatar avatarUrl={userData.avatarUrl} displayName={userData.displayName} />
                   <ListItemContent>
                     <Typography level="title-md">
                       {userData.displayName}
@@ -185,7 +185,7 @@ export const FriendsClient = ({ initialData }: FriendsClientProps) => {
             )}
             {user?.incomingFriendRequests.map((x) => (
               <ListItem variant="outlined" key={x.id}>
-                <Avatar src={x.user.avatarUrl ?? undefined} />
+                <UserAvatar avatarUrl={x.user.avatarUrl} displayName={x.user.displayName} />
                 <ListItemContent>
                   <Typography level="title-md">{x.user.displayName}</Typography>
                 </ListItemContent>
@@ -221,7 +221,7 @@ export const FriendsClient = ({ initialData }: FriendsClientProps) => {
             )}
             {user?.outgoingFriendRequests.map((x) => (
               <ListItem variant="outlined" key={x.id}>
-                <Avatar src={x.friend.avatarUrl ?? undefined} />
+                <UserAvatar avatarUrl={x.friend.avatarUrl} displayName={x.friend.displayName} />
                 <ListItemContent>
                   <Typography level="title-md">
                     {x.friend.displayName}
