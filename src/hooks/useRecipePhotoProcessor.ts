@@ -5,7 +5,6 @@ import {
   processRecipePhotoAction,
   type RecipeProcessingResult,
 } from "@/app/actions/processRecipePhoto";
-import { useAuth } from "@/components/providers/NhostClientProvider";
 
 // Re-export RecipeProcessingResult for consumers
 export type { RecipeProcessingResult } from "@/app/actions/processRecipePhoto";
@@ -25,7 +24,6 @@ export interface RecipePhotoProcessingState {
 }
 
 export function useRecipePhotoProcessor() {
-  const { isAuthenticated, isLoading } = useAuth();
   const [state, setState] = useState<RecipePhotoProcessingState>({
     isProcessing: false,
     progress: 0,
@@ -54,19 +52,6 @@ export function useRecipePhotoProcessor() {
 
       try {
         updateProgress("Processing recipe photo...", 10);
-
-        // Check authentication state
-        if (isLoading) {
-          throw new Error("Authentication is still loading, please try again");
-        }
-
-        if (!isAuthenticated) {
-          throw new Error("User not authenticated - please refresh the page");
-        }
-
-        console.log(
-          "🔍 [Recipe Processor] Using server action for processing...",
-        );
 
         // Create FormData for server action
         const formData = new FormData();
@@ -106,7 +91,7 @@ export function useRecipePhotoProcessor() {
         throw error;
       }
     },
-    [updateProgress, isAuthenticated, isLoading],
+    [updateProgress],
   );
 
   const reset = useCallback(() => {

@@ -64,7 +64,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https: http:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.nhost.run wss://*.nhost.run https://*.googleapis.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://d2ad6b4ur7yvpq.cloudfront.net https://va.vercel-scripts.com",
+              "connect-src 'self' https://*.nhost.run https://*.googleapis.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://d2ad6b4ur7yvpq.cloudfront.net https://va.vercel-scripts.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

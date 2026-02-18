@@ -68,52 +68,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   useEffect(() => {
-    const initializeAuth = async () => {
+    const initializeAuth = () => {
       setIsLoading(true);
 
-      // Check for OAuth callback - refreshToken in URL from SSO redirect
-      const urlParams = new URLSearchParams(window.location.search);
-      const refreshTokenFromUrl = urlParams.get("refreshToken");
-
-      if (refreshTokenFromUrl) {
-        try {
-          // Exchange the refresh token for a full session
-          const result = await nhost.auth.refreshToken({
-            refreshToken: refreshTokenFromUrl,
-          });
-
-          if (result.body && result.status === 200) {
-            // Store the session using the SDK's storage
-            nhost.sessionStorage.set(result.body);
-
-            // Clean up the URL by removing the refreshToken param
-            const url = new URL(window.location.href);
-            url.searchParams.delete("refreshToken");
-            window.history.replaceState({}, "", url.toString());
-
-            setUser(result.body.user || null);
-            setSession(result.body);
-            setIsAuthenticated(true);
-            lastRefreshTokenIdRef.current = result.body.refreshTokenId || null;
-            setIsLoading(false);
-            router.refresh();
-            return;
-          }
-        } catch (error) {
-          console.error("Failed to exchange OAuth refresh token:", error);
-          // Clean up the URL even on error
-          const url = new URL(window.location.href);
-          url.searchParams.delete("refreshToken");
-          window.history.replaceState({}, "", url.toString());
-        }
-      }
-
-      // Get initial session from SDK
+      // Get initial session from SDK's CookieStorage
       const currentSession = nhost.getUserSession();
-      setUser(currentSession?.user || null);
+      setUser(currentSession?.user ?? null);
       setSession(currentSession);
       setIsAuthenticated(!!currentSession);
-      lastRefreshTokenIdRef.current = currentSession?.refreshTokenId || null;
+      lastRefreshTokenIdRef.current = currentSession?.refreshTokenId ?? null;
       setIsLoading(false);
     };
 
@@ -122,12 +85,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Subscribe to session changes using SDK's storage onChange
     const unsubscribe = nhost.sessionStorage?.onChange?.(
       (newSession: Session | null) => {
-        setUser(newSession?.user || null);
+        setUser(newSession?.user ?? null);
         setSession(newSession);
         setIsAuthenticated(!!newSession);
 
         if (newSession?.refreshTokenId !== lastRefreshTokenIdRef.current) {
-          lastRefreshTokenIdRef.current = newSession?.refreshTokenId || null;
+          lastRefreshTokenIdRef.current = newSession?.refreshTokenId ?? null;
           router.refresh();
         }
       },
@@ -148,7 +111,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         nhost,
       }}
     >
-      <UrqlProvider nhost={nhost}>
+      <UrqlProvider>
         <IconContext.Provider
           value={{
             color: "var(--Icon-color)",
@@ -174,18 +137,6 @@ export const useAuth = (): AuthContextType => {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-};
-
-// Legacy hook for backward compatibility
-export const useNhostClient = (): NhostClient => {
-  const { nhost } = useAuth();
-  return nhost;
-};
-
-// Legacy hook for backward compatibility
-export const useAuthenticationStatus = () => {
-  const { user, session, isAuthenticated, isLoading } = useAuth();
-  return { user, session, isAuthenticated, isLoading };
 };
 
 // Default export with renamed component

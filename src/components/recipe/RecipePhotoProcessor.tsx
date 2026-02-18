@@ -16,7 +16,6 @@ import {
 } from "@mui/joy";
 import type React from "react";
 import { useRef, useState } from "react";
-import { useAuth } from "@/components/providers/NhostClientProvider";
 import { useRecipePhotoProcessor } from "../../hooks/useRecipePhotoProcessor";
 
 interface RecipePhotoProcessorProps {
@@ -34,7 +33,6 @@ export function RecipePhotoProcessor({
 }: RecipePhotoProcessorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const {
     isProcessing,
     progress,
@@ -121,17 +119,13 @@ export function RecipePhotoProcessor({
             variant="solid"
             color="primary"
             onClick={handleUploadAndProcess}
-            disabled={!selectedFile || isProcessing || authLoading}
-            loading={isProcessing || authLoading}
+            disabled={!selectedFile || isProcessing}
+            loading={isProcessing}
             loadingIndicator={<CircularProgress size="sm" />}
             fullWidth
             size="lg"
           >
-            {authLoading
-              ? "Loading..."
-              : isProcessing
-                ? "Processing..."
-                : "Extract Recipes"}
+            {isProcessing ? "Processing..." : "Extract Recipes"}
           </Button>
 
           {/* Progress Display */}

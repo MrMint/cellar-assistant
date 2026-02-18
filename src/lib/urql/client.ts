@@ -1,4 +1,3 @@
-import type { NhostClient } from "@nhost/nhost-js";
 import { createClient, fetchExchange, ssrExchange } from "@urql/core";
 import { devtoolsExchange } from "@urql/devtools";
 import { cacheExchange } from "@urql/exchange-graphcache";
@@ -8,7 +7,7 @@ import { createCookieAuthExchange } from "./auth-exchange";
  * Creates a URQL client for client components with SSR support
  * This includes SSR exchange for proper hydration
  */
-export function makeClientClient(_nhost: NhostClient) {
+export function makeClientClient() {
   const ssr = ssrExchange({
     isClient: typeof window !== "undefined",
     staleWhileRevalidate: true, // Update stale SSG data
