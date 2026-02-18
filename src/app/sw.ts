@@ -48,6 +48,18 @@ const serwist = new Serwist({
       }),
     },
     {
+      matcher: /\/_next\/image\?/i,
+      handler: new CacheFirst({
+        cacheName: "next-images",
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 200,
+            maxAgeSeconds: 60 * 60 * 24 * 30,
+          }),
+        ],
+      }),
+    },
+    {
       matcher: /\.storage\..*nhost\.run\/v1\/files\//i,
       handler: new CacheFirst({
         cacheName: "nhost-images",
