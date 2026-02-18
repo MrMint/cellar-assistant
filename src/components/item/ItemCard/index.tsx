@@ -33,8 +33,8 @@ import wine1 from "@/images/wine1.png";
 import {
   formatItemType,
   formatVintage,
+  getNhostStorageUrl,
   getNextPlaceholder,
-  nhostImageLoader,
 } from "@/utilities";
 
 const overflowItemStyles: SxProps = {
@@ -136,11 +136,10 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
               height: "auto",
               width: "auto",
             }}
-            src={item.displayImageId}
+            src={getNhostStorageUrl(item.displayImageId)}
             alt={fallback.alt}
             height={400}
             width={400}
-            loader={nhostImageLoader}
             placeholder={getNextPlaceholder(item.placeholder)}
           />
         )}

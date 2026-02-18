@@ -1,6 +1,6 @@
 import type { ItemTypeValue } from "@cellar-assistant/shared";
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
-import type { ImageLoaderProps } from "next/image";
+
 import { always, cond, equals, isEmpty, isNil } from "ramda";
 
 // https://stackoverflow.com/a/76775845
@@ -91,15 +91,11 @@ export function formatVintage(vintage: string | number | null | undefined) {
   return formatIsoDateString(vintage, "yyyy");
 }
 
-export const nhostImageLoader = ({ width, src, quality }: ImageLoaderProps) => {
+export const getNhostStorageUrl = (fileId: string) => {
   if (isNil(process.env.NEXT_PUBLIC_NHOST_REGION)) {
-    return `https://${
-      process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN
-    }.storage.nhost.run/v1/files/${src}?w=${width}&q=${quality || 75}`;
+    return `https://${process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN}.storage.nhost.run/v1/files/${fileId}`;
   }
-  return `https://${process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN}.storage.${
-    process.env.NEXT_PUBLIC_NHOST_REGION
-  }.nhost.run/v1/files/${src}?w=${width}&q=${quality || 75}`;
+  return `https://${process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN}.storage.${process.env.NEXT_PUBLIC_NHOST_REGION}.nhost.run/v1/files/${fileId}`;
 };
 
 export function getRandomInt(max: number) {

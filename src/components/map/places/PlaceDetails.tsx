@@ -57,7 +57,7 @@ import {
 } from "../queries";
 import { usePlaceEnrichment } from "@/hooks/usePlaceEnrichment";
 import type { PlaceEnrichment, PlaceGooglePhoto } from "@/types/places";
-import { nhostImageLoader } from "@/utilities";
+import { getNhostStorageUrl } from "@/utilities";
 import { MenuScanner } from "../scanning/MenuScanner";
 import {
   formatCategoryName,
@@ -510,7 +510,10 @@ export function PlaceDetails({
               >
                 {mergedRating != null && (
                   <Stack direction="row" spacing={0.5} alignItems="center">
-                    <MdStar size={18} style={{ color: "var(--joy-palette-warning-400)" }} />
+                    <MdStar
+                      size={18}
+                      style={{ color: "var(--joy-palette-warning-400)" }}
+                    />
                     <Typography level="body-sm" sx={{ fontWeight: "md" }}>
                       {mergedRating.toFixed(1)}
                       {(enrichment?.userRatingsTotal ??
@@ -568,7 +571,10 @@ export function PlaceDetails({
                   >
                     <MdMap
                       size={18}
-                      style={{ color: "var(--joy-palette-primary-500)", flexShrink: 0 }}
+                      style={{
+                        color: "var(--joy-palette-primary-500)",
+                        flexShrink: 0,
+                      }}
                     />
                     <Typography
                       className="address-text"
@@ -637,8 +643,7 @@ export function PlaceDetails({
         <Card sx={{ mb: 3, p: 0, overflow: "hidden" }}>
           <AspectRatio ratio="16/9">
             <Image
-              loader={nhostImageLoader}
-              src={googlePhotos[0].storageFileId}
+              src={getNhostStorageUrl(googlePhotos[0].storageFileId)}
               alt={placeData.name}
               fill
               style={{ objectFit: "cover" }}
@@ -769,7 +774,10 @@ export function PlaceDetails({
                   sx={{ cursor: "pointer" }}
                   onClick={handleCall}
                 >
-                  <MdPhone size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
+                  <MdPhone
+                    size={20}
+                    style={{ color: "var(--joy-palette-text-secondary)" }}
+                  />
                   <Typography level="body-sm" sx={{ color: "primary.500" }}>
                     {mergedPhone}
                   </Typography>
@@ -784,7 +792,10 @@ export function PlaceDetails({
                   sx={{ cursor: "pointer" }}
                   onClick={handleWebsite}
                 >
-                  <MdLanguage size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
+                  <MdLanguage
+                    size={20}
+                    style={{ color: "var(--joy-palette-text-secondary)" }}
+                  />
                   <Typography level="body-sm" sx={{ color: "primary.500" }}>
                     {mergedWebsite
                       .replace(/^https?:\/\//, "")
@@ -839,7 +850,10 @@ export function PlaceDetails({
               <Box sx={{ textAlign: "center", py: 4 }}>
                 <MdRestaurant
                   size={48}
-                  style={{ color: "var(--joy-palette-text-tertiary)", marginBottom: 16 }}
+                  style={{
+                    color: "var(--joy-palette-text-tertiary)",
+                    marginBottom: 16,
+                  }}
                 />
                 <Typography level="title-lg" sx={{ mb: 1 }}>
                   No menu discovered yet
@@ -865,7 +879,10 @@ export function PlaceDetails({
               {(enrichment?.openingHours ?? placeData.hours) != null && (
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography level="title-md" startDecorator={<MdSchedule />}>
+                    <Typography
+                      level="title-md"
+                      startDecorator={<MdSchedule />}
+                    >
                       Hours
                     </Typography>
                     <HoursDisplay

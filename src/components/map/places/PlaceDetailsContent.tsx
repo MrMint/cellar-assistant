@@ -40,7 +40,7 @@ import {
 import { useMutation } from "urql";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
 import type { PlaceEnrichment, PlaceGooglePhoto } from "@/types/places";
-import { nhostImageLoader } from "@/utilities";
+import { getNhostStorageUrl } from "@/utilities";
 import { MARK_PLACE_VISITED, TOGGLE_FAVORITE_PLACE } from "../queries";
 import {
   formatCategoryName,
@@ -394,7 +394,10 @@ export function PlaceDetailsContent({
           >
             {mergedPlace.rating && (
               <Stack direction="row" spacing={0.5} alignItems="center">
-                <MdStar size={16} style={{ color: "var(--joy-palette-warning-400)" }} />
+                <MdStar
+                  size={16}
+                  style={{ color: "var(--joy-palette-warning-400)" }}
+                />
                 <Typography level="body-sm" sx={{ fontWeight: "md" }}>
                   {mergedPlace.rating.toFixed(1)}
                   {ratingCount ? ` (${ratingCount})` : ""}
@@ -475,8 +478,7 @@ export function PlaceDetailsContent({
               sx={{ borderRadius: "md" }}
             >
               <Image
-                loader={nhostImageLoader}
-                src={googlePhotos[0].storageFileId}
+                src={getNhostStorageUrl(googlePhotos[0].storageFileId)}
                 alt={place.name}
                 fill
                 style={{ objectFit: "cover" }}
@@ -616,7 +618,10 @@ export function PlaceDetailsContent({
                 sx={{ cursor: "pointer" }}
                 onClick={handleCall}
               >
-                <MdPhone size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
+                <MdPhone
+                  size={20}
+                  style={{ color: "var(--joy-palette-text-secondary)" }}
+                />
                 <Typography level="body-sm" sx={{ color: "primary.500" }}>
                   {mergedPlace.phone}
                 </Typography>
@@ -630,7 +635,10 @@ export function PlaceDetailsContent({
                 sx={{ cursor: "pointer" }}
                 onClick={handleWebsite}
               >
-                <MdLanguage size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
+                <MdLanguage
+                  size={20}
+                  style={{ color: "var(--joy-palette-text-secondary)" }}
+                />
                 <Typography level="body-sm" sx={{ color: "primary.500" }}>
                   Visit website
                 </Typography>
@@ -662,7 +670,10 @@ export function PlaceDetailsContent({
             alignItems="center"
             sx={{ mb: 2, flexShrink: 0 }}
           >
-            <MdMenuBook size={20} style={{ color: "var(--joy-palette-text-secondary)" }} />
+            <MdMenuBook
+              size={20}
+              style={{ color: "var(--joy-palette-text-secondary)" }}
+            />
             <Typography level="title-md">Menu Items</Typography>
             {hasMenuItems && (
               <Chip size="sm" variant="soft" color="primary">
@@ -946,7 +957,11 @@ function MobileActions({
                 userInteraction?.is_favorite ? "Remove from saved" : "Save"
               }
             >
-              {userInteraction?.is_favorite ? <MdFavorite /> : <MdFavoriteBorder />}
+              {userInteraction?.is_favorite ? (
+                <MdFavorite />
+              ) : (
+                <MdFavoriteBorder />
+              )}
             </IconButton>
           </Tooltip>
 

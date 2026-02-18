@@ -5,7 +5,7 @@ import Image, { type StaticImageData } from "next/image";
 import { isNil, isNotNil } from "ramda";
 import { useCallback, useState } from "react";
 import { MdEdit } from "react-icons/md";
-import { getNextPlaceholder, nhostImageLoader } from "@/utilities";
+import { getNhostStorageUrl, getNextPlaceholder } from "@/utilities";
 import { AddPhotoModal } from "./AddPhoto";
 
 export type ItemImageProps = {
@@ -39,11 +39,10 @@ export const ItemImage = ({
         <CardCover>
           {isNotNil(fileId) && (
             <Image
-              src={fileId}
+              src={getNhostStorageUrl(fileId)}
               alt="A picture of a glass"
               height={500}
               width={500}
-              loader={nhostImageLoader}
               placeholder={getNextPlaceholder(placeholder)}
             />
           )}

@@ -121,7 +121,11 @@ export const CellarForm = ({
                   {friends.map((x) => (
                     <Option key={x.id} value={x.id}>
                       <ListItemDecorator>
-                        <UserAvatar avatarUrl={x.avatarUrl} displayName={x.displayName} size="sm" />
+                        <UserAvatar
+                          avatarUrl={x.avatarUrl}
+                          displayName={x.displayName}
+                          size="sm"
+                        />
                       </ListItemDecorator>
                       {x.displayName}
                     </Option>

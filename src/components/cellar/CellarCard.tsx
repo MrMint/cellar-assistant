@@ -77,11 +77,19 @@ export const CellarCard = ({
         )}
         <AvatarGroup>
           <Tooltip title={cellar.createdBy.displayName}>
-            <UserAvatar avatarUrl={cellar.createdBy.avatarUrl} displayName={cellar.createdBy.displayName} size="sm" />
+            <UserAvatar
+              avatarUrl={cellar.createdBy.avatarUrl}
+              displayName={cellar.createdBy.displayName}
+              size="sm"
+            />
           </Tooltip>
           {cellar.coOwners.map((x) => (
             <Tooltip key={x.id} title={x.displayName}>
-              <UserAvatar avatarUrl={x.avatarUrl} displayName={x.displayName} size="sm" />
+              <UserAvatar
+                avatarUrl={x.avatarUrl}
+                displayName={x.displayName}
+                size="sm"
+              />
             </Tooltip>
           ))}
         </AvatarGroup>

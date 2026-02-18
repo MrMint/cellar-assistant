@@ -131,7 +131,10 @@ export const ItemCheckIns = ({
                   <AvatarGroup>
                     {x.map((y) => (
                       <Tooltip key={y.id} title={y.user.displayName}>
-                        <UserAvatar avatarUrl={y.user.avatarUrl} displayName={y.user.displayName} />
+                        <UserAvatar
+                          avatarUrl={y.user.avatarUrl}
+                          displayName={y.user.displayName}
+                        />
                       </Tooltip>
                     ))}
                   </AvatarGroup>
@@ -155,7 +158,10 @@ export const ItemCheckIns = ({
                   <ListItemDecorator>
                     <Checkbox readOnly checked={bulk.includes(user.id)} />
                   </ListItemDecorator>
-                  <UserAvatar avatarUrl={user.avatarUrl} displayName={user.displayName} />
+                  <UserAvatar
+                    avatarUrl={user.avatarUrl}
+                    displayName={user.displayName}
+                  />
                   <ListItemContent>
                     <Typography level="title-md">{user.displayName}</Typography>
                   </ListItemContent>

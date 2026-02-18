@@ -19,6 +19,8 @@ const nextConfig = {
       { protocol: "https", hostname: "platform-lookaside.fbsbx.com" },
       { protocol: "https", hostname: "graph.facebook.com" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "*.storage.nhost.run" },
+      { protocol: "https", hostname: "*.storage.*.nhost.run" },
     ],
   },
   logging: {
@@ -64,7 +66,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https: http:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.nhost.run https://*.googleapis.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://d2ad6b4ur7yvpq.cloudfront.net https://va.vercel-scripts.com",
+              "connect-src 'self' https://*.googleapis.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://d2ad6b4ur7yvpq.cloudfront.net https://va.vercel-scripts.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

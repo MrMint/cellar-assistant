@@ -52,7 +52,10 @@ export const ItemReviews = ({ reviews }: ItemReviewsProps) => {
           {reviews.map((x) => (
             <Accordion key={x.id}>
               <AccordionSummary>
-                <UserAvatar avatarUrl={x.user.avatarUrl} displayName={x.user.displayName} />
+                <UserAvatar
+                  avatarUrl={x.user.avatarUrl}
+                  displayName={x.user.displayName}
+                />
                 <ListItemContent>
                   <Typography level="title-md">{x.user.displayName}</Typography>
                   <Rating

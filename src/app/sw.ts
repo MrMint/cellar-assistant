@@ -60,18 +60,6 @@ const serwist = new Serwist({
       }),
     },
     {
-      matcher: /\.storage\..*nhost\.run\/v1\/files\//i,
-      handler: new CacheFirst({
-        cacheName: "nhost-images",
-        plugins: [
-          new ExpirationPlugin({
-            maxEntries: 500,
-            maxAgeSeconds: 60 * 60 * 24 * 30,
-          }),
-        ],
-      }),
-    },
-    {
       matcher: /\/v1\/graphql/i,
       handler: new NetworkFirst({
         cacheName: "graphql-cache",
