@@ -127,6 +127,7 @@ export function CellarSpiritDetails({
               )}
               <ItemRemainingSlider
                 itemId={itemId}
+                cellarId={cellarId}
                 isCellarOwner={isOwner}
                 percentageRemaining={itemData.percentage_remaining}
                 opened={parseDate(itemData?.open_at)}

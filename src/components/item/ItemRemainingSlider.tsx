@@ -14,6 +14,7 @@ import { useInterval } from "@/utilities/hooks";
 export type ItemRemainingSliderProps = {
   isCellarOwner: boolean;
   itemId: string;
+  cellarId: string;
   opened?: Date;
   emptied?: Date;
   percentageRemaining: number;
@@ -21,6 +22,7 @@ export type ItemRemainingSliderProps = {
 
 export const ItemRemainingSlider = ({
   itemId,
+  cellarId,
   percentageRemaining,
   opened,
   emptied,
@@ -38,14 +40,14 @@ export const ItemRemainingSlider = ({
   useEffect(() => {
     if (debouncedPercent !== percentageRemaining) {
       startTransition(async () => {
-        await updateCellarItemPercentageAction(itemId, debouncedPercent);
+        await updateCellarItemPercentageAction(itemId, debouncedPercent, cellarId);
       });
     }
-  }, [debouncedPercent, percentageRemaining, itemId]);
+  }, [debouncedPercent, percentageRemaining, itemId, cellarId]);
 
   const handleOpen = () => {
     startTransition(async () => {
-      await openCellarItemAction(itemId);
+      await openCellarItemAction(itemId, cellarId);
     });
   };
 

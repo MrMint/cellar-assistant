@@ -3,6 +3,7 @@ import type {
   ResultOf,
   VariablesOf,
 } from "@cellar-assistant/shared";
+import { unstable_cache } from "next/cache";
 import {
   ascend,
   defaultTo,
@@ -15,9 +16,10 @@ import {
   without,
 } from "ramda";
 import type { ItemCardItem } from "@/components/item/ItemCard";
-import { getCachedSearchVector } from "@/lib/cache";
+import { CacheTags, getCachedSearchVector } from "@/lib/cache";
+import { serverQuery } from "@/lib/urql/server";
 import { formatVintage, getItemType } from "@/utilities";
-import type { GetCellarItemsQuery } from "./queries";
+import { GetCellarItemsQuery } from "./queries";
 
 export interface TransformedCellarItem {
   type: ItemTypeValue;
@@ -31,20 +33,6 @@ export interface CellarItemCounts {
   spirits?: number;
   coffees?: number;
   sakes?: number;
-}
-
-/**
- * Generate search vector from text (server-side).
- * Uses cached embedding generation - same text produces same vector for all users.
- */
-export async function generateSearchVector(
-  searchText: string,
-): Promise<string | undefined> {
-  if (!searchText || searchText.trim() === "") {
-    return undefined;
-  }
-
-  return getCachedSearchVector(searchText);
 }
 
 /**
@@ -132,6 +120,68 @@ export function sortCellarItems(
     [ascend(prop("distance")), ascend((x) => x.item.name)],
     items,
   );
+}
+
+/**
+ * Cached fetch, transform, and sort of cellar items.
+ *
+ * Auth headers are captured via closure — they're NOT part of the cache key
+ * so different JWTs for the same user share one cache entry. On cache miss
+ * the current request's headers are used, preserving Hasura RLS. On cache
+ * hit the function body never executes so headers aren't needed.
+ *
+ * Cache key: cellarId (keyParts) + userId + search + types (args)
+ * TTL: 5 minutes (safety net)
+ * Tag: cellar-items:{cellarId} (for on-demand revalidation)
+ */
+export function getCachedCellarItems(
+  cellarId: string,
+  authHeaders: Record<string, string>,
+) {
+  return unstable_cache(
+    async (
+      userId: string,
+      search: string,
+      types: ItemTypeValue[],
+    ): Promise<CachedCellarItemsResult> => {
+      const searchVector = search
+        ? await getCachedSearchVector(search)
+        : undefined;
+      const itemsWhereClause = buildItemsWhereClause(
+        types.length > 0 ? types : undefined,
+      );
+
+      const data = await serverQuery(
+        GetCellarItemsQuery,
+        {
+          cellarId,
+          userId,
+          itemsWhereClause,
+          search: searchVector,
+        },
+        authHeaders,
+      );
+
+      if (!data.cellars_by_pk) {
+        return { items: [], totalCount: 0 };
+      }
+
+      const transformedItems = transformCellarItems(data.cellars_by_pk.items);
+      const sortedItems = sortCellarItems(transformedItems);
+
+      return { items: sortedItems, totalCount: sortedItems.length };
+    },
+    ["cellar-items", cellarId],
+    {
+      revalidate: 300,
+      tags: [CacheTags.cellarItems(cellarId)],
+    },
+  );
+}
+
+export interface CachedCellarItemsResult {
+  items: TransformedCellarItem[];
+  totalCount: number;
 }
 
 /**

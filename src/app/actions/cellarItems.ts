@@ -2,7 +2,8 @@
 
 import type { ItemTypeValue } from "@cellar-assistant/shared";
 import { graphql } from "@cellar-assistant/shared";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { CacheTags } from "@/lib/cache";
 import { serverMutation } from "@/lib/urql/server";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 
@@ -48,6 +49,7 @@ export type UpdateCellarItemResult = {
 
 export async function openCellarItemAction(
   itemId: string,
+  cellarId: string,
 ): Promise<UpdateCellarItemResult> {
   const user = await getOptionalServerUser();
 
@@ -64,12 +66,13 @@ export async function openCellarItemAction(
       },
     });
 
-    // Revalidate all cellar item pages
+    // Revalidate all cellar item pages and cached items list
     revalidatePath("/cellars/[cellarId]/beers/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/wines/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/spirits/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/coffees/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/sakes/[itemId]", "page");
+    revalidateTag(CacheTags.cellarItems(cellarId), "default");
 
     return { success: true };
   } catch (error) {
@@ -85,6 +88,7 @@ export async function openCellarItemAction(
 export async function updateCellarItemPercentageAction(
   itemId: string,
   percentage: number,
+  cellarId: string,
 ): Promise<UpdateCellarItemResult> {
   const user = await getOptionalServerUser();
 
@@ -101,12 +105,13 @@ export async function updateCellarItemPercentageAction(
       },
     });
 
-    // Revalidate all cellar item pages
+    // Revalidate all cellar item pages and cached items list
     revalidatePath("/cellars/[cellarId]/beers/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/wines/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/spirits/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/coffees/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/sakes/[itemId]", "page");
+    revalidateTag(CacheTags.cellarItems(cellarId), "default");
 
     return { success: true };
   } catch (error) {
@@ -173,9 +178,10 @@ export async function addCellarItemAction(
   try {
     const result = await serverMutation(addCellarItemMutation, { item });
 
-    // Revalidate cellar pages
+    // Revalidate cellar pages and cached items list
     revalidatePath(`/cellars/${cellarId}`, "page");
     revalidatePath("/cellars/[cellarId]", "page");
+    revalidateTag(CacheTags.cellarItems(cellarId), "default");
 
     return {
       success: true,
@@ -210,10 +216,11 @@ export async function deleteCellarItemAction(
   try {
     await serverMutation(deleteCellarItemMutation, { itemId });
 
-    // Revalidate cellar pages
+    // Revalidate cellar pages and cached items list
     revalidatePath(`/cellars/${cellarId}`, "page");
     revalidatePath("/cellars/[cellarId]", "page");
     revalidatePath("/cellars/[cellarId]/items", "page");
+    revalidateTag(CacheTags.cellarItems(cellarId), "default");
 
     return { success: true };
   } catch (error) {

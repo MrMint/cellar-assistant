@@ -2,12 +2,16 @@ import { ITEM_TYPES, type ItemTypeValue } from "@cellar-assistant/shared";
 import {
   createSearchParamsCache,
   parseAsArrayOf,
+  parseAsInteger,
   parseAsString,
 } from "nuqs/server";
+
+export const ITEMS_PAGE_SIZE = 50;
 
 export const itemsSearchParamsCache = createSearchParamsCache({
   search: parseAsString.withDefault(""),
   types: parseAsArrayOf(parseAsString).withDefault([]),
+  limit: parseAsInteger.withDefault(ITEMS_PAGE_SIZE),
 });
 
 /**

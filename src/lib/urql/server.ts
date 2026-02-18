@@ -67,7 +67,7 @@ function _isValidSessionData(data: unknown): data is NhostSessionData {
  * Get auth headers from cookies for server requests
  * Includes Hasura-specific headers for RLS
  */
-async function getServerAuthHeaders(): Promise<ServerAuthHeaders> {
+export async function getServerAuthHeaders(): Promise<ServerAuthHeaders> {
   try {
     if (isDev) console.log("🔑 [URQL] Getting server auth headers");
     const cookieStore = await cookies();
@@ -158,19 +158,24 @@ async function getServerAuthHeaders(): Promise<ServerAuthHeaders> {
 }
 
 /**
- * Server-side query utility with error handling
- * Use this in Server Components for data fetching
+ * Server-side query utility with error handling.
+ * Use this in Server Components for data fetching.
+ *
+ * When `headers` is provided, uses those instead of reading from cookies.
+ * This is useful inside unstable_cache where cookies() is not available —
+ * the caller extracts headers beforehand and passes them via closure.
  */
 export async function serverQuery<TDocument extends TadaDocumentNode<any, any>>(
   query: TDocument,
   variables?: VariablesOf<TDocument>,
+  headers?: ServerAuthHeaders,
 ): Promise<ResultOf<TDocument>> {
   if (!query) {
     throw new Error("Query document is required");
   }
 
   const client = getClient();
-  const authHeaders = await getServerAuthHeaders();
+  const authHeaders = headers ?? (await getServerAuthHeaders());
 
   try {
     const result = await client

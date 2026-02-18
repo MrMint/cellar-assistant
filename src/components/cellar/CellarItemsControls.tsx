@@ -1,23 +1,23 @@
 "use client";
 
-import { ITEM_TYPES, type ItemTypeValue } from "@cellar-assistant/shared";
+import type { ItemTypeValue } from "@cellar-assistant/shared";
 import { Button, Stack } from "@mui/joy";
-import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
+import {
+  parseAsArrayOf,
+  parseAsInteger,
+  parseAsString,
+  useQueryState,
+} from "nuqs";
 import { useEffect, useRef, useTransition } from "react";
 import { MdAdd } from "react-icons/md";
+import {
+  ITEMS_PAGE_SIZE,
+  parseItemTypes,
+} from "@/app/(authenticated)/cellars/[cellarId]/items/searchParams";
 import { HeaderBar } from "@/components/common/HeaderBar";
 import { Link } from "@/components/common/Link";
 import { CellarItemsFilter } from "./CellarItemsFilter";
 import type { CellarItemCounts } from "./cellarItemsServer";
-
-/**
- * Validates and filters an array of strings to only include valid ItemTypeValue values.
- */
-function parseItemTypes(types: string[]): ItemTypeValue[] {
-  return types.filter((t): t is ItemTypeValue =>
-    ITEM_TYPES.includes(t as ItemTypeValue),
-  );
-}
 
 interface CellarItemsControlsProps {
   cellarName: string;
@@ -59,12 +59,22 @@ export function CellarItemsControls({
     }),
   );
 
+  const [, setLimit] = useQueryState(
+    "limit",
+    parseAsInteger.withDefault(ITEMS_PAGE_SIZE).withOptions({
+      shallow: false,
+      startTransition,
+    }),
+  );
+
   const handleSearchChange = (value: string) => {
     setSearch(value || null); // null removes the param
+    setLimit(null); // Reset to default on search change
   };
 
   const handleTypesChange = (newTypes: ItemTypeValue[]) => {
     setTypes(newTypes.length > 0 ? newTypes : null);
+    setLimit(null); // Reset to default on type filter change
   };
 
   // Before mount, use server-provided initial values to prevent hydration mismatch.

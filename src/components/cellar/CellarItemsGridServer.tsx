@@ -1,54 +1,48 @@
 import type { ItemTypeValue } from "@cellar-assistant/shared";
-import { serverQuery } from "@/lib/urql/server";
+import { getServerAuthHeaders } from "@/lib/urql/server";
 import { CellarItemsGrid } from "./CellarItemsGrid";
-import {
-  buildItemsWhereClause,
-  generateSearchVector,
-  sortCellarItems,
-  transformCellarItems,
-} from "./cellarItemsServer";
-import { GetCellarItemsQuery } from "./queries";
+import { getCachedCellarItems } from "./cellarItemsServer";
 
 interface CellarItemsGridServerProps {
   cellarId: string;
   userId: string;
   search: string;
   types: ItemTypeValue[];
+  limit: number;
 }
 
 /**
  * Async server component that fetches and renders cellar items.
  * Designed to be wrapped in Suspense for streaming.
+ *
+ * Extracts auth headers from cookies, then passes them into the cached
+ * function via closure — so Hasura RLS is enforced on cache miss, and
+ * subsequent load-more calls from the server action hit the same cache.
  */
 export async function CellarItemsGridServer({
   cellarId,
   userId,
   search,
   types,
+  limit,
 }: CellarItemsGridServerProps) {
-  // Generate search vector if search text exists (server-side)
-  const searchVector = search ? await generateSearchVector(search) : undefined;
-
-  // Build where clause for type filtering
-  const itemsWhereClause = buildItemsWhereClause(
-    types.length > 0 ? types : undefined,
-  );
-
-  // Fetch items
-  const data = await serverQuery(GetCellarItemsQuery, {
+  const authHeaders = await getServerAuthHeaders();
+  const { items: sortedItems, totalCount } = await getCachedCellarItems(
     cellarId,
-    userId,
-    itemsWhereClause,
-    search: searchVector,
-  });
+    authHeaders,
+  )(userId, search, types);
 
-  if (!data.cellars_by_pk) {
+  if (totalCount === 0) {
     return null;
   }
 
-  // Transform and sort items server-side
-  const transformedItems = transformCellarItems(data.cellars_by_pk.items);
-  const sortedItems = sortCellarItems(transformedItems);
-
-  return <CellarItemsGrid items={sortedItems} />;
+  return (
+    <CellarItemsGrid
+      initialItems={sortedItems.slice(0, limit)}
+      totalCount={totalCount}
+      cellarId={cellarId}
+      search={search}
+      types={types}
+    />
+  );
 }
