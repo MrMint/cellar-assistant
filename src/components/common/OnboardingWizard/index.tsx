@@ -7,7 +7,7 @@ import { DisplayPictureStep } from "./DisplayPictureStep";
 import { ExistingItems } from "./ExistingItems";
 import { pictureOnboardingMachine } from "./machines";
 import { PictureStep } from "./PictureStep";
-import { SearchingStep } from "./SearchingStep";
+import { AnimationShowcase } from "../AnimationShowcase";
 
 export type OnboardingResult = {
   barcode?: Barcode;
@@ -62,7 +62,7 @@ export const OnboardingWizard = ({
         />
       )}
       {includes(state.value, ["searching", "searchingByImage"]) && (
-        <SearchingStep />
+        <AnimationShowcase statusText="Searching..." />
       )}
       {includes(state.value, ["chooseExisting", "chooseExistingImage"]) &&
         isNotNil(state.context.existingItems) && (

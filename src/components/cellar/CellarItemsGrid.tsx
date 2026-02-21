@@ -4,7 +4,14 @@ import type { ItemTypeValue } from "@cellar-assistant/shared";
 import { Box, Card, CircularProgress, Grid, Skeleton, Typography } from "@mui/joy";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { parseAsInteger, useQueryState } from "nuqs";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ITEMS_PAGE_SIZE } from "@/app/(authenticated)/cellars/[cellarId]/items/searchParams";
 import { ItemCard } from "@/components/item/ItemCard";
 import { useColumnCount } from "@/hooks/useColumnCount";
@@ -59,7 +66,11 @@ export function CellarItemsGrid({
   const [scrollData, setScrollData] = useState<ScrollData | null>(
     readScrollData,
   );
-  const [isRestoringScroll, setIsRestoringScroll] = useState(!!scrollData);
+  const [isRestoringScroll, setIsRestoringScroll] = useState(() => {
+    if (!scrollData) return false;
+    // Skip hiding if the target is already in the initial batch
+    return !initialItems.some((x) => x.item.id === scrollData.id);
+  });
 
   // Responsive column count
   const columnCount = useColumnCount(items.length);
@@ -84,7 +95,7 @@ export function CellarItemsGrid({
     null,
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!sentinelRef.current) return;
     let el: HTMLElement | null = sentinelRef.current.parentElement;
     while (el) {
@@ -149,12 +160,25 @@ export function CellarItemsGrid({
   // holds the value from the original mount (likely null). The popstate listener
   // picks up the freshly-written sessionStorage entry and re-arms scroll restore.
   const hasScrolledRef = useRef(false);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
   useEffect(() => {
     const handlePopState = () => {
       const data = readScrollData();
       if (data) {
+        // Only hide the grid if the target item isn't loaded yet —
+        // the useLayoutEffect scroll restore will handle it before paint.
+        const needsLoad = !itemsRef.current.some(
+          (x) => x.item.id === data.id,
+        );
+        // setScrollData triggers a re-render; the useLayoutEffect scroll
+        // restore runs before paint, so the grid never appears at the wrong
+        // position even when isRestoringScroll stays false.
         setScrollData(data);
-        setIsRestoringScroll(true);
+        if (needsLoad) {
+          setIsRestoringScroll(true);
+        }
         hasScrolledRef.current = false;
       }
     };
@@ -162,11 +186,12 @@ export function CellarItemsGrid({
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // Scroll restore — runs when rows AND scroll container are ready.
-  // If the target item isn't in the initial batch, loads exactly the missing
-  // items in one shot using the stored itemCount. If the item was deleted
-  // (all expected items loaded but target not found), gives up gracefully.
-  useEffect(() => {
+  // Scroll restore — runs as a layout effect (before paint) so the user never
+  // sees the grid at the wrong position. If the target item isn't in the
+  // initial batch, loads exactly the missing items in one shot using the
+  // stored itemCount. If the item was deleted (all expected items loaded but
+  // target not found), gives up gracefully.
+  useLayoutEffect(() => {
     if (
       hasScrolledRef.current ||
       !scrollData ||
@@ -181,12 +206,10 @@ export function CellarItemsGrid({
 
     if (rowIndex >= 0) {
       hasScrolledRef.current = true;
-      requestAnimationFrame(() => {
-        virtualizer.scrollToIndex(rowIndex, { align: "center" });
-        setIsRestoringScroll(false);
-        setScrollData(null);
-        sessionStorage.removeItem(SCROLL_STORAGE_KEY);
-      });
+      virtualizer.scrollToIndex(rowIndex, { align: "center" });
+      setIsRestoringScroll(false);
+      setScrollData(null);
+      sessionStorage.removeItem(SCROLL_STORAGE_KEY);
     } else if (hasMore && !isLoadingMore && scrollData.itemCount > items.length) {
       // Load exactly the missing items in one shot
       loadMore(scrollData.itemCount - items.length);
