@@ -28,7 +28,7 @@ export default async function CellarItemsPage({
 
   // Parse search params using nuqs cache with validation
   const resolvedSearchParams = await searchParams;
-  const { search, types, limit } =
+  const { search, types } =
     itemsSearchParamsCache.parse(resolvedSearchParams);
   const validTypes = parseItemTypes(types);
 
@@ -67,7 +67,6 @@ export default async function CellarItemsPage({
             userId={userId}
             search={search}
             types={validTypes}
-            limit={limit}
           />
         </Suspense>
       </Stack>

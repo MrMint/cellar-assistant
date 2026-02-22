@@ -3,7 +3,6 @@
 import type { ItemTypeValue } from "@cellar-assistant/shared";
 import { Box, Card, CircularProgress, Grid, Skeleton, Typography } from "@mui/joy";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { parseAsInteger, useQueryState } from "nuqs";
 import {
   useCallback,
   useEffect,
@@ -22,6 +21,22 @@ import type { TransformedCellarItem } from "./cellarItemsServer";
 const SCROLL_STORAGE_KEY = "scroll-restore";
 const ESTIMATED_ROW_HEIGHT = 340;
 
+// Module-level cache — survives unmount/remount within the same SPA session.
+// On back-navigation the component initializes from this cache (all previously
+// loaded items) so scroll restore finds the target immediately, no spinner.
+const gridItemsCache = new Map<
+  string,
+  { items: TransformedCellarItem[]; total: number }
+>();
+
+function getCacheKey(
+  cellarId: string,
+  search: string,
+  types: ItemTypeValue[],
+): string {
+  return `${cellarId}\0${search}\0${types.join(",")}`;
+}
+
 interface CellarItemsGridProps {
   initialItems: TransformedCellarItem[];
   totalCount: number;
@@ -37,27 +52,41 @@ export function CellarItemsGrid({
   search,
   types,
 }: CellarItemsGridProps) {
-  const [items, setItems] = useState(initialItems);
-  const [total, setTotal] = useState(totalCount);
+  const cacheKey = getCacheKey(cellarId, search, types);
+
+  // Prefer cached items when they're a superset of the server-provided batch
+  // (i.e. the user had loaded beyond the initial page before navigating away).
+  const [items, setItems] = useState(() => {
+    const cached = gridItemsCache.get(cacheKey);
+    if (cached && cached.items.length > initialItems.length) {
+      return cached.items;
+    }
+    return initialItems;
+  });
+  const [total, setTotal] = useState(() => {
+    const cached = gridItemsCache.get(cacheKey);
+    if (cached && cached.items.length > initialItems.length) {
+      return cached.total;
+    }
+    return totalCount;
+  });
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Sync state when the server provides new initialItems without a remount
-  // (e.g., revalidation or router cache miss that doesn't trigger Suspense).
+  // Keep the module cache in sync as the user loads more items.
+  useEffect(() => {
+    gridItemsCache.set(cacheKey, { items, total });
+  }, [cacheKey, items, total]);
+
+  // Sync state when the server provides genuinely new data (revalidation).
+  // On back-nav with a router cache hit, initialItems is the same reference
+  // so the sync is skipped and the cache-populated state is preserved.
   const [prevInitial, setPrevInitial] = useState(initialItems);
   if (prevInitial !== initialItems) {
     setPrevInitial(initialItems);
     setItems(initialItems);
     setTotal(totalCount);
+    gridItemsCache.delete(cacheKey);
   }
-
-  // nuqs limit param — shallow: true so load-more doesn't trigger server
-  // re-renders (which are slow and block the UI). The URL still gets updated
-  // via history.replaceState, so back-navigation carries the correct limit.
-  // On cache miss, loading.tsx shows while the server renders the right slice.
-  const [, setLimit] = useQueryState(
-    "limit",
-    parseAsInteger.withDefault(ITEMS_PAGE_SIZE).withOptions({ shallow: true }),
-  );
 
   // Scroll restore target from sessionStorage. Using state (with lazy init)
   // avoids re-reading on every render while still allowing updates — the
@@ -66,11 +95,11 @@ export function CellarItemsGrid({
   const [scrollData, setScrollData] = useState<ScrollData | null>(
     readScrollData,
   );
-  const [isRestoringScroll, setIsRestoringScroll] = useState(() => {
-    if (!scrollData) return false;
-    // Skip hiding if the target is already in the initial batch
-    return !initialItems.some((x) => x.item.id === scrollData.id);
-  });
+  // Hide the grid during back-nav until useLayoutEffect restores scroll position.
+  // With the module cache the restore happens before paint (same frame), so the
+  // hidden state is never visible — but it prevents a brief navigation flash
+  // where the grid would appear at scroll-top before snapping into place.
+  const [isRestoringScroll, setIsRestoringScroll] = useState(!!scrollData);
 
   // Responsive column count
   const columnCount = useColumnCount(items.length);
@@ -110,11 +139,13 @@ export function CellarItemsGrid({
 
   // Virtualizer — count reflects total rows for accurate scrollbar sizing.
   // Unloaded rows use estimateSize; loaded rows are measured dynamically.
+  // Higher overscan on mobile where rows are cheap (1-2 columns) to prevent
+  // blank flashes during fast flick scrolling.
   const virtualizer = useVirtualizer({
     count: totalRows,
     getScrollElement: () => scrollContainer,
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
-    overscan: 3,
+    overscan: columnCount <= 2 ? 8 : 5,
     gap: 16,
   });
 
@@ -138,15 +169,12 @@ export function CellarItemsGrid({
         batchSize,
       );
 
-      const newLength = items.length + result.items.length;
       setItems((prev) => [...prev, ...result.items]);
       setTotal(result.totalCount);
-
-      setLimit(newLength);
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, cellarId, search, types, items.length, setLimit]);
+  }, [isLoadingMore, hasMore, cellarId, search, types, items.length]);
 
   useEffect(() => {
     if (!hasMore || isLoadingMore) return;
@@ -167,18 +195,12 @@ export function CellarItemsGrid({
     const handlePopState = () => {
       const data = readScrollData();
       if (data) {
-        // Only hide the grid if the target item isn't loaded yet —
-        // the useLayoutEffect scroll restore will handle it before paint.
-        const needsLoad = !itemsRef.current.some(
-          (x) => x.item.id === data.id,
-        );
-        // setScrollData triggers a re-render; the useLayoutEffect scroll
-        // restore runs before paint, so the grid never appears at the wrong
-        // position even when isRestoringScroll stays false.
         setScrollData(data);
-        if (needsLoad) {
-          setIsRestoringScroll(true);
-        }
+        // Always hide the grid during scroll restore — the virtualizer's
+        // internal scrollOffset lags the DOM scrollTop by one frame (the
+        // scroll event is async), so revealing immediately would flash
+        // rows from the old offset.
+        setIsRestoringScroll(true);
         hasScrolledRef.current = false;
       }
     };
@@ -207,9 +229,16 @@ export function CellarItemsGrid({
     if (rowIndex >= 0) {
       hasScrolledRef.current = true;
       virtualizer.scrollToIndex(rowIndex, { align: "center" });
-      setIsRestoringScroll(false);
       setScrollData(null);
       sessionStorage.removeItem(SCROLL_STORAGE_KEY);
+      // Reveal after the next frame — scrollToIndex sets the DOM scrollTop
+      // synchronously, but the virtualizer's internal scrollOffset only
+      // updates when its scroll event handler fires (async). Revealing
+      // immediately would show rows from the old offset (0) for one frame,
+      // causing a visible flash for items beyond the initial viewport.
+      requestAnimationFrame(() => {
+        setIsRestoringScroll(false);
+      });
     } else if (hasMore && !isLoadingMore && scrollData.itemCount > items.length) {
       // Load exactly the missing items in one shot
       loadMore(scrollData.itemCount - items.length);

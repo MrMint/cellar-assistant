@@ -1,4 +1,5 @@
 import type { ItemTypeValue } from "@cellar-assistant/shared";
+import { ITEMS_PAGE_SIZE } from "@/app/(authenticated)/cellars/[cellarId]/items/searchParams";
 import { getServerAuthHeaders } from "@/lib/urql/server";
 import { CellarItemsGrid } from "./CellarItemsGrid";
 import { getCachedCellarItems } from "./cellarItemsServer";
@@ -8,7 +9,6 @@ interface CellarItemsGridServerProps {
   userId: string;
   search: string;
   types: ItemTypeValue[];
-  limit: number;
 }
 
 /**
@@ -24,7 +24,6 @@ export async function CellarItemsGridServer({
   userId,
   search,
   types,
-  limit,
 }: CellarItemsGridServerProps) {
   const authHeaders = await getServerAuthHeaders();
   const { items: sortedItems, totalCount } = await getCachedCellarItems(
@@ -38,7 +37,7 @@ export async function CellarItemsGridServer({
 
   return (
     <CellarItemsGrid
-      initialItems={sortedItems.slice(0, limit)}
+      initialItems={sortedItems.slice(0, ITEMS_PAGE_SIZE)}
       totalCount={totalCount}
       cellarId={cellarId}
       search={search}

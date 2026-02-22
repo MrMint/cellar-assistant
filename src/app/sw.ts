@@ -20,8 +20,20 @@ const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,
   clientsClaim: true,
-  navigationPreload: true,
+  navigationPreload: false,
   runtimeCaching: [
+    {
+      matcher: ({ request }) => request.mode === "navigate",
+      handler: new StaleWhileRevalidate({
+        cacheName: "pages",
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 32,
+            maxAgeSeconds: 24 * 60 * 60,
+          }),
+        ],
+      }),
+    },
     ...defaultCache,
     {
       matcher: /\.(?:woff2?|ttf|otf|eot)$/i,
