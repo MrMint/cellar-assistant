@@ -23,10 +23,14 @@ const ESTIMATED_ROW_HEIGHT = 340;
 
 // Module-level cache — survives unmount/remount within the same SPA session.
 // On back-navigation the component initializes from this cache (all previously
-// loaded items) so scroll restore finds the target immediately, no spinner.
+// loaded items + row height measurements) so scroll restore is pixel-perfect.
 const gridItemsCache = new Map<
   string,
-  { items: TransformedCellarItem[]; total: number }
+  {
+    items: TransformedCellarItem[];
+    total: number;
+    measurements: Record<number, number>;
+  }
 >();
 
 function getCacheKey(
@@ -72,9 +76,20 @@ export function CellarItemsGrid({
   });
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // Accumulated row height measurements — persisted in the module cache so
+  // the virtualizer's estimateSize returns accurate heights on back-nav,
+  // giving pixel-perfect scroll restoration.
+  const measurementsRef = useRef<Record<number, number>>(
+    gridItemsCache.get(cacheKey)?.measurements ?? {},
+  );
+
   // Keep the module cache in sync as the user loads more items.
   useEffect(() => {
-    gridItemsCache.set(cacheKey, { items, total });
+    gridItemsCache.set(cacheKey, {
+      items,
+      total,
+      measurements: measurementsRef.current,
+    });
   }, [cacheKey, items, total]);
 
   // Sync state when the server provides genuinely new data (revalidation).
@@ -85,6 +100,7 @@ export function CellarItemsGrid({
     setPrevInitial(initialItems);
     setItems(initialItems);
     setTotal(totalCount);
+    measurementsRef.current = {};
     gridItemsCache.delete(cacheKey);
   }
 
@@ -95,11 +111,6 @@ export function CellarItemsGrid({
   const [scrollData, setScrollData] = useState<ScrollData | null>(
     readScrollData,
   );
-  // Hide the grid during back-nav until useLayoutEffect restores scroll position.
-  // With the module cache the restore happens before paint (same frame), so the
-  // hidden state is never visible — but it prevents a brief navigation flash
-  // where the grid would appear at scroll-top before snapping into place.
-  const [isRestoringScroll, setIsRestoringScroll] = useState(!!scrollData);
 
   // Responsive column count
   const columnCount = useColumnCount(items.length);
@@ -130,6 +141,15 @@ export function CellarItemsGrid({
     while (el) {
       const style = getComputedStyle(el);
       if (style.overflowY === "auto" || style.overflowY === "scroll") {
+        // Pre-set scroll position BEFORE setScrollContainer triggers the
+        // virtualizer to observe this element. When the virtualizer's
+        // observeElementOffset fires synchronously during setup, it reads
+        // the correct scrollTop — so it initializes at the target offset
+        // and renders the right rows on the first paint.
+        const data = readScrollData();
+        if (data) {
+          el.scrollTop = data.scrollTop;
+        }
         setScrollContainer(el);
         break;
       }
@@ -144,12 +164,34 @@ export function CellarItemsGrid({
   const virtualizer = useVirtualizer({
     count: totalRows,
     getScrollElement: () => scrollContainer,
-    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    // Use cached measurements from previous mount for accurate initial heights.
+    // This makes scrollToOffset pixel-perfect on back-nav because the virtualizer
+    // starts with the same heights it had when the scrollTop was saved.
+    estimateSize: (index) =>
+      measurementsRef.current[index] ?? ESTIMATED_ROW_HEIGHT,
     overscan: columnCount <= 2 ? 8 : 5,
     gap: 16,
   });
 
   const virtualRows = virtualizer.getVirtualItems();
+
+  // Accumulate row measurements for the module cache.
+  useEffect(() => {
+    let changed = false;
+    for (const vr of virtualRows) {
+      if (measurementsRef.current[vr.index] !== vr.size) {
+        measurementsRef.current[vr.index] = vr.size;
+        changed = true;
+      }
+    }
+    if (changed) {
+      gridItemsCache.set(cacheKey, {
+        items,
+        total,
+        measurements: measurementsRef.current,
+      });
+    }
+  });
 
   // Eager load-more: trigger when visible rows approach the loaded boundary.
   // Buffer of 5 rows (~10-30 items depending on columns) for seamless scrolling.
@@ -188,19 +230,12 @@ export function CellarItemsGrid({
   // holds the value from the original mount (likely null). The popstate listener
   // picks up the freshly-written sessionStorage entry and re-arms scroll restore.
   const hasScrolledRef = useRef(false);
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
 
   useEffect(() => {
     const handlePopState = () => {
       const data = readScrollData();
       if (data) {
         setScrollData(data);
-        // Always hide the grid during scroll restore — the virtualizer's
-        // internal scrollOffset lags the DOM scrollTop by one frame (the
-        // scroll event is async), so revealing immediately would flash
-        // rows from the old offset.
-        setIsRestoringScroll(true);
         hasScrolledRef.current = false;
       }
     };
@@ -208,58 +243,20 @@ export function CellarItemsGrid({
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // Scroll restore — runs as a layout effect (before paint) so the user never
-  // sees the grid at the wrong position. If the target item isn't in the
-  // initial batch, loads exactly the missing items in one shot using the
-  // stored itemCount. If the item was deleted (all expected items loaded but
-  // target not found), gives up gracefully.
+  // Scroll restore — runs in useLayoutEffect (before paint) so the user
+  // never sees the grid at the wrong position. For fresh mounts the scroll
+  // container's scrollTop was already pre-set in the container-detection LE
+  // above, so the virtualizer initialized at the correct offset. This LE
+  // handles the popstate case (component stays mounted, needs repositioning)
+  // and cleans up sessionStorage in both cases.
   useLayoutEffect(() => {
-    if (
-      hasScrolledRef.current ||
-      !scrollData ||
-      !scrollContainer ||
-      loadedRows.length === 0
-    )
-      return;
+    if (hasScrolledRef.current || !scrollData || !scrollContainer) return;
 
-    const rowIndex = loadedRows.findIndex((row) =>
-      row.some((item) => item.item.id === scrollData.id),
-    );
-
-    if (rowIndex >= 0) {
-      hasScrolledRef.current = true;
-      virtualizer.scrollToIndex(rowIndex, { align: "center" });
-      setScrollData(null);
-      sessionStorage.removeItem(SCROLL_STORAGE_KEY);
-      // Reveal after the next frame — scrollToIndex sets the DOM scrollTop
-      // synchronously, but the virtualizer's internal scrollOffset only
-      // updates when its scroll event handler fires (async). Revealing
-      // immediately would show rows from the old offset (0) for one frame,
-      // causing a visible flash for items beyond the initial viewport.
-      requestAnimationFrame(() => {
-        setIsRestoringScroll(false);
-      });
-    } else if (hasMore && !isLoadingMore && scrollData.itemCount > items.length) {
-      // Load exactly the missing items in one shot
-      loadMore(scrollData.itemCount - items.length);
-    } else if (!isLoadingMore) {
-      // Item was deleted or all expected items loaded — give up, show grid at top
-      hasScrolledRef.current = true;
-      setIsRestoringScroll(false);
-      setScrollData(null);
-      sessionStorage.removeItem(SCROLL_STORAGE_KEY);
-    }
-    // else: loading in progress, wait for it to complete
-  }, [
-    scrollData,
-    scrollContainer,
-    loadedRows,
-    virtualizer,
-    hasMore,
-    isLoadingMore,
-    loadMore,
-    items.length,
-  ]);
+    hasScrolledRef.current = true;
+    virtualizer.scrollToOffset(scrollData.scrollTop);
+    setScrollData(null);
+    sessionStorage.removeItem(SCROLL_STORAGE_KEY);
+  }, [scrollData, scrollContainer, virtualizer]);
 
   if (items.length === 0) {
     return (
@@ -274,21 +271,13 @@ export function CellarItemsGrid({
       {/* Sentinel for scroll container detection */}
       <div ref={sentinelRef} style={{ height: 0, overflow: "hidden" }} />
 
-      {/* Loading overlay while scroll restore loads missing batches */}
-      {isRestoringScroll && (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-          <CircularProgress size="sm" />
-        </Box>
-      )}
-
-      {/* Virtualized grid — invisible (not removed) during scroll restore so
-          the virtualizer keeps its full layout and scrollToIndex works. */}
+      {/* Virtualized grid — scroll position is set in useLayoutEffect (before
+          paint), so the grid is always visible at the correct offset. */}
       <Box
         sx={{
           height: virtualizer.getTotalSize(),
           width: "100%",
           position: "relative",
-          ...(isRestoringScroll && { visibility: "hidden" }),
         }}
       >
         {virtualRows.map((virtualRow) => {
@@ -322,7 +311,7 @@ export function CellarItemsGrid({
                           item={x.item}
                           type={x.type}
                           href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
-                          onClick={() => writeScrollData(x.item.id, items.length)}
+                          onClick={() => writeScrollData(scrollContainer?.scrollTop ?? 0)}
                         />
                       </Grid>
                     ))
@@ -362,8 +351,7 @@ export function CellarItemsGrid({
 }
 
 interface ScrollData {
-  id: string;
-  itemCount: number;
+  scrollTop: number;
 }
 
 function readScrollData(): ScrollData | null {
@@ -373,16 +361,16 @@ function readScrollData(): ScrollData | null {
     if (!stored) return null;
     const data = JSON.parse(stored);
     if (data.path !== window.location.pathname) return null;
-    return { id: data.id, itemCount: data.itemCount ?? Infinity };
+    return { scrollTop: data.scrollTop ?? 0 };
   } catch {
     return null;
   }
 }
 
-function writeScrollData(id: string, itemCount: number) {
+function writeScrollData(scrollTop: number) {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(
     SCROLL_STORAGE_KEY,
-    JSON.stringify({ path: window.location.pathname, id, itemCount }),
+    JSON.stringify({ path: window.location.pathname, scrollTop }),
   );
 }
