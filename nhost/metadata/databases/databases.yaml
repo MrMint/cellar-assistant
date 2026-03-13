@@ -134,7 +134,7 @@
           description: ""
           nullable: false
           type: text
-      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id) *, vector <=> {{image}}::vector AS distance FROM public.item_image ORDER BY beer_id, wine_id, spirit_id, coffee_id, sake_id, distance
+      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id) *, vector <=> {{image}}::halfvec(768) AS distance FROM public.item_vectors ORDER BY beer_id, wine_id, spirit_id, coffee_id, sake_id, distance
       object_relationships:
         - name: beer
           using:
@@ -267,7 +267,7 @@
           description: ""
           nullable: false
           type: text
-      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id) *, vector <=> {{text}}::vector AS distance FROM public.item_vectors ORDER BY beer_id, wine_id, spirit_id, coffee_id, sake_id, distance
+      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id) *, vector <=> {{text}}::halfvec(768) AS distance FROM public.item_vectors ORDER BY beer_id, wine_id, spirit_id, coffee_id, sake_id, distance
       object_relationships:
         - name: beer
           using:

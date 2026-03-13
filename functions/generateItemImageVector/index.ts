@@ -1,33 +1,21 @@
 import type { Request, Response } from "express";
 import {
   createErrorResponse,
-  createFunctionNhostClient,
-  createPerformanceTracker,
-  DatabaseError,
-  type ExtendedPerformanceMetrics,
-  executeWithRetry,
-  functionMutation,
-  getAdminAuthHeaders,
-  getConfig,
-  getFilePresignedURLWithAuth,
   logError,
-  logPerformanceMetrics,
 } from "../_utils";
-import { createAIProvider } from "../_utils/ai-providers/factory.js";
 import {
   type ItemImageVectorInput,
   type ItemImageVectorOutput,
-  UPDATE_ITEM_IMAGE_VECTOR_MUTATION,
   validateItemImageVectorInput,
 } from "./_types.js";
 
-const { NHOST_WEBHOOK_SECRET } = process.env;
+const { NHOST_WEBHOOK_SECRET, NHOST_FUNCTIONS_URL } = process.env;
 
-const nhostClient = createFunctionNhostClient();
-
-// Get shared configuration
-const CONFIG = getConfig();
-
+/**
+ * When a new item_image is inserted, this function triggers re-generation of the
+ * parent item's vector via the generateItemVector endpoint. This ensures the
+ * combined text+image multimodal embedding stays current.
+ */
 export default async function generateItemImageVector(
   req: Request<
     Record<string, never>,
@@ -44,46 +32,50 @@ export default async function generateItemImageVector(
     }
 
     const validatedInput = validateItemImageVectorInput(req.body);
-    const performanceTracker =
-      createPerformanceTracker<ExtendedPerformanceMetrics>();
+    const item = validatedInput.event.data.new;
 
-    const {
-      event: {
-        data: { new: item },
+    console.log(`Image uploaded for item_image ${item.id}, triggering parent item vector regeneration`);
+
+    // Determine the parent item type and ID
+    const parentItem = getParentItem(item);
+    if (!parentItem) {
+      console.log(`No parent item found for item_image ${item.id}, skipping vector regeneration`);
+      return res.status(200).json({ success: true, itemImageId: item.id as string });
+    }
+
+    console.log(`Re-triggering vector generation for ${parentItem.tableName} ${parentItem.id}`);
+
+    // Call generateItemVector to regenerate the parent item's combined embedding
+    const response = await fetch(`${NHOST_FUNCTIONS_URL}/generateItemVector`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "nhost-webhook-secret": NHOST_WEBHOOK_SECRET ?? "",
       },
-    } = validatedInput;
-
-    console.log(`Processing image vector generation for item_image ${item.id}`);
-
-    const result = await executeWithRetry(
-      () => processItemImageVector(item, performanceTracker),
-      {
-        retryConfig: {
-          maxRetries: CONFIG.RETRY.MAX_RETRIES,
-          baseDelayMs: CONFIG.RETRY.BASE_DELAY_MS,
-          maxDelayMs: CONFIG.RETRY.MAX_DELAY_MS,
-          jitterFactor: CONFIG.RETRY.JITTER_FACTOR,
+      body: JSON.stringify({
+        table: { name: parentItem.tableName },
+        event: {
+          data: {
+            new: { id: parentItem.id },
+          },
         },
-        operationName: "item image vector generation",
-        context: { itemImageId: item.id, fileId: item.file_id },
-      },
-    );
+      }),
+    });
 
-    // Log performance metrics
-    const metrics = performanceTracker.getMetrics();
-    logPerformanceMetrics(
-      metrics,
-      { itemImageId: item.id, fileId: item.file_id },
-      {
-        functionName: "generateItemImageVector",
-        sampleRate: CONFIG.PERFORMANCE.LOG_METRICS_SAMPLE_RATE,
-        slowOperationThresholdMs: CONFIG.PERFORMANCE.LOG_SLOW_OPERATIONS_MS,
-      },
-    );
+    if (!response.ok) {
+      console.warn(`Failed to trigger vector regeneration: ${response.status} ${response.statusText}`);
+    } else {
+      console.log(`Successfully triggered vector regeneration for ${parentItem.tableName} ${parentItem.id}`);
+    }
+
+    const result: ItemImageVectorOutput = {
+      success: true,
+      itemImageId: item.id as string,
+      retriggeredItem: { type: parentItem.tableName, id: parentItem.id },
+    };
 
     return res.status(200).json(result);
   } catch (exception) {
-    // Extract context for error logging
     let errorContext: Record<string, unknown> = {};
     try {
       const context = validateItemImageVectorInput(req.body);
@@ -109,76 +101,13 @@ export default async function generateItemImageVector(
   }
 }
 
-async function processItemImageVector(
+function getParentItem(
   item: ItemImageVectorInput["event"]["data"]["new"],
-  performanceTracker: ReturnType<
-    typeof createPerformanceTracker<ExtendedPerformanceMetrics>
-  >,
-): Promise<ItemImageVectorOutput> {
-  // Get presigned URL with performance tracking
-  const endUrlTimer = performanceTracker.startTimer("externalApiDuration");
-  const presignedUrlResponse = await getFilePresignedURLWithAuth(
-    nhostClient,
-    item.file_id as string,
-  );
-  endUrlTimer();
-
-  // Type assertion for Nhost SDK FetchResponse<PresignedURLResponse>
-  const { body, status } =
-    presignedUrlResponse as import("../_utils/types").PresignedUrlResponse;
-  if (status < 200 || status >= 300 || !body?.url) {
-    throw new DatabaseError(`Failed to get presigned URL: status ${status}`);
-  }
-
-  // Fetch image with performance tracking
-  const endFetchTimer = performanceTracker.startTimer("externalApiDuration");
-  const response = await fetch(body.url);
-  if (!response.ok) {
-    throw new DatabaseError(`Failed to fetch image: ${response.statusText}`);
-  }
-  const image = await response.arrayBuffer();
-  const content = Buffer.from(image);
-  endFetchTimer();
-  console.log("Fetched image");
-
-  // Generate embeddings with performance tracking
-  const endEmbeddingTimer = performanceTracker.startTimer(
-    "externalApiDuration",
-  );
-  const aiProvider = await createAIProvider();
-  const embeddingResult = await aiProvider.generateEmbeddings?.({
-    content,
-    type: "image",
-  });
-  endEmbeddingTimer();
-
-  if (!embeddingResult?.embeddings) {
-    throw new DatabaseError("Failed to generate image embeddings");
-  }
-
-  console.log(
-    `Generated image vector with ${embeddingResult.embeddings.length} dimensions`,
-  );
-
-  // Update item_image with vector
-  const endDbTimer = performanceTracker.startTimer("dbOperationDuration");
-
-  const insertVectorResult = await functionMutation(
-    UPDATE_ITEM_IMAGE_VECTOR_MUTATION,
-    {
-      itemId: item.id as string,
-      item: {
-        vector: JSON.stringify(embeddingResult.embeddings),
-      },
-    },
-    { headers: getAdminAuthHeaders() },
-  );
-  endDbTimer();
-
-  if (!insertVectorResult) {
-    throw new DatabaseError("Failed to update item_image vector");
-  }
-
-  console.log(`Updated item_image vector for ${item.id}`);
-  return { success: true, itemImageId: item.id as string };
+): { tableName: string; id: string } | null {
+  if (item.beer_id) return { tableName: "beers", id: item.beer_id as string };
+  if (item.wine_id) return { tableName: "wines", id: item.wine_id as string };
+  if (item.spirit_id) return { tableName: "spirits", id: item.spirit_id as string };
+  if (item.coffee_id) return { tableName: "coffees", id: item.coffee_id as string };
+  if (item.sake_id) return { tableName: "sakes", id: item.sake_id as string };
+  return null;
 }

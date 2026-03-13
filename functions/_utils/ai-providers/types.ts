@@ -54,6 +54,10 @@ export interface EmbeddingRequest {
   model?: string;
   dimensions?: number;
   taskType?: EmbeddingTaskType;
+  /** Optional images to combine with text content for multimodal embedding.
+   * When provided with type "text", produces a single vector encoding both text and visual information.
+   * Requires a model that supports multimodal embeddings (e.g. gemini-embedding-2). */
+  images?: Buffer[];
 }
 
 export interface EmbeddingResponse {

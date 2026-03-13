@@ -1,27 +1,11 @@
 /**
  * Type definitions for generateItemImageVector function
  *
- * This function processes item image uploads to generate embeddings/vectors
- * for similarity search and recommendation features.
+ * When a new item_image is inserted, this function triggers re-generation
+ * of the parent item's vector so the combined text+image embedding stays current.
  */
 
 import type { Item_Image } from "@cellar-assistant/shared";
-import { graphql, type ResultOf } from "@cellar-assistant/shared/gql/graphql";
-
-// =============================================================================
-// GraphQL Operations
-// =============================================================================
-
-/**
- * Mutation to update item_image with generated vector
- */
-export const UPDATE_ITEM_IMAGE_VECTOR_MUTATION = graphql(`
-  mutation UpdateItemImage($itemId: uuid!, $item: item_image_set_input!) {
-    update_item_image_by_pk(pk_columns: { id: $itemId }, _set: $item) {
-      id
-    }
-  }
-`);
 
 // =============================================================================
 // Input Types
@@ -49,56 +33,12 @@ export interface ItemImageVectorInput {
 export interface ItemImageVectorOutput {
   success: boolean;
   itemImageId: string;
+  retriggeredItem?: { type: string; id: string };
 }
-
-/**
- * Result from updating item_image with vector
- */
-export type UpdateItemImageResult = ResultOf<
-  typeof UPDATE_ITEM_IMAGE_VECTOR_MUTATION
->;
 
 // =============================================================================
 // Validation Functions
 // =============================================================================
-
-/**
- * Type guard to validate ItemImageVectorInput
- */
-export function isItemImageVectorInput(
-  value: unknown,
-): value is ItemImageVectorInput {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const data = value as Record<string, unknown>;
-
-  // Check event structure
-  if (!data.event || typeof data.event !== "object") {
-    return false;
-  }
-
-  const event = data.event as Record<string, unknown>;
-  if (!event.data || typeof event.data !== "object") {
-    return false;
-  }
-
-  const eventData = event.data as Record<string, unknown>;
-  if (!eventData.new || typeof eventData.new !== "object") {
-    return false;
-  }
-
-  const newItem = eventData.new as Record<string, unknown>;
-
-  // Check required fields
-  return (
-    typeof newItem.id === "string" &&
-    newItem.id.length > 0 &&
-    typeof newItem.file_id === "string" &&
-    newItem.file_id.length > 0
-  );
-}
 
 /**
  * Validates ItemImageVectorInput and throws descriptive errors

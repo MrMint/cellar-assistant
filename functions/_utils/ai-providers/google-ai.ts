@@ -103,13 +103,33 @@ export class GoogleAIProvider implements AIProvider {
     try {
       console.log(`Google AI generateEmbeddings with type: ${request.type}`);
 
-      const embeddingModel = request.model || "text-embedding-004";
+      // Gemini Embedding 2 provides a unified multimodal embedding space
+      const embeddingModel = request.model || "gemini-embedding-2-preview";
+      const dimensions = request.dimensions || 768;
 
       if (request.type === "text" && typeof request.content === "string") {
-        // Text embeddings
+        const hasImages = request.images && request.images.length > 0;
+
+        // Build content parts: text + optional images for combined multimodal embedding
+        const contents: unknown[] = [request.content];
+        if (hasImages && request.images) {
+          for (const image of request.images) {
+            contents.push({
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: image.toString("base64"),
+              },
+            });
+          }
+        }
+
         const response = await this.ai.models.embedContent({
           model: embeddingModel,
-          contents: request.content,
+          contents,
+          config: {
+            outputDimensionality: dimensions,
+            taskType: request.taskType || "RETRIEVAL_DOCUMENT",
+          },
         });
 
         return {
@@ -117,29 +137,33 @@ export class GoogleAIProvider implements AIProvider {
           metadata: {
             model: embeddingModel,
             dimensions:
-              response.embeddings?.[0]?.values?.length || request.dimensions,
+              response.embeddings?.[0]?.values?.length || dimensions,
             provider: "google-ai",
           },
         };
       } else if (request.type === "image" && Buffer.isBuffer(request.content)) {
-        // Multimodal embeddings (image)
+        // Image-only embedding (e.g. for search-by-image queries)
+        const imageBase64 = request.content.toString("base64");
         const response = await this.ai.models.embedContent({
-          model: "multimodalembedding@001", // Multimodal embedding model
+          model: embeddingModel,
           contents: [
             {
               inlineData: {
                 mimeType: "image/jpeg",
-                data: request.content.toString("base64"),
+                data: imageBase64,
               },
             },
           ],
+          config: {
+            outputDimensionality: dimensions,
+          },
         });
 
         return {
           embeddings: response.embeddings?.[0]?.values || [],
           metadata: {
-            model: "multimodalembedding@001",
-            dimensions: response.embeddings?.[0]?.values?.length || 1408, // Default multimodal dimension
+            model: embeddingModel,
+            dimensions: response.embeddings?.[0]?.values?.length || dimensions,
             provider: "google-ai",
           },
         };

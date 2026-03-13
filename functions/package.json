@@ -14,18 +14,23 @@
     "@cellar-assistant/shared": "file:./_packages/shared",
     "@cellar-assistant/typescript-config": "file:./_packages/typescript-config",
     "@google-cloud/bigquery": "8.1.1",
-    "@google/genai": "1.41.0",
-    "@nhost/nhost-js": "4.4.0",
+    "@google/genai": "1.45.0",
+    "@nhost/nhost-js": "4.5.0",
     "@types/json-schema": "7.0.15",
     "@urql/core": "6.0.1",
     "ajv": "8.18.0",
     "ajv-formats": "3.0.1",
     "form-data": "4.0.5",
     "fuzzball": "2.2.3",
-    "google-auth-library": "^10.5.0",
+    "google-auth-library": "^10.6.1",
     "gql.tada": "1.9.0",
     "ollama": "0.6.3",
     "ramda": "0.32.0",
     "ts-pattern": "5.9.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion": "^2.0.1"
+    }
   }
 }
