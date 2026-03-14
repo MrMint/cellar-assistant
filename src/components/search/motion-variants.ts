@@ -24,6 +24,10 @@ export const staggerContainerFast: Variants = {
       delayChildren: 0.02,
     },
   },
+  exit: {
+    opacity: 0,
+    transition: { duration: 0.12, ease: "easeIn" },
+  },
 };
 
 /**
@@ -48,6 +52,10 @@ export const fadeInLeft: Variants = {
     opacity: 1,
     x: 0,
     transition: { duration: 0.25, ease: "easeOut" },
+  },
+  exit: {
+    opacity: 0,
+    transition: { duration: 0.12, ease: "easeIn" },
   },
 };
 

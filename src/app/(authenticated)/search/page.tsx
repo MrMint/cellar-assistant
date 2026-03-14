@@ -1,14 +1,4 @@
-import {
-  Box,
-  Button,
-  Card,
-  CardCover,
-  Chip,
-  Grid,
-  Skeleton,
-  Stack,
-  Typography,
-} from "@mui/joy";
+import { Box, Button, Chip, Stack, Typography } from "@mui/joy";
 import Link from "next/link";
 import { Suspense } from "react";
 import {
@@ -21,9 +11,10 @@ import {
 } from "react-icons/md";
 import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
 import {
-  AnimatedDiscovery,
-  AnimatedDiscoveryItem,
-} from "@/components/search/AnimatedDiscovery";
+  FadeIn,
+  StaggerIn,
+  StaggerItem,
+} from "@/components/search/AnimateIn";
 import { ClientSearchInterface } from "@/components/search/ClientSearchInterface";
 import { Greeting } from "@/components/search/Greeting";
 import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
@@ -34,6 +25,7 @@ import {
 } from "@/components/search/fragments";
 import { SearchResultGrid } from "@/components/search/SearchResultGrid";
 import { ServerSearchResults } from "@/components/search/ServerSearchResults";
+import type { ActivityKind } from "@/components/search/RecentActivity";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUser } from "@/utilities/auth-server";
 
@@ -44,52 +36,9 @@ interface SearchPageProps {
     image_no_results?: string;
     barcode_results?: string;
     barcode_no_results?: string;
+    activity?: string;
   }>;
 }
-
-const SearchResultsSkeleton = () => (
-  <Grid container spacing={2}>
-    {[1, 2, 3, 4, 5, 6].map((x) => (
-      <Grid key={x} sx={{ overflow: "hidden" }} xs={12} sm={6} md={4} lg={2}>
-        <Card sx={{ aspectRatio: { xs: 1.2, sm: 1 } }}>
-          <CardCover>
-            <Skeleton />
-          </CardCover>
-        </Card>
-      </Grid>
-    ))}
-  </Grid>
-);
-
-const ContentSkeleton = () => (
-  <Stack spacing={4}>
-    <Stack spacing={1.5}>
-      <Skeleton variant="text" level="title-lg" width="30%" />
-      <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
-        {[1, 2, 3, 4, 5, 6].map((x) => (
-          <Grid key={x} xs={1}>
-            <Card
-              orientation="horizontal"
-              variant="outlined"
-              sx={{ "--Card-padding": "0.625rem" }}
-            >
-              <Skeleton
-                variant="rectangular"
-                width={44}
-                height={44}
-                sx={{ borderRadius: "md", flexShrink: 0 }}
-              />
-              <Stack spacing={0.5} sx={{ flex: 1 }}>
-                <Skeleton variant="text" level="title-sm" width="60%" />
-                <Skeleton variant="text" level="body-xs" width="80%" />
-              </Stack>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-    </Stack>
-  </Stack>
-);
 
 export default async function Search({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = await searchParams;
@@ -98,6 +47,18 @@ export default async function Search({ searchParams }: SearchPageProps) {
   const imageNoResults = resolvedSearchParams.image_no_results === "true";
   const barcodeResultsParam = resolvedSearchParams.barcode_results;
   const barcodeNoResults = resolvedSearchParams.barcode_no_results === "true";
+  const activityParam = resolvedSearchParams.activity;
+
+  const VALID_KINDS = new Set<ActivityKind>([
+    "added",
+    "reviewed",
+    "tier-listed",
+  ]);
+  const activityKinds: ActivityKind[] = activityParam
+    ? activityParam
+        .split(",")
+        .filter((k): k is ActivityKind => VALID_KINDS.has(k as ActivityKind))
+    : [];
 
   const user = await getServerUser();
 
@@ -131,69 +92,61 @@ export default async function Search({ searchParams }: SearchPageProps) {
   return (
     <Box>
       <Stack spacing={3}>
-        {/* Discovery: greeting + search render immediately, content streams in */}
+        {/* Discovery: hero renders instantly from SSR, async content streams in */}
         {!hasActiveSearch && (
           <Stack spacing={4}>
-            <AnimatedDiscovery>
-              <Stack
-                spacing={3}
-                alignItems="center"
-                sx={{ pt: { xs: 2, sm: 4 } }}
+            <Stack
+              spacing={3}
+              alignItems="center"
+              sx={{ pt: { xs: 2, sm: 4 } }}
+            >
+              <FadeIn>
+                <Greeting displayName={user.displayName} />
+              </FadeIn>
+              <Box
+                sx={{
+                  minHeight: "1.5rem",
+                  mt: -1.5,
+                  display: "flex",
+                  justifyContent: "center",
+                }}
               >
-                <AnimatedDiscoveryItem>
-                  <Greeting displayName={user.displayName} />
-                </AnimatedDiscoveryItem>
-                <AnimatedDiscoveryItem>
-                  <Suspense
-                    fallback={
-                      <Skeleton
-                        variant="text"
-                        level="body-md"
-                        width={180}
-                        sx={{ mt: -1.5 }}
-                      />
-                    }
-                  >
-                    <CollectionStats userId={user.id} />
-                  </Suspense>
-                </AnimatedDiscoveryItem>
-                <AnimatedDiscoveryItem>
-                  <Box sx={{ width: "100%", maxWidth: 600 }}>
-                    <ClientSearchInterface initialQuery={query} />
-                  </Box>
-                </AnimatedDiscoveryItem>
-                <AnimatedDiscoveryItem>
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    flexWrap="wrap"
-                    justifyContent="center"
-                    useFlexGap
-                  >
-                    {[
-                      { href: "/cellars", label: "Cellars", icon: <MdHome /> },
-                      { href: "/map", label: "Map", icon: <MdMap /> },
-                      {
-                        href: "/tier-lists",
-                        label: "Tier Lists",
-                        icon: <MdViewList />,
-                      },
-                      {
-                        href: "/favorites",
-                        label: "Favorites",
-                        icon: <MdFavorite />,
-                      },
-                      {
-                        href: "/rankings",
-                        label: "Rankings",
-                        icon: <MdLeaderboard />,
-                      },
-                    ].map(({ href, label, icon }) => (
-                      <Link
-                        key={href}
-                        href={href}
-                        style={{ textDecoration: "none" }}
-                      >
+                <Suspense fallback={null}>
+                  <CollectionStats userId={user.id} />
+                </Suspense>
+              </Box>
+              <Box sx={{ width: "100%", maxWidth: 600 }}>
+                <ClientSearchInterface initialQuery={query} />
+              </Box>
+              <StaggerIn>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  flexWrap="wrap"
+                  justifyContent="center"
+                  useFlexGap
+                >
+                  {[
+                    { href: "/cellars", label: "Cellars", icon: <MdHome /> },
+                    { href: "/map", label: "Map", icon: <MdMap /> },
+                    {
+                      href: "/tier-lists",
+                      label: "Tier Lists",
+                      icon: <MdViewList />,
+                    },
+                    {
+                      href: "/favorites",
+                      label: "Favorites",
+                      icon: <MdFavorite />,
+                    },
+                    {
+                      href: "/rankings",
+                      label: "Rankings",
+                      icon: <MdLeaderboard />,
+                    },
+                  ].map(({ href, label, icon }) => (
+                    <StaggerItem key={href}>
+                      <Link href={href} style={{ textDecoration: "none" }}>
                         <Chip
                           variant="outlined"
                           startDecorator={icon}
@@ -206,14 +159,17 @@ export default async function Search({ searchParams }: SearchPageProps) {
                           {label}
                         </Chip>
                       </Link>
-                    ))}
-                  </Stack>
-                </AnimatedDiscoveryItem>
-              </Stack>
-            </AnimatedDiscovery>
+                    </StaggerItem>
+                  ))}
+                </Stack>
+              </StaggerIn>
+            </Stack>
 
-            <Suspense fallback={<ContentSkeleton />}>
-              <DiscoveryContent userId={user.id} />
+            <Suspense fallback={null}>
+              <DiscoveryContent
+                userId={user.id}
+                activityKinds={activityKinds}
+              />
             </Suspense>
           </Stack>
         )}
@@ -268,7 +224,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
                 <Typography level="title-lg">
                   Search results for &ldquo;{query}&rdquo;
                 </Typography>
-                <Suspense fallback={<SearchResultsSkeleton />}>
+                <Suspense fallback={null}>
                   <ServerSearchResults query={query} />
                 </Suspense>
               </Stack>
@@ -298,7 +254,15 @@ async function CollectionStats({ userId }: { userId: string }) {
   return (
     <Typography
       level="body-md"
-      sx={{ color: "text.secondary", textAlign: "center", mt: -1.5 }}
+      sx={{
+        color: "text.secondary",
+        textAlign: "center",
+        "@keyframes fadeIn": {
+          from: { opacity: 0 },
+          to: { opacity: 1 },
+        },
+        animation: "fadeIn 0.3s ease-out",
+      }}
     >
       {totalItems === 0
         ? "Your collection awaits. Start by adding your first item."
@@ -309,21 +273,41 @@ async function CollectionStats({ userId }: { userId: string }) {
   );
 }
 
-async function DiscoveryContent({ userId }: { userId: string }) {
+async function DiscoveryContent({
+  userId,
+  activityKinds,
+}: {
+  userId: string;
+  activityKinds: ActivityKind[];
+}) {
   const data = await serverQuery(SearchDiscoveryQuery, { userId });
 
   const friendIds = data.user?.friends?.map((f) => f.friend.id) ?? [];
   const reviewUserIds = [userId, ...friendIds];
+
+  const noFilter = activityKinds.length === 0;
+  const wantReviews = noFilter || activityKinds.includes("reviewed");
+  const wantTierListed = noFilter || activityKinds.includes("tier-listed");
+
   const [reviewsData, tierListItemsData] = await Promise.all([
-    serverQuery(RecentReviewsQuery, { userIds: reviewUserIds }),
-    serverQuery(RecentTierListItemsQuery, { userIds: reviewUserIds }),
+    wantReviews
+      ? serverQuery(RecentReviewsQuery, { userIds: reviewUserIds })
+      : Promise.resolve({ item_reviews: [] as never[] }),
+    wantTierListed
+      ? serverQuery(RecentTierListItemsQuery, { userIds: reviewUserIds })
+      : Promise.resolve({ tier_list_items: [] as never[] }),
   ]);
+
+  // Filter cellar items (added) on the server when filter is active
+  const wantAdded = noFilter || activityKinds.includes("added");
+  const cellarItems = wantAdded ? data.recent_cellar_items : [];
 
   return (
     <SearchDiscoveryContent
-      data={data}
+      data={{ ...data, recent_cellar_items: cellarItems }}
       reviews={reviewsData.item_reviews}
       tierListItems={tierListItemsData.tier_list_items}
+      activityKinds={activityKinds}
     />
   );
 }

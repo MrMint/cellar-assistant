@@ -118,7 +118,7 @@ export const ClientSearchInterface = ({
           <motion.div
             key="idle"
             variants={prefersReducedMotion ? undefined : modalScale}
-            initial={prefersReducedMotion ? false : "initial"}
+            initial={false}
             animate="animate"
             exit="exit"
           >

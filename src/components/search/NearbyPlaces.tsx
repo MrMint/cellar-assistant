@@ -7,13 +7,12 @@ import {
   CardContent,
   Grid,
   IconButton,
-  Skeleton,
   Stack,
   ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/joy";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -101,40 +100,13 @@ function getOpenStatus(openingHours: unknown): OpenStatus | null {
   };
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
-
-const NearbyPlacesSkeleton = () => (
-  <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
-    {[1, 2, 3, 4].map((x) => (
-      <Grid key={x} xs={1}>
-        <Card
-          orientation="horizontal"
-          variant="outlined"
-          sx={{ "--Card-padding": "0.625rem" }}
-        >
-          <Skeleton
-            variant="rectangular"
-            width={44}
-            height={44}
-            sx={{ borderRadius: "md", flexShrink: 0 }}
-          />
-          <Stack spacing={0.5} sx={{ flex: 1 }}>
-            <Skeleton variant="text" level="title-sm" width="50%" />
-            <Skeleton variant="text" level="body-xs" width="70%" />
-          </Stack>
-        </Card>
-      </Grid>
-    ))}
-  </Grid>
-);
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function NearbyPlaces() {
   const geo = useGeolocation();
   const [places, setPlaces] = useState<PlaceResult[]>([]);
   const [summaries, setSummaries] = useState<Record<string, PlaceSummary>>({});
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedTypes, setSelectedTypes] = useState<ItemType[]>([]);
   const prefersReducedMotion = useMediaQuery(
     "(prefers-reduced-motion: reduce)",
@@ -152,7 +124,6 @@ export function NearbyPlaces() {
     const bounds = buildNearbyBounds(latitude, longitude);
     const id = ++fetchIdRef.current;
 
-    setLoading(true);
     searchMapPlaces({ bounds, itemTypes: selectedTypes, limit: 6 })
       .then(async (result) => {
         if (id !== fetchIdRef.current) return; // stale response
@@ -181,7 +152,7 @@ export function NearbyPlaces() {
       })
       .finally(() => {
         if (id === fetchIdRef.current) {
-          setLoading(false);
+          setInitialLoading(false);
         }
       });
   }, [latitude, longitude, selectedTypes]);
@@ -189,10 +160,21 @@ export function NearbyPlaces() {
   // Don't render if location denied or unavailable
   if (geo.error || (!geo.loading && !geo.location)) return null;
 
-  // Show full skeleton before we have a location at all
-  if (geo.loading) {
-    return (
-      <Stack spacing={1.5}>
+  // Don't render until we have a location
+  if (geo.loading) return null;
+
+  const { latitude: userLat, longitude: userLng } = geo.location!;
+
+  return (
+    <Stack spacing={1.5}>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        justifyContent="space-between"
+        flexWrap="wrap"
+        useFlexGap
+      >
         <Stack direction="row" spacing={1} alignItems="center">
           <MdLocationOn
             style={{
@@ -202,73 +184,47 @@ export function NearbyPlaces() {
           />
           <Typography level="title-lg">Nearby Places</Typography>
         </Stack>
-        <NearbyPlacesSkeleton />
+
+        <ToggleButtonGroup
+          variant="plain"
+          spacing={0.5}
+          value={selectedTypes}
+          onChange={(_event, newTypes) => setSelectedTypes(newTypes)}
+          aria-label="Place type filters"
+        >
+          {PLACE_TYPE_FILTERS.map(({ id, label, icon: Icon }) => (
+            <Tooltip key={id} title={label}>
+              <IconButton value={id} aria-label={label} size="sm">
+                <Icon />
+              </IconButton>
+            </Tooltip>
+          ))}
+        </ToggleButtonGroup>
       </Stack>
-    );
-  }
 
-  const { latitude: userLat, longitude: userLng } = geo.location!;
-
-  return (
-    <Stack spacing={1.5}>
-      {/* Header animates once on scroll-in, stays stable during filter changes */}
-      <motion.div
-        variants={prefersReducedMotion ? undefined : fadeInLeft}
-        initial={prefersReducedMotion ? false : "hidden"}
-        whileInView="show"
-        viewport={{ once: true, margin: "-50px" }}
-      >
-        <Stack
-          direction="row"
-          spacing={1}
-          alignItems="center"
-          justifyContent="space-between"
-          flexWrap="wrap"
-          useFlexGap
-        >
-          <Stack direction="row" spacing={1} alignItems="center">
-            <MdLocationOn
-              style={{
-                color: "var(--joy-palette-primary-400)",
-                fontSize: "1.25rem",
-              }}
-            />
-            <Typography level="title-lg">Nearby Places</Typography>
-          </Stack>
-
-          <ToggleButtonGroup
-            variant="plain"
-            spacing={0.5}
-            value={selectedTypes}
-            onChange={(_event, newTypes) => setSelectedTypes(newTypes)}
-            aria-label="Place type filters"
+      {/* Cards: AnimatePresence handles smooth exit/enter between filter changes */}
+      <AnimatePresence mode="wait">
+        {initialLoading ? null : places.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
           >
-            {PLACE_TYPE_FILTERS.map(({ id, label, icon: Icon }) => (
-              <Tooltip key={id} title={label}>
-                <IconButton value={id} aria-label={label} size="sm">
-                  <Icon />
-                </IconButton>
-              </Tooltip>
-            ))}
-          </ToggleButtonGroup>
-        </Stack>
-      </motion.div>
-
-      {/* Cards area: stagger animates on each new result set */}
-      {loading ? (
-        <NearbyPlacesSkeleton />
-      ) : places.length === 0 ? (
-        <Typography level="body-sm" sx={{ color: "text.tertiary", py: 2 }}>
-          No nearby places found
-          {selectedTypes.length > 0 && " for the selected types"}
-        </Typography>
-      ) : (
-        <motion.div
-          key={selectedTypes.join(",")}
-          variants={prefersReducedMotion ? undefined : staggerContainerFast}
-          initial={prefersReducedMotion ? false : "hidden"}
-          animate="show"
-        >
+            <Typography level="body-sm" sx={{ color: "text.tertiary", py: 2 }}>
+              No nearby places found
+              {selectedTypes.length > 0 && " for the selected types"}
+            </Typography>
+          </motion.div>
+        ) : (
+          <motion.div
+            key={selectedTypes.join(",")}
+            variants={prefersReducedMotion ? undefined : staggerContainerFast}
+            initial={prefersReducedMotion ? false : "hidden"}
+            animate="show"
+            exit="exit"
+          >
           <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
             {places.map((place) => {
               const [lng, lat] = place.location.coordinates;
@@ -402,7 +358,8 @@ export function NearbyPlaces() {
             })}
           </Grid>
         </motion.div>
-      )}
+        )}
+      </AnimatePresence>
       <Box sx={{ textAlign: "center" }}>
         <Typography
           component={Link}

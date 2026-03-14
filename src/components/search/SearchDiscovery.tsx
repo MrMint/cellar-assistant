@@ -6,7 +6,7 @@ import type {
   SearchDiscoveryQuery,
 } from "./fragments";
 import { NearbyPlaces } from "./NearbyPlaces";
-import { RecentActivity } from "./RecentActivity";
+import { type ActivityKind, RecentActivity } from "./RecentActivity";
 
 type DiscoveryData = ResultOf<typeof SearchDiscoveryQuery>;
 
@@ -20,6 +20,7 @@ interface SearchDiscoveryContentProps {
   data: DiscoveryData;
   reviews: ReviewsData;
   tierListItems: TierListItemsData;
+  activityKinds: ActivityKind[];
 }
 
 /**
@@ -30,6 +31,7 @@ export function SearchDiscoveryContent({
   data,
   reviews,
   tierListItems,
+  activityKinds,
 }: SearchDiscoveryContentProps) {
   return (
     <Stack spacing={4}>
@@ -38,6 +40,7 @@ export function SearchDiscoveryContent({
         cellarItems={data.recent_cellar_items}
         reviews={reviews}
         tierListItems={tierListItems}
+        selectedKinds={activityKinds}
       />
 
       {/* Nearby places — client component, uses geolocation */}
