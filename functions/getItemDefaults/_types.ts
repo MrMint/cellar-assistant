@@ -10,7 +10,6 @@ import {
   type ResultOf,
   type VariablesOf,
 } from "@cellar-assistant/shared/gql/graphql";
-import type { NhostClient } from "@nhost/nhost-js";
 import type { AIProvider, JSONSchema7 } from "../_utils/ai-providers/types";
 import {
   type FunctionRequest,
@@ -205,13 +204,13 @@ export interface AnalyzeImagesParams {
  */
 export interface FinalizeResultsParams {
   aiDefaults: AIDefaults;
+  modelUsed?: string;
   itemType: string;
   enumValues: EnumValues;
   schema: JSONSchema7;
   barcode?: string;
   barcodeType?: string;
   context: ProcessingContext;
-  nhostClient: NhostClient;
   performanceTracker: PerformanceTracker<AIPerformanceMetrics>;
 }
 
@@ -222,7 +221,8 @@ export interface SaveOnboardingParams {
   context: ProcessingContext;
   aiDefaults: AIDefaults;
   results: GetItemDefaultsResult;
-  nhostClient: NhostClient;
+  aiModel?: string;
+  confidence: number;
 }
 
 // =============================================================================

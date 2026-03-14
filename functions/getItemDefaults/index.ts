@@ -2,7 +2,6 @@ import { graphql } from "@cellar-assistant/shared/gql/graphql";
 import type { Request, Response } from "express";
 import { isNotNil } from "ramda";
 import {
-  AIAnalysisError,
   createAIPerformanceTracker,
   createErrorResponse,
   createFunctionNhostClient,
@@ -10,7 +9,6 @@ import {
   functionMutation,
   getAdminAuthHeaders,
   getConfig,
-  getFilePresignedURLWithAuth,
   logError,
   logPerformanceMetrics,
   ValidationError,
@@ -26,10 +24,9 @@ import {
   findOrCreateBrandWithDetails,
 } from "../_utils/recipe-database/brand-management";
 import { BRAND_TYPES } from "../_utils/shared-enums";
-import type { PresignedUrlResponse } from "../_utils/types";
+import { analyzeItemImages, fetchLabelImages } from "./_analyze";
 import { getSchemaForItemType } from "./_schemas";
 import type {
-  AnalyzeImagesParams,
   FinalizeResultsParams,
   GetItemDefaultsRequest,
   GetItemDefaultsResult,
@@ -38,13 +35,10 @@ import type {
 } from "./_types";
 import {
   type AIDefaults,
-  buildItemAnalysisPrompt,
   calculateConfidence,
   getAllEnumValues,
   type ItemType,
   mapValidatedDataToReturnType,
-  sanitizeAIResponse,
-  validateAndNarrowAIDefaults,
 } from "./_utils";
 
 const addItemOnboarding = graphql(`
@@ -254,7 +248,7 @@ async function processItemCore(
   const endImageTimer = performanceTracker.startTimer("imageFetchDuration");
   const [aiProvider, images] = await Promise.all([
     createAIProvider(),
-    fetchLabelImages(frontLabelFileId, backLabelFileId),
+    fetchLabelImages(nhostClient, frontLabelFileId, backLabelFileId),
   ]);
   endImageTimer();
 
@@ -270,7 +264,7 @@ async function processItemCore(
   console.log("Starting AI analysis...");
   const endAiTimer = performanceTracker.startTimer("aiAnalysisDuration");
 
-  const aiDefaults = await analyzeItemImages({
+  const { aiDefaults, modelUsed } = await analyzeItemImages({
     aiProvider,
     images,
     itemType: context.itemType,
@@ -285,123 +279,30 @@ async function processItemCore(
   // Process and enhance results
   const results = await finalizeResults({
     aiDefaults,
+    modelUsed,
     itemType: context.itemType,
     enumValues,
     schema,
     barcode: context.barcode,
     barcodeType: context.barcodeType,
     context,
-    nhostClient,
     performanceTracker,
   });
 
   return results;
 }
 
-// AnalyzeImagesParams is now imported from ./types.ts
-
-async function analyzeItemImages({
-  aiProvider,
-  images,
-  itemType,
-  schema,
-  performanceTracker,
-  enumValues,
-}: AnalyzeImagesParams): Promise<AIDefaults> {
-  const prompt = buildItemAnalysisPrompt(
-    itemType as ItemType,
-    schema,
-    enumValues,
-  );
-
-  const aiResponse = await aiProvider.generateContent(
-    {
-      prompt,
-      images,
-      schema,
-    },
-    "low",
-  );
-
-  // Debug: Log raw AI response
-  console.log("🔍 [getItemDefaults] Raw AI response content:");
-  console.log("=".repeat(80));
-  console.log(aiResponse.content);
-  console.log("=".repeat(80));
-
-  // Parse the AI response
-  let parsedResponse: unknown;
-  try {
-    parsedResponse = JSON.parse(aiResponse.content);
-    console.log("✅ [getItemDefaults] JSON parsing successful");
-  } catch (parseError) {
-    console.error("❌ [getItemDefaults] Failed to parse AI response as JSON");
-    console.error("❌ [getItemDefaults] Full raw AI content:");
-    console.error("-".repeat(80));
-    console.error(aiResponse.content);
-    console.error("-".repeat(80));
-    console.error("❌ [getItemDefaults] Parse error:", parseError);
-    throw new AIAnalysisError("AI response is not valid JSON");
-  }
-
-  // Sanitize the AI response before validation
-  // - Convert null values to undefined for optional string fields
-  // - Pre-match enum values using fuzzy matching (e.g., "USA" -> "UNITED_STATES")
-  const sanitizedResponse = enumValues
-    ? sanitizeAIResponse(parsedResponse, itemType as ItemType, enumValues)
-    : parsedResponse;
-
-  console.log("🔧 [getItemDefaults] Sanitized AI response for validation");
-
-  // Try to validate and narrow types using AJV
-  const endValidationTimer =
-    performanceTracker.startTimer("validationDuration");
-  const validation = validateAndNarrowAIDefaults(
-    sanitizedResponse,
-    itemType as ItemType,
-    schema,
-  );
-  endValidationTimer();
-
-  if (!validation.valid) {
-    const errors = "errors" in validation ? validation.errors : [];
-    console.warn("AI response validation failed with type narrowing:", {
-      errors,
-      itemType,
-      responseKeys:
-        typeof parsedResponse === "object" && parsedResponse !== null
-          ? Object.keys(parsedResponse)
-          : "N/A",
-    });
-
-    // Log sample of invalid data for debugging
-    if (process.env.NODE_ENV === "development") {
-      console.debug(
-        "Invalid AI response sample:",
-        JSON.stringify(parsedResponse, null, 2),
-      );
-    }
-
-    throw new AIAnalysisError(
-      `AI response validation failed: ${errors.join(", ")}`,
-    );
-  }
-
-  console.log("AI response validation passed with type narrowing");
-  return validation.data;
-}
-
 // FinalizeResultsParams is now imported from ./types.ts
 
 async function finalizeResults({
   aiDefaults,
+  modelUsed,
   itemType,
   enumValues,
   schema,
   barcode,
   barcodeType,
   context,
-  nhostClient,
   performanceTracker,
 }: FinalizeResultsParams): Promise<GetItemDefaultsResult> {
   const confidence = calculateConfidence(aiDefaults, schema);
@@ -452,7 +353,8 @@ async function finalizeResults({
     context,
     aiDefaults,
     results,
-    nhostClient,
+    aiModel: modelUsed,
+    confidence,
   });
   endDbTimer();
 
@@ -577,7 +479,8 @@ async function saveOnboardingData({
   context,
   aiDefaults,
   results,
-  nhostClient,
+  aiModel,
+  confidence,
 }: SaveOnboardingParams): Promise<{ id: string }> {
   const addOnboardingResult = await functionMutation(
     addItemOnboarding,
@@ -592,6 +495,8 @@ async function saveOnboardingData({
         raw_defaults: JSON.stringify(aiDefaults),
         defaults: results,
         status: "COMPLETED",
+        ai_model: aiModel,
+        confidence,
       },
     },
     { headers: getAdminAuthHeaders() },
@@ -601,76 +506,11 @@ async function saveOnboardingData({
     id: addOnboardingResult.insert_item_onboardings_one?.id,
     userId: context.userId,
     itemType: context.itemType,
+    aiModel,
+    confidence,
   });
 
   return {
     id: addOnboardingResult.insert_item_onboardings_one?.id || "",
   };
-}
-
-async function fetchLabelImages(
-  frontLabelFileId?: string,
-  backLabelFileId?: string,
-): Promise<Buffer[]> {
-  const images: Buffer[] = [];
-
-  const fetchImage = async (fileId: string): Promise<Buffer> => {
-    console.log(
-      `📥 [getItemDefaults] Fetching presigned URL for file: ${fileId}`,
-    );
-
-    const presignedUrlResponse = await getFilePresignedURLWithAuth(
-      nhostClient,
-      fileId,
-    );
-
-    console.log(
-      `📥 [getItemDefaults] Presigned URL response status: ${presignedUrlResponse.status}`,
-    );
-
-    // The Nhost SDK returns FetchResponse<PresignedURLResponse> with { body, status, headers }
-    const { body, status } = presignedUrlResponse as PresignedUrlResponse;
-
-    if (status < 200 || status >= 300 || !body?.url) {
-      console.error(
-        `❌ [getItemDefaults] Failed to get presigned URL for file ${fileId}:`,
-        {
-          status,
-          body,
-        },
-      );
-      throw new Error(`Failed to get URL for file ${fileId}: status ${status}`);
-    }
-
-    console.log(`📥 [getItemDefaults] Got presigned URL, fetching image...`);
-    const response = await fetch(body.url);
-    if (!response.ok) {
-      console.error(
-        `❌ [getItemDefaults] Failed to fetch image from presigned URL:`,
-        {
-          status: response.status,
-          statusText: response.statusText,
-        },
-      );
-      throw new Error(`Failed to fetch image: ${response.statusText}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    console.log(
-      `✅ [getItemDefaults] Successfully fetched image, size: ${arrayBuffer.byteLength} bytes`,
-    );
-    return Buffer.from(arrayBuffer);
-  };
-
-  if (isNotNil(frontLabelFileId)) {
-    images.push(await fetchImage(frontLabelFileId));
-    console.log("Fetched front label image");
-  }
-
-  if (isNotNil(backLabelFileId)) {
-    images.push(await fetchImage(backLabelFileId));
-    console.log("Fetched back label image");
-  }
-
-  return images;
 }

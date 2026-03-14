@@ -44,6 +44,7 @@
 - "!include public_item_vectors.yaml"
 - "!include public_menu_item_recipes.yaml"
 - "!include public_menu_scans.yaml"
+- "!include public_onboarding_reprocess_jobs.yaml"
 - "!include public_permission_type.yaml"
 - "!include public_place_brands.yaml"
 - "!include public_place_google_enrichments.yaml"

@@ -72,6 +72,8 @@ select_permissions:
         - raw_defaults
         - defaults
         - item_type
+        - ai_model
+        - confidence
       filter:
         user_id:
           _eq: X-Hasura-User-Id

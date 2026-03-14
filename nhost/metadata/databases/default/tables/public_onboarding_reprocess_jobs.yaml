@@ -1,0 +1,20 @@
+table:
+  name: onboarding_reprocess_jobs
+  schema: public
+event_triggers:
+  - name: process_onboarding_reprocess_batch
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+      update:
+        columns:
+          - cursor
+    retry_conf:
+      interval_sec: 10
+      num_retries: 3
+      timeout_sec: 60
+    webhook: '{{NHOST_FUNCTIONS_URL}}/reprocessOnboardingBatch'
+    headers:
+      - name: nhost-webhook-secret
+        value_from_env: NHOST_WEBHOOK_SECRET
