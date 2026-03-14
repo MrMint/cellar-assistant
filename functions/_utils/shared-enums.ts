@@ -205,7 +205,11 @@ export async function getAllEnumValues(
   const now = Date.now();
 
   // Return cached values if still valid
-  if (useCache && enumCacheEntry && now - enumCacheEntry.timestamp < CACHE_DURATION_MS) {
+  if (
+    useCache &&
+    enumCacheEntry &&
+    now - enumCacheEntry.timestamp < CACHE_DURATION_MS
+  ) {
     return enumCacheEntry.data;
   }
 
@@ -305,7 +309,9 @@ export async function getAllEnumValues(
     }
 
     // No cached data available — return empty fallback
-    console.error("[shared-enums] No cached enum data available, returning empty fallback");
+    console.error(
+      "[shared-enums] No cached enum data available, returning empty fallback",
+    );
     return {
       spiritTypes: [],
       wineStyles: [],
@@ -337,7 +343,10 @@ export function resetEnumCache(): void {
  */
 export function isEnumCacheValid(): boolean {
   const now = Date.now();
-  return enumCacheEntry !== null && now - enumCacheEntry.timestamp < CACHE_DURATION_MS;
+  return (
+    enumCacheEntry !== null &&
+    now - enumCacheEntry.timestamp < CACHE_DURATION_MS
+  );
 }
 
 /**

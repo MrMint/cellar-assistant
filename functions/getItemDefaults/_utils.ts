@@ -38,7 +38,9 @@ const validatorCache = new Map<string, ValidateFunction<unknown>>();
 
 onEnumCacheRefresh(() => {
   if (validatorCache.size > 0) {
-    console.log(`[_utils] Clearing ${validatorCache.size} cached AJV validators after enum refresh`);
+    console.log(
+      `[_utils] Clearing ${validatorCache.size} cached AJV validators after enum refresh`,
+    );
     validatorCache.clear();
   }
 });
@@ -256,7 +258,6 @@ export function sanitizeAIResponse(
 
   return sanitized;
 }
-
 
 /**
  * Create typed validators for each item type
@@ -606,13 +607,20 @@ function makeLenientSchema(schema: JSONSchema7): JSONSchema7 {
 
     // Allow null alongside the declared type for non-required properties
     if (type && typeof type === "string") {
-      lenientProperties[key] = { ...rest, type: [type, "null"] as unknown as JSONSchema7["type"] };
+      lenientProperties[key] = {
+        ...rest,
+        type: [type, "null"] as unknown as JSONSchema7["type"],
+      };
     } else {
       lenientProperties[key] = { ...rest, ...(type ? { type } : {}) };
     }
   }
 
-  return { ...schema, properties: lenientProperties, additionalProperties: true };
+  return {
+    ...schema,
+    properties: lenientProperties,
+    additionalProperties: true,
+  };
 }
 
 /**

@@ -40,7 +40,11 @@ export const ItemRemainingSlider = ({
   useEffect(() => {
     if (debouncedPercent !== percentageRemaining) {
       startTransition(async () => {
-        await updateCellarItemPercentageAction(itemId, debouncedPercent, cellarId);
+        await updateCellarItemPercentageAction(
+          itemId,
+          debouncedPercent,
+          cellarId,
+        );
       });
     }
   }, [debouncedPercent, percentageRemaining, itemId, cellarId]);

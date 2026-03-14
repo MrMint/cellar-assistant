@@ -136,8 +136,7 @@ export class GoogleAIProvider implements AIProvider {
           embeddings: response.embeddings?.[0]?.values || [],
           metadata: {
             model: embeddingModel,
-            dimensions:
-              response.embeddings?.[0]?.values?.length || dimensions,
+            dimensions: response.embeddings?.[0]?.values?.length || dimensions,
             provider: "google-ai",
           },
         };

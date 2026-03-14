@@ -81,7 +81,10 @@ export const ItemImage = ({
             }}
           >
             <MdCameraAlt size={36} color="white" />
-            <Typography level="body-sm" sx={{ color: "white", fontWeight: 600 }}>
+            <Typography
+              level="body-sm"
+              sx={{ color: "white", fontWeight: 600 }}
+            >
               Add a photo
             </Typography>
           </Box>

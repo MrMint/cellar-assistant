@@ -388,7 +388,13 @@ function makeLabels(left: string[], right: string[]): LabelDef[] {
     labels.push({ x: 32, y: 165 + i * 70, text, targetX: 78, delay: i * 0.12 });
   });
   right.forEach((text, i) => {
-    labels.push({ x: 268, y: 195 + i * 70, text, targetX: 222, delay: (i + 0.5) * 0.12 });
+    labels.push({
+      x: 268,
+      y: 195 + i * 70,
+      text,
+      targetX: 222,
+      delay: (i + 0.5) * 0.12,
+    });
   });
   return labels;
 }
@@ -399,7 +405,10 @@ function computeNeighbors(points: Point[]): number[][] {
     const dists: Array<{ j: number; d: number }> = [];
     for (let j = 0; j < points.length; j++) {
       if (j === i) continue;
-      const d = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y);
+      const d = Math.hypot(
+        points[i].x - points[j].x,
+        points[i].y - points[j].y,
+      );
       if (d < 35) dists.push({ j, d });
     }
     dists.sort((a, b) => a.d - b.d);
@@ -522,7 +531,8 @@ function particleProps(i: number) {
 
 // ─── Draw: Constellation ────────────────────────────────────────────────────────
 function drawConstellation(d: DrawCtx) {
-  const { ctx, positions, toPoints, visibility, easedMorph, now, neighbors } = d;
+  const { ctx, positions, toPoints, visibility, easedMorph, now, neighbors } =
+    d;
 
   // Motion trails during morphs
   if (easedMorph < 0.95 && visibility > 0.3) {
@@ -642,7 +652,9 @@ function drawConstellation(d: DrawCtx) {
 // ─── Component ──────────────────────────────────────────────────────────────────
 export function AnimationShowcase({
   statusText = "Scanning...",
-}: { statusText?: string } = {}) {
+}: {
+  statusText?: string;
+} = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>(0);
   const nameRef = useRef(ITEM_CONFIGS[0].name);
@@ -743,8 +755,10 @@ export function AnimationShowcase({
       const positions: Point[] = new Array(NUM_PARTICLES);
       const scatterAmt = Math.sin(Math.min(1, morphT) * Math.PI) * 12;
       for (let i = 0; i < NUM_PARTICLES; i++) {
-        let x = fromPoints[i].x + (toPoints[i].x - fromPoints[i].x) * easedMorph;
-        let y = fromPoints[i].y + (toPoints[i].y - fromPoints[i].y) * easedMorph;
+        let x =
+          fromPoints[i].x + (toPoints[i].x - fromPoints[i].x) * easedMorph;
+        let y =
+          fromPoints[i].y + (toPoints[i].y - fromPoints[i].y) * easedMorph;
         if (scatterAmt > 0.1) {
           x += Math.sin(i * 1.7 + 0.3) * scatterAmt;
           y += Math.cos(i * 2.3 + 0.7) * scatterAmt;

@@ -765,3 +765,74 @@ export async function createUserPlaceAction(
     };
   }
 }
+
+// =============================================================================
+// Batch Place Summaries (for Nearby Places cards)
+// =============================================================================
+
+const BATCH_PLACE_SUMMARIES = graphql(`
+  query BatchPlaceSummaries($placeIds: [uuid!]!) {
+    place_google_enrichments(where: { place_id: { _in: $placeIds } }) {
+      place_id
+      google_opening_hours
+      google_price_level
+      google_rating
+      google_user_ratings_total
+    }
+    place_google_photos(
+      where: { place_id: { _in: $placeIds }, storage_file_id: { _is_null: false } }
+      order_by: [{ place_id: asc }, { display_order: asc }]
+      distinct_on: place_id
+    ) {
+      place_id
+      storage_file_id
+    }
+  }
+`);
+
+export interface PlaceSummary {
+  photoFileId?: string;
+  openingHours?: unknown;
+  priceLevel?: number | null;
+  rating?: number | null;
+  userRatingsTotal?: number | null;
+}
+
+/**
+ * Batch-fetch cached enrichment data and first photo for a set of place IDs.
+ * Reads from the database only — no Google API calls.
+ */
+export async function getPlaceSummaries(
+  placeIds: string[],
+): Promise<Record<string, PlaceSummary>> {
+  await getServerUserId();
+
+  if (placeIds.length === 0) return {};
+
+  try {
+    const data = await serverQuery(BATCH_PLACE_SUMMARIES, { placeIds });
+
+    const result: Record<string, PlaceSummary> = {};
+
+    // Index enrichments by place_id
+    for (const e of data.place_google_enrichments) {
+      result[e.place_id] = {
+        openingHours: e.google_opening_hours,
+        priceLevel: e.google_price_level,
+        rating: e.google_rating,
+        userRatingsTotal: e.google_user_ratings_total,
+      };
+    }
+
+    // Add first photo per place
+    for (const p of data.place_google_photos) {
+      if (!result[p.place_id]) result[p.place_id] = {};
+      result[p.place_id].photoFileId = p.storage_file_id ?? undefined;
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Batch place summaries failed:", error);
+    return {};
+  }
+}

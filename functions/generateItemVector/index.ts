@@ -305,7 +305,9 @@ async function fetchItemImages(
     // 1. Fetch onboarding label images (front + back) via item_onboarding_id
     const onboardingId = (item as Record<string, unknown>).item_onboarding_id;
     if (onboardingId && typeof onboardingId === "string") {
-      const endOnboardingTimer = performanceTracker.startTimer("dbOperationDuration");
+      const endOnboardingTimer = performanceTracker.startTimer(
+        "dbOperationDuration",
+      );
       const onboardingResult = await functionQuery(
         GET_ONBOARDING_IMAGES_QUERY,
         { onboardingId },
@@ -315,17 +317,25 @@ async function fetchItemImages(
 
       const onboarding = onboardingResult?.item_onboardings_by_pk;
       if (onboarding?.front_label_image_id) {
-        fileIds.push({ id: onboarding.front_label_image_id, label: "front_label" });
+        fileIds.push({
+          id: onboarding.front_label_image_id,
+          label: "front_label",
+        });
       }
       if (onboarding?.back_label_image_id) {
-        fileIds.push({ id: onboarding.back_label_image_id, label: "back_label" });
+        fileIds.push({
+          id: onboarding.back_label_image_id,
+          label: "back_label",
+        });
       }
     }
 
     // 2. Fetch most recent display image
     const displayQuery = DISPLAY_IMAGE_QUERIES[name];
     if (displayQuery) {
-      const endQueryTimer = performanceTracker.startTimer("dbOperationDuration");
+      const endQueryTimer = performanceTracker.startTimer(
+        "dbOperationDuration",
+      );
       const imageResult = await functionQuery(
         displayQuery,
         { itemId: String(item.id) },
@@ -340,7 +350,9 @@ async function fetchItemImages(
     }
 
     if (fileIds.length === 0) {
-      console.log(`No images found for ${name} ${item.id}, using text-only embedding`);
+      console.log(
+        `No images found for ${name} ${item.id}, using text-only embedding`,
+      );
       return [];
     }
 
@@ -386,13 +398,17 @@ async function fetchImageBuffer(
     const { body, status } =
       presignedUrlResponse as import("../_utils/types").PresignedUrlResponse;
     if (status < 200 || status >= 300 || !body?.url) {
-      console.warn(`Failed to get presigned URL for ${label} image ${fileId}: status ${status}`);
+      console.warn(
+        `Failed to get presigned URL for ${label} image ${fileId}: status ${status}`,
+      );
       return null;
     }
 
     const response = await fetch(body.url);
     if (!response.ok) {
-      console.warn(`Failed to fetch ${label} image ${fileId}: ${response.statusText}`);
+      console.warn(
+        `Failed to fetch ${label} image ${fileId}: ${response.statusText}`,
+      );
       return null;
     }
 

@@ -28,8 +28,7 @@ export default async function CellarItemsPage({
 
   // Parse search params using nuqs cache with validation
   const resolvedSearchParams = await searchParams;
-  const { search, types } =
-    itemsSearchParamsCache.parse(resolvedSearchParams);
+  const { search, types } = itemsSearchParamsCache.parse(resolvedSearchParams);
   const validTypes = parseItemTypes(types);
 
   // Fetch cellar metadata immediately (for header)

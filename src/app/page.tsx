@@ -6,8 +6,8 @@ export default async function Home() {
   const user = await getOptionalServerUser();
 
   if (user) {
-    // User is authenticated, redirect to cellars
-    redirect("/cellars");
+    // User is authenticated, redirect to search
+    redirect("/search");
   } else {
     // User is not authenticated, redirect to sign-in
     redirect("/sign-in");

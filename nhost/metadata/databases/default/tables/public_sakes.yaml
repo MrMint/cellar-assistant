@@ -111,9 +111,13 @@ select_permissions:
       filter: {}
       allow_aggregations: true
       query_root_fields:
+        - select
         - select_by_pk
+        - select_aggregate
       subscription_root_fields:
+        - select
         - select_by_pk
+        - select_aggregate
     comment: ""
 update_permissions:
   - role: user

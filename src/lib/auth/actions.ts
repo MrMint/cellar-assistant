@@ -25,7 +25,7 @@ export async function signIn(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
   const returnTo =
-    sanitizeReturnTo(formData.get("returnTo") as string) ?? "/cellars";
+    sanitizeReturnTo(formData.get("returnTo") as string) ?? "/search";
 
   if (!email || !password) {
     throw new Error("Email and password are required");
@@ -81,7 +81,7 @@ export async function signUp(formData: FormData) {
 
     if (result.body?.session) {
       revalidatePath("/", "layout");
-      redirect("/cellars");
+      redirect("/search");
     }
 
     // Default success case - user needs to verify email
@@ -98,7 +98,7 @@ export async function getProviderSignInUrl(
   returnTo?: string,
 ) {
   const nhost = await createNhostClient();
-  const destination = sanitizeReturnTo(returnTo) ?? "/cellars";
+  const destination = sanitizeReturnTo(returnTo) ?? "/search";
 
   try {
     const url = nhost.auth.signInProviderURL(provider, {

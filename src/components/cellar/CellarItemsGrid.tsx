@@ -1,7 +1,14 @@
 "use client";
 
 import type { ItemTypeValue } from "@cellar-assistant/shared";
-import { Box, Card, CircularProgress, Grid, Skeleton, Typography } from "@mui/joy";
+import {
+  Box,
+  Card,
+  CircularProgress,
+  Grid,
+  Skeleton,
+  Typography,
+} from "@mui/joy";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useCallback,
@@ -198,25 +205,28 @@ export function CellarItemsGrid({
   const hasMore = items.length < total;
   const lastVirtualIndex = virtualRows[virtualRows.length - 1]?.index ?? 0;
 
-  const loadMore = useCallback(async (batchSize = ITEMS_PAGE_SIZE) => {
-    if (isLoadingMore || !hasMore) return;
-    setIsLoadingMore(true);
+  const loadMore = useCallback(
+    async (batchSize = ITEMS_PAGE_SIZE) => {
+      if (isLoadingMore || !hasMore) return;
+      setIsLoadingMore(true);
 
-    try {
-      const result = await loadMoreCellarItemsAction(
-        cellarId,
-        search,
-        types,
-        items.length,
-        batchSize,
-      );
+      try {
+        const result = await loadMoreCellarItemsAction(
+          cellarId,
+          search,
+          types,
+          items.length,
+          batchSize,
+        );
 
-      setItems((prev) => [...prev, ...result.items]);
-      setTotal(result.totalCount);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [isLoadingMore, hasMore, cellarId, search, types, items.length]);
+        setItems((prev) => [...prev, ...result.items]);
+        setTotal(result.totalCount);
+      } finally {
+        setIsLoadingMore(false);
+      }
+    },
+    [isLoadingMore, hasMore, cellarId, search, types, items.length],
+  );
 
   useEffect(() => {
     if (!hasMore || isLoadingMore) return;
@@ -311,7 +321,9 @@ export function CellarItemsGrid({
                           item={x.item}
                           type={x.type}
                           href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
-                          onClick={() => writeScrollData(scrollContainer?.scrollTop ?? 0)}
+                          onClick={() =>
+                            writeScrollData(scrollContainer?.scrollTop ?? 0)
+                          }
                         />
                       </Grid>
                     ))

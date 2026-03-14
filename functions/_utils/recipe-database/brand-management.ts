@@ -451,19 +451,39 @@ export async function linkItemToBrand(
     const headers = { headers: getAdminAuthHeaders() };
     switch (itemType) {
       case "wine":
-        await functionMutation(DeleteWineBrandsMutation, { item_id: itemId }, headers);
+        await functionMutation(
+          DeleteWineBrandsMutation,
+          { item_id: itemId },
+          headers,
+        );
         break;
       case "beer":
-        await functionMutation(DeleteBeerBrandsMutation, { item_id: itemId }, headers);
+        await functionMutation(
+          DeleteBeerBrandsMutation,
+          { item_id: itemId },
+          headers,
+        );
         break;
       case "spirit":
-        await functionMutation(DeleteSpiritBrandsMutation, { item_id: itemId }, headers);
+        await functionMutation(
+          DeleteSpiritBrandsMutation,
+          { item_id: itemId },
+          headers,
+        );
         break;
       case "coffee":
-        await functionMutation(DeleteCoffeeBrandsMutation, { item_id: itemId }, headers);
+        await functionMutation(
+          DeleteCoffeeBrandsMutation,
+          { item_id: itemId },
+          headers,
+        );
         break;
       case "sake":
-        await functionMutation(DeleteSakeBrandsMutation, { item_id: itemId }, headers);
+        await functionMutation(
+          DeleteSakeBrandsMutation,
+          { item_id: itemId },
+          headers,
+        );
         break;
     }
   }
