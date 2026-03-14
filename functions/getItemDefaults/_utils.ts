@@ -18,7 +18,9 @@ import type { JSONSchema7 } from "../_utils/ai-providers/types";
 import { hasProperty, isRecord } from "../_utils/types";
 
 // Initialize AJV with format support
-const ajv = new Ajv({ allErrors: true });
+// - coerceTypes: converts string "5.0" → number 5, etc. (AI often returns wrong JSON types)
+// - nullable: allows null for any typed field (AI returns null for fields it can't determine)
+const ajv = new Ajv({ allErrors: true, coerceTypes: true });
 addFormats(ajv);
 
 // Type for GraphQL enum query response
@@ -808,6 +810,34 @@ export function calculateConfidence(
 }
 
 /**
+ * Clone a schema with all properties accepting null values.
+ * The AI returns null for fields it can't determine — this prevents
+ * AJV from rejecting an otherwise valid response over optional nulls.
+ */
+function makePropertiesNullable(schema: JSONSchema7): JSONSchema7 {
+  if (!schema.properties) return schema;
+
+  const requiredSet = new Set(schema.required ?? []);
+  const nullableProperties: Record<string, JSONSchema7> = {};
+
+  for (const [key, prop] of Object.entries(schema.properties)) {
+    if (typeof prop === "boolean" || requiredSet.has(key)) {
+      nullableProperties[key] = prop;
+      continue;
+    }
+    // Allow null alongside the declared type
+    const { type, ...rest } = prop;
+    if (type && typeof type === "string") {
+      nullableProperties[key] = { ...rest, type: [type, "null"] as unknown as JSONSchema7["type"] };
+    } else {
+      nullableProperties[key] = prop;
+    }
+  }
+
+  return { ...schema, properties: nullableProperties };
+}
+
+/**
  * Validate and narrow types using AJV with type narrowing
  * @param data - Data to validate
  * @param schema - JSON schema for validation
@@ -826,7 +856,10 @@ export function validateWithTypeNarrowing<T>(
   // Get or create validator
   let validate = validatorCache.get(schemaKey);
   if (!validate) {
-    validate = ajv.compile(schema);
+    // Make all non-required properties accept null values, since the AI
+    // returns null for fields it can't determine from the label image.
+    const lenientSchema = makePropertiesNullable(schema);
+    validate = ajv.compile(lenientSchema);
     validatorCache.set(schemaKey, validate);
   }
 

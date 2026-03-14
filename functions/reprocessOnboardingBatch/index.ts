@@ -184,6 +184,20 @@ const UPDATE_JOB_MUTATION = graphql(`
   }
 `);
 
+const SET_REPROCESS_RESULT_MUTATION = graphql(`
+  mutation SetOnboardingReprocessResult(
+    $id: uuid!
+    $last_reprocess_result: jsonb!
+  ) {
+    update_item_onboardings_by_pk(
+      pk_columns: { id: $id }
+      _set: { last_reprocess_result: $last_reprocess_result }
+    ) {
+      id
+    }
+  }
+`);
+
 const FAIL_JOB_MUTATION = graphql(`
   mutation FailOnboardingReprocessJob($id: uuid!, $error_message: String!) {
     update_onboarding_reprocess_jobs_by_pk(
@@ -280,11 +294,28 @@ function vintageToDate(vintage: string | undefined): string | null {
   return null;
 }
 
-/** Strip null/undefined values from an object so Hasura _set only touches fields
- * the AI actually returned, leaving any user-edited fields intact. */
+/** Placeholder values the AI uses when it can't extract real data. */
+const PLACEHOLDER_VALUES = new Set([
+  "n/a", "na", "none", "unknown", "not available", "not specified", "unspecified",
+]);
+
+/** Returns true if a value is meaningful (not null, undefined, placeholder, or zero). */
+function isMeaningfulValue(value: unknown): boolean {
+  if (value == null || value === "") return false;
+  if (value === 0) return false;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "" || PLACEHOLDER_VALUES.has(normalized)) return false;
+    if (/^0+$/.test(normalized)) return false;
+  }
+  return true;
+}
+
+/** Strip null/undefined/placeholder values from an object so Hasura _set only
+ * touches fields the AI actually returned with real data. */
 function compactSet<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v != null),
+    Object.entries(obj).filter(([, v]) => isMeaningfulValue(v)),
   ) as Partial<T>;
 }
 
@@ -544,6 +575,20 @@ export default async function reprocessOnboardingBatch(
     let batchSkipped = 0;
     const skipReasons: Record<string, number> = {};
 
+    /** Save a reprocess result to the onboarding row (fire-and-forget). */
+    const saveReprocessResult = (
+      onboardingId: string,
+      result: Record<string, unknown>,
+    ) => {
+      functionMutation(
+        SET_REPROCESS_RESULT_MUTATION,
+        { id: onboardingId, last_reprocess_result: { ...result, job_id: job.id, at: new Date().toISOString() } },
+        headers,
+      ).catch((err) =>
+        console.warn(`[ReprocessBatch] Failed to save reprocess result for ${onboardingId}:`, err),
+      );
+    };
+
     const trackSkip = (
       reason: string,
       onboarding: OnboardingRecord,
@@ -579,6 +624,11 @@ export default async function reprocessOnboardingBatch(
       }
 
       console.log(`[ReprocessBatch] SKIP`, JSON.stringify(context));
+
+      // Persist to onboarding row for future debugging
+      const result: Record<string, unknown> = { status: "skipped", reason };
+      if (detail) result.detail = detail;
+      saveReprocessResult(onboarding.id, result);
     };
 
     for (const onboarding of onboardings) {
@@ -691,6 +741,12 @@ export default async function reprocessOnboardingBatch(
         console.log(
           `[ReprocessBatch] Updated onboarding ${onboarding.id}: confidence ${existingConfidence.toFixed(2)} → ${newConfidence.toFixed(2)}, model=${modelUsed}`,
         );
+        saveReprocessResult(onboarding.id, {
+          status: "updated",
+          previous_confidence: existingConfidence,
+          new_confidence: newConfidence,
+          model: modelUsed,
+        });
         batchUpdated++;
       } catch (recordError) {
         const errMsg = recordError instanceof Error ? recordError.message : String(recordError);

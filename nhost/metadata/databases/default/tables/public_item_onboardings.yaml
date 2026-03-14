@@ -74,6 +74,7 @@ select_permissions:
         - item_type
         - ai_model
         - confidence
+        - last_reprocess_result
       filter:
         user_id:
           _eq: X-Hasura-User-Id
