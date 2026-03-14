@@ -53,11 +53,38 @@ export interface AllEnumValues {
 }
 
 /**
- * Cache for enum values to avoid repeated database queries
+ * Cache for enum values to avoid repeated database queries.
+ * This is the single source of truth for enum values — all consumers
+ * (schemas, sanitizers, prompt builders) should import from here.
  */
-let enumCache: AllEnumValues | null = null;
-let cacheTimestamp: number = 0;
+interface EnumCacheEntry {
+  data: AllEnumValues;
+  timestamp: number;
+  errors: number; // Consecutive fetch failures for circuit breaker
+}
+
+let enumCacheEntry: EnumCacheEntry | null = null;
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_ERRORS = 3; // Circuit breaker threshold
+const ERROR_BACKOFF_MULTIPLIER = 2;
+
+/** Listeners notified when the enum cache refreshes (e.g. to clear compiled validators). */
+const cacheRefreshListeners: Array<() => void> = [];
+
+/** Register a callback that fires whenever the enum cache is refreshed. */
+export function onEnumCacheRefresh(listener: () => void): void {
+  cacheRefreshListeners.push(listener);
+}
+
+function notifyCacheRefresh(): void {
+  for (const listener of cacheRefreshListeners) {
+    try {
+      listener();
+    } catch (err) {
+      console.warn("[shared-enums] Cache refresh listener error:", err);
+    }
+  }
+}
 
 /**
  * Fetch enum values dynamically from GraphQL with fallback handling
@@ -175,13 +202,27 @@ async function getEnumValues(enumTypeName: string): Promise<string[]> {
 export async function getAllEnumValues(
   useCache: boolean = true,
 ): Promise<AllEnumValues> {
-  // Check cache first
   const now = Date.now();
-  if (useCache && enumCache && now - cacheTimestamp < CACHE_DURATION_MS) {
-    return enumCache;
+
+  // Return cached values if still valid
+  if (useCache && enumCacheEntry && now - enumCacheEntry.timestamp < CACHE_DURATION_MS) {
+    return enumCacheEntry.data;
   }
 
-  console.log("Fetching fresh enum values from database...");
+  // Circuit breaker: if too many consecutive errors, extend cache TTL with exponential backoff
+  if (enumCacheEntry && enumCacheEntry.errors >= MAX_CACHE_ERRORS) {
+    const backoffTime =
+      CACHE_DURATION_MS *
+      ERROR_BACKOFF_MULTIPLIER ** (enumCacheEntry.errors - MAX_CACHE_ERRORS);
+    if (now - enumCacheEntry.timestamp < backoffTime) {
+      console.warn(
+        `[shared-enums] Circuit breaker active, using stale data. Errors: ${enumCacheEntry.errors}`,
+      );
+      return enumCacheEntry.data;
+    }
+  }
+
+  console.log("[shared-enums] Fetching fresh enum values from database...");
 
   try {
     const [
@@ -230,11 +271,10 @@ export async function getAllEnumValues(
       sakeRiceVarieties,
     };
 
-    // Cache the results
-    enumCache = allEnums;
-    cacheTimestamp = now;
+    // Success: reset error count and update cache
+    enumCacheEntry = { data: allEnums, timestamp: now, errors: 0 };
 
-    console.log("Successfully fetched enum values:", {
+    console.log("[shared-enums] Successfully refreshed enum cache:", {
       spiritTypes: spiritTypes.length,
       wineStyles: wineStyles.length,
       wineVarieties: wineVarieties.length,
@@ -250,15 +290,23 @@ export async function getAllEnumValues(
       sakeRiceVarieties: sakeRiceVarieties.length,
     });
 
+    notifyCacheRefresh();
     return allEnums;
   } catch (error) {
-    console.error(
-      "Failed to fetch enum values, returning empty arrays:",
-      error,
-    );
+    console.error("[shared-enums] Failed to fetch enum values:", error);
 
-    // Return empty arrays as fallback
-    const fallbackEnums: AllEnumValues = {
+    // Update error count, return stale data if available
+    if (enumCacheEntry) {
+      enumCacheEntry.errors += 1;
+      console.warn(
+        `[shared-enums] Enum fetch failed ${enumCacheEntry.errors} times, returning stale data`,
+      );
+      return enumCacheEntry.data;
+    }
+
+    // No cached data available — return empty fallback
+    console.error("[shared-enums] No cached enum data available, returning empty fallback");
+    return {
       spiritTypes: [],
       wineStyles: [],
       wineVarieties: [],
@@ -273,8 +321,6 @@ export async function getAllEnumValues(
       sakeServingTemperatures: [],
       sakeRiceVarieties: [],
     };
-
-    return fallbackEnums;
   }
 }
 
@@ -282,9 +328,8 @@ export async function getAllEnumValues(
  * Reset the enum cache (useful for testing or forcing refresh)
  */
 export function resetEnumCache(): void {
-  enumCache = null;
-  cacheTimestamp = 0;
-  console.log("Enum cache reset");
+  enumCacheEntry = null;
+  console.log("[shared-enums] Enum cache reset");
 }
 
 /**
@@ -292,7 +337,25 @@ export function resetEnumCache(): void {
  */
 export function isEnumCacheValid(): boolean {
   const now = Date.now();
-  return enumCache !== null && now - cacheTimestamp < CACHE_DURATION_MS;
+  return enumCacheEntry !== null && now - enumCacheEntry.timestamp < CACHE_DURATION_MS;
+}
+
+/**
+ * Get enum cache statistics for monitoring
+ */
+export function getEnumCacheStats() {
+  return {
+    hasCache: !!enumCacheEntry,
+    timestamp: enumCacheEntry?.timestamp ?? 0,
+    errors: enumCacheEntry?.errors ?? 0,
+    age: enumCacheEntry ? Date.now() - enumCacheEntry.timestamp : 0,
+    isStale: enumCacheEntry
+      ? Date.now() - enumCacheEntry.timestamp > CACHE_DURATION_MS
+      : true,
+    isInCircuitBreaker: enumCacheEntry
+      ? enumCacheEntry.errors >= MAX_CACHE_ERRORS
+      : false,
+  };
 }
 
 // Re-export unit conversion utilities from shared lib

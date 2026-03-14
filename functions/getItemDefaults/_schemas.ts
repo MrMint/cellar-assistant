@@ -1,114 +1,29 @@
-import {
-  getCountryEnumQuery,
-  getSpiritTypeEnumQuery,
-  getWineStyleEnumQuery,
-  getWineVarietyEnumQuery,
-  graphql,
-} from "@cellar-assistant/shared";
-import type { TadaDocumentNode } from "gql.tada";
-import { functionQuery, getAdminAuthHeaders } from "../_utils";
 import type { JSONSchema7 } from "../_utils/ai-providers/types";
-import type { EnumQueryResponse } from "../_utils/types";
+import {
+  type AllEnumValues,
+  getAllEnumValues,
+  onEnumCacheRefresh,
+} from "../_utils/shared-enums";
 
 // Generate schemas at runtime with caching
 let cachedSchemas: Record<string, JSONSchema7> | null = null;
 
-async function getEnumValues(enumTypeName: string): Promise<string[]> {
-  try {
-    // Use TadaDocumentNode to properly type the dynamic query selection
-    let query: TadaDocumentNode<EnumQueryResponse, Record<string, never>>;
-    switch (enumTypeName) {
-      case "country_enum":
-        query = getCountryEnumQuery;
-        break;
-      case "wine_style_enum":
-        query = getWineStyleEnumQuery;
-        break;
-      case "wine_variety_enum":
-        query = getWineVarietyEnumQuery;
-        break;
-      case "spirit_type_enum":
-        query = getSpiritTypeEnumQuery;
-        break;
-      case "beer_style_enum":
-        query = graphql(`
-          query GetBeerStyleEnum {
-            __type(name: "beer_style_enum") {
-              enumValues {
-                name
-              }
-            }
-          }
-        `);
-        break;
-      case "coffee_roast_level_enum":
-        query = graphql(`
-          query GetCoffeeRoastLevelEnum {
-            __type(name: "coffee_roast_level_enum") {
-              enumValues {
-                name
-              }
-            }
-          }
-        `);
-        break;
-      case "coffee_process_enum":
-        query = graphql(`
-          query GetCoffeeProcessEnum {
-            __type(name: "coffee_process_enum") {
-              enumValues {
-                name
-              }
-            }
-          }
-        `);
-        break;
-      case "coffee_species_enum":
-        query = graphql(`
-          query GetCoffeeSpeciesEnum {
-            __type(name: "coffee_species_enum") {
-              enumValues {
-                name
-              }
-            }
-          }
-        `);
-        break;
-      case "coffee_cultivar_enum":
-        query = graphql(`
-          query GetCoffeeCultivarEnum {
-            __type(name: "coffee_cultivar_enum") {
-              enumValues {
-                name
-              }
-            }
-          }
-        `);
-        break;
-      default:
-        return [];
-    }
-
-    const data = await functionQuery(
-      query,
-      {},
-      { headers: getAdminAuthHeaders() },
-    );
-    return data?.__type?.enumValues?.map((e: { name: string }) => e.name) || [];
-  } catch (error) {
-    console.warn(`Failed to fetch enum values for ${enumTypeName}:`, error);
-    return [];
+// Clear schema cache when enum values refresh so schemas are rebuilt with fresh enums.
+onEnumCacheRefresh(() => {
+  if (cachedSchemas) {
+    console.log("[_schemas] Clearing schema cache after enum refresh");
+    cachedSchemas = null;
   }
-}
+});
 
 /**
- * Generate JSON Schema for a specific table with dynamic enum values
+ * Generate JSON Schema for a specific table using shared enum values
  */
-async function generateJsonSchemaFromIntrospection(
+function generateJsonSchemaForTable(
   tableName: "beers" | "wines" | "spirits" | "coffees",
-): Promise<JSONSchema7> {
-  // Fetch all enum values upfront
-  const [
+  enumValues: AllEnumValues,
+): JSONSchema7 {
+  const {
     beerStyles,
     countries,
     wineVarieties,
@@ -118,17 +33,7 @@ async function generateJsonSchemaFromIntrospection(
     coffeeProcesses,
     coffeeSpecies,
     coffeeCultivars,
-  ] = await Promise.all([
-    getEnumValues("beer_style_enum"),
-    getEnumValues("country_enum"),
-    getEnumValues("wine_variety_enum"),
-    getEnumValues("wine_style_enum"),
-    getEnumValues("spirit_type_enum"),
-    getEnumValues("coffee_roast_level_enum"),
-    getEnumValues("coffee_process_enum"),
-    getEnumValues("coffee_species_enum"),
-    getEnumValues("coffee_cultivar_enum"),
-  ]);
+  } = enumValues;
 
   // Helper function to add enum if values exist
   const enumOrUndefined = (values: string[]) =>
@@ -422,47 +327,20 @@ async function generateJsonSchemaFromIntrospection(
   };
 }
 
-/**
- * Generate all item schemas with dynamic enum values
- */
-async function generateAllItemSchemasFromIntrospection(): Promise<
-  Record<string, JSONSchema7>
-> {
-  const [wine, beer, spirit, coffee] = await Promise.all([
-    generateJsonSchemaFromIntrospection("wines"),
-    generateJsonSchemaFromIntrospection("beers"),
-    generateJsonSchemaFromIntrospection("spirits"),
-    generateJsonSchemaFromIntrospection("coffees"),
-  ]);
-
-  return {
-    WINE: wine,
-    BEER: beer,
-    SPIRIT: spirit,
-    COFFEE: coffee,
-  };
-}
-
 export async function getItemSchemas(): Promise<Record<string, JSONSchema7>> {
   if (!cachedSchemas) {
-    cachedSchemas = await generateAllItemSchemasFromIntrospection();
+    // Fetch enum values once from the shared cache, then build all schemas synchronously
+    const enumValues = await getAllEnumValues();
 
-    // Apply any runtime overrides or extensions
-    cachedSchemas = applySchemaOverrides(cachedSchemas);
+    cachedSchemas = {
+      WINE: generateJsonSchemaForTable("wines", enumValues),
+      BEER: generateJsonSchemaForTable("beers", enumValues),
+      SPIRIT: generateJsonSchemaForTable("spirits", enumValues),
+      COFFEE: generateJsonSchemaForTable("coffees", enumValues),
+    };
   }
 
   return cachedSchemas;
-}
-
-/**
- * Apply any custom overrides to generated schemas
- */
-function applySchemaOverrides(
-  schemas: Record<string, JSONSchema7>,
-): Record<string, JSONSchema7> {
-  // Apply any runtime overrides that can't be handled in the schema generation
-  // Currently no overrides needed since descriptions are handled directly in schema generation
-  return schemas;
 }
 
 /**

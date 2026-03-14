@@ -45,14 +45,16 @@ interface ItemTierListsProps {
   entityType: EntityType;
 }
 
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
 function buildVariables(entityId: string, entityType: EntityType) {
   return {
-    placeId: entityType === "place" ? entityId : undefined,
-    wineId: entityType === "wine" ? entityId : undefined,
-    beerId: entityType === "beer" ? entityId : undefined,
-    spiritId: entityType === "spirit" ? entityId : undefined,
-    coffeeId: entityType === "coffee" ? entityId : undefined,
-    sakeId: entityType === "sake" ? entityId : undefined,
+    placeId: entityType === "place" ? entityId : NIL_UUID,
+    wineId: entityType === "wine" ? entityId : NIL_UUID,
+    beerId: entityType === "beer" ? entityId : NIL_UUID,
+    spiritId: entityType === "spirit" ? entityId : NIL_UUID,
+    coffeeId: entityType === "coffee" ? entityId : NIL_UUID,
+    sakeId: entityType === "sake" ? entityId : NIL_UUID,
   };
 }
 

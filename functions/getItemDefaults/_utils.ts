@@ -1,21 +1,30 @@
-import {
-  type Beer_Defaults_Result,
-  type Coffee_Defaults_Result,
-  getCountryEnumQuery,
-  getSpiritTypeEnumQuery,
-  getWineStyleEnumQuery,
-  getWineVarietyEnumQuery,
-  graphql,
-  type Spirit_Defaults_Result,
-  type Wine_Defaults_Result,
+import type {
+  Beer_Defaults_Result,
+  Coffee_Defaults_Result,
+  Spirit_Defaults_Result,
+  Wine_Defaults_Result,
 } from "@cellar-assistant/shared";
 import Ajv, { type ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
 import { extract } from "fuzzball";
 import { defaultTo, filter, isNotNil, nth, pipe } from "ramda";
-import { functionQuery, getAdminAuthHeaders } from "../_utils";
 import type { JSONSchema7 } from "../_utils/ai-providers/types";
+import { isMeaningfulValue } from "../_utils/placeholder";
+import {
+  type AllEnumValues,
+  getAllEnumValues,
+  onEnumCacheRefresh,
+} from "../_utils/shared-enums";
 import { hasProperty, isRecord } from "../_utils/types";
+
+// Re-export so existing consumers don't need to change their import paths
+export { getAllEnumValues };
+
+/**
+ * Backward-compatible alias — AllEnumValues is a superset of the old EnumValues.
+ * Consumers that only use the base fields (no sake) work unchanged.
+ */
+export type EnumValues = AllEnumValues;
 
 // Initialize AJV with format support
 // - coerceTypes: converts string "5.0" → number 5, etc. (AI often returns wrong JSON types)
@@ -23,199 +32,16 @@ import { hasProperty, isRecord } from "../_utils/types";
 const ajv = new Ajv({ allErrors: true, coerceTypes: true });
 addFormats(ajv);
 
-// Type for GraphQL enum query response
-type EnumQueryResponse = {
-  __type?: {
-    enumValues?: Array<{ name: string }>;
-  };
-};
+// AJV validator cache — compiled validators for each schema key.
+// Cleared when the shared enum cache refreshes so validators don't hold stale enum data.
+const validatorCache = new Map<string, ValidateFunction<unknown>>();
 
-// Enhanced cache for enum values with error handling
-interface EnumCacheEntry {
-  data: EnumValues;
-  timestamp: number;
-  errors: number; // Track consecutive errors for circuit breaker
-}
-
-let enumCacheEntry: EnumCacheEntry | null = null;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_CACHE_ERRORS = 3; // Circuit breaker threshold
-const ERROR_BACKOFF_MULTIPLIER = 2;
-
-// Enum value container for passing to functions
-export interface EnumValues {
-  beerStyles: string[];
-  wineStyles: string[];
-  wineVarieties: string[];
-  spiritTypes: string[];
-  countries: string[];
-  coffeeCultivars: string[];
-  coffeeProcesses: string[];
-  coffeeSpecies: string[];
-  coffeeRoastLevels: string[];
-}
-
-/**
- * Helper function to create EnumValues from individual arrays
- */
-export function createEnumValues(
-  beerStyles: string[],
-  wineStyles: string[],
-  wineVarieties: string[],
-  spiritTypes: string[],
-  countries: string[],
-  coffeeRoastLevels: string[],
-  coffeeProcesses: string[],
-  coffeeSpecies: string[],
-  coffeeCultivars: string[],
-): EnumValues {
-  return {
-    beerStyles,
-    wineStyles,
-    wineVarieties,
-    spiritTypes,
-    countries,
-    coffeeCultivars,
-    coffeeProcesses,
-    coffeeSpecies,
-    coffeeRoastLevels,
-  };
-}
-
-/**
- * Fetch all enum values with caching for performance
- */
-export async function getAllEnumValues(): Promise<EnumValues> {
-  const now = Date.now();
-
-  // Return cached values if still valid
-  if (enumCacheEntry && now - enumCacheEntry.timestamp < CACHE_TTL) {
-    return enumCacheEntry.data;
+onEnumCacheRefresh(() => {
+  if (validatorCache.size > 0) {
+    console.log(`[_utils] Clearing ${validatorCache.size} cached AJV validators after enum refresh`);
+    validatorCache.clear();
   }
-
-  // Circuit breaker: if too many consecutive errors, extend cache TTL
-  if (enumCacheEntry && enumCacheEntry.errors >= MAX_CACHE_ERRORS) {
-    const backoffTime =
-      CACHE_TTL *
-      ERROR_BACKOFF_MULTIPLIER ** (enumCacheEntry.errors - MAX_CACHE_ERRORS);
-    if (now - enumCacheEntry.timestamp < backoffTime) {
-      console.warn(
-        `Enum cache in circuit breaker mode, using stale data. Errors: ${enumCacheEntry.errors}`,
-      );
-      return enumCacheEntry.data;
-    }
-  }
-
-  try {
-    // Batch all enum queries for better performance
-    const [
-      beerStylesResult,
-      countriesResult,
-      wineVarietiesResult,
-      wineStylesResult,
-      spiritTypesResult,
-      coffeeRoastLevelsResult,
-      coffeeProcessesResult,
-      coffeeSpeciesResult,
-      coffeeCultivarsResult,
-    ] = await Promise.all([
-      fetchEnumValues("beer_style_enum"),
-      fetchEnumValues("country_enum"),
-      fetchEnumValues("wine_variety_enum"),
-      fetchEnumValues("wine_style_enum"),
-      fetchEnumValues("spirit_type_enum"),
-      fetchEnumValues("coffee_roast_level_enum"),
-      fetchEnumValues("coffee_process_enum"),
-      fetchEnumValues("coffee_species_enum"),
-      fetchEnumValues("coffee_cultivar_enum"),
-    ]);
-
-    const newEnumData = createEnumValues(
-      beerStylesResult,
-      wineStylesResult,
-      wineVarietiesResult,
-      spiritTypesResult,
-      countriesResult,
-      coffeeRoastLevelsResult,
-      coffeeProcessesResult,
-      coffeeSpeciesResult,
-      coffeeCultivarsResult,
-    );
-
-    // Success: reset error count and update cache
-    enumCacheEntry = {
-      data: newEnumData,
-      timestamp: now,
-      errors: 0,
-    };
-
-    console.log("Successfully refreshed enum cache");
-    return newEnumData;
-  } catch (error) {
-    console.error("Failed to fetch enum values:", error);
-
-    // Update error count
-    if (enumCacheEntry) {
-      enumCacheEntry.errors += 1;
-      console.warn(
-        `Enum fetch failed ${enumCacheEntry.errors} times, returning stale data`,
-      );
-      return enumCacheEntry.data;
-    }
-
-    // No cached data available, return empty values as fallback
-    console.error(
-      "No cached enum data available, returning empty fallback values",
-    );
-    return createEnumValues([], [], [], [], [], [], [], [], []);
-  }
-}
-
-/**
- * Fetch enum values for a specific enum type
- */
-async function fetchEnumValues(enumType: string): Promise<string[]> {
-  try {
-    // Use existing queries where available
-    let query: any;
-    switch (enumType) {
-      case "country_enum":
-        query = getCountryEnumQuery;
-        break;
-      case "wine_style_enum":
-        query = getWineStyleEnumQuery;
-        break;
-      case "wine_variety_enum":
-        query = getWineVarietyEnumQuery;
-        break;
-      case "spirit_type_enum":
-        query = getSpiritTypeEnumQuery;
-        break;
-      default:
-        query = graphql(`
-          query Get${enumType.charAt(0).toUpperCase() + enumType.slice(1)}Enum {
-            __type(name: "${enumType}") {
-              enumValues {
-                name
-              }
-            }
-          }
-        `);
-    }
-
-    const data = await functionQuery(
-      query,
-      {},
-      { headers: getAdminAuthHeaders() },
-    );
-    const enumData = data as EnumQueryResponse | undefined;
-    const enumValues = enumData?.__type?.enumValues;
-    return enumValues ? enumValues.map((e: { name: string }) => e.name) : [];
-  } catch (error) {
-    console.warn(`Failed to fetch enum values for ${enumType}:`, error);
-    return [];
-  }
-}
+});
 
 export type ItemType = "BEER" | "WINE" | "SPIRIT" | "COFFEE" | "SAKE";
 
@@ -333,9 +159,6 @@ function performEnumMatch(
   return null;
 }
 
-// AJV validator cache
-const validatorCache = new Map<string, ValidateFunction<unknown>>();
-
 /**
  * Sanitize AI response before validation
  * - Convert null values to undefined for optional string fields
@@ -434,30 +257,6 @@ export function sanitizeAIResponse(
   return sanitized;
 }
 
-/**
- * Reset enum cache (useful for testing or when enum values change)
- */
-export function resetEnumCache(): void {
-  enumCacheEntry = null;
-}
-
-/**
- * Get enum cache statistics for monitoring
- */
-export function getEnumCacheStats() {
-  return {
-    hasCache: !!enumCacheEntry,
-    timestamp: enumCacheEntry?.timestamp || 0,
-    errors: enumCacheEntry?.errors || 0,
-    age: enumCacheEntry ? Date.now() - enumCacheEntry.timestamp : 0,
-    isStale: enumCacheEntry
-      ? Date.now() - enumCacheEntry.timestamp > CACHE_TTL
-      : true,
-    isInCircuitBreaker: enumCacheEntry
-      ? enumCacheEntry.errors >= MAX_CACHE_ERRORS
-      : false,
-  };
-}
 
 /**
  * Create typed validators for each item type
@@ -743,38 +542,6 @@ Translate all text to English and return only the JSON response.`,
 }
 
 /**
- * Placeholder strings the AI uses when it can't extract real data.
- * Matched case-insensitively after trimming.
- */
-const PLACEHOLDER_VALUES = new Set([
-  "n/a",
-  "na",
-  "none",
-  "unknown",
-  "not available",
-  "not specified",
-  "unspecified",
-]);
-
-/**
- * Check whether a value represents meaningful extracted data.
- * Returns false for null, undefined, empty strings, placeholder strings,
- * and numeric zero (which the AI uses as a default when no real value exists).
- */
-function isMeaningfulValue(value: unknown): boolean {
-  if (value === null || value === undefined || value === "") return false;
-  if (value === 0) return false;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === "") return false;
-    if (PLACEHOLDER_VALUES.has(normalized)) return false;
-    // Reject all-zero barcodes (e.g. "00000000000000")
-    if (/^0+$/.test(normalized)) return false;
-  }
-  return true;
-}
-
-/**
  * Calculate confidence score based on data completeness against schema
  * @param data - The extracted data from AI analysis
  * @param schema - The expected JSON schema
@@ -810,31 +577,42 @@ export function calculateConfidence(
 }
 
 /**
- * Clone a schema with all properties accepting null values.
- * The AI returns null for fields it can't determine — this prevents
- * AJV from rejecting an otherwise valid response over optional nulls.
+ * Build a lenient validation schema from the AI prompt schema.
+ * - Non-required properties accept null (AI returns null for unknown fields)
+ * - Enum constraints are removed (AI may return valid values not in our enum tables)
+ * - Pattern constraints are removed (AI may return slightly different formats)
+ * The prompt schema stays strict to guide the AI; this relaxed copy is only for AJV.
  */
-function makePropertiesNullable(schema: JSONSchema7): JSONSchema7 {
+function makeLenientSchema(schema: JSONSchema7): JSONSchema7 {
   if (!schema.properties) return schema;
 
   const requiredSet = new Set(schema.required ?? []);
-  const nullableProperties: Record<string, JSONSchema7> = {};
+  const lenientProperties: Record<string, JSONSchema7> = {};
 
   for (const [key, prop] of Object.entries(schema.properties)) {
-    if (typeof prop === "boolean" || requiredSet.has(key)) {
-      nullableProperties[key] = prop;
+    if (typeof prop === "boolean") {
+      lenientProperties[key] = prop;
       continue;
     }
-    // Allow null alongside the declared type
-    const { type, ...rest } = prop;
+
+    // Strip enum and pattern constraints — the AI may return valid values
+    // that aren't in our database tables or match slightly different formats
+    const { type, enum: _enum, pattern: _pattern, ...rest } = prop;
+
+    if (requiredSet.has(key)) {
+      lenientProperties[key] = { ...rest, ...(type ? { type } : {}) };
+      continue;
+    }
+
+    // Allow null alongside the declared type for non-required properties
     if (type && typeof type === "string") {
-      nullableProperties[key] = { ...rest, type: [type, "null"] as unknown as JSONSchema7["type"] };
+      lenientProperties[key] = { ...rest, type: [type, "null"] as unknown as JSONSchema7["type"] };
     } else {
-      nullableProperties[key] = prop;
+      lenientProperties[key] = { ...rest, ...(type ? { type } : {}) };
     }
   }
 
-  return { ...schema, properties: nullableProperties };
+  return { ...schema, properties: lenientProperties, additionalProperties: true };
 }
 
 /**
@@ -856,9 +634,9 @@ export function validateWithTypeNarrowing<T>(
   // Get or create validator
   let validate = validatorCache.get(schemaKey);
   if (!validate) {
-    // Make all non-required properties accept null values, since the AI
-    // returns null for fields it can't determine from the label image.
-    const lenientSchema = makePropertiesNullable(schema);
+    // Relax the schema for validation: allow nulls, strip enum/pattern constraints.
+    // The strict schema is still used in the AI prompt to guide output.
+    const lenientSchema = makeLenientSchema(schema);
     validate = ajv.compile(lenientSchema);
     validatorCache.set(schemaKey, validate);
   }

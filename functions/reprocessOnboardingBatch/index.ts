@@ -20,6 +20,7 @@ import {
   getAdminAuthHeaders,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { isMeaningfulValue } from "../_utils/placeholder";
 import { linkItemToBrand } from "../_utils/recipe-database/brand-management";
 import {
   analyzeItemImages,
@@ -51,6 +52,16 @@ const BATCH_SIZE = 3;
 
 // Sentinel cursor value meaning "start from the beginning"
 const CURSOR_START = "1900-01-01T00:00:00Z";
+
+// Skip reason constants for structured tracking
+const SKIP = {
+  UNKNOWN_ITEM_TYPE: "unknown_item_type",
+  NO_IMAGES: "no_images",
+  NO_LINKED_ITEM: "no_linked_item",
+  CONFIDENCE_REGRESSION: "confidence_regression",
+  LOW_CONFIDENCE: "low_confidence",
+  ERROR: "error",
+} as const;
 
 // =============================================================================
 // GraphQL operations
@@ -292,23 +303,6 @@ function vintageToDate(vintage: string | undefined): string | null {
   if (/^\d{4}$/.test(vintage)) return `${vintage}-01-01`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(vintage)) return vintage;
   return null;
-}
-
-/** Placeholder values the AI uses when it can't extract real data. */
-const PLACEHOLDER_VALUES = new Set([
-  "n/a", "na", "none", "unknown", "not available", "not specified", "unspecified",
-]);
-
-/** Returns true if a value is meaningful (not null, undefined, placeholder, or zero). */
-function isMeaningfulValue(value: unknown): boolean {
-  if (value == null || value === "") return false;
-  if (value === 0) return false;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === "" || PLACEHOLDER_VALUES.has(normalized)) return false;
-    if (/^0+$/.test(normalized)) return false;
-  }
-  return true;
 }
 
 /** Strip null/undefined/placeholder values from an object so Hasura _set only
@@ -575,18 +569,22 @@ export default async function reprocessOnboardingBatch(
     let batchSkipped = 0;
     const skipReasons: Record<string, number> = {};
 
-    /** Save a reprocess result to the onboarding row (fire-and-forget). */
+    /** Pending reprocess result writes — collected and awaited at batch end. */
+    const pendingResultWrites: Promise<void>[] = [];
+
+    /** Save a reprocess result to the onboarding row. */
     const saveReprocessResult = (
       onboardingId: string,
       result: Record<string, unknown>,
     ) => {
-      functionMutation(
+      const p = functionMutation(
         SET_REPROCESS_RESULT_MUTATION,
         { id: onboardingId, last_reprocess_result: { ...result, job_id: job.id, at: new Date().toISOString() } },
         headers,
-      ).catch((err) =>
+      ).then(() => {}).catch((err) =>
         console.warn(`[ReprocessBatch] Failed to save reprocess result for ${onboardingId}:`, err),
       );
+      pendingResultWrites.push(p);
     };
 
     const trackSkip = (
@@ -637,7 +635,7 @@ export default async function reprocessOnboardingBatch(
           onboarding.item_type as ItemType,
         );
         if (!schema) {
-          trackSkip("unknown_item_type", onboarding);
+          trackSkip(SKIP.UNKNOWN_ITEM_TYPE, onboarding);
           continue;
         }
 
@@ -650,7 +648,7 @@ export default async function reprocessOnboardingBatch(
         );
 
         if (images.length === 0) {
-          trackSkip("no_images", onboarding);
+          trackSkip(SKIP.NO_IMAGES, onboarding);
           continue;
         }
 
@@ -658,7 +656,7 @@ export default async function reprocessOnboardingBatch(
         const itemType = onboarding.item_type as ItemType;
         const linkedItemId = await findLinkedItemId(onboarding.id, itemType, headers);
         if (!linkedItemId) {
-          trackSkip("no_linked_item", onboarding);
+          trackSkip(SKIP.NO_LINKED_ITEM, onboarding);
           continue;
         }
 
@@ -676,7 +674,7 @@ export default async function reprocessOnboardingBatch(
 
         if (newConfidence < existingConfidence) {
           trackSkip(
-            "confidence_regression",
+            SKIP.CONFIDENCE_REGRESSION,
             onboarding,
             `${existingConfidence.toFixed(2)} → ${newConfidence.toFixed(2)}`,
             aiDefaults,
@@ -686,7 +684,7 @@ export default async function reprocessOnboardingBatch(
 
         if (newConfidence < 0.3) {
           trackSkip(
-            "low_confidence",
+            SKIP.LOW_CONFIDENCE,
             onboarding,
             `new confidence ${newConfidence.toFixed(2)} too low to be useful`,
             aiDefaults,
@@ -750,9 +748,12 @@ export default async function reprocessOnboardingBatch(
         batchUpdated++;
       } catch (recordError) {
         const errMsg = recordError instanceof Error ? recordError.message : String(recordError);
-        trackSkip("error", onboarding, errMsg);
+        trackSkip(SKIP.ERROR, onboarding, errMsg);
       }
     }
+
+    // Wait for all reprocess result writes before updating job status
+    await Promise.all(pendingResultWrites);
 
     const lastOnboarding = onboardings[onboardings.length - 1];
     const newCursor = lastOnboarding.created_at;
