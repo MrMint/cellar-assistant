@@ -78,7 +78,7 @@ export async function analyzeItemImages({
   console.log("🔍 [analyze] Starting AI analysis...");
   const aiResponse = await aiProvider.generateContent(
     { prompt, images, schema },
-    "low",
+    "medium",
   );
 
   console.log("🔍 [analyze] Raw AI response content:");
