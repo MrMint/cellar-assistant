@@ -170,3 +170,13 @@ export type Sakes_Insert_Input = VariablesOf<typeof addSakeMutation>["sake"];
 export type Cellar_Items_Insert_Input = VariablesOf<
   typeof addCellarItemMutation
 >["item"];
+
+export type Wines_Set_Input = VariablesOf<typeof updateWineMutation>["wine"];
+export type Beers_Set_Input = VariablesOf<typeof updateBeerMutation>["beer"];
+export type Spirits_Set_Input = VariablesOf<
+  typeof updateSpiritMutation
+>["spirit"];
+export type Coffees_Set_Input = VariablesOf<
+  typeof updateCoffeeMutation
+>["coffee"];
+export type Sakes_Set_Input = VariablesOf<typeof updateSakeMutation>["sake"];

@@ -1,4 +1,16 @@
 import { graphql, type ResultOf } from "@cellar-assistant/shared/gql/graphql";
+import {
+  type Beers_Set_Input,
+  type Coffees_Set_Input,
+  type Sakes_Set_Input,
+  type Spirits_Set_Input,
+  type Wines_Set_Input,
+  updateBeerMutation,
+  updateCoffeeMutation,
+  updateSakeMutation,
+  updateSpiritMutation,
+  updateWineMutation,
+} from "@cellar-assistant/shared/queries";
 import type { Request, Response } from "express";
 import {
   createAIPerformanceTracker,
@@ -8,12 +20,20 @@ import {
   getAdminAuthHeaders,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
-import { analyzeItemImages, fetchLabelImages } from "../getItemDefaults/_analyze";
+import {
+  analyzeItemImages,
+  fetchLabelImages,
+} from "../getItemDefaults/_analyze";
 import { getSchemaForItemType } from "../getItemDefaults/_schemas";
 import {
   calculateConfidence,
   getAllEnumValues,
+  type AIDefaults,
+  type BeerAIDefaults,
+  type CoffeeAIDefaults,
   type ItemType,
+  type SpiritAIDefaults,
+  type WineAIDefaults,
 } from "../getItemDefaults/_utils";
 import type { OnboardingReprocessBatchEventPayload } from "./_types";
 
@@ -175,6 +195,53 @@ const FAIL_JOB_MUTATION = graphql(`
   }
 `);
 
+// Lookup queries — resolve item ID from onboarding ID so we can use the shared pk mutations
+const GET_WINE_ID_QUERY = graphql(`
+  query GetWineIdByOnboarding($onboarding_id: uuid!) {
+    wines(where: { item_onboarding_id: { _eq: $onboarding_id } }, limit: 1) {
+      id
+    }
+  }
+`);
+
+const GET_BEER_ID_QUERY = graphql(`
+  query GetBeerIdByOnboarding($onboarding_id: uuid!) {
+    beers(where: { item_onboarding_id: { _eq: $onboarding_id } }, limit: 1) {
+      id
+    }
+  }
+`);
+
+const GET_SPIRIT_ID_QUERY = graphql(`
+  query GetSpiritIdByOnboarding($onboarding_id: uuid!) {
+    spirits(
+      where: { item_onboarding_id: { _eq: $onboarding_id } }
+      limit: 1
+    ) {
+      id
+    }
+  }
+`);
+
+const GET_COFFEE_ID_QUERY = graphql(`
+  query GetCoffeeIdByOnboarding($onboarding_id: uuid!) {
+    coffees(
+      where: { item_onboarding_id: { _eq: $onboarding_id } }
+      limit: 1
+    ) {
+      id
+    }
+  }
+`);
+
+const GET_SAKE_ID_QUERY = graphql(`
+  query GetSakeIdByOnboarding($onboarding_id: uuid!) {
+    sakes(where: { item_onboarding_id: { _eq: $onboarding_id } }, limit: 1) {
+      id
+    }
+  }
+`);
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -182,6 +249,202 @@ const FAIL_JOB_MUTATION = graphql(`
 type OnboardingRecord = ResultOf<
   typeof GET_ONBOARDINGS_BATCH_QUERY
 >["item_onboardings"][number];
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/** Convert a year string ("2019") to a date string ("2019-01-01") for date columns.
+ * Returns null for anything that isn't a 4-digit year or an already-valid date,
+ * so non-vintage strings ("NV", "Unknown", etc.) don't blow up the date constraint. */
+function vintageToDate(vintage: string | undefined): string | null {
+  if (!vintage) return null;
+  if (/^\d{4}$/.test(vintage)) return `${vintage}-01-01`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(vintage)) return vintage;
+  return null;
+}
+
+/** Strip null/undefined values from an object so Hasura _set only touches fields
+ * the AI actually returned, leaving any user-edited fields intact. */
+function compactSet<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v != null),
+  ) as Partial<T>;
+}
+
+/**
+ * Update the linked item record (wine/beer/spirit/coffee/sake) after a successful
+ * onboarding reprocess. This causes the generate_vector event trigger to fire,
+ * regenerating the item's embeddings automatically.
+ */
+// No typed SakeAIDefaults exists in _utils — define the relevant fields here
+type SakeAIDefaults = {
+  name: string;
+  vintage?: string | number;
+  country?: string;
+  region?: string;
+  description?: string;
+  alcohol_content_percentage?: number;
+};
+
+/**
+ * Update the linked item record (wine/beer/spirit/coffee/sake) after a successful
+ * onboarding reprocess. This causes the generate_vector event trigger to fire,
+ * regenerating the item's embeddings automatically.
+ * Returns true if an item was found and updated, false if no linked item exists.
+ */
+async function updateLinkedItem(
+  onboardingId: string,
+  itemType: ItemType,
+  aiDefaults: AIDefaults,
+  headers: { headers: Record<string, string> },
+): Promise<boolean> {
+  switch (itemType) {
+    case "WINE": {
+      const lookup = await functionQuery(
+        GET_WINE_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
+      const wineId = lookup?.wines?.[0]?.id;
+      if (!wineId) return false;
+      const d = aiDefaults as WineAIDefaults;
+      await functionMutation(
+        updateWineMutation,
+        {
+          wineId,
+          wine: compactSet({
+            name: d.name,
+            vintage: vintageToDate(d.vintage),
+            variety: d.variety,
+            style: d.style,
+            region: d.region,
+            country: d.country,
+            alcohol_content_percentage: d.alcohol_content_percentage,
+            description: d.description,
+          }) as unknown as Wines_Set_Input,
+        },
+        headers,
+      );
+      return true;
+    }
+    case "BEER": {
+      const lookup = await functionQuery(
+        GET_BEER_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
+      const beerId = lookup?.beers?.[0]?.id;
+      if (!beerId) return false;
+      const d = aiDefaults as BeerAIDefaults;
+      await functionMutation(
+        updateBeerMutation,
+        {
+          beerId,
+          beer: compactSet({
+            name: d.name,
+            vintage: vintageToDate(d.vintage),
+            style: d.style,
+            country: d.country,
+            alcohol_content_percentage: d.alcohol_content_percentage,
+            description: d.description,
+          }) as unknown as Beers_Set_Input,
+        },
+        headers,
+      );
+      return true;
+    }
+    case "SPIRIT": {
+      const lookup = await functionQuery(
+        GET_SPIRIT_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
+      const spiritId = lookup?.spirits?.[0]?.id;
+      if (!spiritId) return false;
+      const d = aiDefaults as SpiritAIDefaults;
+      await functionMutation(
+        updateSpiritMutation,
+        {
+          spiritId,
+          spirit: compactSet({
+            name: d.name,
+            vintage: vintageToDate(d.vintage),
+            type: d.type,
+            style: d.style,
+            country: d.country,
+            alcohol_content_percentage: d.alcohol_content_percentage,
+            description: d.description,
+          }) as unknown as Spirits_Set_Input,
+        },
+        headers,
+      );
+      return true;
+    }
+    case "COFFEE": {
+      const lookup = await functionQuery(
+        GET_COFFEE_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
+      const coffeeId = lookup?.coffees?.[0]?.id;
+      if (!coffeeId) return false;
+      const d = aiDefaults as CoffeeAIDefaults;
+      await functionMutation(
+        updateCoffeeMutation,
+        {
+          coffeeId,
+          coffee: compactSet({
+            name: d.name,
+            roast_level: d.roast_level,
+            species: d.species,
+            cultivar: d.cultivar,
+            process: d.process,
+            country: d.country,
+            description: d.description,
+          }) as unknown as Coffees_Set_Input,
+        },
+        headers,
+      );
+      return true;
+    }
+    case "SAKE": {
+      const lookup = await functionQuery(
+        GET_SAKE_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
+      const sakeId = lookup?.sakes?.[0]?.id;
+      if (!sakeId) return false;
+      const d = aiDefaults as unknown as SakeAIDefaults;
+      const parsed =
+        typeof d.vintage === "string" ? parseInt(d.vintage, 10) : d.vintage;
+      const vintageYear =
+        parsed !== undefined && !Number.isNaN(parsed) ? parsed : undefined;
+      await functionMutation(
+        updateSakeMutation,
+        {
+          sakeId,
+          sake: compactSet({
+            name: d.name,
+            vintage: vintageYear,
+            country: d.country,
+            region: d.region,
+            description: d.description,
+            alcohol_content_percentage: d.alcohol_content_percentage,
+          }) as unknown as Sakes_Set_Input,
+        },
+        headers,
+      );
+      return true;
+    }
+    default:
+      console.warn(
+        `[ReprocessBatch] No item update handler for type: ${itemType}`,
+      );
+      return false;
+  }
+}
 
 // =============================================================================
 // Main handler
@@ -212,8 +475,7 @@ export default async function reprocessOnboardingBatch(
     { id: job.id },
     { headers: getAdminAuthHeaders() },
   );
-  const currentStatus =
-    currentJob?.onboarding_reprocess_jobs_by_pk?.status;
+  const currentStatus = currentJob?.onboarding_reprocess_jobs_by_pk?.status;
 
   if (currentStatus !== "processing") {
     console.log(
@@ -333,6 +595,27 @@ export default async function reprocessOnboardingBatch(
           },
           headers,
         );
+
+        // Update the linked item record so the generate_vector trigger fires
+        try {
+          const itemsUpdated = await updateLinkedItem(
+            onboarding.id,
+            onboarding.item_type as ItemType,
+            aiDefaults,
+            headers,
+          );
+          if (itemsUpdated) {
+            console.log(
+              `[ReprocessBatch] Updated linked item for onboarding ${onboarding.id}`,
+            );
+          }
+        } catch (itemError) {
+          // Item update failure is non-fatal — onboarding was already updated
+          console.warn(
+            `[ReprocessBatch] Failed to update linked item for onboarding ${onboarding.id}:`,
+            itemError,
+          );
+        }
 
         console.log(
           `[ReprocessBatch] Updated onboarding ${onboarding.id}: confidence ${existingConfidence.toFixed(2)} → ${newConfidence.toFixed(2)}, model=${modelUsed}`,
