@@ -331,23 +331,43 @@ async function findLinkedItemId(
 ): Promise<string | null> {
   switch (itemType) {
     case "WINE": {
-      const r = await functionQuery(GET_WINE_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      const r = await functionQuery(
+        GET_WINE_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
       return r?.wines?.[0]?.id ?? null;
     }
     case "BEER": {
-      const r = await functionQuery(GET_BEER_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      const r = await functionQuery(
+        GET_BEER_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
       return r?.beers?.[0]?.id ?? null;
     }
     case "SPIRIT": {
-      const r = await functionQuery(GET_SPIRIT_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      const r = await functionQuery(
+        GET_SPIRIT_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
       return r?.spirits?.[0]?.id ?? null;
     }
     case "COFFEE": {
-      const r = await functionQuery(GET_COFFEE_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      const r = await functionQuery(
+        GET_COFFEE_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
       return r?.coffees?.[0]?.id ?? null;
     }
     case "SAKE": {
-      const r = await functionQuery(GET_SAKE_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      const r = await functionQuery(
+        GET_SAKE_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
       return r?.sakes?.[0]?.id ?? null;
     }
     default:
@@ -509,11 +529,33 @@ export default async function reprocessOnboardingBatch(
   );
   const currentStatus = currentJob?.onboarding_reprocess_jobs_by_pk?.status;
 
-  if (currentStatus !== "processing") {
+  const resumableStatuses = ["processing", "failed"];
+  if (!resumableStatuses.includes(currentStatus ?? "")) {
     console.log(
       `[ReprocessBatch] Skipping job ${job.id} — status is '${currentStatus}'`,
     );
     return res.status(200).json({ success: true, skipped: true });
+  }
+
+  // If resuming a failed job, move it back to processing
+  if (currentStatus === "failed") {
+    console.log(
+      `[ReprocessBatch] Resuming failed job ${job.id} from cursor=${job.cursor ?? "START"}`,
+    );
+    await functionMutation(
+      UPDATE_JOB_MUTATION,
+      {
+        id: job.id,
+        cursor: job.cursor,
+        total_processed: job.total_processed,
+        total_updated: job.total_updated,
+        total_skipped: job.total_skipped,
+        total_batches: job.total_batches,
+        status: "processing",
+        skip_reasons: job.skip_reasons ?? {},
+      },
+      { headers: getAdminAuthHeaders() },
+    );
   }
 
   console.log(
@@ -579,11 +621,23 @@ export default async function reprocessOnboardingBatch(
     ) => {
       const p = functionMutation(
         SET_REPROCESS_RESULT_MUTATION,
-        { id: onboardingId, last_reprocess_result: { ...result, job_id: job.id, at: new Date().toISOString() } },
+        {
+          id: onboardingId,
+          last_reprocess_result: {
+            ...result,
+            job_id: job.id,
+            at: new Date().toISOString(),
+          },
+        },
         headers,
-      ).then(() => {}).catch((err) =>
-        console.warn(`[ReprocessBatch] Failed to save reprocess result for ${onboardingId}:`, err),
-      );
+      )
+        .then(() => {})
+        .catch((err) =>
+          console.warn(
+            `[ReprocessBatch] Failed to save reprocess result for ${onboardingId}:`,
+            err,
+          ),
+        );
       pendingResultWrites.push(p);
     };
 
@@ -613,11 +667,18 @@ export default async function reprocessOnboardingBatch(
         const d = aiDefaults as unknown as Record<string, unknown>;
         context.aiResult = {
           name: d.name,
-          brand_name: d.brand_name ?? d.winery ?? d.brewery ?? d.distillery ?? d.roaster ?? d.kura,
+          brand_name:
+            d.brand_name ??
+            d.winery ??
+            d.brewery ??
+            d.distillery ??
+            d.roaster ??
+            d.kura,
           country: d.country,
-          description: typeof d.description === "string"
-            ? d.description.slice(0, 80)
-            : d.description,
+          description:
+            typeof d.description === "string"
+              ? d.description.slice(0, 80)
+              : d.description,
         };
       }
 
@@ -654,7 +715,11 @@ export default async function reprocessOnboardingBatch(
 
         // Check for linked item before expensive AI call
         const itemType = onboarding.item_type as ItemType;
-        const linkedItemId = await findLinkedItemId(onboarding.id, itemType, headers);
+        const linkedItemId = await findLinkedItemId(
+          onboarding.id,
+          itemType,
+          headers,
+        );
         if (!linkedItemId) {
           trackSkip(SKIP.NO_LINKED_ITEM, onboarding);
           continue;
@@ -747,7 +812,10 @@ export default async function reprocessOnboardingBatch(
         });
         batchUpdated++;
       } catch (recordError) {
-        const errMsg = recordError instanceof Error ? recordError.message : String(recordError);
+        const errMsg =
+          recordError instanceof Error
+            ? recordError.message
+            : String(recordError);
         trackSkip(SKIP.ERROR, onboarding, errMsg);
       }
     }
