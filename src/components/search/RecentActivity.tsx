@@ -10,6 +10,7 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { formatDistanceToNow, parseISO } from "date-fns";
@@ -19,10 +20,13 @@ import {
   MdCoffee,
   MdHistory,
   MdLocalBar,
+  MdPlace,
   MdSportsBar,
   MdStar,
+  MdViewList,
   MdWineBar,
 } from "react-icons/md";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   formatVintage,
   getNextPlaceholder,
@@ -30,7 +34,12 @@ import {
 } from "@/utilities";
 import { RichTextDisplay } from "../common/RichTextDisplay";
 import { UserAvatar } from "../common/UserAvatar";
-import type { RecentReviewsQuery, SearchDiscoveryQuery } from "./fragments";
+import type {
+  RecentReviewsQuery,
+  RecentTierListItemsQuery,
+  SearchDiscoveryQuery,
+} from "./fragments";
+import { fadeInLeft, staggerContainerFast } from "./motion-variants";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +48,10 @@ type CellarItem = ResultOf<
 >["recent_cellar_items"][number];
 
 type ReviewItem = ResultOf<typeof RecentReviewsQuery>["item_reviews"][number];
+
+type TierListItem = ResultOf<
+  typeof RecentTierListItemsQuery
+>["tier_list_items"][number];
 
 type ActivityEntry =
   | {
@@ -69,6 +82,21 @@ type ActivityEntry =
       userAvatar: string;
       score: number | null;
       reviewText: string | null;
+    }
+  | {
+      kind: "tier-listed";
+      id: string;
+      timestamp: string;
+      itemName: string;
+      itemType: string;
+      itemImageId?: string;
+      itemPlaceholder?: string | null;
+      itemHref: string;
+      userId: string;
+      userName: string;
+      userAvatar: string;
+      tierListName: string;
+      rank: number;
     };
 
 // ─── Item type icon helper ──────────────────────────────────────────────────
@@ -83,6 +111,8 @@ function getItemTypeIcon(type: string) {
       return <MdLocalBar />;
     case "COFFEE":
       return <MdCoffee />;
+    case "PLACE":
+      return <MdPlace />;
     default:
       return <MdLocalBar />;
   }
@@ -98,6 +128,8 @@ function getItemTypeColor(type: string) {
       return "neutral";
     case "COFFEE":
       return "success";
+    case "PLACE":
+      return "primary";
     default:
       return "neutral";
   }
@@ -196,11 +228,68 @@ function getItemFromReview(r: ReviewItem) {
   return null;
 }
 
+function getItemFromTierListItem(tli: TierListItem) {
+  if (isNotNil(tli.beer))
+    return {
+      name: tli.beer.name,
+      type: "BEER",
+      imageId: tli.beer.item_images[0]?.file_id,
+      placeholder: tli.beer.item_images[0]?.placeholder,
+      href: `/beers/${tli.beer.id}`,
+    };
+  if (isNotNil(tli.wine))
+    return {
+      name: tli.wine.vintage
+        ? `${formatVintage(tli.wine.vintage)} ${tli.wine.name}`
+        : tli.wine.name,
+      type: "WINE",
+      imageId: tli.wine.item_images[0]?.file_id,
+      placeholder: tli.wine.item_images[0]?.placeholder,
+      href: `/wines/${tli.wine.id}`,
+    };
+  if (isNotNil(tli.spirit))
+    return {
+      name: tli.spirit.name,
+      type: "SPIRIT",
+      imageId: tli.spirit.item_images[0]?.file_id,
+      placeholder: tli.spirit.item_images[0]?.placeholder,
+      href: `/spirits/${tli.spirit.id}`,
+    };
+  if (isNotNil(tli.coffee))
+    return {
+      name: tli.coffee.name,
+      type: "COFFEE",
+      imageId: tli.coffee.item_images[0]?.file_id,
+      placeholder: tli.coffee.item_images[0]?.placeholder,
+      href: `/coffees/${tli.coffee.id}`,
+    };
+  if (isNotNil(tli.sake))
+    return {
+      name: tli.sake.vintage
+        ? `${formatVintage(tli.sake.vintage)} ${tli.sake.name}`
+        : tli.sake.name,
+      type: "SAKE",
+      imageId: tli.sake.item_images[0]?.file_id,
+      placeholder: tli.sake.item_images[0]?.placeholder,
+      href: `/sakes/${tli.sake.id}`,
+    };
+  if (isNotNil(tli.place))
+    return {
+      name: tli.place.display_name ?? tli.place.name,
+      type: "PLACE",
+      imageId: undefined,
+      placeholder: undefined,
+      href: `/places/${tli.place.id}`,
+    };
+  return null;
+}
+
 // ─── Build the merged, sorted feed ───────────────────────────────────────────
 
 function buildActivityFeed(
   cellarItems: CellarItem[],
   reviews: ReviewItem[],
+  tierListItems: TierListItem[],
 ): ActivityEntry[] {
   const entries: ActivityEntry[] = [];
 
@@ -243,6 +332,27 @@ function buildActivityFeed(
     });
   }
 
+  for (const tli of tierListItems) {
+    const item = getItemFromTierListItem(tli);
+    if (!item || !tli.createdAt) continue;
+    const rank = tli.tier_list.items.findIndex((i) => i.id === tli.id) + 1 || 1;
+    entries.push({
+      kind: "tier-listed",
+      id: `tier-${tli.id}`,
+      timestamp: tli.createdAt,
+      itemName: item.name,
+      itemType: item.type,
+      itemImageId: item.imageId,
+      itemPlaceholder: item.placeholder,
+      itemHref: item.href,
+      userId: tli.tier_list.createdBy.id,
+      userName: tli.tier_list.createdBy.displayName,
+      userAvatar: tli.tier_list.createdBy.avatarUrl,
+      tierListName: tli.tier_list.name,
+      rank,
+    });
+  }
+
   // Sort descending by time
   entries.sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
@@ -257,200 +367,233 @@ function buildActivityFeed(
 interface RecentActivityProps {
   cellarItems: CellarItem[];
   reviews: ReviewItem[];
-  currentUserId: string;
+  tierListItems: TierListItem[];
 }
 
 export function RecentActivity({
   cellarItems,
   reviews,
-  currentUserId,
+  tierListItems,
 }: RecentActivityProps) {
-  const feed = buildActivityFeed(cellarItems, reviews);
+  const feed = buildActivityFeed(cellarItems, reviews, tierListItems);
+  const prefersReducedMotion = useMediaQuery(
+    "(prefers-reduced-motion: reduce)",
+  );
 
   if (feed.length === 0) return null;
 
   return (
-    <Stack spacing={1.5}>
-      <Stack direction="row" spacing={1} alignItems="center">
-        <MdHistory
-          style={{
-            color: "var(--joy-palette-neutral-400)",
-            fontSize: "1.25rem",
-          }}
-        />
-        <Typography level="title-lg">Recent Activity</Typography>
-      </Stack>
-      <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
-        {feed.map((entry) => {
-          const isOwn = entry.userId === currentUserId;
-          const timeAgo = formatDistanceToNow(parseISO(entry.timestamp), {
-            addSuffix: true,
-          });
-          const blurDataURL = getNextPlaceholder(entry.itemPlaceholder);
-          const typeColor = getItemTypeColor(entry.itemType) as
-            | "danger"
-            | "warning"
-            | "neutral"
-            | "success";
+    <motion.div
+      variants={prefersReducedMotion ? undefined : staggerContainerFast}
+      initial={prefersReducedMotion ? false : "hidden"}
+      whileInView="show"
+      viewport={{ once: true, margin: "-50px" }}
+    >
+      <Stack spacing={1.5}>
+        <motion.div variants={prefersReducedMotion ? undefined : fadeInLeft}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <MdHistory
+              style={{
+                color: "var(--joy-palette-neutral-400)",
+                fontSize: "1.25rem",
+              }}
+            />
+            <Typography level="title-lg">Recent Activity</Typography>
+          </Stack>
+        </motion.div>
+        <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
+          {feed.map((entry) => {
+            const timeAgo = formatDistanceToNow(parseISO(entry.timestamp), {
+              addSuffix: true,
+            });
+            const blurDataURL = getNextPlaceholder(entry.itemPlaceholder);
+            const typeColor = getItemTypeColor(entry.itemType) as
+              | "danger"
+              | "warning"
+              | "neutral"
+              | "success"
+              | "primary";
 
-          return (
-            <Grid key={entry.id} xs={1}>
-              <Card
-                component={Link}
-                href={entry.itemHref}
-                variant="outlined"
-                orientation="horizontal"
-                sx={{
-                  textDecoration: "none",
-                  "--Card-padding": "0.625rem",
-                  transition: "all 0.15s ease",
-                  height: "100%",
-                  "&:hover": {
-                    boxShadow: "sm",
-                    borderColor: "neutral.outlinedHoverBorder",
-                  },
-                }}
-              >
-                {/* Item thumbnail with action badge */}
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    flexShrink: 0,
-                    position: "relative",
-                  }}
+            return (
+              <Grid key={entry.id} xs={1}>
+                <motion.div
+                  variants={prefersReducedMotion ? undefined : fadeInLeft}
+                  whileHover={prefersReducedMotion ? undefined : { y: -2 }}
+                  whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
                 >
-                  <Box
+                  <Card
+                    component={Link}
+                    href={entry.itemHref}
+                    variant="outlined"
+                    orientation="horizontal"
                     sx={{
-                      width: "100%",
+                      textDecoration: "none",
+                      "--Card-padding": "0.625rem",
+                      transition: "all 0.15s ease",
                       height: "100%",
-                      borderRadius: "md",
-                      overflow: "hidden",
-                      position: "relative",
+                      "&:hover": {
+                        boxShadow: "sm",
+                        borderColor: "neutral.outlinedHoverBorder",
+                      },
                     }}
                   >
-                    {entry.itemImageId ? (
-                      <Image
-                        src={getNhostStorageUrl(entry.itemImageId)}
-                        alt={entry.itemName}
-                        fill
-                        style={{ objectFit: "cover" }}
-                        sizes="44px"
-                        placeholder={blurDataURL ? "blur" : undefined}
-                        blurDataURL={blurDataURL}
-                      />
-                    ) : (
-                      <Avatar
-                        variant="soft"
-                        color={typeColor}
+                    {/* Item thumbnail with action badge */}
+                    <Box
+                      sx={{
+                        width: 44,
+                        height: 44,
+                        flexShrink: 0,
+                        position: "relative",
+                      }}
+                    >
+                      <Box
                         sx={{
                           width: "100%",
                           height: "100%",
                           borderRadius: "md",
-                          fontSize: "md",
+                          overflow: "hidden",
+                          position: "relative",
                         }}
                       >
-                        {getItemTypeIcon(entry.itemType)}
-                      </Avatar>
-                    )}
-                  </Box>
+                        {entry.itemImageId ? (
+                          <Image
+                            src={getNhostStorageUrl(entry.itemImageId)}
+                            alt={entry.itemName}
+                            fill
+                            style={{ objectFit: "cover" }}
+                            sizes="44px"
+                            placeholder={blurDataURL ? "blur" : undefined}
+                            blurDataURL={blurDataURL}
+                          />
+                        ) : (
+                          <Avatar
+                            variant="soft"
+                            color={typeColor}
+                            sx={{
+                              width: "100%",
+                              height: "100%",
+                              borderRadius: "md",
+                              fontSize: "md",
+                            }}
+                          >
+                            {getItemTypeIcon(entry.itemType)}
+                          </Avatar>
+                        )}
+                      </Box>
 
-                  {/* Action icon */}
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      top: -4,
-                      left: -4,
-                      lineHeight: 0,
-                      filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))",
-                    }}
-                  >
-                    {entry.kind === "added" ? (
-                      <MdAdd
-                        style={{
-                          fontSize: "1rem",
-                          color: "var(--joy-palette-success-400)",
+                      {/* Action icon */}
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          top: -4,
+                          left: -4,
+                          lineHeight: 0,
+                          filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))",
                         }}
-                      />
-                    ) : (
-                      <MdStar
-                        style={{
-                          fontSize: "1rem",
-                          color: "var(--joy-palette-warning-400)",
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Box>
-
-                <CardContent sx={{ gap: 0.25, minWidth: 0, flex: 1 }}>
-                  {/* Item name */}
-                  <Typography level="title-sm" noWrap>
-                    {entry.itemName}
-                  </Typography>
-
-                  {/* Action line */}
-                  <Typography
-                    level="body-xs"
-                    noWrap
-                    sx={{ color: "text.tertiary" }}
-                  >
-                    {entry.kind === "added" ? (
-                      <>
-                        {isOwn ? "You" : entry.userName} added to{" "}
-                        {entry.cellarName}
-                        {" \u00B7 "}
-                        {timeAgo}
-                      </>
-                    ) : (
-                      <>
-                        {isOwn ? "You" : entry.userName} rated{" "}
-                        {isNotNil(entry.score) ? entry.score.toFixed(1) : ""}
-                        {" \u00B7 "}
-                        {timeAgo}
-                      </>
-                    )}
-                  </Typography>
-
-                  {/* Review text snippet */}
-                  {entry.kind === "reviewed" && entry.reviewText && (
-                    <Box
-                      sx={{
-                        maxHeight: "1.4em",
-                        overflow: "hidden",
-                        mt: 0.25,
-                        fontSize: "xs",
-                        color: "text.secondary",
-                        fontStyle: "italic",
-                        "& [contenteditable]": {
-                          padding: 0,
-                          maxHeight: "1.4em",
-                          overflow: "hidden",
-                        },
-                        "& p": { margin: 0 },
-                      }}
-                    >
-                      <RichTextDisplay text={entry.reviewText} />
+                      >
+                        {entry.kind === "added" ? (
+                          <MdAdd
+                            style={{
+                              fontSize: "1rem",
+                              color: "var(--joy-palette-success-400)",
+                            }}
+                          />
+                        ) : entry.kind === "tier-listed" ? (
+                          <MdViewList
+                            style={{
+                              fontSize: "1rem",
+                              color: "var(--joy-palette-primary-400)",
+                            }}
+                          />
+                        ) : (
+                          <MdStar
+                            style={{
+                              fontSize: "1rem",
+                              color: "var(--joy-palette-warning-400)",
+                            }}
+                          />
+                        )}
+                      </Box>
                     </Box>
-                  )}
-                </CardContent>
 
-                {/* User avatar on right */}
-                <UserAvatar
-                  avatarUrl={entry.userAvatar}
-                  displayName={entry.userName}
-                  size="sm"
-                  sx={{
-                    "--Avatar-size": "28px",
-                    flexShrink: 0,
-                    alignSelf: "center",
-                  }}
-                />
-              </Card>
-            </Grid>
-          );
-        })}
-      </Grid>
-    </Stack>
+                    <CardContent sx={{ gap: 0.25, minWidth: 0, flex: 1 }}>
+                      {/* Item name */}
+                      <Typography level="title-sm" noWrap>
+                        {entry.itemName}
+                      </Typography>
+
+                      {/* Action line */}
+                      <Typography
+                        level="body-xs"
+                        noWrap
+                        sx={{ color: "text.tertiary" }}
+                      >
+                        {entry.kind === "added" ? (
+                          <>
+                            Added to {entry.cellarName}
+                            {" \u00B7 "}
+                            {timeAgo}
+                          </>
+                        ) : entry.kind === "tier-listed" ? (
+                          <>
+                            #{entry.rank} in {entry.tierListName}
+                            {" \u00B7 "}
+                            {timeAgo}
+                          </>
+                        ) : (
+                          <>
+                            Rated{" "}
+                            {isNotNil(entry.score)
+                              ? entry.score.toFixed(1)
+                              : ""}
+                            {" \u00B7 "}
+                            {timeAgo}
+                          </>
+                        )}
+                      </Typography>
+
+                      {/* Review text snippet */}
+                      {entry.kind === "reviewed" && entry.reviewText && (
+                        <Box
+                          sx={{
+                            maxHeight: "1.4em",
+                            overflow: "hidden",
+                            mt: 0.25,
+                            fontSize: "xs",
+                            color: "text.secondary",
+                            fontStyle: "italic",
+                            "& [contenteditable]": {
+                              padding: 0,
+                              maxHeight: "1.4em",
+                              overflow: "hidden",
+                            },
+                            "& p": { margin: 0 },
+                          }}
+                        >
+                          <RichTextDisplay text={entry.reviewText} />
+                        </Box>
+                      )}
+                    </CardContent>
+
+                    {/* User avatar on right */}
+                    <UserAvatar
+                      avatarUrl={entry.userAvatar}
+                      displayName={entry.userName}
+                      size="sm"
+                      sx={{
+                        "--Avatar-size": "28px",
+                        flexShrink: 0,
+                        alignSelf: "center",
+                      }}
+                    />
+                  </Card>
+                </motion.div>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Stack>
+    </motion.div>
   );
 }

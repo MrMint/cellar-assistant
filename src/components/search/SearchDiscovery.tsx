@@ -1,6 +1,10 @@
 import type { ResultOf } from "@cellar-assistant/shared";
 import { Stack } from "@mui/joy";
-import type { RecentReviewsQuery, SearchDiscoveryQuery } from "./fragments";
+import type {
+  RecentReviewsQuery,
+  RecentTierListItemsQuery,
+  SearchDiscoveryQuery,
+} from "./fragments";
 import { NearbyPlaces } from "./NearbyPlaces";
 import { RecentActivity } from "./RecentActivity";
 
@@ -8,10 +12,14 @@ type DiscoveryData = ResultOf<typeof SearchDiscoveryQuery>;
 
 type ReviewsData = ResultOf<typeof RecentReviewsQuery>["item_reviews"];
 
+type TierListItemsData = ResultOf<
+  typeof RecentTierListItemsQuery
+>["tier_list_items"];
+
 interface SearchDiscoveryContentProps {
   data: DiscoveryData;
   reviews: ReviewsData;
-  currentUserId: string;
+  tierListItems: TierListItemsData;
 }
 
 /**
@@ -21,15 +29,15 @@ interface SearchDiscoveryContentProps {
 export function SearchDiscoveryContent({
   data,
   reviews,
-  currentUserId,
+  tierListItems,
 }: SearchDiscoveryContentProps) {
   return (
     <Stack spacing={4}>
-      {/* Unified activity feed: additions + reviews sorted by time */}
+      {/* Unified activity feed: additions + reviews + tier list updates sorted by time */}
       <RecentActivity
         cellarItems={data.recent_cellar_items}
         reviews={reviews}
-        currentUserId={currentUserId}
+        tierListItems={tierListItems}
       />
 
       {/* Nearby places — client component, uses geolocation */}

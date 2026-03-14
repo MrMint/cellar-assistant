@@ -20,11 +20,16 @@ import {
   MdViewList,
 } from "react-icons/md";
 import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
+import {
+  AnimatedDiscovery,
+  AnimatedDiscoveryItem,
+} from "@/components/search/AnimatedDiscovery";
 import { ClientSearchInterface } from "@/components/search/ClientSearchInterface";
 import { Greeting } from "@/components/search/Greeting";
 import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
 import {
   RecentReviewsQuery,
+  RecentTierListItemsQuery,
   SearchDiscoveryQuery,
 } from "@/components/search/fragments";
 import { SearchResultGrid } from "@/components/search/SearchResultGrid";
@@ -129,73 +134,83 @@ export default async function Search({ searchParams }: SearchPageProps) {
         {/* Discovery: greeting + search render immediately, content streams in */}
         {!hasActiveSearch && (
           <Stack spacing={4}>
-            <Stack
-              spacing={3}
-              alignItems="center"
-              sx={{ pt: { xs: 2, sm: 4 } }}
-            >
-              <Greeting displayName={user.displayName} />
-              <Suspense
-                fallback={
-                  <Skeleton
-                    variant="text"
-                    level="body-md"
-                    width={180}
-                    sx={{ mt: -1.5 }}
-                  />
-                }
-              >
-                <CollectionStats userId={user.id} />
-              </Suspense>
-              <Box sx={{ width: "100%", maxWidth: 600 }}>
-                <ClientSearchInterface initialQuery={query} />
-              </Box>
+            <AnimatedDiscovery>
               <Stack
-                direction="row"
-                spacing={1}
-                flexWrap="wrap"
-                justifyContent="center"
-                useFlexGap
+                spacing={3}
+                alignItems="center"
+                sx={{ pt: { xs: 2, sm: 4 } }}
               >
-                {[
-                  { href: "/cellars", label: "Cellars", icon: <MdHome /> },
-                  { href: "/map", label: "Map", icon: <MdMap /> },
-                  {
-                    href: "/tier-lists",
-                    label: "Tier Lists",
-                    icon: <MdViewList />,
-                  },
-                  {
-                    href: "/favorites",
-                    label: "Favorites",
-                    icon: <MdFavorite />,
-                  },
-                  {
-                    href: "/rankings",
-                    label: "Rankings",
-                    icon: <MdLeaderboard />,
-                  },
-                ].map(({ href, label, icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    style={{ textDecoration: "none" }}
+                <AnimatedDiscoveryItem>
+                  <Greeting displayName={user.displayName} />
+                </AnimatedDiscoveryItem>
+                <AnimatedDiscoveryItem>
+                  <Suspense
+                    fallback={
+                      <Skeleton
+                        variant="text"
+                        level="body-md"
+                        width={180}
+                        sx={{ mt: -1.5 }}
+                      />
+                    }
                   >
-                    <Chip
-                      variant="outlined"
-                      startDecorator={icon}
-                      sx={{
-                        cursor: "pointer",
-                        "--Chip-minHeight": "32px",
-                        fontSize: "sm",
-                      }}
-                    >
-                      {label}
-                    </Chip>
-                  </Link>
-                ))}
+                    <CollectionStats userId={user.id} />
+                  </Suspense>
+                </AnimatedDiscoveryItem>
+                <AnimatedDiscoveryItem>
+                  <Box sx={{ width: "100%", maxWidth: 600 }}>
+                    <ClientSearchInterface initialQuery={query} />
+                  </Box>
+                </AnimatedDiscoveryItem>
+                <AnimatedDiscoveryItem>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    flexWrap="wrap"
+                    justifyContent="center"
+                    useFlexGap
+                  >
+                    {[
+                      { href: "/cellars", label: "Cellars", icon: <MdHome /> },
+                      { href: "/map", label: "Map", icon: <MdMap /> },
+                      {
+                        href: "/tier-lists",
+                        label: "Tier Lists",
+                        icon: <MdViewList />,
+                      },
+                      {
+                        href: "/favorites",
+                        label: "Favorites",
+                        icon: <MdFavorite />,
+                      },
+                      {
+                        href: "/rankings",
+                        label: "Rankings",
+                        icon: <MdLeaderboard />,
+                      },
+                    ].map(({ href, label, icon }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        style={{ textDecoration: "none" }}
+                      >
+                        <Chip
+                          variant="outlined"
+                          startDecorator={icon}
+                          sx={{
+                            cursor: "pointer",
+                            "--Chip-minHeight": "32px",
+                            fontSize: "sm",
+                          }}
+                        >
+                          {label}
+                        </Chip>
+                      </Link>
+                    ))}
+                  </Stack>
+                </AnimatedDiscoveryItem>
               </Stack>
-            </Stack>
+            </AnimatedDiscovery>
 
             <Suspense fallback={<ContentSkeleton />}>
               <DiscoveryContent userId={user.id} />
@@ -299,15 +314,16 @@ async function DiscoveryContent({ userId }: { userId: string }) {
 
   const friendIds = data.user?.friends?.map((f) => f.friend.id) ?? [];
   const reviewUserIds = [userId, ...friendIds];
-  const reviewsData = await serverQuery(RecentReviewsQuery, {
-    userIds: reviewUserIds,
-  });
+  const [reviewsData, tierListItemsData] = await Promise.all([
+    serverQuery(RecentReviewsQuery, { userIds: reviewUserIds }),
+    serverQuery(RecentTierListItemsQuery, { userIds: reviewUserIds }),
+  ]);
 
   return (
     <SearchDiscoveryContent
       data={data}
       reviews={reviewsData.item_reviews}
-      currentUserId={userId}
+      tierListItems={tierListItemsData.tier_list_items}
     />
   );
 }

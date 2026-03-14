@@ -18,7 +18,11 @@ export function Greeting({ displayName }: GreetingProps) {
   const firstName = displayName?.split(" ")[0];
 
   return (
-    <Typography level="h2" suppressHydrationWarning sx={{ fontWeight: 600 }}>
+    <Typography
+      level="h2"
+      suppressHydrationWarning
+      sx={{ fontWeight: 600, textAlign: "center" }}
+    >
       {greeting}
       {firstName ? `, ${firstName}` : ""}
     </Typography>
