@@ -646,6 +646,7 @@ export function PlaceDetails({
               src={getNhostStorageUrl(googlePhotos[0].storageFileId)}
               alt={placeData.name}
               fill
+              sizes="(max-width: 720px) 100vw, 720px"
               style={{ objectFit: "cover" }}
             />
           </AspectRatio>

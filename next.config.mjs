@@ -14,6 +14,16 @@ const nextConfig = {
   },
   images: {
     dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
+    // Cache transformed images for 31 days — item images rarely change.
+    // Default is 60s which causes the same transformation to be regenerated
+    // repeatedly throughout the day, burning through the free tier limit.
+    minimumCacheTTL: 2678400,
+    // Only webp — default includes avif+webp which doubles transformations per image.
+    formats: ["image/webp"],
+    // Only the sizes actually used in the app (200, 400, 500px display sizes + 2x DPR).
+    // Default device/image size lists generate many unused variants per image.
+    deviceSizes: [400, 500, 828, 1080],
+    imageSizes: [200, 400, 500],
     remotePatterns: [
       { protocol: "https", hostname: "s.gravatar.com" },
       { protocol: "https", hostname: "cdn.discordapp.com" },
