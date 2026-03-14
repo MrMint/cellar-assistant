@@ -8,6 +8,7 @@ export interface OnboardingReprocessJob {
   total_skipped: number;
   total_batches: number;
   error_message: string | null;
+  skip_reasons: Record<string, number> | null;
 }
 
 export interface OnboardingReprocessBatchEventPayload {

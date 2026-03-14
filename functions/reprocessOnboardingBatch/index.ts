@@ -20,10 +20,12 @@ import {
   getAdminAuthHeaders,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { linkItemToBrand } from "../_utils/recipe-database/brand-management";
 import {
   analyzeItemImages,
   fetchLabelImages,
 } from "../getItemDefaults/_analyze";
+import { processBrandFromAIDefaults } from "../getItemDefaults/_brand";
 import { getSchemaForItemType } from "../getItemDefaults/_schemas";
 import {
   calculateConfidence,
@@ -162,6 +164,7 @@ const UPDATE_JOB_MUTATION = graphql(`
     $total_skipped: Int!
     $total_batches: Int!
     $status: String!
+    $skip_reasons: jsonb
   ) {
     update_onboarding_reprocess_jobs_by_pk(
       pk_columns: { id: $id }
@@ -172,6 +175,7 @@ const UPDATE_JOB_MUTATION = graphql(`
         total_skipped: $total_skipped
         total_batches: $total_batches
         status: $status
+        skip_reasons: $skip_reasons
         updated_at: "now()"
       }
     ) {
@@ -254,6 +258,18 @@ type OnboardingRecord = ResultOf<
 // Helpers
 // =============================================================================
 
+/** Merge this batch's skip reasons into the job's accumulated reasons. */
+function mergeSkipReasons(
+  existing: Record<string, number> | null,
+  batch: Record<string, number>,
+): Record<string, number> {
+  const merged = { ...(existing ?? {}) };
+  for (const [reason, count] of Object.entries(batch)) {
+    merged[reason] = (merged[reason] ?? 0) + count;
+  }
+  return merged;
+}
+
 /** Convert a year string ("2019") to a date string ("2019-01-01") for date columns.
  * Returns null for anything that isn't a 4-digit year or an already-valid date,
  * so non-vintage strings ("NV", "Unknown", etc.) don't blow up the date constraint. */
@@ -272,11 +288,6 @@ function compactSet<T extends Record<string, unknown>>(obj: T): Partial<T> {
   ) as Partial<T>;
 }
 
-/**
- * Update the linked item record (wine/beer/spirit/coffee/sake) after a successful
- * onboarding reprocess. This causes the generate_vector event trigger to fire,
- * regenerating the item's embeddings automatically.
- */
 // No typed SakeAIDefaults exists in _utils — define the relevant fields here
 type SakeAIDefaults = {
   name: string;
@@ -287,32 +298,57 @@ type SakeAIDefaults = {
   alcohol_content_percentage?: number;
 };
 
+/** Look up the linked item ID for an onboarding record. Returns null if no item exists. */
+async function findLinkedItemId(
+  onboardingId: string,
+  itemType: ItemType,
+  headers: { headers: Record<string, string> },
+): Promise<string | null> {
+  switch (itemType) {
+    case "WINE": {
+      const r = await functionQuery(GET_WINE_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      return r?.wines?.[0]?.id ?? null;
+    }
+    case "BEER": {
+      const r = await functionQuery(GET_BEER_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      return r?.beers?.[0]?.id ?? null;
+    }
+    case "SPIRIT": {
+      const r = await functionQuery(GET_SPIRIT_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      return r?.spirits?.[0]?.id ?? null;
+    }
+    case "COFFEE": {
+      const r = await functionQuery(GET_COFFEE_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      return r?.coffees?.[0]?.id ?? null;
+    }
+    case "SAKE": {
+      const r = await functionQuery(GET_SAKE_ID_QUERY, { onboarding_id: onboardingId }, headers);
+      return r?.sakes?.[0]?.id ?? null;
+    }
+    default:
+      return null;
+  }
+}
+
 /**
  * Update the linked item record (wine/beer/spirit/coffee/sake) after a successful
- * onboarding reprocess. This causes the generate_vector event trigger to fire,
+ * onboarding reprocess. Caller must provide the pre-fetched itemId.
+ * This causes the generate_vector event trigger to fire,
  * regenerating the item's embeddings automatically.
- * Returns true if an item was found and updated, false if no linked item exists.
  */
 async function updateLinkedItem(
-  onboardingId: string,
+  itemId: string,
   itemType: ItemType,
   aiDefaults: AIDefaults,
   headers: { headers: Record<string, string> },
-): Promise<boolean> {
+): Promise<void> {
   switch (itemType) {
     case "WINE": {
-      const lookup = await functionQuery(
-        GET_WINE_ID_QUERY,
-        { onboarding_id: onboardingId },
-        headers,
-      );
-      const wineId = lookup?.wines?.[0]?.id;
-      if (!wineId) return false;
       const d = aiDefaults as WineAIDefaults;
       await functionMutation(
         updateWineMutation,
         {
-          wineId,
+          wineId: itemId,
           wine: compactSet({
             name: d.name,
             vintage: vintageToDate(d.vintage),
@@ -326,21 +362,14 @@ async function updateLinkedItem(
         },
         headers,
       );
-      return true;
+      break;
     }
     case "BEER": {
-      const lookup = await functionQuery(
-        GET_BEER_ID_QUERY,
-        { onboarding_id: onboardingId },
-        headers,
-      );
-      const beerId = lookup?.beers?.[0]?.id;
-      if (!beerId) return false;
       const d = aiDefaults as BeerAIDefaults;
       await functionMutation(
         updateBeerMutation,
         {
-          beerId,
+          beerId: itemId,
           beer: compactSet({
             name: d.name,
             vintage: vintageToDate(d.vintage),
@@ -352,21 +381,14 @@ async function updateLinkedItem(
         },
         headers,
       );
-      return true;
+      break;
     }
     case "SPIRIT": {
-      const lookup = await functionQuery(
-        GET_SPIRIT_ID_QUERY,
-        { onboarding_id: onboardingId },
-        headers,
-      );
-      const spiritId = lookup?.spirits?.[0]?.id;
-      if (!spiritId) return false;
       const d = aiDefaults as SpiritAIDefaults;
       await functionMutation(
         updateSpiritMutation,
         {
-          spiritId,
+          spiritId: itemId,
           spirit: compactSet({
             name: d.name,
             vintage: vintageToDate(d.vintage),
@@ -379,21 +401,14 @@ async function updateLinkedItem(
         },
         headers,
       );
-      return true;
+      break;
     }
     case "COFFEE": {
-      const lookup = await functionQuery(
-        GET_COFFEE_ID_QUERY,
-        { onboarding_id: onboardingId },
-        headers,
-      );
-      const coffeeId = lookup?.coffees?.[0]?.id;
-      if (!coffeeId) return false;
       const d = aiDefaults as CoffeeAIDefaults;
       await functionMutation(
         updateCoffeeMutation,
         {
-          coffeeId,
+          coffeeId: itemId,
           coffee: compactSet({
             name: d.name,
             roast_level: d.roast_level,
@@ -406,16 +421,9 @@ async function updateLinkedItem(
         },
         headers,
       );
-      return true;
+      break;
     }
     case "SAKE": {
-      const lookup = await functionQuery(
-        GET_SAKE_ID_QUERY,
-        { onboarding_id: onboardingId },
-        headers,
-      );
-      const sakeId = lookup?.sakes?.[0]?.id;
-      if (!sakeId) return false;
       const d = aiDefaults as unknown as SakeAIDefaults;
       const parsed =
         typeof d.vintage === "string" ? parseInt(d.vintage, 10) : d.vintage;
@@ -424,7 +432,7 @@ async function updateLinkedItem(
       await functionMutation(
         updateSakeMutation,
         {
-          sakeId,
+          sakeId: itemId,
           sake: compactSet({
             name: d.name,
             vintage: vintageYear,
@@ -436,13 +444,12 @@ async function updateLinkedItem(
         },
         headers,
       );
-      return true;
+      break;
     }
     default:
       console.warn(
         `[ReprocessBatch] No item update handler for type: ${itemType}`,
       );
-      return false;
   }
 }
 
@@ -520,6 +527,7 @@ export default async function reprocessOnboardingBatch(
           total_skipped: job.total_skipped,
           total_batches: job.total_batches + 1,
           status: "completed",
+          skip_reasons: job.skip_reasons ?? {},
         },
         headers,
       );
@@ -534,6 +542,44 @@ export default async function reprocessOnboardingBatch(
 
     let batchUpdated = 0;
     let batchSkipped = 0;
+    const skipReasons: Record<string, number> = {};
+
+    const trackSkip = (
+      reason: string,
+      onboarding: OnboardingRecord,
+      detail?: string,
+      aiDefaults?: AIDefaults,
+    ) => {
+      skipReasons[reason] = (skipReasons[reason] ?? 0) + 1;
+      batchSkipped++;
+
+      const context: Record<string, unknown> = {
+        reason,
+        onboardingId: onboarding.id,
+        itemType: onboarding.item_type,
+        userId: onboarding.user_id,
+        existingModel: onboarding.ai_model,
+        existingConfidence: onboarding.confidence,
+        hasFrontLabel: !!onboarding.front_label_image_id,
+        hasBackLabel: !!onboarding.back_label_image_id,
+      };
+      if (detail) context.detail = detail;
+
+      // For post-AI skips, log key fields from what the AI returned
+      if (aiDefaults && typeof aiDefaults === "object") {
+        const d = aiDefaults as unknown as Record<string, unknown>;
+        context.aiResult = {
+          name: d.name,
+          brand_name: d.brand_name ?? d.winery ?? d.brewery ?? d.distillery ?? d.roaster ?? d.kura,
+          country: d.country,
+          description: typeof d.description === "string"
+            ? d.description.slice(0, 80)
+            : d.description,
+        };
+      }
+
+      console.log(`[ReprocessBatch] SKIP`, JSON.stringify(context));
+    };
 
     for (const onboarding of onboardings) {
       try {
@@ -541,10 +587,7 @@ export default async function reprocessOnboardingBatch(
           onboarding.item_type as ItemType,
         );
         if (!schema) {
-          console.warn(
-            `[ReprocessBatch] Unknown item_type '${onboarding.item_type}' for onboarding ${onboarding.id} — skipping`,
-          );
-          batchSkipped++;
+          trackSkip("unknown_item_type", onboarding);
           continue;
         }
 
@@ -557,10 +600,15 @@ export default async function reprocessOnboardingBatch(
         );
 
         if (images.length === 0) {
-          console.warn(
-            `[ReprocessBatch] No images found for onboarding ${onboarding.id} — skipping`,
-          );
-          batchSkipped++;
+          trackSkip("no_images", onboarding);
+          continue;
+        }
+
+        // Check for linked item before expensive AI call
+        const itemType = onboarding.item_type as ItemType;
+        const linkedItemId = await findLinkedItemId(onboarding.id, itemType, headers);
+        if (!linkedItemId) {
+          trackSkip("no_linked_item", onboarding);
           continue;
         }
 
@@ -577,10 +625,22 @@ export default async function reprocessOnboardingBatch(
         const existingConfidence = onboarding.confidence ?? CONFIDENCE_FALLBACK;
 
         if (newConfidence < existingConfidence) {
-          console.log(
-            `[ReprocessBatch] Skipping onboarding ${onboarding.id} — confidence dropped from ${existingConfidence.toFixed(2)} to ${newConfidence.toFixed(2)}`,
+          trackSkip(
+            "confidence_regression",
+            onboarding,
+            `${existingConfidence.toFixed(2)} → ${newConfidence.toFixed(2)}`,
+            aiDefaults,
           );
-          batchSkipped++;
+          continue;
+        }
+
+        if (newConfidence < 0.3) {
+          trackSkip(
+            "low_confidence",
+            onboarding,
+            `new confidence ${newConfidence.toFixed(2)} too low to be useful`,
+            aiDefaults,
+          );
           continue;
         }
 
@@ -596,17 +656,28 @@ export default async function reprocessOnboardingBatch(
           headers,
         );
 
-        // Update the linked item record so the generate_vector trigger fires
+        // Update the linked item record so the generate_vector trigger fires,
+        // and process brand — both only need aiDefaults so run in parallel.
         try {
-          const itemsUpdated = await updateLinkedItem(
-            onboarding.id,
-            onboarding.item_type as ItemType,
-            aiDefaults,
-            headers,
+          const [, brandResult] = await Promise.all([
+            updateLinkedItem(linkedItemId, itemType, aiDefaults, headers),
+            processBrandFromAIDefaults(aiDefaults, itemType),
+          ]);
+          console.log(
+            `[ReprocessBatch] Updated linked item for onboarding ${onboarding.id}`,
           );
-          if (itemsUpdated) {
-            console.log(
-              `[ReprocessBatch] Updated linked item for onboarding ${onboarding.id}`,
+          if (brandResult) {
+            await linkItemToBrand(
+              linkedItemId,
+              onboarding.item_type.toLowerCase() as
+                | "wine"
+                | "beer"
+                | "spirit"
+                | "coffee"
+                | "sake",
+              brandResult.id,
+              true, // isPrimary
+              true, // replace existing brand linkages
             );
           }
         } catch (itemError) {
@@ -622,11 +693,8 @@ export default async function reprocessOnboardingBatch(
         );
         batchUpdated++;
       } catch (recordError) {
-        console.error(
-          `[ReprocessBatch] Error processing onboarding ${onboarding.id}:`,
-          recordError,
-        );
-        batchSkipped++;
+        const errMsg = recordError instanceof Error ? recordError.message : String(recordError);
+        trackSkip("error", onboarding, errMsg);
       }
     }
 
@@ -634,6 +702,7 @@ export default async function reprocessOnboardingBatch(
     const newCursor = lastOnboarding.created_at;
     const hasMore = onboardings.length === BATCH_SIZE;
     const newStatus = hasMore ? "processing" : "completed";
+    const mergedReasons = mergeSkipReasons(job.skip_reasons, skipReasons);
 
     await functionMutation(
       UPDATE_JOB_MUTATION,
@@ -645,12 +714,17 @@ export default async function reprocessOnboardingBatch(
         total_skipped: job.total_skipped + batchSkipped,
         total_batches: job.total_batches + 1,
         status: newStatus,
+        skip_reasons: mergedReasons,
       },
       headers,
     );
 
+    const reasonsSummary = Object.entries(skipReasons)
+      .map(([reason, count]) => `${reason}=${count}`)
+      .join(", ");
+
     console.log(
-      `[ReprocessBatch] Batch ${job.total_batches + 1} done: ${batchUpdated} updated, ${batchSkipped} skipped — status: ${newStatus}`,
+      `[ReprocessBatch] Batch ${job.total_batches + 1} done: ${batchUpdated} updated, ${batchSkipped} skipped${reasonsSummary ? ` (${reasonsSummary})` : ""} — status: ${newStatus}`,
     );
 
     return res.status(200).json({
@@ -658,6 +732,7 @@ export default async function reprocessOnboardingBatch(
       batch: job.total_batches + 1,
       updated: batchUpdated,
       skipped: batchSkipped,
+      skipReasons,
       status: newStatus,
     });
   } catch (error) {

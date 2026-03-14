@@ -89,6 +89,12 @@ export const CreateBrandWithDetailsMutation = graphql(`
   }
 `);
 
+export const DeleteWineBrandsMutation = graphql(`mutation DeleteWineBrands($item_id: uuid!) { delete_item_brands(where: { wine_id: { _eq: $item_id } }) { affected_rows } }`);
+export const DeleteBeerBrandsMutation = graphql(`mutation DeleteBeerBrands($item_id: uuid!) { delete_item_brands(where: { beer_id: { _eq: $item_id } }) { affected_rows } }`);
+export const DeleteSpiritBrandsMutation = graphql(`mutation DeleteSpiritBrands($item_id: uuid!) { delete_item_brands(where: { spirit_id: { _eq: $item_id } }) { affected_rows } }`);
+export const DeleteCoffeeBrandsMutation = graphql(`mutation DeleteCoffeeBrands($item_id: uuid!) { delete_item_brands(where: { coffee_id: { _eq: $item_id } }) { affected_rows } }`);
+export const DeleteSakeBrandsMutation = graphql(`mutation DeleteSakeBrands($item_id: uuid!) { delete_item_brands(where: { sake_id: { _eq: $item_id } }) { affected_rows } }`);
+
 export const LinkItemToBrandMutation = graphql(`
   mutation LinkItemToBrand(
     $wine_id: uuid

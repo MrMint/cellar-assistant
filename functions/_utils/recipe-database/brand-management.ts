@@ -8,6 +8,7 @@
  * similarity matching instead of client-side fuzzy matching.
  */
 
+import { linkItemToBrandMutation as LinkItemToBrandMutation } from "@cellar-assistant/shared/queries";
 import { BRAND_TYPES } from "../shared-enums";
 import {
   functionMutation,
@@ -17,8 +18,12 @@ import {
 import {
   CreateBrandMutation,
   CreateBrandWithDetailsMutation,
+  DeleteBeerBrandsMutation,
+  DeleteCoffeeBrandsMutation,
+  DeleteSakeBrandsMutation,
+  DeleteSpiritBrandsMutation,
+  DeleteWineBrandsMutation,
   FindBrandQuery,
-  LinkItemToBrandMutation,
   SearchBrandsBySimilarityQuery,
 } from "./graphql-operations";
 
@@ -63,11 +68,39 @@ export interface BrandResult {
 // =============================================================================
 
 /**
- * Similarity threshold for database-side trigram matching (0.0-1.0)
- * pg_trgm similarity returns 0.0-1.0, with 1.0 being exact match
- * 0.5 is a reasonable threshold for catching typos and variations
+ * Minimum similarity score to be returned as a candidate (0.0-1.0).
+ * Kept low so near-exact name variants are included.
  */
 const SIMILARITY_THRESHOLD = 0.5;
+
+/**
+ * AI sometimes returns generic ownership descriptors as a parent brand name.
+ * These are not real parent companies and should be ignored.
+ */
+const GENERIC_PARENT_BRAND_NAMES = new Set([
+  "independent",
+  "independently owned",
+  "independent brewery",
+  "independent winery",
+  "independent distillery",
+  "privately owned",
+  "private",
+  "self",
+  "self-owned",
+  "n/a",
+  "na",
+  "none",
+  "unknown",
+  "various",
+]);
+
+/**
+ * Minimum similarity score to auto-accept a fuzzy match.
+ * Scores below this create a new brand instead of risking a wrong association.
+ * "Eagle Park Brewing Company" vs "Pabst Brewing Company" scores ~0.65 due
+ * to the shared " Brewing Company" suffix — this threshold rejects such matches.
+ */
+const ACCEPT_THRESHOLD = 0.8;
 
 /**
  * Find or create a brand record
@@ -192,7 +225,7 @@ export async function findOrCreateBrandWithDetails(
   criteria: BrandMatchCriteria,
   details: BrandDetails,
 ): Promise<BrandResult> {
-  const { name: brandName, country } = criteria;
+  const { name: brandName } = criteria;
 
   if (!brandName || brandName.trim().length === 0) {
     throw new Error("Brand name is required for matching");
@@ -247,37 +280,25 @@ export async function findOrCreateBrandWithDetails(
     // Results are already sorted by similarity_score DESC from the database
     const bestMatch = similarBrands[0];
 
-    if (similarBrands.length === 1) {
-      // Single good match - use it
+    // Only accept a fuzzy match if we're confident enough — low scores can
+    // false-match on shared suffixes like "Brewing Company" or "Winery".
+    if (bestMatch.similarity_score >= ACCEPT_THRESHOLD) {
+      if (similarBrands.length === 1) {
+        console.log(
+          `✅ [findOrCreateBrandWithDetails] Similarity match found: "${bestMatch.name}" (score: ${bestMatch.similarity_score.toFixed(2)})`,
+        );
+        return { id: bestMatch.id, name: bestMatch.name, isNew: false };
+      }
+
       console.log(
-        `✅ [findOrCreateBrandWithDetails] Similarity match found: "${bestMatch.name}" (score: ${bestMatch.similarity_score.toFixed(2)})`,
+        `✅ [findOrCreateBrandWithDetails] Best similarity match: "${bestMatch.name}" (score: ${bestMatch.similarity_score.toFixed(2)})`,
       );
       return { id: bestMatch.id, name: bestMatch.name, isNew: false };
     }
 
-    // Multiple matches - try to disambiguate by country in description
-    if (country) {
-      console.log(
-        `🔍 [findOrCreateBrandWithDetails] Multiple matches (${similarBrands.length}), checking descriptions for country: ${country}`,
-      );
-
-      const countryMatch = similarBrands.find((b) =>
-        b.description?.toLowerCase().includes(country.toLowerCase()),
-      );
-
-      if (countryMatch) {
-        console.log(
-          `✅ [findOrCreateBrandWithDetails] Country-disambiguated match: "${countryMatch.name}" (score: ${countryMatch.similarity_score.toFixed(2)})`,
-        );
-        return { id: countryMatch.id, name: countryMatch.name, isNew: false };
-      }
-    }
-
-    // No country match or no country provided - use the best scoring match
     console.log(
-      `✅ [findOrCreateBrandWithDetails] Best similarity match: "${bestMatch.name}" (score: ${bestMatch.similarity_score.toFixed(2)})`,
+      `⚠️ [findOrCreateBrandWithDetails] Best match "${bestMatch.name}" score ${bestMatch.similarity_score.toFixed(2)} below acceptance threshold — creating new brand`,
     );
-    return { id: bestMatch.id, name: bestMatch.name, isNew: false };
   }
 
   // Step 3: No match found - create new brand with full details
@@ -310,13 +331,17 @@ export async function findOrCreateBrandWithDetails(
 
   // Handle parent brand if provided
   let parentBrandId: string | undefined;
-  if (details.parentBrandName && details.parentBrandName.trim().length > 0) {
+  const parentBrandName = details.parentBrandName?.trim();
+  if (
+    parentBrandName &&
+    !GENERIC_PARENT_BRAND_NAMES.has(parentBrandName.toLowerCase())
+  ) {
     try {
       console.log(
-        `🔗 [findOrCreateBrandWithDetails] Looking up parent brand: "${details.parentBrandName}"`,
+        `🔗 [findOrCreateBrandWithDetails] Looking up parent brand: "${parentBrandName}"`,
       );
       const parentResult = await findOrCreateBrand(
-        details.parentBrandName.trim(),
+        parentBrandName,
         "manufacturer", // Parent brands are typically holding companies
       );
       parentBrandId = parentResult.id;
@@ -386,6 +411,7 @@ export async function linkItemToBrand(
   itemType: "wine" | "beer" | "spirit" | "coffee" | "sake",
   brandId: string,
   isPrimary: boolean = true,
+  replace: boolean = false,
 ): Promise<void> {
   console.log(
     `🔗 [linkItemToBrand] Linking ${itemType} ${itemId} to brand ${brandId}`,
@@ -419,6 +445,27 @@ export async function linkItemToBrand(
     case "sake":
       variables.sake_id = itemId;
       break;
+  }
+
+  if (replace) {
+    const headers = { headers: getAdminAuthHeaders() };
+    switch (itemType) {
+      case "wine":
+        await functionMutation(DeleteWineBrandsMutation, { item_id: itemId }, headers);
+        break;
+      case "beer":
+        await functionMutation(DeleteBeerBrandsMutation, { item_id: itemId }, headers);
+        break;
+      case "spirit":
+        await functionMutation(DeleteSpiritBrandsMutation, { item_id: itemId }, headers);
+        break;
+      case "coffee":
+        await functionMutation(DeleteCoffeeBrandsMutation, { item_id: itemId }, headers);
+        break;
+      case "sake":
+        await functionMutation(DeleteSakeBrandsMutation, { item_id: itemId }, headers);
+        break;
+    }
   }
 
   try {

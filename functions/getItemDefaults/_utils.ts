@@ -722,8 +722,14 @@ ${JSON.stringify(schema, null, 2)}
 - The producer field (winery/brewery/etc.) should contain ONLY the company/producer name (e.g., "Château Margaux", not a description)
 - Do NOT put description text in the producer field
 
+**NO PLACEHOLDER VALUES:**
+- If the image does not show a recognizable product or you cannot extract real data, return null for fields you cannot determine
+- NEVER use "N/A", "Unknown", "Not Available", "0", or similar placeholder values
+- NEVER fabricate barcode numbers — return null if no barcode is visible
+- It is better to leave a field null than to fill it with a placeholder or guess
+
 Focus on:
-1. **FILL EVERY FIELD** - even if you need to make educated guesses based on label context
+1. **FILL EVERY FIELD** from visible label information — but use null for fields you genuinely cannot determine
 2. **Professional accuracy** - use industry-standard terminology
 3. **Logical validation** - ensure all values make sense together
 4. **Distinct field purposes** - each field has a specific purpose, don't mix them
@@ -732,6 +738,38 @@ Translate all text to English and return only the JSON response.`,
   ];
 
   return sections.join("\n\n");
+}
+
+/**
+ * Placeholder strings the AI uses when it can't extract real data.
+ * Matched case-insensitively after trimming.
+ */
+const PLACEHOLDER_VALUES = new Set([
+  "n/a",
+  "na",
+  "none",
+  "unknown",
+  "not available",
+  "not specified",
+  "unspecified",
+]);
+
+/**
+ * Check whether a value represents meaningful extracted data.
+ * Returns false for null, undefined, empty strings, placeholder strings,
+ * and numeric zero (which the AI uses as a default when no real value exists).
+ */
+function isMeaningfulValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return false;
+  if (value === 0) return false;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "") return false;
+    if (PLACEHOLDER_VALUES.has(normalized)) return false;
+    // Reject all-zero barcodes (e.g. "00000000000000")
+    if (/^0+$/.test(normalized)) return false;
+  }
+  return true;
 }
 
 /**
@@ -749,14 +787,12 @@ export function calculateConfidence(
   const dataKeys = isRecord(data) ? Object.keys(data) : [];
   const providedFields = dataKeys.filter((key) => {
     if (!isRecord(data) || !hasProperty(data, key)) return false;
-    const value = data[key];
-    return value !== null && value !== undefined && value !== "";
+    return isMeaningfulValue(data[key]);
   }).length;
 
   const requiredFieldsProvided = requiredFields.filter((field: string) => {
     if (!isRecord(data) || !hasProperty(data, field)) return false;
-    const value = data[field];
-    return value !== null && value !== undefined && value !== "";
+    return isMeaningfulValue(data[field]);
   }).length;
 
   const requiredScore =

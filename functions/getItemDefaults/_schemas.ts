@@ -172,71 +172,14 @@ async function generateJsonSchemaFromIntrospection(
     },
   };
 
-  // Common brand fields to add to required array for all item types
-  const commonBrandFieldNames = [
-    "brand_name",
-    "brand_description",
-    "brand_region",
-    "brand_country",
-    "brand_website",
-    "parent_brand_name",
-  ];
-
-  // Define which fields are required for each table
-  // IMPORTANT: Vertex AI only populates fields in the 'required' array by default
-  // Fields not listed here will be skipped by the model
-  // All fields are marked nullable: true in schema conversion, so AI can return null if not visible
+  // Only truly required fields — the AI must provide these for a valid result.
+  // All other fields in `properties` are optional; the prompt and Gemini 3.x
+  // models reliably attempt every property without needing the `required` hint.
   const requiredFields: Record<string, string[]> = {
-    beers: [
-      "name",
-      "style",
-      "vintage",
-      "description",
-      "alcohol_content_percentage",
-      "international_bitterness_unit",
-      "country",
-      "barcode_code",
-      "brewery",
-      ...commonBrandFieldNames,
-    ],
-    wines: [
-      "name",
-      "vintage",
-      "variety",
-      "style",
-      "region",
-      "country",
-      "alcohol_content_percentage",
-      "description",
-      "barcode_code",
-      "winery",
-      ...commonBrandFieldNames,
-    ],
-    spirits: [
-      "name",
-      "type",
-      "style",
-      "vintage",
-      "description",
-      "alcohol_content_percentage",
-      "country",
-      "barcode_code",
-      "distillery",
-      ...commonBrandFieldNames,
-    ],
-    coffees: [
-      "name",
-      "description",
-      "roast_level",
-      "process",
-      "species",
-      "cultivar",
-      "country",
-      "barcode_code",
-      "weight",
-      "roaster",
-      ...commonBrandFieldNames,
-    ],
+    beers: ["name", "description"],
+    wines: ["name", "description"],
+    spirits: ["name", "type", "description"],
+    coffees: ["name", "description"],
   };
 
   // Define all fields for each table with dynamic enum values
