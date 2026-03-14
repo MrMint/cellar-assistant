@@ -16,7 +16,7 @@ import {
 import { formatItemType, getItemType } from "@/utilities";
 import {
   useReviewersFilterState,
-  useScrollRestore,
+  useScrollPositionRestore,
   useTypesFilterState,
 } from "@/utilities/hooks";
 import { GetRankingFriendsQuery, GetRankingsQuery } from "./fragments";
@@ -27,7 +27,7 @@ interface RankingsClientProps {
 
 export const RankingsClient = ({ userId }: RankingsClientProps) => {
   if (isNil(userId)) throw new Error("Nil UserId");
-  const { scrollId, setScrollId, scrollTargetRef } = useScrollRestore();
+  const { sentinelRef, saveScrollPosition } = useScrollPositionRestore();
   const { types, setTypes } = useTypesFilterState();
   const { reviewers, setReviewers } = useReviewersFilterState();
 
@@ -104,36 +104,33 @@ export const RankingsClient = ({ userId }: RankingsClientProps) => {
       .filter(isNotNil);
   }
   return (
-    <Grid container spacing={2}>
-      <Grid xs={12}>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          sx={{ justifyContent: "space-between", alignItems: "center" }}
-        >
-          <Typography level="title-lg">Rankings</Typography>
-          <Stack direction="row" spacing={2}>
-            <RankingsFilter types={reviewers} onTypesChange={setReviewers} />
-            <CellarItemsFilter types={types} onTypesChange={setTypes} />
+    <>
+      <div ref={sentinelRef} style={{ height: 0, overflow: "hidden" }} />
+      <Grid container spacing={2}>
+        <Grid xs={12}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ justifyContent: "space-between", alignItems: "center" }}
+          >
+            <Typography level="title-lg">Rankings</Typography>
+            <Stack direction="row" spacing={2}>
+              <RankingsFilter types={reviewers} onTypesChange={setReviewers} />
+              <CellarItemsFilter types={types} onTypesChange={setTypes} />
+            </Stack>
           </Stack>
-        </Stack>
-      </Grid>
-      {items.map((x) => (
-        <Grid
-          ref={scrollId === x.item.id ? scrollTargetRef : null}
-          key={x.item.id}
-          xs={6}
-          md={4}
-          lg={2}
-        >
-          <ItemCard
-            item={x.item}
-            type={x.type}
-            href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
-            onClick={() => setScrollId(x.item.id)}
-          />
         </Grid>
-      ))}
-    </Grid>
+        {items.map((x) => (
+          <Grid key={x.item.id} xs={6} md={4} lg={2}>
+            <ItemCard
+              item={x.item}
+              type={x.type}
+              href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
+              onClick={saveScrollPosition}
+            />
+          </Grid>
+        ))}
+      </Grid>
+    </>
   );
 };

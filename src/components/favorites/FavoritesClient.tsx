@@ -13,7 +13,10 @@ import {
   wineItemCardFragment,
 } from "@/components/item/ItemCard/fragments";
 import { formatItemType, getItemType } from "@/utilities";
-import { useScrollRestore, useTypesFilterState } from "@/utilities/hooks";
+import {
+  useScrollPositionRestore,
+  useTypesFilterState,
+} from "@/utilities/hooks";
 
 const favoritesQuery = graphql(
   `
@@ -49,7 +52,7 @@ interface FavoritesClientProps {
 }
 
 export function FavoritesClient({ userId }: FavoritesClientProps) {
-  const { scrollId, setScrollId, scrollTargetRef } = useScrollRestore();
+  const { sentinelRef, saveScrollPosition } = useScrollPositionRestore();
   const { types, setTypes } = useTypesFilterState();
 
   const favoritesWhereClause: any = {};
@@ -106,35 +109,32 @@ export function FavoritesClient({ userId }: FavoritesClientProps) {
   }
 
   return (
-    <Grid container spacing={2}>
-      <Grid xs={12}>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          sx={{ justifyContent: "space-between", alignItems: "center" }}
-        >
-          <Typography level="title-lg">Favorites</Typography>
-          <Stack direction="row" spacing={2}>
-            <CellarItemsFilter types={types} onTypesChange={setTypes} />
+    <>
+      <div ref={sentinelRef} style={{ height: 0, overflow: "hidden" }} />
+      <Grid container spacing={2}>
+        <Grid xs={12}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ justifyContent: "space-between", alignItems: "center" }}
+          >
+            <Typography level="title-lg">Favorites</Typography>
+            <Stack direction="row" spacing={2}>
+              <CellarItemsFilter types={types} onTypesChange={setTypes} />
+            </Stack>
           </Stack>
-        </Stack>
-      </Grid>
-      {items.map((x) => (
-        <Grid
-          ref={scrollId === x.item.id ? scrollTargetRef : null}
-          key={x.item.id}
-          xs={6}
-          md={4}
-          lg={2}
-        >
-          <ItemCard
-            item={x.item}
-            type={x.type}
-            href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
-            onClick={() => setScrollId(x.item.id)}
-          />
         </Grid>
-      ))}
-    </Grid>
+        {items.map((x) => (
+          <Grid key={x.item.id} xs={6} md={4} lg={2}>
+            <ItemCard
+              item={x.item}
+              type={x.type}
+              href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
+              onClick={saveScrollPosition}
+            />
+          </Grid>
+        ))}
+      </Grid>
+    </>
   );
 }

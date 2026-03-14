@@ -12,10 +12,9 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { MdAdd } from "react-icons/md";
 import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
-import { ItemCard } from "@/components/item/ItemCard";
 import { ClientSearchInterface } from "@/components/search/ClientSearchInterface";
+import { SearchResultGrid } from "@/components/search/SearchResultGrid";
 import { ServerSearchResults } from "@/components/search/ServerSearchResults";
-import { formatItemType } from "@/utilities";
 import { getServerUserId } from "@/utilities/auth-server";
 
 interface SearchPageProps {
@@ -97,23 +96,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
                 </Link>
               </Stack>
             ) : (
-              <Grid container spacing={2}>
-                {imageResults.map((item: BarcodeSearchResult) => (
-                  <Grid
-                    key={item.id}
-                    xs={imageResults.length > 6 ? 6 : 12}
-                    sm={6}
-                    md={4}
-                    lg={2}
-                  >
-                    <ItemCard
-                      item={item}
-                      type={item.type}
-                      href={`${formatItemType(item.type).toLowerCase()}s/${item.id}`}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              <SearchResultGrid items={imageResults} />
             )}
           </Stack>
         )}
@@ -134,23 +117,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
                 </Link>
               </Stack>
             ) : (
-              <Grid container spacing={2}>
-                {barcodeResults.map((item: BarcodeSearchResult) => (
-                  <Grid
-                    key={item.id}
-                    xs={barcodeResults.length > 6 ? 6 : 12}
-                    sm={6}
-                    md={4}
-                    lg={2}
-                  >
-                    <ItemCard
-                      item={item}
-                      type={item.type}
-                      href={`${formatItemType(item.type).toLowerCase()}s/${item.id}`}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              <SearchResultGrid items={barcodeResults} />
             )}
           </Stack>
         )}

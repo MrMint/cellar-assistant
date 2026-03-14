@@ -5,6 +5,7 @@ import { Box, Button, Grid, Link, Stack } from "@mui/joy";
 import { MdAdd } from "react-icons/md";
 import { CellarCardClient } from "@/components/cellar/CellarCardClient";
 import { HeaderBar } from "@/components/common/HeaderBar";
+import { useScrollPositionRestore } from "@/utilities/hooks";
 import { CellarCardFragment } from "./fragments";
 
 interface CellarsProps {
@@ -13,8 +14,11 @@ interface CellarsProps {
 }
 
 export function Cellars({ cellars, userId }: CellarsProps) {
+  const { sentinelRef, saveScrollPosition } = useScrollPositionRestore();
+
   return (
     <Box>
+      <div ref={sentinelRef} style={{ height: 0, overflow: "hidden" }} />
       <Stack spacing={2}>
         <HeaderBar
           serverBreadcrumbs={{}}
@@ -32,7 +36,14 @@ export function Cellars({ cellars, userId }: CellarsProps) {
           {cellars.map((cellar, i) => {
             const cellarData = readFragment(CellarCardFragment, cellar);
             return (
-              <Grid key={cellarData.id} xs={12} sm={6} md={4} lg={3}>
+              <Grid
+                key={cellarData.id}
+                xs={12}
+                sm={6}
+                md={4}
+                lg={3}
+                onClick={saveScrollPosition}
+              >
                 <CellarCardClient
                   userId={userId}
                   cellar={{

@@ -1,10 +1,8 @@
-import { Button, Grid, Stack, Typography } from "@mui/joy";
+import { Button, Stack, Typography } from "@mui/joy";
 import Link from "next/link";
 import { MdAdd } from "react-icons/md";
 import { searchByText } from "@/app/(authenticated)/search/actions";
-import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
-import { ItemCard } from "@/components/item/ItemCard";
-import { formatItemType } from "@/utilities";
+import { SearchResultGrid } from "@/components/search/SearchResultGrid";
 
 interface ServerSearchResultsProps {
   query: string;
@@ -30,23 +28,7 @@ export async function ServerSearchResults({ query }: ServerSearchResultsProps) {
 
   return (
     <Stack spacing={3}>
-      <Grid container spacing={2}>
-        {results.map((item: BarcodeSearchResult) => (
-          <Grid
-            key={item.id}
-            xs={results.length > 6 ? 6 : 12}
-            sm={6}
-            md={4}
-            lg={2}
-          >
-            <ItemCard
-              item={item}
-              type={item.type}
-              href={`${formatItemType(item.type).toLowerCase()}s/${item.id}`}
-            />
-          </Grid>
-        ))}
-      </Grid>
+      <SearchResultGrid items={results} />
       <Stack alignItems="center">
         <Link href="/add" style={{ textDecoration: "none" }}>
           <Button variant="plain" startDecorator={<MdAdd />}>
