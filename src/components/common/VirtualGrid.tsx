@@ -320,10 +320,7 @@ export function VirtualGrid<T>({
                 <Grid container spacing={2}>
                   {row
                     ? row.map((item) => (
-                        <Grid
-                          key={getItemKey(item)}
-                          {...gridBreakpoints}
-                        >
+                        <Grid key={getItemKey(item)} {...gridBreakpoints}>
                           {renderItem(item, saveScrollPosition)}
                         </Grid>
                       ))

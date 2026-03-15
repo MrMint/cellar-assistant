@@ -223,7 +223,10 @@ export async function serverQuery<TDocument extends TadaDocumentNode<any, any>>(
 export async function createEnumQueryFn() {
   return async (query: unknown, variables?: Record<string, unknown>) => {
     // biome-ignore lint/suspicious/noExplicitAny: unknown query must be cast to TadaDocumentNode with any params to satisfy serverQuery's generic constraint
-    const result = await serverQuery(query as TadaDocumentNode<any, any>, variables);
+    const result = await serverQuery(
+      query as TadaDocumentNode<any, any>,
+      variables,
+    );
     return result as {
       __schema: {
         types: Array<{

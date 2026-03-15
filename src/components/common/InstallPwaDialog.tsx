@@ -26,8 +26,17 @@ const isIos = () => {
   return /iphone|ipad|ipod/.test(userAgent);
 };
 
+const isChromeOnIos = () => {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  return /crios/.test(userAgent);
+};
+
 const isInStandaloneMode = () => {
-  return window.matchMedia("(display-mode: standalone)").matches;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    ("standalone" in window.navigator &&
+      (window.navigator as Navigator & { standalone: boolean }).standalone)
+  );
 };
 
 const isDismissedPermanently = (): boolean => {
@@ -58,9 +67,31 @@ const shouldShowDialog = (): boolean => {
   return true;
 };
 
+const ShareIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ verticalAlign: "middle", display: "inline-block" }}
+    role="img"
+    aria-label="Share"
+  >
+    <title>Share</title>
+    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    <polyline points="16 6 12 2 8 6" />
+    <line x1="12" y1="2" x2="12" y2="15" />
+  </svg>
+);
+
 export const InstallPwaDialog = () => {
   const [open, setOpen] = useState(false);
   const [ios, setIos] = useState(false);
+  const [chromeIos, setChromeIos] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent>();
 
@@ -74,14 +105,23 @@ export const InstallPwaDialog = () => {
       }
     };
     window.addEventListener("beforeinstallprompt", onBeforePrompt);
+
+    const onInstalled = () => {
+      setOpen(false);
+      track("pwa_installed");
+    };
+    window.addEventListener("appinstalled", onInstalled);
+
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforePrompt);
+      window.removeEventListener("appinstalled", onInstalled);
     };
   }, []);
 
   useEffect(() => {
     if (!isInStandaloneMode() && isIos() && shouldShowDialog()) {
       setIos(true);
+      setChromeIos(isChromeOnIos());
       setOpen(true);
       track("pwa_install_prompt_shown", { platform: "ios" });
     }
@@ -124,15 +164,25 @@ export const InstallPwaDialog = () => {
             installing it as an app. This will allow easy access from the home
             screen.
           </Typography>
-          {isNil(installEvent) && ios && (
+          {isNil(installEvent) && ios && chromeIos && (
+            <List marker="decimal">
+              <ListItem>
+                Tap the share icon <ShareIcon /> in the toolbar.
+              </ListItem>
+              <ListItem>
+                Tap{" "}
+                <Typography component="span" fontWeight="lg">
+                  &quot;Add to Home Screen&quot;
+                </Typography>
+                .
+              </ListItem>
+            </List>
+          )}
+          {isNil(installEvent) && ios && !chromeIos && (
             <List marker="decimal">
               <ListItem>Make sure you are using Safari.</ListItem>
               <ListItem>
-                Tap the share icon{" "}
-                <Typography component="span" fontWeight="lg">
-                  ⎋
-                </Typography>{" "}
-                at the bottom of the screen.
+                Tap the share icon <ShareIcon /> at the bottom of the screen.
               </ListItem>
               <ListItem>
                 Scroll down and tap{" "}

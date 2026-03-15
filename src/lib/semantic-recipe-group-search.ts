@@ -222,18 +222,16 @@ export async function findSimilarRecipeGroupsForGrouping(params: {
     const recipeGroups = result.data?.recipe_groups || [];
 
     // Calculate similarity scores based on name matching
-    const candidates: RecipeGroupingCandidate[] = recipeGroups.map(
-      (group) => {
-        const similarity = calculateTextSimilarity(recipeName, group.name);
-        const confidence = getConfidenceLevel(similarity);
+    const candidates: RecipeGroupingCandidate[] = recipeGroups.map((group) => {
+      const similarity = calculateTextSimilarity(recipeName, group.name);
+      const confidence = getConfidenceLevel(similarity);
 
-        return {
-          recipeGroup: group,
-          similarity_score: similarity,
-          confidence,
-        };
-      },
-    );
+      return {
+        recipeGroup: group,
+        similarity_score: similarity,
+        confidence,
+      };
+    });
 
     // Sort by similarity score (highest first)
     return candidates.sort((a, b) => b.similarity_score - a.similarity_score);

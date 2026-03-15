@@ -10,11 +10,7 @@ import {
   MdViewList,
 } from "react-icons/md";
 import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
-import {
-  FadeIn,
-  StaggerIn,
-  StaggerItem,
-} from "@/components/search/AnimateIn";
+import { FadeIn, StaggerIn, StaggerItem } from "@/components/search/AnimateIn";
 import { ClientSearchInterface } from "@/components/search/ClientSearchInterface";
 import { Greeting } from "@/components/search/Greeting";
 import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";

@@ -311,22 +311,20 @@ async function getAllRecipes(limit: number): Promise<RecipeSearchResults> {
     throw new Error("No recipe data returned");
   }
 
-  const recipes: RecipeSearchResult[] = searchResult.recipes.map(
-    (recipe) => ({
-      id: recipe.id,
-      name: recipe.name,
-      description: recipe.description || undefined,
-      type: recipe.type as "cocktail",
-      difficulty_level: recipe.difficulty_level || undefined,
-      prep_time_minutes: recipe.prep_time_minutes || undefined,
-      serving_size: recipe.serving_size || undefined,
-      image_url: recipe.image_url || undefined,
-      created_at: recipe.created_at || new Date().toISOString(),
-      ingredient_count: Array.isArray(recipe.ingredients)
-        ? recipe.ingredients.length
-        : 0,
-    }),
-  );
+  const recipes: RecipeSearchResult[] = searchResult.recipes.map((recipe) => ({
+    id: recipe.id,
+    name: recipe.name,
+    description: recipe.description || undefined,
+    type: recipe.type as "cocktail",
+    difficulty_level: recipe.difficulty_level || undefined,
+    prep_time_minutes: recipe.prep_time_minutes || undefined,
+    serving_size: recipe.serving_size || undefined,
+    image_url: recipe.image_url || undefined,
+    created_at: recipe.created_at || new Date().toISOString(),
+    ingredient_count: Array.isArray(recipe.ingredients)
+      ? recipe.ingredients.length
+      : 0,
+  }));
 
   console.log(`✅ [Recipe Search] Retrieved ${recipes.length} recipes`);
 

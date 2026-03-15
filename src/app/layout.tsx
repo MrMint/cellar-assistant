@@ -6,6 +6,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import NhostClientProvider from "@/components/providers/NhostClientProvider";
+import { AppleSplashScreens } from "@/components/pwa/AppleSplashScreens";
 import SerwistClientProvider from "@/components/providers/SerwistClientProvider";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -16,6 +17,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
@@ -29,6 +31,10 @@ export const metadata: Metadata = {
     title: "Cellar Assistant",
   },
   icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
     apple: "/apple-touch-icon.png",
   },
 };
@@ -40,6 +46,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <AppleSplashScreens />
+      </head>
       <body className={inter.className}>
         <SerwistClientProvider>
           <NuqsAdapter>
@@ -49,6 +58,10 @@ export default function RootLayout({
                   display: "flex",
                   height: "100vh",
                   width: "100vw",
+                  paddingTop: "env(safe-area-inset-top)",
+                  paddingBottom: "env(safe-area-inset-bottom)",
+                  paddingLeft: "env(safe-area-inset-left)",
+                  paddingRight: "env(safe-area-inset-right)",
                 }}
               >
                 {children}

@@ -20,13 +20,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { isNotNil } from "ramda";
-import {
-  MdAdd,
-  MdHistory,
-  MdPlace,
-  MdStar,
-  MdViewList,
-} from "react-icons/md";
+import { MdAdd, MdHistory, MdPlace, MdStar, MdViewList } from "react-icons/md";
 import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
@@ -472,199 +466,199 @@ export function RecentActivity({
           >
             <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
               {feed.map((entry) => {
-              const timeAgo = formatDistanceToNow(parseISO(entry.timestamp), {
-                addSuffix: true,
-              });
-              const blurDataURL = getNextPlaceholder(entry.itemPlaceholder);
-              const typeColor = getItemTypeColor(entry.itemType) as
-                | "danger"
-                | "warning"
-                | "neutral"
-                | "success"
-                | "primary";
+                const timeAgo = formatDistanceToNow(parseISO(entry.timestamp), {
+                  addSuffix: true,
+                });
+                const blurDataURL = getNextPlaceholder(entry.itemPlaceholder);
+                const typeColor = getItemTypeColor(entry.itemType) as
+                  | "danger"
+                  | "warning"
+                  | "neutral"
+                  | "success"
+                  | "primary";
 
-              return (
-                <Grid key={entry.id} xs={1}>
-                  <motion.div
-                    variants={prefersReducedMotion ? undefined : fadeInLeft}
-                    whileHover={prefersReducedMotion ? undefined : { y: -2 }}
-                    whileTap={
-                      prefersReducedMotion ? undefined : { scale: 0.98 }
-                    }
-                    transition={{ duration: 0.15 }}
-                  >
-                    <Card
-                      component={Link}
-                      href={entry.itemHref}
-                      variant="outlined"
-                      orientation="horizontal"
-                      sx={{
-                        textDecoration: "none",
-                        "--Card-padding": "0.625rem",
-                        transition: "all 0.15s ease",
-                        height: "100%",
-                        "&:hover": {
-                          boxShadow: "sm",
-                          borderColor: "neutral.outlinedHoverBorder",
-                        },
-                      }}
+                return (
+                  <Grid key={entry.id} xs={1}>
+                    <motion.div
+                      variants={prefersReducedMotion ? undefined : fadeInLeft}
+                      whileHover={prefersReducedMotion ? undefined : { y: -2 }}
+                      whileTap={
+                        prefersReducedMotion ? undefined : { scale: 0.98 }
+                      }
+                      transition={{ duration: 0.15 }}
                     >
-                      {/* Item thumbnail with action badge */}
-                      <Box
+                      <Card
+                        component={Link}
+                        href={entry.itemHref}
+                        variant="outlined"
+                        orientation="horizontal"
                         sx={{
-                          width: 44,
-                          height: 44,
-                          flexShrink: 0,
-                          position: "relative",
+                          textDecoration: "none",
+                          "--Card-padding": "0.625rem",
+                          transition: "all 0.15s ease",
+                          height: "100%",
+                          "&:hover": {
+                            boxShadow: "sm",
+                            borderColor: "neutral.outlinedHoverBorder",
+                          },
                         }}
                       >
+                        {/* Item thumbnail with action badge */}
                         <Box
                           sx={{
-                            width: "100%",
-                            height: "100%",
-                            borderRadius: "md",
-                            overflow: "hidden",
+                            width: 44,
+                            height: 44,
+                            flexShrink: 0,
                             position: "relative",
                           }}
                         >
-                          {entry.itemImageId ? (
-                            <Image
-                              src={getNhostStorageUrl(entry.itemImageId)}
-                              alt={entry.itemName}
-                              fill
-                              style={{ objectFit: "cover" }}
-                              sizes="44px"
-                              placeholder={blurDataURL ? "blur" : undefined}
-                              blurDataURL={blurDataURL}
-                            />
-                          ) : (
-                            <Avatar
-                              variant="soft"
-                              color={typeColor}
-                              sx={{
-                                width: "100%",
-                                height: "100%",
-                                borderRadius: "md",
-                                fontSize: "md",
-                              }}
-                            >
-                              {getItemTypeIcon(entry.itemType)}
-                            </Avatar>
-                          )}
-                        </Box>
-
-                        {/* Action icon */}
-                        <Box
-                          sx={{
-                            position: "absolute",
-                            top: -4,
-                            left: -4,
-                            lineHeight: 0,
-                            filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))",
-                          }}
-                        >
-                          {entry.kind === "added" ? (
-                            <MdAdd
-                              style={{
-                                fontSize: "1rem",
-                                color: "var(--joy-palette-success-400)",
-                              }}
-                            />
-                          ) : entry.kind === "tier-listed" ? (
-                            <MdViewList
-                              style={{
-                                fontSize: "1rem",
-                                color: "var(--joy-palette-primary-400)",
-                              }}
-                            />
-                          ) : (
-                            <MdStar
-                              style={{
-                                fontSize: "1rem",
-                                color: "var(--joy-palette-warning-400)",
-                              }}
-                            />
-                          )}
-                        </Box>
-                      </Box>
-
-                      <CardContent sx={{ gap: 0.25, minWidth: 0, flex: 1 }}>
-                        {/* Item name */}
-                        <Typography level="title-sm" noWrap>
-                          {entry.itemName}
-                        </Typography>
-
-                        {/* Action line */}
-                        <Typography
-                          level="body-xs"
-                          noWrap
-                          sx={{ color: "text.tertiary" }}
-                        >
-                          {entry.kind === "added" ? (
-                            <>
-                              Added to {entry.cellarName}
-                              {" \u00B7 "}
-                              {timeAgo}
-                            </>
-                          ) : entry.kind === "tier-listed" ? (
-                            <>
-                              #{entry.rank} in {entry.tierListName}
-                              {" \u00B7 "}
-                              {timeAgo}
-                            </>
-                          ) : (
-                            <>
-                              Rated{" "}
-                              {isNotNil(entry.score)
-                                ? entry.score.toFixed(1)
-                                : ""}
-                              {" \u00B7 "}
-                              {timeAgo}
-                            </>
-                          )}
-                        </Typography>
-
-                        {/* Review text snippet */}
-                        {entry.kind === "reviewed" && entry.reviewText && (
                           <Box
                             sx={{
-                              maxHeight: "1.4em",
+                              width: "100%",
+                              height: "100%",
+                              borderRadius: "md",
                               overflow: "hidden",
-                              mt: 0.25,
-                              fontSize: "xs",
-                              color: "text.secondary",
-                              fontStyle: "italic",
-                              "& [contenteditable]": {
-                                padding: 0,
-                                maxHeight: "1.4em",
-                                overflow: "hidden",
-                              },
-                              "& p": { margin: 0 },
+                              position: "relative",
                             }}
                           >
-                            <RichTextDisplay text={entry.reviewText} />
+                            {entry.itemImageId ? (
+                              <Image
+                                src={getNhostStorageUrl(entry.itemImageId)}
+                                alt={entry.itemName}
+                                fill
+                                style={{ objectFit: "cover" }}
+                                sizes="44px"
+                                placeholder={blurDataURL ? "blur" : undefined}
+                                blurDataURL={blurDataURL}
+                              />
+                            ) : (
+                              <Avatar
+                                variant="soft"
+                                color={typeColor}
+                                sx={{
+                                  width: "100%",
+                                  height: "100%",
+                                  borderRadius: "md",
+                                  fontSize: "md",
+                                }}
+                              >
+                                {getItemTypeIcon(entry.itemType)}
+                              </Avatar>
+                            )}
                           </Box>
-                        )}
-                      </CardContent>
 
-                      {/* User avatar on right */}
-                      <UserAvatar
-                        avatarUrl={entry.userAvatar}
-                        displayName={entry.userName}
-                        size="sm"
-                        sx={{
-                          "--Avatar-size": "28px",
-                          flexShrink: 0,
-                          alignSelf: "center",
-                        }}
-                      />
-                    </Card>
-                  </motion.div>
-                </Grid>
-              );
-            })}
-          </Grid>
-        </motion.div>
+                          {/* Action icon */}
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              top: -4,
+                              left: -4,
+                              lineHeight: 0,
+                              filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))",
+                            }}
+                          >
+                            {entry.kind === "added" ? (
+                              <MdAdd
+                                style={{
+                                  fontSize: "1rem",
+                                  color: "var(--joy-palette-success-400)",
+                                }}
+                              />
+                            ) : entry.kind === "tier-listed" ? (
+                              <MdViewList
+                                style={{
+                                  fontSize: "1rem",
+                                  color: "var(--joy-palette-primary-400)",
+                                }}
+                              />
+                            ) : (
+                              <MdStar
+                                style={{
+                                  fontSize: "1rem",
+                                  color: "var(--joy-palette-warning-400)",
+                                }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+
+                        <CardContent sx={{ gap: 0.25, minWidth: 0, flex: 1 }}>
+                          {/* Item name */}
+                          <Typography level="title-sm" noWrap>
+                            {entry.itemName}
+                          </Typography>
+
+                          {/* Action line */}
+                          <Typography
+                            level="body-xs"
+                            noWrap
+                            sx={{ color: "text.tertiary" }}
+                          >
+                            {entry.kind === "added" ? (
+                              <>
+                                Added to {entry.cellarName}
+                                {" \u00B7 "}
+                                {timeAgo}
+                              </>
+                            ) : entry.kind === "tier-listed" ? (
+                              <>
+                                #{entry.rank} in {entry.tierListName}
+                                {" \u00B7 "}
+                                {timeAgo}
+                              </>
+                            ) : (
+                              <>
+                                Rated{" "}
+                                {isNotNil(entry.score)
+                                  ? entry.score.toFixed(1)
+                                  : ""}
+                                {" \u00B7 "}
+                                {timeAgo}
+                              </>
+                            )}
+                          </Typography>
+
+                          {/* Review text snippet */}
+                          {entry.kind === "reviewed" && entry.reviewText && (
+                            <Box
+                              sx={{
+                                maxHeight: "1.4em",
+                                overflow: "hidden",
+                                mt: 0.25,
+                                fontSize: "xs",
+                                color: "text.secondary",
+                                fontStyle: "italic",
+                                "& [contenteditable]": {
+                                  padding: 0,
+                                  maxHeight: "1.4em",
+                                  overflow: "hidden",
+                                },
+                                "& p": { margin: 0 },
+                              }}
+                            >
+                              <RichTextDisplay text={entry.reviewText} />
+                            </Box>
+                          )}
+                        </CardContent>
+
+                        {/* User avatar on right */}
+                        <UserAvatar
+                          avatarUrl={entry.userAvatar}
+                          displayName={entry.userName}
+                          size="sm"
+                          sx={{
+                            "--Avatar-size": "28px",
+                            flexShrink: 0,
+                            alignSelf: "center",
+                          }}
+                        />
+                      </Card>
+                    </motion.div>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </motion.div>
         )}
       </AnimatePresence>
     </Stack>

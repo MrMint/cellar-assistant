@@ -234,7 +234,9 @@ export const useOptimizedRecipeGroupSearch = (
   // Execute query with proper typing
   const [queryResult, refetchQuery] = useQuery({
     query: OptimizedRecipeGroupSearchQuery,
-    variables: searchVariables as VariablesOf<typeof OptimizedRecipeGroupSearchQuery>,
+    variables: searchVariables as VariablesOf<
+      typeof OptimizedRecipeGroupSearchQuery
+    >,
     pause: !!cachedResult, // Skip query if cached
     requestPolicy: "cache-first",
   });

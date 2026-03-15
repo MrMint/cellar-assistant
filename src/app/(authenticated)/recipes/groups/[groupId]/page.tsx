@@ -194,7 +194,9 @@ export default async function RecipeGroupPage({
       >
         {(recipeGroup.canonical_recipe as unknown as RecipeDetailsItem)?.id ? (
           <RecipeDetails
-            recipe={recipeGroup.canonical_recipe as unknown as RecipeDetailsItem}
+            recipe={
+              recipeGroup.canonical_recipe as unknown as RecipeDetailsItem
+            }
             userId={userId}
             showGroupInfo={false}
             showVotingInfo={versionCount > 1}

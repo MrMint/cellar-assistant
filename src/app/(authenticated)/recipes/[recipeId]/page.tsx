@@ -46,6 +46,9 @@ export default async function RecipeDetailPage({
   // The readFragment result contains all the necessary data but with complex gql.tada types
 
   return (
-    <RecipeDetails recipe={recipe as unknown as RecipeDetailsItem} userId={userId} />
+    <RecipeDetails
+      recipe={recipe as unknown as RecipeDetailsItem}
+      userId={userId}
+    />
   );
 }

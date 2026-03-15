@@ -336,7 +336,12 @@ export const RecipeSearch = ({
       category?: string;
     }> = [];
 
-    const toSuggestion = (item: { id: string; name: string; type: string; category?: string | null }) => ({
+    const toSuggestion = (item: {
+      id: string;
+      name: string;
+      type: string;
+      category?: string | null;
+    }) => ({
       id: item.id,
       name: item.name,
       type: item.type,
@@ -549,15 +554,11 @@ export const RecipeSearch = ({
                         multiple
                         options={ingredientSuggestions}
                         getOptionLabel={(option) => option.name}
-                        value={
-                          filters.ingredientIncludes
-                            .map((id) =>
-                              ingredientSuggestions.find((s) => s.id === id),
-                            )
-                            .filter(
-                              (s): s is NonNullable<typeof s> => s != null,
-                            )
-                        }
+                        value={filters.ingredientIncludes
+                          .map((id) =>
+                            ingredientSuggestions.find((s) => s.id === id),
+                          )
+                          .filter((s): s is NonNullable<typeof s> => s != null)}
                         onChange={(_, value) =>
                           updateFilters({
                             ingredientIncludes: value.map((v) => v.id),

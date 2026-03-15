@@ -16,9 +16,7 @@ interface TierListsPageProps {
 export function TierListsPage({ tierLists }: TierListsPageProps) {
   const tierListItems = useMemo(
     () =>
-      tierLists.map((tierList) =>
-        readFragment(TierListCardFragment, tierList),
-      ),
+      tierLists.map((tierList) => readFragment(TierListCardFragment, tierList)),
     [tierLists],
   );
 

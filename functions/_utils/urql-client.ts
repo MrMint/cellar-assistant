@@ -176,9 +176,7 @@ export function getAdminAuthHeaders(): FunctionAuthHeaders {
  * but Hasura doesn't support this format and returns PersistedQueryNotSupported.
  * We use print() to convert the document to a query string and send it directly.
  */
-export async function functionQuery<
-  TDocument extends TadaDocumentNode,
->(
+export async function functionQuery<TDocument extends TadaDocumentNode>(
   query: TDocument,
   variables?: VariablesOf<TDocument>,
   options?: FunctionGraphQLOptions,
@@ -262,9 +260,7 @@ export async function functionQuery<
  * Same approach as functionQuery - converts document to string to ensure
  * the full query is always sent.
  */
-export async function functionMutation<
-  TMutation extends TadaDocumentNode,
->(
+export async function functionMutation<TMutation extends TadaDocumentNode>(
   mutation: TMutation,
   variables?: VariablesOf<TMutation>,
   options?: FunctionGraphQLOptions,

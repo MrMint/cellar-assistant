@@ -108,10 +108,7 @@ export type RecipeDetailsProps = {
   showVotingInfo?: boolean; // Whether to show voting UI
 };
 
-export const RecipeDetails = ({
-  recipe,
-  userId,
-}: RecipeDetailsProps) => {
+export const RecipeDetails = ({ recipe, userId }: RecipeDetailsProps) => {
   const fallback = getFallback(recipe.type);
 
   return (

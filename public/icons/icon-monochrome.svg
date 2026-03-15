@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Monochrome icon: simplified wine bottle + crate for notification tray -->
+  <!-- Browser uses alpha channel as mask, fills with system/theme color -->
+  <!-- Crate -->
+  <rect x="4" y="8" width="16" height="13" rx="1.5" fill="black" opacity="0.85"/>
+  <rect x="4" y="8" width="1" height="13" fill="black"/>
+  <rect x="9.5" y="8" width="0.8" height="13" fill="black"/>
+  <rect x="13.7" y="8" width="0.8" height="13" fill="black"/>
+  <rect x="19" y="8" width="1" height="13" fill="black"/>
+  <!-- Bottle -->
+  <rect x="9" y="4" width="6" height="16" rx="2" fill="black"/>
+  <rect x="10.5" y="1" width="3" height="4" rx="1" fill="black"/>
+  <!-- Bottle neck ring -->
+  <rect x="9.5" y="3.5" width="5" height="1.5" rx="0.75" fill="black"/>
+</svg>

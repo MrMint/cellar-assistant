@@ -4,6 +4,7 @@ import {
   CacheFirst,
   ExpirationPlugin,
   NetworkFirst,
+  NetworkOnly,
   Serwist,
   StaleWhileRevalidate,
 } from "serwist";
@@ -20,7 +21,7 @@ const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,
   clientsClaim: true,
-  navigationPreload: false,
+  navigationPreload: true,
   runtimeCaching: [
     {
       matcher: ({ request }) => request.mode === "navigate",
@@ -86,10 +87,7 @@ const serwist = new Serwist({
     },
     {
       matcher: /\/v1\/auth/i,
-      handler: new NetworkFirst({
-        cacheName: "auth-cache",
-        networkTimeoutSeconds: 5,
-      }),
+      handler: new NetworkOnly(),
     },
     {
       matcher: /basemaps\.cartocdn\.com/i,

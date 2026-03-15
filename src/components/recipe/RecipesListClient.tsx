@@ -86,7 +86,13 @@ export const RecipesListClient = ({
           items={sortedRecipes}
           cacheKey={`recipes-${search}`}
           getItemKey={(recipe) => recipe.id}
-          gridBreakpoints={{ xs: filteredRecipes.length > 6 ? 6 : 12, sm: 6, md: 4, lg: 3, xl: 2 }}
+          gridBreakpoints={{
+            xs: filteredRecipes.length > 6 ? 6 : 12,
+            sm: 6,
+            md: 4,
+            lg: 3,
+            xl: 2,
+          }}
           emptyMessage="No recipes found"
           renderItem={(recipe, onBeforeNavigate) => (
             <Box onClick={onBeforeNavigate}>

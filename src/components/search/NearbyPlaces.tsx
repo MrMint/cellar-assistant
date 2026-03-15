@@ -225,139 +225,139 @@ export function NearbyPlaces() {
             animate="show"
             exit="exit"
           >
-          <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
-            {places.map((place) => {
-              const [lng, lat] = place.location.coordinates;
-              const dist = formatDistance(lat, lng, userLat, userLng);
-              const summary = summaries[place.id];
-              const photoUrl = summary?.photoFileId
-                ? getNhostStorageUrl(summary.photoFileId)
-                : null;
-              const rating = summary?.rating ?? place.rating;
-              const priceLevel = summary?.priceLevel ?? place.price_level;
-              const priceLevelText = getPriceLevelText(priceLevel);
-              const openStatus = summary?.openingHours
-                ? getOpenStatus(summary.openingHours)
-                : null;
+            <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
+              {places.map((place) => {
+                const [lng, lat] = place.location.coordinates;
+                const dist = formatDistance(lat, lng, userLat, userLng);
+                const summary = summaries[place.id];
+                const photoUrl = summary?.photoFileId
+                  ? getNhostStorageUrl(summary.photoFileId)
+                  : null;
+                const rating = summary?.rating ?? place.rating;
+                const priceLevel = summary?.priceLevel ?? place.price_level;
+                const priceLevelText = getPriceLevelText(priceLevel);
+                const openStatus = summary?.openingHours
+                  ? getOpenStatus(summary.openingHours)
+                  : null;
 
-              return (
-                <Grid key={place.id} xs={1}>
-                  <motion.div
-                    variants={prefersReducedMotion ? undefined : fadeInLeft}
-                    whileHover={prefersReducedMotion ? undefined : { y: -2 }}
-                    whileTap={
-                      prefersReducedMotion ? undefined : { scale: 0.98 }
-                    }
-                    transition={{ duration: 0.15 }}
-                  >
-                    <Card
-                      component={Link}
-                      href={`/map?placeId=${place.id}`}
-                      variant="outlined"
-                      orientation="horizontal"
-                      sx={{
-                        textDecoration: "none",
-                        "--Card-padding": "0.625rem",
-                        height: "100%",
-                        transition: "all 0.15s ease",
-                        "&:hover": {
-                          boxShadow: "sm",
-                          borderColor: "neutral.outlinedHoverBorder",
-                        },
-                      }}
+                return (
+                  <Grid key={place.id} xs={1}>
+                    <motion.div
+                      variants={prefersReducedMotion ? undefined : fadeInLeft}
+                      whileHover={prefersReducedMotion ? undefined : { y: -2 }}
+                      whileTap={
+                        prefersReducedMotion ? undefined : { scale: 0.98 }
+                      }
+                      transition={{ duration: 0.15 }}
                     >
-                      {/* Place thumbnail */}
-                      <Box
+                      <Card
+                        component={Link}
+                        href={`/map?placeId=${place.id}`}
+                        variant="outlined"
+                        orientation="horizontal"
                         sx={{
-                          width: 44,
-                          height: 44,
-                          flexShrink: 0,
-                          borderRadius: "md",
-                          overflow: "hidden",
-                          position: "relative",
+                          textDecoration: "none",
+                          "--Card-padding": "0.625rem",
+                          height: "100%",
+                          transition: "all 0.15s ease",
+                          "&:hover": {
+                            boxShadow: "sm",
+                            borderColor: "neutral.outlinedHoverBorder",
+                          },
                         }}
                       >
-                        {photoUrl ? (
-                          <Image
-                            src={photoUrl}
-                            alt={place.name}
-                            fill
-                            style={{ objectFit: "cover" }}
-                            sizes="44px"
-                          />
-                        ) : (
-                          <Avatar
-                            variant="soft"
-                            color="primary"
-                            sx={{
-                              width: "100%",
-                              height: "100%",
-                              borderRadius: "md",
-                              fontSize: "md",
-                            }}
-                          >
-                            {place.name.charAt(0)}
-                          </Avatar>
-                        )}
-                      </Box>
-
-                      <CardContent sx={{ gap: 0.25, minWidth: 0 }}>
-                        <Typography level="title-sm" noWrap>
-                          {place.name}
-                        </Typography>
-
-                        {/* Info line: category · rating · price · distance */}
-                        <Typography
-                          level="body-xs"
-                          noWrap
-                          sx={{ color: "text.tertiary" }}
+                        {/* Place thumbnail */}
+                        <Box
+                          sx={{
+                            width: 44,
+                            height: 44,
+                            flexShrink: 0,
+                            borderRadius: "md",
+                            overflow: "hidden",
+                            position: "relative",
+                          }}
                         >
-                          {formatCategoryName(place.primary_category)}
-                          {rating != null && (
-                            <>
-                              {" \u00B7 "}
-                              <MdStar
-                                style={{
-                                  fontSize: "0.7rem",
-                                  verticalAlign: "middle",
-                                  color: "var(--joy-palette-warning-400)",
-                                }}
-                              />{" "}
-                              {rating.toFixed(1)}
-                            </>
+                          {photoUrl ? (
+                            <Image
+                              src={photoUrl}
+                              alt={place.name}
+                              fill
+                              style={{ objectFit: "cover" }}
+                              sizes="44px"
+                            />
+                          ) : (
+                            <Avatar
+                              variant="soft"
+                              color="primary"
+                              sx={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: "md",
+                                fontSize: "md",
+                              }}
+                            >
+                              {place.name.charAt(0)}
+                            </Avatar>
                           )}
-                          {priceLevelText && (
-                            <>
-                              {" \u00B7 "}
-                              {priceLevelText}
-                            </>
-                          )}
-                          {" \u00B7 "}
-                          {dist}
-                        </Typography>
+                        </Box>
 
-                        {/* Open/closed status when available */}
-                        {openStatus && (
+                        <CardContent sx={{ gap: 0.25, minWidth: 0 }}>
+                          <Typography level="title-sm" noWrap>
+                            {place.name}
+                          </Typography>
+
+                          {/* Info line: category · rating · price · distance */}
                           <Typography
                             level="body-xs"
-                            sx={{
-                              color: openStatus.isOpen
-                                ? "success.600"
-                                : "danger.600",
-                              fontWeight: "md",
-                            }}
+                            noWrap
+                            sx={{ color: "text.tertiary" }}
                           >
-                            {openStatus.text}
+                            {formatCategoryName(place.primary_category)}
+                            {rating != null && (
+                              <>
+                                {" \u00B7 "}
+                                <MdStar
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    verticalAlign: "middle",
+                                    color: "var(--joy-palette-warning-400)",
+                                  }}
+                                />{" "}
+                                {rating.toFixed(1)}
+                              </>
+                            )}
+                            {priceLevelText && (
+                              <>
+                                {" \u00B7 "}
+                                {priceLevelText}
+                              </>
+                            )}
+                            {" \u00B7 "}
+                            {dist}
                           </Typography>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Grid>
-              );
-            })}
-          </Grid>
-        </motion.div>
+
+                          {/* Open/closed status when available */}
+                          {openStatus && (
+                            <Typography
+                              level="body-xs"
+                              sx={{
+                                color: openStatus.isOpen
+                                  ? "success.600"
+                                  : "danger.600",
+                                fontWeight: "md",
+                              }}
+                            >
+                              {openStatus.text}
+                            </Typography>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </motion.div>
         )}
       </AnimatePresence>
       <Box sx={{ textAlign: "center" }}>

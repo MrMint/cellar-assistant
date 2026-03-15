@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .bg { fill: #433544; }
+    .crate { fill: #c4a265; }
+    .bottle { fill: #2d4a3a; }
+    .neck { fill: #3a5e4a; }
+    .highlight { fill: #d4b87a; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #433544; }
+    }
+  </style>
+  <!-- Background -->
+  <rect class="bg" width="32" height="32" rx="6"/>
+  <!-- Crate -->
+  <rect class="crate" x="6" y="11" width="20" height="15" rx="2"/>
+  <rect class="highlight" x="6" y="11" width="1.2" height="15" rx="0.5"/>
+  <rect class="highlight" x="12" y="11" width="0.8" height="15" rx="0.3"/>
+  <rect class="highlight" x="19" y="11" width="0.8" height="15" rx="0.3"/>
+  <rect class="highlight" x="24.8" y="11" width="1.2" height="15" rx="0.5"/>
+  <!-- Bottle -->
+  <rect class="bottle" x="12" y="6" width="8" height="19" rx="2.5"/>
+  <rect class="neck" x="13.8" y="2" width="4.4" height="5.5" rx="1.5"/>
+  <rect class="bottle" x="13" y="5" width="6" height="2.5" rx="1"/>
+  <!-- Bottle label accent -->
+  <rect class="highlight" x="13.5" y="13" width="5" height="4" rx="0.8" opacity="0.3"/>
+</svg>
