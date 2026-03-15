@@ -6,14 +6,17 @@ import { useCallback, useRef } from "react";
  * Custom debounced callback hook - replacement for use-debounce package
  * Debounces function execution to prevent excessive calls
  */
-export function useDebouncedCallback<T extends (...args: any[]) => any>(
-  callback: T,
+export function useDebouncedCallback<TArgs extends unknown[]>(
+  callback: (...args: TArgs) => void,
   delay: number,
-): T {
+): (...args: TArgs) => void {
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
+
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const debouncedCallback = useCallback(
-    (...args: Parameters<T>) => {
+    (...args: TArgs) => {
       // Clear existing timeout
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -21,11 +24,11 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
 
       // Set new timeout
       timeoutRef.current = setTimeout(() => {
-        callback(...args);
+        callbackRef.current(...args);
       }, delay);
     },
-    [callback, delay],
-  ) as T;
+    [delay],
+  );
 
   return debouncedCallback;
 }

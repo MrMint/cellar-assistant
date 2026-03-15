@@ -11,7 +11,7 @@ export type PictureStepProps = {
 };
 
 export const PictureStep = ({
-  picture,
+  picture: _picture,
   onCapture,
   onSkip,
   onBack,

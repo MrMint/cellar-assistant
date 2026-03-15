@@ -21,13 +21,7 @@ import {
   validatePlaceholderInput,
 } from "./_types.js";
 
-const {
-  NHOST_ADMIN_SECRET,
-  NHOST_SUBDOMAIN,
-  NHOST_REGION,
-  NHOST_WEBHOOK_SECRET,
-  PLACEHOLDER_API_URL,
-} = process.env;
+const { NHOST_WEBHOOK_SECRET, PLACEHOLDER_API_URL } = process.env;
 
 // Get shared configuration
 const CONFIG = getConfig();

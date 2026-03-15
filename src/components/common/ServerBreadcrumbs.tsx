@@ -117,12 +117,10 @@ export function ServerBreadcrumbs({
         px: 0,
       }}
     >
-      {breadcrumbs.map((breadcrumb, index) => {
-        const isLast = index === breadcrumbs.length - 1;
-
-        if (isLast || !breadcrumb.href) {
+      {breadcrumbs.map((breadcrumb) => {
+        if (!breadcrumb.href) {
           return (
-            <Typography key={index} color="neutral">
+            <Typography key={breadcrumb.label} color="neutral">
               {breadcrumb.label}
             </Typography>
           );
@@ -130,7 +128,7 @@ export function ServerBreadcrumbs({
 
         return (
           <Link
-            key={index}
+            key={breadcrumb.href}
             href={breadcrumb.href}
             color="neutral"
             underline="hover"

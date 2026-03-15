@@ -1,4 +1,9 @@
-import type { ItemType, MapSearchParams, PlaceCategory } from "../types";
+import type {
+  ItemType,
+  MapSearchParams,
+  PlaceCategory,
+  PlaceResult,
+} from "../types";
 import { ITEM_TYPE_CATEGORY_MAPPINGS } from "./categories";
 import { NAME_KEYWORDS } from "./keywords";
 
@@ -6,8 +11,13 @@ import { NAME_KEYWORDS } from "./keywords";
 // Categories with identityScore >= this value are sent to the database query.
 const IDENTITY_THRESHOLD = 0.5;
 
+// Extended place type for scoring that includes optional menu data
+interface ScoringPlace extends PlaceResult {
+  menu_summary?: { total_items: number };
+}
+
 // Calculate overall place quality independent of search criteria
-export function calculateOverallQuality(place: any): number {
+export function calculateOverallQuality(place: ScoringPlace): number {
   let score = 0;
   let maxScore = 0;
 
@@ -76,7 +86,9 @@ export function calculateOverallQuality(place: any): number {
 }
 
 // Calculate item type matching scores for ALL item types using identityScore
-export function calculateItemTypeMatches(place: any): Record<ItemType, number> {
+export function calculateItemTypeMatches(
+  place: PlaceResult,
+): Record<ItemType, number> {
   const allItemTypes: ItemType[] = ["wine", "beer", "spirit", "coffee", "sake"];
   const scores: Record<ItemType, number> = {
     wine: 0,
@@ -105,7 +117,7 @@ export function calculateItemTypeMatches(place: any): Record<ItemType, number> {
     const mappings = ITEM_TYPE_CATEGORY_MAPPINGS[itemType] || [];
     let bestScore = 0;
 
-    categories.forEach((category: any, index: number) => {
+    categories.forEach((category: string, index: number) => {
       const isPrimary = index === 0 || category === place.primary_category;
       const multiplier = isPrimary ? 1.5 : 1.0;
 

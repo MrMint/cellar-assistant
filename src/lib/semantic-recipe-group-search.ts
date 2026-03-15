@@ -147,7 +147,7 @@ export type RecipeGroupingCandidate = {
     recipes_aggregate: {
       aggregate: {
         count: number;
-      };
+      } | null;
     };
   };
   similarity_score: number;
@@ -223,7 +223,7 @@ export async function findSimilarRecipeGroupsForGrouping(params: {
 
     // Calculate similarity scores based on name matching
     const candidates: RecipeGroupingCandidate[] = recipeGroups.map(
-      (group: any) => {
+      (group) => {
         const similarity = calculateTextSimilarity(recipeName, group.name);
         const confidence = getConfidenceLevel(similarity);
 

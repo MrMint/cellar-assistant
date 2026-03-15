@@ -160,7 +160,7 @@ export interface ProcessedPlaceResult {
   display_name?: string;
   primary_category?: string;
   categories?: string[];
-  location?: any;
+  location?: { type: string; coordinates: number[] } | string;
   rating?: number;
   price_level?: number;
   street_address?: string;
@@ -171,7 +171,7 @@ export interface ProcessedPlaceResult {
   phone?: string;
   website?: string;
   email?: string;
-  hours?: any;
+  hours?: Record<string, unknown>;
   confidence?: number;
   is_verified?: boolean;
   distance: number;

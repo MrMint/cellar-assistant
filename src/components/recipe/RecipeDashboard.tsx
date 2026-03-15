@@ -192,7 +192,7 @@ export const RecipeDashboard = ({
 /**
  * Feature showcase component demonstrating all recipe system capabilities
  */
-export const RecipeFeatureShowcase = ({ userId }: { userId?: string }) => {
+export const RecipeFeatureShowcase = () => {
   return (
     <Box>
       <Typography level="h3" component="h2" sx={{ mb: 3 }}>

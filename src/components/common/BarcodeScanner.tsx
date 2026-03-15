@@ -124,7 +124,6 @@ export const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
   const {
     videoRef,
     isSupported,
-    isStreaming,
     error,
     startScanning,
     stopScanning,

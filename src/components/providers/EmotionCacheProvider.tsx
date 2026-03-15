@@ -79,14 +79,14 @@ export default function EmotionCacheProvider(props: EmotionCacheProviderProps) {
           <style
             key={name}
             data-emotion={`${registry.cache.key}-global ${name}`}
-            // eslint-disable-next-line react/no-danger
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: Required for Emotion SSR style injection
             dangerouslySetInnerHTML={{ __html: style }}
           />
         ))}
         {styles && (
           <style
             data-emotion={dataEmotionAttribute}
-            // eslint-disable-next-line react/no-danger
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: Required for Emotion SSR style injection
             dangerouslySetInnerHTML={{ __html: styles }}
           />
         )}

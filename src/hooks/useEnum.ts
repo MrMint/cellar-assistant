@@ -6,6 +6,7 @@ import type {
   EnumValue,
 } from "@cellar-assistant/shared/enums";
 import { getEnumOptions } from "@cellar-assistant/shared/enums";
+import type { TadaDocumentNode } from "gql.tada";
 import { useCallback, useEffect, useState } from "react";
 import { useClient } from "urql";
 import { useEnumContext } from "@/components/providers/EnumProvider";
@@ -57,7 +58,7 @@ export function useEnum<K extends EnumKey>(
         setError(null);
         const fetchedOptions = await getEnumOptions(enumKey, {
           query: (query: unknown, variables: Record<string, unknown>) =>
-            client.query(query as any, variables || {}),
+            client.query(query as TadaDocumentNode, variables || {}),
         });
 
         // Validate that we got some options
@@ -98,7 +99,7 @@ export function useEnum<K extends EnumKey>(
     // SERVER-FIRST LOGIC:
     if (hasServerData) {
       // We have server data - use it and don't fetch
-      setEnumOptions(serverData!);
+      setEnumOptions(serverData ?? []);
       setLoading(false);
       setError(null);
     } else if (initialData?.length) {

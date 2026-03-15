@@ -8,8 +8,6 @@ import {
   validateRecipePhotoRequest,
 } from "./_validation";
 
-const { NHOST_ADMIN_SECRET, NHOST_SUBDOMAIN, NHOST_REGION } = process.env;
-
 // Validate environment configuration
 console.log(
   "🔧 [RecipeProcessor] Initializing with environment configuration...",

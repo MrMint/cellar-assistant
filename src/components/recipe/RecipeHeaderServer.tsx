@@ -8,7 +8,6 @@ interface RecipeHeaderServerProps {
 }
 
 export function RecipeHeaderServer({
-  recipeId,
   recipeName,
   recipeType,
 }: RecipeHeaderServerProps) {

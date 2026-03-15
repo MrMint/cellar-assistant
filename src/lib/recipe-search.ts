@@ -274,7 +274,7 @@ async function performTextRecipeSearch(
 
   const recipes: RecipeSearchResult[] = searchResult.recipes
     .slice(0, limit)
-    .map((recipe: any) => ({
+    .map((recipe) => ({
       id: recipe.id,
       name: recipe.name,
       description: recipe.description || undefined,
@@ -312,7 +312,7 @@ async function getAllRecipes(limit: number): Promise<RecipeSearchResults> {
   }
 
   const recipes: RecipeSearchResult[] = searchResult.recipes.map(
-    (recipe: any) => ({
+    (recipe) => ({
       id: recipe.id,
       name: recipe.name,
       description: recipe.description || undefined,

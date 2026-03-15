@@ -8,7 +8,7 @@ interface RecipeShareProps {
   recipeType: "food" | "cocktail";
 }
 
-export function RecipeShare({ recipeId, recipeType }: RecipeShareProps) {
+export function RecipeShare({ recipeType }: RecipeShareProps) {
   const handleShare = async () => {
     if (navigator.share) {
       try {

@@ -127,7 +127,7 @@ export default async (req: Request, res: Response) => {
     const nearbyPlaces = data?.places || [];
 
     // Transform places to match frontend expectations
-    const transformedPlaces = nearbyPlaces.map((place: any) => {
+    const transformedPlaces = nearbyPlaces.map((place) => {
       // Parse location coordinates from PostGIS POINT format
       // Location is stored as POINT(lng, lat) in database
       let coordinates = [0, 0]; // Default fallback

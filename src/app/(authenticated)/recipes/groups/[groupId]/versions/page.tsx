@@ -3,7 +3,10 @@ import { Box, CircularProgress, Typography } from "@mui/joy";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { RecipeVersionsTab } from "@/components/recipe/RecipeVersionsTab";
+import {
+  type RecipeVersionData,
+  RecipeVersionsTab,
+} from "@/components/recipe/RecipeVersionsTab";
 import { makeServerClient } from "@/lib/urql/server-client";
 import { getServerUserId } from "@/utilities/auth-server";
 
@@ -138,10 +141,10 @@ export default async function RecipeVersionsPage({
     notFound();
   }
 
-  const recipes = (recipeGroup.recipes || []).map((recipe: any) => ({
+  const recipes = (recipeGroup.recipes || []).map((recipe) => ({
     ...recipe,
     created_at: recipe.created_at || new Date().toISOString(),
-  }));
+  })) as RecipeVersionData[];
   const canonicalRecipeId = recipeGroup.canonical_recipe_id;
 
   return (

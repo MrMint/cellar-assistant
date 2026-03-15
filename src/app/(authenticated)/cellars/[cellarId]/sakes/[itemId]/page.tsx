@@ -18,6 +18,10 @@ export default async function CellarSakeDetailsPage({
     return <div>Cellar sake item not found</div>;
   }
 
+  if (!data.user) {
+    return <div>User not found</div>;
+  }
+
   return (
     <CellarSakeDetails cellarItem={data.cellar_items_by_pk} user={data.user} />
   );

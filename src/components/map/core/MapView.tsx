@@ -2,7 +2,6 @@
 
 import { Box, CircularProgress } from "@mui/joy";
 import dynamic from "next/dynamic";
-import { useClient } from "urql";
 import { MapMachineProvider } from "../state/MapMachineProvider";
 
 interface MapViewProps {
@@ -32,9 +31,8 @@ const MapLibreRenderer = dynamic(
 );
 
 export function MapView({ userId }: MapViewProps) {
-  const urqlClient = useClient();
   return (
-    <MapMachineProvider userId={userId} urqlClient={urqlClient}>
+    <MapMachineProvider userId={userId}>
       <MapLibreRenderer userId={userId} />
     </MapMachineProvider>
   );

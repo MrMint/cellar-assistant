@@ -17,11 +17,6 @@ import { BsDiscord, BsFacebook } from "react-icons/bs";
 import { FcGoogle } from "react-icons/fc";
 import { getProviderSignInUrl, signIn } from "@/lib/auth/actions";
 
-interface IFormInput {
-  email: string;
-  password: string;
-}
-
 export function SignInClient({ returnTo }: { returnTo?: string }) {
   const [isRedirectingToSso, setIsRedirectingToSso] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -92,7 +92,7 @@ function unmaskMenuItem(item: MenuItem): MenuItemWithSuggestions {
 }
 
 export function PlaceMenuItems({
-  placeId,
+  placeId: _placeId,
   userId,
   menuItems,
 }: PlaceMenuItemsProps) {

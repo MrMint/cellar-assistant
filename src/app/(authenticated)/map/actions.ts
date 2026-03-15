@@ -252,8 +252,9 @@ function transformPlaceResult(
   // Calculate scoring when search params are provided
   const scoring = searchParams
     ? (() => {
-        const overallQuality = calculateOverallQuality(item);
-        const itemTypeScores = calculateItemTypeMatches(item);
+        const scoringItem = item as unknown as Parameters<typeof calculateOverallQuality>[0];
+        const overallQuality = calculateOverallQuality(scoringItem);
+        const itemTypeScores = calculateItemTypeMatches(scoringItem);
         const overallRelevance = calculateOverallRelevance(
           searchParams,
           itemTypeScores,

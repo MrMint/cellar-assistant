@@ -59,13 +59,9 @@ export const CellarForm = ({
     privacy,
     co_owners,
   }) => {
-    let result;
-
-    if (isNil(id)) {
-      result = await addCellarAction(name, privacy, co_owners);
-    } else {
-      result = await editCellarAction(id, name, privacy, co_owners);
-    }
+    const result = isNil(id)
+      ? await addCellarAction(name, privacy, co_owners)
+      : await editCellarAction(id, name, privacy, co_owners);
 
     if (result.success && isNotNil(result.cellarId)) {
       onSubmitted(result.cellarId);

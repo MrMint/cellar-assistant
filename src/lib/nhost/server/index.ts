@@ -1,4 +1,5 @@
 import { createServerClient, type NhostClient } from "@nhost/nhost-js";
+import type { Session } from "@nhost/nhost-js/session";
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -42,7 +43,7 @@ export async function createNhostClient(): Promise<NhostClient> {
           return null;
         }
       },
-      set: (session: any) => {
+      set: (session: Session) => {
         try {
           cookieStore.set("nhostSession", JSON.stringify(session), {
             httpOnly: true,

@@ -11,7 +11,7 @@ export type RichTextDisplayProps = {
   text: string;
 };
 
-const StyledContentEditable = styled(ContentEditable)(({ theme }) => ({
+const StyledContentEditable = styled(ContentEditable)(({ theme: _theme }) => ({
   padding: "0 1rem",
   overflow: "hidden",
   maxHeight: "20rem",

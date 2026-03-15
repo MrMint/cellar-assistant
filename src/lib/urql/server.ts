@@ -58,8 +58,8 @@ function _isValidSessionData(data: unknown): data is NhostSessionData {
     data &&
     typeof data === "object" &&
     "accessToken" in data &&
-    typeof (data as any).accessToken === "string" &&
-    (data as any).accessToken.length > 0
+    typeof (data as Record<string, unknown>).accessToken === "string" &&
+    ((data as Record<string, unknown>).accessToken as string).length > 0
   );
 }
 
@@ -165,6 +165,7 @@ export async function getServerAuthHeaders(): Promise<ServerAuthHeaders> {
  * This is useful inside unstable_cache where cookies() is not available —
  * the caller extracts headers beforehand and passes them via closure.
  */
+// biome-ignore lint/suspicious/noExplicitAny: TadaDocumentNode requires `any` generic params to accept all typed document nodes due to contravariance in URQL's query method
 export async function serverQuery<TDocument extends TadaDocumentNode<any, any>>(
   query: TDocument,
   variables?: VariablesOf<TDocument>,
@@ -221,7 +222,8 @@ export async function serverQuery<TDocument extends TadaDocumentNode<any, any>>(
  */
 export async function createEnumQueryFn() {
   return async (query: unknown, variables?: Record<string, unknown>) => {
-    const result = await serverQuery(query as any, variables);
+    // biome-ignore lint/suspicious/noExplicitAny: unknown query must be cast to TadaDocumentNode with any params to satisfy serverQuery's generic constraint
+    const result = await serverQuery(query as TadaDocumentNode<any, any>, variables);
     return result as {
       __schema: {
         types: Array<{
@@ -240,6 +242,7 @@ export async function createEnumQueryFn() {
  * IMPORTANT: Only use this for operations that don't require user-specific permissions.
  * The admin secret bypasses RLS, so use carefully.
  */
+// biome-ignore lint/suspicious/noExplicitAny: TadaDocumentNode requires `any` generic params to accept all typed document nodes due to contravariance in URQL's query method
 export async function adminQuery<TDocument extends TadaDocumentNode<any, any>>(
   query: TDocument,
   variables?: VariablesOf<TDocument>,
@@ -298,6 +301,7 @@ export async function adminQuery<TDocument extends TadaDocumentNode<any, any>>(
  * Use this in Server Actions for mutations
  */
 export async function serverMutation<
+  // biome-ignore lint/suspicious/noExplicitAny: TadaDocumentNode requires `any` generic params to accept all typed document nodes due to contravariance in URQL's mutation method
   TMutation extends TadaDocumentNode<any, any>,
 >(
   mutation: TMutation,

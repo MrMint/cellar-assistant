@@ -326,7 +326,8 @@ export const RecipeSearch = ({
 
   // Build ingredient suggestions list
   const ingredientSuggestions = useMemo(() => {
-    if (!ingredientSuggestionsResult.data) return [];
+    const data = ingredientSuggestionsResult.data;
+    if (!data) return [];
 
     const suggestions: Array<{
       id: string;
@@ -335,20 +336,19 @@ export const RecipeSearch = ({
       category?: string;
     }> = [];
 
+    const toSuggestion = (item: { id: string; name: string; type: string; category?: string | null }) => ({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      category: item.category ?? undefined,
+    });
+
     // Add all item types to suggestions
-    ["wines", "beers", "spirits", "coffees", "generic_items"].forEach(
-      (type) => {
-        const items = (ingredientSuggestionsResult.data as any)[type] || [];
-        suggestions.push(
-          ...items.map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            type: item.type,
-            category: item.category,
-          })),
-        );
-      },
-    );
+    for (const item of data.wines) suggestions.push(toSuggestion(item));
+    for (const item of data.beers) suggestions.push(toSuggestion(item));
+    for (const item of data.spirits) suggestions.push(toSuggestion(item));
+    for (const item of data.coffees) suggestions.push(toSuggestion(item));
+    for (const item of data.generic_items) suggestions.push(toSuggestion(item));
 
     return suggestions;
   }, [ingredientSuggestionsResult.data]);
@@ -554,7 +554,9 @@ export const RecipeSearch = ({
                             .map((id) =>
                               ingredientSuggestions.find((s) => s.id === id),
                             )
-                            .filter(Boolean) as any[]
+                            .filter(
+                              (s): s is NonNullable<typeof s> => s != null,
+                            )
                         }
                         onChange={(_, value) =>
                           updateFilters({

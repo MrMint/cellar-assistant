@@ -114,7 +114,9 @@ export const CameraCapture = ({
     const videoTrack = stream.getVideoTracks()[0];
     if (videoTrack) {
       const capabilities = videoTrack.getCapabilities?.();
-      setTorchSupported(!!(capabilities as any)?.torch);
+      setTorchSupported(
+        !!(capabilities as MediaTrackCapabilities & { torch?: boolean })?.torch,
+      );
     }
   }, []);
 
@@ -127,7 +129,11 @@ export const CameraCapture = ({
       const newTorchState = !torchEnabled;
 
       await videoTrack.applyConstraints({
-        advanced: [{ torch: newTorchState } as any],
+        advanced: [
+          { torch: newTorchState } as MediaTrackConstraintSet & {
+            torch?: boolean;
+          },
+        ],
       });
 
       setTorchEnabled(newTorchState);
@@ -162,7 +168,11 @@ export const CameraCapture = ({
               focusMode: "manual",
               focusDistance: { ideal: 0.5 }, // Adjust based on distance estimation
               pointsOfInterest: [{ x: normalizedX, y: normalizedY }],
-            } as any,
+            } as MediaTrackConstraintSet & {
+              focusMode?: string;
+              focusDistance?: { ideal: number };
+              pointsOfInterest?: Array<{ x: number; y: number }>;
+            },
           ],
         });
 
@@ -172,7 +182,11 @@ export const CameraCapture = ({
           // Return to continuous focus after manual focus
           videoTrack
             .applyConstraints({
-              advanced: [{ focusMode: "continuous" } as any],
+              advanced: [
+                { focusMode: "continuous" } as MediaTrackConstraintSet & {
+                  focusMode?: string;
+                },
+              ],
             })
             .catch(() => {});
         }, 2000);
@@ -214,7 +228,11 @@ export const CameraCapture = ({
         const videoTrack = streamRef.current.getVideoTracks()[0];
         videoTrack
           ?.applyConstraints({
-            advanced: [{ torch: false } as any],
+            advanced: [
+              { torch: false } as MediaTrackConstraintSet & {
+                torch?: boolean;
+              },
+            ],
           })
           .catch(() => {});
       }

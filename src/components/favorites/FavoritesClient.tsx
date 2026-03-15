@@ -52,7 +52,7 @@ interface FavoritesClientProps {
 export function FavoritesClient({ userId }: FavoritesClientProps) {
   const { types, setTypes } = useTypesFilterState();
 
-  const favoritesWhereClause: any = {};
+  const favoritesWhereClause: Record<string, Record<string, string[]>> = {};
   if (isNotNil(types)) {
     const itemTypes = types as string[];
     favoritesWhereClause.type = { _in: itemTypes };

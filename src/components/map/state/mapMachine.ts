@@ -111,7 +111,6 @@ const fetchPlacesService = fromPromise(
       searchQuery,
       isSemanticSearch,
       globalSearch,
-      userId,
     } = input;
 
     try {
@@ -674,7 +673,12 @@ export const mapMachine = createMachine(
                   src: "fetchPlaces",
                   id: "fetchPlaces",
                   input: ({ context }) => ({
-                    bounds: context.bounds!,
+                    bounds: context.bounds ?? {
+                      north: 0,
+                      south: 0,
+                      east: 0,
+                      west: 0,
+                    },
                     itemTypes: context.selectedItemTypes,
                     minRating: context.minRating,
                     visitStatuses: context.visitStatuses,
@@ -871,7 +875,7 @@ export const mapMachine = createMachine(
     },
   },
   {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- XState v5 action typing issue with assign()
+    // biome-ignore lint/suspicious/noExplicitAny: XState v5 createMachine() config param requires wider action types than assign() infers; no precise cast available
     actions: actions as any,
     guards,
     actors: {

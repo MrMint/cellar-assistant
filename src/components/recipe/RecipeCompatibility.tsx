@@ -439,7 +439,12 @@ const DetailedCompatibilityDisplay = ({
 };
 
 // Helper function to get cellar item name
-function getCellarItemName(cellarItem: any): string {
+function getCellarItemName(cellarItem: {
+  wine?: { name: string } | null;
+  beer?: { name: string } | null;
+  spirit?: { name: string } | null;
+  coffee?: { name: string } | null;
+}): string {
   if (cellarItem.wine) return cellarItem.wine.name;
   if (cellarItem.beer) return cellarItem.beer.name;
   if (cellarItem.spirit) return cellarItem.spirit.name;

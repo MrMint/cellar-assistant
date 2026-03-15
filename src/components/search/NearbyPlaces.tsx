@@ -161,9 +161,9 @@ export function NearbyPlaces() {
   if (geo.error || (!geo.loading && !geo.location)) return null;
 
   // Don't render until we have a location
-  if (geo.loading) return null;
+  if (geo.loading || !geo.location) return null;
 
-  const { latitude: userLat, longitude: userLng } = geo.location!;
+  const { latitude: userLat, longitude: userLng } = geo.location;
 
   return (
     <Stack spacing={1.5}>

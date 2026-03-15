@@ -10,6 +10,7 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import Image from "next/image";
 import { isNotNil } from "ramda";
 import beer1 from "@/images/beer1.png";
 import wine1 from "@/images/wine1.png";
@@ -110,8 +111,6 @@ export type RecipeDetailsProps = {
 export const RecipeDetails = ({
   recipe,
   userId,
-  showGroupInfo = true,
-  showVotingInfo = false,
 }: RecipeDetailsProps) => {
   const fallback = getFallback(recipe.type);
 
@@ -127,24 +126,22 @@ export const RecipeDetails = ({
         <Grid xs={12} sm={4}>
           <Stack spacing={1}>
             <Card sx={{ aspectRatio: "1" }}>
-              <CardContent sx={{ p: 0 }}>
+              <CardContent sx={{ p: 0, position: "relative" }}>
                 {isNotNil(recipe.image_url) ? (
-                  <img
+                  <Image
                     src={recipe.image_url}
                     alt={recipe.name}
+                    fill
                     style={{
-                      width: "100%",
-                      height: "100%",
                       objectFit: "cover",
                     }}
                   />
                 ) : (
-                  <img
-                    src={fallback.image.src}
+                  <Image
+                    src={fallback.image}
                     alt={fallback.alt}
+                    fill
                     style={{
-                      width: "100%",
-                      height: "100%",
                       objectFit: "cover",
                     }}
                   />

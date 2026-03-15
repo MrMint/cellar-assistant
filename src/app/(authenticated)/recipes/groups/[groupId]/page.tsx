@@ -2,7 +2,10 @@ import { graphql } from "@cellar-assistant/shared";
 import { Box, CircularProgress, Typography } from "@mui/joy";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { RecipeDetails } from "@/components/recipe/RecipeDetails";
+import {
+  RecipeDetails,
+  type RecipeDetailsItem,
+} from "@/components/recipe/RecipeDetails";
 import { makeServerClient } from "@/lib/urql/server-client";
 import { getServerUserId } from "@/utilities/auth-server";
 
@@ -137,7 +140,7 @@ export default async function RecipeGroupPage({
   }
 
   // If no canonical recipe, this is a broken state
-  if (!(recipeGroup as any).canonical_recipe_rel) {
+  if (!recipeGroup.canonical_recipe) {
     return (
       <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
         <Typography level="h1" sx={{ mb: 3 }}>
@@ -189,9 +192,9 @@ export default async function RecipeGroupPage({
           </Box>
         }
       >
-        {(recipeGroup as any).canonical_recipe_rel?.id ? (
+        {(recipeGroup.canonical_recipe as unknown as RecipeDetailsItem)?.id ? (
           <RecipeDetails
-            recipe={(recipeGroup as any).canonical_recipe_rel}
+            recipe={recipeGroup.canonical_recipe as unknown as RecipeDetailsItem}
             userId={userId}
             showGroupInfo={false}
             showVotingInfo={versionCount > 1}

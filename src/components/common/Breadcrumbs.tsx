@@ -17,12 +17,10 @@ export function Breadcrumbs({ segments }: BreadcrumbsProps) {
         px: 0,
       }}
     >
-      {segments.map((segment, index) => {
-        const isLast = index === segments.length - 1;
-
-        if (isLast || !segment.href) {
+      {segments.map((segment) => {
+        if (!segment.href) {
           return (
-            <Typography key={index} color="neutral">
+            <Typography key={segment.label} color="neutral">
               {segment.label}
             </Typography>
           );
@@ -30,7 +28,7 @@ export function Breadcrumbs({ segments }: BreadcrumbsProps) {
 
         return (
           <Link
-            key={index}
+            key={segment.href}
             href={segment.href}
             color="neutral"
             underline="hover"

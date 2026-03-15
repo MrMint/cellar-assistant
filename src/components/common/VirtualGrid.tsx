@@ -271,14 +271,6 @@ export function VirtualGrid<T>({
     writeScrollData(scrollContainer?.scrollTop ?? 0);
   }, [scrollContainer]);
 
-  if (items.length === 0) {
-    return (
-      <Typography level="body-md" sx={{ textAlign: "center", py: 4 }}>
-        {emptyMessage}
-      </Typography>
-    );
-  }
-
   const defaultSkeleton = () => (
     <Card sx={{ overflow: "hidden" }}>
       <Skeleton
@@ -294,54 +286,61 @@ export function VirtualGrid<T>({
 
   return (
     <>
-      {/* Sentinel for scroll container detection */}
+      {/* Sentinel always rendered so scroll container detection works even
+          when items arrive asynchronously (e.g. client-side URQL queries). */}
       <div ref={sentinelRef} style={{ height: 0, overflow: "hidden" }} />
 
-      <Box
-        sx={{
-          height: virtualizer.getTotalSize(),
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualRows.map((virtualRow) => {
-          const row = loadedRows[virtualRow.index];
-          return (
-            <Box
-              key={virtualRow.key}
-              ref={virtualizer.measureElement}
-              data-index={virtualRow.index}
-              sx={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              <Grid container spacing={2}>
-                {row
-                  ? row.map((item) => (
-                      <Grid
-                        key={getItemKey(item)}
-                        {...gridBreakpoints}
-                      >
-                        {renderItem(item, saveScrollPosition)}
-                      </Grid>
-                    ))
-                  : Array.from({ length: columnCount }, (_, i) => (
-                      <Grid
-                        key={`skeleton-${virtualRow.index}-${i}`}
-                        {...gridBreakpoints}
-                      >
-                        {skeletonRenderer()}
-                      </Grid>
-                    ))}
-              </Grid>
-            </Box>
-          );
-        })}
-      </Box>
+      {items.length === 0 ? (
+        <Typography level="body-md" sx={{ textAlign: "center", py: 4 }}>
+          {emptyMessage}
+        </Typography>
+      ) : (
+        <Box
+          sx={{
+            height: virtualizer.getTotalSize(),
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualRows.map((virtualRow) => {
+            const row = loadedRows[virtualRow.index];
+            return (
+              <Box
+                key={virtualRow.key}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <Grid container spacing={2}>
+                  {row
+                    ? row.map((item) => (
+                        <Grid
+                          key={getItemKey(item)}
+                          {...gridBreakpoints}
+                        >
+                          {renderItem(item, saveScrollPosition)}
+                        </Grid>
+                      ))
+                    : Array.from({ length: columnCount }, (_, colIndex) => (
+                        <Grid
+                          key={`skeleton-${virtualRow.index}-${String(colIndex)}`}
+                          {...gridBreakpoints}
+                        >
+                          {skeletonRenderer()}
+                        </Grid>
+                      ))}
+                </Grid>
+              </Box>
+            );
+          })}
+        </Box>
+      )}
 
       {isLoadingMore && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>

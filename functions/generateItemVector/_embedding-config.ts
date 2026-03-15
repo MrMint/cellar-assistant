@@ -16,13 +16,6 @@ type Spirit_Type_Enum =
 type Coffee_Roast_Level_Enum =
   introspection["types"]["coffee_roast_level_enum"]["enumValues"];
 
-// Core field configuration interfaces (simplified for current usage)
-interface BaseFieldConfig<T extends string = string> {
-  field: T;
-  weight?: number;
-  synonyms?: string[];
-}
-
 // Type-specific configurations that map to GraphQL schema
 export const EMBEDDING_CONFIGS = {
   beers: {

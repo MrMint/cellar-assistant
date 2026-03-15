@@ -40,6 +40,7 @@ export function CenterPinOverlay({
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
+          <title>Location pin for placing a new place on the map</title>
           {/* Pin body */}
           <path
             d="M20 0C8.954 0 0 8.954 0 20c0 14 20 32 20 32s20-18 20-32C40 8.954 31.046 0 20 0z"

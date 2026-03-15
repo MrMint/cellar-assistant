@@ -13,11 +13,6 @@ import {
 import { useState, useTransition } from "react";
 import { signUp } from "@/lib/auth/actions";
 
-interface IFormInput {
-  email: string;
-  password: string;
-}
-
 export function SignUpClient() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();

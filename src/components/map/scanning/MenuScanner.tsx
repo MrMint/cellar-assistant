@@ -23,6 +23,7 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
+import Image from "next/image";
 import NextLink from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MenuScanStatus } from "@/app/actions/menuScanning";
@@ -256,14 +257,22 @@ export function MenuScanner({
                 sx={{
                   maxWidth: 400,
                   mx: "auto",
-                  "& img": {
-                    width: "100%",
-                    height: "auto",
-                    borderRadius: "md",
-                  },
+                  position: "relative",
+                  minHeight: 200,
                 }}
               >
-                <img src={previewUrl} alt="Menu preview" />
+                <Image
+                  src={previewUrl}
+                  alt="Menu preview"
+                  width={400}
+                  height={300}
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    borderRadius: "var(--joy-radius-md)",
+                  }}
+                  unoptimized
+                />
               </Box>
 
               <Typography level="body-sm" sx={{ textAlign: "center" }}>

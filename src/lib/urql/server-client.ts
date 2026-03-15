@@ -8,7 +8,12 @@ import { registerUrql } from "@urql/next/rsc";
  */
 export const makeServerClient = () => {
   // Use environment variables to get GraphQL URL directly
-  const subdomain = process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN!;
+  const subdomain = process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN;
+  if (!subdomain) {
+    throw new Error(
+      "NEXT_PUBLIC_NHOST_SUBDOMAIN environment variable is required",
+    );
+  }
   const region = process.env.NEXT_PUBLIC_NHOST_REGION;
 
   // Construct GraphQL URL based on Nhost configuration

@@ -1,3 +1,4 @@
+import type { ResultOf, VariablesOf } from "@cellar-assistant/shared";
 import { graphql } from "@cellar-assistant/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "urql";
@@ -233,7 +234,7 @@ export const useOptimizedRecipeGroupSearch = (
   // Execute query with proper typing
   const [queryResult, refetchQuery] = useQuery({
     query: OptimizedRecipeGroupSearchQuery,
-    variables: searchVariables as any, // Temporary type assertion to resolve GraphQL schema mismatch
+    variables: searchVariables as VariablesOf<typeof OptimizedRecipeGroupSearchQuery>,
     pause: !!cachedResult, // Skip query if cached
     requestPolicy: "cache-first",
   });
@@ -263,10 +264,14 @@ export const useOptimizedRecipeGroupSearch = (
     }
   }, [data, error, cacheKey, cachedResult, result]);
 
+  // Type for the query result data
+  type QueryData = ResultOf<typeof OptimizedRecipeGroupSearchQuery>;
+
   // Update results for infinite scroll
   useEffect(() => {
     if (data && typeof data === "object" && "recipe_groups" in data) {
-      const newResults = (data as any).recipe_groups || [];
+      const typedData = data as QueryData;
+      const newResults = (typedData.recipe_groups as SearchResult[]) || [];
 
       if (page === 0) {
         // New search - replace all results
@@ -281,7 +286,7 @@ export const useOptimizedRecipeGroupSearch = (
   // Calculate derived state
   const totalCount =
     data && typeof data === "object" && "recipe_groups_aggregate" in data
-      ? (data as any).recipe_groups_aggregate?.aggregate?.count || 0
+      ? (data as QueryData).recipe_groups_aggregate?.aggregate?.count || 0
       : 0;
   const hasMore = enableInfiniteScroll && allResults.length < totalCount;
   const isLoading = fetching && !cachedResult;
@@ -321,7 +326,7 @@ export const useOptimizedRecipeGroupSearch = (
     isLoading,
     error:
       error && typeof error === "object" && "message" in error
-        ? new Error((error as any).message)
+        ? new Error((error as { message: string }).message)
         : null,
     hasMore,
     loadMore,

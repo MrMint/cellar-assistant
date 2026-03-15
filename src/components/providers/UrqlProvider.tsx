@@ -14,8 +14,13 @@ export function UrqlProvider({ children }: UrqlProviderProps) {
     return [client, ssr];
   }, []);
 
+  // biome-ignore lint/suspicious/noExplicitAny: URQL version type mismatch between client and provider
+  const providerClient = client as any;
+  // biome-ignore lint/suspicious/noExplicitAny: URQL version type mismatch between client and provider
+  const providerSsr = ssr as any;
+
   return (
-    <Provider client={client as any} ssr={ssr as any}>
+    <Provider client={providerClient} ssr={providerSsr}>
       {children}
     </Provider>
   );

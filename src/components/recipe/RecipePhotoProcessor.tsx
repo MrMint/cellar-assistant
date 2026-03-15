@@ -66,8 +66,11 @@ export function RecipePhotoProcessor({
         // Notify parent components
         if (result.results && result.results.length > 0) {
           const successfulRecipeIds = result.results
-            .filter((r) => r.success && r.recipeId)
-            .map((r) => r.recipeId!);
+            .filter(
+              (r): r is typeof r & { recipeId: string } =>
+                r.success && r.recipeId !== undefined,
+            )
+            .map((r) => r.recipeId);
 
           onRecipesCreated?.(successfulRecipeIds);
         }

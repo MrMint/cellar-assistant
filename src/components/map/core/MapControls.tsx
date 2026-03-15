@@ -527,7 +527,7 @@ export function FullMapControls(props: MapControlsProps) {
  * Usage:
  * ```tsx
  * // Must be wrapped in MapMachineProvider
- * <MapMachineProvider userId={userId} urqlClient={client}>
+ * <MapMachineProvider userId={userId}>
  *   <MapControls onLocationClick={handleLocation} />
  * </MapMachineProvider>
  * ```

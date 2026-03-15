@@ -155,8 +155,7 @@ function calculateGenericItemSimilarity(
   // Category match boost
   if (
     categoryFilter &&
-    item.category &&
-    item.category.toLowerCase().includes(categoryFilter.toLowerCase())
+    item.category?.toLowerCase().includes(categoryFilter.toLowerCase())
   ) {
     similarity += 0.2;
   }

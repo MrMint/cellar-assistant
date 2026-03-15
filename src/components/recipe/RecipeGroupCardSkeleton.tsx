@@ -19,8 +19,8 @@ export const RecipeGroupCardSkeleton = ({
 }: RecipeGroupCardSkeletonProps) => {
   return (
     <>
-      {Array.from({ length: count }).map((_, index) => (
-        <Card key={index} variant="outlined">
+      {Array.from({ length: count }, (_, i) => `skeleton-${i}`).map((key) => (
+        <Card key={key} variant="outlined">
           <CardOverflow>
             <AspectRatio ratio="4/3">
               <Skeleton variant="overlay" />

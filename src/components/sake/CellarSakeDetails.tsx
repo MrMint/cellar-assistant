@@ -1,18 +1,21 @@
-import { readFragment } from "@cellar-assistant/shared";
+import { type FragmentOf, readFragment } from "@cellar-assistant/shared";
 import { Box, Card, CardContent, Chip, Typography } from "@mui/joy";
 import { ItemBrands } from "../item/ItemBrands";
 import { ItemCard } from "../item/ItemCard";
 import { ItemRecipes } from "../item/ItemRecipes";
-import { CellarSakeDetailsFragment } from "./fragments";
+import {
+  CellarSakeDetailsFragment,
+  type UserWithFriendsFragment,
+} from "./fragments";
 
 interface CellarSakeDetailsProps {
-  cellarItem: any; // Replace with proper type from fragments
-  user: any; // Replace with proper type from fragments
+  cellarItem: FragmentOf<typeof CellarSakeDetailsFragment>;
+  user: FragmentOf<typeof UserWithFriendsFragment>;
 }
 
 export function CellarSakeDetails({
   cellarItem,
-  user,
+  user: _user,
 }: CellarSakeDetailsProps) {
   const item = readFragment(CellarSakeDetailsFragment, cellarItem);
   const sake = item.sake;
@@ -102,7 +105,7 @@ export function CellarSakeDetails({
             <Typography level="h3" sx={{ mb: 1 }}>
               Recent Check-ins
             </Typography>
-            {item.check_ins.slice(0, 5).map((checkin: any) => (
+            {item.check_ins.slice(0, 5).map((checkin) => (
               <Box key={checkin.id} sx={{ mb: 1 }}>
                 <Typography level="body-sm">
                   {checkin.user.displayName} -{" "}

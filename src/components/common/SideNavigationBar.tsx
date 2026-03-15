@@ -61,7 +61,7 @@ const NavLinkButton = styled(({ href, pathname, icon }: NavLinkButtonProps) => {
       </NavLinkIconButton>
     </Link>
   );
-})(({ theme }) => ({}));
+})(({ theme: _theme }) => ({}));
 
 type NavItem = {
   href: string;

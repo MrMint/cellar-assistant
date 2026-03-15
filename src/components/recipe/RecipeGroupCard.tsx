@@ -245,9 +245,9 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
               flexWrap="wrap"
               sx={{ mt: 1 }}
             >
-              {recipeGroup.tags.slice(0, isMobile ? 2 : 3).map((tag, index) => (
+              {recipeGroup.tags.slice(0, isMobile ? 2 : 3).map((tag) => (
                 <Chip
-                  key={index}
+                  key={`tag-${tag}`}
                   size={isMobile ? "sm" : "sm"}
                   variant="outlined"
                   color="neutral"

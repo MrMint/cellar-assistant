@@ -177,7 +177,7 @@ export function getAdminAuthHeaders(): FunctionAuthHeaders {
  * We use print() to convert the document to a query string and send it directly.
  */
 export async function functionQuery<
-  TDocument extends TadaDocumentNode<any, any>,
+  TDocument extends TadaDocumentNode,
 >(
   query: TDocument,
   variables?: VariablesOf<TDocument>,
@@ -263,7 +263,7 @@ export async function functionQuery<
  * the full query is always sent.
  */
 export async function functionMutation<
-  TMutation extends TadaDocumentNode<any, any>,
+  TMutation extends TadaDocumentNode,
 >(
   mutation: TMutation,
   variables?: VariablesOf<TMutation>,
@@ -349,9 +349,9 @@ export async function functionMutation<
  * Execute raw GraphQL with string queries (for legacy compatibility)
  * This is useful during migration from Nhost GraphQL client patterns
  */
-export async function functionRawGraphQL<TData = any>(
+export async function functionRawGraphQL<TData = unknown>(
   query: string,
-  variables?: Record<string, any>,
+  variables?: Record<string, unknown>,
   options?: FunctionGraphQLOptions,
 ): Promise<TData> {
   if (!query) {

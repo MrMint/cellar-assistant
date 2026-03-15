@@ -327,25 +327,28 @@ export function CellarItemsGrid({
                         />
                       </Grid>
                     ))
-                  : Array.from({ length: columnCount }, (_, i) => (
-                      <Grid
-                        key={`skeleton-${virtualRow.index}-${i}`}
-                        xs={items.length > 6 ? 6 : 12}
-                        sm={6}
-                        md={4}
-                        lg={3}
-                        xl={2}
-                      >
-                        <Card sx={{ overflow: "hidden" }}>
-                          <Skeleton
-                            variant="rectangular"
-                            sx={{ aspectRatio: { xs: 1.2, sm: 1 } }}
-                          />
-                          <Skeleton variant="text" sx={{ mx: 1, my: 1 }} />
-                          <Skeleton variant="rectangular" height={40} />
-                        </Card>
-                      </Grid>
-                    ))}
+                  : Array.from({ length: columnCount }, (_, colIndex) => {
+                      const skeletonKey = `skeleton-${virtualRow.key}-${colIndex}`;
+                      return (
+                        <Grid
+                          key={skeletonKey}
+                          xs={items.length > 6 ? 6 : 12}
+                          sm={6}
+                          md={4}
+                          lg={3}
+                          xl={2}
+                        >
+                          <Card sx={{ overflow: "hidden" }}>
+                            <Skeleton
+                              variant="rectangular"
+                              sx={{ aspectRatio: { xs: 1.2, sm: 1 } }}
+                            />
+                            <Skeleton variant="text" sx={{ mx: 1, my: 1 }} />
+                            <Skeleton variant="rectangular" height={40} />
+                          </Card>
+                        </Grid>
+                      );
+                    })}
               </Grid>
             </Box>
           );

@@ -12,6 +12,7 @@ import {
   Tabs,
   Typography,
 } from "@mui/joy";
+import Image from "next/image";
 import { isNotNil } from "ramda";
 import { useState } from "react";
 import { MdAccessTime, MdGroup, MdPerson } from "react-icons/md";
@@ -104,7 +105,6 @@ export type RecipeVersionsTabProps = {
 export const RecipeVersionsTab = ({
   recipes,
   canonicalRecipeId,
-  groupId,
 }: RecipeVersionsTabProps) => {
   const [selectedVersion, setSelectedVersion] = useState(0);
 
@@ -194,14 +194,13 @@ export const RecipeVersionsTab = ({
                 <Stack spacing={2}>
                   {/* Recipe Image */}
                   <Card sx={{ aspectRatio: "1" }}>
-                    <CardContent sx={{ p: 0 }}>
+                    <CardContent sx={{ p: 0, position: "relative" }}>
                       {isNotNil(recipe.image_url) ? (
-                        <img
+                        <Image
                           src={recipe.image_url}
                           alt={recipe.name}
+                          fill
                           style={{
-                            width: "100%",
-                            height: "100%",
                             objectFit: "cover",
                           }}
                         />

@@ -34,7 +34,7 @@ export const VirtualizedRecipeGroupGrid = memo<VirtualizedRecipeGroupGridProps>(
     const scrollTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
     // Calculate rows and total height
-    const { rows, totalRows, totalHeight } = useMemo(() => {
+    const { totalRows, totalHeight } = useMemo(() => {
       const totalRows = Math.ceil(recipeGroups.length / itemsPerRow);
       const rows: RecipeGroupCardData[][] = [];
 
@@ -158,11 +158,13 @@ export const VirtualizedRecipeGroupGrid = memo<VirtualizedRecipeGroupGridProps>(
 
           {/* Loading skeletons */}
           {isLoading &&
-            Array.from({ length: loadingItems }).map((_, index) => (
-              <Grid key={`loading-${index}`} xs={12} sm={6} md={4}>
-                <RecipeGroupCardSkeleton />
-              </Grid>
-            ))}
+            Array.from({ length: loadingItems }, (_, i) => `loading-${i}`).map(
+              (key) => (
+                <Grid key={key} xs={12} sm={6} md={4}>
+                  <RecipeGroupCardSkeleton />
+                </Grid>
+              ),
+            )}
         </Grid>
 
         {/* Bottom spacer for virtual scrolling */}

@@ -5,7 +5,10 @@
  * processing ingredients, and creating instructions.
  */
 
-import type { EnhancedExtractedRecipe } from "../../processRecipePhoto/_schemas";
+import type {
+  EnhancedExtractedRecipe,
+  EnhancedRecipeInstruction,
+} from "../../processRecipePhoto/_schemas";
 import { functionMutation, getAdminAuthHeaders } from "../urql-client";
 import {
   CreateRecipeInstructionsMutation,
@@ -135,7 +138,7 @@ async function createRecipeRecord(
  * Create recipe instructions
  */
 async function createRecipeInstructions(
-  instructions: Array<Record<string, any>>,
+  instructions: EnhancedRecipeInstruction[],
   recipeId: string,
 ): Promise<number> {
   console.log(

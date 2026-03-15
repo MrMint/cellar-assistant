@@ -17,10 +17,8 @@ interface RecipesListClientProps {
 }
 
 export const RecipesListClient = ({
-  userId,
   initialRecipes,
   initialSearch,
-  isSemanticSearch,
 }: RecipesListClientProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();

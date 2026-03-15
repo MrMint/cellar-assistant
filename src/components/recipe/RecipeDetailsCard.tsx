@@ -37,7 +37,6 @@ export type RecipeDetailsCardProps = {
 };
 
 export function RecipeDetailsCard({
-  recipeId,
   favoriteId,
   title,
   type,

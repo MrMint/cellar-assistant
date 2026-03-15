@@ -1,7 +1,10 @@
 import { graphql, readFragment } from "@cellar-assistant/shared";
 import { Typography } from "@mui/joy";
 import { redirect } from "next/navigation";
-import { RecipeDetails } from "@/components/recipe/RecipeDetails";
+import {
+  RecipeDetails,
+  type RecipeDetailsItem,
+} from "@/components/recipe/RecipeDetails";
 import { RecipeFullFragment } from "@/components/shared/fragments/recipe-fragments";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
@@ -42,5 +45,7 @@ export default async function RecipeDetailPage({
   // Cast fragment data to match RecipeDetailsItem interface
   // The readFragment result contains all the necessary data but with complex gql.tada types
 
-  return <RecipeDetails recipe={recipe as any} userId={userId} />;
+  return (
+    <RecipeDetails recipe={recipe as unknown as RecipeDetailsItem} userId={userId} />
+  );
 }

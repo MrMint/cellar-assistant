@@ -2,7 +2,6 @@
 
 import { useActor, useSelector } from "@xstate/react";
 import { createContext, type ReactNode, useContext } from "react";
-import type { Client } from "urql";
 // XState DevTools Integration
 // Note: Inspector types between @statelyai/inspect and xstate may not perfectly align,
 // but the runtime behavior is correct.
@@ -32,7 +31,6 @@ const MapMachineContext = createContext<MapMachineContextType>(null);
 interface MapMachineProviderProps {
   children: ReactNode;
   userId: string;
-  urqlClient?: Client;
 }
 
 /**
@@ -43,7 +41,6 @@ interface MapMachineProviderProps {
 export function MapMachineProvider({
   children,
   userId,
-  urqlClient,
 }: MapMachineProviderProps) {
   const [, , actorRef] = useActor(mapMachine, {
     input: { userId },
@@ -56,7 +53,8 @@ export function MapMachineProvider({
 
       {/* Development-only inspector toggle */}
       {process.env.NODE_ENV === "development" && (
-        <div
+        <button
+          type="button"
           style={{
             position: "fixed",
             bottom: "20px",
@@ -66,6 +64,7 @@ export function MapMachineProvider({
             color: "white",
             padding: "8px 12px",
             borderRadius: "4px",
+            border: "none",
             fontSize: "12px",
             cursor: "pointer",
             fontFamily: "monospace",
@@ -78,8 +77,8 @@ export function MapMachineProvider({
           }}
           title="Open XState Inspector (Development Only)"
         >
-          🔍 XState
-        </div>
+          XState Inspector
+        </button>
       )}
     </MapMachineContext.Provider>
   );

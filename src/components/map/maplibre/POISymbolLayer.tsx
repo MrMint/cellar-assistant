@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CircleLayerSpecification,
   SymbolLayerSpecification,
@@ -138,16 +138,19 @@ function useTransitionedCollection(
   const clusterSpatialMatching = options?.clusterSpatialMatching === true;
   const matchZoom = options?.currentZoom ?? 12;
 
-  const setRenderedAndRef = (
-    next:
-      | TransitionedFeature[]
-      | ((current: TransitionedFeature[]) => TransitionedFeature[]),
-  ) => {
-    const nextValue =
-      typeof next === "function" ? next(renderedFeaturesRef.current) : next;
-    renderedFeaturesRef.current = nextValue;
-    setRenderedFeatures(nextValue);
-  };
+  const setRenderedAndRef = useCallback(
+    (
+      next:
+        | TransitionedFeature[]
+        | ((current: TransitionedFeature[]) => TransitionedFeature[]),
+    ) => {
+      const nextValue =
+        typeof next === "function" ? next(renderedFeaturesRef.current) : next;
+      renderedFeaturesRef.current = nextValue;
+      setRenderedFeatures(nextValue);
+    },
+    [],
+  );
 
   useEffect(() => {
     cycleRef.current += 1;
@@ -453,7 +456,7 @@ function useTransitionedCollection(
     };
 
     animationRafRef.current = window.requestAnimationFrame(tick);
-  }, [nextFeatures, clusterSpatialMatching, matchZoom]);
+  }, [nextFeatures, clusterSpatialMatching, matchZoom, setRenderedAndRef]);
 
   useEffect(
     () => () => {

@@ -9,7 +9,7 @@ import {
   getWineVarietyEnumQuery,
   graphql,
 } from "@cellar-assistant/shared";
-import type { EnumQueryResponse } from "./types";
+import type { DocumentInput, EnumQueryResponse } from "./types";
 import { functionQuery, getAdminAuthHeaders } from "./urql-client";
 
 /**
@@ -91,7 +91,7 @@ function notifyCacheRefresh(): void {
  */
 async function getEnumValues(enumTypeName: string): Promise<string[]> {
   try {
-    let query: any;
+    let query: DocumentInput | undefined;
     switch (enumTypeName) {
       case "country_enum":
         query = getCountryEnumQuery;

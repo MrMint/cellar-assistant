@@ -47,7 +47,7 @@ const formatMap: Record<string, BarcodeType> = {
 };
 
 // ZXing hints for fallback
-const hints = new Map<DecodeHintType, any>([
+const hints = new Map<DecodeHintType, BarcodeFormat[]>([
   [
     DecodeHintType.POSSIBLE_FORMATS,
     [

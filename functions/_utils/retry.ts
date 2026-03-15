@@ -115,16 +115,19 @@ export function getCircuitBreaker(
   name: string,
   config: CircuitBreakerConfig = {},
 ): CircuitBreaker {
-  if (!circuitBreakers.has(name)) {
-    const fullConfig = {
-      errorThreshold: BASE_CONFIG.PERFORMANCE.CIRCUIT_BREAKER_THRESHOLD,
-      timeoutMs: BASE_CONFIG.PERFORMANCE.CACHE_TTL_MS,
-      monitoringIntervalMs: 60000, // 1 minute
-      ...config,
-    };
-    circuitBreakers.set(name, new CircuitBreaker(name, fullConfig));
+  const existing = circuitBreakers.get(name);
+  if (existing) {
+    return existing;
   }
-  return circuitBreakers.get(name)!;
+  const fullConfig = {
+    errorThreshold: BASE_CONFIG.PERFORMANCE.CIRCUIT_BREAKER_THRESHOLD,
+    timeoutMs: BASE_CONFIG.PERFORMANCE.CACHE_TTL_MS,
+    monitoringIntervalMs: 60000, // 1 minute
+    ...config,
+  };
+  const breaker = new CircuitBreaker(name, fullConfig);
+  circuitBreakers.set(name, breaker);
+  return breaker;
 }
 
 /**

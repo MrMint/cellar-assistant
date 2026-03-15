@@ -192,13 +192,13 @@ export async function processRecipePhotoAction(
       totalIngredients: result.totalIngredients || 0,
       enhancementsApplied: result.enhancementsApplied || 0,
       results:
-        result.results?.map((r: any) => ({
-          recipeId: r.recipeId,
+        result.results?.map((r) => ({
+          recipeId: r.recipeId ?? undefined,
           recipeName: r.recipeName || "Unknown Recipe",
           success: r.success,
-          ingredientsCreated: r.ingredientsCreated,
-          instructionsCreated: r.instructionsCreated,
-          error: r.error,
+          ingredientsCreated: r.ingredientsCreated ?? undefined,
+          instructionsCreated: r.instructionsCreated ?? undefined,
+          error: r.error ?? undefined,
         })) || [],
       menuAnalysis: result.menuAnalysis,
     };
