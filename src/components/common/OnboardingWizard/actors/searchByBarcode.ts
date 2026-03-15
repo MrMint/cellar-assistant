@@ -7,7 +7,7 @@ import {
   spiritItemCardFragment,
   wineItemCardFragment,
 } from "@/components/item/ItemCard/fragments";
-import { getItemType } from "@/utilities";
+import { buildItemSubtitle, getItemType } from "@/utilities";
 import type { BarcodeSearchResult, SearchByBarcodeInput } from "./types";
 
 const searchByBarcodeQuery = graphql(
@@ -69,6 +69,7 @@ export const searchByBarcode = fromPromise(
             itemId: result.id,
             name: result.name,
             vintage: result.vintage ?? undefined,
+            subtitle: buildItemSubtitle(result),
             displayImageId: result.item_images[0]?.file_id,
             placeholder: result.item_images[0]?.placeholder,
             score: result.reviews_aggregate.aggregate?.avg?.score,

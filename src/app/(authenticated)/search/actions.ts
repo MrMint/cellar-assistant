@@ -14,7 +14,7 @@ import {
 } from "@/components/item/ItemCard/fragments";
 import type { Barcode } from "@/constants";
 import { serverQuery } from "@/lib/urql/server";
-import { formatVintage, getItemType } from "@/utilities";
+import { buildItemSubtitle, formatVintage, getItemType } from "@/utilities";
 import { getServerUserId } from "@/utilities/auth-server";
 
 const textSearchQuery = graphql(
@@ -155,6 +155,7 @@ export async function searchByText(
         itemId: item.id,
         name: item.name,
         vintage: "vintage" in item ? formatVintage(item.vintage) : undefined,
+        subtitle: buildItemSubtitle(item as Parameters<typeof buildItemSubtitle>[0]),
         displayImageId: item.item_images?.[0]?.file_id,
         placeholder: item.item_images?.[0]?.placeholder,
         score: item.reviews_aggregate?.aggregate?.avg?.score,
@@ -216,6 +217,7 @@ export async function searchByImage(
         itemId: item.id,
         name: item.name,
         vintage: "vintage" in item ? formatVintage(item.vintage) : undefined,
+        subtitle: buildItemSubtitle(item as Parameters<typeof buildItemSubtitle>[0]),
         displayImageId: item.item_images?.[0]?.file_id,
         placeholder: item.item_images?.[0]?.placeholder,
         score: item.reviews_aggregate?.aggregate?.avg?.score,

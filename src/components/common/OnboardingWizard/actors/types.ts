@@ -77,6 +77,7 @@ export type BarcodeSearchResult = {
   itemId: string;
   name: string;
   vintage?: string;
+  subtitle?: string;
   type: ItemTypeValue;
   displayImageId?: string;
   placeholder?: string | null;

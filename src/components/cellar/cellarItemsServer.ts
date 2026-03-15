@@ -18,7 +18,7 @@ import {
 import type { ItemCardItem } from "@/components/item/ItemCard";
 import { CacheTags, getCachedSearchVector } from "@/lib/cache";
 import { serverQuery } from "@/lib/urql/server";
-import { formatVintage, getItemType } from "@/utilities";
+import { buildItemSubtitle, formatVintage, getItemType } from "@/utilities";
 import { GetCellarItemsQuery } from "./queries";
 
 export interface TransformedCellarItem {
@@ -97,6 +97,7 @@ export function transformCellarItems(
           itemId: result.id,
           name: result.name,
           vintage: formatVintage(result.vintage),
+          subtitle: buildItemSubtitle(result),
           displayImageId: result.item_images[0]?.file_id,
           placeholder: result.item_images[0]?.placeholder,
           score: result.reviews_aggregate.aggregate?.avg?.score,

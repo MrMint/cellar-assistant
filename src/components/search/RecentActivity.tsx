@@ -22,15 +22,12 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import { isNotNil } from "ramda";
 import {
   MdAdd,
-  MdCoffee,
   MdHistory,
-  MdLocalBar,
   MdPlace,
-  MdSportsBar,
   MdStar,
   MdViewList,
-  MdWineBar,
 } from "react-icons/md";
+import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   formatVintage,
@@ -122,18 +119,16 @@ const ACTIVITY_KIND_FILTERS: {
 
 function getItemTypeIcon(type: string) {
   switch (type) {
-    case "WINE":
-      return <MdWineBar />;
     case "BEER":
-      return <MdSportsBar />;
+    case "WINE":
     case "SPIRIT":
-      return <MdLocalBar />;
     case "COFFEE":
-      return <MdCoffee />;
+    case "SAKE":
+      return <ItemTypeIcon type={type} />;
     case "PLACE":
       return <MdPlace />;
     default:
-      return <MdLocalBar />;
+      return <MdPlace />;
   }
 }
 

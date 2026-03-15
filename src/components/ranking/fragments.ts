@@ -8,7 +8,13 @@ export const RankingBeerFragment = graphql(`
     id
     name
     vintage
+    subtitle_field: style
     __typename
+    brands(order_by: { is_primary: desc }, limit: 1) {
+      brand {
+        name
+      }
+    }
     item_favorites(where: { user_id: { _eq: $userId } }) {
       id
     }
@@ -40,7 +46,13 @@ export const RankingWineFragment = graphql(`
     id
     name
     vintage
+    subtitle_field: variety
     __typename
+    brands(order_by: { is_primary: desc }, limit: 1) {
+      brand {
+        name
+      }
+    }
     item_favorites(where: { user_id: { _eq: $userId } }) {
       id
     }
@@ -72,7 +84,13 @@ export const RankingSpiritFragment = graphql(`
     id
     name
     vintage
+    subtitle_field: style
     __typename
+    brands(order_by: { is_primary: desc }, limit: 1) {
+      brand {
+        name
+      }
+    }
     item_favorites(where: { user_id: { _eq: $userId } }) {
       id
     }
@@ -103,7 +121,13 @@ export const RankingCoffeeFragment = graphql(`
   fragment RankingCoffee on coffees @_unmask {
     id
     name
+    subtitle_field: roast_level
     __typename
+    brands(order_by: { is_primary: desc }, limit: 1) {
+      brand {
+        name
+      }
+    }
     item_favorites(where: { user_id: { _eq: $userId } }) {
       id
     }

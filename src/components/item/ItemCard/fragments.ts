@@ -26,6 +26,12 @@ export const beerItemCardFragment = graphql(
       id
       name
       vintage
+      subtitle_field: style
+      brands(order_by: { is_primary: desc }, limit: 1) {
+        brand {
+          name
+        }
+      }
       item_images(limit: 1) {
         file_id
         placeholder
@@ -59,6 +65,12 @@ export const wineItemCardFragment = graphql(
       id
       name
       vintage
+      subtitle_field: variety
+      brands(order_by: { is_primary: desc }, limit: 1) {
+        brand {
+          name
+        }
+      }
       item_images(limit: 1) {
         file_id
         placeholder
@@ -92,6 +104,12 @@ export const spiritItemCardFragment = graphql(
       id
       name
       vintage
+      subtitle_field: style
+      brands(order_by: { is_primary: desc }, limit: 1) {
+        brand {
+          name
+        }
+      }
       item_images(limit: 1) {
         file_id
         placeholder
@@ -124,6 +142,12 @@ export const coffeeItemCardFragment = graphql(
       __typename
       id
       name
+      subtitle_field: roast_level
+      brands(order_by: { is_primary: desc }, limit: 1) {
+        brand {
+          name
+        }
+      }
       item_images(limit: 1) {
         file_id
         placeholder
@@ -157,6 +181,12 @@ export const sakeItemCardFragment = graphql(
       id
       name
       vintage
+      subtitle_field: category
+      brands(order_by: { is_primary: desc }, limit: 1) {
+        brand {
+          name
+        }
+      }
       item_images(limit: 1) {
         file_id
         placeholder

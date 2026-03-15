@@ -12,7 +12,7 @@ import {
   spiritItemCardFragment,
   wineItemCardFragment,
 } from "@/components/item/ItemCard/fragments";
-import { formatItemType, getItemType } from "@/utilities";
+import { buildItemSubtitle, formatItemType, getItemType } from "@/utilities";
 import {
   useScrollPositionRestore,
   useTypesFilterState,
@@ -95,6 +95,7 @@ export function FavoritesClient({ userId }: FavoritesClientProps) {
             itemId: result.id,
             name: result.name,
             vintage: result.vintage,
+            subtitle: buildItemSubtitle(result),
             displayImageId: result.item_images[0]?.file_id,
             placeholder: result.item_images[0]?.placeholder,
             score: result.reviews_aggregate?.aggregate?.avg?.score,

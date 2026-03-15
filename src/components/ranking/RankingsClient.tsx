@@ -13,7 +13,7 @@ import {
   RankingsFilter,
   RankingsFilterValue,
 } from "@/components/ranking/RankingsFilter";
-import { formatItemType, getItemType } from "@/utilities";
+import { buildItemSubtitle, formatItemType, getItemType } from "@/utilities";
 import {
   useReviewersFilterState,
   useScrollPositionRestore,
@@ -91,6 +91,7 @@ export const RankingsClient = ({ userId }: RankingsClientProps) => {
             itemId: result.id,
             name: result.name,
             vintage: result.vintage,
+            subtitle: buildItemSubtitle(result),
             displayImageId: result.item_images[0]?.file_id,
             placeholder: result.item_images[0]?.placeholder,
             score: x.score,

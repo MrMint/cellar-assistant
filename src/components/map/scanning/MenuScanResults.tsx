@@ -3,14 +3,11 @@
 import {
   MdArrowBack,
   MdCheckCircle,
-  MdCoffee,
   MdError,
   MdHelp,
-  MdLocalBar,
   MdMonetizationOn,
-  MdSportsBar,
-  MdWineBar,
 } from "react-icons/md";
+import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 import {
   Alert,
   Box,
@@ -32,15 +29,14 @@ interface MenuScanResultsProps {
 }
 
 const getItemIcon = (type?: string | null) => {
-  switch (type) {
-    case "wine":
-      return <MdWineBar />;
-    case "beer":
-      return <MdSportsBar />;
-    case "spirit":
-      return <MdLocalBar />;
-    case "coffee":
-      return <MdCoffee />;
+  const upper = type?.toUpperCase();
+  switch (upper) {
+    case "BEER":
+    case "WINE":
+    case "SPIRIT":
+    case "COFFEE":
+    case "SAKE":
+      return <ItemTypeIcon type={upper} />;
     default:
       return <MdHelp />;
   }

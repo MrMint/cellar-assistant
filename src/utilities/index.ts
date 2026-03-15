@@ -1,6 +1,7 @@
 import type { ItemTypeValue } from "@cellar-assistant/shared";
 import { format as dateFnsFormat, format, parseISO } from "date-fns";
 
+import { formatEnum } from "@cellar-assistant/shared/utility";
 import { always, cond, equals, isEmpty, isNil } from "ramda";
 
 // https://stackoverflow.com/a/76775845
@@ -165,6 +166,18 @@ export const getItemType = (
     [equals("coffees"), always("COFFEE" as const)],
     [equals("sakes"), always("SAKE" as const)],
   ])(typename) as ItemTypeValue;
+
+export function buildItemSubtitle(result: {
+  brands?: Array<{ brand?: { name?: string | null } | null }> | null;
+  subtitle_field?: string | null;
+}): string | undefined {
+  const brandName = result.brands?.[0]?.brand?.name;
+  const descriptor = result.subtitle_field
+    ? formatEnum(result.subtitle_field)
+    : undefined;
+  const parts = [brandName, descriptor].filter(Boolean);
+  return parts.length > 0 ? parts.join(" \u00B7 ") : undefined;
+}
 
 /**
  * Compress and resize an image data URL to reduce file size.

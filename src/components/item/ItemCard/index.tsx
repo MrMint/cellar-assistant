@@ -24,6 +24,7 @@ import {
   deleteFavoriteAction,
 } from "@/app/actions/favorites";
 import { InteractiveCard } from "@/components/common/InteractiveCard";
+import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 import { Link } from "@/components/common/Link";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
@@ -61,6 +62,7 @@ export type ItemCardItem = {
   itemId: string;
   name: string;
   vintage?: string;
+  subtitle?: string;
   displayImageId?: string;
   placeholder?: string | null;
   score?: number | null;
@@ -163,13 +165,47 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
               {type !== "WINE" && item.name}
             </Typography>
           </Link>
+          <Typography
+            level="body-xs"
+            noWrap
+            sx={{
+              color: "text.secondary",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 0.5,
+            }}
+          >
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+              {item.subtitle ?? "\u00A0"}
+            </span>
+            <ItemTypeIcon type={type} />
+          </Typography>
         </CardContent>
       )}
       {isNil(href) && isNotNil(onClick) && (
-        <Typography level="title-md" noWrap>
-          {type === "WINE" && `${formatVintage(item.vintage)} ${item.name}`}
-          {type !== "WINE" && item.name}
-        </Typography>
+        <>
+          <Typography level="title-md" noWrap>
+            {type === "WINE" && `${formatVintage(item.vintage)} ${item.name}`}
+            {type !== "WINE" && item.name}
+          </Typography>
+          <Typography
+            level="body-xs"
+            noWrap
+            sx={{
+              color: "text.secondary",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 0.5,
+            }}
+          >
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+              {item.subtitle ?? "\u00A0"}
+            </span>
+            <ItemTypeIcon type={type} />
+          </Typography>
+        </>
       )}
       <CardOverflow
         variant="soft"

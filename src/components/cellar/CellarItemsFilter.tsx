@@ -8,13 +8,7 @@ import {
   Typography,
 } from "@mui/joy";
 import { isNotNil } from "ramda";
-import {
-  FaBeer,
-  FaCocktail,
-  FaCoffee,
-  FaGlassWhiskey,
-  FaWineGlass,
-} from "react-icons/fa";
+import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 
 type CellarItemsFilterProps = {
   types?: ItemTypeValue[];
@@ -53,7 +47,7 @@ export const CellarItemsFilter = ({
               {isNotNil(counts.beers) && (
                 <Typography>{counts.beers}</Typography>
               )}
-              <FaBeer />
+              <ItemTypeIcon type="BEER" />
             </Stack>
           </IconButton>
         </Tooltip>
@@ -63,7 +57,7 @@ export const CellarItemsFilter = ({
               {isNotNil(counts.wines) && (
                 <Typography>{counts.wines}</Typography>
               )}
-              <FaWineGlass />
+              <ItemTypeIcon type="WINE" />
             </Stack>
           </IconButton>
         </Tooltip>
@@ -73,7 +67,7 @@ export const CellarItemsFilter = ({
               {isNotNil(counts.spirits) && (
                 <Typography>{counts.spirits}</Typography>
               )}
-              <FaCocktail />
+              <ItemTypeIcon type="SPIRIT" />
             </Stack>
           </IconButton>
         </Tooltip>
@@ -83,7 +77,7 @@ export const CellarItemsFilter = ({
               {isNotNil(counts.coffees) && (
                 <Typography>{counts.coffees}</Typography>
               )}
-              <FaCoffee />
+              <ItemTypeIcon type="COFFEE" />
             </Stack>
           </IconButton>
         </Tooltip>
@@ -93,7 +87,7 @@ export const CellarItemsFilter = ({
               {isNotNil(counts.sakes) && (
                 <Typography>{counts.sakes}</Typography>
               )}
-              <FaGlassWhiskey />
+              <ItemTypeIcon type="SAKE" />
             </Stack>
           </IconButton>
         </Tooltip>
