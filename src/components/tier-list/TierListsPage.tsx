@@ -1,9 +1,11 @@
 "use client";
 
 import { type FragmentOf, readFragment } from "@cellar-assistant/shared";
-import { Box, Button, Grid, Link, Stack } from "@mui/joy";
+import { Box, Button, Link, Stack } from "@mui/joy";
+import { useMemo } from "react";
 import { MdAdd } from "react-icons/md";
 import { HeaderBar } from "@/components/common/HeaderBar";
+import { VirtualGrid } from "@/components/common/VirtualGrid";
 import { TierListCardFragment } from "./fragments";
 import { TierListCard } from "./TierListCard";
 
@@ -12,6 +14,14 @@ interface TierListsPageProps {
 }
 
 export function TierListsPage({ tierLists }: TierListsPageProps) {
+  const tierListItems = useMemo(
+    () =>
+      tierLists.map((tierList) =>
+        readFragment(TierListCardFragment, tierList),
+      ),
+    [tierLists],
+  );
+
   return (
     <Box>
       <Stack spacing={2}>
@@ -27,16 +37,18 @@ export function TierListsPage({ tierLists }: TierListsPageProps) {
             </Button>
           }
         />
-        <Grid container spacing={2} sx={{ flexGrow: 1 }}>
-          {tierLists.map((tierList) => {
-            const data = readFragment(TierListCardFragment, tierList);
-            return (
-              <Grid key={data.id} xs={12} sm={6} md={4} lg={3}>
-                <TierListCard tierList={data} />
-              </Grid>
-            );
-          })}
-        </Grid>
+        <VirtualGrid
+          items={tierListItems}
+          cacheKey="tier-lists"
+          getItemKey={(data) => data.id}
+          gridBreakpoints={{ xs: 12, sm: 6, md: 4, lg: 3 }}
+          emptyMessage="No tier lists found"
+          renderItem={(data, onBeforeNavigate) => (
+            <Box onClick={onBeforeNavigate}>
+              <TierListCard tierList={data} />
+            </Box>
+          )}
+        />
       </Stack>
     </Box>
   );

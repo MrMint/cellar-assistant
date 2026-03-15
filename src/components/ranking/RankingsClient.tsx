@@ -4,10 +4,11 @@ import type {
   Item_Score_Bool_Exp_Bool_Exp,
   ItemTypeValue,
 } from "@cellar-assistant/shared";
-import { Grid, Stack, Typography } from "@mui/joy";
+import { Stack, Typography } from "@mui/joy";
 import { defaultTo, isNil, isNotNil, nth, without } from "ramda";
 import { useQuery } from "urql";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
+import { VirtualGrid } from "@/components/common/VirtualGrid";
 import { ItemCard, type ItemCardItem } from "@/components/item/ItemCard";
 import {
   RankingsFilter,
@@ -16,7 +17,6 @@ import {
 import { buildItemSubtitle, formatItemType, getItemType } from "@/utilities";
 import {
   useReviewersFilterState,
-  useScrollPositionRestore,
   useTypesFilterState,
 } from "@/utilities/hooks";
 import { GetRankingFriendsQuery, GetRankingsQuery } from "./fragments";
@@ -27,7 +27,6 @@ interface RankingsClientProps {
 
 export const RankingsClient = ({ userId }: RankingsClientProps) => {
   if (isNil(userId)) throw new Error("Nil UserId");
-  const { sentinelRef, saveScrollPosition } = useScrollPositionRestore();
   const { types, setTypes } = useTypesFilterState();
   const { reviewers, setReviewers } = useReviewersFilterState();
 
@@ -106,32 +105,32 @@ export const RankingsClient = ({ userId }: RankingsClientProps) => {
   }
   return (
     <>
-      <div ref={sentinelRef} style={{ height: 0, overflow: "hidden" }} />
-      <Grid container spacing={2}>
-        <Grid xs={12}>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={2}
-            sx={{ justifyContent: "space-between", alignItems: "center" }}
-          >
-            <Typography level="title-lg">Rankings</Typography>
-            <Stack direction="row" spacing={2}>
-              <RankingsFilter types={reviewers} onTypesChange={setReviewers} />
-              <CellarItemsFilter types={types} onTypesChange={setTypes} />
-            </Stack>
-          </Stack>
-        </Grid>
-        {items.map((x) => (
-          <Grid key={x.item.id} xs={6} md={4} lg={2}>
-            <ItemCard
-              item={x.item}
-              type={x.type}
-              href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
-              onClick={saveScrollPosition}
-            />
-          </Grid>
-        ))}
-      </Grid>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={2}
+        sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
+      >
+        <Typography level="title-lg">Rankings</Typography>
+        <Stack direction="row" spacing={2}>
+          <RankingsFilter types={reviewers} onTypesChange={setReviewers} />
+          <CellarItemsFilter types={types} onTypesChange={setTypes} />
+        </Stack>
+      </Stack>
+      <VirtualGrid
+        items={items}
+        cacheKey={`rankings-${types?.join(",") ?? "all"}-${reviewers?.join(",") ?? "all"}`}
+        getItemKey={(x) => x.item.id}
+        gridBreakpoints={{ xs: 6, md: 4, lg: 2 }}
+        emptyMessage="No rankings found"
+        renderItem={(x, onBeforeNavigate) => (
+          <ItemCard
+            item={x.item}
+            type={x.type}
+            href={`${formatItemType(x.type).toLowerCase()}s/${x.item.id}`}
+            onClick={onBeforeNavigate}
+          />
+        )}
+      />
     </>
   );
 };

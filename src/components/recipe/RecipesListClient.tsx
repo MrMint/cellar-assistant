@@ -1,10 +1,11 @@
 "use client";
 
-import { Box, Grid, Stack } from "@mui/joy";
+import { Box, Stack } from "@mui/joy";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ascend, isNotNil, sortWith } from "ramda";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { HeaderBar } from "@/components/common/HeaderBar";
+import { VirtualGrid } from "@/components/common/VirtualGrid";
 import type { RecipeSearchResult } from "@/lib/recipe-search";
 import { RecipeCard, type RecipeCardItem } from "./RecipeCard";
 
@@ -70,6 +71,11 @@ export const RecipesListClient = ({
 
   const filteredRecipes = recipeItems;
 
+  const sortedRecipes = useMemo(
+    () => sortWith([ascend((x: RecipeCardItem) => x.name)], filteredRecipes),
+    [filteredRecipes],
+  );
+
   return (
     <Box>
       <Stack spacing={2}>
@@ -78,20 +84,18 @@ export const RecipesListClient = ({
           onSearchChange={handleSearchChange}
           isSearching={isSearching}
         />
-        <Grid container spacing={2}>
-          {sortWith([ascend((x) => x.name)], filteredRecipes).map((recipe) => (
-            <Grid
-              key={recipe.id}
-              xs={filteredRecipes.length > 6 ? 6 : 12}
-              sm={6}
-              md={4}
-              lg={3}
-              xl={2}
-            >
+        <VirtualGrid
+          items={sortedRecipes}
+          cacheKey={`recipes-${search}`}
+          getItemKey={(recipe) => recipe.id}
+          gridBreakpoints={{ xs: filteredRecipes.length > 6 ? 6 : 12, sm: 6, md: 4, lg: 3, xl: 2 }}
+          emptyMessage="No recipes found"
+          renderItem={(recipe, onBeforeNavigate) => (
+            <Box onClick={onBeforeNavigate}>
               <RecipeCard recipe={recipe} href={`/recipes/${recipe.id}`} />
-            </Grid>
-          ))}
-        </Grid>
+            </Box>
+          )}
+        />
       </Stack>
     </Box>
   );
