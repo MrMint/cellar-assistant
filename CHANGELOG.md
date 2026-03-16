@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.52.0](https://github.com/MrMint/cellar-assistant/compare/v0.51.0...v0.52.0) (2026-03-16)
+
+
+### Features
+
+* Cache location and auth cleanup ([c9a2d76](https://github.com/MrMint/cellar-assistant/commit/c9a2d769605f36f7e3f1f234d91ce57fd925e519))
+
 ## [0.51.0](https://github.com/MrMint/cellar-assistant/compare/v0.50.0...v0.51.0) (2026-03-16)
 
 
