@@ -22,7 +22,7 @@
     "ajv-formats": "3.0.1",
     "form-data": "4.0.5",
     "fuzzball": "2.2.3",
-    "google-auth-library": "^10.6.1",
+    "google-auth-library": "^10.6.2",
     "gql.tada": "1.9.0",
     "ollama": "0.6.3",
     "ramda": "0.32.0",
