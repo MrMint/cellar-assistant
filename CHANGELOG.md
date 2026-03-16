@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.51.0](https://github.com/MrMint/cellar-assistant/compare/v0.50.0...v0.51.0) (2026-03-16)
+
+
+### Features
+
+* Adds enriched data to tier list features ([2223a65](https://github.com/MrMint/cellar-assistant/commit/2223a65aa194cb3fcfbf58b61212c870a2c37e6b))
+* Adds path to create an item outside of cellar ([17e9243](https://github.com/MrMint/cellar-assistant/commit/17e924390d1694880141683343ae011c2803d2e0))
+* Adds scroll restore to other pages ([c74e993](https://github.com/MrMint/cellar-assistant/commit/c74e99346a74b8afeaf49bca1f05e875ae312a30))
+* Adds subtitle to item cards ([0a69365](https://github.com/MrMint/cellar-assistant/commit/0a69365c3db00147d5a1fe0edfa0944f1617e131))
+* Big search by name improvements on map ([f869b36](https://github.com/MrMint/cellar-assistant/commit/f869b3640919fcdc404f5e28a565f8fab1316c4a))
+* Bump item processing quality to medium ([7bb3308](https://github.com/MrMint/cellar-assistant/commit/7bb330860ed4ed22d612ae145c0de0d307e3cb34))
+* Cache images in service worker ([42f709d](https://github.com/MrMint/cellar-assistant/commit/42f709d979ab3ad9ed2a78f4d81076d0d6d03203))
+* Cleans up search page ([a863bfc](https://github.com/MrMint/cellar-assistant/commit/a863bfcfa50ac19e8d6d746cd2138b36f2070234))
+* Gives extra weight to name trigram match on places ([1e13a2d](https://github.com/MrMint/cellar-assistant/commit/1e13a2d7f0c320a7d7b827df21bc8cc934b1a7a0))
+* Improves cellar scroll restore ([2144f35](https://github.com/MrMint/cellar-assistant/commit/2144f3505aeeae45a72e3056e983aa6b0b69920a))
+* Link brands in re-process ([15590c9](https://github.com/MrMint/cellar-assistant/commit/15590c98ad4b8c100b559ceaee16b11b011e1e45))
+* Model updates ([58f0dcf](https://github.com/MrMint/cellar-assistant/commit/58f0dcf93587b055b76f79cfb2f863d8f882dbc5))
+* More search page improvements ([dacab89](https://github.com/MrMint/cellar-assistant/commit/dacab89ae792238609658c1369600269a3603bbc))
+* Onboarding reprocess feature ([7bf3309](https://github.com/MrMint/cellar-assistant/commit/7bf3309f5096e20c02c10fc6a31f942f321dcc52))
+* Reduce map calls while zoom/pan ([c69dee6](https://github.com/MrMint/cellar-assistant/commit/c69dee6d7936b2dd6230486d97de01b40c264bb7))
+* Route avatars through next image cache ([d1a7223](https://github.com/MrMint/cellar-assistant/commit/d1a7223a2c23f6cd9a68acd1a902f4c0dfb51601))
+* Routes nhost images through vercel ([2820c81](https://github.com/MrMint/cellar-assistant/commit/2820c8177f8cfe1017894af09e7d395a4f418224))
+* Search improvements and add to tier list bug fix ([7b60ef3](https://github.com/MrMint/cellar-assistant/commit/7b60ef379bcd2d47df10b08b98505da395dd7532))
+* Search page v2 ([fdfe991](https://github.com/MrMint/cellar-assistant/commit/fdfe99194b27e842501bf3676d317d1262dac18a))
+* Some cleanup ([464f8db](https://github.com/MrMint/cellar-assistant/commit/464f8db2704b50eb563b25032b5539d567523246))
+* Store re-process info ([22abe6b](https://github.com/MrMint/cellar-assistant/commit/22abe6bf65505424d0f050f42c075424a4afbdb2))
+* Testing virtualized cellar items ([9c93169](https://github.com/MrMint/cellar-assistant/commit/9c9316930ab6e73cc5cb73f8093cc1992357caff))
+* Tier list analysis ([1be1bda](https://github.com/MrMint/cellar-assistant/commit/1be1bda54d173a26deb4bec7919810107081f1b1))
+* Update items during re-process ([e1c24fb](https://github.com/MrMint/cellar-assistant/commit/e1c24fb6f9af9ad5bfefa1ab7005bce811f97fad))
+* Update PWA settings ([b0babe7](https://github.com/MrMint/cellar-assistant/commit/b0babe73d00649954bcfa46c8afb22f8c17b95f1))
+* Virtualizes and scroll restores more pages ([419f78c](https://github.com/MrMint/cellar-assistant/commit/419f78cb37aaf4dee21df29d75bc04fa8aede457))
+* Wires up google places api ([fbc9d61](https://github.com/MrMint/cellar-assistant/commit/fbc9d61499511c431cc6acf8abd59664bb9ed5f6))
+
+
+### Bug Fixes
+
+* Allow resuming failed reprocessing ([f6c6f4f](https://github.com/MrMint/cellar-assistant/commit/f6c6f4fdc8b013225633c3deb852af0321953b97))
+* Cellar item page nav cleanup ([7505ef7](https://github.com/MrMint/cellar-assistant/commit/7505ef76353277d7888d048bce8ffe9a2271f445))
+* Fix error on tier list page ([03ad0b8](https://github.com/MrMint/cellar-assistant/commit/03ad0b8e5048147852a051b99f29e8ad7ecac01c))
+* Fix redirect ([eb20bc9](https://github.com/MrMint/cellar-assistant/commit/eb20bc9360d3c9f24f33b18f61be9788563db660))
+* Fixes missing migrations ([011297e](https://github.com/MrMint/cellar-assistant/commit/011297e9b2af2b3e631737a8d77a5fc06b413512))
+* Fixes stale tier list bug ([6d5bcd3](https://github.com/MrMint/cellar-assistant/commit/6d5bcd3d9d4381f0ab025ee289a6fd674a5e58dd))
+* Fixes tier list drag and drop error ([1f945e8](https://github.com/MrMint/cellar-assistant/commit/1f945e81750acc103b6e945dc6724a8cc658a5cc))
+* Follow up fix on the service worker caching ([2e94ae8](https://github.com/MrMint/cellar-assistant/commit/2e94ae801ddada7f8c7ffa47986bb1b1210dca29))
+* Improves image caching ([b47af1a](https://github.com/MrMint/cellar-assistant/commit/b47af1a89779745828eb5a8e84ff883f1ba04b2a))
+* Tier list and map fixes ([53c2672](https://github.com/MrMint/cellar-assistant/commit/53c267266d85cc8f92423ea550407d7e6d9be87f))
+* Tier list fixes ([da0243d](https://github.com/MrMint/cellar-assistant/commit/da0243d9c1bce6308a2bed74802ae23d9ca14691))
+
 ## [0.50.0](https://github.com/MrMint/cellar-assistant/compare/v0.49.0...v0.50.0) (2026-02-10)
 
 
