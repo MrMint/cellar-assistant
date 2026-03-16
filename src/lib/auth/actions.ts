@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createNhostClient } from "@/lib/nhost/server";
+import {
+  SESSION_COOKIE_CONFIG,
+  SESSION_COOKIE_NAME,
+  createNhostClient,
+} from "@/lib/nhost/server";
 import { sanitizeReturnTo } from "@/utilities/sanitize-return-to";
 
 export async function revalidateAfterAuthChange() {
@@ -42,18 +46,13 @@ export async function signIn(formData: FormData) {
     }
 
     if (result.body?.session) {
-      // Manually ensure the session is stored in cookies
       const { cookies } = await import("next/headers");
       const cookieStore = await cookies();
-      const sessionData = JSON.stringify(result.body.session);
-
-      cookieStore.set("nhostSession", sessionData, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        path: "/",
-      });
+      cookieStore.set(
+        SESSION_COOKIE_NAME,
+        JSON.stringify(result.body.session),
+        SESSION_COOKIE_CONFIG,
+      );
 
       revalidatePath("/", "layout");
       redirect(returnTo);

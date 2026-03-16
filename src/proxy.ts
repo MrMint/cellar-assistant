@@ -1,6 +1,10 @@
-import { createServerClient } from "@nhost/nhost-js";
 import { type NextRequest, NextResponse } from "next/server";
-import { handleNhostMiddleware } from "./lib/nhost/server";
+import {
+  SESSION_COOKIE_CONFIG,
+  SESSION_COOKIE_NAME,
+  createStatelessNhostClient,
+  handleNhostMiddleware,
+} from "./lib/nhost/server";
 
 /** Session type returned from Nhost token exchange */
 interface NhostSession {
@@ -40,19 +44,7 @@ function isValidSession(session: unknown): session is NhostSession {
 async function exchangeRefreshToken(
   refreshToken: string,
 ): Promise<NhostSession | null> {
-  const subdomain = process.env.NEXT_PUBLIC_NHOST_SUBDOMAIN || "local";
-  const region = process.env.NEXT_PUBLIC_NHOST_REGION;
-
-  // Create a minimal Nhost client for token exchange (no storage needed)
-  const nhost = createServerClient({
-    subdomain,
-    region: region || undefined,
-    storage: {
-      get: () => null,
-      set: () => {},
-      remove: () => {},
-    },
-  });
+  const nhost = createStatelessNhostClient();
 
   try {
     const result = await nhost.auth.refreshToken({ refreshToken });
@@ -62,7 +54,6 @@ async function exchangeRefreshToken(
       return null;
     }
 
-    // Validate the session structure before returning
     if (!isValidSession(result.body)) {
       console.error("[Proxy] Invalid session structure received");
       return null;
@@ -112,13 +103,11 @@ export async function proxy(request: NextRequest) {
 
       // Redirect to clean URL with session cookie set
       const response = NextResponse.redirect(cleanUrl);
-      response.cookies.set("nhostSession", JSON.stringify(session), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        path: "/",
-      });
+      response.cookies.set(
+        SESSION_COOKIE_NAME,
+        JSON.stringify(session),
+        SESSION_COOKIE_CONFIG,
+      );
 
       return response;
     }

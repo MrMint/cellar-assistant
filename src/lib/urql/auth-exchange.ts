@@ -1,8 +1,14 @@
 import { authExchange } from "@urql/exchange-auth";
 
 /**
- * Custom auth exchange that works with our cookie-based auth system
- * Handles token refresh by triggering a page refresh when tokens expire
+ * Custom auth exchange that works with our cookie-based auth system.
+ *
+ * The /api/graphql proxy handles token refresh transparently — if an access
+ * token is expiring, the proxy refreshes it and retries the Hasura request.
+ *
+ * This exchange only triggers when the proxy itself returns 401, which means
+ * the session is truly expired (refresh token invalid). In that case we
+ * redirect to sign-in rather than attempting a client-side refresh.
  */
 export function createCookieAuthExchange() {
   return authExchange(async (_utils) => {
@@ -12,29 +18,24 @@ export function createCookieAuthExchange() {
         return operation;
       },
       didAuthError: (error) => {
-        // Check if we got a 401 from our GraphQL proxy
         return (
           error.response?.status === 401 ||
           error.graphQLErrors?.some(
             (e) =>
               e.message === "Authentication required" ||
-              e.message === "Token expired",
+              e.message === "Token expired" ||
+              e.message === "Invalid or expired token",
           )
         );
       },
       willAuthError: () => {
-        // We can't easily check token expiry on client side with HttpOnly cookies
-        // Let the server decide
         return false;
       },
       refreshAuth: async () => {
-        console.log(
-          "[Auth Exchange] Token expired, triggering page refresh for middleware handling",
-        );
-
-        // Instead of trying to refresh on client-side, let middleware handle it
-        // This avoids potential race conditions and keeps the logic centralized
-        window.location.reload();
+        // The proxy already attempted to refresh the token and failed.
+        // The session is truly expired — redirect to sign-in.
+        // Using replace() so the back button doesn't loop back here.
+        window.location.replace("/sign-in");
       },
     };
   });

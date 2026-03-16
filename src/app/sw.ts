@@ -25,15 +25,7 @@ const serwist = new Serwist({
   runtimeCaching: [
     {
       matcher: ({ request }) => request.mode === "navigate",
-      handler: new StaleWhileRevalidate({
-        cacheName: "pages",
-        plugins: [
-          new ExpirationPlugin({
-            maxEntries: 32,
-            maxAgeSeconds: 24 * 60 * 60,
-          }),
-        ],
-      }),
+      handler: new NetworkOnly(),
     },
     ...defaultCache,
     {

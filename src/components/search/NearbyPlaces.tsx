@@ -35,6 +35,7 @@ import {
   getPriceLevelText,
 } from "@/components/map/places/place-utils";
 import type { ItemType, MapBounds, PlaceResult } from "@/components/map/types";
+import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { getNhostStorageUrl } from "@/utilities";
 import { fadeInLeft, staggerContainerFast } from "./motion-variants";
@@ -100,13 +101,29 @@ function getOpenStatus(openingHours: unknown): OpenStatus | null {
   };
 }
 
+// ─── Epsilon for comparing cached vs live location ──────────────────────────
+const COORDINATE_EPSILON = 0.0001;
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function NearbyPlaces() {
+interface NearbyPlacesProps {
+  initialPlaces?: PlaceResult[];
+  initialSummaries?: Record<string, PlaceSummary>;
+  cachedLocation?: CachedLocation | null;
+}
+
+export function NearbyPlaces({
+  initialPlaces,
+  initialSummaries,
+  cachedLocation,
+}: NearbyPlacesProps) {
   const geo = useGeolocation();
-  const [places, setPlaces] = useState<PlaceResult[]>([]);
-  const [summaries, setSummaries] = useState<Record<string, PlaceSummary>>({});
-  const [initialLoading, setInitialLoading] = useState(true);
+  const hasInitialData = initialPlaces != null && initialPlaces.length > 0;
+  const [places, setPlaces] = useState<PlaceResult[]>(initialPlaces ?? []);
+  const [summaries, setSummaries] = useState<Record<string, PlaceSummary>>(
+    initialSummaries ?? {},
+  );
+  const [initialLoading, setInitialLoading] = useState(!hasInitialData);
   const [selectedTypes, setSelectedTypes] = useState<ItemType[]>([]);
   const prefersReducedMotion = useMediaQuery(
     "(prefers-reduced-motion: reduce)",
@@ -118,8 +135,24 @@ export function NearbyPlaces() {
 
   // Single effect: runs on location arrival AND on filter changes.
   // Uses a fetch ID to ensure only the latest request's response is applied.
+  // Skips the first fetch if we have server-side pre-fetched data and
+  // the live location matches the cached location within epsilon.
   useEffect(() => {
     if (latitude == null || longitude == null) return;
+
+    // Skip re-fetch if we have initial data, no filter changes, and
+    // the live location matches the cached location (user hasn't moved)
+    if (
+      hasInitialData &&
+      selectedTypes.length === 0 &&
+      fetchIdRef.current === 0 &&
+      cachedLocation &&
+      Math.abs(latitude - cachedLocation.latitude) < COORDINATE_EPSILON &&
+      Math.abs(longitude - cachedLocation.longitude) < COORDINATE_EPSILON
+    ) {
+      fetchIdRef.current++;
+      return;
+    }
 
     const bounds = buildNearbyBounds(latitude, longitude);
     const id = ++fetchIdRef.current;
@@ -155,15 +188,17 @@ export function NearbyPlaces() {
           setInitialLoading(false);
         }
       });
-  }, [latitude, longitude, selectedTypes]);
+  }, [latitude, longitude, selectedTypes, hasInitialData, cachedLocation]);
 
-  // Don't render if location denied or unavailable
-  if (geo.error || (!geo.loading && !geo.location)) return null;
+  // Don't render if location denied or unavailable (and no cached data)
+  if (!hasInitialData && (geo.error || (!geo.loading && !geo.location)))
+    return null;
 
-  // Don't render until we have a location
-  if (geo.loading || !geo.location) return null;
+  // Don't render until we have a location or cached data
+  if (!hasInitialData && (geo.loading || !geo.location)) return null;
 
-  const { latitude: userLat, longitude: userLng } = geo.location;
+  const userLat = geo.location?.latitude ?? cachedLocation?.latitude ?? 0;
+  const userLng = geo.location?.longitude ?? cachedLocation?.longitude ?? 0;
 
   return (
     <Stack spacing={1.5}>

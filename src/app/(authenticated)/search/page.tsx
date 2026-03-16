@@ -22,6 +22,7 @@ import {
 import { SearchResultGrid } from "@/components/search/SearchResultGrid";
 import { ServerSearchResults } from "@/components/search/ServerSearchResults";
 import type { ActivityKind } from "@/components/search/RecentActivity";
+import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUser } from "@/utilities/auth-server";
 
@@ -276,7 +277,10 @@ async function DiscoveryContent({
   userId: string;
   activityKinds: ActivityKind[];
 }) {
-  const data = await serverQuery(SearchDiscoveryQuery, { userId });
+  const [data, cachedLocation] = await Promise.all([
+    serverQuery(SearchDiscoveryQuery, { userId }),
+    getGeolocationFromCookie(),
+  ]);
 
   const friendIds = data.user?.friends?.map((f) => f.friend.id) ?? [];
   const reviewUserIds = [userId, ...friendIds];
@@ -285,14 +289,68 @@ async function DiscoveryContent({
   const wantReviews = noFilter || activityKinds.includes("reviewed");
   const wantTierListed = noFilter || activityKinds.includes("tier-listed");
 
-  const [reviewsData, tierListItemsData] = await Promise.all([
+  // Pre-fetch nearby places server-side when we have a cached location
+  const nearbyPromise = cachedLocation
+    ? import("@/app/(authenticated)/map/actions").then(
+        ({ searchMapPlaces }) => {
+          const NEARBY_RADIUS_DEG = 0.018;
+          const bounds = {
+            north: cachedLocation.latitude + NEARBY_RADIUS_DEG,
+            south: cachedLocation.latitude - NEARBY_RADIUS_DEG,
+            east: cachedLocation.longitude + NEARBY_RADIUS_DEG,
+            west: cachedLocation.longitude - NEARBY_RADIUS_DEG,
+          };
+          return searchMapPlaces({ bounds, limit: 6 });
+        },
+      )
+    : Promise.resolve(null);
+
+  const [reviewsData, tierListItemsData, nearbyResult] = await Promise.all([
     wantReviews
       ? serverQuery(RecentReviewsQuery, { userIds: reviewUserIds })
       : Promise.resolve({ item_reviews: [] as never[] }),
     wantTierListed
       ? serverQuery(RecentTierListItemsQuery, { userIds: reviewUserIds })
       : Promise.resolve({ tier_list_items: [] as never[] }),
+    nearbyPromise.catch(() => null),
   ]);
+
+  // Sort and limit nearby places, then fetch summaries
+  let nearbyPlaces: import("@/components/map/types").PlaceResult[] | undefined;
+  let nearbySummaries:
+    | Record<
+        string,
+        import("@/app/(authenticated)/map/place-actions").PlaceSummary
+      >
+    | undefined;
+
+  if (
+    nearbyResult?.places &&
+    nearbyResult.places.length > 0 &&
+    cachedLocation
+  ) {
+    const sorted = [...nearbyResult.places].sort((a, b) => {
+      const [aLng, aLat] = a.location.coordinates;
+      const [bLng, bLat] = b.location.coordinates;
+      const aDist =
+        (aLat - cachedLocation.latitude) ** 2 +
+        (aLng - cachedLocation.longitude) ** 2;
+      const bDist =
+        (bLat - cachedLocation.latitude) ** 2 +
+        (bLng - cachedLocation.longitude) ** 2;
+      return aDist - bDist;
+    });
+    nearbyPlaces = sorted.slice(0, 6);
+
+    try {
+      const { getPlaceSummaries } = await import(
+        "@/app/(authenticated)/map/place-actions"
+      );
+      nearbySummaries = await getPlaceSummaries(nearbyPlaces.map((p) => p.id));
+    } catch {
+      // Summaries are optional — proceed without them
+    }
+  }
 
   // Filter cellar items (added) on the server when filter is active
   const wantAdded = noFilter || activityKinds.includes("added");
@@ -304,6 +362,9 @@ async function DiscoveryContent({
       reviews={reviewsData.item_reviews}
       tierListItems={tierListItemsData.tier_list_items}
       activityKinds={activityKinds}
+      nearbyPlaces={nearbyPlaces}
+      nearbySummaries={nearbySummaries}
+      cachedLocation={cachedLocation}
     />
   );
 }

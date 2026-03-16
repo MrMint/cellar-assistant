@@ -10,6 +10,7 @@ import {
   type MapLayerMouseEvent,
   type MapRef,
 } from "react-map-gl/maplibre";
+import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { MapControls } from "../core/MapControls";
 import { useGeolocation } from "../hooks/useGeolocation";
@@ -44,6 +45,7 @@ import { loadPOIIcons } from "./utils/iconLoader";
 
 interface MapLibreRendererProps {
   userId: string;
+  cachedLocation?: CachedLocation | null;
 }
 
 const CARTO_LIGHT_STYLE =
@@ -51,7 +53,10 @@ const CARTO_LIGHT_STYLE =
 const CARTO_DARK_STYLE =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
+export function MapLibreRenderer({
+  userId,
+  cachedLocation,
+}: MapLibreRendererProps) {
   const mapRef = useRef<MapRef>(null);
   const detailDrawerRef = useRef<PlaceDetailsDrawerRef>(null);
   const [iconsLoaded, setIconsLoaded] = useState(false);
@@ -92,6 +97,7 @@ export function MapLibreRenderer({ userId }: MapLibreRendererProps) {
     mapReady,
     userLocation,
     locationLoading,
+    cachedLocation,
   });
 
   // Place selection ↔ URL coordination

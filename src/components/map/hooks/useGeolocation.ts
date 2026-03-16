@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { setGeolocationCookie } from "@/lib/geo-cookie/client";
 import { MAP_CONFIG } from "../config/constants";
 
 interface GeolocationState {
@@ -73,6 +74,7 @@ function createGeolocationStore() {
         loading: false,
         error: null,
       };
+      setGeolocationCookie(latitude, longitude);
       emit();
     };
 

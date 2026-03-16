@@ -1,5 +1,8 @@
 import type { ResultOf } from "@cellar-assistant/shared";
 import { Stack } from "@mui/joy";
+import type { PlaceSummary } from "@/app/(authenticated)/map/place-actions";
+import type { PlaceResult } from "@/components/map/types";
+import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import type {
   RecentReviewsQuery,
   RecentTierListItemsQuery,
@@ -21,6 +24,9 @@ interface SearchDiscoveryContentProps {
   reviews: ReviewsData;
   tierListItems: TierListItemsData;
   activityKinds: ActivityKind[];
+  nearbyPlaces?: PlaceResult[];
+  nearbySummaries?: Record<string, PlaceSummary>;
+  cachedLocation?: CachedLocation | null;
 }
 
 /**
@@ -32,6 +38,9 @@ export function SearchDiscoveryContent({
   reviews,
   tierListItems,
   activityKinds,
+  nearbyPlaces,
+  nearbySummaries,
+  cachedLocation,
 }: SearchDiscoveryContentProps) {
   return (
     <Stack spacing={4}>
@@ -43,8 +52,12 @@ export function SearchDiscoveryContent({
         selectedKinds={activityKinds}
       />
 
-      {/* Nearby places — client component, uses geolocation */}
-      <NearbyPlaces />
+      {/* Nearby places — pre-fetched server-side when cached location available */}
+      <NearbyPlaces
+        initialPlaces={nearbyPlaces}
+        initialSummaries={nearbySummaries}
+        cachedLocation={cachedLocation}
+      />
     </Stack>
   );
 }

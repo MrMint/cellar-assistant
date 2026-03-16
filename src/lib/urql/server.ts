@@ -1,6 +1,7 @@
 import type { ResultOf, VariablesOf } from "@cellar-assistant/shared";
 import type { TadaDocumentNode } from "gql.tada";
 import { cookies } from "next/headers";
+import { SESSION_COOKIE_NAME } from "@/lib/nhost/server";
 import { getClient } from "./server-client";
 
 // Only log auth details in development to avoid exposing sensitive info in production
@@ -71,7 +72,7 @@ export async function getServerAuthHeaders(): Promise<ServerAuthHeaders> {
   try {
     if (isDev) console.log("🔑 [URQL] Getting server auth headers");
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("nhostSession")?.value;
+    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
     if (!sessionCookie) {
       if (isDev) console.log("🔑 [URQL] No session cookie found");

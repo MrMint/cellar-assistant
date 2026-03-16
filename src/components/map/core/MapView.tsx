@@ -2,10 +2,12 @@
 
 import { Box, CircularProgress } from "@mui/joy";
 import dynamic from "next/dynamic";
+import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { MapMachineProvider } from "../state/MapMachineProvider";
 
 interface MapViewProps {
   userId: string;
+  cachedLocation?: CachedLocation | null;
 }
 
 const MapLibreRenderer = dynamic(
@@ -30,10 +32,10 @@ const MapLibreRenderer = dynamic(
   },
 );
 
-export function MapView({ userId }: MapViewProps) {
+export function MapView({ userId, cachedLocation }: MapViewProps) {
   return (
     <MapMachineProvider userId={userId}>
-      <MapLibreRenderer userId={userId} />
+      <MapLibreRenderer userId={userId} cachedLocation={cachedLocation} />
     </MapMachineProvider>
   );
 }

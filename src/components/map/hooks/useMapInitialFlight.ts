@@ -10,6 +10,7 @@ interface UseMapInitialFlightOptions {
   mapReady: boolean;
   userLocation: { latitude: number; longitude: number } | null;
   locationLoading: boolean;
+  cachedLocation?: { latitude: number; longitude: number } | null;
 }
 
 /**
@@ -25,6 +26,7 @@ export function useMapInitialFlight({
   mapReady,
   userLocation,
   locationLoading,
+  cachedLocation,
 }: UseMapInitialFlightOptions) {
   const hasFlownRef = useRef(false);
 
@@ -53,11 +55,12 @@ export function useMapInitialFlight({
     zoom: number;
   } | null>(null);
 
-  if (!initialViewStateRef.current && !locationLoading) {
+  if (!initialViewStateRef.current && (!locationLoading || cachedLocation)) {
+    const center = userLocation ?? cachedLocation ?? FALLBACK_CENTER;
     initialViewStateRef.current = {
-      longitude: userLocation?.longitude ?? FALLBACK_CENTER.longitude,
-      latitude: userLocation?.latitude ?? FALLBACK_CENTER.latitude,
-      zoom: userLocation ? 15 : 8,
+      longitude: center.longitude,
+      latitude: center.latitude,
+      zoom: userLocation ? 15 : cachedLocation ? 14 : 8,
     };
   }
 
@@ -67,7 +70,8 @@ export function useMapInitialFlight({
       latitude: FALLBACK_CENTER.latitude,
       zoom: 8,
     },
-    /** True once geolocation has resolved (or location arrived). Controls the loading screen. */
-    isLocationReady: !locationLoading || userLocation !== null,
+    /** True once geolocation has resolved, cached location exists, or location arrived. Controls the loading screen. */
+    isLocationReady:
+      !locationLoading || userLocation !== null || cachedLocation != null,
   };
 }

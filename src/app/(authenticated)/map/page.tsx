@@ -1,10 +1,14 @@
 import { Box, CircularProgress, Typography } from "@mui/joy";
 import { Suspense } from "react";
 import { MapWrapper } from "@/components/map/core/MapWrapper";
+import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
 import { getServerUserId } from "@/utilities/auth-server";
 
 export default async function MapPage() {
-  const userId = await getServerUserId();
+  const [userId, cachedLocation] = await Promise.all([
+    getServerUserId(),
+    getGeolocationFromCookie(),
+  ]);
 
   return (
     <Box
@@ -35,7 +39,7 @@ export default async function MapPage() {
           </Box>
         }
       >
-        <MapWrapper userId={userId} />
+        <MapWrapper userId={userId} cachedLocation={cachedLocation} />
       </Suspense>
     </Box>
   );
