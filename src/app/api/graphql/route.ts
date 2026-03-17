@@ -23,12 +23,19 @@ function getJWTExpiry(token: string): number | null {
   }
 }
 
-/** Check if access token is expired or expiring within the margin */
-function isTokenExpiring(accessToken: string, marginSeconds = 300): boolean {
+/** Check if access token is expiring soon (but NOT already expired).
+ *  Returns true only when the token is within `marginSeconds` of expiry
+ *  but still technically valid. Fully-expired tokens should be handled
+ *  by the middleware redirect, not the proxy. */
+function isTokenExpiringSoon(
+  accessToken: string,
+  marginSeconds = 300,
+): boolean {
   const exp = getJWTExpiry(accessToken);
-  if (!exp) return true;
+  if (!exp) return false; // Can't determine — don't attempt refresh
   const now = Math.floor(Date.now() / 1000);
-  return exp - now < marginSeconds;
+  const remaining = exp - now;
+  return remaining > 0 && remaining < marginSeconds;
 }
 
 /** Get the GraphQL URL for Hasura */
@@ -171,7 +178,7 @@ export async function POST(request: NextRequest) {
     const graphqlUrl = getGraphQLUrl();
 
     // Proactively refresh if token is expiring within 5 minutes
-    if (isTokenExpiring(accessToken)) {
+    if (isTokenExpiringSoon(accessToken)) {
       if (isDev)
         console.log(
           "[GraphQL Proxy] Token expiring soon, refreshing proactively",

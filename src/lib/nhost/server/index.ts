@@ -179,8 +179,11 @@ export async function handleNhostMiddleware(
       return response;
     }
 
-    // Update cookie with refreshed session
-    const response = NextResponse.next();
+    // Redirect to the same URL so the browser makes a fresh request with
+    // the new cookie. Without this, server components rendering in the
+    // current request still see the OLD request cookies (stale token),
+    // causing a thundering herd of failed refresh attempts.
+    const response = NextResponse.redirect(request.url);
     response.cookies.set(
       SESSION_COOKIE_NAME,
       JSON.stringify(refreshedSession),
