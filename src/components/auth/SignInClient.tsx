@@ -8,6 +8,7 @@ import {
   FormHelperText,
   FormLabel,
   Input,
+  Sheet,
   Stack,
   Typography,
 } from "@mui/joy";
@@ -16,6 +17,7 @@ import { useState, useTransition } from "react";
 import { BsDiscord, BsFacebook } from "react-icons/bs";
 import { FcGoogle } from "react-icons/fc";
 import { getProviderSignInUrl, signIn } from "@/lib/auth/actions";
+import { LiquidBackground } from "./LiquidBackground";
 
 export function SignInClient({ returnTo }: { returnTo?: string }) {
   const [isRedirectingToSso, setIsRedirectingToSso] = useState(false);
@@ -59,16 +61,29 @@ export function SignInClient({ returnTo }: { returnTo?: string }) {
         justifyContent: "center",
         alignItems: "center",
         flexGrow: 1,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      <Box
+      <LiquidBackground />
+      <Sheet
+        variant="outlined"
         sx={{
           maxWidth: { xs: "400px" },
-          width: { xs: null, sm: "400px" },
+          width: { xs: "100%", sm: "400px" },
           flexGrow: { xs: 1, sm: 0 },
           display: "flex",
           flexDirection: "column",
-          padding: "1rem",
+          padding: 3,
+          margin: 2,
+          position: "relative",
+          zIndex: 1,
+          borderRadius: "lg",
+          backgroundColor: "rgba(17, 16, 21, 0.65)",
+          backdropFilter: "blur(16px) saturate(1.2)",
+          WebkitBackdropFilter: "blur(16px) saturate(1.2)",
+          borderColor: "rgba(255, 255, 255, 0.08)",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
         }}
       >
         <Stack gap={1} sx={{ marginBottom: 2 }}>
@@ -149,7 +164,7 @@ export function SignInClient({ returnTo }: { returnTo?: string }) {
             </Stack>
           </Stack>
         </form>
-      </Box>
+      </Sheet>
     </Box>
   );
 }

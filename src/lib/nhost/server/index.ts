@@ -45,9 +45,7 @@ export function getNhostConfig() {
  * Does not read/write cookies — callers manage cookie persistence themselves.
  * Use `createNhostClient()` instead when you need SDK-managed session storage.
  */
-export function createStatelessNhostClient(
-  sessionData?: unknown,
-): NhostClient {
+export function createStatelessNhostClient(sessionData?: unknown): NhostClient {
   return createServerClient({
     ...getNhostConfig(),
     storage: {

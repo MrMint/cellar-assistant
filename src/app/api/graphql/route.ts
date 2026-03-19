@@ -143,8 +143,7 @@ export async function POST(request: NextRequest) {
     const nhostSessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
     if (!nhostSessionCookie) {
-      if (isDev)
-        console.log("[GraphQL Proxy] No nhostSession cookie found");
+      if (isDev) console.log("[GraphQL Proxy] No nhostSession cookie found");
       return NextResponse.json(
         { errors: [{ message: "Authentication required" }] },
         { status: 401 },
@@ -232,8 +231,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (isDev)
-      console.log("[GraphQL Proxy] Request forwarded successfully");
+    if (isDev) console.log("[GraphQL Proxy] Request forwarded successfully");
     return NextResponse.json(data);
   } catch (error) {
     if (isDev) console.error("[GraphQL Proxy] Error:", error);

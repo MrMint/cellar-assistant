@@ -20,6 +20,23 @@ export const CellarCardFragment = graphql(`
         avatarUrl
       }
     }
+    item_counts: items_aggregate(where: { empty_at: { _is_null: true } }) {
+      beers: aggregate {
+        count(columns: [beer_id])
+      }
+      wines: aggregate {
+        count(columns: [wine_id])
+      }
+      spirits: aggregate {
+        count(columns: [spirit_id])
+      }
+      coffees: aggregate {
+        count(columns: [coffee_id])
+      }
+      sakes: aggregate {
+        count(columns: [sake_id])
+      }
+    }
   }
 `);
 
