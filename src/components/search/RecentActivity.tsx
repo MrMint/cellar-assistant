@@ -285,7 +285,7 @@ function getItemFromTierListItem(tli: TierListItem) {
     return {
       name: tli.place.display_name ?? tli.place.name,
       type: "PLACE",
-      imageId: undefined,
+      imageId: tli.place.google_photos[0]?.storage_file_id,
       placeholder: undefined,
       href: `/places/${tli.place.id}`,
     };
