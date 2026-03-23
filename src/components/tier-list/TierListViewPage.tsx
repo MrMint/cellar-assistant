@@ -50,6 +50,7 @@ export function TierListViewPage({
     "tab",
     parseAsStringLiteral(TAB_VALUES).withDefault("rankings"),
   );
+  const [selectedItemId] = useQueryState("item");
 
   const privacyInfo = privacyLabels[data.privacy] ?? privacyLabels.PRIVATE;
   const PrivacyIcon = privacyInfo.icon;
@@ -247,6 +248,7 @@ export function TierListViewPage({
               items={data.items}
               isOwner={data.isOwner}
               isEditingLocked={isEditingLocked}
+              selectedItemId={selectedItemId ?? undefined}
             />
           </TabPanel>
           <TabPanel value="insights" sx={{ px: 0 }}>

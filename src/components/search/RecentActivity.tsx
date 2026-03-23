@@ -352,7 +352,7 @@ function buildActivityFeed(
       itemType: item.type,
       itemImageId: item.imageId,
       itemPlaceholder: item.placeholder,
-      itemHref: item.href,
+      itemHref: `/tier-lists/${tli.tier_list.id}?item=${tli.id}`,
       userId: tli.tier_list.createdBy.id,
       userName: tli.tier_list.createdBy.displayName,
       userAvatar: tli.tier_list.createdBy.avatarUrl,
