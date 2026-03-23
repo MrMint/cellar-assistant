@@ -310,6 +310,9 @@ export const RecentTierListItemsQuery = graphql(`
         id
         name
         display_name
+        google_photos(limit: 1, order_by: { display_order: asc }) {
+          storage_file_id
+        }
       }
     }
   }
