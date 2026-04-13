@@ -24,6 +24,6 @@
   "author": "Jared Prather",
   "license": "AGPL-3.0",
   "dependencies": {
-    "gql.tada": "1.9.0"
+    "gql.tada": "1.9.2"
   }
 }
