@@ -14,7 +14,7 @@
     "@cellar-assistant/shared": "file:./_packages/shared",
     "@cellar-assistant/typescript-config": "file:./_packages/typescript-config",
     "@google-cloud/bigquery": "8.1.1",
-    "@google/genai": "1.45.0",
+    "@google/genai": "1.52.0",
     "@nhost/nhost-js": "4.5.0",
     "@types/json-schema": "7.0.15",
     "@urql/core": "6.0.1",
