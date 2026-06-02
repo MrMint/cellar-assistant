@@ -8,6 +8,7 @@ import type {
   SEARCH_COFFEES_TEXT_QUERY,
   SEARCH_SAKES_TEXT_QUERY,
   SEARCH_SPIRITS_TEXT_QUERY,
+  SEARCH_TEAS_TEXT_QUERY,
   SEARCH_WINES_TEXT_QUERY,
 } from "../search-queries";
 
@@ -108,6 +109,9 @@ type CoffeeItem = NonNullable<
 type SakeItem = NonNullable<
   ResultOf<typeof SEARCH_SAKES_TEXT_QUERY>["sakes"]
 >[number];
+type TeaItem = NonNullable<
+  ResultOf<typeof SEARCH_TEAS_TEXT_QUERY>["teas"]
+>[number];
 
 /**
  * Vector search result with distance and optional item types
@@ -120,6 +124,7 @@ export interface VectorSearchResult {
   spirit?: SpiritItem;
   coffee?: CoffeeItem;
   sake?: SakeItem;
+  tea?: TeaItem;
 }
 
 /**
@@ -152,6 +157,14 @@ export interface ItemRecord {
   coffee_style?: string | null;
   sake_style?: string | null;
   sake_type?: string | null;
+  // Tea-specific fields
+  form?: string | null;
+  caffeine_level?: string | null;
+  cultivar?: string | null;
+  oxidation_level?: string | null;
+  processing?: string | null;
+  harvest_year?: number | null;
+  tea_category?: string | null;
   // Brand name fields (vary by item type)
   brand_name?: string | null;
   producer_name?: string | null;

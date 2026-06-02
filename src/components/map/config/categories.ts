@@ -129,4 +129,17 @@ export const ITEM_TYPE_CATEGORY_MAPPINGS: Record<ItemType, CategoryIdentity[]> =
       { category: "resort", identityScore: 0.1 },
       { category: "casino", identityScore: 0.1 },
     ],
+
+    tea: [
+      { category: "tea_house", identityScore: 0.95 },
+      { category: "tea_shop", identityScore: 0.95 },
+      { category: "bubble_tea", identityScore: 0.8 },
+      { category: "cafe", identityScore: 0.6 },
+      { category: "japanese_restaurant", identityScore: 0.4 },
+      { category: "specialty_grocery_store", identityScore: 0.4 },
+      { category: "coffee_shop", identityScore: 0.3 },
+      { category: "restaurant", identityScore: 0.15 },
+      { category: "hotel", identityScore: 0.1 },
+      { category: "resort", identityScore: 0.1 },
+    ],
   };

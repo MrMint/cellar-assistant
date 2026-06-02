@@ -30,6 +30,8 @@ export function getBrandNameFromDefaults(
       return (aiDefaults as { roaster?: string }).roaster?.trim();
     case "SAKE":
       return (aiDefaults as { kura?: string }).kura?.trim();
+    case "TEA":
+      return (aiDefaults as { tea_house?: string }).tea_house?.trim();
     default:
       return undefined;
   }
@@ -47,6 +49,8 @@ export function getBrandTypeForItemType(itemType: ItemType): string {
       return BRAND_TYPES.ROASTERY;
     case "SAKE":
       return BRAND_TYPES.KURA;
+    case "TEA":
+      return BRAND_TYPES.TEA_HOUSE;
     default:
       return BRAND_TYPES.OTHER;
   }

@@ -8,6 +8,9 @@ import {
   formatSakeServingTemperature,
   formatSakeType,
   formatSpiritType,
+  formatTeaCaffeineLevel,
+  formatTeaCategory,
+  formatTeaForm,
   formatWineStyle,
   formatWineVariety,
 } from "../utility/index";
@@ -119,6 +122,25 @@ export const ENUM_REGISTRY = {
     name: "Sake Rice Variety",
     graphqlType: "sake_rice_variety",
     formatFn: formatSakeRiceVariety,
+    category: "item",
+  },
+  // Tea enums
+  teaCategory: {
+    name: "Tea Category",
+    graphqlType: "tea_category",
+    formatFn: formatTeaCategory,
+    category: "item",
+  },
+  teaForm: {
+    name: "Tea Form",
+    graphqlType: "tea_form",
+    formatFn: formatTeaForm,
+    category: "item",
+  },
+  teaCaffeineLevel: {
+    name: "Tea Caffeine Level",
+    graphqlType: "tea_caffeine_level",
+    formatFn: formatTeaCaffeineLevel,
     category: "item",
   },
   // Friend request status

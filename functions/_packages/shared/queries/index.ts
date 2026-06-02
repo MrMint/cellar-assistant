@@ -108,6 +108,22 @@ export const updateSakeMutation = graphql(`
   }
 `);
 
+export const addTeaMutation = graphql(`
+  mutation AddTea($tea: teas_insert_input!) {
+    insert_teas_one(object: $tea) {
+      id
+    }
+  }
+`);
+
+export const updateTeaMutation = graphql(`
+  mutation UpdateTea($teaId: uuid!, $tea: teas_set_input!) {
+    update_teas_by_pk(pk_columns: { id: $teaId }, _set: $tea) {
+      id
+    }
+  }
+`);
+
 // Note: addItemReview, addCheckIn, addCheckIns, addFavoriteMutation,
 // deleteFavoriteMutation mutations moved to server actions
 
@@ -133,6 +149,7 @@ export const linkItemToBrandMutation = graphql(`
     $spirit_id: uuid
     $coffee_id: uuid
     $sake_id: uuid
+    $tea_id: uuid
     $brand_id: uuid!
     $is_primary: Boolean
   ) {
@@ -143,6 +160,7 @@ export const linkItemToBrandMutation = graphql(`
         spirit_id: $spirit_id
         coffee_id: $coffee_id
         sake_id: $sake_id
+        tea_id: $tea_id
         brand_id: $brand_id
         is_primary: $is_primary
       }
@@ -167,6 +185,7 @@ export type Coffees_Insert_Input = VariablesOf<
 >["coffee"];
 export type Beers_Insert_Input = VariablesOf<typeof addBeerMutation>["beer"];
 export type Sakes_Insert_Input = VariablesOf<typeof addSakeMutation>["sake"];
+export type Teas_Insert_Input = VariablesOf<typeof addTeaMutation>["tea"];
 export type Cellar_Items_Insert_Input = VariablesOf<
   typeof addCellarItemMutation
 >["item"];
@@ -180,3 +199,4 @@ export type Coffees_Set_Input = VariablesOf<
   typeof updateCoffeeMutation
 >["coffee"];
 export type Sakes_Set_Input = VariablesOf<typeof updateSakeMutation>["sake"];
+export type Teas_Set_Input = VariablesOf<typeof updateTeaMutation>["tea"];

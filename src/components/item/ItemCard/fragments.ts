@@ -212,3 +212,41 @@ export const sakeItemCardFragment = graphql(
   `,
   [reviewFragment, favoriteFragment],
 );
+
+export const teaItemCardFragment = graphql(
+  `
+    fragment teaItemCardFragment on teas @_unmask {
+      __typename
+      id
+      name
+      subtitle_field: category
+      brands(order_by: { is_primary: desc }, limit: 1) {
+        brand {
+          name
+        }
+      }
+      item_images(limit: 1) {
+        file_id
+        placeholder
+      }
+      item_favorites(where: { user_id: { _eq: $userId } }) {
+        id
+      }
+      user_reviews: reviews_aggregate(
+        where: { user_id: { _eq: $userId } }
+        limit: 1
+      ) {
+        aggregate {
+          count
+        }
+      }
+      reviews_aggregate {
+        ...reviewFragment
+      }
+      item_favorites_aggregate {
+        ...favoriteFragment
+      }
+    }
+  `,
+  [reviewFragment, favoriteFragment],
+);

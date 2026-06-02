@@ -49,9 +49,12 @@ export type PlaceCategory =
   | "hotel"
   | "resort"
   | "casino"
-  | "music_venue";
+  | "music_venue"
+  // Overture-only: Tea
+  | "tea_shop"
+  | "bubble_tea";
 
-export type ItemType = "wine" | "beer" | "spirit" | "coffee" | "sake";
+export type ItemType = "wine" | "beer" | "spirit" | "coffee" | "sake" | "tea";
 export type VisitStatus = "visited" | "unvisited" | "favorites";
 
 // Identity-based category mapping: single score per category-item-type pair

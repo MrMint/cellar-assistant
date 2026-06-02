@@ -1,4 +1,3 @@
-import { MdCheck, MdClose, MdPlace, MdStar } from "react-icons/md";
 import {
   Autocomplete,
   Box,
@@ -20,9 +19,16 @@ import {
   FaCocktail,
   FaCoffee,
   FaGlassWhiskey,
+  FaMugHot,
   FaWineGlass,
 } from "react-icons/fa";
-import { MdFilterList } from "react-icons/md";
+import {
+  MdCheck,
+  MdClose,
+  MdFilterList,
+  MdPlace,
+  MdStar,
+} from "react-icons/md";
 import type { TierListFilterOption } from "../hooks/useTierListFilter";
 import type { ItemType, VisitStatus } from "../types";
 import { ITEM_TYPES } from "./ItemTypeCategoryMapper";
@@ -71,6 +77,7 @@ const ITEM_TYPE_ICONS = {
   LocalBar: FaCocktail,
   Coffee: FaCoffee,
   Sake: FaGlassWhiskey,
+  Tea: FaMugHot,
 };
 
 export const MapFilter: FC<MapFilterProps> = ({

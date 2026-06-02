@@ -80,11 +80,22 @@ const GET_COFFEE_IMAGE_QUERY = graphql(`
   }
 `);
 
+const GET_TEA_IMAGE_QUERY = graphql(`
+  query GetTeaImage($itemId: uuid!) {
+    item_image(
+      where: { tea_id: { _eq: $itemId } }
+      order_by: { created_at: desc }
+      limit: 1
+    ) { file_id }
+  }
+`);
+
 const DISPLAY_IMAGE_QUERIES = {
   beers: GET_BEER_IMAGE_QUERY,
   wines: GET_WINE_IMAGE_QUERY,
   spirits: GET_SPIRIT_IMAGE_QUERY,
   coffees: GET_COFFEE_IMAGE_QUERY,
+  teas: GET_TEA_IMAGE_QUERY,
 } as const;
 
 /**
@@ -242,6 +253,7 @@ async function processVectorGeneration(
         spirit_id: name === "spirits" ? String(item.id) : undefined,
         wine_id: name === "wines" ? String(item.id) : undefined,
         coffee_id: name === "coffees" ? String(item.id) : undefined,
+        tea_id: name === "teas" ? String(item.id) : undefined,
         vector: JSON.stringify(embeddingResponse.embeddings),
       },
     },

@@ -89,13 +89,21 @@ export function calculateOverallQuality(place: ScoringPlace): number {
 export function calculateItemTypeMatches(
   place: PlaceResult,
 ): Record<ItemType, number> {
-  const allItemTypes: ItemType[] = ["wine", "beer", "spirit", "coffee", "sake"];
+  const allItemTypes: ItemType[] = [
+    "wine",
+    "beer",
+    "spirit",
+    "coffee",
+    "sake",
+    "tea",
+  ];
   const scores: Record<ItemType, number> = {
     wine: 0,
     beer: 0,
     spirit: 0,
     coffee: 0,
     sake: 0,
+    tea: 0,
   };
 
   // 1. Name-based keyword detection

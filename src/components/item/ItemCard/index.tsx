@@ -28,14 +28,16 @@ import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 import { Link } from "@/components/common/Link";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
+// Note: tea/sake reuse coffee1/wine1 as placeholders until type-specific images exist
+import tea1 from "@/images/coffee1.png";
 import spirit1 from "@/images/spirit1.png";
 import sake1 from "@/images/wine1.png";
 import wine1 from "@/images/wine1.png";
 import {
   formatItemType,
   formatVintage,
-  getNhostStorageUrl,
   getNextPlaceholder,
+  getNhostStorageUrl,
 } from "@/utilities";
 
 const overflowItemStyles: SxProps = {
@@ -55,6 +57,7 @@ const getFallback = (type: ItemTypeValue) =>
     ],
     [equals("SPIRIT"), always({ image: spirit1, alt: "A bottle of spirits" })],
     [equals("SAKE"), always({ image: sake1, alt: "A sake bottle" })],
+    [equals("TEA"), always({ image: tea1, alt: "A tea container" })],
   ])(type);
 
 export type ItemCardItem = {

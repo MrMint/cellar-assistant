@@ -421,6 +421,48 @@ export const EMBEDDING_CONFIGS = {
 
     baseTerms: ["coffee", "beans", "roast", "caffeine"],
   },
+
+  teas: {
+    primaryFields: [
+      { field: "name" as const, weight: 10, synonyms: ["tea", "tisane"] },
+      {
+        field: "category" as const,
+        weight: 9,
+        synonyms: ["type", "variety"],
+      },
+      { field: "region" as const, weight: 7, synonyms: ["origin"] },
+    ],
+
+    enhancingFields: [
+      {
+        field: "processing" as const,
+        weight: 6,
+        synonyms: ["process", "method"],
+      },
+      { field: "caffeine_level" as const, weight: 5 },
+      { field: "country" as const, weight: 6, synonyms: ["origin"] },
+      { field: "cultivar" as const, weight: 5, synonyms: ["varietal"] },
+      { field: "description" as const, weight: 5 },
+    ],
+
+    // Category-specific keyword mappings (tea category values are plain text)
+    categoryKeywords: {
+      black: ["black tea", "fully oxidized", "malty", "brisk", "robust"],
+      green: ["green tea", "unoxidized", "vegetal", "grassy", "fresh"],
+      white: ["white tea", "delicate", "subtle", "minimally processed"],
+      oolong: ["oolong", "partially oxidized", "floral", "roasted", "complex"],
+      pu_erh: ["pu-erh", "puer", "fermented", "aged", "earthy", "dark tea"],
+      yellow: ["yellow tea", "mellow", "rare", "lightly oxidized"],
+      dark: ["dark tea", "fermented", "aged", "earthy"],
+      herbal: ["herbal", "tisane", "caffeine-free", "infusion", "botanical"],
+      rooibos: ["rooibos", "red bush", "south african", "caffeine-free"],
+      mate: ["yerba mate", "maté", "south american", "energizing"],
+      chai: ["chai", "masala", "spiced tea", "cardamom", "cinnamon"],
+      blend: ["tea blend", "mixed", "flavored tea"],
+    } as const satisfies Record<string, readonly string[]>,
+
+    baseTerms: ["tea", "leaves", "brew", "infusion"],
+  },
 } as const;
 
 // Description keyword patterns organized by relevance to item types

@@ -72,7 +72,13 @@ export interface PresignedUrlResponse {
  * @deprecated Use ItemTypeValue from @cellar-assistant/shared instead
  * This type is kept for backward compatibility only
  */
-export type ValidItemType = "wine" | "beer" | "spirit" | "coffee" | "sake";
+export type ValidItemType =
+  | "wine"
+  | "beer"
+  | "spirit"
+  | "coffee"
+  | "sake"
+  | "tea";
 
 /**
  * Extended item types including unknown for menu processing

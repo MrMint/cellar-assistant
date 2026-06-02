@@ -14,6 +14,9 @@ object_relationships:
   - name: sake
     using:
       foreign_key_constraint_on: sake_id
+  - name: tea
+    using:
+      foreign_key_constraint_on: tea_id
   - name: spirit
     using:
       foreign_key_constraint_on: spirit_id
@@ -37,6 +40,7 @@ insert_permissions:
         - placeholder
         - sake_id
         - spirit_id
+        - tea_id
         - wine_id
     comment: ""
 select_permissions:
@@ -52,6 +56,7 @@ select_permissions:
         - placeholder
         - sake_id
         - spirit_id
+        - tea_id
         - updated_at
         - user_id
         - wine_id

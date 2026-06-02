@@ -8,7 +8,13 @@
 import { linkItemToBrandMutation } from "@cellar-assistant/shared/queries";
 import type { Client } from "urql";
 
-export type ItemTypeForBrand = "wine" | "beer" | "spirit" | "coffee" | "sake";
+export type ItemTypeForBrand =
+  | "wine"
+  | "beer"
+  | "spirit"
+  | "coffee"
+  | "sake"
+  | "tea";
 
 /**
  * Link an item to a brand via the item_brands join table.
@@ -38,6 +44,7 @@ export async function linkItemToBrand(
       spirit_id: itemType === "spirit" ? itemId : null,
       coffee_id: itemType === "coffee" ? itemId : null,
       sake_id: itemType === "sake" ? itemId : null,
+      tea_id: itemType === "tea" ? itemId : null,
     };
 
     await urqlClient.mutation(linkItemToBrandMutation, variables);

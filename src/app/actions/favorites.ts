@@ -26,6 +26,9 @@ const addFavoriteMutation = graphql(`
       sake {
         id
       }
+      tea {
+        id
+      }
     }
   }
 `);
@@ -97,6 +100,7 @@ export async function deleteFavoriteAction(
     revalidatePath("/spirits/[itemId]", "page");
     revalidatePath("/coffees/[itemId]", "page");
     revalidatePath("/sakes/[itemId]", "page");
+    revalidatePath("/teas/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]", "page");
 
     return { success: true };

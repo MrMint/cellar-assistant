@@ -104,6 +104,9 @@ export const DeleteCoffeeBrandsMutation = graphql(
 export const DeleteSakeBrandsMutation = graphql(
   `mutation DeleteSakeBrands($item_id: uuid!) { delete_item_brands(where: { sake_id: { _eq: $item_id } }) { affected_rows } }`,
 );
+export const DeleteTeaBrandsMutation = graphql(
+  `mutation DeleteTeaBrands($item_id: uuid!) { delete_item_brands(where: { tea_id: { _eq: $item_id } }) { affected_rows } }`,
+);
 
 export const LinkItemToBrandMutation = graphql(`
   mutation LinkItemToBrand(
@@ -111,6 +114,8 @@ export const LinkItemToBrandMutation = graphql(`
     $beer_id: uuid
     $spirit_id: uuid
     $coffee_id: uuid
+    $sake_id: uuid
+    $tea_id: uuid
     $brand_id: uuid!
     $is_primary: Boolean
   ) {
@@ -119,6 +124,8 @@ export const LinkItemToBrandMutation = graphql(`
       beer_id: $beer_id
       spirit_id: $spirit_id
       coffee_id: $coffee_id
+      sake_id: $sake_id
+      tea_id: $tea_id
       brand_id: $brand_id
       is_primary: $is_primary
     }) {

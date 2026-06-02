@@ -99,6 +99,22 @@ export const SearchDiscoveryQuery = graphql(`
         count
       }
     }
+    teas_aggregate(
+      where: {
+        cellar_items: {
+          cellar: {
+            _or: [
+              { created_by_id: { _eq: $userId } }
+              { co_owners: { user_id: { _eq: $userId } } }
+            ]
+          }
+        }
+      }
+    ) {
+      aggregate {
+        count
+      }
+    }
 
     recent_cellar_items: cellar_items(
       order_by: { created_at: desc }
@@ -153,6 +169,14 @@ export const SearchDiscoveryQuery = graphql(`
         id
         name
         vintage
+        item_images(limit: 1) {
+          file_id
+          placeholder
+        }
+      }
+      tea {
+        id
+        name
         item_images(limit: 1) {
           file_id
           placeholder
@@ -233,6 +257,14 @@ export const RecentReviewsQuery = graphql(`
           placeholder
         }
       }
+      tea {
+        id
+        name
+        item_images(limit: 1) {
+          file_id
+          placeholder
+        }
+      }
     }
   }
 `);
@@ -301,6 +333,14 @@ export const RecentTierListItemsQuery = graphql(`
         id
         name
         vintage
+        item_images(limit: 1) {
+          file_id
+          placeholder
+        }
+      }
+      tea {
+        id
+        name
         item_images(limit: 1) {
           file_id
           placeholder

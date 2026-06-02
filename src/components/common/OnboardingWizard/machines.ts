@@ -25,6 +25,7 @@ const ROUTE_TO_ITEM_TYPE: Record<string, ItemTypeValue> = {
   spirits: "SPIRIT",
   coffees: "COFFEE",
   sakes: "SAKE",
+  teas: "TEA",
 };
 
 export const OnboardingMachine = createMachine(

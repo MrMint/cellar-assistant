@@ -1,7 +1,6 @@
 import type { ItemTypeValue } from "@cellar-assistant/shared";
-import { format as dateFnsFormat, format, parseISO } from "date-fns";
-
 import { formatEnum } from "@cellar-assistant/shared/utility";
+import { format as dateFnsFormat, format, parseISO } from "date-fns";
 import { always, cond, equals, isEmpty, isNil } from "ramda";
 
 // https://stackoverflow.com/a/76775845
@@ -122,6 +121,8 @@ export const formatItemType = (type: ItemTypeValue) => {
       return "Coffee";
     case "SAKE":
       return "Sake";
+    case "TEA":
+      return "Tea";
     default:
       throw new Error("Unsupported item type");
   }
@@ -154,10 +155,11 @@ export const typeToIdKey = (type: ItemTypeValue) =>
     [equals("SPIRIT"), always("spirit_id")],
     [equals("COFFEE"), always("coffee_id")],
     [equals("SAKE"), always("sake_id")],
+    [equals("TEA"), always("tea_id")],
   ])(type);
 
 export const getItemType = (
-  typename: "beers" | "wines" | "spirits" | "coffees" | "sakes",
+  typename: "beers" | "wines" | "spirits" | "coffees" | "sakes" | "teas",
 ): ItemTypeValue =>
   cond([
     [equals("beers"), always("BEER" as const)],
@@ -165,6 +167,7 @@ export const getItemType = (
     [equals("wines"), always("WINE" as const)],
     [equals("coffees"), always("COFFEE" as const)],
     [equals("sakes"), always("SAKE" as const)],
+    [equals("teas"), always("TEA" as const)],
   ])(typename) as ItemTypeValue;
 
 export function buildItemSubtitle(result: {

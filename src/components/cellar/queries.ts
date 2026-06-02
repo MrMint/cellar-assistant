@@ -4,6 +4,7 @@ import {
   coffeeItemCardFragment,
   sakeItemCardFragment,
   spiritItemCardFragment,
+  teaItemCardFragment,
   wineItemCardFragment,
 } from "@/components/item/ItemCard/fragments";
 
@@ -37,6 +38,9 @@ export const GetCellarItemsQuery = graphql(
           }
           sakes: aggregate {
             count(columns: [sake_id])
+          }
+          teas: aggregate {
+            count(columns: [tea_id])
           }
         }
         items(where: $itemsWhereClause) {
@@ -76,6 +80,12 @@ export const GetCellarItemsQuery = graphql(
               distance(args: { search: $search })
             }
           }
+          tea {
+            ...teaItemCardFragment
+            item_vectors {
+              distance(args: { search: $search })
+            }
+          }
         }
       }
     }
@@ -86,5 +96,6 @@ export const GetCellarItemsQuery = graphql(
     spiritItemCardFragment,
     coffeeItemCardFragment,
     sakeItemCardFragment,
+    teaItemCardFragment,
   ],
 );

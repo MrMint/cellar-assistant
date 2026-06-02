@@ -255,7 +255,7 @@ export function generateFlexibleRecipeSchema(
                     type: "string",
                     enum: [...ITEM_TYPES_LOWERCASE, "ingredient"],
                     description:
-                      "CRITICAL: wine=wine/champagne, beer=all beer styles, spirit=whiskey/gin/vodka/rum/tequila/liqueurs, coffee=coffee products, sake=Japanese rice wine, ingredient=everything else",
+                      "CRITICAL: wine=wine/champagne, beer=all beer styles, spirit=whiskey/gin/vodka/rum/tequila/liqueurs, coffee=coffee products, sake=Japanese rice wine, tea=teas and tisanes, ingredient=everything else",
                   },
 
                   // Preferred database enum fields
@@ -343,7 +343,7 @@ export function generateFlexibleRecipeSchema(
                     type: "string",
                     enum: [...ITEM_TYPES_LOWERCASE, "generic"],
                     description:
-                      "REQUIRED: Target database table - wine/beer/spirit/coffee/sake for specific items, generic for everything else",
+                      "REQUIRED: Target database table - wine/beer/spirit/coffee/sake/tea for specific items, generic for everything else",
                   },
                   matching_priority: {
                     type: "string",

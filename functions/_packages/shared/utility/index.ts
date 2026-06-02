@@ -217,3 +217,24 @@ export const formatSakeRiceVariety = (type: string | null | undefined) => {
       return formatEnum(type);
   }
 };
+
+export const formatTeaCategory = (type: string | null | undefined) => {
+  if (isNil(type)) return undefined;
+  // Only values that don't title-case cleanly need special handling.
+  switch (type) {
+    case "pu_erh":
+      return "Pu-erh";
+    case "mate":
+      return "Maté";
+    default:
+      return formatEnum(type);
+  }
+};
+
+// Form/caffeine values all title-case cleanly (loose_leaf -> Loose Leaf,
+// tea_bag -> Tea Bag, high -> High), so formatEnum handles them directly.
+export const formatTeaForm = (type: string | null | undefined) =>
+  isNil(type) ? undefined : formatEnum(type);
+
+export const formatTeaCaffeineLevel = (type: string | null | undefined) =>
+  isNil(type) ? undefined : formatEnum(type);

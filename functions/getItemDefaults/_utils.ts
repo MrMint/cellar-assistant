@@ -2,6 +2,7 @@ import type {
   Beer_Defaults_Result,
   Coffee_Defaults_Result,
   Spirit_Defaults_Result,
+  Tea_Defaults_Result,
   Wine_Defaults_Result,
 } from "@cellar-assistant/shared";
 import Ajv, { type ValidateFunction } from "ajv";
@@ -45,7 +46,7 @@ onEnumCacheRefresh(() => {
   }
 });
 
-export type ItemType = "BEER" | "WINE" | "SPIRIT" | "COFFEE" | "SAKE";
+export type ItemType = "BEER" | "WINE" | "SPIRIT" | "COFFEE" | "SAKE" | "TEA";
 
 // Common brand fields extracted by AI for all item types
 export interface AIBrandFields {
@@ -110,11 +111,34 @@ export interface CoffeeAIDefaults extends AIBrandFields {
   roaster?: string;
 }
 
+export interface TeaAIDefaults extends AIBrandFields {
+  name: string;
+  description: string;
+  category?: string;
+  form?: string;
+  caffeine_level?: string;
+  region?: string;
+  country?: string;
+  cultivar?: string;
+  oxidation_level?: string;
+  processing?: string;
+  harvest_year?: number;
+  ingredients?: string;
+  steeping_temperature?: string;
+  steeping_time?: string;
+  flavor_profile?: string;
+  is_organic?: boolean;
+  is_fair_trade?: boolean;
+  barcode_code?: string;
+  tea_house?: string;
+}
+
 export type AIDefaults =
   | BeerAIDefaults
   | WineAIDefaults
   | SpiritAIDefaults
-  | CoffeeAIDefaults;
+  | CoffeeAIDefaults
+  | TeaAIDefaults;
 
 // Type guards for AJV validation results
 export function isBeerAIDefaults(data: unknown): data is BeerAIDefaults {
@@ -130,6 +154,15 @@ export function isSpiritAIDefaults(data: unknown): data is SpiritAIDefaults {
 }
 
 export function isCoffeeAIDefaults(data: unknown): data is CoffeeAIDefaults {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "name" in data &&
+    "description" in data
+  );
+}
+
+export function isTeaAIDefaults(data: unknown): data is TeaAIDefaults {
   return (
     typeof data === "object" &&
     data !== null &&
@@ -195,8 +228,19 @@ export function sanitizeAIResponse(
     "winery",
     "brewery",
     "roaster",
+    "tea_house",
     "special_designation",
     "vineyard_designation",
+    // Tea fields
+    "category",
+    "form",
+    "caffeine_level",
+    "oxidation_level",
+    "processing",
+    "ingredients",
+    "steeping_temperature",
+    "steeping_time",
+    "flavor_profile",
     // Brand fields
     "brand_name",
     "brand_description",
@@ -230,6 +274,12 @@ export function sanitizeAIResponse(
         return enumValues.coffeeSpecies;
       case "cultivar":
         return enumValues.coffeeCultivars;
+      case "category":
+        return itemType === "TEA" ? enumValues.teaCategories : [];
+      case "form":
+        return itemType === "TEA" ? enumValues.teaForms : [];
+      case "caffeine_level":
+        return itemType === "TEA" ? enumValues.teaCaffeineLevels : [];
       default:
         return [];
     }
@@ -267,6 +317,7 @@ export function createItemValidators(schemas: {
   WINE: JSONSchema7;
   SPIRIT: JSONSchema7;
   COFFEE: JSONSchema7;
+  TEA: JSONSchema7;
 }) {
   return {
     validateBeer: createTypedValidator<BeerAIDefaults>(schemas.BEER, "BEER"),
@@ -279,6 +330,7 @@ export function createItemValidators(schemas: {
       schemas.COFFEE,
       "COFFEE",
     ),
+    validateTea: createTypedValidator<TeaAIDefaults>(schemas.TEA, "TEA"),
   };
 }
 
@@ -365,6 +417,24 @@ function getClassificationGuidance(
 - Extract origin farm/region information
 - Determine processing method from labeling
 - Note cultivar varieties when specified`;
+
+    case "TEA":
+      return `## 🍵 TEA CLASSIFICATION GUIDANCE
+
+**Categories:** ${enumValues?.teaCategories?.join(", ") || "BLACK, GREEN, WHITE, OOLONG, PU_ERH, HERBAL, ROOIBOS, MATE, CHAI, BLEND"}
+**Forms:** ${enumValues?.teaForms?.join(", ") || "LOOSE_LEAF, SACHET, TEA_BAG, MATCHA_POWDER, BRICK, INSTANT"}
+**Caffeine Levels:** ${enumValues?.teaCaffeineLevels?.join(", ") || "HIGH, MEDIUM, LOW, DECAF, NONE"}
+**Country Origins:** ${enumValues?.countries?.slice(0, 8).join(", ") || "CHINA, JAPAN, INDIA, SRI_LANKA, TAIWAN"}
+
+**Professional Classification:**
+- Identify the tea category from leaf color, oxidation, and labeling
+- Determine the physical form (loose leaf, sachet, bag, matcha powder)
+- Assess caffeine level (true teas have caffeine; tisanes/herbals are often caffeine-free)
+- Extract origin region (e.g. Darjeeling, Uji, Wuyi) and processing method
+- Note cultivar/botanical, harvest year, and steeping recommendations when specified`;
+
+    default:
+      return "";
   }
 }
 
@@ -432,6 +502,33 @@ function getOutputExamples(itemType: ItemType): string {
   "roaster": "Blue Bottle Coffee"
 }
 \`\`\``;
+
+    case "TEA":
+      return `## 📝 TEA EXAMPLE OUTPUT
+
+\`\`\`json
+{
+  "name": "Jade Cloud",
+  "category": "green",
+  "form": "loose_leaf",
+  "caffeine_level": "medium",
+  "region": "Zhejiang",
+  "country": "CHINA",
+  "cultivar": "Camellia sinensis sinensis",
+  "oxidation_level": "none",
+  "processing": "pan-fired",
+  "harvest_year": 2024,
+  "flavor_profile": "vegetal, sweet, light astringency with a clean finish",
+  "steeping_temperature": "80°C",
+  "steeping_time": "3 minutes",
+  "is_organic": true,
+  "description": "A vibrant pan-fired green tea with a sweet vegetal character and a clean, refreshing finish",
+  "tea_house": "Rishi Tea"
+}
+\`\`\``;
+
+    default:
+      return "";
   }
 }
 
@@ -453,6 +550,7 @@ export function buildItemAnalysisPrompt(
     SPIRIT: "spirit or liquor bottle",
     COFFEE: "coffee bag or package",
     SAKE: "sake bottle or container",
+    TEA: "tea package, tin, or box",
   };
 
   const sections = [
@@ -698,7 +796,8 @@ export function mapValidatedDataToReturnType(
   | Beer_Defaults_Result
   | Wine_Defaults_Result
   | Spirit_Defaults_Result
-  | Coffee_Defaults_Result {
+  | Coffee_Defaults_Result
+  | Tea_Defaults_Result {
   // Helper function to safely get country from different data types
   const getCountry = (data: AIDefaults): string | undefined => {
     if ("country" in data) {
@@ -811,6 +910,40 @@ export function mapValidatedDataToReturnType(
         process,
         barcode_code: coffeeData.barcode_code,
       } as Coffee_Defaults_Result;
+    }
+    case "TEA": {
+      const teaData = validatedData as TeaAIDefaults;
+      const category = performEnumMatch(
+        teaData.category,
+        enumValues.teaCategories,
+      );
+      const form = performEnumMatch(teaData.form, enumValues.teaForms);
+      const caffeine_level = performEnumMatch(
+        teaData.caffeine_level,
+        enumValues.teaCaffeineLevels,
+      );
+
+      return {
+        __typename: "tea_defaults_result",
+        name: teaData.name,
+        description: teaData.description,
+        country,
+        category,
+        form,
+        caffeine_level,
+        region: teaData.region,
+        cultivar: teaData.cultivar,
+        oxidation_level: teaData.oxidation_level,
+        processing: teaData.processing,
+        harvest_year: teaData.harvest_year,
+        ingredients: teaData.ingredients,
+        steeping_temperature: teaData.steeping_temperature,
+        steeping_time: teaData.steeping_time,
+        flavor_profile: teaData.flavor_profile,
+        is_organic: teaData.is_organic,
+        is_fair_trade: teaData.is_fair_trade,
+        barcode_code: teaData.barcode_code,
+      } as Tea_Defaults_Result;
     }
     default:
       throw new Error(`Unknown item type: ${itemType}`);

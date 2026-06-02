@@ -12,16 +12,16 @@ import {
 import type { BarcodeSearchResult } from "@/components/common/OnboardingWizard/actors/types";
 import { FadeIn, StaggerIn, StaggerItem } from "@/components/search/AnimateIn";
 import { ClientSearchInterface } from "@/components/search/ClientSearchInterface";
-import { Greeting } from "@/components/search/Greeting";
-import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
 import {
   RecentReviewsQuery,
   RecentTierListItemsQuery,
   SearchDiscoveryQuery,
 } from "@/components/search/fragments";
+import { Greeting } from "@/components/search/Greeting";
+import type { ActivityKind } from "@/components/search/RecentActivity";
+import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
 import { SearchResultGrid } from "@/components/search/SearchResultGrid";
 import { ServerSearchResults } from "@/components/search/ServerSearchResults";
-import type { ActivityKind } from "@/components/search/RecentActivity";
 import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUser } from "@/utilities/auth-server";
@@ -245,7 +245,8 @@ async function CollectionStats({ userId }: { userId: string }) {
     (data.wines_aggregate.aggregate?.count ?? 0) +
     (data.spirits_aggregate.aggregate?.count ?? 0) +
     (data.coffees_aggregate.aggregate?.count ?? 0) +
-    (data.sakes_aggregate.aggregate?.count ?? 0);
+    (data.sakes_aggregate.aggregate?.count ?? 0) +
+    (data.teas_aggregate.aggregate?.count ?? 0);
   const cellarCount = data.cellars_aggregate.aggregate?.count ?? 0;
 
   return (

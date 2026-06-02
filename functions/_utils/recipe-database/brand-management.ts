@@ -22,6 +22,7 @@ import {
   DeleteCoffeeBrandsMutation,
   DeleteSakeBrandsMutation,
   DeleteSpiritBrandsMutation,
+  DeleteTeaBrandsMutation,
   DeleteWineBrandsMutation,
   FindBrandQuery,
   SearchBrandsBySimilarityQuery,
@@ -408,7 +409,7 @@ export async function findOrCreateBrandWithDetails(
  */
 export async function linkItemToBrand(
   itemId: string,
-  itemType: "wine" | "beer" | "spirit" | "coffee" | "sake",
+  itemType: "wine" | "beer" | "spirit" | "coffee" | "sake" | "tea",
   brandId: string,
   isPrimary: boolean = true,
   replace: boolean = false,
@@ -424,6 +425,7 @@ export async function linkItemToBrand(
     spirit_id: null as string | null,
     coffee_id: null as string | null,
     sake_id: null as string | null,
+    tea_id: null as string | null,
     brand_id: brandId,
     is_primary: isPrimary,
   };
@@ -444,6 +446,9 @@ export async function linkItemToBrand(
       break;
     case "sake":
       variables.sake_id = itemId;
+      break;
+    case "tea":
+      variables.tea_id = itemId;
       break;
   }
 
@@ -481,6 +486,13 @@ export async function linkItemToBrand(
       case "sake":
         await functionMutation(
           DeleteSakeBrandsMutation,
+          { item_id: itemId },
+          headers,
+        );
+        break;
+      case "tea":
+        await functionMutation(
+          DeleteTeaBrandsMutation,
           { item_id: itemId },
           headers,
         );

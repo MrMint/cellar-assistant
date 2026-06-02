@@ -36,4 +36,18 @@ export const NAME_KEYWORDS: Record<ItemType, string[]> = {
     "japanese",
     "sushi",
   ],
+  tea: [
+    "tea",
+    "tea house",
+    "tea shop",
+    "matcha",
+    "sencha",
+    "oolong",
+    "green tea",
+    "black tea",
+    "pu-erh",
+    "chai",
+    "boba",
+    "bubble tea",
+  ],
 };

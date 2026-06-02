@@ -40,6 +40,12 @@ export const ITEM_TYPES: ItemTypeConfig[] = [
     icon: "Sake",
     color: ITEM_TYPE_JOY_COLORS.sake,
   },
+  {
+    id: "tea",
+    label: "Tea",
+    icon: "Tea",
+    color: ITEM_TYPE_JOY_COLORS.tea,
+  },
 ];
 
 // Comprehensive category mappings based on Overture analysis
@@ -98,6 +104,22 @@ const SAKE_CATEGORIES: PlaceCategory[] = [
   // Note: 'sake_brewery', 'izakaya', 'japanese_restaurant' may not exist in current PlaceCategory type
 ];
 
+const TEA_CATEGORIES: PlaceCategory[] = [
+  // Tier 1: Highest likelihood (90%+)
+  "tea_house", // Tea houses / tea rooms
+  "tea_shop", // Tea retail / specialty tea shops
+
+  // Tier 2: High likelihood (70-90%)
+  "bubble_tea", // Boba / bubble tea shops
+
+  // Tier 3: Good likelihood (50-70%)
+  "cafe", // Many cafes serve tea
+
+  // Tier 4: Possible
+  "japanese_restaurant", // Matcha, sencha, etc.
+  "specialty_grocery_store", // Loose-leaf tea retail
+];
+
 // Mapping interface
 export interface CategoryMapping {
   getCategories(itemTypes: ItemType[]): PlaceCategory[];
@@ -113,6 +135,7 @@ export class ItemTypeCategoryMapper implements CategoryMapping {
     spirit: SPIRITS_CATEGORIES,
     coffee: COFFEE_CATEGORIES,
     sake: SAKE_CATEGORIES,
+    tea: TEA_CATEGORIES,
   };
 
   /**

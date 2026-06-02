@@ -54,6 +54,7 @@ function getItemHref(item: {
   spirit?: { id: string } | null;
   coffee?: { id: string } | null;
   sake?: { id: string } | null;
+  tea?: { id: string } | null;
 }): string {
   if (item.place) return `/places/${item.place.id}`;
   if (item.wine) return `/wines/${item.wine.id}`;
@@ -61,6 +62,7 @@ function getItemHref(item: {
   if (item.spirit) return `/spirits/${item.spirit.id}`;
   if (item.coffee) return `/coffees/${item.coffee.id}`;
   if (item.sake) return `/sakes/${item.sake.id}`;
+  if (item.tea) return `/teas/${item.tea.id}`;
   return "#";
 }
 
@@ -70,12 +72,14 @@ function getEntityId(item: {
   spirit?: { id: string } | null;
   coffee?: { id: string } | null;
   sake?: { id: string } | null;
+  tea?: { id: string } | null;
 }): { type: string; id: string } | null {
   if (item.wine) return { type: "wine", id: item.wine.id };
   if (item.beer) return { type: "beer", id: item.beer.id };
   if (item.spirit) return { type: "spirit", id: item.spirit.id };
   if (item.coffee) return { type: "coffee", id: item.coffee.id };
   if (item.sake) return { type: "sake", id: item.sake.id };
+  if (item.tea) return { type: "tea", id: item.tea.id };
   return null;
 }
 
@@ -102,6 +106,7 @@ export default async function TierListPage({ params }: Props) {
   const spiritIds: string[] = [];
   const coffeeIds: string[] = [];
   const sakeIds: string[] = [];
+  const teaIds: string[] = [];
 
   for (const item of resolvedItems) {
     const entity = getEntityId(item);
@@ -122,6 +127,9 @@ export default async function TierListPage({ params }: Props) {
       case "sake":
         sakeIds.push(entity.id);
         break;
+      case "tea":
+        teaIds.push(entity.id);
+        break;
     }
   }
 
@@ -131,7 +139,8 @@ export default async function TierListPage({ params }: Props) {
       beerIds.length +
       spiritIds.length +
       coffeeIds.length +
-      sakeIds.length >
+      sakeIds.length +
+      teaIds.length >
     0;
 
   const reviewScoreMap = new Map<string, number>();
@@ -144,6 +153,7 @@ export default async function TierListPage({ params }: Props) {
       spiritIds,
       coffeeIds,
       sakeIds,
+      teaIds,
     });
     for (const review of reviews.item_reviews) {
       const entityId =
@@ -151,7 +161,8 @@ export default async function TierListPage({ params }: Props) {
         review.beer_id ??
         review.spirit_id ??
         review.coffee_id ??
-        review.sake_id;
+        review.sake_id ??
+        review.tea_id;
       if (entityId) {
         reviewScoreMap.set(entityId, review.score);
       }
@@ -207,6 +218,12 @@ export default async function TierListPage({ params }: Props) {
         .filter(Boolean)
         .join(" · ");
       reviewScore = reviewScoreMap.get(item.sake.id) ?? null;
+    } else if (item.tea) {
+      name = item.tea.name;
+      subtitle = [item.tea.category, item.tea.region]
+        .filter(Boolean)
+        .join(" · ");
+      reviewScore = reviewScoreMap.get(item.tea.id) ?? null;
     }
 
     return {

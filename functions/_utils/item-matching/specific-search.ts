@@ -157,7 +157,8 @@ function transformVectorSearchResults(
         result.beer ||
         result.spirit ||
         result.coffee ||
-        result.sake;
+        result.sake ||
+        result.tea;
       if (!item) {
         return null;
       }
@@ -240,6 +241,13 @@ async function searchWithTextMatching(
           limit: params.limit * 2,
         });
         return searchResult.sakes || [];
+      })
+      .with("TEA", async () => {
+        const searchResult = await functionQuery(TEXT_SEARCH_QUERIES.tea, {
+          searchTerm: `%${searchTermLower}%`,
+          limit: params.limit * 2,
+        });
+        return searchResult.teas || [];
       })
       .exhaustive();
 

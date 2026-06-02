@@ -18,6 +18,7 @@ type CellarItemsFilterProps = {
     spirits?: number;
     coffees?: number;
     sakes?: number;
+    teas?: number;
   };
   onTypesChange: (types: ItemTypeValue[]) => void;
 };
@@ -88,6 +89,14 @@ export const CellarItemsFilter = ({
                 <Typography>{counts.sakes}</Typography>
               )}
               <ItemTypeIcon type="SAKE" />
+            </Stack>
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Tea">
+          <IconButton value={"TEA"} aria-label="Tea">
+            <Stack direction="row" gap={0.5} alignItems="center">
+              {isNotNil(counts.teas) && <Typography>{counts.teas}</Typography>}
+              <ItemTypeIcon type="TEA" />
             </Stack>
           </IconButton>
         </Tooltip>

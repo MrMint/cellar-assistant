@@ -120,5 +120,6 @@ function getParentItem(
   if (item.coffee_id)
     return { tableName: "coffees", id: item.coffee_id as string };
   if (item.sake_id) return { tableName: "sakes", id: item.sake_id as string };
+  if (item.tea_id) return { tableName: "teas", id: item.tea_id as string };
   return null;
 }

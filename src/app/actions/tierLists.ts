@@ -21,6 +21,7 @@ const VALID_LIST_TYPES = [
   "spirit",
   "coffee",
   "sake",
+  "tea",
 ] as const;
 
 type ListType = (typeof VALID_LIST_TYPES)[number];
@@ -375,6 +376,7 @@ export async function addItemToTierListAction(
       spirit_id: undefined as string | undefined,
       coffee_id: undefined as string | undefined,
       sake_id: undefined as string | undefined,
+      tea_id: undefined as string | undefined,
       [entityFkField]: entityId,
     };
 

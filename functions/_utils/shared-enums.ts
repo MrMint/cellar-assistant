@@ -5,6 +5,9 @@ import {
   getSakeServingTemperatureEnumQuery,
   getSakeTypeEnumQuery,
   getSpiritTypeEnumQuery,
+  getTeaCaffeineLevelEnumQuery,
+  getTeaCategoryEnumQuery,
+  getTeaFormEnumQuery,
   getWineStyleEnumQuery,
   getWineVarietyEnumQuery,
   graphql,
@@ -21,6 +24,7 @@ export const BRAND_TYPES = {
   WINERY: "winery",
   ROASTERY: "roastery",
   KURA: "kura", // Japanese sake brewery
+  TEA_HOUSE: "tea_house",
   RESTAURANT_CHAIN: "restaurant_chain",
   MANUFACTURER: "manufacturer",
   OTHER: "other",
@@ -50,6 +54,11 @@ export interface AllEnumValues {
   sakeTypes: string[];
   sakeServingTemperatures: string[];
   sakeRiceVarieties: string[];
+
+  // Tea specific
+  teaCategories: string[];
+  teaForms: string[];
+  teaCaffeineLevels: string[];
 }
 
 /**
@@ -172,6 +181,15 @@ async function getEnumValues(enumTypeName: string): Promise<string[]> {
       case "sake_rice_variety_enum":
         query = getSakeRiceVarietyEnumQuery;
         break;
+      case "tea_category_enum":
+        query = getTeaCategoryEnumQuery;
+        break;
+      case "tea_form_enum":
+        query = getTeaFormEnumQuery;
+        break;
+      case "tea_caffeine_level_enum":
+        query = getTeaCaffeineLevelEnumQuery;
+        break;
       default:
         console.warn(`Unknown enum type: ${enumTypeName}`);
         return [];
@@ -243,6 +261,9 @@ export async function getAllEnumValues(
       sakeTypes,
       sakeServingTemperatures,
       sakeRiceVarieties,
+      teaCategories,
+      teaForms,
+      teaCaffeineLevels,
     ] = await Promise.all([
       getEnumValues("spirit_type_enum"),
       getEnumValues("wine_style_enum"),
@@ -257,6 +278,9 @@ export async function getAllEnumValues(
       getEnumValues("sake_type_enum"),
       getEnumValues("sake_serving_temperature_enum"),
       getEnumValues("sake_rice_variety_enum"),
+      getEnumValues("tea_category_enum"),
+      getEnumValues("tea_form_enum"),
+      getEnumValues("tea_caffeine_level_enum"),
     ]);
 
     const allEnums: AllEnumValues = {
@@ -273,6 +297,9 @@ export async function getAllEnumValues(
       sakeTypes,
       sakeServingTemperatures,
       sakeRiceVarieties,
+      teaCategories,
+      teaForms,
+      teaCaffeineLevels,
     };
 
     // Success: reset error count and update cache
@@ -292,6 +319,9 @@ export async function getAllEnumValues(
       sakeTypes: sakeTypes.length,
       sakeServingTemperatures: sakeServingTemperatures.length,
       sakeRiceVarieties: sakeRiceVarieties.length,
+      teaCategories: teaCategories.length,
+      teaForms: teaForms.length,
+      teaCaffeineLevels: teaCaffeineLevels.length,
     });
 
     notifyCacheRefresh();
@@ -326,6 +356,9 @@ export async function getAllEnumValues(
       sakeTypes: [],
       sakeServingTemperatures: [],
       sakeRiceVarieties: [],
+      teaCategories: [],
+      teaForms: [],
+      teaCaffeineLevels: [],
     };
   }
 }

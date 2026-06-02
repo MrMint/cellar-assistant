@@ -260,6 +260,36 @@ actions:
     permissions:
       - role: user
     comment: sake_defaults
+  - name: tea_defaults
+    definition:
+      kind: ""
+      handler: '{{NHOST_FUNCTIONS_URL}}/getItemDefaults'
+      forward_client_headers: true
+      headers:
+        - name: nhost-webhook-secret
+          value_from_env: NHOST_WEBHOOK_SECRET
+      timeout: 120
+      request_transform:
+        body:
+          action: transform
+          template: |-
+            {
+              "hint": {
+                "barcode": {{$body.input.hint?.barcode}},
+                "barcodeType": {{$body.input.hint?.barcodeType}},
+                "frontLabelFileId": {{$body.input.hint?.frontLabelFileId}},
+                "backLabelFileId": {{$body.input.hint?.backLabelFileId}}
+              },
+              "itemType": "TEA",
+              "session_variables": {{$body?.session_variables}}
+            }
+        method: POST
+        query_params: {}
+        template_engine: Kriti
+        version: 2
+    permissions:
+      - role: user
+    comment: tea_defaults
   - name: search_nearby_places
     definition:
       kind: ""
@@ -365,6 +395,9 @@ custom_types:
         - description: null
           is_deprecated: null
           value: SAKE
+        - description: null
+          is_deprecated: null
+          value: TEA
   input_objects:
     - name: item_defaults_input
     - name: item_defaults_hint
@@ -382,6 +415,7 @@ custom_types:
     - name: item_image_upload_result
     - name: coffee_defaults_result
     - name: sake_defaults_result
+    - name: tea_defaults_result
     - name: search_nearby_places_result
     - name: search_nearby_place
     - name: search_query_info

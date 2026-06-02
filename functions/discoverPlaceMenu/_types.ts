@@ -315,7 +315,9 @@ export function isValidExtractedItemType(
 ): value is ExtractedItemType {
   return (
     typeof value === "string" &&
-    ["wine", "beer", "spirit", "coffee", "sake", "unknown"].includes(value)
+    ["wine", "beer", "spirit", "coffee", "sake", "tea", "unknown"].includes(
+      value,
+    )
   );
 }
 

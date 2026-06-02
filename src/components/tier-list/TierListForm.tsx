@@ -47,6 +47,7 @@ const listTypeOptions = [
   { value: "spirit", label: "Spirits" },
   { value: "coffee", label: "Coffees" },
   { value: "sake", label: "Sake" },
+  { value: "tea", label: "Teas" },
 ];
 
 export function TierListForm({

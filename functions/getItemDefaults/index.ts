@@ -18,8 +18,8 @@ import {
   validateUserId,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
-import { processBrandFromAIDefaults } from "./_brand";
 import { analyzeItemImages, fetchLabelImages } from "./_analyze";
+import { processBrandFromAIDefaults } from "./_brand";
 import { getSchemaForItemType } from "./_schemas";
 import type {
   FinalizeResultsParams,
@@ -60,7 +60,7 @@ function sanitizeProcessingContext(req: Request): ProcessingContext {
 
   if (!validateItemType(itemType)) {
     throw new ValidationError(
-      `Invalid item type: ${itemType}. Must be one of: BEER, WINE, SPIRIT, COFFEE`,
+      `Invalid item type: ${itemType}. Must be one of: BEER, WINE, SPIRIT, COFFEE, SAKE, TEA`,
     );
   }
 

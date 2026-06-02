@@ -14,6 +14,9 @@ object_relationships:
   - name: sake
     using:
       foreign_key_constraint_on: sake_id
+  - name: tea
+    using:
+      foreign_key_constraint_on: tea_id
   - name: spirit
     using:
       foreign_key_constraint_on: spirit_id
@@ -40,6 +43,9 @@ insert_permissions:
           - sake:
               created_by_id:
                 _eq: X-Hasura-User-Id
+          - tea:
+              created_by_id:
+                _eq: X-Hasura-User-Id
       columns:
         - beer_id
         - brand_id
@@ -47,6 +53,7 @@ insert_permissions:
         - is_primary
         - sake_id
         - spirit_id
+        - tea_id
         - wine_id
     comment: ""
 select_permissions:
@@ -61,6 +68,7 @@ select_permissions:
         - is_primary
         - sake_id
         - spirit_id
+        - tea_id
         - wine_id
       filter: {}
       allow_aggregations: true
@@ -87,6 +95,9 @@ update_permissions:
           - sake:
               created_by_id:
                 _eq: X-Hasura-User-Id
+          - tea:
+              created_by_id:
+                _eq: X-Hasura-User-Id
       check: {}
     comment: ""
 delete_permissions:
@@ -107,6 +118,9 @@ delete_permissions:
               created_by_id:
                 _eq: X-Hasura-User-Id
           - sake:
+              created_by_id:
+                _eq: X-Hasura-User-Id
+          - tea:
               created_by_id:
                 _eq: X-Hasura-User-Id
     comment: ""

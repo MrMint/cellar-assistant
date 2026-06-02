@@ -194,6 +194,43 @@ export const SEARCH_SAKES_QUERY = graphql(`
   }
 `);
 
+/**
+ * Text search for specific tea items using vector similarity
+ */
+export const SEARCH_TEAS_QUERY = graphql(`
+  query SearchTeas($text: String!, $limit: Int!, $maxDistance: float8!) {
+    text_search(
+      args: { text: $text }
+      where: {
+        distance: { _lte: $maxDistance }
+        tea_id: { _is_null: false }
+      }
+      order_by: { distance: asc }
+      limit: $limit
+    ) {
+      distance
+      tea {
+        id
+        name
+        category
+        form
+        caffeine_level
+        region
+        country
+        cultivar
+        oxidation_level
+        processing
+        harvest_year
+        brands {
+          brand {
+            name
+          }
+        }
+      }
+    }
+  }
+`);
+
 // =============================================================================
 // Fallback Text-Based Search Queries
 // =============================================================================
@@ -352,6 +389,41 @@ export const SEARCH_SAKES_TEXT_QUERY = graphql(`
   }
 `);
 
+/**
+ * Fallback text-based search for teas using ILIKE
+ */
+export const SEARCH_TEAS_TEXT_QUERY = graphql(`
+  query SearchTeasText($searchTerm: String!, $limit: Int!) {
+    teas(
+      where: {
+        _or: [
+          { name: { _ilike: $searchTerm } }
+          { brands: { brand: { name: { _ilike: $searchTerm } } } }
+        ]
+      }
+      order_by: [{ name: asc }]
+      limit: $limit
+    ) {
+      id
+      name
+      category
+      form
+      caffeine_level
+      region
+      country
+      cultivar
+      oxidation_level
+      processing
+      harvest_year
+      brands {
+        brand {
+          name
+        }
+      }
+    }
+  }
+`);
+
 // =============================================================================
 // Generic Items Search
 // =============================================================================
@@ -396,6 +468,7 @@ export const VECTOR_SEARCH_QUERIES = {
   spirit: SEARCH_SPIRITS_QUERY,
   coffee: SEARCH_COFFEES_QUERY,
   sake: SEARCH_SAKES_QUERY,
+  tea: SEARCH_TEAS_QUERY,
 } as const;
 
 /**
@@ -407,6 +480,7 @@ export const TEXT_SEARCH_QUERIES = {
   spirit: SEARCH_SPIRITS_TEXT_QUERY,
   coffee: SEARCH_COFFEES_TEXT_QUERY,
   sake: SEARCH_SAKES_TEXT_QUERY,
+  tea: SEARCH_TEAS_TEXT_QUERY,
 } as const;
 
 /**

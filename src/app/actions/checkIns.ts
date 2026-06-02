@@ -66,6 +66,7 @@ export async function addCheckInAction(
     revalidatePath("/cellars/[cellarId]/spirits/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/coffees/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/sakes/[itemId]", "page");
+    revalidatePath("/cellars/[cellarId]/teas/[itemId]", "page");
 
     return {
       success: true,
@@ -104,6 +105,7 @@ export async function addBulkCheckInsAction(
     revalidatePath("/cellars/[cellarId]/spirits/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/coffees/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/sakes/[itemId]", "page");
+    revalidatePath("/cellars/[cellarId]/teas/[itemId]", "page");
 
     return {
       success: true,

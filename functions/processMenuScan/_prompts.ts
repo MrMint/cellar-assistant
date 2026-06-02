@@ -50,6 +50,7 @@ export const MENU_EXTRACTION_SCHEMA: JSONSchema7 = {
           "spirit",
           "coffee",
           "sake",
+          "tea",
           "cocktail",
           "unknown",
         ],
@@ -159,6 +160,22 @@ export const MENU_EXTRACTION_SCHEMA: JSONSchema7 = {
             description:
               "Cocktail category or style (classic, tiki, sour, highball, martini, etc.)",
           },
+          // Tea attributes
+          tea_category: {
+            type: "string",
+            description:
+              "Tea category as a snake_case token: black, green, white, oolong, pu_erh, yellow, dark, herbal, rooibos, mate, chai, blend",
+          },
+          tea_form: {
+            type: "string",
+            description:
+              "Physical form as a snake_case token: loose_leaf, sachet, tea_bag, matcha_powder, brick, instant",
+          },
+          caffeine_level: {
+            type: "string",
+            description:
+              "Caffeine level (high, medium, low, decaf, none for herbal tisanes)",
+          },
         },
       },
     },
@@ -203,6 +220,7 @@ INSTRUCTIONS:
    - SPIRITS: Extract name, distillery, type (whiskey/rum/vodka/gin/etc), age, proof, price
    - COFFEES: Extract name, roaster, origin, roast level, processing method, price
    - SAKE: Extract name, variety, region, style, vintage, price
+   - TEA: Extract name, tea category (black/green/white/oolong/pu-erh/herbal/etc), form (loose leaf/sachet/bag), caffeine level, region, price
    - COCKTAILS/MIXED DRINKS: Extract name, base spirit, key ingredients, style/category, price
 3. Skip food items, soft drinks, juices, and water.
 4. For search_name: ALWAYS expand abbreviations and normalize for database matching:

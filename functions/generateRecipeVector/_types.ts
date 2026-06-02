@@ -68,6 +68,11 @@ export const GET_RECIPE_WITH_DETAILS_QUERY = graphql(`
           category
           type
         }
+        tea {
+          name
+          category
+          caffeine_level
+        }
         generic_item {
           name
           category

@@ -36,6 +36,9 @@ export const CellarCardFragment = graphql(`
       sakes: aggregate {
         count(columns: [sake_id])
       }
+      teas: aggregate {
+        count(columns: [tea_id])
+      }
     }
   }
 `);
@@ -82,6 +85,9 @@ export const CellarInfoFragment = graphql(`
       }
       sakes: aggregate {
         count(columns: [sake_id])
+      }
+      teas: aggregate {
+        count(columns: [tea_id])
       }
     }
   }

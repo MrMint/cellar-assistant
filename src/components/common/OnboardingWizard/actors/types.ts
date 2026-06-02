@@ -4,6 +4,7 @@ import type { BeerFormDefaultValues } from "@/components/beer/BeerForm";
 import type { CoffeeFormDefaultValues } from "@/components/coffee/CoffeeForm";
 import type { SakeFormDefaultValues } from "@/components/sake/SakeForm";
 import type { SpiritFormDefaultValues } from "@/components/spirit/SpiritForm";
+import type { TeaFormDefaultValues } from "@/components/tea/TeaForm";
 import type { WineFormDefaultValues } from "@/components/wine/WineForm";
 import type { Barcode } from "@/constants";
 
@@ -53,6 +54,7 @@ export type DefaultValues =
   | CoffeeFormDefaultValues
   | SakeFormDefaultValues
   | SpiritFormDefaultValues
+  | TeaFormDefaultValues
   | WineFormDefaultValues;
 
 export interface DefaultValuesResult<T extends DefaultValues> {

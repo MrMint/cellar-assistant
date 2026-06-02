@@ -20,6 +20,9 @@ object_relationships:
   - name: suggested_sake
     using:
       foreign_key_constraint_on: suggested_sake_id
+  - name: suggested_tea
+    using:
+      foreign_key_constraint_on: suggested_tea_id
   - name: suggested_spirit
     using:
       foreign_key_constraint_on: suggested_spirit_id
@@ -48,6 +51,7 @@ insert_permissions:
         - suggested_recipe_id
         - suggested_sake_id
         - suggested_spirit_id
+        - suggested_tea_id
         - suggested_wine_id
     comment: ""
 select_permissions:
@@ -69,6 +73,7 @@ select_permissions:
         - suggested_recipe_id
         - suggested_sake_id
         - suggested_spirit_id
+        - suggested_tea_id
         - suggested_wine_id
       filter:
         place_menu_item:

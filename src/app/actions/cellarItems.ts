@@ -72,6 +72,7 @@ export async function openCellarItemAction(
     revalidatePath("/cellars/[cellarId]/spirits/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/coffees/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/sakes/[itemId]", "page");
+    revalidatePath("/cellars/[cellarId]/teas/[itemId]", "page");
     revalidateTag(CacheTags.cellarItems(cellarId), "default");
 
     return { success: true };
@@ -111,6 +112,7 @@ export async function updateCellarItemPercentageAction(
     revalidatePath("/cellars/[cellarId]/spirits/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/coffees/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/sakes/[itemId]", "page");
+    revalidatePath("/cellars/[cellarId]/teas/[itemId]", "page");
     revalidateTag(CacheTags.cellarItems(cellarId), "default");
 
     return { success: true };
@@ -150,6 +152,7 @@ export async function addCellarItemAction(
     spirit_id?: string;
     coffee_id?: string;
     sake_id?: string;
+    tea_id?: string;
   } = { cellar_id: cellarId };
 
   switch (itemType) {
@@ -167,6 +170,9 @@ export async function addCellarItemAction(
       break;
     case "SAKE":
       item.sake_id = itemId;
+      break;
+    case "TEA":
+      item.tea_id = itemId;
       break;
     default:
       return {

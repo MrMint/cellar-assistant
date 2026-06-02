@@ -43,7 +43,14 @@ export { readFragment } from "gql.tada";
  * // Or use string literals directly
  * const type: ItemTypeValue = "WINE";
  */
-export const ITEM_TYPES = ["WINE", "BEER", "SPIRIT", "COFFEE", "SAKE"] as const;
+export const ITEM_TYPES = [
+  "WINE",
+  "BEER",
+  "SPIRIT",
+  "COFFEE",
+  "SAKE",
+  "TEA",
+] as const;
 
 export type ItemTypeValue = (typeof ITEM_TYPES)[number];
 
@@ -87,6 +94,11 @@ export type Sake_Type_Enum = string;
 export type Sake_Serving_Temperature_Enum = string;
 export type Sake_Rice_Variety_Enum = string;
 
+// Tea types are strings since they're stored in tables, not GraphQL enums
+export type Tea_Category_Enum = string;
+export type Tea_Form_Enum = string;
+export type Tea_Caffeine_Level_Enum = string;
+
 // Constraint enum values
 export const Barcodes_Constraint = {
   BarcodesPkey: "barcodes_pkey" as const,
@@ -107,11 +119,13 @@ export type Beers = Record<string, unknown>; // Placeholder for GraphQL generate
 export type Wines = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Spirits = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Coffees = Record<string, unknown>; // Placeholder for GraphQL generated type
+export type Teas = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Item_Vectors_Bool_Exp = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Beer_Defaults_Result = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Wine_Defaults_Result = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Spirit_Defaults_Result = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Coffee_Defaults_Result = Record<string, unknown>; // Placeholder for GraphQL generated type
+export type Tea_Defaults_Result = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Query_RootWine_DefaultsArgs = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Item_Score_Bool_Exp_Bool_Exp = Record<string, unknown>; // Placeholder for GraphQL generated type
 
@@ -281,6 +295,36 @@ export const getSakeServingTemperatureEnumQuery = graphql(`
 export const getSakeRiceVarietyEnumQuery = graphql(`
   query GetSakeRiceVarietyEnum {
     __type(name: "sake_rice_variety_enum") {
+      enumValues {
+        name
+      }
+    }
+  }
+`);
+
+export const getTeaCategoryEnumQuery = graphql(`
+  query GetTeaCategoryEnum {
+    __type(name: "tea_category_enum") {
+      enumValues {
+        name
+      }
+    }
+  }
+`);
+
+export const getTeaFormEnumQuery = graphql(`
+  query GetTeaFormEnum {
+    __type(name: "tea_form_enum") {
+      enumValues {
+        name
+      }
+    }
+  }
+`);
+
+export const getTeaCaffeineLevelEnumQuery = graphql(`
+  query GetTeaCaffeineLevelEnum {
+    __type(name: "tea_caffeine_level_enum") {
       enumValues {
         name
       }

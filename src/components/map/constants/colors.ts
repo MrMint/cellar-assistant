@@ -12,6 +12,7 @@ export const ITEM_TYPE_COLORS: Record<ItemType, string> = {
   spirit: "#607D8B", // Blue-gray (needs contrast with white icons on pins)
   coffee: "#8B4513", // Rich brown
   sake: "#7B1FA2", // Deep purple (needs contrast with white icons on pins)
+  tea: "#2E7D32", // Green (matcha/green tea)
 } as const;
 
 // Joy UI color schemes for item types (used in UI components)
@@ -24,6 +25,7 @@ export const ITEM_TYPE_JOY_COLORS: Record<
   spirit: "neutral", // Gray theme
   coffee: "success", // Brown/green theme
   sake: "neutral", // Purple/lavender theme (using neutral as closest match)
+  tea: "success", // Green theme
 } as const;
 
 // Theme-based colors for markers

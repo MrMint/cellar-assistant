@@ -3,7 +3,13 @@
  * Uses GraphQL types and configuration to generate rich, searchable embedding text
  */
 
-import type { Beers, Coffees, Spirits, Wines } from "@cellar-assistant/shared";
+import type {
+  Beers,
+  Coffees,
+  Spirits,
+  Teas,
+  Wines,
+} from "@cellar-assistant/shared";
 import {
   formatBeerStyle,
   formatCountry,
@@ -19,7 +25,7 @@ import {
 } from "./_embedding-config";
 
 // Type-safe item union
-type AnyItem = Beers | Wines | Spirits | Coffees;
+type AnyItem = Beers | Wines | Spirits | Coffees | Teas;
 
 /**
  * Generate rich, searchable embedding text from any item using schema-driven configuration
@@ -198,6 +204,21 @@ function addTypeSpecificKeywords(
       }
       break;
     }
+
+    case "teas": {
+      const tea = item as Teas;
+      const teaConfig = config as typeof EMBEDDING_CONFIGS.teas;
+      if (tea.category) {
+        const categoryKey = String(
+          tea.category,
+        ) as keyof typeof teaConfig.categoryKeywords;
+        const keywords = teaConfig.categoryKeywords[categoryKey];
+        if (keywords) {
+          parts.push(...keywords);
+        }
+      }
+      break;
+    }
   }
 }
 
@@ -221,8 +242,9 @@ function addDescriptionKeywords(
     // Process item-type specific patterns
     if (itemType === "coffees") {
       processPatternGroup(DESCRIPTION_KEYWORDS.coffee, description, parts);
-    } else {
-      // All other types are alcoholic beverages
+    } else if (itemType !== "teas") {
+      // Wine/beer/spirit/sake are alcoholic; tea is non-alcoholic so it
+      // only gets the universal patterns above.
       processPatternGroup(DESCRIPTION_KEYWORDS.alcoholic, description, parts);
     }
   }
