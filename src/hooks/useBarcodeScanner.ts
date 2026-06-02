@@ -120,6 +120,13 @@ export const useBarcodeScanner = ({
     },
     constraints: fallbackConstraints,
     formats: SUPPORTED_FORMATS,
+    // react-zxing v3 decodes via a WASM module. By default zxing-wasm fetches
+    // it from a jsdelivr CDN at runtime, which the app's strict CSP
+    // (connect-src 'self') blocks and which breaks offline (PWA) use. Serve it
+    // same-origin instead. The file is copied from
+    // node_modules/zxing-wasm/dist/reader/zxing_reader.wasm into public/zxing/.
+    // Refresh public/zxing/zxing_reader.wasm whenever zxing-wasm is bumped.
+    wasmUrl: "/zxing/zxing_reader.wasm",
   });
 
   // Check native BarcodeDetector support on mount
