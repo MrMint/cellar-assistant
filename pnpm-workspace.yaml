@@ -3,3 +3,5 @@ packages:
   - "functions"
   - "functions/_packages/*"
 sharedWorkspaceLockfile: false
+overrides:
+  brace-expansion: "^2.0.1"
