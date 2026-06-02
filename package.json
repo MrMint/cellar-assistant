@@ -61,7 +61,7 @@
     "lexical": "0.43.0",
     "libphonenumber-js": "^1.12.41",
     "maplibre-gl": "^5.23.0",
-    "next": "16.2.3",
+    "next": "16.2.6",
     "npm-run-all2": "8.0.4",
     "nuqs": "^2.8.9",
     "ramda": "0.32.0",
