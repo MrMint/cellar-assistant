@@ -24,8 +24,8 @@ importers:
         specifier: 8.1.1
         version: 8.1.1
       '@google/genai':
-        specifier: 1.50.0
-        version: 1.50.0
+        specifier: 1.52.0
+        version: 1.52.0
       '@nhost/nhost-js':
         specifier: 4.6.0
         version: 4.6.0
@@ -117,8 +117,8 @@ packages:
     resolution: {integrity: sha512-N8qS6dlORGHwk7WjGXKOSsLjIjNINCPicsOX6gyyLiYk7mq3MtII96NZ9N2ahwA2vnkLmZODOIH9rlNniYWvCQ==}
     engines: {node: '>=18'}
 
-  '@google/genai@1.50.0':
-    resolution: {integrity: sha512-oHv7JfdI6SLUitERptYoHqpn4Y2wWyPOBfWtpw8kfKTqqEiMJpUC6SEtiQPogb55Ip8fymj4bxGnGBTVV/Z9Ew==}
+  '@google/genai@1.52.0':
+    resolution: {integrity: sha512-gwSvbpiN/17O9TbsqSsE/OzZcpv5Fo4RQjdngGgogtuB9RsyJ8ZHhX5KjHj1bp5N9snN2eK8LDGXSaWW2hof8Q==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -635,7 +635,7 @@ snapshots:
 
   '@google-cloud/promisify@5.0.0': {}
 
-  '@google/genai@1.50.0':
+  '@google/genai@1.52.0':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
