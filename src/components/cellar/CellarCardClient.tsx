@@ -10,6 +10,14 @@ type User = {
   avatarUrl: string;
 };
 
+type ItemCounts = {
+  wines: number;
+  beers: number;
+  spirits: number;
+  coffees: number;
+  sakes: number;
+};
+
 type CellarCardClientProps = {
   userId: string;
   cellar: {
@@ -17,15 +25,11 @@ type CellarCardClientProps = {
     name: string;
     createdBy: User;
     coOwners: User[];
+    itemCounts: ItemCounts;
   };
-  index: number;
 };
 
-export function CellarCardClient({
-  userId,
-  cellar,
-  index,
-}: CellarCardClientProps) {
+export function CellarCardClient({ userId, cellar }: CellarCardClientProps) {
   const router = useRouter();
 
   const handleEditClick = useCallback(
@@ -34,11 +38,6 @@ export function CellarCardClient({
   );
 
   return (
-    <CellarCard
-      userId={userId}
-      cellar={cellar}
-      index={index}
-      onEditClick={handleEditClick}
-    />
+    <CellarCard userId={userId} cellar={cellar} onEditClick={handleEditClick} />
   );
 }

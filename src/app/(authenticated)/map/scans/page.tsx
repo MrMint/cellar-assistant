@@ -6,7 +6,7 @@ export default function ScanHistoryPage() {
   return (
     <Box
       sx={{
-        height: "100vh",
+        height: "100dvh",
         overflow: "auto",
         p: 2,
       }}

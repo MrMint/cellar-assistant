@@ -18,7 +18,7 @@ export default function MapLayout({ children }: MapLayoutProps) {
   return (
     <div
       style={{
-        height: "100vh",
+        height: "100dvh",
         overflow: "hidden",
         overscrollBehavior: "contain",
       }}

@@ -795,7 +795,7 @@ export function AnimationShowcase({
     <Box
       sx={{
         width: "100%",
-        height: "min(calc(100vh - 8rem), 600px)",
+        height: "min(calc(100dvh - 8rem), 600px)",
         display: "flex",
         flexDirection: "column",
         position: "relative",

@@ -13,7 +13,7 @@ export default async function MapPage() {
   return (
     <Box
       sx={{
-        height: "100vh",
+        height: "100dvh",
         width: "100%",
         position: "relative",
         overflow: "hidden",

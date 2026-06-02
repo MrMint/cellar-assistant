@@ -285,7 +285,7 @@ function getItemFromTierListItem(tli: TierListItem) {
     return {
       name: tli.place.display_name ?? tli.place.name,
       type: "PLACE",
-      imageId: undefined,
+      imageId: tli.place.google_photos[0]?.storage_file_id,
       placeholder: undefined,
       href: `/places/${tli.place.id}`,
     };
@@ -352,7 +352,7 @@ function buildActivityFeed(
       itemType: item.type,
       itemImageId: item.imageId,
       itemPlaceholder: item.placeholder,
-      itemHref: item.href,
+      itemHref: `/tier-lists/${tli.tier_list.id}?item=${tli.id}`,
       userId: tli.tier_list.createdBy.id,
       userName: tli.tier_list.createdBy.displayName,
       userAvatar: tli.tier_list.createdBy.avatarUrl,

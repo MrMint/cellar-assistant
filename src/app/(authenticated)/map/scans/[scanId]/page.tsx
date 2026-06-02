@@ -21,7 +21,7 @@ export default async function ScanDetailsPage({
   return (
     <Box
       sx={{
-        height: "100vh",
+        height: "100dvh",
         overflow: "auto",
         p: 2,
       }}

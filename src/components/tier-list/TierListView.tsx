@@ -70,6 +70,7 @@ interface TierListViewProps {
   items: TierListItemDisplay[];
   isOwner: boolean;
   isEditingLocked?: boolean;
+  selectedItemId?: string;
 }
 
 type BandMap = Record<number, string[]>;
@@ -312,6 +313,7 @@ interface SortableTierListItemProps {
   item: TierListItemDisplay;
   rank: number;
   canEdit: boolean;
+  isSelected?: boolean;
   onRemove: (itemId: string, name: string) => void;
 }
 
@@ -319,6 +321,7 @@ const SortableTierListItem = memo(function SortableTierListItem({
   item,
   rank,
   canEdit,
+  isSelected,
   onRemove,
 }: SortableTierListItemProps) {
   const {
@@ -342,9 +345,16 @@ const SortableTierListItem = memo(function SortableTierListItem({
     opacity: isDragging ? 0.3 : 1,
   };
 
+  useEffect(() => {
+    if (!isSelected) return;
+    const el = document.getElementById(item.id);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [isSelected, item.id]);
+
   return (
     <Sheet
       ref={setNodeRef}
+      id={item.id}
       variant="outlined"
       style={dynamicStyle}
       sx={{
@@ -358,6 +368,11 @@ const SortableTierListItem = memo(function SortableTierListItem({
         "&:hover": {
           boxShadow: "sm",
         },
+        ...(isSelected && {
+          outline: "2px solid",
+          outlineColor: "primary.500",
+          outlineOffset: "2px",
+        }),
       }}
     >
       {canEdit && (
@@ -487,6 +502,7 @@ interface TierBandProps {
   canEdit: boolean;
   isFirst: boolean;
   isLast: boolean;
+  selectedItemId?: string;
   onRemove: (itemId: string, name: string) => void;
 }
 
@@ -498,6 +514,7 @@ const TierBand = memo(function TierBand({
   canEdit,
   isFirst,
   isLast,
+  selectedItemId,
   onRemove,
 }: TierBandProps) {
   const hasItems = itemIds.length > 0;
@@ -543,6 +560,7 @@ const TierBand = memo(function TierBand({
                   item={item}
                   rank={rankOffset + index + 1}
                   canEdit={canEdit}
+                  isSelected={selectedItemId === itemId}
                   onRemove={onRemove}
                 />
               );
@@ -563,6 +581,7 @@ export function TierListView({
   items,
   isOwner,
   isEditingLocked = false,
+  selectedItemId,
 }: TierListViewProps) {
   const dndId = useId();
   const router = useRouter();
@@ -927,6 +946,7 @@ export function TierListView({
                 canEdit={canEdit}
                 isFirst={index === 0}
                 isLast={index === BANDS.length - 1}
+                selectedItemId={selectedItemId}
                 onRemove={handleRemoveClick}
               />
             );

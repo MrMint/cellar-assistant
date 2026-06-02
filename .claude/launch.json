@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Next.js",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/Users/jaredprather/workspace/cellar-assistant/node_modules/next/dist/bin/next", "dev", "--turbo"],
+      "port": 3000
+    },
+    {
+      "name": "Nhost backend",
+      "runtimeExecutable": "nhost",
+      "runtimeArgs": ["up", "--apply-seeds"],
+      "port": 1337
+    }
+  ]
+}

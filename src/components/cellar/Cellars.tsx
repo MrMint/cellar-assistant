@@ -17,9 +17,8 @@ interface CellarsProps {
 export function Cellars({ cellars, userId }: CellarsProps) {
   const cellarItems = useMemo(
     () =>
-      cellars.map((cellar, i) => ({
+      cellars.map((cellar) => ({
         data: readFragment(CellarCardFragment, cellar),
-        index: i,
       })),
     [cellars],
   );
@@ -44,6 +43,7 @@ export function Cellars({ cellars, userId }: CellarsProps) {
           cacheKey="cellars"
           getItemKey={(x) => x.data.id}
           gridBreakpoints={{ xs: 12, sm: 6, md: 4, lg: 3 }}
+          estimatedRowHeight={120}
           emptyMessage="No cellars found"
           renderItem={(x, onBeforeNavigate) => (
             <Box onClick={onBeforeNavigate}>
@@ -52,8 +52,14 @@ export function Cellars({ cellars, userId }: CellarsProps) {
                 cellar={{
                   ...x.data,
                   coOwners: x.data.coOwners.map((co) => co.user),
+                  itemCounts: {
+                    wines: x.data.item_counts?.wines?.count ?? 0,
+                    beers: x.data.item_counts?.beers?.count ?? 0,
+                    spirits: x.data.item_counts?.spirits?.count ?? 0,
+                    coffees: x.data.item_counts?.coffees?.count ?? 0,
+                    sakes: x.data.item_counts?.sakes?.count ?? 0,
+                  },
                 }}
-                index={x.index}
               />
             </Box>
           )}
