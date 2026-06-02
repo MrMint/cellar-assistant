@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.52.0](https://github.com/MrMint/cellar-assistant/compare/v0.51.0...v0.52.0) (2026-06-02)
+
+
+### Features
+
+* Cache location and auth cleanup ([c9a2d76](https://github.com/MrMint/cellar-assistant/commit/c9a2d769605f36f7e3f1f234d91ce57fd925e519))
+* Cellar page redesign ([e627528](https://github.com/MrMint/cellar-assistant/commit/e627528d8afa57236766b7a76f22211f9c737432))
+* Link tier list activity cards to tier list with item highlight ([eb32d9e](https://github.com/MrMint/cellar-assistant/commit/eb32d9e30f98d2ee2a946fa8b42f88d35167811c))
+* Show place photos in recent activity tier list cards ([af2bbd7](https://github.com/MrMint/cellar-assistant/commit/af2bbd71a683d8a06a7594cf922bd20671d8dc1d))
+
+
+### Bug Fixes
+
+* Add type declaration for [@fontsource](https://github.com/fontsource) side-effect imports ([c3e8d06](https://github.com/MrMint/cellar-assistant/commit/c3e8d06811195145e7db81e4c9491c2663f77315))
+* Attempt to fix refresh race condition ([2d06772](https://github.com/MrMint/cellar-assistant/commit/2d0677227dd4fe604cb04ecc0c85dc0ffa0ac625))
+* Self-host zxing-wasm for the barcode scanner fallback ([abc919e](https://github.com/MrMint/cellar-assistant/commit/abc919ea9c5e253c8d78006219979c8f750b0627))
+* Use 100dvh instead of 100vh for mobile Safari viewport ([5cd9539](https://github.com/MrMint/cellar-assistant/commit/5cd953939c0a81167cce0c2ce732c78abd9af899))
+* Use 100dvh instead of 100vh for mobile Safari viewport ([e5b5f10](https://github.com/MrMint/cellar-assistant/commit/e5b5f1061b97057a42259846f7ce1e9bc96bedf7))
+
 ## [0.51.0](https://github.com/MrMint/cellar-assistant/compare/v0.50.0...v0.51.0) (2026-03-16)
 
 
