@@ -129,8 +129,8 @@ importers:
         specifier: ^6.2.2
         version: 6.2.2
       js-cookie:
-        specifier: 3.0.5
-        version: 3.0.5
+        specifier: 3.0.7
+        version: 3.0.7
       lexical:
         specifier: 0.43.0
         version: 0.43.0
@@ -218,7 +218,7 @@ importers:
         version: 0.28.0
       serwist:
         specifier: ^9.5.7
-        version: 9.5.7(browserslist@4.28.1)(typescript@6.0.2)
+        version: 9.5.7(browserslist@4.28.2)(typescript@6.0.2)
 
 packages:
 
@@ -2609,9 +2609,9 @@ packages:
   jose@6.2.2:
     resolution: {integrity: sha512-d7kPDd34KO/YnzaDOlikGpOurfF0ByC2sEV4cANCtdqLlTfBlw2p14O/5d/zv40gJPbIQxfES3nSx1/oYNyuZQ==}
 
-  js-cookie@3.0.5:
-    resolution: {integrity: sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw==}
-    engines: {node: '>=14'}
+  js-cookie@3.0.7:
+    resolution: {integrity: sha512-z/wZZgDrkNV1eA0ULjM/F9/50Ya8fbzgKneSpoPsXSGd0KnpdtHfOZWK+GcwLk+EZbS4F9RBhU+K2RgzuDaItw==}
+    engines: {node: '>=20'}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -3341,6 +3341,7 @@ packages:
 
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   v8-compile-cache-lib@3.0.1:
@@ -4565,6 +4566,10 @@ snapshots:
   '@serwist/utils@9.5.7(browserslist@4.28.1)':
     optionalDependencies:
       browserslist: 4.28.1
+
+  '@serwist/utils@9.5.7(browserslist@4.28.2)':
+    optionalDependencies:
+      browserslist: 4.28.2
 
   '@serwist/window@9.5.7(browserslist@4.28.1)(typescript@6.0.2)':
     dependencies:
@@ -6477,7 +6482,7 @@ snapshots:
 
   jose@6.2.2: {}
 
-  js-cookie@3.0.5: {}
+  js-cookie@3.0.7: {}
 
   js-tokens@4.0.0: {}
 
@@ -6907,6 +6912,15 @@ snapshots:
   serwist@9.5.7(browserslist@4.28.1)(typescript@6.0.2):
     dependencies:
       '@serwist/utils': 9.5.7(browserslist@4.28.1)
+      idb: 8.0.3
+    optionalDependencies:
+      typescript: 6.0.2
+    transitivePeerDependencies:
+      - browserslist
+
+  serwist@9.5.7(browserslist@4.28.2)(typescript@6.0.2):
+    dependencies:
+      '@serwist/utils': 9.5.7(browserslist@4.28.2)
       idb: 8.0.3
     optionalDependencies:
       typescript: 6.0.2
