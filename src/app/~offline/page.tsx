@@ -11,7 +11,7 @@ export default function OfflinePage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        minHeight: "100vh",
+        minHeight: "100dvh",
         width: "100vw",
         padding: 24,
       }}

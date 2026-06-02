@@ -103,7 +103,7 @@ export function SearchResultsList({
             top: 0,
             left: sidebarOffset,
             width: 400,
-            height: "100vh",
+            height: "100dvh",
             backgroundColor: "var(--joy-palette-background-body)",
             boxShadow: "4px 0 20px rgba(0,0,0,0.08)",
             zIndex: 949,
