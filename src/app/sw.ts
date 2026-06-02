@@ -29,6 +29,20 @@ const serwist = new Serwist({
     },
     ...defaultCache,
     {
+      // Self-hosted zxing-wasm reader (barcode scanner fallback). Cache it so
+      // scanning works offline after the first load.
+      matcher: /\.wasm$/i,
+      handler: new CacheFirst({
+        cacheName: "static-wasm",
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 5,
+            maxAgeSeconds: 60 * 60 * 24 * 365,
+          }),
+        ],
+      }),
+    },
+    {
       matcher: /\.(?:woff2?|ttf|otf|eot)$/i,
       handler: new CacheFirst({
         cacheName: "static-fonts",

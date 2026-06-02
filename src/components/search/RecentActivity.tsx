@@ -13,13 +13,13 @@ import {
   Tooltip,
   Typography,
 } from "@mui/joy";
+import { formatDistanceToNow, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
-import { formatDistanceToNow, parseISO } from "date-fns";
 import { isNotNil } from "ramda";
+import { useCallback } from "react";
 import { MdAdd, MdHistory, MdPlace, MdStar, MdViewList } from "react-icons/md";
 import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -285,7 +285,7 @@ function getItemFromTierListItem(tli: TierListItem) {
     return {
       name: tli.place.display_name ?? tli.place.name,
       type: "PLACE",
-      imageId: tli.place.google_photos[0]?.storage_file_id,
+      imageId: tli.place.google_photos[0]?.storage_file_id ?? undefined,
       placeholder: undefined,
       href: `/places/${tli.place.id}`,
     };

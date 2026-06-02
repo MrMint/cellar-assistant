@@ -1,6 +1,9 @@
-import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Result, useZxing } from "react-zxing";
+import {
+  type BarcodeFormat,
+  useZxing,
+  type DetectedBarcode as ZxingDetectedBarcode,
+} from "react-zxing";
 import { type Barcode, BarcodeType } from "@/constants";
 
 // Native BarcodeDetector API types
@@ -36,7 +39,12 @@ declare global {
   }
 }
 
-const SUPPORTED_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
+const SUPPORTED_FORMATS: BarcodeFormat[] = [
+  "ean_13",
+  "ean_8",
+  "upc_a",
+  "upc_e",
+];
 
 // Map native format names to our BarcodeType enum
 const formatMap: Record<string, BarcodeType> = {
@@ -45,19 +53,6 @@ const formatMap: Record<string, BarcodeType> = {
   upc_a: BarcodeType.UPC_A,
   upc_e: BarcodeType.UPC_E,
 };
-
-// ZXing hints for fallback
-const hints = new Map<DecodeHintType, BarcodeFormat[]>([
-  [
-    DecodeHintType.POSSIBLE_FORMATS,
-    [
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_E,
-    ],
-  ],
-]);
 
 interface UseBarcodeScannerOptions {
   onDetect: (barcode: Barcode) => void;
@@ -93,7 +88,7 @@ export const useBarcodeScanner = ({
   const [error, setError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
-  const [fallbackResult, setFallbackResult] = useState<Result>();
+  const [fallbackResult, setFallbackResult] = useState<ZxingDetectedBarcode>();
 
   // Refs for native implementation
   const isInitializedRef = useRef(false);
@@ -124,7 +119,14 @@ export const useBarcodeScanner = ({
       }
     },
     constraints: fallbackConstraints,
-    hints,
+    formats: SUPPORTED_FORMATS,
+    // react-zxing v3 decodes via a WASM module. By default zxing-wasm fetches
+    // it from a jsdelivr CDN at runtime, which the app's strict CSP
+    // (connect-src 'self') blocks and which breaks offline (PWA) use. Serve it
+    // same-origin instead. The file is copied from
+    // node_modules/zxing-wasm/dist/reader/zxing_reader.wasm into public/zxing/.
+    // Refresh public/zxing/zxing_reader.wasm whenever zxing-wasm is bumped.
+    wasmUrl: "/zxing/zxing_reader.wasm",
   });
 
   // Check native BarcodeDetector support on mount
@@ -276,27 +278,9 @@ export const useBarcodeScanner = ({
   // Handle fallback (ZXing) detection results
   useEffect(() => {
     if (fallbackResult !== undefined && shouldUseFallback) {
-      let type: BarcodeType | undefined;
-      switch (fallbackResult.getBarcodeFormat()) {
-        case BarcodeFormat.UPC_A:
-          type = BarcodeType.UPC_A;
-          break;
-        case BarcodeFormat.UPC_E:
-          type = BarcodeType.UPC_E;
-          break;
-        case BarcodeFormat.EAN_13:
-          type = BarcodeType.EAN_13;
-          break;
-        case BarcodeFormat.EAN_8:
-          type = BarcodeType.EAN_8;
-          break;
-        default:
-          break;
-      }
-
       onDetect({
-        text: fallbackResult.getText(),
-        type: type,
+        text: fallbackResult.rawValue,
+        type: formatMap[fallbackResult.format],
       });
     }
   }, [fallbackResult, shouldUseFallback, onDetect]);
