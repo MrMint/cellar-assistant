@@ -161,7 +161,7 @@ export class VertexAIProvider implements AIProvider {
   private qualityModelMap: Record<ModelQuality, string> = {
     low: "gemini-3.1-flash-lite-preview",
     medium: "gemini-3.1-flash-lite-preview",
-    high: "gemini-3.1-pro-preview",
+    high: "gemini-3.5-flash",
   };
 
   // Map quality levels to Gemini 3 thinking levels
