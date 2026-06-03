@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.53.1](https://github.com/MrMint/cellar-assistant/compare/v0.53.0...v0.53.1) (2026-06-03)
+
+
+### Bug Fixes
+
+* Drop obsolete brace-expansion override; handle pnpm 11 build scripts ([42d752f](https://github.com/MrMint/cellar-assistant/commit/42d752f4b920d5ff4ca01185a686d7a12a853d58))
+* Drop obsolete brace-expansion override; handle pnpm 11 build scripts ([8d43de9](https://github.com/MrMint/cellar-assistant/commit/8d43de9d5bc1d323d49bc9f731482182ad0b116b))
+* move cellar edit button inline after name to avoid overlap ([8df0bd1](https://github.com/MrMint/cellar-assistant/commit/8df0bd12b8937c753deb970920b1038e73a8fbd5))
+* move cellar edit button inline after name to avoid overlap ([eb813c6](https://github.com/MrMint/cellar-assistant/commit/eb813c62e1c9e5509668de94f88a111b41a121c7))
+
 ## [0.53.0](https://github.com/MrMint/cellar-assistant/compare/v0.52.1...v0.53.0) (2026-06-03)
 
 
