@@ -104,6 +104,9 @@ importers:
       autoprefixer:
         specifier: 10.5.0
         version: 10.5.0(postcss@8.4.31)
+      barcode-detector:
+        specifier: 3.2.0
+        version: 3.2.0(@types/emscripten@1.41.5)
       convert:
         specifier: ^7.0.0
         version: 7.0.0
@@ -182,9 +185,6 @@ importers:
       react-webcam:
         specifier: 7.2.0
         version: 7.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      react-zxing:
-        specifier: 3.0.0
-        version: 3.0.0(@types/emscripten@1.41.5)(react@19.2.7)
       recharts:
         specifier: ^3.8.1
         version: 3.8.1(@types/react@19.2.16)(react-dom@19.2.7(react@19.2.7))(react-is@19.2.4)(react@19.2.7)(redux@5.0.1)
@@ -2942,11 +2942,6 @@ packages:
     peerDependencies:
       react: '>=16.2.0'
       react-dom: '>=16.2.0'
-
-  react-zxing@3.0.0:
-    resolution: {integrity: sha512-qCK4hvqY7j0sRoty15N99WDiIUyXK23+JJe9PcuPzO/qkQFrXIBOUwaiG3BeBSvTP2S73ebLpG+ap3D+eA/BcQ==}
-    peerDependencies:
-      react: ^16.8.0  || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   react@19.2.7:
     resolution: {integrity: sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ==}
@@ -6695,13 +6690,6 @@ snapshots:
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
-
-  react-zxing@3.0.0(@types/emscripten@1.41.5)(react@19.2.7):
-    dependencies:
-      barcode-detector: 3.2.0(@types/emscripten@1.41.5)
-      react: 19.2.7
-    transitivePeerDependencies:
-      - '@types/emscripten'
 
   react@19.2.7: {}
 
