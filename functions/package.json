@@ -25,7 +25,7 @@
     "fuzzball": "2.2.6",
     "google-auth-library": "^10.6.2",
     "gql.tada": "1.9.2",
-    "graphql": "16.8.1",
+    "graphql": "16.14.1",
     "ollama": "0.6.3",
     "ramda": "0.32.0",
     "ts-pattern": "5.9.0"
