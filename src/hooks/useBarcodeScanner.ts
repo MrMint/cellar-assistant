@@ -1,21 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type BarcodeFormat,
-  useZxing,
-  type DetectedBarcode as ZxingDetectedBarcode,
-} from "react-zxing";
+  prepareZXingModule,
+  BarcodeDetector as WasmBarcodeDetector,
+} from "barcode-detector/ponyfill";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Barcode, BarcodeType } from "@/constants";
 
-// Native BarcodeDetector API types
-interface BarcodeDetectorOptions {
-  formats?: string[];
-}
+// Self-hosted zxing-wasm reader, served same-origin so it works under the
+// app's strict CSP (connect-src 'self') and offline (PWA). The file is copied
+// from node_modules/zxing-wasm/dist/reader/zxing_reader.wasm into
+// public/zxing/. Refresh public/zxing/zxing_reader.wasm whenever the
+// barcode-detector / zxing-wasm dependency is bumped.
+const WASM_URL = "/zxing/zxing_reader.wasm";
 
-interface DetectedBarcode {
-  rawValue: string;
-  format: string;
-  boundingBox?: DOMRectReadOnly;
-  cornerPoints?: Array<{ x: number; y: number }>;
+// Minimal shape shared by both the native `window.BarcodeDetector` and the
+// `barcode-detector/ponyfill` WASM implementation. Their interfaces are
+// identical (`new Detector({ formats })`, `detect(image)`), which lets a single
+// detection loop drive both code paths.
+interface BarcodeDetectorLike {
+  detect(
+    image: ImageBitmapSource,
+  ): Promise<Array<{ rawValue: string; format: string }>>;
 }
 
 interface ExtendedMediaTrackCapabilities extends MediaTrackCapabilities {
@@ -29,11 +34,7 @@ interface ExtendedMediaTrackConstraintSet extends MediaTrackConstraintSet {
 declare global {
   interface Window {
     BarcodeDetector?: {
-      new (
-        options?: BarcodeDetectorOptions,
-      ): {
-        detect(image: ImageBitmapSource): Promise<DetectedBarcode[]>;
-      };
+      new (options?: { formats?: string[] }): BarcodeDetectorLike;
       getSupportedFormats(): Promise<string[]>;
     };
   }
@@ -46,7 +47,7 @@ const SUPPORTED_FORMATS: BarcodeFormat[] = [
   "upc_e",
 ];
 
-// Map native format names to our BarcodeType enum
+// Map native/ponyfill format names to our BarcodeType enum
 const formatMap: Record<string, BarcodeType> = {
   ean_13: BarcodeType.EAN_13,
   ean_8: BarcodeType.EAN_8,
@@ -83,90 +84,80 @@ export const useBarcodeScanner = ({
   },
 }: UseBarcodeScannerOptions): UseBarcodeScannerReturn => {
   // State
-  const [nativeSupported, setNativeSupported] = useState<boolean | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [usingNativeAPI, setUsingNativeAPI] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
-  const [fallbackResult, setFallbackResult] = useState<ZxingDetectedBarcode>();
 
-  // Refs for native implementation
+  // Refs
   const isInitializedRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<{
-    detect(image: ImageBitmapSource): Promise<DetectedBarcode[]>;
-  } | null>(null);
+  const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const canvasRef = useRef<HTMLCanvasElement | undefined>(undefined);
   const detectBarcodesRef = useRef<(() => void) | undefined>(undefined);
 
-  // ZXing fallback hook - conditionally initialize
-  const shouldUseFallback = nativeSupported === false;
-
-  // Create stable constraints object to prevent re-initialization
-  const fallbackConstraints = useMemo(() => {
-    return shouldUseFallback ? constraints : { video: false };
-  }, [shouldUseFallback, constraints]);
-
-  const {
-    ref: zxingVideoRef,
-    torch: { off, on, isOn, isAvailable },
-  } = useZxing({
-    onDecodeResult(result) {
-      if (shouldUseFallback) {
-        setFallbackResult(result);
-      }
-    },
-    constraints: fallbackConstraints,
-    formats: SUPPORTED_FORMATS,
-    // react-zxing v3 decodes via a WASM module. By default zxing-wasm fetches
-    // it from a jsdelivr CDN at runtime, which the app's strict CSP
-    // (connect-src 'self') blocks and which breaks offline (PWA) use. Serve it
-    // same-origin instead. The file is copied from
-    // node_modules/zxing-wasm/dist/reader/zxing_reader.wasm into public/zxing/.
-    // Refresh public/zxing/zxing_reader.wasm whenever zxing-wasm is bumped.
-    wasmUrl: "/zxing/zxing_reader.wasm",
-  });
-
-  // Check native BarcodeDetector support on mount
+  // Select the detector once on mount: native `BarcodeDetector` first (fast,
+  // OS-accelerated, zero-download on Chrome/Edge/Android), the WASM ponyfill as
+  // a universal fallback (iOS Safari, Firefox).
   useEffect(() => {
-    const checkSupport = async () => {
+    let cancelled = false;
+
+    const setup = async () => {
+      let nativeFormats: string[] | null = null;
+
       if ("BarcodeDetector" in window && window.BarcodeDetector) {
         try {
-          const supportedFormats =
-            await window.BarcodeDetector.getSupportedFormats();
-          if (supportedFormats) {
-            const hasRequiredFormats = SUPPORTED_FORMATS.some((format) =>
-              supportedFormats.includes(format),
-            );
-            setNativeSupported(hasRequiredFormats);
-
-            if (hasRequiredFormats && window.BarcodeDetector) {
-              detectorRef.current = new window.BarcodeDetector({
-                formats: SUPPORTED_FORMATS.filter((format) =>
-                  supportedFormats.includes(format),
-                ),
-              });
-            }
+          const supported = await window.BarcodeDetector.getSupportedFormats();
+          const usable = SUPPORTED_FORMATS.filter((format) =>
+            supported.includes(format),
+          );
+          if (usable.length > 0) {
+            nativeFormats = usable;
           }
-        } catch (_err) {
-          setNativeSupported(false);
+        } catch {
+          nativeFormats = null;
         }
-      } else {
-        setNativeSupported(false);
       }
+
+      if (cancelled) return;
+
+      if (nativeFormats && window.BarcodeDetector) {
+        detectorRef.current = new window.BarcodeDetector({
+          formats: nativeFormats,
+        });
+        setUsingNativeAPI(true);
+      } else {
+        // WASM fallback. Point the ponyfill at the self-hosted reader.
+        // `fireImmediately: false` only registers the override — the ~1MB WASM
+        // binary is not fetched until the first detect() call, so native users
+        // (where this branch never runs) never download it.
+        prepareZXingModule({
+          overrides: {
+            locateFile: (path: string, prefix: string) =>
+              path.endsWith(".wasm") ? WASM_URL : prefix + path,
+          },
+          fireImmediately: false,
+        });
+        detectorRef.current = new WasmBarcodeDetector({
+          formats: SUPPORTED_FORMATS,
+        });
+        setUsingNativeAPI(false);
+      }
+
+      canvasRef.current = document.createElement("canvas");
+      setIsReady(true);
     };
 
-    checkSupport();
-  }, []);
+    setup();
 
-  // Initialize canvas for native detection
-  useEffect(() => {
-    if (nativeSupported && !canvasRef.current) {
-      canvasRef.current = document.createElement("canvas");
-    }
-  }, [nativeSupported]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Stop scanning function
   const stopScanning = useCallback(() => {
@@ -190,7 +181,7 @@ export const useBarcodeScanner = ({
     isInitializedRef.current = false; // Reset initialization state when stopping
   }, []);
 
-  // Native barcode detection function
+  // Barcode detection loop (drives both native and WASM detectors)
   const detectBarcodes = useCallback(async () => {
     if (!videoRef.current || !detectorRef.current || !canvasRef.current) {
       return;
@@ -275,100 +266,71 @@ export const useBarcodeScanner = ({
   // Update the ref with the latest detectBarcodes function
   detectBarcodesRef.current = detectBarcodes;
 
-  // Handle fallback (ZXing) detection results
-  useEffect(() => {
-    if (fallbackResult !== undefined && shouldUseFallback) {
-      onDetect({
-        text: fallbackResult.rawValue,
-        type: formatMap[fallbackResult.format],
-      });
-    }
-  }, [fallbackResult, shouldUseFallback, onDetect]);
-
   // Memoize constraints to prevent re-initialization
   const stableConstraints = useMemo(() => constraints, [constraints]);
 
   // Start scanning function
   const startScanning = useCallback(async () => {
-    if (nativeSupported === null || isInitializedRef.current) return; // Wait for support check and prevent double init
+    if (!detectorRef.current || isInitializedRef.current) return; // Wait for detector and prevent double init
 
     try {
       setError(null);
       isInitializedRef.current = true;
 
-      if (nativeSupported) {
-        // Use native implementation
-        const stream =
-          await navigator.mediaDevices.getUserMedia(stableConstraints);
-        streamRef.current = stream;
+      const stream =
+        await navigator.mediaDevices.getUserMedia(stableConstraints);
+      streamRef.current = stream;
 
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await new Promise<void>((resolve) => {
-            if (videoRef.current) {
-              videoRef.current.onloadedmetadata = () => {
-                videoRef.current?.play();
-                resolve();
-              };
-            } else {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await new Promise<void>((resolve) => {
+          if (videoRef.current) {
+            videoRef.current.onloadedmetadata = () => {
+              videoRef.current?.play();
               resolve();
-            }
-          });
+            };
+          } else {
+            resolve();
+          }
+        });
 
-          setIsStreaming(true);
-
-          // Check for torch support
-          const videoTrack = stream.getVideoTracks()[0];
-          const capabilities = videoTrack.getCapabilities?.() as
-            | ExtendedMediaTrackCapabilities
-            | undefined;
-          setTorchSupported(!!capabilities?.torch);
-
-          // Start barcode detection
-          detectBarcodesRef.current?.();
-        }
-      } else {
-        // ZXing handles this automatically, just set streaming state
         setIsStreaming(true);
-        setTorchSupported(isAvailable === true);
-        setTorchEnabled(isOn);
+
+        // Check for torch support
+        const videoTrack = stream.getVideoTracks()[0];
+        const capabilities = videoTrack.getCapabilities?.() as
+          | ExtendedMediaTrackCapabilities
+          | undefined;
+        setTorchSupported(!!capabilities?.torch);
+
+        // Start barcode detection
+        detectBarcodesRef.current?.();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start camera");
       setIsStreaming(false);
       isInitializedRef.current = false; // Reset initialization state on error
     }
-  }, [nativeSupported, stableConstraints, isAvailable, isOn]);
+  }, [stableConstraints]);
 
-  // Toggle torch function
+  // Toggle torch function (handled via MediaStream track constraints for both
+  // detector backends, since this hook now owns getUserMedia in all cases)
   const toggleTorch = useCallback(async () => {
-    if (nativeSupported) {
-      // Native implementation
-      if (!streamRef.current || !torchSupported) return;
+    if (!streamRef.current || !torchSupported) return;
 
-      try {
-        const videoTrack = streamRef.current.getVideoTracks()[0];
-        const newTorchState = !torchEnabled;
+    try {
+      const videoTrack = streamRef.current.getVideoTracks()[0];
+      const newTorchState = !torchEnabled;
 
-        await videoTrack.applyConstraints({
-          advanced: [
-            { torch: newTorchState } as ExtendedMediaTrackConstraintSet,
-          ],
-        });
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: newTorchState } as ExtendedMediaTrackConstraintSet],
+      });
 
-        setTorchEnabled(newTorchState);
-      } catch (err) {
-        console.warn("Failed to toggle torch:", err);
-      }
-    } else {
-      // ZXing implementation
-      if (isOn) {
-        off();
-      } else {
-        on();
-      }
+      setTorchEnabled(newTorchState);
+    } catch (err) {
+      console.warn("Failed to toggle torch:", err);
     }
-  }, [nativeSupported, torchSupported, torchEnabled, isOn, off, on]);
+  }, [torchSupported, torchEnabled]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -377,19 +339,16 @@ export const useBarcodeScanner = ({
     };
   }, [stopScanning]);
 
-  // Use the appropriate video ref
-  const activeVideoRef = nativeSupported ? videoRef : zxingVideoRef;
-
   return {
-    videoRef: activeVideoRef,
-    isSupported: nativeSupported !== null,
+    videoRef,
+    isSupported: isReady,
     isStreaming,
     error,
     startScanning,
     stopScanning,
     toggleTorch,
-    torchSupported: nativeSupported ? torchSupported : isAvailable === true,
-    torchEnabled: nativeSupported ? torchEnabled : isOn,
-    usingNativeAPI: nativeSupported === true,
+    torchSupported,
+    torchEnabled,
+    usingNativeAPI,
   };
 };
