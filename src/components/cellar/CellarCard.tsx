@@ -62,38 +62,43 @@ export const CellarCard = ({
 }: CellarCardProps) => {
   return (
     <InteractiveCard sx={{ position: "relative" }}>
-      {canEdit(userId, cellar) && (
-        <Tooltip title="Edit Cellar">
-          <IconButton
-            size="sm"
-            variant="soft"
-            onClick={() => onEditClick(cellar.id)}
-            sx={{
-              position: "absolute",
-              bottom: 8,
-              right: 8,
-              zIndex: 1,
-            }}
-          >
-            <MdEdit />
-          </IconButton>
-        </Tooltip>
-      )}
-
       <Stack
         direction="row"
         spacing={1}
         justifyContent="space-between"
         alignItems="center"
       >
-        {isNil(onClick) && (
-          <Link overlay href={`cellars/${cellar.id}/items`}>
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          sx={{ minWidth: 0 }}
+        >
+          {isNil(onClick) && (
+            <Link overlay href={`cellars/${cellar.id}/items`}>
+              <Typography level="title-lg">{cellar.name}</Typography>
+            </Link>
+          )}
+          {isNotNil(onClick) && (
             <Typography level="title-lg">{cellar.name}</Typography>
-          </Link>
-        )}
-        {isNotNil(onClick) && (
-          <Typography level="title-lg">{cellar.name}</Typography>
-        )}
+          )}
+          {canEdit(userId, cellar) && (
+            <Tooltip title="Edit Cellar">
+              <IconButton
+                size="sm"
+                variant="soft"
+                onClick={() => onEditClick(cellar.id)}
+                sx={{
+                  position: "relative",
+                  zIndex: 1,
+                  flexShrink: 0,
+                }}
+              >
+                <MdEdit />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
         <AvatarGroup sx={{ flexShrink: 0 }}>
           <Tooltip title={cellar.createdBy.displayName}>
             <UserAvatar
