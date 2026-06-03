@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.53.2](https://github.com/MrMint/cellar-assistant/compare/v0.53.1...v0.53.2) (2026-06-03)
+
+
+### Bug Fixes
+
+* Pin functions build to pnpm 10 to clear pnpm 11 build-scripts gate ([5885de6](https://github.com/MrMint/cellar-assistant/commit/5885de67ffb98893a2aab3d80028f2c3903c3471))
+* Pin functions build to pnpm 10 to clear pnpm 11 build-scripts gate ([11c0cf0](https://github.com/MrMint/cellar-assistant/commit/11c0cf01f3e2eceeca0cba9e9d2b6abb2ec968eb))
+
 ## [0.53.1](https://github.com/MrMint/cellar-assistant/compare/v0.53.0...v0.53.1) (2026-06-03)
 
 
