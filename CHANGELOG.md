@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.53.3](https://github.com/MrMint/cellar-assistant/compare/v0.53.2...v0.53.3) (2026-06-03)
+
+
+### Bug Fixes
+
+* Declare graphql and convert as functions dependencies ([f160013](https://github.com/MrMint/cellar-assistant/commit/f1600135028e7c87ca6d7d972a866b04a763c125))
+* Declare graphql and convert as functions dependencies ([a20872c](https://github.com/MrMint/cellar-assistant/commit/a20872c5118519cc9c22e206f0620f7de02ef619))
+
 ## [0.53.2](https://github.com/MrMint/cellar-assistant/compare/v0.53.1...v0.53.2) (2026-06-03)
 
 
