@@ -17,12 +17,10 @@ import { useQuery } from "urql";
 import { InteractiveCard } from "@/components/common/InteractiveCard";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
-// Note: Using coffee1 as placeholder for tea until a tea-specific image is added
-import tea1 from "@/images/coffee1.png";
+import sake1 from "@/images/sake1.png";
 import spirit1 from "@/images/spirit1.png";
+import tea1 from "@/images/tea1.png";
 import wine1 from "@/images/wine1.png";
-
-// Note: Using wine1 as placeholder for sake until sake-specific image is added
 
 type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee" | "Sake" | "Tea";
 
@@ -68,7 +66,7 @@ const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
           />
         )}
         {type === "Sake" && (
-          <Image src={wine1} alt="A sake bottle" fill placeholder="blur" />
+          <Image src={sake1} alt="A sake bottle" fill placeholder="blur" />
         )}
         {type === "Tea" && (
           <Image src={tea1} alt="A tea container" fill placeholder="blur" />
