@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.52.1](https://github.com/MrMint/cellar-assistant/compare/v0.52.0...v0.52.1) (2026-06-03)
+
+
+### Bug Fixes
+
+* Bump Nhost functions Node runtime to 22 to fix deploy ([9e3a876](https://github.com/MrMint/cellar-assistant/commit/9e3a876f48c6978842e2792576ce4f6e08f26057))
+* Bump Nhost functions Node runtime to 22 to fix deploy ([9968cbc](https://github.com/MrMint/cellar-assistant/commit/9968cbc5d746274416cece00b8c7dc8be1f5dc77))
+
 ## [0.52.0](https://github.com/MrMint/cellar-assistant/compare/v0.51.0...v0.52.0) (2026-06-02)
 
 
