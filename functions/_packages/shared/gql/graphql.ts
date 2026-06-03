@@ -120,6 +120,7 @@ export type Wines = Record<string, unknown>; // Placeholder for GraphQL generate
 export type Spirits = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Coffees = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Teas = Record<string, unknown>; // Placeholder for GraphQL generated type
+export type Sakes = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Item_Vectors_Bool_Exp = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Beer_Defaults_Result = Record<string, unknown>; // Placeholder for GraphQL generated type
 export type Wine_Defaults_Result = Record<string, unknown>; // Placeholder for GraphQL generated type
