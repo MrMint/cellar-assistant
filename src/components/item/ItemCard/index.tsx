@@ -28,10 +28,9 @@ import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 import { Link } from "@/components/common/Link";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
-// Note: tea/sake reuse coffee1/wine1 as placeholders until type-specific images exist
-import tea1 from "@/images/coffee1.png";
+import sake1 from "@/images/sake1.png";
 import spirit1 from "@/images/spirit1.png";
-import sake1 from "@/images/wine1.png";
+import tea1 from "@/images/tea1.png";
 import wine1 from "@/images/wine1.png";
 import {
   formatItemType,
