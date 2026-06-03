@@ -27,10 +27,5 @@
     "ollama": "0.6.3",
     "ramda": "0.32.0",
     "ts-pattern": "5.9.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "brace-expansion": "^2.0.1"
-    }
   }
 }
