@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.53.0](https://github.com/MrMint/cellar-assistant/compare/v0.52.1...v0.53.0) (2026-06-03)
+
+
+### Features
+
+* add tea as a new item type ([87f7042](https://github.com/MrMint/cellar-assistant/commit/87f7042e7f7c8ea2af96b5b1ed73d31eb1cd077e))
+* add tea as a new item type ([07e142d](https://github.com/MrMint/cellar-assistant/commit/07e142d61f0eeb6ea403eb94f9ab280e541f9dd6))
+* **ai:** use gemini-3.5-flash for high quality tier ([0018d84](https://github.com/MrMint/cellar-assistant/commit/0018d84401a48432480133dead4ecea2be4cdaa9))
+* **ai:** use gemini-3.5-flash for high quality tier ([6cc020d](https://github.com/MrMint/cellar-assistant/commit/6cc020d8e8fb1cb296d91b320a3b4c72c49e744d))
+
+
+### Bug Fixes
+
+* generate vectors for sake items ([5c2b1f0](https://github.com/MrMint/cellar-assistant/commit/5c2b1f0d8a015c61231bc1590199a7d974a2aae2))
+* generate vectors for sake items ([0e5a8f2](https://github.com/MrMint/cellar-assistant/commit/0e5a8f236df9cf7635d526ddf8c8b6ce50a60560))
+* Migrate functions pnpm overrides/build config for pnpm 11 deploy ([5e52212](https://github.com/MrMint/cellar-assistant/commit/5e522122406f89cece050097dbbd02f58bbe9fb9))
+* Migrate functions pnpm overrides/build config for pnpm 11 deploy ([41802d6](https://github.com/MrMint/cellar-assistant/commit/41802d68d1e42ed195e5bb0892112c2a2fb38196))
+
 ## [0.52.1](https://github.com/MrMint/cellar-assistant/compare/v0.52.0...v0.52.1) (2026-06-03)
 
 
