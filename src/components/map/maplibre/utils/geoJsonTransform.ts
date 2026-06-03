@@ -53,6 +53,9 @@ const CATEGORY_ICON_MAP: Record<string, string> = {
   casino: "poi-hotel",
   music_venue: "poi-hotel",
   sake_bar: "poi-wine",
+  tea_house: "poi-coffee",
+  tea_shop: "poi-coffee",
+  bubble_tea: "poi-coffee",
 };
 
 export function categoryToIcon(primaryCategory: string): string {

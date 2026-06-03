@@ -58,6 +58,7 @@ export function Cellars({ cellars, userId }: CellarsProps) {
                     spirits: x.data.item_counts?.spirits?.count ?? 0,
                     coffees: x.data.item_counts?.coffees?.count ?? 0,
                     sakes: x.data.item_counts?.sakes?.count ?? 0,
+                    teas: x.data.item_counts?.teas?.count ?? 0,
                   },
                 }}
               />

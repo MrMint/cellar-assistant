@@ -164,6 +164,7 @@ export const BASE_SPIRIT_KEYWORDS: Record<string, readonly string[]> = {
   ],
   beer: ["beer", "beer cocktail", "shandy", "radler", "beer-based"],
   sake: ["sake", "nihonshu", "japanese rice wine", "sake cocktail"],
+  tea: ["tea", "iced tea", "tea cocktail", "infusion", "tisane"],
   liqueur: ["liqueur", "cordial", "sweet spirit", "flavored spirit"],
   aperitif: ["aperitif", "apéritif", "pre-dinner drink", "appetite opener"],
   digestif: ["digestif", "after-dinner drink", "amaro", "bitter"],

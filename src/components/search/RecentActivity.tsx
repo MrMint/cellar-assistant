@@ -118,6 +118,7 @@ function getItemTypeIcon(type: string) {
     case "SPIRIT":
     case "COFFEE":
     case "SAKE":
+    case "TEA":
       return <ItemTypeIcon type={type} />;
     case "PLACE":
       return <MdPlace />;
@@ -135,6 +136,8 @@ function getItemTypeColor(type: string) {
     case "SPIRIT":
       return "neutral";
     case "COFFEE":
+      return "success";
+    case "TEA":
       return "success";
     case "PLACE":
       return "primary";
@@ -185,6 +188,13 @@ function getItemFromCellarItem(ci: CellarItem) {
       placeholder: ci.sake.item_images[0]?.placeholder,
       href: `/sakes/${ci.sake.id}`,
     };
+  if (isNotNil(ci.tea))
+    return {
+      name: ci.tea.name,
+      imageId: ci.tea.item_images[0]?.file_id,
+      placeholder: ci.tea.item_images[0]?.placeholder,
+      href: `/teas/${ci.tea.id}`,
+    };
   return null;
 }
 
@@ -233,6 +243,14 @@ function getItemFromReview(r: ReviewItem) {
       placeholder: r.sake.item_images[0]?.placeholder,
       href: `/sakes/${r.sake.id}`,
     };
+  if (isNotNil(r.tea))
+    return {
+      name: r.tea.name,
+      type: "TEA",
+      imageId: r.tea.item_images[0]?.file_id,
+      placeholder: r.tea.item_images[0]?.placeholder,
+      href: `/teas/${r.tea.id}`,
+    };
   return null;
 }
 
@@ -280,6 +298,14 @@ function getItemFromTierListItem(tli: TierListItem) {
       imageId: tli.sake.item_images[0]?.file_id,
       placeholder: tli.sake.item_images[0]?.placeholder,
       href: `/sakes/${tli.sake.id}`,
+    };
+  if (isNotNil(tli.tea))
+    return {
+      name: tli.tea.name,
+      type: "TEA",
+      imageId: tli.tea.item_images[0]?.file_id,
+      placeholder: tli.tea.item_images[0]?.placeholder,
+      href: `/teas/${tli.tea.id}`,
     };
   if (isNotNil(tli.place))
     return {

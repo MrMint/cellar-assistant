@@ -33,6 +33,7 @@ export interface CellarItemCounts {
   spirits?: number;
   coffees?: number;
   sakes?: number;
+  teas?: number;
 }
 
 /**
@@ -47,7 +48,7 @@ export function buildItemsWhereClause(
     empty_at: { _is_null: true },
   };
 
-  if (types && types.length > 0 && types.length < 5) {
+  if (types && types.length > 0 && types.length < 6) {
     whereClause.type = { _in: types };
   }
 
@@ -79,6 +80,7 @@ export function transformCellarItems(
               ? { ...x.coffee, vintage: undefined }
               : undefined,
             x.sake,
+            isNotNil(x.tea) ? { ...x.tea, vintage: undefined } : undefined,
           ],
         ),
       );
@@ -195,6 +197,7 @@ interface ItemCountsInput {
   spirits?: { count?: number | null } | null;
   coffees?: { count?: number | null } | null;
   sakes?: { count?: number | null } | null;
+  teas?: { count?: number | null } | null;
 }
 
 /**
@@ -209,5 +212,6 @@ export function extractItemCounts(
     spirits: itemCounts?.spirits?.count ?? undefined,
     coffees: itemCounts?.coffees?.count ?? undefined,
     sakes: itemCounts?.sakes?.count ?? undefined,
+    teas: itemCounts?.teas?.count ?? undefined,
   };
 }

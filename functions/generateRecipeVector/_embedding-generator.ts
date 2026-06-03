@@ -211,6 +211,15 @@ function addIngredientData(
       if (ingredient.sake.type) {
         parts.push(ingredient.sake.type);
       }
+    } else if (ingredient.tea) {
+      ingredientNames.push(ingredient.tea.name);
+      parts.push("tea ingredient", "tea", "infusion");
+      if (ingredient.tea.category) {
+        parts.push(ingredient.tea.category);
+      }
+      if (ingredient.tea.caffeine_level) {
+        parts.push(ingredient.tea.caffeine_level);
+      }
     } else if (ingredient.generic_item) {
       ingredientNames.push(ingredient.generic_item.name);
       const category = ingredient.generic_item.category;

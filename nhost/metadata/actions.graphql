@@ -64,6 +64,12 @@ type Query {
 }
 
 type Query {
+  tea_defaults(
+    hint: item_defaults_hint!
+  ): tea_defaults_result
+}
+
+type Query {
   search_nearby_places(
     input: search_nearby_places_input!
   ): search_nearby_places_result
@@ -87,6 +93,7 @@ enum ItemType {
   SPIRIT
   COFFEE
   SAKE
+  TEA
 }
 
 input item_defaults_input {
@@ -242,6 +249,33 @@ type sake_defaults_result {
   rice_variety: String
   serving_temperature: String
   alcohol_content_percentage: numeric
+  item_onboarding_id: String!
+  confidence: Float
+  brand_id: String
+  brand_name: String
+  is_new_brand: Boolean
+}
+
+type tea_defaults_result {
+  description: String
+  barcode_code: String
+  barcode_type: String
+  name: String
+  country: String
+  category: String
+  form: String
+  caffeine_level: String
+  region: String
+  cultivar: String
+  oxidation_level: String
+  processing: String
+  harvest_year: Int
+  ingredients: String
+  steeping_temperature: String
+  steeping_time: String
+  flavor_profile: String
+  is_organic: Boolean
+  is_fair_trade: Boolean
   item_onboarding_id: String!
   confidence: Float
   brand_id: String

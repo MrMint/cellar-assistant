@@ -91,7 +91,8 @@ async function processRecipeIngredient(
           | "BEER"
           | "SPIRIT"
           | "COFFEE"
-          | "SAKE");
+          | "SAKE"
+          | "TEA");
 
   const matchRequest: ItemMatchRequest = {
     name: ingredient.name,

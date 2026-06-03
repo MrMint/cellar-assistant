@@ -39,7 +39,7 @@ export const CellarOwnersFragment = graphql(`
  */
 export const CellarItemCountsFragment = graphql(`
   fragment CellarItemCounts on cellars {
-    items_aggregate(distinct_on: [beer_id, wine_id, spirit_id, coffee_id, sake_id]) {
+    items_aggregate(distinct_on: [beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id]) {
       wines: aggregate(where: { wine_id: { _is_null: false } }) {
         count
       }
@@ -53,6 +53,9 @@ export const CellarItemCountsFragment = graphql(`
         count
       }
       sakes: aggregate(where: { sake_id: { _is_null: false } }) {
+        count
+      }
+      teas: aggregate(where: { tea_id: { _is_null: false } }) {
         count
       }
     }

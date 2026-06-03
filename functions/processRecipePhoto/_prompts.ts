@@ -45,7 +45,7 @@ function getItemClassificationGuidance(): string {
 
 For EVERY ingredient, determine if it should be a SPECIFIC item or GENERIC item:
 
-**SPECIFIC ITEMS** (create specific wine/beer/spirit/coffee records):
+**SPECIFIC ITEMS** (create specific wine/beer/spirit/coffee/sake/tea records):
 - Have clear brand identification ("Hendrick's Gin", "Macallan 18", "Dom Pérignon")
 - Specific product names that matter for the recipe
 - Detailed characteristics that affect taste/quality
@@ -63,7 +63,7 @@ For EVERY ingredient, determine if it should be a SPECIFIC item or GENERIC item:
 
 **OUTPUT REQUIREMENTS FOR EVERY INGREDIENT:**
 - Add 'should_be_specific' boolean field
-- Add 'database_item_type' field: 'wine'|'beer'|'spirit'|'coffee'|'generic'
+- Add 'database_item_type' field: 'wine'|'beer'|'spirit'|'coffee'|'sake'|'tea'|'generic'
 - Add 'matching_priority' field: 'exact_brand'|'category_match'|'generic_fallback'
 - Add 'creation_confidence' field: 0.0-1.0 (how confident you are about creating this item)
 - Add 'brand_importance' field: 'critical'|'preferred'|'optional'

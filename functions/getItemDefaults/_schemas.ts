@@ -20,7 +20,7 @@ onEnumCacheRefresh(() => {
  * Generate JSON Schema for a specific table using shared enum values
  */
 function generateJsonSchemaForTable(
-  tableName: "beers" | "wines" | "spirits" | "coffees",
+  tableName: "beers" | "wines" | "spirits" | "coffees" | "teas",
   enumValues: AllEnumValues,
 ): JSONSchema7 {
   const {
@@ -33,6 +33,9 @@ function generateJsonSchemaForTable(
     coffeeProcesses,
     coffeeSpecies,
     coffeeCultivars,
+    teaCategories,
+    teaForms,
+    teaCaffeineLevels,
   } = enumValues;
 
   // Helper function to add enum if values exist
@@ -85,6 +88,7 @@ function generateJsonSchemaForTable(
     wines: ["name", "description"],
     spirits: ["name", "type", "description"],
     coffees: ["name", "description"],
+    teas: ["name", "description", "category"],
   };
 
   // Define all fields for each table with dynamic enum values
@@ -306,6 +310,103 @@ function generateJsonSchemaForTable(
           "Name of the coffee roastery or company that roasted the beans",
       },
     },
+    teas: {
+      name: {
+        type: "string",
+        description:
+          'Product name only, excluding brand/tea house name (e.g., "Jade Cloud" not "Rishi Jade Cloud")',
+      },
+      ...commonBrandFields,
+      description: {
+        type: "string",
+        description:
+          "Write as an enthusiastic connoisseur who appreciates the craftsmanship and unique qualities of this product. Draw from both visible label information and your knowledge of what makes this product special, interesting, or noteworthy - whether it's the producer's reputation, the region's characteristics, unique production methods, or notable flavor profiles.",
+      },
+      category: {
+        type: "string",
+        enum: enumOrUndefined(teaCategories),
+        description:
+          "Tea category (e.g., Black, Green, White, Oolong, Pu-erh, Herbal, Rooibos, Maté, Chai, Blend)",
+      },
+      form: {
+        type: "string",
+        enum: enumOrUndefined(teaForms),
+        description:
+          "Physical form of the tea (e.g., Loose Leaf, Sachet, Tea Bag, Matcha Powder, Brick, Instant)",
+      },
+      caffeine_level: {
+        type: "string",
+        enum: enumOrUndefined(teaCaffeineLevels),
+        description:
+          "Caffeine level (e.g., High, Medium, Low, Decaf, None for caffeine-free tisanes)",
+      },
+      region: {
+        type: "string",
+        description:
+          "Specific origin region or growing area (e.g., Darjeeling, Uji, Wuyi Mountains, Yunnan)",
+      },
+      country: {
+        type: "string",
+        enum: enumOrUndefined(countries),
+        description: "Country where the tea was grown and produced",
+      },
+      cultivar: {
+        type: "string",
+        description:
+          "Tea plant varietal or botanical (e.g., Camellia sinensis sinensis, Camellia sinensis assamica, or the primary herbal botanical for tisanes)",
+      },
+      oxidation_level: {
+        type: "string",
+        description:
+          "Degree of oxidation (e.g., None, Light, Partial, Full, Post-fermented)",
+      },
+      processing: {
+        type: "string",
+        description:
+          "Processing method (e.g., Steamed, Pan-fired, Roasted, Aged, Smoked, Sun-dried)",
+      },
+      harvest_year: {
+        type: "integer",
+        minimum: 1900,
+        maximum: 2100,
+        description: "Year the tea was harvested (YYYY)",
+      },
+      ingredients: {
+        type: "string",
+        description:
+          "List of ingredients for blends or herbal tisanes (e.g., 'rooibos, vanilla, cinnamon')",
+      },
+      steeping_temperature: {
+        type: "string",
+        description:
+          "Recommended steeping water temperature (e.g., '80°C', '175°F', 'just off boil')",
+      },
+      steeping_time: {
+        type: "string",
+        description:
+          "Recommended steeping time (e.g., '3 minutes', '30 seconds for multiple infusions')",
+      },
+      flavor_profile: {
+        type: "string",
+        description:
+          "Tasting notes and flavor characteristics (e.g., 'floral, honey, light astringency')",
+      },
+      is_organic: {
+        type: "boolean",
+        description:
+          "Whether the tea is certified organic (true/false) based on label certifications",
+      },
+      is_fair_trade: {
+        type: "boolean",
+        description:
+          "Whether the tea is fair trade certified (true/false) based on label certifications",
+      },
+      barcode_code: {
+        type: "string",
+        pattern: "^[0-9]{8,14}$",
+        description: "EAN or UPC barcode number if visible on packaging",
+      },
+    },
   };
 
   // Add properties for the specified table
@@ -337,6 +438,7 @@ export async function getItemSchemas(): Promise<Record<string, JSONSchema7>> {
       BEER: generateJsonSchemaForTable("beers", enumValues),
       SPIRIT: generateJsonSchemaForTable("spirits", enumValues),
       COFFEE: generateJsonSchemaForTable("coffees", enumValues),
+      TEA: generateJsonSchemaForTable("teas", enumValues),
     };
   }
 

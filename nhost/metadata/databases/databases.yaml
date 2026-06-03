@@ -65,6 +65,10 @@
           type:
             nullable: true
             scalar: uuid
+        - name: tea_id
+          type:
+            nullable: true
+            scalar: uuid
         - name: distance
           type:
             nullable: true
@@ -78,6 +82,7 @@
               - spirit_id
               - coffee_id
               - sake_id
+              - tea_id
               - distance
             filter: {}
           role: user
@@ -102,6 +107,10 @@
           type:
             nullable: true
             scalar: uuid
+        - name: tea_id
+          type:
+            nullable: true
+            scalar: uuid
         - name: score
           type:
             nullable: true
@@ -123,6 +132,7 @@
               - spirit_id
               - coffee_id
               - sake_id
+              - tea_id
               - score
               - count
               - type
@@ -134,7 +144,7 @@
           description: ""
           nullable: false
           type: text
-      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id) *, vector <=> {{image}}::halfvec(768) AS distance FROM public.item_vectors ORDER BY beer_id, wine_id, spirit_id, coffee_id, sake_id, distance
+      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) *, vector <=> {{image}}::halfvec(768) AS distance FROM public.item_vectors ORDER BY beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id, distance
       object_relationships:
         - name: beer
           using:
@@ -168,6 +178,14 @@
             remote_table:
               name: spirits
               schema: public
+        - name: tea
+          using:
+            column_mapping:
+              tea_id: id
+            insertion_order: null
+            remote_table:
+              name: teas
+              schema: public
         - name: wine
           using:
             column_mapping:
@@ -184,13 +202,13 @@
           nullable: true
           type: text
       code: |-
-        SELECT beer_id, wine_id, spirit_id, coffee_id, sake_id, AVG(score) as score, COUNT(*) as count, CASE WHEN (beer_id IS NOT NULL) THEN 'BEER'::text WHEN (wine_id IS NOT NULL) THEN 'WINE'::text WHEN (coffee_id IS NOT NULL) THEN 'COFFEE'::text WHEN (sake_id IS NOT NULL) THEN 'SAKE'::text ELSE 'SPIRIT'::text END as type
+        SELECT beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id, AVG(score) as score, COUNT(*) as count, CASE WHEN (beer_id IS NOT NULL) THEN 'BEER'::text WHEN (wine_id IS NOT NULL) THEN 'WINE'::text WHEN (coffee_id IS NOT NULL) THEN 'COFFEE'::text WHEN (sake_id IS NOT NULL) THEN 'SAKE'::text WHEN (tea_id IS NOT NULL) THEN 'TEA'::text ELSE 'SPIRIT'::text END as type
         FROM item_reviews
         WHERE CASE
         WHEN cardinality({{reviewers}}::UUID[]) = 0 THEN true
         ELSE user_id = ANY ({{reviewers}}::UUID[])
         END
-        GROUP BY (beer_id, wine_id, spirit_id, coffee_id, sake_id)
+        GROUP BY (beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id)
         -- Do not have access to session variables (user_id) in native queries
         -- https://github.com/hasura/graphql-engine/issues/9915
       object_relationships:
@@ -225,6 +243,14 @@
             insertion_order: null
             remote_table:
               name: spirits
+              schema: public
+        - name: tea
+          using:
+            column_mapping:
+              tea_id: id
+            insertion_order: null
+            remote_table:
+              name: teas
               schema: public
         - name: wine
           using:
@@ -267,7 +293,7 @@
           description: ""
           nullable: false
           type: text
-      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id) *, vector <=> {{text}}::halfvec(768) AS distance FROM public.item_vectors ORDER BY beer_id, wine_id, spirit_id, coffee_id, sake_id, distance
+      code: SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) *, vector <=> {{text}}::halfvec(768) AS distance FROM public.item_vectors ORDER BY beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id, distance
       object_relationships:
         - name: beer
           using:
@@ -300,6 +326,14 @@
             insertion_order: null
             remote_table:
               name: spirits
+              schema: public
+        - name: tea
+          using:
+            column_mapping:
+              tea_id: id
+            insertion_order: null
+            remote_table:
+              name: teas
               schema: public
         - name: wine
           using:

@@ -1,8 +1,8 @@
 "use client";
 
 import { graphql } from "@cellar-assistant/shared";
-import { MdFormatListNumbered } from "react-icons/md";
 import { Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
+import { MdFormatListNumbered } from "react-icons/md";
 import { useQuery } from "urql";
 import { Link } from "../common/Link";
 import { BAND_JOY_COLORS, BAND_LABELS } from "../tier-list/constants";
@@ -15,6 +15,7 @@ const GetTierListsForEntityQuery = graphql(`
     $spiritId: uuid
     $coffeeId: uuid
     $sakeId: uuid
+    $teaId: uuid
   ) {
     tier_list_items(
       where: {
@@ -25,6 +26,7 @@ const GetTierListsForEntityQuery = graphql(`
           { spirit_id: { _eq: $spiritId } }
           { coffee_id: { _eq: $coffeeId } }
           { sake_id: { _eq: $sakeId } }
+          { tea_id: { _eq: $teaId } }
         ]
       }
     ) {
@@ -38,7 +40,14 @@ const GetTierListsForEntityQuery = graphql(`
   }
 `);
 
-type EntityType = "place" | "wine" | "beer" | "spirit" | "coffee" | "sake";
+type EntityType =
+  | "place"
+  | "wine"
+  | "beer"
+  | "spirit"
+  | "coffee"
+  | "sake"
+  | "tea";
 
 interface ItemTierListsProps {
   entityId: string;
@@ -55,6 +64,7 @@ function buildVariables(entityId: string, entityType: EntityType) {
     spiritId: entityType === "spirit" ? entityId : NIL_UUID,
     coffeeId: entityType === "coffee" ? entityId : NIL_UUID,
     sakeId: entityType === "sake" ? entityId : NIL_UUID,
+    teaId: entityType === "tea" ? entityId : NIL_UUID,
   };
 }
 

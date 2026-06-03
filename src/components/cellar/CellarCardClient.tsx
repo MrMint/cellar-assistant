@@ -16,6 +16,7 @@ type ItemCounts = {
   spirits: number;
   coffees: number;
   sakes: number;
+  teas: number;
 };
 
 type CellarCardClientProps = {

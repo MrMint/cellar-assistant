@@ -66,7 +66,7 @@ export type UpdatePlaceVectorOutput = ResultOf<
 /**
  * Valid item types for menu items
  */
-export type ItemType = "wine" | "beer" | "spirit" | "coffee" | "sake";
+export type ItemType = "wine" | "beer" | "spirit" | "coffee" | "sake" | "tea";
 
 /**
  * Menu item structure for place embedding
@@ -125,6 +125,7 @@ export interface CategoryItemLikelihood {
   spirit: number;
   coffee: number;
   sake: number;
+  tea: number;
 }
 
 /**
@@ -156,31 +157,89 @@ export interface PlaceEmbeddingResult {
 export const CATEGORY_ITEM_LIKELIHOOD: Record<string, CategoryItemLikelihood> =
   {
     // High specificity categories
-    wine_bar: { wine: 0.95, spirit: 0.7, beer: 0.4, coffee: 0.1, sake: 0.3 },
-    brewery: { beer: 0.98, wine: 0.2, spirit: 0.3, coffee: 0.1, sake: 0.05 },
+    wine_bar: {
+      wine: 0.95,
+      spirit: 0.7,
+      beer: 0.4,
+      coffee: 0.1,
+      sake: 0.3,
+      tea: 0.1,
+    },
+    brewery: {
+      beer: 0.98,
+      wine: 0.2,
+      spirit: 0.3,
+      coffee: 0.1,
+      sake: 0.05,
+      tea: 0.05,
+    },
     coffee_shop: {
       coffee: 0.95,
       wine: 0.05,
       beer: 0.1,
       spirit: 0.05,
       sake: 0.05,
+      tea: 0.6,
     },
-    distillery: { spirit: 0.95, wine: 0.1, beer: 0.1, coffee: 0.1, sake: 0.05 },
-    winery: { wine: 0.98, beer: 0.1, spirit: 0.2, coffee: 0.05, sake: 0.1 },
+    distillery: {
+      spirit: 0.95,
+      wine: 0.1,
+      beer: 0.1,
+      coffee: 0.1,
+      sake: 0.05,
+      tea: 0.05,
+    },
+    winery: {
+      wine: 0.98,
+      beer: 0.1,
+      spirit: 0.2,
+      coffee: 0.05,
+      sake: 0.1,
+      tea: 0.05,
+    },
 
     // Medium specificity
-    restaurant: { wine: 0.7, beer: 0.6, spirit: 0.5, coffee: 0.3, sake: 0.4 },
-    bar: { spirit: 0.8, beer: 0.8, wine: 0.6, coffee: 0.2, sake: 0.4 },
-    cafe: { coffee: 0.9, wine: 0.1, beer: 0.2, spirit: 0.1, sake: 0.05 },
+    restaurant: {
+      wine: 0.7,
+      beer: 0.6,
+      spirit: 0.5,
+      coffee: 0.3,
+      sake: 0.4,
+      tea: 0.3,
+    },
+    bar: {
+      spirit: 0.8,
+      beer: 0.8,
+      wine: 0.6,
+      coffee: 0.2,
+      sake: 0.4,
+      tea: 0.1,
+    },
+    cafe: {
+      coffee: 0.9,
+      wine: 0.1,
+      beer: 0.2,
+      spirit: 0.1,
+      sake: 0.05,
+      tea: 0.7,
+    },
 
     // Cuisine-specific restaurants
-    steakhouse: { wine: 0.9, spirit: 0.7, beer: 0.5, coffee: 0.3, sake: 0.2 },
+    steakhouse: {
+      wine: 0.9,
+      spirit: 0.7,
+      beer: 0.5,
+      coffee: 0.3,
+      sake: 0.2,
+      tea: 0.2,
+    },
     italian_restaurant: {
       wine: 0.85,
       spirit: 0.4,
       beer: 0.4,
       coffee: 0.8,
       sake: 0.1,
+      tea: 0.2,
     },
     french_restaurant: {
       wine: 0.9,
@@ -188,6 +247,7 @@ export const CATEGORY_ITEM_LIKELIHOOD: Record<string, CategoryItemLikelihood> =
       beer: 0.3,
       coffee: 0.8,
       sake: 0.1,
+      tea: 0.3,
     },
     japanese_restaurant: {
       beer: 0.6,
@@ -195,6 +255,7 @@ export const CATEGORY_ITEM_LIKELIHOOD: Record<string, CategoryItemLikelihood> =
       spirit: 0.7,
       coffee: 0.2,
       sake: 0.95,
+      tea: 0.7,
     },
     german_restaurant: {
       beer: 0.9,
@@ -202,6 +263,7 @@ export const CATEGORY_ITEM_LIKELIHOOD: Record<string, CategoryItemLikelihood> =
       spirit: 0.5,
       coffee: 0.3,
       sake: 0.05,
+      tea: 0.1,
     },
     american_restaurant: {
       beer: 0.8,
@@ -209,10 +271,18 @@ export const CATEGORY_ITEM_LIKELIHOOD: Record<string, CategoryItemLikelihood> =
       spirit: 0.6,
       coffee: 0.4,
       sake: 0.3,
+      tea: 0.2,
     },
 
     // Default fallback
-    default: { wine: 0.3, beer: 0.3, spirit: 0.3, coffee: 0.3, sake: 0.3 },
+    default: {
+      wine: 0.3,
+      beer: 0.3,
+      spirit: 0.3,
+      coffee: 0.3,
+      sake: 0.3,
+      tea: 0.3,
+    },
   };
 
 /**
@@ -236,7 +306,7 @@ export const PRICE_LEVEL_DESCRIPTIONS = [
 export function isValidItemType(value: unknown): value is ItemType {
   return (
     typeof value === "string" &&
-    ["wine", "beer", "spirit", "coffee", "sake"].includes(value)
+    ["wine", "beer", "spirit", "coffee", "sake", "tea"].includes(value)
   );
 }
 

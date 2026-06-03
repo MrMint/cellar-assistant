@@ -13,7 +13,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { QUICK_ADD_AUTO_CONFIRM_DELAY } from "@/constants";
 
-export type ItemType = "WINE" | "BEER" | "SPIRIT" | "COFFEE" | "SAKE";
+export type ItemType = "WINE" | "BEER" | "SPIRIT" | "COFFEE" | "SAKE" | "TEA";
 
 export type QuickAddItemDefaults = {
   name?: string;
@@ -26,6 +26,7 @@ export type QuickAddItemDefaults = {
   type?: string;
   roast_level?: string;
   category?: string;
+  caffeine_level?: string;
   // Brand fields
   brand_id?: string;
   brand_name?: string;
@@ -80,6 +81,12 @@ function getItemSummary(
     case "SAKE":
       if (defaults.category) parts.push(defaults.category.replace(/_/g, " "));
       if (defaults.type) parts.push(defaults.type.replace(/_/g, " "));
+      if (defaults.country) parts.push(defaults.country.replace(/_/g, " "));
+      break;
+    case "TEA":
+      if (defaults.category) parts.push(defaults.category.replace(/_/g, " "));
+      if (defaults.caffeine_level)
+        parts.push(defaults.caffeine_level.replace(/_/g, " "));
       if (defaults.country) parts.push(defaults.country.replace(/_/g, " "));
       break;
   }

@@ -4,6 +4,7 @@ import {
   FaCocktail,
   FaCoffee,
   FaGlassWhiskey,
+  FaMugHot,
   FaWineGlass,
 } from "react-icons/fa";
 
@@ -19,5 +20,7 @@ export function ItemTypeIcon({ type }: { type: ItemTypeValue }) {
       return <FaCoffee />;
     case "SAKE":
       return <FaGlassWhiskey />;
+    case "TEA":
+      return <FaMugHot />;
   }
 }

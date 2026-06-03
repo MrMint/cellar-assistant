@@ -85,6 +85,7 @@ export const GetTierListsForItemQuery = graphql(`
     $spiritId: uuid
     $coffeeId: uuid
     $sakeId: uuid
+    $teaId: uuid
   ) {
     tier_lists(
       where: {
@@ -104,6 +105,7 @@ export const GetTierListsForItemQuery = graphql(`
             { spirit_id: { _eq: $spiritId } }
             { coffee_id: { _eq: $coffeeId } }
             { sake_id: { _eq: $sakeId } }
+            { tea_id: { _eq: $teaId } }
           ]
         }
       ) {
@@ -127,6 +129,7 @@ export const GetUserItemReviewsQuery = graphql(`
     $spiritIds: [uuid!]!
     $coffeeIds: [uuid!]!
     $sakeIds: [uuid!]!
+    $teaIds: [uuid!]!
   ) {
     item_reviews(
       where: {
@@ -137,6 +140,7 @@ export const GetUserItemReviewsQuery = graphql(`
           { spirit_id: { _in: $spiritIds } }
           { coffee_id: { _in: $coffeeIds } }
           { sake_id: { _in: $sakeIds } }
+          { tea_id: { _in: $teaIds } }
         ]
       }
     ) {
@@ -145,6 +149,7 @@ export const GetUserItemReviewsQuery = graphql(`
       spirit_id
       coffee_id
       sake_id
+      tea_id
       score
     }
   }

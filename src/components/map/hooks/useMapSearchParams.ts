@@ -16,6 +16,7 @@ const VALID_ITEM_TYPES: ItemType[] = [
   "spirit",
   "coffee",
   "sake",
+  "tea",
 ];
 const VALID_VISIT_STATUSES: VisitStatus[] = [
   "visited",

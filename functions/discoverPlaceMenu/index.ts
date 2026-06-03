@@ -125,12 +125,13 @@ export default async (req: Request, res: Response) => {
       - SPIRITS: Extract name, distillery, type (whiskey/rum/vodka/gin/etc), age, proof, price
       - COFFEES: Extract name, roaster, origin, roast level, processing method, price
       - SAKE: Extract name, brewery, category (junmai/ginjo/etc), polish ratio, SMV, price
+      - TEA: Extract name, category (black/green/white/oolong/pu-erh/herbal/etc), form (loose leaf/sachet/bag), caffeine level, region, price
 
       For each item, determine:
       1. Item type (${ITEM_TYPES_LOWERCASE.join("/")}/unknown)
       2. Confidence level (0.0-1.0)
       3. Extract relevant attributes based on type
-      4. Menu category (wine list, beer menu, cocktails, coffee, sake, etc.)
+      4. Menu category (wine list, beer menu, cocktails, coffee, sake, tea, etc.)
 
       Return ONLY a valid JSON array with this exact structure:
       [

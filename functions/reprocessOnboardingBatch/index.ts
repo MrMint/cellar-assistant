@@ -4,12 +4,14 @@ import {
   type Coffees_Set_Input,
   type Sakes_Set_Input,
   type Spirits_Set_Input,
-  type Wines_Set_Input,
+  type Teas_Set_Input,
   updateBeerMutation,
   updateCoffeeMutation,
   updateSakeMutation,
   updateSpiritMutation,
+  updateTeaMutation,
   updateWineMutation,
+  type Wines_Set_Input,
 } from "@cellar-assistant/shared/queries";
 import type { Request, Response } from "express";
 import {
@@ -29,13 +31,14 @@ import {
 import { processBrandFromAIDefaults } from "../getItemDefaults/_brand";
 import { getSchemaForItemType } from "../getItemDefaults/_schemas";
 import {
-  calculateConfidence,
-  getAllEnumValues,
   type AIDefaults,
   type BeerAIDefaults,
   type CoffeeAIDefaults,
+  calculateConfidence,
+  getAllEnumValues,
   type ItemType,
   type SpiritAIDefaults,
+  type TeaAIDefaults,
   type WineAIDefaults,
 } from "../getItemDefaults/_utils";
 import type { OnboardingReprocessBatchEventPayload } from "./_types";
@@ -271,6 +274,14 @@ const GET_SAKE_ID_QUERY = graphql(`
   }
 `);
 
+const GET_TEA_ID_QUERY = graphql(`
+  query GetTeaIdByOnboarding($onboarding_id: uuid!) {
+    teas(where: { item_onboarding_id: { _eq: $onboarding_id } }, limit: 1) {
+      id
+    }
+  }
+`);
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -369,6 +380,14 @@ async function findLinkedItemId(
         headers,
       );
       return r?.sakes?.[0]?.id ?? null;
+    }
+    case "TEA": {
+      const r = await functionQuery(
+        GET_TEA_ID_QUERY,
+        { onboarding_id: onboardingId },
+        headers,
+      );
+      return r?.teas?.[0]?.id ?? null;
     }
     default:
       return null;
@@ -486,6 +505,36 @@ async function updateLinkedItem(
             description: d.description,
             alcohol_content_percentage: d.alcohol_content_percentage,
           }) as unknown as Sakes_Set_Input,
+        },
+        headers,
+      );
+      break;
+    }
+    case "TEA": {
+      const d = aiDefaults as TeaAIDefaults;
+      await functionMutation(
+        updateTeaMutation,
+        {
+          teaId: itemId,
+          tea: compactSet({
+            name: d.name,
+            description: d.description,
+            category: d.category,
+            form: d.form,
+            caffeine_level: d.caffeine_level,
+            region: d.region,
+            country: d.country,
+            cultivar: d.cultivar,
+            oxidation_level: d.oxidation_level,
+            processing: d.processing,
+            harvest_year: d.harvest_year,
+            ingredients: d.ingredients,
+            steeping_temperature: d.steeping_temperature,
+            steeping_time: d.steeping_time,
+            flavor_profile: d.flavor_profile,
+            is_organic: d.is_organic,
+            is_fair_trade: d.is_fair_trade,
+          }) as unknown as Teas_Set_Input,
         },
         headers,
       );
@@ -787,7 +836,8 @@ export default async function reprocessOnboardingBatch(
                 | "beer"
                 | "spirit"
                 | "coffee"
-                | "sake",
+                | "sake"
+                | "tea",
               brandResult.id,
               true, // isPrimary
               true, // replace existing brand linkages

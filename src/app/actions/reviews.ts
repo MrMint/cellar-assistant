@@ -31,6 +31,9 @@ const addItemReviewMutation = graphql(`
       sake {
         id
       }
+      tea {
+        id
+      }
     }
   }
 `);
@@ -41,6 +44,7 @@ export type AddReviewInput = {
   spiritId?: string;
   coffeeId?: string;
   sakeId?: string;
+  teaId?: string;
   score?: number;
   text?: string;
 };
@@ -59,7 +63,8 @@ export async function addReviewAction(
     return { success: false, error: "Not authenticated" };
   }
 
-  const { beerId, wineId, spiritId, coffeeId, sakeId, score, text } = input;
+  const { beerId, wineId, spiritId, coffeeId, sakeId, teaId, score, text } =
+    input;
 
   // Build the review object with only the item ID that's provided
   const review: {
@@ -68,6 +73,7 @@ export async function addReviewAction(
     spirit_id?: string;
     coffee_id?: string;
     sake_id?: string;
+    tea_id?: string;
     score?: number;
     text?: string;
   } = { score, text };
@@ -77,6 +83,7 @@ export async function addReviewAction(
   else if (spiritId) review.spirit_id = spiritId;
   else if (coffeeId) review.coffee_id = coffeeId;
   else if (sakeId) review.sake_id = sakeId;
+  else if (teaId) review.tea_id = teaId;
 
   try {
     await serverMutation(addItemReviewMutation, { review });
@@ -87,6 +94,7 @@ export async function addReviewAction(
     if (spiritId) revalidatePath(`/spirits/${spiritId}`);
     if (coffeeId) revalidatePath(`/coffees/${coffeeId}`);
     if (sakeId) revalidatePath(`/sakes/${sakeId}`);
+    if (teaId) revalidatePath(`/teas/${teaId}`);
 
     // Also revalidate cellar item pages since reviews show there too
     revalidatePath("/cellars/[cellarId]/beers/[itemId]", "page");
@@ -94,6 +102,7 @@ export async function addReviewAction(
     revalidatePath("/cellars/[cellarId]/spirits/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/coffees/[itemId]", "page");
     revalidatePath("/cellars/[cellarId]/sakes/[itemId]", "page");
+    revalidatePath("/cellars/[cellarId]/teas/[itemId]", "page");
 
     return { success: true };
   } catch (error) {

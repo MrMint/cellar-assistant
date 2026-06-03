@@ -144,6 +144,9 @@ async function processImageUpload(
     case "SAKE":
       item.sake_id = itemId;
       break;
+    case "TEA":
+      item.tea_id = itemId;
+      break;
     default:
       throw new ValidationError(`Unsupported item type: ${itemType}`);
   }

@@ -178,6 +178,7 @@ export default async (req: Request, res: Response) => {
       "spirit",
       "coffee",
       "sake",
+      "tea",
       "cocktail",
     ];
     const validItems = extractedItems.filter(

@@ -72,7 +72,7 @@ export function PLACE_REVIEW_PROMPT(input: PlaceReviewInput): string {
     input.country_code,
   ].filter(Boolean);
 
-  return `You are reviewing a user-submitted place for an app that helps people discover and track venues for wine, beer, spirits, coffee, and sake.
+  return `You are reviewing a user-submitted place for an app that helps people discover and track venues for wine, beer, spirits, coffee, sake, and tea.
 
 Evaluate this submission for quality, accuracy, and potential abuse.
 

@@ -1,16 +1,24 @@
-import { notFound } from "next/navigation";
 import type { EnumKey } from "@cellar-assistant/shared/enums/registry";
+import { notFound } from "next/navigation";
 import { BeerOnboarding } from "@/components/beer/BeerOnboarding";
 import { CoffeeOnboarding } from "@/components/coffee/CoffeeOnboarding";
 import { EnumProvider } from "@/components/providers/EnumProvider";
 import { SakeOnboarding } from "@/components/sake/SakeOnboarding";
 import { SpiritOnboarding } from "@/components/spirit/SpiritOnboarding";
+import { TeaOnboarding } from "@/components/tea/TeaOnboarding";
 import { WineOnboarding } from "@/components/wine/WineOnboarding";
 import { getMultipleEnumOptions } from "@/lib/enums/server";
 import { createEnumQueryFn } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
 
-const VALID_TYPES = ["wines", "beers", "spirits", "coffees", "sakes"] as const;
+const VALID_TYPES = [
+  "wines",
+  "beers",
+  "spirits",
+  "coffees",
+  "sakes",
+  "teas",
+] as const;
 type ValidItemType = (typeof VALID_TYPES)[number];
 
 const ENUM_MAP: Record<ValidItemType, readonly EnumKey[]> = {
@@ -31,6 +39,7 @@ const ENUM_MAP: Record<ValidItemType, readonly EnumKey[]> = {
     "sakeRiceVariety",
     "country",
   ],
+  teas: ["teaCategory", "teaForm", "teaCaffeineLevel", "country"],
 };
 
 function isValidItemType(type: string): type is ValidItemType {
@@ -62,6 +71,7 @@ export default async function AddItemTypePage({
       {itemType === "spirits" && <SpiritOnboarding userId={userId} />}
       {itemType === "coffees" && <CoffeeOnboarding userId={userId} />}
       {itemType === "sakes" && <SakeOnboarding userId={userId} />}
+      {itemType === "teas" && <TeaOnboarding userId={userId} />}
     </EnumProvider>
   );
 }

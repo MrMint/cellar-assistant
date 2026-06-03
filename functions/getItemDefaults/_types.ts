@@ -165,7 +165,13 @@ export type GetItemDefaultsResult = ItemDefaultsOutput;
 /**
  * Valid item types for defaults
  */
-export type ValidItemType = "BEER" | "WINE" | "SPIRIT" | "COFFEE" | "SAKE";
+export type ValidItemType =
+  | "BEER"
+  | "WINE"
+  | "SPIRIT"
+  | "COFFEE"
+  | "SAKE"
+  | "TEA";
 
 /**
  * Processing context for the function
@@ -369,7 +375,7 @@ export function validateProcessingContext(
     throw new FunctionValidationError(
       "getItemDefaults",
       "itemType",
-      "must be one of: BEER, WINE, SPIRIT, COFFEE",
+      "must be one of: BEER, WINE, SPIRIT, COFFEE, SAKE, TEA",
       itemType,
     );
   }

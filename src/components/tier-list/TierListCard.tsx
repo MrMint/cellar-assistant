@@ -24,6 +24,7 @@ const listTypeLabels: Record<string, string> = {
   spirit: "Spirits",
   coffee: "Coffees",
   sake: "Sake",
+  tea: "Teas",
 };
 
 export function TierListCard({ tierList }: TierListCardProps) {

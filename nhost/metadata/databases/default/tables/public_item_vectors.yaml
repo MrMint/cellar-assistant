@@ -11,6 +11,9 @@ object_relationships:
   - name: sake
     using:
       foreign_key_constraint_on: sake_id
+  - name: tea
+    using:
+      foreign_key_constraint_on: tea_id
   - name: spirit
     using:
       foreign_key_constraint_on: spirit_id
@@ -33,6 +36,7 @@ select_permissions:
         - id
         - sake_id
         - spirit_id
+        - tea_id
         - updated_at
         - wine_id
       computed_fields:

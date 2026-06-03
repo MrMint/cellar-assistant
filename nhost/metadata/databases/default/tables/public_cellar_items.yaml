@@ -23,6 +23,9 @@ object_relationships:
   - name: spirit
     using:
       foreign_key_constraint_on: spirit_id
+  - name: tea
+    using:
+      foreign_key_constraint_on: tea_id
   - name: wine
     using:
       foreign_key_constraint_on: wine_id
@@ -58,6 +61,7 @@ insert_permissions:
         - percentage_remaining
         - sake_id
         - spirit_id
+        - tea_id
         - wine_id
     comment: ""
 select_permissions:
@@ -76,6 +80,7 @@ select_permissions:
         - percentage_remaining
         - sake_id
         - spirit_id
+        - tea_id
         - type
         - updated_at
         - wine_id

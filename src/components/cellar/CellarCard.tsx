@@ -5,12 +5,13 @@ import {
   FaCocktail,
   FaCoffee,
   FaGlassWhiskey,
+  FaMugHot,
   FaWineGlass,
 } from "react-icons/fa";
 import { MdEdit } from "react-icons/md";
-import { UserAvatar } from "../common/UserAvatar";
 import { InteractiveCard } from "../common/InteractiveCard";
 import { Link } from "../common/Link";
+import { UserAvatar } from "../common/UserAvatar";
 
 type User = {
   id: string;
@@ -24,6 +25,7 @@ type ItemCounts = {
   spirits: number;
   coffees: number;
   sakes: number;
+  teas: number;
 };
 
 const ITEM_TYPE_CONFIG = [
@@ -32,6 +34,7 @@ const ITEM_TYPE_CONFIG = [
   { key: "spirits" as const, label: "Spirits", icon: FaCocktail },
   { key: "coffees" as const, label: "Coffees", icon: FaCoffee },
   { key: "sakes" as const, label: "Sakes", icon: FaGlassWhiskey },
+  { key: "teas" as const, label: "Teas", icon: FaMugHot },
 ];
 
 type CellarCardProps = {

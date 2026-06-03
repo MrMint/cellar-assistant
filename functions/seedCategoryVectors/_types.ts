@@ -434,6 +434,14 @@ const ITEM_TYPE_LABELS: CategoryLabel[] = [
     ],
     metadata: { itemType: "sake" },
   },
+  {
+    label: "tea",
+    embeddingText:
+      "Tea is a brewed beverage made from tea leaves and herbal botanicals, available as loose leaf, sachet, and bagged black, green, white, oolong, pu-erh, herbal, and chai teas at tea houses, cafes, and specialty grocery stores",
+    labelType: "item_type",
+    associatedCategories: ["tea_house", "cafe", "coffee_shop"],
+    metadata: { itemType: "tea" },
+  },
 ];
 
 // =============================================================================

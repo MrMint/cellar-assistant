@@ -17,12 +17,14 @@ import { useQuery } from "urql";
 import { InteractiveCard } from "@/components/common/InteractiveCard";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
+// Note: Using coffee1 as placeholder for tea until a tea-specific image is added
+import tea1 from "@/images/coffee1.png";
 import spirit1 from "@/images/spirit1.png";
 import wine1 from "@/images/wine1.png";
 
 // Note: Using wine1 as placeholder for sake until sake-specific image is added
 
-type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee" | "Sake";
+type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee" | "Sake" | "Tea";
 
 type AddItemTypeCardProps = {
   type: ItemType;
@@ -67,6 +69,9 @@ const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
         )}
         {type === "Sake" && (
           <Image src={wine1} alt="A sake bottle" fill placeholder="blur" />
+        )}
+        {type === "Tea" && (
+          <Image src={tea1} alt="A tea container" fill placeholder="blur" />
         )}
       </AspectRatio>
     </CardOverflow>
@@ -124,7 +129,14 @@ export function AddItemClient({ cellarId, userId }: AddItemClientProps) {
         )}
         <Grid container spacing={2}>
           {(
-            ["Wine", "Beer", "Spirit", "Coffee", "Sake"] satisfies ItemType[]
+            [
+              "Wine",
+              "Beer",
+              "Spirit",
+              "Coffee",
+              "Sake",
+              "Tea",
+            ] satisfies ItemType[]
           ).map((x) => (
             <Grid key={x} xs={6} sm={6} md={4} lg={2}>
               <AddItemTypeCard

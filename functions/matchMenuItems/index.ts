@@ -37,6 +37,7 @@ const VALID_ITEM_TYPES = [
   "spirit",
   "coffee",
   "sake",
+  "tea",
   "cocktail",
 ] as const;
 
@@ -46,6 +47,7 @@ const ITEM_TYPE_SUGGESTION_COLUMN: Record<string, string> = {
   spirit: "suggested_spirit_id",
   coffee: "suggested_coffee_id",
   sake: "suggested_sake_id",
+  tea: "suggested_tea_id",
   cocktail: "suggested_recipe_id",
 };
 
@@ -124,6 +126,7 @@ export default async (req: Request, res: Response) => {
                 spirit_id: { _is_null: true }
                 coffee_id: { _is_null: true }
                 sake_id: { _is_null: true }
+                tea_id: { _is_null: true }
                 detected_item_type: { _in: $itemTypes }
               }
             ) {
@@ -481,6 +484,12 @@ function buildFiltersFromAttributes(
         filters.style = attributes.style;
       if (typeof attributes.variety === "string")
         filters.variety = attributes.variety;
+      break;
+    case "tea":
+      if (typeof attributes.tea_category === "string")
+        filters.category = attributes.tea_category;
+      if (typeof attributes.region === "string")
+        filters.region = attributes.region;
       break;
   }
 

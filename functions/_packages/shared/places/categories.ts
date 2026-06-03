@@ -31,6 +31,7 @@ export const PLACE_CATEGORY_TIERS = {
     "beer_garden",
     "wine_tasting_room",
     "coffee_roastery",
+    "tea_house",
   ],
   retail: [
     "liquor_store",

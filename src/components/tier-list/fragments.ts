@@ -106,6 +106,12 @@ export const TierListItemFragment = graphql(`
       category
       region
     }
+    tea {
+      id
+      name
+      category
+      region
+    }
   }
 `);
 

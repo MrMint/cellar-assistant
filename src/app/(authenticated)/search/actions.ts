@@ -10,6 +10,7 @@ import {
   coffeeItemCardFragment,
   sakeItemCardFragment,
   spiritItemCardFragment,
+  teaItemCardFragment,
   wineItemCardFragment,
 } from "@/components/item/ItemCard/fragments";
 import type { Barcode } from "@/constants";
@@ -42,6 +43,9 @@ const textSearchQuery = graphql(
         sake {
           ...sakeItemCardFragment
         }
+        tea {
+          ...teaItemCardFragment
+        }
       }
     }
   `,
@@ -51,6 +55,7 @@ const textSearchQuery = graphql(
     spiritItemCardFragment,
     coffeeItemCardFragment,
     sakeItemCardFragment,
+    teaItemCardFragment,
   ],
 );
 
@@ -78,6 +83,9 @@ const imageSearchQuery = graphql(
         sake {
           ...sakeItemCardFragment
         }
+        tea {
+          ...teaItemCardFragment
+        }
       }
     }
   `,
@@ -87,6 +95,7 @@ const imageSearchQuery = graphql(
     spiritItemCardFragment,
     coffeeItemCardFragment,
     sakeItemCardFragment,
+    teaItemCardFragment,
   ],
 );
 
@@ -112,6 +121,9 @@ function extractItemFromSearchResult(searchResult: TextSearchItem) {
   }
   if (searchResult.sake) {
     return { item: searchResult.sake, type: "sake" as const };
+  }
+  if (searchResult.tea) {
+    return { item: searchResult.tea, type: "tea" as const };
   }
   return null;
 }

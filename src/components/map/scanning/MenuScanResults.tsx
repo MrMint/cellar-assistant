@@ -1,14 +1,6 @@
 "use client";
 
 import {
-  MdArrowBack,
-  MdCheckCircle,
-  MdError,
-  MdHelp,
-  MdMonetizationOn,
-} from "react-icons/md";
-import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
-import {
   Alert,
   Box,
   Button,
@@ -21,8 +13,16 @@ import {
 } from "@mui/joy";
 import NextLink from "next/link";
 import { useEffect, useState } from "react";
+import {
+  MdArrowBack,
+  MdCheckCircle,
+  MdError,
+  MdHelp,
+  MdMonetizationOn,
+} from "react-icons/md";
 import type { MenuScanFullResult } from "@/app/actions/menuScanning";
 import { getScanResults } from "@/app/actions/menuScanning";
+import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 
 interface MenuScanResultsProps {
   scanId: string;
@@ -36,6 +36,7 @@ const getItemIcon = (type?: string | null) => {
     case "SPIRIT":
     case "COFFEE":
     case "SAKE":
+    case "TEA":
       return <ItemTypeIcon type={upper} />;
     default:
       return <MdHelp />;
