@@ -38,6 +38,9 @@ importers:
       ajv-formats:
         specifier: 3.0.1
         version: 3.0.1(ajv@8.20.0)
+      convert:
+        specifier: 7.0.0
+        version: 7.0.0
       form-data:
         specifier: 4.0.5
         version: 4.0.5
@@ -50,6 +53,9 @@ importers:
       gql.tada:
         specifier: 1.9.2
         version: 1.9.2(graphql@16.8.1)(typescript@5.9.3)
+      graphql:
+        specifier: 16.8.1
+        version: 16.8.1
       ollama:
         specifier: 0.6.3
         version: 0.6.3
@@ -272,6 +278,9 @@ packages:
   combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
     engines: {node: '>= 0.8'}
+
+  convert@7.0.0:
+    resolution: {integrity: sha512-Sc8P9MeZBPtaAG/hiSYO28LvVjEDfP+iecvP1nvhJxvXcS3d9WQJIQma9XMPRwIWPifA2X8epIR9zbLxJPrT8w==}
 
   data-uri-to-buffer@4.0.1:
     resolution: {integrity: sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A==}
@@ -773,6 +782,8 @@ snapshots:
   combined-stream@1.0.8:
     dependencies:
       delayed-stream: 1.0.0
+
+  convert@7.0.0: {}
 
   data-uri-to-buffer@4.0.1: {}
 
