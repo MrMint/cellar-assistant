@@ -20,10 +20,12 @@
     "@urql/core": "6.0.1",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
+    "convert": "7.0.0",
     "form-data": "4.0.5",
     "fuzzball": "2.2.6",
     "google-auth-library": "^10.6.2",
     "gql.tada": "1.9.2",
+    "graphql": "16.8.1",
     "ollama": "0.6.3",
     "ramda": "0.32.0",
     "ts-pattern": "5.9.0"
