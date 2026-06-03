@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.54.0](https://github.com/MrMint/cellar-assistant/compare/v0.53.3...v0.54.0) (2026-06-03)
+
+
+### Features
+
+* add sake and tea placeholder images ([df8c309](https://github.com/MrMint/cellar-assistant/commit/df8c309b3b65f0132c1e8cd0eadccb2e70613079))
+* add sake and tea placeholder images ([783fcb5](https://github.com/MrMint/cellar-assistant/commit/783fcb553b40748d8091b84acafbb2318399f122))
+
 ## [0.53.3](https://github.com/MrMint/cellar-assistant/compare/v0.53.2...v0.53.3) (2026-06-03)
 
 
