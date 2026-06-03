@@ -23,6 +23,15 @@ value = 'us-central1-aiplatform.googleapis.com'
 name = 'CI'
 value = '1'
 
+# pnpm 11 fails frozen installs on unapproved dependency build scripts
+# (strictDepBuilds defaults to true). The functions build is standalone and
+# does not read pnpm-workspace.yaml's allowBuilds, so demote the error to a
+# warning here. These scripts (@google/genai, protobufjs) were never run on
+# prior pnpm 10 deploys, so this preserves behavior.
+[[global.environment]]
+name = 'PNPM_CONFIG_STRICT_DEP_BUILDS'
+value = 'false'
+
 [[global.environment]]
 name = 'AI_PROVIDER'
 value = '{{ secrets.AI_PROVIDER }}'

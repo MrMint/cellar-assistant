@@ -3,8 +3,6 @@ packages:
   - "functions"
   - "functions/_packages/*"
 sharedWorkspaceLockfile: false
-overrides:
-  brace-expansion: "^2.0.1"
 minimumReleaseAgeExclude:
   - '@tanstack/react-virtual@3.14.2'
   - '@tanstack/virtual-core@3.17.0'
