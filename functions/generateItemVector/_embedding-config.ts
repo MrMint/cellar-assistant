@@ -463,6 +463,64 @@ export const EMBEDDING_CONFIGS = {
 
     baseTerms: ["tea", "leaves", "brew", "infusion"],
   },
+
+  sakes: {
+    primaryFields: [
+      {
+        field: "name" as const,
+        weight: 10,
+        synonyms: ["sake", "nihonshu", "rice wine"],
+      },
+      {
+        field: "category" as const,
+        weight: 9,
+        synonyms: ["grade", "classification"],
+      },
+      { field: "type" as const, weight: 8 },
+    ],
+
+    enhancingFields: [
+      { field: "rice_variety" as const, weight: 6, synonyms: ["rice"] },
+      {
+        field: "polish_grade" as const,
+        weight: 5,
+        formatter: (grade: number) => [
+          `${grade}% polish`,
+          `seimaibuai ${grade}`,
+        ],
+      },
+      { field: "region" as const, weight: 7, synonyms: ["origin"] },
+      { field: "country" as const, weight: 6 },
+      { field: "description" as const, weight: 5 },
+    ],
+
+    // Category-specific keyword mappings (sake category values are plain text)
+    categoryKeywords: {
+      junmai: ["junmai", "pure rice", "full-bodied", "rich", "umami"],
+      honjozo: ["honjozo", "light", "easy drinking", "added alcohol"],
+      ginjo: ["ginjo", "fragrant", "fruity", "refined", "premium"],
+      daiginjo: [
+        "daiginjo",
+        "premium",
+        "highly polished",
+        "elegant",
+        "aromatic",
+      ],
+      junmai_ginjo: ["junmai ginjo", "pure rice", "fragrant", "premium"],
+      junmai_daiginjo: [
+        "junmai daiginjo",
+        "pure rice",
+        "highly polished",
+        "luxurious",
+      ],
+      nigori: ["nigori", "cloudy", "unfiltered", "creamy", "sweet"],
+      sparkling: ["sparkling sake", "effervescent", "bubbly", "fresh"],
+      nama: ["namazake", "unpasteurized", "fresh", "vibrant"],
+      koshu: ["koshu", "aged sake", "matured", "complex"],
+    } as const satisfies Record<string, readonly string[]>,
+
+    baseTerms: ["sake", "nihonshu", "rice wine", "japanese"],
+  },
 } as const;
 
 // Description keyword patterns organized by relevance to item types

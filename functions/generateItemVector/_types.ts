@@ -31,6 +31,7 @@ const INSERT_ITEM_VECTOR_MUTATION = graphql(`
     $spirit_id: String,
     $coffee_id: String,
     $tea_id: String,
+    $sake_id: String,
     $vector: vector,
     $embedding_text: String
   ) {
@@ -40,6 +41,7 @@ const INSERT_ITEM_VECTOR_MUTATION = graphql(`
       spirit_id: $spirit_id,
       coffee_id: $coffee_id,
       tea_id: $tea_id,
+      sake_id: $sake_id,
       vector: $vector,
       embedding_text: $embedding_text
     }) {
@@ -49,6 +51,7 @@ const INSERT_ITEM_VECTOR_MUTATION = graphql(`
       spirit_id
       coffee_id
       tea_id
+      sake_id
       vector
       embedding_text
       created_at
@@ -170,6 +173,30 @@ const GET_TEA_QUERY = graphql(`
   }
 `);
 
+const GET_SAKE_QUERY = graphql(`
+  query GetSake($id: uuid!) {
+    sakes_by_pk(id: $id) {
+      id
+      name
+      description
+      category
+      type
+      polish_grade
+      rice_variety
+      yeast_strain
+      sake_meter_value
+      acidity
+      amino_acid
+      alcohol_content_percentage
+      vintage
+      country
+      region
+      created_at
+      updated_at
+    }
+  }
+`);
+
 // =============================================================================
 // Extracted Types
 // =============================================================================
@@ -202,11 +229,18 @@ export type WineItem = ResultOf<typeof GET_WINE_QUERY>["wines_by_pk"];
 export type SpiritItem = ResultOf<typeof GET_SPIRIT_QUERY>["spirits_by_pk"];
 export type CoffeeItem = ResultOf<typeof GET_COFFEE_QUERY>["coffees_by_pk"];
 export type TeaItem = ResultOf<typeof GET_TEA_QUERY>["teas_by_pk"];
+export type SakeItem = ResultOf<typeof GET_SAKE_QUERY>["sakes_by_pk"];
 
 /**
  * Union type for all item types
  */
-export type ItemType = BeerItem | WineItem | SpiritItem | CoffeeItem | TeaItem;
+export type ItemType =
+  | BeerItem
+  | WineItem
+  | SpiritItem
+  | CoffeeItem
+  | TeaItem
+  | SakeItem;
 
 // =============================================================================
 // Function-specific Types
@@ -215,7 +249,13 @@ export type ItemType = BeerItem | WineItem | SpiritItem | CoffeeItem | TeaItem;
 /**
  * Valid table names for item vector generation
  */
-export type TableName = "beers" | "wines" | "spirits" | "coffees" | "teas";
+export type TableName =
+  | "beers"
+  | "wines"
+  | "spirits"
+  | "coffees"
+  | "teas"
+  | "sakes";
 
 /**
  * Webhook input structure for item vector generation
@@ -235,6 +275,7 @@ export interface ItemVectorsBoolExp {
   spirit_id?: { _eq?: string };
   coffee_id?: { _eq?: string };
   tea_id?: { _eq?: string };
+  sake_id?: { _eq?: string };
 }
 
 /**
@@ -258,7 +299,7 @@ export interface VectorGenerationContext {
 export function isValidTableName(value: unknown): value is TableName {
   return (
     typeof value === "string" &&
-    ["beers", "wines", "spirits", "coffees", "teas"].includes(value)
+    ["beers", "wines", "spirits", "coffees", "teas", "sakes"].includes(value)
   );
 }
 
@@ -376,11 +417,13 @@ export function createDeleteVectorWhereClause(
       return { ...where, coffee_id: { _eq: itemId } };
     case "teas":
       return { ...where, tea_id: { _eq: itemId } };
+    case "sakes":
+      return { ...where, sake_id: { _eq: itemId } };
     default:
       throw new FunctionValidationError(
         "generateItemVector",
         "tableName",
-        "must be one of: beers, wines, spirits, coffees, teas",
+        "must be one of: beers, wines, spirits, coffees, teas, sakes",
         type,
       );
   }

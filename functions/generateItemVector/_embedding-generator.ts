@@ -6,6 +6,7 @@
 import type {
   Beers,
   Coffees,
+  Sakes,
   Spirits,
   Teas,
   Wines,
@@ -25,7 +26,7 @@ import {
 } from "./_embedding-config";
 
 // Type-safe item union
-type AnyItem = Beers | Wines | Spirits | Coffees | Teas;
+type AnyItem = Beers | Wines | Spirits | Coffees | Teas | Sakes;
 
 /**
  * Generate rich, searchable embedding text from any item using schema-driven configuration
@@ -213,6 +214,21 @@ function addTypeSpecificKeywords(
           tea.category,
         ) as keyof typeof teaConfig.categoryKeywords;
         const keywords = teaConfig.categoryKeywords[categoryKey];
+        if (keywords) {
+          parts.push(...keywords);
+        }
+      }
+      break;
+    }
+
+    case "sakes": {
+      const sake = item as Sakes;
+      const sakeConfig = config as typeof EMBEDDING_CONFIGS.sakes;
+      if (sake.category && "categoryKeywords" in sakeConfig) {
+        const categoryKey = String(
+          sake.category,
+        ) as keyof typeof sakeConfig.categoryKeywords;
+        const keywords = sakeConfig.categoryKeywords[categoryKey];
         if (keywords) {
           parts.push(...keywords);
         }
