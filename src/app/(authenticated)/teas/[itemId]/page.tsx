@@ -18,5 +18,11 @@ export default async function TeaDetailsPage({
     return <div>Tea not found</div>;
   }
 
-  return <TeaDetails teaData={data.teas_by_pk} />;
+  return (
+    <TeaDetails
+      teaData={data.teas_by_pk}
+      cellars={data.cellars}
+      itemId={itemId}
+    />
+  );
 }

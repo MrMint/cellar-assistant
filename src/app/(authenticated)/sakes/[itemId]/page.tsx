@@ -18,5 +18,11 @@ export default async function SakeDetailsPage({
     return <div>Sake not found</div>;
   }
 
-  return <SakeDetails sakeData={data.sakes_by_pk} />;
+  return (
+    <SakeDetails
+      sakeData={data.sakes_by_pk}
+      cellars={data.cellars}
+      itemId={itemId}
+    />
+  );
 }
