@@ -25,6 +25,14 @@ const cellarItemQuery = graphql(`
         id
         name
       }
+      sake {
+        id
+        name
+      }
+      tea {
+        id
+        name
+      }
     }
   }
 `);
@@ -44,7 +52,9 @@ export async function getCellarItemData(itemId: string) {
       item.beer?.name ||
       item.wine?.name ||
       item.spirit?.name ||
-      item.coffee?.name;
+      item.coffee?.name ||
+      item.sake?.name ||
+      item.tea?.name;
 
     return {
       ...item,

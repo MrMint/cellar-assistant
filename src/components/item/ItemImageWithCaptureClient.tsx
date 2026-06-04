@@ -15,7 +15,7 @@ interface ItemImageWithCaptureClientProps {
   placeholder?: string | null;
   fallback: StaticImageData;
   itemId: string;
-  itemType: "BEER" | "WINE" | "SPIRIT" | "COFFEE";
+  itemType: "BEER" | "WINE" | "SPIRIT" | "COFFEE" | "SAKE" | "TEA";
   cellarItemId: string;
 }
 

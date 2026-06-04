@@ -26,37 +26,65 @@ interface AddBeerReviewProps {
   wineId?: never;
   spiritId?: never;
   coffeeId?: never;
+  sakeId?: never;
+  teaId?: never;
 }
 interface AddWineReviewProps {
   wineId: string;
   beerId?: never;
   spiritId?: never;
   coffeeId?: never;
+  sakeId?: never;
+  teaId?: never;
 }
 interface AddSpiritReviewProps {
   spiritId: string;
   beerId?: never;
   wineId?: never;
   coffeeId?: never;
+  sakeId?: never;
+  teaId?: never;
 }
 interface AddCoffeeReviewProps {
   coffeeId: string;
   beerId?: never;
   wineId?: never;
   spiritId?: never;
+  sakeId?: never;
+  teaId?: never;
+}
+interface AddSakeReviewProps {
+  sakeId: string;
+  beerId?: never;
+  wineId?: never;
+  spiritId?: never;
+  coffeeId?: never;
+  teaId?: never;
+}
+interface AddTeaReviewProps {
+  teaId: string;
+  beerId?: never;
+  wineId?: never;
+  spiritId?: never;
+  coffeeId?: never;
+  sakeId?: never;
 }
 
 export type AddReviewProps =
   | AddBeerReviewProps
   | AddWineReviewProps
   | AddCoffeeReviewProps
-  | AddSpiritReviewProps;
+  | AddSpiritReviewProps
+  | AddSakeReviewProps
+  | AddTeaReviewProps;
 
 export const AddReview = ({
   beerId,
   spiritId,
   wineId,
   coffeeId,
+  sakeId,
+  teaId,
 }: AddReviewProps) => {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -77,6 +105,8 @@ export const AddReview = ({
           wineId,
           spiritId,
           coffeeId,
+          sakeId,
+          teaId,
           score,
           text,
         });
