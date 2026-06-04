@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.55.0](https://github.com/MrMint/cellar-assistant/compare/v0.54.0...v0.55.0) (2026-06-04)
+
+
+### Features
+
+* align tea and sake cellar item detail pages with other item types ([0425707](https://github.com/MrMint/cellar-assistant/commit/042570722f91687a626d5e53876e4f5134137798))
+* align tea and sake item detail pages with other item types ([700d89c](https://github.com/MrMint/cellar-assistant/commit/700d89cbd93ad80abdcad35f8f5d681d356e8067))
+
 ## [0.54.0](https://github.com/MrMint/cellar-assistant/compare/v0.53.3...v0.54.0) (2026-06-03)
 
 
