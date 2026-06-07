@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.57.0](https://github.com/MrMint/cellar-assistant/compare/v0.56.0...v0.57.0) (2026-06-07)
+
+
+### Features
+
+* add items to tier lists from item & place detail pages ([8d81359](https://github.com/MrMint/cellar-assistant/commit/8d81359bbc39fc0550899331d2a623d98f161cd2))
+* add items to tier lists from item & place detail pages ([295598b](https://github.com/MrMint/cellar-assistant/commit/295598bc5fa04004080dc51d62f8099e00f9b463))
+
+
+### Bug Fixes
+
+* **migrations:** make place_vectors 768 conversion safe on fresh replays ([eaa240d](https://github.com/MrMint/cellar-assistant/commit/eaa240d52910e1ada8be8409317b8e25c70afd52))
+* **migrations:** make place_vectors 768 conversion safe on fresh replays ([e7acf13](https://github.com/MrMint/cellar-assistant/commit/e7acf138b41501ed99b91d2e0966e3c1a6d8cc8c))
+* pass userId to AddToTierListModal from place detail callers ([eedf759](https://github.com/MrMint/cellar-assistant/commit/eedf759df754b40bb7f039e71a96d8a8d5756460))
+
 ## [0.56.0](https://github.com/MrMint/cellar-assistant/compare/v0.55.0...v0.56.0) (2026-06-04)
 
 
