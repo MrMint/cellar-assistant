@@ -763,6 +763,7 @@ export function PlaceDetailsContent({
         entityId={place.id}
         entityType="place"
         entityName={place.name}
+        userId={userId}
       />
     </>
   );

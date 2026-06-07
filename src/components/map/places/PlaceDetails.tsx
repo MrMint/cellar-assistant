@@ -956,6 +956,7 @@ export function PlaceDetails({
         entityId={placeData.id}
         entityType="place"
         entityName={placeData.name}
+        userId={userId}
       />
     </Box>
   );
