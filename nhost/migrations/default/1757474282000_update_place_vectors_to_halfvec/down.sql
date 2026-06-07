@@ -1,7 +1,8 @@
--- Rollback place_vectors table from halfvec(3072) back to vector(3072)
+-- Rollback place_vectors table from halfvec(768) back to vector(3072)
 -- This reverses the HNSW index optimization
 
--- Drop the function that uses halfvec
+-- Drop the function that uses halfvec (both possible widths, to be safe)
+DROP FUNCTION IF EXISTS public.calculate_place_vector_distance(place_vectors, halfvec(768));
 DROP FUNCTION IF EXISTS public.calculate_place_vector_distance(place_vectors, halfvec(3072));
 
 -- Drop the HNSW indexes
