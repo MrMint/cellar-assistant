@@ -79,6 +79,7 @@ export function TeaDetails({
         itemId={itemId}
         itemName={coreData.name}
         itemType={"TEA"}
+        userId={userId}
         cellars={cellars}
       />
       <Grid container spacing={2}>

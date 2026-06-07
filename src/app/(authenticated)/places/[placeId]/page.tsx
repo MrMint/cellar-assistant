@@ -1,6 +1,7 @@
 import { Box, CircularProgress, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { ItemTierLists } from "@/components/item/ItemTierLists";
 import { PlaceDetails } from "@/components/map/places/PlaceDetails";
 import { getServerUserId } from "@/utilities/auth-server";
 import { serverQuery } from "@/lib/urql/server";
@@ -84,6 +85,7 @@ export default async function PlaceDetailsPage({
           userId={userId}
           serverEnrichment={serverEnrichment}
           serverPhotos={serverPhotos}
+          tierLists={<ItemTierLists entityId={placeId} entityType="place" />}
         />
       </Suspense>
     </Box>

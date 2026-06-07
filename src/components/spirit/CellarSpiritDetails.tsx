@@ -83,6 +83,7 @@ export function CellarSpiritDetails({
       <CellarItemHeader
         itemType={"SPIRIT"}
         itemId={itemId}
+        entityId={spiritCore?.id ?? ""}
         itemName={itemName || spiritCore?.name}
         cellarId={cellarId}
         cellarName={cellarName || itemData.cellar?.name}

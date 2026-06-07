@@ -31,9 +31,15 @@ interface SpiritDetailsProps {
   spirit: FragmentOf<typeof SpiritDetailsFragment>;
   cellars: Array<{ id: string; name: string }>;
   itemId: string;
+  userId?: string;
 }
 
-export function SpiritDetails({ spirit, cellars, itemId }: SpiritDetailsProps) {
+export function SpiritDetails({
+  spirit,
+  cellars,
+  itemId,
+  userId,
+}: SpiritDetailsProps) {
   if (isNil(spirit)) {
     notFound();
   }
@@ -54,6 +60,7 @@ export function SpiritDetails({ spirit, cellars, itemId }: SpiritDetailsProps) {
         itemId={itemId}
         itemName={coreData.name}
         itemType={"SPIRIT"}
+        userId={userId}
         cellars={cellars}
       />
       <Grid container spacing={2}>

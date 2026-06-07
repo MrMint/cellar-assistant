@@ -48,38 +48,16 @@ export const GetTierListEditQuery = graphql(
 );
 
 /**
- * Get user's tier lists that may contain a specific place
- * Used by the "Add to Tier List" modal
- */
-export const GetTierListsForPlaceQuery = graphql(`
-  query GetTierListsForPlace($placeId: uuid!, $userId: uuid!) {
-    tier_lists(
-      where: {
-        list_type: { _eq: "place" }
-        created_by_id: { _eq: $userId }
-      }
-      order_by: { updated_at: desc }
-    ) {
-      id
-      name
-      list_type
-      items(where: { place_id: { _eq: $placeId } }) {
-        id
-        band
-      }
-    }
-  }
-`);
-
-/**
- * Get user's tier lists that may contain a specific item
- * Used by the "Add to Tier List" modal for wines, beers, etc.
- * Filters by list_type to only show relevant tier lists.
+ * Get the current user's tier lists of a given type, annotated with whether
+ * each already contains a specific entity (place/wine/beer/…).
+ * Used by the "Add to Tier List" modal across all entity types.
+ * Filters by list_type so only relevant tier lists are shown.
  */
 export const GetTierListsForItemQuery = graphql(`
   query GetTierListsForItem(
     $listType: String!
     $userId: uuid!
+    $placeId: uuid
     $wineId: uuid
     $beerId: uuid
     $spiritId: uuid
@@ -100,6 +78,7 @@ export const GetTierListsForItemQuery = graphql(`
       items(
         where: {
           _or: [
+            { place_id: { _eq: $placeId } }
             { wine_id: { _eq: $wineId } }
             { beer_id: { _eq: $beerId } }
             { spirit_id: { _eq: $spiritId } }

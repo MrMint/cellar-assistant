@@ -83,6 +83,7 @@ export function CellarCoffeeDetails({
       <CellarItemHeader
         itemType={"COFFEE"}
         itemId={itemId}
+        entityId={coffeeCore?.id ?? ""}
         itemName={itemName || coffeeCore?.name}
         cellarId={cellarId}
         cellarName={cellarName || itemData.cellar?.name}

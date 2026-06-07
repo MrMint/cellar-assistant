@@ -760,8 +760,9 @@ export function PlaceDetailsContent({
       <AddToTierListModal
         open={tierListModalOpen}
         onClose={() => setTierListModalOpen(false)}
-        placeId={place.id}
-        placeName={place.name}
+        entityId={place.id}
+        entityType="place"
+        entityName={place.name}
         userId={userId}
       />
     </>

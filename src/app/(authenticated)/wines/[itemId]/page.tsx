@@ -23,6 +23,7 @@ export default async function WineDetailsPage({
       wine={data.wines_by_pk}
       cellars={data.cellars}
       itemId={itemId}
+      userId={userId}
     />
   );
 }

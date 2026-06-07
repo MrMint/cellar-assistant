@@ -40,7 +40,7 @@ import {
 } from "@mui/joy";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { MdFormatListNumbered } from "react-icons/md";
 import { useMutation, useQuery } from "urql";
 import {
@@ -49,7 +49,6 @@ import {
   PlaceWithMenuFragment,
 } from "../../shared/fragments/place-fragments";
 import { AddToTierListModal } from "../../tier-list/AddToTierListModal";
-import { ItemTierLists } from "../../item/ItemTierLists";
 import {
   GET_PLACE_DETAILS,
   MARK_PLACE_VISITED,
@@ -223,6 +222,8 @@ interface PlaceDetailsProps {
   userId: string;
   serverEnrichment?: PlaceEnrichment | null;
   serverPhotos?: PlaceGooglePhoto[];
+  /** Server-rendered "On Lists" card, passed in so it can be an RSC. */
+  tierLists?: ReactNode;
 }
 
 export function PlaceDetails({
@@ -230,6 +231,7 @@ export function PlaceDetails({
   userId,
   serverEnrichment,
   serverPhotos,
+  tierLists,
 }: PlaceDetailsProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
@@ -809,10 +811,8 @@ export function PlaceDetails({
         </Card>
       )}
 
-      {/* Tier lists this place belongs to */}
-      <Box sx={{ mb: 3 }}>
-        <ItemTierLists entityId={placeData.id} entityType="place" />
-      </Box>
+      {/* Tier lists this place belongs to (server-rendered slot) */}
+      <Box sx={{ mb: 3 }}>{tierLists}</Box>
 
       {/* Google Attribution */}
       {enrichment && (
@@ -953,8 +953,9 @@ export function PlaceDetails({
       <AddToTierListModal
         open={tierListModalOpen}
         onClose={() => setTierListModalOpen(false)}
-        placeId={placeData.id}
-        placeName={placeData.name}
+        entityId={placeData.id}
+        entityType="place"
+        entityName={placeData.name}
         userId={userId}
       />
     </Box>

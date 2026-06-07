@@ -62,6 +62,7 @@ export function WineDetails({
         itemId={itemId}
         itemName={coreData.name}
         itemType={"WINE"}
+        userId={userId}
         cellars={cellars}
       />
       <Grid container spacing={2}>

@@ -1,11 +1,13 @@
-"use client";
-
 import { graphql } from "@cellar-assistant/shared";
 import { Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
 import { MdFormatListNumbered } from "react-icons/md";
-import { useQuery } from "urql";
+import { serverQuery } from "@/lib/urql/server";
 import { Link } from "../common/Link";
-import { BAND_JOY_COLORS, BAND_LABELS } from "../tier-list/constants";
+import {
+  BAND_JOY_COLORS,
+  BAND_LABELS,
+  type TierListEntityType,
+} from "../tier-list/constants";
 
 const GetTierListsForEntityQuery = graphql(`
   query GetTierListsForEntity(
@@ -40,23 +42,14 @@ const GetTierListsForEntityQuery = graphql(`
   }
 `);
 
-type EntityType =
-  | "place"
-  | "wine"
-  | "beer"
-  | "spirit"
-  | "coffee"
-  | "sake"
-  | "tea";
-
 interface ItemTierListsProps {
   entityId: string;
-  entityType: EntityType;
+  entityType: TierListEntityType;
 }
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
-function buildVariables(entityId: string, entityType: EntityType) {
+function buildVariables(entityId: string, entityType: TierListEntityType) {
   return {
     placeId: entityType === "place" ? entityId : NIL_UUID,
     wineId: entityType === "wine" ? entityId : NIL_UUID,
@@ -68,15 +61,23 @@ function buildVariables(entityId: string, entityType: EntityType) {
   };
 }
 
-export function ItemTierLists({ entityId, entityType }: ItemTierListsProps) {
-  const [{ data, fetching }] = useQuery({
-    query: GetTierListsForEntityQuery,
-    variables: buildVariables(entityId, entityType),
-  });
+/**
+ * Server component showing which tier lists an entity already appears on.
+ * Fetched server-side so it re-renders on router.refresh() (e.g. after the
+ * "Add to Tier List" modal adds the item).
+ */
+export async function ItemTierLists({
+  entityId,
+  entityType,
+}: ItemTierListsProps) {
+  const data = await serverQuery(
+    GetTierListsForEntityQuery,
+    buildVariables(entityId, entityType),
+  );
 
   const items = data?.tier_list_items ?? [];
 
-  if (fetching || items.length === 0) {
+  if (items.length === 0) {
     return null;
   }
 

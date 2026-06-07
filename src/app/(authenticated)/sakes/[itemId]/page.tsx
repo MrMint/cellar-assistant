@@ -23,6 +23,7 @@ export default async function SakeDetailsPage({
       sakeData={data.sakes_by_pk}
       cellars={data.cellars}
       itemId={itemId}
+      userId={userId}
     />
   );
 }

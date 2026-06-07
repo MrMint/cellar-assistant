@@ -23,6 +23,7 @@ export default async function CoffeeDetailsPage({
       coffee={data.coffees_by_pk}
       cellars={data.cellars}
       itemId={itemId}
+      userId={userId}
     />
   );
 }
