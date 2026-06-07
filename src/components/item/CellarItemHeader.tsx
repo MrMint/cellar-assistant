@@ -16,11 +16,15 @@ import { useState, useTransition } from "react";
 import { MdDelete, MdEdit, MdWarning } from "react-icons/md";
 import { deleteCellarItemAction } from "@/app/actions/cellarItems";
 import { HeaderBar } from "@/components/common/HeaderBar";
+import { AddToTierListButton } from "@/components/tier-list/AddToTierListButton";
+import type { TierListEntityType } from "@/components/tier-list/constants";
 import { formatItemType } from "@/utilities";
 import { Link } from "../common/Link";
 
 type CellarItemHeaderProps = {
   itemId: string;
+  /** The underlying catalog item id (wine/beer/…), used for tier lists. */
+  entityId: string;
   itemName: string | undefined;
   itemType: ItemTypeValue;
   cellarId: string;
@@ -32,10 +36,12 @@ type CellarItemHeaderProps = {
 export const CellarItemHeader = ({
   itemType,
   itemId,
+  entityId,
   itemName,
   cellarId,
   cellarName,
   isOwner,
+  userId,
 }: CellarItemHeaderProps) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -63,6 +69,12 @@ export const CellarItemHeader = ({
         }}
         endComponent={
           <Stack spacing={2} direction="row">
+            <AddToTierListButton
+              entityId={entityId}
+              entityType={itemType.toLowerCase() as TierListEntityType}
+              entityName={itemName ?? "this item"}
+              userId={userId}
+            />
             <Button
               component={Link}
               href={`${itemId}/edit`}

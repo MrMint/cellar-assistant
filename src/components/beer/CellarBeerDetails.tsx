@@ -80,6 +80,7 @@ export function CellarBeerDetails({
       <CellarItemHeader
         itemType={"BEER"}
         itemId={itemId}
+        entityId={beerCore?.id ?? ""}
         itemName={itemName || beerCore?.name}
         cellarId={cellarId}
         cellarName={cellarName || itemData.cellar?.name}

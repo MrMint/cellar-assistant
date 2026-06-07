@@ -23,6 +23,7 @@ export default async function TeaDetailsPage({
       teaData={data.teas_by_pk}
       cellars={data.cellars}
       itemId={itemId}
+      userId={userId}
     />
   );
 }

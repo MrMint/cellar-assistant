@@ -31,9 +31,15 @@ interface BeerDetailsProps {
   beer: FragmentOf<typeof BeerDetailsFragment>;
   cellars: Array<{ id: string; name: string }>;
   itemId: string;
+  userId?: string;
 }
 
-export function BeerDetails({ beer, cellars, itemId }: BeerDetailsProps) {
+export function BeerDetails({
+  beer,
+  cellars,
+  itemId,
+  userId,
+}: BeerDetailsProps) {
   if (isNil(beer)) {
     notFound();
   }
@@ -54,6 +60,7 @@ export function BeerDetails({ beer, cellars, itemId }: BeerDetailsProps) {
         itemId={itemId}
         itemName={coreData.name}
         itemType={"BEER"}
+        userId={userId}
         cellars={cellars}
       />
       <Grid container spacing={2}>

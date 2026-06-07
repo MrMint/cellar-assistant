@@ -15,3 +15,13 @@ export const BAND_JOY_COLORS: Record<number, ColorPaletteProp> = {
   1: "danger",
   0: "neutral",
 };
+
+/** Entity types that can be added to a tier list (matches tier_lists.list_type). */
+export type TierListEntityType =
+  | "place"
+  | "wine"
+  | "beer"
+  | "spirit"
+  | "coffee"
+  | "sake"
+  | "tea";

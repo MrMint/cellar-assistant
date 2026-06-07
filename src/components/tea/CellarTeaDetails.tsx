@@ -84,6 +84,7 @@ export function CellarTeaDetails({
       <CellarItemHeader
         itemType={"TEA"}
         itemId={itemId}
+        entityId={tea.id}
         itemName={itemName || tea.name}
         cellarId={cellarId}
         cellarName={cellarName || item.cellar?.name}

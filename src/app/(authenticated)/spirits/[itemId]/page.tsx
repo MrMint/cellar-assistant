@@ -23,6 +23,7 @@ export default async function SpiritDetailsPage({
       spirit={data.spirits_by_pk}
       cellars={data.cellars}
       itemId={itemId}
+      userId={userId}
     />
   );
 }

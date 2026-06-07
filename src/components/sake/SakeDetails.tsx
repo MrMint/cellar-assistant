@@ -86,6 +86,7 @@ export function SakeDetails({
         itemId={itemId}
         itemName={coreData.name}
         itemType={"SAKE"}
+        userId={userId}
         cellars={cellars}
       />
       <Grid container spacing={2}>
