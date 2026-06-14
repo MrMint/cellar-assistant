@@ -88,16 +88,23 @@ export type Coffee_Process_Enum =
 export type Permission_Type_Enum =
   introspection["types"]["permission_type_enum"]["enumValues"];
 
-// Sake types are strings since they're stored in tables, not GraphQL enums
-export type Sake_Category_Enum = string;
-export type Sake_Type_Enum = string;
-export type Sake_Serving_Temperature_Enum = string;
-export type Sake_Rice_Variety_Enum = string;
+// Sake enum types — now backed by FK constraints to is_enum tables
+export type Sake_Category_Enum =
+  introspection["types"]["sake_category_enum"]["enumValues"];
+export type Sake_Type_Enum =
+  introspection["types"]["sake_type_enum"]["enumValues"];
+export type Sake_Serving_Temperature_Enum =
+  introspection["types"]["sake_serving_temperature_enum"]["enumValues"];
+export type Sake_Rice_Variety_Enum =
+  introspection["types"]["sake_rice_variety_enum"]["enumValues"];
 
-// Tea types are strings since they're stored in tables, not GraphQL enums
-export type Tea_Category_Enum = string;
-export type Tea_Form_Enum = string;
-export type Tea_Caffeine_Level_Enum = string;
+// Tea enum types — now backed by FK constraints to is_enum tables
+export type Tea_Category_Enum =
+  introspection["types"]["tea_category_enum"]["enumValues"];
+export type Tea_Form_Enum =
+  introspection["types"]["tea_form_enum"]["enumValues"];
+export type Tea_Caffeine_Level_Enum =
+  introspection["types"]["tea_caffeine_level_enum"]["enumValues"];
 
 // Constraint enum values
 export const Barcodes_Constraint = {
