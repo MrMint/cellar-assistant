@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.57.1](https://github.com/MrMint/cellar-assistant/compare/v0.57.0...v0.57.1) (2026-06-14)
+
+
+### Bug Fixes
+
+* **tea,sake:** generate enum GraphQL types so dropdowns and AI onboarding work ([4a1530a](https://github.com/MrMint/cellar-assistant/commit/4a1530a8110ad1945537933cd40dbf722a5588c9))
+* **tea,sake:** generate enum GraphQL types so dropdowns and AI onboarding work ([7693f3b](https://github.com/MrMint/cellar-assistant/commit/7693f3b883453efa833746e4a34cca8c05013a67))
+
 ## [0.57.0](https://github.com/MrMint/cellar-assistant/compare/v0.56.0...v0.57.0) (2026-06-07)
 
 
