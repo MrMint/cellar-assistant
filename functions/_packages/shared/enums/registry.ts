@@ -102,44 +102,44 @@ export const ENUM_REGISTRY = {
   // Sake enums
   sakeCategory: {
     name: "Sake Category",
-    graphqlType: "sake_category",
+    graphqlType: "sake_category_enum",
     formatFn: formatSakeCategory,
     category: "item",
   },
   sakeType: {
     name: "Sake Type",
-    graphqlType: "sake_type",
+    graphqlType: "sake_type_enum",
     formatFn: formatSakeType,
     category: "item",
   },
   sakeServingTemperature: {
     name: "Sake Serving Temperature",
-    graphqlType: "sake_serving_temperature",
+    graphqlType: "sake_serving_temperature_enum",
     formatFn: formatSakeServingTemperature,
     category: "item",
   },
   sakeRiceVariety: {
     name: "Sake Rice Variety",
-    graphqlType: "sake_rice_variety",
+    graphqlType: "sake_rice_variety_enum",
     formatFn: formatSakeRiceVariety,
     category: "item",
   },
   // Tea enums
   teaCategory: {
     name: "Tea Category",
-    graphqlType: "tea_category",
+    graphqlType: "tea_category_enum",
     formatFn: formatTeaCategory,
     category: "item",
   },
   teaForm: {
     name: "Tea Form",
-    graphqlType: "tea_form",
+    graphqlType: "tea_form_enum",
     formatFn: formatTeaForm,
     category: "item",
   },
   teaCaffeineLevel: {
     name: "Tea Caffeine Level",
-    graphqlType: "tea_caffeine_level",
+    graphqlType: "tea_caffeine_level_enum",
     formatFn: formatTeaCaffeineLevel,
     category: "item",
   },
