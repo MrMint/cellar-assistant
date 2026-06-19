@@ -45,8 +45,6 @@ export type BrandPlace = {
   place: {
     id: string;
     name: string;
-    latitude?: number | null;
-    longitude?: number | null;
   };
 };
 

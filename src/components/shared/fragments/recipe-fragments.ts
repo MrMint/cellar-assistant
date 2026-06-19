@@ -262,8 +262,6 @@ export const BrandPlacesFragment = graphql(`
       place {
         id
         name
-        latitude
-        longitude
       }
     }
   }
