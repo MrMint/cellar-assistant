@@ -26,11 +26,6 @@ export const BrandsListQuery = graphql(
           count
         }
       }
-      place_brands_aggregate {
-        aggregate {
-          count
-        }
-      }
     }
   }
 `,
@@ -54,7 +49,8 @@ export function toBrandCardItems(
       brand_type: core.brand_type ?? "other",
       parent_brand_id: core.parent_brand_id,
       item_count: brand.item_brands_aggregate.aggregate?.count,
-      place_count: brand.place_brands_aggregate.aggregate?.count,
+      // place_count omitted: the place_brands relationship isn't reliably
+      // tracked across deployments (see BrandPlacesQuery), so it's not queried.
     };
   });
 }
