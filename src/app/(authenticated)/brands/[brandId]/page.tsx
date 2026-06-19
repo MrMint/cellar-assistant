@@ -5,8 +5,8 @@ import {
   BrandDetails,
   type BrandDetailsItem,
 } from "@/components/brand/BrandDetails";
-import { BrandDetailQuery } from "@/components/brand/queries";
-import { BrandFullFragment } from "@/components/shared/fragments";
+import { BrandDetailQuery, BrandPlacesQuery } from "@/components/brand/queries";
+import { BrandPlacesFragment } from "@/components/shared/fragments";
 import { serverQuery } from "@/lib/urql/server";
 import { getServerUserId } from "@/utilities/auth-server";
 
@@ -28,13 +28,30 @@ export default async function BrandDetailPage({
     notFound();
   }
 
+  // `place_brands` isn't tracked in every deployed schema, so fetch it in a
+  // separate query and tolerate its absence — render the brand without its
+  // places section rather than failing the whole page.
+  let placeBrands: unknown[] = [];
+  try {
+    const placesData = await serverQuery(BrandPlacesQuery, { id: brandId });
+    const places = placesData.brands_by_pk
+      ? readFragment(BrandPlacesFragment, placesData.brands_by_pk)
+      : null;
+    placeBrands = places?.place_brands ?? [];
+  } catch {
+    // Relationship unavailable on this schema — leave places empty.
+  }
+
   // gql.tada masks nested fragment fields at the type level; the runtime object
-  // contains everything BrandDetails needs, so cast as the recipe pages do.
-  const brand = readFragment(BrandFullFragment, data.brands_by_pk);
+  // carries everything BrandDetails needs, so cast as the recipe pages do.
+  const brand = {
+    ...(data.brands_by_pk as unknown as Record<string, unknown>),
+    place_brands: placeBrands,
+  } as unknown as BrandDetailsItem;
 
   return (
     <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
-      <BrandDetails brand={brand as unknown as BrandDetailsItem} />
+      <BrandDetails brand={brand} />
     </Box>
   );
 }
