@@ -13,44 +13,14 @@ import {
 } from "@mui/joy";
 import Image from "next/image";
 import { isNotNil } from "ramda";
-import { MdBusiness, MdLocalBar, MdLocationOn } from "react-icons/md";
+import { MdLocationOn } from "react-icons/md";
 import { Link } from "@/components/common/Link";
 import cellar1 from "@/images/cellar1.png";
-
-const getBrandTypeIcon = (brandType: string) => {
-  switch (brandType) {
-    case "brewery":
-    case "distillery":
-    case "winery":
-    case "roastery":
-      return <MdLocalBar />;
-    case "restaurant_chain":
-      return <MdLocationOn />;
-    default:
-      return <MdBusiness />;
-  }
-};
-
-const getBrandTypeColor = (brandType: string) => {
-  switch (brandType) {
-    case "brewery":
-      return "warning";
-    case "distillery":
-      return "neutral";
-    case "winery":
-      return "danger";
-    case "roastery":
-      return "primary";
-    case "restaurant_chain":
-      return "success";
-    default:
-      return "neutral";
-  }
-};
-
-const formatBrandType = (brandType: string) => {
-  return brandType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-};
+import {
+  formatBrandType,
+  getBrandTypeColor,
+  getBrandTypeIcon,
+} from "./brand-type-display";
 
 export type BrandItem = {
   id: string;
@@ -59,10 +29,14 @@ export type BrandItem = {
   beer_id?: string | null;
   spirit_id?: string | null;
   coffee_id?: string | null;
+  sake_id?: string | null;
+  tea_id?: string | null;
   wine?: { id: string; name: string; vintage?: string | null } | null;
   beer?: { id: string; name: string } | null;
   spirit?: { id: string; name: string } | null;
   coffee?: { id: string; name: string } | null;
+  sake?: { id: string; name: string } | null;
+  tea?: { id: string; name: string } | null;
 };
 
 export type BrandPlace = {
@@ -137,6 +111,24 @@ const getItemDisplay = (item: BrandItem) => {
       type: "coffee" as const,
       itemId: item.coffee.id,
       href: `/coffees/${item.coffee.id}`,
+    };
+  }
+
+  if (isNotNil(item.sake)) {
+    return {
+      name: item.sake.name,
+      type: "sake" as const,
+      itemId: item.sake.id,
+      href: `/sakes/${item.sake.id}`,
+    };
+  }
+
+  if (isNotNil(item.tea)) {
+    return {
+      name: item.tea.name,
+      type: "tea" as const,
+      itemId: item.tea.id,
+      href: `/teas/${item.tea.id}`,
     };
   }
 

@@ -25,7 +25,6 @@ import {
   DeleteTeaBrandsMutation,
   DeleteWineBrandsMutation,
   FindBrandQuery,
-  SearchBrandsBySimilarityQuery,
 } from "./graphql-operations";
 
 // =============================================================================
@@ -69,12 +68,6 @@ export interface BrandResult {
 // =============================================================================
 
 /**
- * Minimum similarity score to be returned as a candidate (0.0-1.0).
- * Kept low so near-exact name variants are included.
- */
-const SIMILARITY_THRESHOLD = 0.5;
-
-/**
  * AI sometimes returns generic ownership descriptors as a parent brand name.
  * These are not real parent companies and should be ignored.
  */
@@ -94,14 +87,6 @@ const GENERIC_PARENT_BRAND_NAMES = new Set([
   "unknown",
   "various",
 ]);
-
-/**
- * Minimum similarity score to auto-accept a fuzzy match.
- * Scores below this create a new brand instead of risking a wrong association.
- * "Eagle Park Brewing Company" vs "Pabst Brewing Company" scores ~0.65 due
- * to the shared " Brewing Company" suffix — this threshold rejects such matches.
- */
-const ACCEPT_THRESHOLD = 0.8;
 
 /**
  * Find or create a brand record
@@ -210,13 +195,11 @@ export async function findOrCreateBrand(
 }
 
 /**
- * Enhanced brand matching and creation with smart matching
+ * Find or create a brand, with full details (parent brand, description).
  *
- * This function:
- * 1. Attempts exact name match first
- * 2. Falls back to fuzzy matching if no exact match
- * 3. Uses country to disambiguate multiple fuzzy matches
- * 4. Creates new brand with full details if no match found
+ * Matches an existing brand by exact (case-insensitive) name; if none is
+ * found, creates a new brand. A prior pg_trgm fuzzy-match step was removed
+ * along with its database function — see migration `remove_brand_functions`.
  *
  * @param criteria - Criteria for matching existing brands
  * @param details - Full details for creating a new brand if needed
@@ -252,57 +235,7 @@ export async function findOrCreateBrandWithDetails(
     return { id: brand.id, name: brand.name, isNew: false };
   }
 
-  // Step 2: Try database-side similarity matching using pg_trgm
-  // This uses the PostgreSQL trigram index for efficient similarity search
-  const similarityResult = await functionQuery(
-    SearchBrandsBySimilarityQuery,
-    {
-      search_term: trimmedName,
-      similarity_threshold: SIMILARITY_THRESHOLD,
-      max_results: 10,
-    },
-    { headers: getAdminAuthHeaders() },
-  );
-
-  // Type for similarity search results
-  type SimilaritySearchResult = {
-    id: string;
-    name: string;
-    description: string | null;
-    brand_type: string | null;
-    similarity_score: number;
-  };
-
-  const similarBrands =
-    (similarityResult?.searchBrandsBySimilarity as SimilaritySearchResult[]) ||
-    [];
-
-  if (similarBrands.length > 0) {
-    // Results are already sorted by similarity_score DESC from the database
-    const bestMatch = similarBrands[0];
-
-    // Only accept a fuzzy match if we're confident enough — low scores can
-    // false-match on shared suffixes like "Brewing Company" or "Winery".
-    if (bestMatch.similarity_score >= ACCEPT_THRESHOLD) {
-      if (similarBrands.length === 1) {
-        console.log(
-          `✅ [findOrCreateBrandWithDetails] Similarity match found: "${bestMatch.name}" (score: ${bestMatch.similarity_score.toFixed(2)})`,
-        );
-        return { id: bestMatch.id, name: bestMatch.name, isNew: false };
-      }
-
-      console.log(
-        `✅ [findOrCreateBrandWithDetails] Best similarity match: "${bestMatch.name}" (score: ${bestMatch.similarity_score.toFixed(2)})`,
-      );
-      return { id: bestMatch.id, name: bestMatch.name, isNew: false };
-    }
-
-    console.log(
-      `⚠️ [findOrCreateBrandWithDetails] Best match "${bestMatch.name}" score ${bestMatch.similarity_score.toFixed(2)} below acceptance threshold — creating new brand`,
-    );
-  }
-
-  // Step 3: No match found - create new brand with full details
+  // Step 2: No exact match found - create new brand with full details
   console.log(
     `🆕 [findOrCreateBrandWithDetails] Creating new brand: "${trimmedName}"`,
   );

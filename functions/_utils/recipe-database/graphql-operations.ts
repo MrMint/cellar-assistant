@@ -21,33 +21,6 @@ export const FindBrandQuery = graphql(`
   }
 `);
 
-/**
- * Search for brands using PostgreSQL trigram similarity (pg_trgm)
- * Uses database-side similarity matching for better performance
- * Returns brands with similarity score above threshold
- */
-export const SearchBrandsBySimilarityQuery = graphql(`
-  query SearchBrandsBySimilarity(
-    $search_term: String!
-    $similarity_threshold: float8
-    $max_results: Int
-  ) {
-    searchBrandsBySimilarity(
-      args: {
-        search_term: $search_term
-        similarity_threshold: $similarity_threshold
-        max_results: $max_results
-      }
-    ) {
-      id
-      name
-      description
-      brand_type
-      similarity_score
-    }
-  }
-`);
-
 export const CreateBrandMutation = graphql(`
   mutation CreateBrand(
     $name: String!

@@ -27,8 +27,10 @@ import {
 import { isNil, isNotNil } from "ramda";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { type CombinedError, useClient } from "urql";
+import { BrandPicker } from "@/components/brand/BrandPicker";
 import { EnumSelect } from "@/components/forms/EnumSelect";
 import { convertYearToDate, formatVintage, parseNumber } from "@/utilities";
+import { ensureAndLinkBrand } from "@/utilities/brand";
 
 type SharedFields = {
   description?: string;
@@ -119,6 +121,7 @@ export const SakeForm = ({
     control,
     handleSubmit,
     setError,
+    setValue,
     formState: { isSubmitting, errors },
   } = useForm<ISakeFormInput>({
     defaultValues: {
@@ -148,6 +151,15 @@ export const SakeForm = ({
       createdId = result.data?.update_sakes_by_pk?.id;
     }
     if (isNil(errored) && isNotNil(createdId)) {
+      // Link the brand in the background (best-effort, errors swallowed) so the
+      // wizard advances immediately; only on create — edit keeps existing links.
+      if (id === undefined) {
+        void ensureAndLinkBrand(client, createdId, "sake", {
+          brand_id: values.brand_id,
+          brand_name: values.brand_name,
+          is_new_brand: values.is_new_brand,
+        });
+      }
       onCreated(createdId);
     } else {
       setError("root", {
@@ -209,6 +221,14 @@ export const SakeForm = ({
                 )}
               />
             </FormControl>
+            {id === undefined && (
+              <BrandPicker
+                control={control}
+                setValue={setValue}
+                initialBrandName={defaultValues?.brand_name}
+                disabled={isSubmitting}
+              />
+            )}
 
             <EnumSelect
               name="category"

@@ -1,7 +1,5 @@
 import { graphql } from "@cellar-assistant/shared";
 import {
-  BrandCoreFragment,
-  BrandFullFragment,
   RecipeCoreFragment,
   RecipeFullFragment,
 } from "@/components/shared/fragments";
@@ -39,51 +37,6 @@ export const GetRecipeQuery = graphql(
   }
 `,
   [RecipeFullFragment],
-);
-
-/**
- * Example query to get all brands with basic info
- * Use with BrandCard component
- */
-export const GetBrandsQuery = graphql(
-  `
-  query GetBrands($limit: Int = 20, $offset: Int = 0) {
-    brands(limit: $limit, offset: $offset, order_by: { name: asc }) {
-      ...BrandCore
-      item_brands_aggregate {
-        aggregate {
-          count
-        }
-      }
-      place_brands_aggregate {
-        aggregate {
-          count
-        }
-      }
-    }
-    brands_aggregate {
-      aggregate {
-        count
-      }
-    }
-  }
-`,
-  [BrandCoreFragment],
-);
-
-/**
- * Example query to get a single brand with full details
- * Use with BrandDetails component
- */
-export const GetBrandQuery = graphql(
-  `
-  query GetBrand($id: uuid!) {
-    brands_by_pk(id: $id) {
-      ...BrandFull
-    }
-  }
-`,
-  [BrandFullFragment],
 );
 
 /**

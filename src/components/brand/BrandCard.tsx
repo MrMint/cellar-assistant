@@ -4,51 +4,21 @@ import { CardContent, CardOverflow, Chip, Divider, Typography } from "@mui/joy";
 import type { SxProps } from "@mui/joy/styles/types";
 import Image from "next/image";
 import { isNil, isNotNil } from "ramda";
-import { MdBusiness, MdLocalBar, MdLocationOn } from "react-icons/md";
+import { MdLocalBar, MdLocationOn } from "react-icons/md";
 import { InteractiveCard } from "@/components/common/InteractiveCard";
 import { Link } from "@/components/common/Link";
 import cellar1 from "@/images/cellar1.png"; // Using as brand placeholder
+import {
+  formatBrandType,
+  getBrandTypeColor,
+  getBrandTypeIcon,
+} from "./brand-type-display";
 
 const overflowItemStyles: SxProps = {
   justifyContent: "center",
   textAlign: "center",
   flexGrow: 1,
   py: 1,
-};
-
-const getBrandTypeIcon = (brandType: string) => {
-  switch (brandType) {
-    case "brewery":
-    case "distillery":
-    case "winery":
-    case "roastery":
-      return <MdLocalBar />;
-    case "restaurant_chain":
-      return <MdLocationOn />;
-    default:
-      return <MdBusiness />;
-  }
-};
-
-const getBrandTypeColor = (brandType: string) => {
-  switch (brandType) {
-    case "brewery":
-      return "warning";
-    case "distillery":
-      return "neutral";
-    case "winery":
-      return "danger";
-    case "roastery":
-      return "primary";
-    case "restaurant_chain":
-      return "success";
-    default:
-      return "neutral";
-  }
-};
-
-const formatBrandType = (brandType: string) => {
-  return brandType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 };
 
 export type BrandCardItem = {

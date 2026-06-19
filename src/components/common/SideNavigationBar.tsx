@@ -31,6 +31,7 @@ import {
   MdMenuBook,
   MdMoreHoriz,
   MdSearch,
+  MdStorefront,
   MdWarehouse,
 } from "react-icons/md";
 import { signOut } from "@/lib/auth/actions";
@@ -119,6 +120,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/rankings", icon: <FaRankingStar />, title: "Rankings" },
   { href: "/favorites", icon: <MdFavorite />, title: "Favorites" },
   { href: "/recipes", icon: <MdMenuBook />, title: "Recipes" },
+  { href: "/brands", icon: <MdStorefront />, title: "Brands" },
   { href: "/friends", icon: <MdGroup />, title: "Friends" },
 ];
 
