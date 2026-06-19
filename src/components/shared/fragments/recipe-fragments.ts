@@ -219,6 +219,8 @@ export const BrandItemsFragment = graphql(`
       beer_id
       spirit_id
       coffee_id
+      sake_id
+      tea_id
       wine {
         id
         name
@@ -233,6 +235,14 @@ export const BrandItemsFragment = graphql(`
         name
       }
       coffee {
+        id
+        name
+      }
+      sake {
+        id
+        name
+      }
+      tea {
         id
         name
       }

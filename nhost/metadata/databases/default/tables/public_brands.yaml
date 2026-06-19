@@ -30,6 +30,15 @@ array_relationships:
         table:
           name: place_brands
           schema: public
+insert_permissions:
+  - role: user
+    permission:
+      check: {}
+      columns:
+        - name
+        - brand_type
+      set: {}
+    comment: Authenticated users can create brands during item onboarding
 select_permissions:
   - role: user
     permission:
