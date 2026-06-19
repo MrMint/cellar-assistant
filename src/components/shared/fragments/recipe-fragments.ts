@@ -198,7 +198,7 @@ export const BrandHierarchyFragment = graphql(`
       name
       brand_type
     }
-    child_brands: brands {
+    child_brands {
       id
       name
       brand_type
