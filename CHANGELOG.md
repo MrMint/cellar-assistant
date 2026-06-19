@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.58.0](https://github.com/MrMint/cellar-assistant/compare/v0.57.1...v0.58.0) (2026-06-19)
+
+
+### Features
+
+* **brands:** brands pages, onboarding brand picker, and dup-safe brand creation ([aaebe8b](https://github.com/MrMint/cellar-assistant/commit/aaebe8bdf14a9d05bad71e7c7d37746b021c8946))
+* **brands:** brands pages, onboarding brand picker, and dup-safe brand creation ([cb7bcab](https://github.com/MrMint/cellar-assistant/commit/cb7bcaba6cf6f12660fcd34f25cc3d95f2967ea4))
+
 ## [0.57.1](https://github.com/MrMint/cellar-assistant/compare/v0.57.0...v0.57.1) (2026-06-14)
 
 
