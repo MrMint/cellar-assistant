@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.58.1](https://github.com/MrMint/cellar-assistant/compare/v0.58.0...v0.58.1) (2026-06-19)
+
+
+### Bug Fixes
+
+* **brands:** select canonical child_brands relationship (hotfix for v0.58.0) ([0ce27d2](https://github.com/MrMint/cellar-assistant/commit/0ce27d253b919a867d7678209de10110cd128097))
+* **brands:** select canonical child_brands relationship in BrandHierarchy ([ad8b14f](https://github.com/MrMint/cellar-assistant/commit/ad8b14f1c35d4a33f409a34075b94229ec70f211))
+
 ## [0.58.0](https://github.com/MrMint/cellar-assistant/compare/v0.57.1...v0.58.0) (2026-06-19)
 
 
