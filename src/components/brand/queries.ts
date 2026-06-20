@@ -2,7 +2,9 @@ import { graphql, type ResultOf, readFragment } from "@cellar-assistant/shared";
 import type { BrandCardItem } from "@/components/brand/BrandCard";
 import {
   BrandCoreFragment,
-  BrandFullFragment,
+  BrandHierarchyFragment,
+  BrandItemsFragment,
+  BrandPlacesFragment,
 } from "@/components/shared/fragments";
 
 /**
@@ -20,11 +22,6 @@ export const BrandsListQuery = graphql(
     ) {
       ...BrandCore
       item_brands_aggregate {
-        aggregate {
-          count
-        }
-      }
-      place_brands_aggregate {
         aggregate {
           count
         }
@@ -52,7 +49,8 @@ export function toBrandCardItems(
       brand_type: core.brand_type ?? "other",
       parent_brand_id: core.parent_brand_id,
       item_count: brand.item_brands_aggregate.aggregate?.count,
-      place_count: brand.place_brands_aggregate.aggregate?.count,
+      // place_count omitted: the place_brands relationship isn't reliably
+      // tracked across deployments (see BrandPlacesQuery), so it's not queried.
     };
   });
 }
@@ -65,11 +63,32 @@ export const BrandDetailQuery = graphql(
   `
   query BrandDetail($id: uuid!) {
     brands_by_pk(id: $id) {
-      ...BrandFull
+      ...BrandCore
+      ...BrandHierarchy
+      ...BrandItems
     }
   }
 `,
-  [BrandFullFragment],
+  [BrandCoreFragment, BrandHierarchyFragment, BrandItemsFragment],
+);
+
+/**
+ * Associated places for a brand, fetched separately from BrandDetailQuery.
+ *
+ * The `place_brands` relationship is not present in every deployed Hasura
+ * schema, so callers run this query defensively and tolerate its failure —
+ * rendering the brand without its places section rather than failing the
+ * whole detail page.
+ */
+export const BrandPlacesQuery = graphql(
+  `
+  query BrandPlaces($id: uuid!) {
+    brands_by_pk(id: $id) {
+      ...BrandPlaces
+    }
+  }
+`,
+  [BrandPlacesFragment],
 );
 
 /**
