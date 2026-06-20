@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.58.2](https://github.com/MrMint/cellar-assistant/compare/v0.58.1...v0.58.2) (2026-06-20)
+
+
+### Bug Fixes
+
+* **brands:** drop place_brands_aggregate from the list query (cloud-safe) ([0c79001](https://github.com/MrMint/cellar-assistant/commit/0c79001d78bc95d2054de62daa6a1880b6af915b))
+* **brands:** make brand pages work everywhere + reconcile place_brands schema ([a226496](https://github.com/MrMint/cellar-assistant/commit/a22649617f250f886449d2c207e4b2ff543c0eeb))
+* **brands:** render brand detail even when place_brands relationship is absent ([b3c557b](https://github.com/MrMint/cellar-assistant/commit/b3c557bf5fc0d2bbcd756c0dcf5a7f1b0aedba79))
+* **brands:** track place_brands relationships and select real place fields ([9d7667b](https://github.com/MrMint/cellar-assistant/commit/9d7667b007bfd6425811779deaa9fd75e52d9b84))
+
 ## [0.58.1](https://github.com/MrMint/cellar-assistant/compare/v0.58.0...v0.58.1) (2026-06-19)
 
 
