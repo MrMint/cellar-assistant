@@ -31,7 +31,7 @@
     "@fontsource/inter": "5.2.8",
     "@lexical/react": "0.45.0",
     "@mui/joy": "5.0.0-beta.52",
-    "@nhost/nhost-js": "4.7.1",
+    "@nhost/nhost-js": "4.7.3",
     "@parcel/watcher": "2.5.6",
     "@tanstack/react-virtual": "^3.14.2",
     "@turf/turf": "7.3.5",

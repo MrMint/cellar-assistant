@@ -48,8 +48,8 @@ importers:
         specifier: 5.0.0-beta.52
         version: 5.0.0-beta.52(@emotion/react@11.14.0(@types/react@19.2.16)(react@19.2.7))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.16)(react@19.2.7))(@types/react@19.2.16)(react@19.2.7))(@types/react@19.2.16)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@nhost/nhost-js':
-        specifier: 4.7.1
-        version: 4.7.1
+        specifier: 4.7.3
+        version: 4.7.3
       '@parcel/watcher':
         specifier: 2.5.6
         version: 2.5.6
@@ -1189,8 +1189,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@nhost/nhost-js@4.7.1':
-    resolution: {integrity: sha512-KvKvoVZPvBsWPBREZ6q3KmDv/VKyGu75idbdTOhJYOBTpjLMLLWpxaKx71pZITJgsbEBdd/60P4+3a12EHe/mQ==}
+  '@nhost/nhost-js@4.7.3':
+    resolution: {integrity: sha512-0JSx9fJYp6TYdFnFunaJCTNKqQ1USexb5IWUVxPHm07xVHuxVkT3shWpXHmGbzFdz6cqHJw572d15fv9HyA9mA==}
     engines: {node: '>=22'}
 
   '@nodelib/fs.scandir@2.1.5':
@@ -4348,7 +4348,7 @@ snapshots:
   '@next/swc-win32-x64-msvc@16.2.7':
     optional: true
 
-  '@nhost/nhost-js@4.7.1':
+  '@nhost/nhost-js@4.7.3':
     dependencies:
       tslib: 2.8.1
 
