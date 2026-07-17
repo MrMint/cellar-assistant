@@ -2,7 +2,7 @@ import type { UserPlaceCategory } from "@cellar-assistant/shared";
 import Ajv from "ajv";
 import type { Request, Response } from "express";
 import { createAIProvider } from "../_utils/ai-providers/factory";
-import { AUTH_ERROR_RESPONSE, requireAuth } from "../_utils/auth-middleware";
+import { AUTH_ERROR_RESPONSE, validateAuth } from "../_utils/auth-middleware";
 import { PLACE_REVIEW_PROMPT, PLACE_REVIEW_SCHEMA } from "./_prompts";
 
 interface ReviewPlaceRequest {
@@ -42,8 +42,10 @@ export default async (req: Request, res: Response) => {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const authResult = requireAuth(req);
-  if (authResult.isAuthenticated === false) {
+  // Hasura sets nhost-webhook-secret from env on this action, which takes
+  // precedence over the client headers it forwards. The review is a pure
+  // function of the request body, so no user identity is needed.
+  if (!validateAuth(req)) {
     return res.status(401).json(AUTH_ERROR_RESPONSE);
   }
 

@@ -1,7 +1,7 @@
 import { graphql } from "@cellar-assistant/shared/gql/graphql";
 import type { Request, Response } from "express";
 import { createAIProvider } from "../_utils/ai-providers/factory";
-import { AUTH_ERROR_RESPONSE, requireAuth } from "../_utils/auth-middleware";
+import { AUTH_ERROR_RESPONSE, validateAuth } from "../_utils/auth-middleware";
 import {
   functionMutation,
   functionQuery,
@@ -17,13 +17,10 @@ export default async (req: Request, res: Response) => {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Validate authentication first
-  const authResult = requireAuth(req);
-  if (authResult.isAuthenticated === false) {
-    console.error(
-      "🚫 [processMenuScan] Authentication failed:",
-      authResult.error,
-    );
+  // Trusted callers only. The webhook secret is what makes the userId below
+  // trustworthy — it is asserted by the caller, not proven by the request.
+  if (!validateAuth(req)) {
+    console.error("🚫 [processMenuScan] Authentication failed");
     return res.status(401).json(AUTH_ERROR_RESPONSE);
   }
 

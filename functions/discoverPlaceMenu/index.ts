@@ -1,7 +1,7 @@
 import { graphql, ITEM_TYPES } from "@cellar-assistant/shared/gql/graphql";
 import type { Request, Response } from "express";
 import { createAIProvider } from "../_utils/ai-providers/factory";
-import { AUTH_ERROR_RESPONSE, requireAuth } from "../_utils/auth-middleware";
+import { AUTH_ERROR_RESPONSE, validateAuth } from "../_utils/auth-middleware";
 import {
   functionMutation,
   functionQuery,
@@ -25,13 +25,10 @@ export default async (req: Request, res: Response) => {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Validate authentication first
-  const authResult = requireAuth(req);
-  if (authResult.isAuthenticated === false) {
-    console.error(
-      "🚫 [discoverPlaceMenu] Authentication failed:",
-      authResult.error,
-    );
+  // Trusted callers only. The webhook secret is what makes the userId below
+  // trustworthy — it is asserted by the caller, not proven by the request.
+  if (!validateAuth(req)) {
+    console.error("🚫 [discoverPlaceMenu] Authentication failed");
     return res.status(401).json(AUTH_ERROR_RESPONSE);
   }
 
@@ -48,9 +45,9 @@ export default async (req: Request, res: Response) => {
     });
   }
 
-  const { placeId } = validatedRequest;
-  // Use authenticated userId from auth validation
-  const userId = authResult.userId;
+  // userId is attribution only (place_menus.created_by), asserted by the
+  // trusted caller and validated as a UUID by validateMenuDiscoveryRequest.
+  const { placeId, userId } = validatedRequest;
 
   try {
     const GET_PLACE_FOR_MENU_DISCOVERY = graphql(`
