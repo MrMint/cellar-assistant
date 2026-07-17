@@ -13,6 +13,7 @@ import {
   logPerformanceMetrics,
   ValidationError,
 } from "../_utils";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import { toDataUrl } from "../_utils/index.js";
 import {
   type PlaceholderInput,
@@ -21,7 +22,7 @@ import {
   validatePlaceholderInput,
 } from "./_types.js";
 
-const { NHOST_WEBHOOK_SECRET, PLACEHOLDER_API_URL } = process.env;
+const { PLACEHOLDER_API_URL } = process.env;
 
 // Get shared configuration
 const CONFIG = getConfig();
@@ -33,7 +34,7 @@ export default async function generatePlaceholder(
   try {
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       return res.status(400).send();
     }
 

@@ -12,14 +12,13 @@ import {
   ValidationError,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import { dataUrlToImageBuffer } from "../_utils/index.js";
 import {
   type VectorInput,
   type VectorOutput,
   validateVectorInput,
 } from "./_types.js";
-
-const { NHOST_WEBHOOK_SECRET } = process.env;
 
 // Get shared configuration
 const CONFIG = getConfig();
@@ -32,11 +31,7 @@ export default async function getVectorForString(
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
 
-    // Validate webhook secret
-    const receivedSecret = req.headers["nhost-webhook-secret"];
-    const expectedSecret = NHOST_WEBHOOK_SECRET;
-
-    if (receivedSecret !== expectedSecret) {
+    if (!validateWebhookAuth(req)) {
       return res.status(400).send();
     }
 
