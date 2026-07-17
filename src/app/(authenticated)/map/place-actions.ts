@@ -638,7 +638,7 @@ export async function createUserPlaceAction(
       trimmedPhone,
       countryCode ?? undefined,
     );
-    if (!parsedPhone || !parsedPhone.isValid()) {
+    if (!parsedPhone?.isValid()) {
       return { success: false, error: "Enter a valid phone number." };
     }
     phone = parsedPhone.number;

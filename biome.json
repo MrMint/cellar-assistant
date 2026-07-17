@@ -18,7 +18,8 @@
       "!**/.next",
       "!**/dist",
       "!**/build",
-      "!packages/shared/gql/graphql-env.d.ts",
+      "!**/graphql-env.d.ts",
+      "!**/wisconsin-places.json",
       "!CHANGELOG.md",
       "!nhost"
     ]
