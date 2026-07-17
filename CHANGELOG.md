@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.58.4](https://github.com/MrMint/cellar-assistant/compare/v0.58.3...v0.58.4) (2026-07-17)
+
+
+### Bug Fixes
+
+* **infra:** Pin Hasura to v2.49.2-ce to unblock Nhost deploy ([2092003](https://github.com/MrMint/cellar-assistant/commit/2092003b110005625082467438a23edb3b5516c7))
+* **infra:** Pin Hasura to v2.49.2-ce to unblock Nhost deploy ([e2b7e9a](https://github.com/MrMint/cellar-assistant/commit/e2b7e9a1964bdce91f5095d22a327c260e967b5c))
+
 ## [0.58.3](https://github.com/MrMint/cellar-assistant/compare/v0.58.2...v0.58.3) (2026-07-17)
 
 
