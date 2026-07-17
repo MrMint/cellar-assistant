@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.58.3](https://github.com/MrMint/cellar-assistant/compare/v0.58.2...v0.58.3) (2026-07-17)
+
+
+### Bug Fixes
+
+* **deps:** release widespread dependency bumps across root, functions & infra ([3e2b64d](https://github.com/MrMint/cellar-assistant/commit/3e2b64dc8459036e103b66960f9cd10afb162f54))
+* **deps:** release widespread dependency bumps across root, functions & infra ([91ca9f1](https://github.com/MrMint/cellar-assistant/commit/91ca9f170dc8fbfa6d4d9862c1bb5cbd60f3e79d))
+
 ## [0.58.2](https://github.com/MrMint/cellar-assistant/compare/v0.58.1...v0.58.2) (2026-06-20)
 
 
