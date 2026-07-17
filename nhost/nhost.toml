@@ -36,7 +36,7 @@ name = 'OLLAMA_ENDPOINT'
 value = 'http://host.docker.internal:11434'
 
 [hasura]
-version = 'v2.48.10-ce'
+version = 'v2.49.4-ce'
 adminSecret = '{{ secrets.HASURA_GRAPHQL_ADMIN_SECRET }}'
 webhookSecret = '{{ secrets.NHOST_WEBHOOK_SECRET }}'
 
@@ -179,7 +179,7 @@ timeout = 60000
 enabled = false
 
 [postgres]
-version = '18.3-20260320-1'
+version = '18.4-20260610-1'
 
 [postgres.resources]
 [postgres.resources.storage]
@@ -188,7 +188,7 @@ capacity = 20
 [provider]
 
 [storage]
-version = '0.14.0'
+version = '0.15.0'
 
 [observability]
 [observability.grafana]
