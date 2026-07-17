@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.58.5](https://github.com/MrMint/cellar-assistant/compare/v0.58.4...v0.58.5) (2026-07-17)
+
+
+### Bug Fixes
+
+* **functions:** close authentication bypass in requireAuth ([67ac1e8](https://github.com/MrMint/cellar-assistant/commit/67ac1e87829a98e7f3abfacb84abc01d6a650b01))
+* **functions:** close authentication bypass in requireAuth ([b4aed2f](https://github.com/MrMint/cellar-assistant/commit/b4aed2fa30e28ebe6b74ce4a4c82e32647ef847f))
+* **functions:** Fail closed on webhook auth via validateWebhookAuth() ([013f02d](https://github.com/MrMint/cellar-assistant/commit/013f02de5b8eda82a1c70b32b69b769f1051e66e))
+* **functions:** Fail closed on webhook auth via validateWebhookAuth() ([c48df48](https://github.com/MrMint/cellar-assistant/commit/c48df48b7fb805fc351ae2d84e8730214df5016b))
+* **lint:** clear all biome warnings and repair stale files.includes glob ([5afa603](https://github.com/MrMint/cellar-assistant/commit/5afa60328da16e4371cb2614bf3ea98a6ebcef37))
+* **lint:** clear all biome warnings and repair stale files.includes glob ([cdf6bc5](https://github.com/MrMint/cellar-assistant/commit/cdf6bc5ef3c6d16eb6b2247a5fcd7ec04a034fad))
+
 ## [0.58.4](https://github.com/MrMint/cellar-assistant/compare/v0.58.3...v0.58.4) (2026-07-17)
 
 
