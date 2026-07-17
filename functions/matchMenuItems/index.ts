@@ -3,7 +3,7 @@ import {
   type ItemTypeValue,
 } from "@cellar-assistant/shared/gql/graphql";
 import type { Request, Response } from "express";
-import { AUTH_ERROR_RESPONSE, requireAuth } from "../_utils/auth-middleware";
+import { AUTH_ERROR_RESPONSE, validateAuth } from "../_utils/auth-middleware";
 import {
   shouldVerifyWithAI,
   verifyMatchesWithAI,
@@ -56,10 +56,10 @@ export default async (req: Request, res: Response) => {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Validate authentication first
-  const authResult = requireAuth(req);
-  if (authResult.isAuthenticated === false) {
-    console.error("[matchMenuItems] Authentication failed:", authResult.error);
+  // Trusted callers only (event trigger / internal function calls). No user
+  // identity is needed — every query below runs with admin headers.
+  if (!validateAuth(req)) {
+    console.error("[matchMenuItems] Authentication failed");
     return res.status(401).json(AUTH_ERROR_RESPONSE);
   }
 

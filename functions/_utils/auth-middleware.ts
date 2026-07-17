@@ -169,70 +169,64 @@ export interface UnauthenticatedResult {
 export type AuthResult = AuthenticatedUser | UnauthenticatedResult;
 
 /**
- * Extracts and validates user from Hasura session variables or request body
+ * Extracts the end-user identity from Hasura session variables.
+ *
+ * Session variables are the only trustworthy source of identity: Hasura derives
+ * them from the verified JWT and delivers them in the request body via the
+ * action's Kriti request transform. Request headers are NOT a source of
+ * identity — actions run with `forward_client_headers: true`, so an inbound
+ * `x-hasura-user-id` header is whatever the client chose to send.
+ *
+ * This does not authenticate the caller. It only reads the identity a caller
+ * already proven trustworthy (see requireAuth) is asserting.
+ *
  * @param req Express request object
  * @returns AuthResult with user info or error
  */
 export function extractAuthenticatedUser(req: Request): AuthResult {
-  // First check for Hasura session variables in headers
-  const hasuraUserId = req.headers["x-hasura-user-id"];
-  const hasuraRole = req.headers["x-hasura-role"];
+  const sessionVars: unknown = req.body?.session_variables;
 
-  if (typeof hasuraUserId === "string" && hasuraUserId.trim()) {
-    return {
-      userId: hasuraUserId,
-      role: typeof hasuraRole === "string" ? hasuraRole : "user",
-      isAuthenticated: true,
-    };
-  }
+  if (typeof sessionVars === "object" && sessionVars !== null) {
+    const vars = sessionVars as Record<string, unknown>;
+    const userId = vars["x-hasura-user-id"];
+    const role = vars["x-hasura-role"];
 
-  // Check for session variables in request body (Hasura action format)
-  const sessionVars = req.body?.session_variables;
-  if (sessionVars && typeof sessionVars["x-hasura-user-id"] === "string") {
-    return {
-      userId: sessionVars["x-hasura-user-id"],
-      role: sessionVars["x-hasura-role"] || "user",
-      isAuthenticated: true,
-    };
-  }
-
-  // Check for userId in request body (legacy format)
-  const bodyUserId = req.body?.userId;
-  if (typeof bodyUserId === "string" && bodyUserId.trim()) {
-    return {
-      userId: bodyUserId,
-      role: "user",
-      isAuthenticated: true,
-    };
+    if (typeof userId === "string" && userId.trim()) {
+      return {
+        userId,
+        role: typeof role === "string" && role.trim() ? role : "user",
+        isAuthenticated: true,
+      };
+    }
   }
 
   return {
     isAuthenticated: false,
-    error: "No valid user authentication found",
+    error: "No Hasura session variables found in request body",
   };
 }
 
 /**
- * Validates that a request has valid authentication (either webhook or user)
+ * Requires a trusted caller (webhook or admin secret) AND an end-user identity
+ * from Hasura session variables. Fails closed on either.
+ *
+ * Only use this for handlers that need to act as a specific user. Handlers that
+ * merely need to prove the request came from Hasura or another trusted service
+ * should call validateAuth() directly.
+ *
+ * Note that the request transform of the calling action must forward
+ * session variables, e.g. `"session_variables": {{$body?.session_variables}}`.
+ *
  * @param req Express request object
- * @returns true if authenticated via webhook/admin, or has valid user session
+ * @returns AuthResult with user info or error
  */
 export function requireAuth(req: Request): AuthResult {
-  // Check webhook/admin auth first
-  if (validateAuth(req)) {
-    // For webhook/admin auth, still try to extract user info if available
-    const userResult = extractAuthenticatedUser(req);
-    if (userResult.isAuthenticated) {
-      return userResult;
-    }
-    // Webhook auth without user - create admin user
+  if (!validateAuth(req)) {
     return {
-      userId: "system",
-      role: "admin",
-      isAuthenticated: true,
+      isAuthenticated: false,
+      error: "Invalid authentication credentials",
     };
   }
 
-  // Otherwise require user authentication
   return extractAuthenticatedUser(req);
 }
