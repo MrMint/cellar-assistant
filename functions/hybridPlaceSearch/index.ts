@@ -12,6 +12,7 @@ import {
   ValidationError,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import {
   LABEL_TYPE_WEIGHTS,
   type LabelType,
@@ -25,7 +26,6 @@ import {
   validateHybridPlaceSearchInput,
 } from "./_types";
 
-const { NHOST_WEBHOOK_SECRET } = process.env;
 const CONFIG = getConfig();
 
 /**
@@ -44,9 +44,7 @@ export default async function hybridPlaceSearch(req: Request, res: Response) {
     createPerformanceTracker<ExtendedPerformanceMetrics>();
 
   try {
-    // Validate webhook secret
-    const webhookSecret = req.headers["nhost-webhook-secret"];
-    if (webhookSecret !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       console.warn("⚠️ [Hybrid Place Search] Invalid webhook secret");
       return res
         .status(401)

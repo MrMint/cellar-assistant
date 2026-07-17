@@ -22,6 +22,7 @@ import {
   logPerformanceMetrics,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import { generateRecipeEmbeddingText } from "./_embedding-generator";
 import {
   DELETE_OLD_RECIPE_VECTORS_MUTATION,
@@ -30,7 +31,6 @@ import {
   validateGenerateRecipeVectorInput,
 } from "./_types";
 
-const { NHOST_WEBHOOK_SECRET } = process.env;
 const CONFIG = getConfig();
 
 /**
@@ -52,7 +52,7 @@ export default async function generateRecipeVector(
     }
 
     // Validate webhook secret
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       console.warn("[generateRecipeVector] Invalid webhook secret");
       return res.status(400).send();
     }

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { createErrorResponse, logError } from "../_utils";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import {
   type ItemImageVectorInput,
   type ItemImageVectorOutput,
@@ -24,7 +25,7 @@ export default async function generateItemImageVector(
   try {
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       return res.status(400).send();
     }
 

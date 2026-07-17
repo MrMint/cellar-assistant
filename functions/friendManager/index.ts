@@ -8,6 +8,7 @@ import {
   logError,
   logPerformanceMetrics,
 } from "../_utils";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import { functionMutation, getAdminAuthHeaders } from "../_utils/urql-client";
 import { insertFriendsAndDeleteRequest } from "./_queries.js";
 import type {
@@ -21,8 +22,6 @@ import {
   validateFriendAcceptanceResult,
   validateFriendManagerInput,
 } from "./_types";
-
-const { NHOST_WEBHOOK_SECRET } = process.env;
 
 // Get shared configuration
 const CONFIG = getConfig();
@@ -40,7 +39,7 @@ export default async function friendManager(
   try {
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       return res.status(400).send();
     }
 

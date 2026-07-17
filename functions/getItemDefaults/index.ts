@@ -18,6 +18,7 @@ import {
   validateUserId,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import { analyzeItemImages, fetchLabelImages } from "./_analyze";
 import { processBrandFromAIDefaults } from "./_brand";
 import { getSchemaForItemType } from "./_schemas";
@@ -93,8 +94,6 @@ function sanitizeProcessingContext(req: Request): ProcessingContext {
   };
 }
 
-const { NHOST_WEBHOOK_SECRET } = process.env;
-
 const nhostClient = createFunctionNhostClient();
 
 // GetItemDefaultsResult is now imported from ./types.ts
@@ -110,7 +109,7 @@ export default async function getItemDefaults(
   try {
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       return res.status(400).send();
     }
 

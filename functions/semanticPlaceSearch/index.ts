@@ -12,6 +12,7 @@ import {
   ValidationError,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import {
   type PlaceVectorResult,
   type ProcessedPlaceResult,
@@ -19,8 +20,6 @@ import {
   validateBounds,
   validateSemanticPlaceSearchInput,
 } from "./_types.js";
-
-const { NHOST_WEBHOOK_SECRET } = process.env;
 
 // Get shared configuration
 const CONFIG = getConfig();
@@ -32,9 +31,7 @@ export default async function semanticPlaceSearch(req: Request, res: Response) {
     createPerformanceTracker<ExtendedPerformanceMetrics>();
 
   try {
-    // Validate webhook secret
-    const webhookSecret = req.headers["nhost-webhook-secret"];
-    if (webhookSecret !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       console.warn("⚠️ [Semantic Place Search] Invalid webhook secret");
       return res
         .status(401)

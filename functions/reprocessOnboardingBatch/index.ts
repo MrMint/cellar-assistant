@@ -22,6 +22,7 @@ import {
   getAdminAuthHeaders,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import { isMeaningfulValue } from "../_utils/placeholder";
 import { linkItemToBrand } from "../_utils/recipe-database/brand-management";
 import {
@@ -42,8 +43,6 @@ import {
   type WineAIDefaults,
 } from "../getItemDefaults/_utils";
 import type { OnboardingReprocessBatchEventPayload } from "./_types";
-
-const { NHOST_WEBHOOK_SECRET } = process.env;
 
 // When an existing onboarding has no confidence recorded (pre-dates the column),
 // treat it as 0.7 — the LOW threshold — so we only update if the new result is at least as good.
@@ -563,7 +562,7 @@ export default async function reprocessOnboardingBatch(
 ) {
   if (req.method === "GET") return res.status(200).send();
   if (req.method !== "POST") return res.status(405).send();
-  if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+  if (!validateWebhookAuth(req)) {
     return res.status(400).send();
   }
 

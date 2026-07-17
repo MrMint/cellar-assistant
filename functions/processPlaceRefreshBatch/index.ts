@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import {
   functionMutation,
   functionQuery,
@@ -17,8 +18,6 @@ import {
   UPSERT_PLACES_MUTATION,
 } from "../refreshPlaces/_types.js";
 import type { PlaceRefreshBatchEventPayload } from "./_types.js";
-
-const { NHOST_WEBHOOK_SECRET } = process.env;
 
 function transformPlaceForUpsert(place: PlaceData): PlaceInsertData {
   return {
@@ -75,7 +74,7 @@ export default async function processPlaceRefreshBatch(
 ) {
   if (req.method === "GET") return res.status(200).send();
   if (req.method !== "POST") return res.status(405).send();
-  if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+  if (!validateWebhookAuth(req)) {
     return res.status(400).send();
   }
 

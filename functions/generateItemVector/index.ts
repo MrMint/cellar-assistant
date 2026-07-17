@@ -16,14 +16,13 @@ import {
   logPerformanceMetrics,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import { generateEmbeddingText } from "./_embedding-generator";
 import type { GenerateVectorInput, ItemType, TableName } from "./_types";
 import {
   createDeleteVectorWhereClause,
   validateGenerateVectorInput,
 } from "./_types";
-
-const { NHOST_WEBHOOK_SECRET } = process.env;
 
 const nhostClient = createFunctionNhostClient();
 
@@ -133,7 +132,7 @@ export default async function generateItemVector(
   try {
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       return res.status(400).send();
     }
 

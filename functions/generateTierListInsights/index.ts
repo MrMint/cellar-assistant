@@ -1,19 +1,18 @@
 import { graphql } from "@cellar-assistant/shared/gql/graphql";
 import type { Request, Response } from "express";
+import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import {
   functionMutation,
   functionQuery,
   getAdminAuthHeaders,
 } from "../_utils/urql-client";
-import { createAIProvider } from "../_utils/ai-providers/factory";
 import {
   buildInsightsPrompt,
   TIER_LIST_INSIGHTS_SCHEMA,
   type TierListPlaceItem,
 } from "./_prompts";
 import { extractTierListId, validateEventInput } from "./_types";
-
-const { NHOST_WEBHOOK_SECRET } = process.env;
 
 const THROTTLE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MIN_ITEMS = 3;
@@ -74,7 +73,7 @@ export default async function generateTierListInsights(
   try {
     if (req.method === "GET") return res.status(200).send();
     if (req.method !== "POST") return res.status(405).send();
-    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       return res.status(400).send();
     }
 

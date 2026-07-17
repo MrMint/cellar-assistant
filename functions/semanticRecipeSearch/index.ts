@@ -19,6 +19,7 @@ import {
   ValidationError,
 } from "../_utils";
 import { createAIProvider } from "../_utils/ai-providers/factory";
+import { validateWebhookAuth } from "../_utils/auth-middleware";
 import {
   type RecipeSearchResult,
   type RecipeVectorResult,
@@ -27,7 +28,6 @@ import {
   validateSemanticRecipeSearchInput,
 } from "./_types.js";
 
-const { NHOST_WEBHOOK_SECRET } = process.env;
 const CONFIG = getConfig();
 
 /**
@@ -42,9 +42,7 @@ export default async function semanticRecipeSearch(
     createPerformanceTracker<ExtendedPerformanceMetrics>();
 
   try {
-    // Validate webhook secret
-    const webhookSecret = req.headers["nhost-webhook-secret"];
-    if (webhookSecret !== NHOST_WEBHOOK_SECRET) {
+    if (!validateWebhookAuth(req)) {
       console.warn("[Semantic Recipe Search] Invalid webhook secret");
       return {
         success: false,
