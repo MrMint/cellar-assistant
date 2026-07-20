@@ -48,7 +48,7 @@
     "@vercel/analytics": "2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "@xstate/react": "6.1.0",
-    "autoprefixer": "10.5.3",
+    "autoprefixer": "10.5.4",
     "barcode-detector": "3.2.1",
     "convert": "^7.0.0",
     "date-fns": "4.4.0",
