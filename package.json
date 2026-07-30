@@ -52,7 +52,7 @@
     "barcode-detector": "3.2.1",
     "convert": "^7.0.0",
     "date-fns": "4.4.0",
-    "framer-motion": "^12.42.2",
+    "motion": "^12.42.2",
     "gql.tada": "1.11.2",
     "graphql": "16.14.2",
     "graphql-config": "5.1.6",
