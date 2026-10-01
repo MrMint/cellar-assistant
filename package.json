@@ -60,7 +60,7 @@
     "js-cookie": "3.0.8",
     "lexical": "0.47.0",
     "libphonenumber-js": "^1.13.8",
-    "maplibre-gl": "^5.24.0",
+    "maplibre-gl": "^6.0.0",
     "next": "16.2.10",
     "npm-run-all2": "9.0.2",
     "nuqs": "^2.9.0",
