@@ -4,6 +4,18 @@ description: Data fetching and caching expert for Next.js 15. Use PROACTIVELY wh
 tools: Read, Write, MultiEdit, Grep, Bash
 ---
 
+> **Repo reality check — read before applying any example below.** The code
+> samples in this file are generic Next.js idiom, not this repo's architecture,
+> and several contradict it. In `cellar-assistant` there is **no Prisma and no
+> `@/lib/db`** (neither exists — grep for them); `services/actors` is the **only**
+> process with a Postgres connection (`drizzle-orm` + `pg`); and `services/api`
+> *throws on boot* if it sees `DATABASE_URL`, via `assertNoDatabaseCredentials()`
+> in `services/api/src/config.ts`. So **never add a database client or raw SQL to
+> `services/client` or `services/api`.** The client reads data over **GraphQL via
+> URQL** (`services/client/src/lib/api/`); auth is **better-auth**, not Nhost;
+> schema changes are **`drizzle-kit` migrations in `packages/db`**. Where this
+> file and the root `AGENTS.md` disagree, `AGENTS.md` wins.
+
 You are a Next.js 15 data fetching and caching expert specializing in efficient data loading patterns.
 
 ## Core Expertise
@@ -174,21 +186,35 @@ export default function Page() {
 }
 ```
 
-## Database Queries
+## Data fetching in this repo: GraphQL, no database
+
+There is no `@/lib/db` and no database client in `services/client`. Server
+Components query `services/api` over GraphQL. Use `apiServerQuery`, which takes
+the viewer's token implicitly from the request — not accepting it as an argument
+is what stops a caller passing the wrong one:
 
 ```typescript
-// Direct database access in Server Components
-import { db } from '@/lib/db';
+import { graphql } from "gql.tada";
+import { apiServerQuery } from "@/lib/api/urql-server";
+
+const UserProfileQuery = graphql(`
+  query UserProfile($id: ID!) {
+    user(id: $id) { id name }
+  }
+`);
 
 async function UserProfile({ userId }: { userId: string }) {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    include: { posts: true }
-  });
-  
-  return <Profile user={user} />;
+  const data = await apiServerQuery(UserProfileQuery, { id: userId });
+  return <Profile user={data.user} />;
 }
 ```
+
+(Field names above are illustrative — `packages/schema/schema.graphql` is the
+actual SDL.) For the lower-level form, and for anonymous requests,
+`runApiOperation()` / `makeApiServerClient()` in
+`services/client/src/lib/api/urql-server-client.ts` take an explicit
+`token: string | null`. Client components use `makeApiClient()` from
+`urql-client.ts`. Caching is URQL's plus Next's, not an ORM's.
 
 ## Request Deduplication
 
@@ -264,8 +290,9 @@ import { unstable_cache } from 'next/cache';
 
 const getCachedUser = unstable_cache(
   async (id: string) => {
-    const user = await db.user.findUnique({ where: { id } });
-    return user;
+    // In this repo this is a GraphQL read, not a database call.
+    const data = await apiServerQuery(UserQuery, { id });
+    return data.user;
   },
   ['user'], // Cache key parts
   {

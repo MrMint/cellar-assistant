@@ -13,14 +13,16 @@ node_modules
 .pnp.js
 
 # testing
-/coverage
+coverage/
 
-# next.js
-/.next/
-/out/
+# next.js — the app is services/client now, so these are no longer
+# repo-root-anchored. `.next/` is left unanchored on purpose: the name is
+# Next's alone and a stray one anywhere is still build output.
+.next/
+services/client/out/
 
 # production
-/build
+services/client/build
 
 # misc
 .DS_Store
@@ -33,6 +35,22 @@ yarn-error.log*
 
 # local env files
 .env*.local
+
+# Every `.env`, anywhere, except the tracked `*.example` templates.
+#
+# This mattered less under Node, which loads nothing unless something calls
+# `dotenv`. **Bun auto-loads `.env` from the process's cwd**, so as of the
+# runtime migration a file like `services/api/.env` is live configuration that
+# silently overrides the environment — and before this rule, `services/api/.env`,
+# `services/actors/.env` and `packages/db/.env` were all committable. The two
+# files that are tracked (`infra/.env.example`, `infra/.env.prod.example`) hold
+# no real values and are re-admitted below.
+.env
+**/.env
+.env.*
+**/.env.*
+!.env*.example
+!**/.env*.example
 
 # vercel
 .vercel
@@ -48,5 +66,84 @@ next-env.d.ts
 functions/node_modules/
 
 # Serwist service worker (generated)
-public/sw*
-public/swe-worker*
+services/client/public/sw*
+services/client/public/swe-worker*
+
+# new stack (infra/) local secrets
+infra/.env
+# E3 · the production deploy's real secrets. `infra/.env.prod.example` (no
+# real values) is tracked; this one never is. The exact-match pattern leaves
+# the .example file alone.
+infra/.env.prod
+
+# e2e (Playwright) output: traces, screenshots, HTML report, and the saved
+# storage states — which hold live better-auth session tokens. Never commit.
+# This pattern contains a slash, so git anchors it to this file's directory —
+# it followed the suite to packages/e2e and does NOT match anywhere else.
+packages/e2e/artifacts/
+# Playwright's *default* outputDir, which is not the one `playwright.config.ts`
+# configures (`./artifacts/results`). A stale `test-results/` was found here
+# after the restructure — untracked, unignored, and carrying a `.last-run.json`
+# that also failed `bun run check`. The directory itself is the hazard: any
+# invocation that misses the config (a bare `playwright test` from another cwd,
+# a one-off `--config`) writes failure traces here instead, and a trace embeds
+# request headers — better-auth session cookies included. Ignored so that can
+# never become a commit.
+packages/e2e/test-results/
+
+# Per-worktree local development stacks (scripts/stack/stack.sh):
+# derived ports, generated Dapr resources, run logs. Never committed.
+.stack/
+
+# dapr CLI run-file bookkeeping, created next to each app by `dapr run -f`.
+services/*/.dapr/
+
+# Turborepo local task cache.
+.turbo/
+
+# curl cookie jars. `cookies.txt` was tracked (empty, header only) until the
+# pre-public audit removed it: harmless as committed, but any `curl -c
+# cookies.txt` run from the repo root would have silently filled it with a live
+# better-auth session cookie and offered it up as a tracked modification.
+cookies.txt
+*.cookies
+cookie-jar.txt
+
+# Key/keystore material beyond the `*.pem` rule above. None of these has ever
+# been committed; they are here so the first one cannot be.
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.key
+id_rsa
+id_ed25519
+
+# Editor/OS scratch that tends to carry a copy of whatever it shadows —
+# `.secrets copy` (a real GCP service-account key) reached a local commit that
+# way and only filter-branch backups still hold it.
+*.bak
+*.orig
+*.swp
+*.swo
+*~
+*.local
+* copy
+* copy.*
+*\ copy
+
+# Claude Code per-machine settings. Ignored by the owner's global gitignore, so
+# it never showed up as untracked here — but that is a property of one machine,
+# not of this repo, and a contributor without that global rule would see it.
+.claude/settings.local.json
+
+# Database dumps, backups and scratch output — never committed (the production
+# backup and cutover dumps hold real user data).
+*.dump
+*.custom
+backups/
+scratch/
+
+# Playwright output, wherever a run puts it
+playwright-report/
+test-results/

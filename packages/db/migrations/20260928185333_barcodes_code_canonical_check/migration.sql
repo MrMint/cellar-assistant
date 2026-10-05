@@ -1,0 +1,1 @@
+ALTER TABLE "barcodes" ADD CONSTRAINT "barcodes_code_canonical" CHECK ((code = canonical_barcode_code(code, NULL::text)));

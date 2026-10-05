@@ -1,0 +1,155 @@
+# Dapr Multi-App Run template — the host-run lane's two apps and their sidecars.
+# https://docs.dapr.io/developing-applications/local-development/multi-app-dapr-run/
+#
+# This file is a TEMPLATE. `scripts/stack/stack.sh` substitutes the `${...}`
+# placeholders with this worktree's derived ports and writes the result to
+# `.stack/<slug>/dapr.yaml`, which is what `dapr run -f` actually reads. The
+# generated file is gitignored, per-worktree, and has every number spelled out —
+# read it when you want to know what a stack is actually doing.
+#
+# Substitution is `scripts/stack/render.mjs` (plain `$${NAME}` replacement over
+# the environment), and it **fails on any placeholder it cannot resolve** rather
+# than emitting an empty string. A typo here is a startup error, not a sidecar
+# that silently binds port 0.
+#
+# ## Why every port is a variable
+#
+# Two worktrees must be able to run two stacks at once. Actor invocation in this
+# repo goes to the calling app's *own* sidecar
+# (`services/actors/src/lib/sidecar.ts`, `services/api/src/dapr.ts`), and Dapr placement
+# routes those calls **by actor type**. Two actor hosts that register `ItemActor`
+# against the same placement service are one virtual-actor cluster, regardless of
+# their app-ids — so worktree A's API can have its call served by worktree B's
+# process against B's database. The fix is a placement service per worktree,
+# which is why `placementHostAddress` below is a variable and not `localhost`.
+# `scripts/stack/isolation-proof.sh` demonstrates both halves of that claim.
+#
+# ## resourcesPaths, not resourcesPath
+#
+# The run-template reference marks `resourcesPath` (singular) deprecated and
+# documents `resourcesPaths` (plural) as its replacement. The reference
+# describes it as "comma separated paths", but CLI 1.18.0 unmarshals the
+# field into a Go []string: a scalar is rejected outright. It is a YAML
+# sequence below for that reason.
+#
+# ## `env:` here vs the shell
+#
+# The `env:` blocks below carry **per-app** configuration — anything that must
+# differ between the two processes, or that must NOT reach one of them.
+# `DATABASE_URL` is the load-bearing example: `services/api` refuses to start if it
+# can see a database credential (`assertNoDatabaseCredentials`,
+# `services/api/src/config.ts`), and that rule is the whole point of the two
+# processes. So the connection string appears in the actors block and nowhere
+# else, and `stack.sh` never exports `DATABASE_URL`/`POSTGRES_PASSWORD` into the
+# `dapr run` environment, which both apps and both sidecars inherit.
+#
+# What *is* exported to the shared parent environment is the small set that is
+# safe for both and needed by daprd itself: `MINIO_ROOT_USER` /
+# `MINIO_ROOT_PASSWORD` (the `envvars` secret store reads them out of the
+# sidecar's own environment for the `files` binding), `BETTER_AUTH_SECRET`, the
+# OAuth client pairs, the `AI_*` settings, and the two Dapr API tokens —
+# `DAPR_API_TOKEN` and `APP_API_TOKEN`, which daprd itself reads (to demand the
+# first from its callers and present the second to its app) and which both apps
+# read under the same names, so the parent environment is the one place all
+# four processes agree on them. None of those is on the API's forbidden list;
+# `stack.sh selftest` checks that.
+version: 1
+
+apps:
+  # The actor host first: it owns every actor type, better-auth, and the only
+  # Postgres connection in the stack.
+  - appID: ${ACTORS_APP_ID}
+    appDirPath: ${REPO_ROOT}/services/actors
+    appProtocol: http
+    appPort: ${ACTORS_PORT}
+    # The app binds 127.0.0.1 in this lane (see APP_HOST below), so the sidecar
+    # must dial the same address. The compose lane uses the service name.
+    appChannelAddress: 127.0.0.1
+    daprHTTPPort: ${ACTORS_DAPR_HTTP_PORT}
+    daprGRPCPort: ${ACTORS_DAPR_GRPC_PORT}
+    daprInternalGRPCPort: ${ACTORS_DAPR_INTERNAL_GRPC_PORT}
+    metricsPort: ${ACTORS_DAPR_METRICS_PORT}
+    placementHostAddress: 127.0.0.1:${PLACEMENT_PORT}
+    schedulerHostAddress: 127.0.0.1:${SCHEDULER_PORT}
+    # A YAML sequence, NOT the comma-separated string the run-template
+    # reference shows: the CLI unmarshals this field into a []string and
+    # rejects a scalar with `cannot unmarshal !!str ... into []string`
+    # (dapr CLI 1.18.0). Verified by trying it the documented way first.
+    resourcesPaths:
+      - ${STACK_DIR}/dapr/components
+    configFilePath: ${STACK_DIR}/dapr/config.yaml
+    appLogDestination: console
+    daprdLogDestination: console
+    # Phase 5b: the actor host runs on bun, the same as
+    # services/actors/package.json's `start` and the same as its Dockerfile's
+    # CMD. Keeping this line on `node` while the image ran bun would mean every
+    # local session exercised a runtime production does not use, which is the
+    # kind of divergence that is only ever found the expensive way.
+    #
+    # The Node path is still supported and still measured: `start:node` in the
+    # package, `CMD ["node", "src/index.ts"]` in the image, and
+    # `services/actors/scripts/soak/run-soak.sh node` here — it writes a variant
+    # of the generated run file with this one line changed, so an A/B needs no
+    # edit to this template and no revert.
+    command: ["bun", "src/index.ts"]
+    env:
+      APP_PORT: "${ACTORS_PORT}"
+      APP_HOST: "127.0.0.1"
+      DAPR_HOST: "127.0.0.1"
+      DAPR_HTTP_PORT: "${ACTORS_DAPR_HTTP_PORT}"
+      DATABASE_URL: "${DATABASE_URL}"
+      AUTH_DATABASE_URL: "${DATABASE_URL}"
+      BETTER_AUTH_URL: "${BETTER_AUTH_URL}"
+      AUTH_TRUSTED_ORIGINS: "${AUTH_TRUSTED_ORIGINS}"
+      # A8/E3 · the presigned-URL host. In the all-compose lane this is `minio`,
+      # which the host browser cannot resolve *and* cannot alias around, because
+      # SigV4 signs the Host header. Running on the host makes one name correct
+      # from both sides: `localhost:${MINIO_PORT}` is what the sidecar's S3
+      # binding signs (`.stack/<slug>/dapr/components/files-binding.yaml`, also
+      # generated) and what the browser dials. `assertBareHostname` in
+      # `services/actors/src/lib/s3-presign.ts` is why the port is a separate
+      # variable.
+      FILES_S3_ENDPOINT: "localhost"
+      FILES_S3_PORT: "${MINIO_PORT}"
+      FILES_S3_USE_SSL: "false"
+      FILES_S3_BUCKET: "${MINIO_BUCKET}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:${OTLP_HTTP_PORT}"
+      OTEL_SERVICE_NAME: "actors"
+      ACTORS_PROBE_ALLOW_KILL: "1"
+      # Ollama is a host process and is deliberately shared between stacks: it
+      # holds no per-stack state. The compose lane reaches it through
+      # host.docker.internal; from the host it is plain localhost.
+      OLLAMA_ENDPOINT: "${OLLAMA_ENDPOINT}"
+
+  - appID: ${API_APP_ID}
+    appDirPath: ${REPO_ROOT}/services/api
+    appProtocol: http
+    appPort: ${API_PORT}
+    appChannelAddress: 127.0.0.1
+    daprHTTPPort: ${API_DAPR_HTTP_PORT}
+    daprGRPCPort: ${API_DAPR_GRPC_PORT}
+    daprInternalGRPCPort: ${API_DAPR_INTERNAL_GRPC_PORT}
+    metricsPort: ${API_DAPR_METRICS_PORT}
+    placementHostAddress: 127.0.0.1:${PLACEMENT_PORT}
+    schedulerHostAddress: 127.0.0.1:${SCHEDULER_PORT}
+    # A YAML sequence, NOT the comma-separated string the run-template
+    # reference shows: the CLI unmarshals this field into a []string and
+    # rejects a scalar with `cannot unmarshal !!str ... into []string`
+    # (dapr CLI 1.18.0). Verified by trying it the documented way first.
+    resourcesPaths:
+      - ${STACK_DIR}/dapr/components
+    configFilePath: ${STACK_DIR}/dapr/config.yaml
+    appLogDestination: console
+    daprdLogDestination: console
+    command: ["bun", "src/index.ts"]
+    env:
+      APP_PORT: "${API_PORT}"
+      APP_HOST: "127.0.0.1"
+      DAPR_HOST: "127.0.0.1"
+      DAPR_HTTP_PORT: "${API_DAPR_HTTP_PORT}"
+      # A7 · same string as the actors app's BETTER_AUTH_URL, or every token
+      # fails verification (`assertAuthIdentityCoherence`, services/api/src/config.ts).
+      AUTH_ISSUER: "${BETTER_AUTH_URL}"
+      AUTH_JWKS_URL: "http://127.0.0.1:${ACTORS_PORT}/api/auth/jwks"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:${OTLP_HTTP_PORT}"
+      OTEL_SERVICE_NAME: "api"

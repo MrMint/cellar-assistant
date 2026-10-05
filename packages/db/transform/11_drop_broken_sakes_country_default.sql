@@ -1,0 +1,24 @@
+-- sakes.country DEFAULT 'Japan' can never be satisfied.
+--
+-- Found by B2 (2026-09-09), verified against the live schema:
+--   sakes.country            DEFAULT 'Japan'::text
+--   sakes_country_country_value_fkey  ->  country(value)
+--   country.value            holds 'JAPAN' (uppercase, like every other row)
+--
+-- so any INSERT that omits `country` fails outright:
+--   ERROR: insert or update on table "sakes" violates foreign key constraint
+--          "sakes_country_country_value_fkey"
+--   DETAIL: Key (country)=(Japan) is not present in table "country".
+--
+-- It has presumably never fired because every existing writer sets the column.
+-- Two ways to fix it: correct the value to 'JAPAN', or drop the default.
+--
+-- Dropping it, deliberately. ItemActor writes `country` explicitly (null unless
+-- the caller supplies one), so the new code's actual behaviour is "no country
+-- unless specified" -- and a default that silently stamps a country onto a
+-- user's row contradicts that. Correcting it to 'JAPAN' would make a
+-- never-executed branch start executing, which is a behaviour change disguised
+-- as a typo fix. If a default country for sake is genuinely wanted, add it back
+-- as a deliberate product decision.
+
+ALTER TABLE sakes ALTER COLUMN country DROP DEFAULT;

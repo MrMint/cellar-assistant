@@ -1,0 +1,107 @@
+# Single-file override of `/otel-lgtm/prometheus.yaml` inside the `otel-lgtm`
+# container, bind-mounted by infra/docker-compose.yml.
+#
+# ⚠ COPIED FROM THE PINNED IMAGE, NOT WRITTEN FROM SCRATCH. Everything from
+# the `---` line down to the "CELLAR ADDITIONS" marker is byte-for-byte the
+# file that `grafana/otel-lgtm:0.32.1` ships (sha256 923c0489…d218a3c,
+# extracted 2026-09-27). The image's Prometheus is started with
+# `--config.file=./prometheus.yaml`, so this file REPLACES that one rather than
+# adding to it. **When the image tag in the compose files changes, re-copy the
+# upstream half from the new image** and re-apply the section below:
+#
+#   docker run --rm --entrypoint cat grafana/otel-lgtm:<new-tag> /otel-lgtm/prometheus.yaml
+#
+# Otherwise an upgrade silently keeps the old image's OTLP settings (the
+# resource attributes promoted to labels, the out-of-order window) while
+# everything around them moves on.
+#
+# Retention is NOT set here: it is a command-line flag, passed through the
+# image's own `PROMETHEUS_EXTRA_ARGS` hook in the compose file.
+---
+global:
+  scrape_native_histograms: true
+otlp:
+  keep_identifying_resource_attributes: true
+  # Recommended attributes to be promoted to labels.
+  promote_resource_attributes:
+    - service.instance.id
+    - service.name
+    - service.namespace
+    - service.version
+    - cloud.availability_zone
+    - cloud.region
+    - container.name
+    - deployment.environment # backward compatibility
+    - deployment.environment.name
+    - k8s.cluster.name
+    - k8s.container.name
+    - k8s.cronjob.name
+    - k8s.daemonset.name
+    - k8s.deployment.name
+    - k8s.job.name
+    - k8s.namespace.name
+    - k8s.node.name
+    - k8s.pod.name
+    - k8s.replicaset.name
+    - k8s.statefulset.name
+    - host.name
+    - postgresql.database.name
+    - postgresql.schema.name
+    - postgresql.table.name
+    - postgresql.index.name
+    - database # used by otelcol/receiver/mongodb
+    - kafka.cluster.alias
+storage:
+  tsdb:
+    # A 10min time window is enough because it can easily absorb retries and network delays.
+    out_of_order_time_window: 10m
+
+# ---------------------------------------------------------------------------
+# CELLAR ADDITIONS — the only lines that differ from the upstream file.
+#
+# The Dapr runtime's own metrics. `--enable-metrics=true` makes every daprd
+# (and placement and scheduler, where it is the default) serve Prometheus
+# text on :9090, and until this block nothing scraped it: Prometheus held only
+# Tempo's span metrics and the collector's self-metrics.
+#
+# The addresses are compose service names because in the all-compose lanes
+# (`cellar-stack`, and production) each sidecar is its OWN container on the
+# compose network — `x-daprd` in infra/docker-compose.yml deliberately does not
+# use `network_mode: service:<app>`. So `actors-dapr:9090` is the sidecar, not
+# the app. (9090 is also this container's own Prometheus port; that does not
+# collide, because each target is a different container's 9090.)
+#
+# In the per-worktree host-run lane (`bun run dev:up`) the two sidecars are
+# host processes, not containers, so `actors-dapr` / `api-dapr` do not resolve.
+# That lane does not mount THIS file: `scripts/stack/stack.sh`
+# (`generate_prometheus_config`) writes a per-stack copy with the two quoted
+# targets below rewritten to `host.docker.internal:<derived metrics port>`, and
+# infra/docker-compose.hostrun.yml mounts that instead. Keep the targets as the
+# literal quoted strings `"actors-dapr:9090"` / `"api-dapr:9090"` — the rewrite
+# matches them exactly and refuses to start the lane if it no longer can.
+# Placement and scheduler are containers in both lanes and are scraped as-is.
+#
+# 30s, not the 1s the collector's self-scrape uses: these feed dashboards and
+# `rate()` over minutes, and the sidecar histograms are most of the series.
+# ---------------------------------------------------------------------------
+scrape_configs:
+  - job_name: dapr-sidecar
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["actors-dapr:9090", "api-dapr:9090"]
+    metric_relabel_configs:
+      # Request/response SIZE histograms: ~25% of a sidecar's series, and no
+      # panel or rule reads them. Latency histograms and every counter stay.
+      - source_labels: [__name__]
+        regex: "dapr_(grpc_io_(client|server)_(received|sent)_bytes_per_rpc|http_(client|server)_(received|sent|request|response)_bytes)_.*"
+        action: drop
+  - job_name: dapr-control-plane
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["placement:9090", "scheduler:9090"]
+    metric_relabel_configs:
+      # The scheduler embeds etcd and serves ~1,500 series of etcd and gRPC
+      # internals; keep Dapr's own series and the process basics.
+      - source_labels: [__name__]
+        regex: "dapr_.*|process_resident_memory_bytes|process_cpu_seconds_total|go_goroutines"
+        action: keep

@@ -1,0 +1,266 @@
+# Outbox liveness — is the drainer running, and is it keeping up?
+#
+# ## Why this file exists
+#
+# The outbox is the system's only durability primitive (target-stack.md §6.4):
+# every follow-up, peer notification, retry and scheduled job is a row that
+# `OutboxActor` drains every 2s. Until these rules, nothing noticed a drainer
+# that had STOPPED except the dead-letter reporter's 150-minute dead-man's
+# switch — and that reporter is itself delivered by the outbox. A dead
+# drainer therefore silenced its own alarm first, and only the alarm-about-
+# the-alarm fired, two and a half hours later.
+#
+# Both rules key on one event, `outbox.heartbeat` (INFO), emitted by the
+# drain reminder's turn at most once a minute (`HEARTBEAT_INTERVAL_MS`,
+# services/actors/src/actors/outbox-actor.ts) and ONLY after a drain returned.
+# A drain that throws, a reminder that stopped firing, a host that is gone and
+# a host that cannot export telemetry all look the same: silence. Attributes
+# (catalogued in services/actors/src/lib/events.ts; Loki turns dots into
+# underscores):
+#
+#   outbox.pending            -> outbox_pending            pending rows, due or not
+#   outbox.due                -> outbox_due                pending rows past run_after
+#   outbox.oldest_due_age_s   -> outbox_oldest_due_age_s   now() - min(run_after) over due rows, DB clock; 0 if none
+#   outbox.delivering         -> outbox_delivering         claimed, unresolved
+#
+# ## House rules this file follows (see outbox-and-actor-alerts.yaml's header)
+#
+#   * `event_name` and every attribute is STRUCTURED METADATA: filtered after
+#     the pipe, never in the `{…}` selector, which would match nothing.
+#   * Every query is `queryType: instant` (target-stack.md §7: a `range` query
+#     silently doubles a rule's window).
+#   * `urgency: page` selects the page route in contact-points-and-policies.yaml.
+#   * services/actors/src/lib/events.test.ts fails if an event_name or label
+#     used here is not in the catalog.
+#
+# ## Proof
+#
+# Measured 2026-09-28 (UTC) on the shared lane's Grafana (`cellar-stack`,
+# Grafana 13.2.0, Loki 3.7.7): rules loaded through
+# POST /api/admin/provisioning/alerting/reload, SYNTHETIC-tagged OTLP records
+# (`synthetic=true`, service.name=actors) pushed to otel-lgtm:4318 every 20s,
+# rule state read from /api/prometheus/grafana/api/v1/rules:
+#
+#   02:31 heartbeats at age 30 + a decoy event_name carrying age 5000
+#         -> both Normal for 5 minutes (negative controls for both rules)
+#   02:36 heartbeats at age 5000 -> backlog Pending 02:36:45, Alerting
+#         02:41:47 (its for: 5m); deadman Normal throughout
+#   02:44 heartbeats stop, decoy continues -> backlog Normal (NoData, as
+#         designed); deadman Pending 02:49:50, Alerting 02:51:50 (window 5m
+#         + for: 2m) — the decoy did not count as a heartbeat
+#   02:54 heartbeats resume -> deadman Normal at the next evaluation, 02:54:51
+#
+# Loki's `unwrap` reads structured metadata directly (checked first against
+# `outbox.drain`'s `claimed`). Positive and negative controls for each rule
+# are listed beside it.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: outbox-liveness
+    folder: Cellar Assistant
+    interval: 1m
+    rules:
+      # ## Dead-man's switch: no heartbeat for 5 minutes
+      #
+      # Window 5m = five missed beats at one a minute. A restart of the actor
+      # host re-arms the drain reminder at boot (`boot()`, keep-alive) with a
+      # 2s due time, so a healthy restart costs one or two beats and never
+      # reaches five. `for: 2m` is a debounce against evaluation timing (a
+      # host resuming from sleep, an OTLP post in flight), not the tolerance:
+      # the window is. So a stopped drainer pages about 7 minutes after its
+      # last beat, instead of 150 minutes after the dead-letter reporter's.
+      #
+      # Absence semantics, the same two guards as `dead-letter-reporter-silent`:
+      # `or vector(0)` makes silence a concrete 0 so `lt 1` decides, and
+      # `noDataState: Alerting` / `execErrState: Alerting` fail closed if that
+      # fallback ever stops working or Loki cannot be queried.
+      #
+      # Positive control: heartbeats stop -> Alerting. Negative controls: a
+      # heartbeat inside the window keeps it Normal; a record with the same
+      # attributes but another event_name does not count as a heartbeat.
+      - uid: outbox-drain-silent
+        title: "Outbox drain is silent: no heartbeat for 5 minutes"
+        condition: C
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: actors
+          urgency: page
+        annotations:
+          summary: "OutboxActor has not emitted outbox.heartbeat for 5 minutes (it beats once a minute). No follow-up work is being delivered: friend confirmations, vector regeneration, menu scans, job batches and the dead-letter report itself."
+          description: >-
+            The drain reminder emits outbox.heartbeat after every successful
+            drain turn, at most once a minute. Five minutes without one means
+            the drain is not running. Most likely first: the actors host is
+            down or not exporting (check {service_name="actors"} for ANY
+            line); drains are throwing ({service_name="actors"} |
+            event_name="outbox.drain_failed"); the keep-alive reminder was
+            never armed or stopped firing ({service_name="actors"} |
+            event_name="outbox.reminder_failed", and the Scheduler's etcd
+            volume). Also fires once when otel-lgtm starts on an EMPTY data
+            volume, and on a stack whose actors predate the heartbeat.
+          runbook_url: "docs/architecture/target-stack.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="actors"} |
+                event_name="outbox.heartbeat" [5m])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query
+
+      # ## Stuck backlog: due work has waited more than 15 minutes
+      #
+      # The drainer is alive (it is beating) but is not getting to due rows.
+      # A healthy drain claims a due row within one 2s tick, so the oldest due
+      # age sits at 0-2s. It grows only when every drain turn is spent on
+      # something else: one delivery hanging to its timeout (capped at 5
+      # minutes, MAX_DELIVERY_TIMEOUT_MS) ten times over, a burst of
+      # model-backed deliveries (menu extraction runs ~30s each, and the drain
+      # is a serial singleton), or a claim that keeps being released at the
+      # drain deadline.
+      #
+      # Threshold 900s (15 minutes): three maximal delivery timeouts back to
+      # back, or ~30 slow model calls queued ahead — well past anything a
+      # healthy burst produces, and short enough that a delayed unfriend
+      # (removeFriendOtherSide, whose delay IS the fail-open window in
+      # target-stack.md §7) is noticed within the half hour. `for: 5m` means
+      # five consecutive heartbeats agreed, so one slow minute does not page.
+      #
+      # `last_over_time` reads the most recent heartbeat in the window;
+      # `max` collapses replicas (a rolling deploy can briefly run two
+      # drainers). No heartbeat is NoData -> OK here, deliberately: silence is
+      # the dead-man's switch above, and paging twice for one outage helps
+      # nobody.
+      #
+      # Positive control: a heartbeat with outbox_oldest_due_age_s > 900 ->
+      # Pending, then Alerting after 5 minutes. Negative controls: the same
+      # event at 30s stays Normal; the same attribute at 5000 on another
+      # event_name stays Normal.
+      - uid: outbox-backlog-stuck
+        title: "Outbox backlog: due work has waited more than 15 minutes"
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: actors
+          urgency: page
+        annotations:
+          summary: "The oldest due outbox row has waited {{ $values.B.Value }}s (threshold 900s). The drain is running but not keeping up, so follow-up work is delayed."
+          description: >-
+            outbox.heartbeat reports outbox_oldest_due_age_s, measured on the
+            database clock. Look at what the drain is spending its turns on:
+            {service_name="actors"} | event_name="outbox.drain" (claimed,
+            delivered, retried, released) and outbox.retry lines for a target
+            timing out repeatedly; public.outbox where status='delivering' for
+            a delivery that has not come back. The queue drains serially, so
+            one slow target delays everything behind it.
+          runbook_url: "docs/architecture/target-stack.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                max(last_over_time({service_name="actors"} |
+                event_name="outbox.heartbeat" |
+                unwrap outbox_oldest_due_age_s [5m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [900]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query

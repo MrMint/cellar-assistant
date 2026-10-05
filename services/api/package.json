@@ -1,0 +1,32 @@
+{
+  "name": "@cellar-assistant/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'no build step: consumed as TypeScript source'",
+    "test": "bun run --bun vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "start": "bun src/index.ts",
+    "start:node": "node src/index.ts",
+    "schema:print": "node scripts/print-schema.ts"
+  },
+  "dependencies": {
+    "@cellar-assistant/contracts": "workspace:*",
+    "@pothos/core": "4.13.1",
+    "@pothos/plugin-dataloader": "4.4.5",
+    "@pothos/plugin-errors": "4.9.1",
+    "@pothos/plugin-relay": "4.7.1",
+    "dataloader": "2.2.3",
+    "graphql": "catalog:",
+    "graphql-yoga": "5.22.0",
+    "jose": "catalog:"
+  },
+  "devDependencies": {
+    "@cellar-assistant/analysis": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

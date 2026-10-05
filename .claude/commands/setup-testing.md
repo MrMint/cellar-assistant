@@ -7,6 +7,25 @@ model: claude-3-5-sonnet-20241022
 
 Set up testing for Next.js 15 with framework: $ARGUMENTS (default: jest)
 
+> **This repo already has a working test setup — do not scaffold a second one.**
+> Verified: there is **no jest** in any `package.json` here, so the default above
+> is wrong for this repo. What actually exists:
+>
+> - `services/client` → `bun test --isolate --timeout=30000 src/lib/` (bun's own
+>   runner, not jest and not vitest)
+> - `packages/db`, `packages/contracts`, `packages/policy`, `services/api`,
+>   `services/actors` → `bun run --bun vitest run`
+> - E2E → Playwright, already configured in `packages/e2e`
+>   (`packages/e2e/playwright.config.ts`), run with `bun run test:e2e`
+> - CI → already wired in `.github/workflows/`
+>
+> Steps 2, 5, 6 and 7 below would therefore **overwrite working configuration
+> that other agents own** — `packages/e2e/playwright.config.ts` and
+> `.github/workflows/**` especially. Add tests to the existing harness instead.
+> Treat this command as applying only to a package that genuinely has no tests,
+> read root `AGENTS.md` ("Key commands", "Testing and validation") first, and say
+> what you intend to create before creating it.
+
 Steps to complete:
 
 1. Install necessary dependencies

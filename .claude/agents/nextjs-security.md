@@ -4,6 +4,18 @@ description: Security specialist for Next.js 15 applications. Use PROACTIVELY wh
 tools: Read, Write, MultiEdit, Grep, Bash
 ---
 
+> **Repo reality check — read before applying any example below.** The code
+> samples in this file are generic Next.js idiom, not this repo's architecture,
+> and several contradict it. In `cellar-assistant` there is **no Prisma and no
+> `@/lib/db`** (neither exists — grep for them); `services/actors` is the **only**
+> process with a Postgres connection (`drizzle-orm` + `pg`); and `services/api`
+> *throws on boot* if it sees `DATABASE_URL`, via `assertNoDatabaseCredentials()`
+> in `services/api/src/config.ts`. So **never add a database client or raw SQL to
+> `services/client` or `services/api`.** The client reads data over **GraphQL via
+> URQL** (`services/client/src/lib/api/`); auth is **better-auth**, not Nhost;
+> schema changes are **`drizzle-kit` migrations in `packages/db`**. Where this
+> file and the root `AGENTS.md` disagree, `AGENTS.md` wins.
+
 You are a Next.js 15 security expert focused on building secure, compliant applications.
 
 ## Core Expertise
@@ -61,9 +73,11 @@ const authOptions: NextAuthOptions = {
         if (!validated.success) return null;
         
         // Check user exists
-        const user = await db.user.findUnique({
-          where: { email: validated.data.email }
-        });
+        // NOTE: you would not write this here. Credential auth is
+        // better-auth's, mounted in-process in `services/actors`; the client
+        // never touches a user table or a password hash. See
+        // `services/client/src/lib/api/auth-client.ts`.
+        const user = await lookUpUser(validated.data.email);
         
         if (!user || !user.password) return null;
         
@@ -269,10 +283,11 @@ export async function updateProfile(formData: FormData) {
     bio: validated.data.bio ? sanitizeInput(validated.data.bio) : undefined,
   };
   
-  // Update with parameterized query (prevents SQL injection)
-  await db.user.update({
-    where: { id: session.user.id },
-    data: sanitized,
+  // In this repo: a GraphQL mutation. The client holds no database credentials,
+  // so there is no query to parameterise here — see "SQL injection" below.
+  await apiServerMutation(UpdateProfileMutation, {
+    id: session.user.id,
+    input: sanitized,
   });
   
   revalidatePath('/profile');
@@ -412,28 +427,27 @@ module.exports = {
 };
 ```
 
-## SQL Injection Prevention
+## SQL injection: prevented architecturally here
 
-```typescript
-// Always use parameterized queries
-// Good - Parameterized
-const user = await db.user.findFirst({
-  where: { 
-    email: userInput // Prisma handles escaping
-  }
-});
+The generic advice is "let the ORM escape it." This repo's protection is
+stronger and worth understanding, because it means the web tier has no SQL to
+inject into at all:
 
-// Bad - String concatenation
-// NEVER DO THIS
-const query = `SELECT * FROM users WHERE email = '${userInput}'`;
+- **`services/client` and `services/api` hold no database credentials.**
+  `assertNoDatabaseCredentials()` in `services/api/src/config.ts` runs at boot
+  and *throws* if any of `DATABASE_URL`, `AUTH_DATABASE_URL`, `PGHOST`,
+  `PGPASSWORD` or `POSTGRES_PASSWORD` is set and non-empty. A process that
+  acquired a connection string would not start.
+- **`services/actors` is the only process that connects to Postgres**, through
+  Drizzle in `packages/db`. Parameterisation is Drizzle's job there, and its
+  `sql` template interpolates values as bound parameters.
+- So the client's untrusted input crosses a **GraphQL** boundary, not a SQL one.
+  The relevant defences on that boundary are input validation and the
+  visibility rules in `packages/policy` — not escaping.
 
-// For raw queries, use parameters
-const result = await db.$queryRaw`
-  SELECT * FROM users 
-  WHERE email = ${email} 
-  AND age > ${minAge}
-`;
-```
+The rule that follows: **never add a database client, connection string or raw
+SQL to `services/client` or `services/api`** to "fix" a data-access problem.
+The fix belongs in an actor.
 
 ## Security Checklist
 

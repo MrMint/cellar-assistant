@@ -1,0 +1,19 @@
+{
+  "name": "@cellar-assistant/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'no build step: consumed as TypeScript source'",
+    "test": "node ../../scripts/check-node-version.mjs && playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "test:ui": "node ../../scripts/check-node-version.mjs && playwright test --ui",
+    "report": "playwright show-report artifacts/report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

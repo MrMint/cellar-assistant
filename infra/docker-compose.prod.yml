@@ -1,0 +1,465 @@
+# Production overlay for infra/docker-compose.yml. Never used alone:
+#
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+#     --env-file infra/.env.prod up -d
+#
+# (`bun run stack:up` is the *development* command and does not read this
+# file.)
+#
+# WHAT THIS OVERLAY CHANGES, AND WHY EACH CHANGE IS HERE RATHER THAN IN THE BASE
+#
+#   1. `api` and `actors` run built images instead of a bind-mounted workspace.
+#      `!reset` on `volumes` is load-bearing: Compose merges volume lists, so
+#      without it the base's `..:/workspace` mount would still apply and would
+#      shadow the image's entire application directory — node_modules included.
+#      Requires Compose ≥ 2.24 (this repo's runner has v5.x).
+#   2. NOTHING HERE IS PUBLISHED ON 0.0.0.0. The public edge is the host's
+#      existing `nginx-proxy` container (with `nginx-proxy-acme` issuing
+#      certificates), which already owns 80/443 on Loki for the owner's other
+#      services; this stack sits behind it rather than beside it. Postgres,
+#      MinIO's S3 port and the API are bound to 127.0.0.1 so host-side tooling
+#      (backups, a curl during a deploy) still works without exposing them to
+#      the LAN; Grafana is bound to the LAN interface only; the actor host
+#      publishes nothing at all — see its comment.
+#   3. `api`, `actors` and `minio` carry nginx-proxy's VIRTUAL_HOST /
+#      VIRTUAL_PATH / VIRTUAL_PORT and acme-companion's LETSENCRYPT_HOST. They
+#      are the ONLY services that do, and the only ones attached to the proxy's
+#      network — which on Loki is Docker's default `bridge`, and Compose cannot
+#      put a service there alongside the project network (measured: the daemon
+#      refuses the service-name alias Compose always adds, "network-scoped
+#      aliases are only supported for user-defined networks"). So the attach is
+#      not declared here: scripts/deploy/edge.sh connects exactly the services
+#      that carry VIRTUAL_HOST after every `up`, and installs the per-host
+#      nginx config from infra/nginx-proxy/vhost.d/ before it.
+#      scripts/deploy/check-prod-config.mjs refuses a render where that set, a
+#      VIRTUAL_PATH, or a 0.0.0.0 publish changes. docs/architecture/
+#      deploy-loki.md §1 and §3 have the whole shape.
+#   4. Healthchecks everywhere, and `restart: unless-stopped` on everything that
+#      is not a one-shot.
+#   5. The `files` binding is NOT overridden: every call a sidecar makes through
+#      it is server-side, so it keeps the base component's in-network
+#      `http://minio:9000`, exactly as in development. Browser-facing URLs are
+#      signed by the actor host for FILES_S3_ENDPOINT
+#      (services/actors/src/lib/s3-presign.ts). Until the edge moved, the
+#      sidecars dialled the PUBLIC files hostname through a compose network
+#      alias on Caddy; with the edge outside this project there is nothing to
+#      alias, and leaving the hop to router NAT hairpinning was the alternative.
+#   6. `client` is profile-gated off. The base file containerises Next for the
+#      local lane; production serves it from Vercel. See that service below.
+#   7. CONFIG FINGERPRINTS. `otel-lgtm` and both sidecars read config from bind
+#      mounts, and `docker compose up -d` recreates a container only when its
+#      *compose* config changes — never because a mounted file did. So a commit
+#      that only edited an alert rule or a Dapr component would deploy
+#      "successfully" with the old config still running — 1c403299, which only
+#      added alert rules, is one (checked with `up --dry-run`: an unchanged
+#      compose config answers "Running", not "Recreate"). Worse, several of
+#      these are SINGLE-FILE mounts, and a single-file bind mount does not
+#      follow a checkout that replaces the file: measured on Docker Desktop
+#      (2026-09-27), the container's view became "No such file" after an
+#      atomic rename on the host; on Linux it keeps serving the old inode.
+#      Either way a Grafana reload API call inside the container would re-read
+#      stale config. Each of those services therefore carries a
+#      `cellar.config-fingerprint` label that .github/workflows/deploy-loki.yaml
+#      sets to a hash of the directory it mounts from; a changed hash is a
+#      changed label, which `up -d` answers with a recreate of that service and
+#      nothing else. Unset (any manual `up`), the label is empty and nothing is
+#      forced. The nginx-proxy vhost files are NOT mounted into any container
+#      of this project, so they get no label: edge.sh copies them into the
+#      proxy's vhost.d and reloads it explicitly.
+#
+# A TRAP THIS FILE DELIBERATELY AVOIDS: no service uses `env_file`. `services/api`
+# refuses to start if a database credential reaches it
+# (`assertNoDatabaseCredentials`), and `env_file: .env.prod` would hand every
+# container the whole file, POSTGRES_PASSWORD included. Every variable below is
+# named explicitly, exactly as the base compose file does.
+
+services:
+  # --- Data ----------------------------------------------------------------
+  postgres:
+    # Postgres must not be PID 1 in its container — see 05c48492's commit
+    # message (and the identical comment on the base file's postgres service,
+    # infra/docker-compose.yml) for the full causal chain and measurements.
+    # Short version: without an init, an orphaned process reparents to the
+    # postmaster, which treats a reaped child's exit status >= 2 as a crashed
+    # backend and crash-recovers the whole cluster. Production is exactly
+    # where that is most expensive, so this mirrors the dev-compose fix.
+    init: true
+    # `!override`, not a plain list: Compose *appends* port lists rather than
+    # merging them by container port, so without it the base file's
+    # `"${POSTGRES_PORT:-5433}:5432"` — which binds 0.0.0.0 — would still be
+    # published alongside the loopback one. Verified with
+    # `docker compose ... config`; the same applies to `minio` and `api` below.
+    ports: !override
+      # Loopback only. The backup job (`scripts/backup/`) and any psql session
+      # run on this host; nothing off-box has any business here.
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+
+  minio:
+    # No `image:` here: the base file's `${MINIO_IMAGE:-pgsty/silo@digest}`
+    # applies, so the pin lives in one place and MINIO_IMAGE still overrides it.
+    # `!override` drops the base's two published ports entirely — including
+    # 9101, the console, which must not exist on any interface here.
+    ports: !override
+      # S3 API on loopback for `mc` mirroring from this host. The console
+      # (container port 9001) is published nowhere and disabled below.
+      - "127.0.0.1:${MINIO_PORT:-9100}:9000"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      # The console is a credentialled admin UI with no role in production, and
+      # the edge proxies only the S3 port (VIRTUAL_PORT below). This closes it
+      # inside the network too.
+      MINIO_BROWSER: "off"
+      # CORS: only the app's own origin may call the S3 API from a browser
+      # (the presigned upload PUT). This replaces the base file's localhost
+      # default, which would otherwise be inherited here and break every
+      # upload. One origin, so the no-spaces rule cannot bite.
+      MINIO_API_CORS_ALLOW_ORIGIN: ${PUBLIC_APP_ORIGIN:?PUBLIC_APP_ORIGIN is required}
+      # --- The public edge: nginx-proxy + acme-companion (header, note 3) ---
+      # The whole files hostname goes to MinIO's S3 API, path-style, with the
+      # Host header and the path untouched — both are inside every SigV4
+      # signature. No VIRTUAL_PATH: this host has nothing else on it.
+      # infra/nginx-proxy/vhost.d/files.conf raises nginx's 1m body cap to the
+      # app's upload limit and turns request buffering off.
+      VIRTUAL_HOST: ${PUBLIC_FILES_HOST:?PUBLIC_FILES_HOST is required}
+      VIRTUAL_PORT: "9000"
+      LETSENCRYPT_HOST: ${PUBLIC_FILES_HOST:?PUBLIC_FILES_HOST is required}
+      # "true" makes acme-companion use Let's Encrypt's STAGING directory for
+      # this container's certificate (untrusted by browsers, loose rate limits)
+      # — the first-deploy rehearsal in deploy-loki.md §4. Per container, so it
+      # never touches the owner's other certificates.
+      LETSENCRYPT_TEST: ${ACME_STAGING:-false}
+
+  minio-init:
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      MINIO_BUCKET: ${MINIO_BUCKET:-cellar-files}
+      # The bucket's CORS rule, from the same origin as `minio` above.
+      FILES_CORS_ALLOWED_ORIGINS: ${PUBLIC_APP_ORIGIN:?PUBLIC_APP_ORIGIN is required}
+
+  # --- Applications --------------------------------------------------------
+  actors:
+    image: ${ACTORS_IMAGE:?ACTORS_IMAGE is required, e.g. ghcr.io/mrmint/cellar-actors:sha-abc1234}
+    # See note 1 at the top of this file: without this the base's workspace bind
+    # mount would shadow the image.
+    volumes: !reset []
+    # `bun src/index.ts` from /workspace/services/actors, both baked into
+    # services/actors/Dockerfile. Dropping the base's working_dir/command override
+    # would also work; keeping them explicit means this file says what runs.
+    #
+    # This line is load-bearing in a way that is easy to miss: it OVERRIDES the
+    # image's `CMD`, so while it said `node` the bun image ran Node. The image
+    # ships both interpreters on a `node:24-bookworm-slim` base precisely so
+    # reverting this one word is the complete rollback — no rebuild, no redeploy
+    # of a different tag.
+    working_dir: /workspace/services/actors
+    command: ["bun", "src/index.ts"]
+    # NOT PUBLISHED, ON PURPOSE — not even on loopback. Port 3002 carries the
+    # Dapr actor host: `DaprServer` registers `/actors/*` on the same Express
+    # app as better-auth, and an actor method there trusts the ctx it is
+    # handed. The edge forwards `/api/auth/*` and nothing else (VIRTUAL_PATH
+    # below; nginx-proxy 404s every other path on the edge hostname), so from
+    # the internet that prefix is the only reachable surface. The rest of this
+    # compose network CAN reach the port — and so, since the edge moved behind
+    # the host's shared nginx-proxy, can every container on Loki's default
+    # `bridge` network, which edge.sh attaches this container to so the proxy
+    # can reach it (deploy-loki.md §7). Either way,
+    # what it cannot do there is anything but better-auth and `/healthz`:
+    # every other path, in any spelling (`/ACTORS/…`, a trailing slash, dot
+    # segments), needs APP_API_TOKEN (below), which only actors-dapr holds.
+    # That was not true until the host's routing was made case-sensitive and
+    # strict and the token check deny-by-default — `/ACTORS/…` used to route
+    # to the actor handlers without it. Proof, per spelling:
+    # services/actors/src/lib/actor-host-bypass.test.ts. A leaked token is
+    # still the whole domain layer, which is why the port stays unpublished.
+    ports: !reset []
+    environment:
+      # A6/E3 · the public **Next** origin, not this host's edge. better-auth
+      # derives OAuth redirect URIs, the JWT `iss`/`aud` and the `__Secure-`
+      # cookie prefix from it, and the browser only ever talks to the Next app,
+      # which proxies /api/auth/* here. `assertPublicAuthOrigins` in
+      # services/actors/src/auth/config.ts refuses to start on anything else.
+      BETTER_AUTH_URL: ${PUBLIC_APP_ORIGIN:?PUBLIC_APP_ORIGIN is required}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      # W4 security F3 · what the Next proxy on Vercel proves itself with, so
+      # its x-cellar-client-ip is trusted and better-auth's limiter counts each
+      # user rather than Vercel's egress address. The SAME value is set in the
+      # Vercel project's environment (deploy-loki.md §2.5). The actor host
+      # refuses to start without it, or with the base file's dev default.
+      AUTH_PROXY_SECRET: ${AUTH_PROXY_SECRET:?AUTH_PROXY_SECRET is required (openssl rand -hex 32; same value on Vercel)}
+      # Only the *extra* origins: better-auth trusts BETTER_AUTH_URL's own
+      # origin implicitly (context/helpers.mjs). Empty is the normal case.
+      AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-}
+      # A8/E3 · a bare hostname; the minio client concatenates it into the
+      # signed Host header. `filesS3Config` throws on a scheme, port or path.
+      # With SSL on and no explicit port the signer defaults to 443, so the
+      # signed authority is the bare hostname — exactly what nginx-proxy
+      # forwards as `Host` on 443.
+      FILES_S3_ENDPOINT: ${FILES_S3_ENDPOINT:?FILES_S3_ENDPOINT is required}
+      FILES_S3_USE_SSL: "true"
+      # EMPTY, ON PURPOSE: the base file sets `${MINIO_PORT:-9100}` here for the
+      # local lane, and environment maps MERGE, so without this line production
+      # inherited it and signed `https://files.example.com:9100/…` — a URL that
+      # reaches nothing (found by rendering base+prod, 2026-10-04). `read()` in
+      # s3-presign.ts treats "" as unset, so the signer falls back to 443.
+      FILES_S3_PORT: ""
+      FILES_S3_BUCKET: ${MINIO_BUCKET:-cellar-files}
+      # FILES_S3_INTERNAL_ENDPOINT / _PORT are inherited from the base file as
+      # `minio` / `9000`, and that is now deliberate here too: what this process
+      # dials itself (stat, copy, the AI seams' image fetch) goes straight to
+      # MinIO on the compose network instead of out through the public edge.
+      # Header, note 5.
+      # A5 · the development kill switch, off. `ProbeJobActor` only honours the
+      # literal "1", so an empty value disables it.
+      ACTORS_PROBE_ALLOW_KILL: ""
+      # Dapr API tokens — REQUIRED here, never the base file's published
+      # development values (docs/architecture/target-stack.md, "Dapr API
+      # tokens"). DAPR_API_TOKEN is what this app presents to actors-dapr;
+      # APP_API_TOKEN is what actors-dapr must present on /actors/* and
+      # /dapr/*, so nothing else on this network can act as the outbox.
+      DAPR_API_TOKEN: ${DAPR_API_TOKEN:?DAPR_API_TOKEN is required (openssl rand -hex 32)}
+      APP_API_TOKEN: ${APP_API_TOKEN:?APP_API_TOKEN is required (openssl rand -hex 32)}
+      # --- The public edge: nginx-proxy + acme-companion (header, note 3) ---
+      # THE PREFIX IS A SECURITY BOUNDARY, NOT TIDINESS. nginx-proxy turns
+      # this into `location ^~ /api/auth/`; the `^~` makes it win over any
+      # regex location, and the raw request line is forwarded unchanged (no
+      # VIRTUAL_DEST), so the actor host's canonical-path gate sees exactly
+      # what the client sent. Drop VIRTUAL_PATH and nginx-proxy serves this
+      # container at "/" — the whole actor host on the internet behind one
+      # token — which is why check-prod-config.mjs refuses any other value.
+      VIRTUAL_HOST: ${PUBLIC_EDGE_HOST:?PUBLIC_EDGE_HOST is required}
+      VIRTUAL_PATH: "^~ /api/auth/"
+      VIRTUAL_PORT: "3002"
+      LETSENCRYPT_HOST: ${PUBLIC_EDGE_HOST:?PUBLIC_EDGE_HOST is required}
+      LETSENCRYPT_TEST: ${ACME_STAGING:-false}
+    healthcheck:
+      # better-auth's key set: proves the HTTP server, the better-auth mount and
+      # the database adapter are all up, which a bare TCP check would not.
+      # `node -e` rather than curl/wget — neither is in node:24-bookworm-slim.
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3002/api/auth/jwks').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    # Merged with the base file's `postgres: service_healthy`. Two reasons, one
+    # of them load-bearing for the deploy: FileActor and the files binding need
+    # the bucket `minio-init` creates, and `docker compose up --wait` (what
+    # .github/workflows/deploy-loki.yaml runs, so the healthchecks above are
+    # actually awaited) FAILS on a one-shot container that exits 0 unless
+    # something depends on it with `service_completed_successfully` — measured
+    # on compose v5.5.1: `container …-oneshot-1 exited (0)`, exit 1.
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  actors-dapr:
+    labels:
+      cellar.config-fingerprint: ${DAPR_CONFIG_HASH:-}
+    # No `volumes:` here: the base's `./dapr/components` mount, unchanged. Its
+    # `files` binding dials `http://minio:9000` on this network, which is right
+    # for every call a sidecar makes (header, note 5). There used to be a prod
+    # override pointing it at the public files hostname through Caddy.
+    environment:
+      # Read by the `files` binding through the `envvars` secret store.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      # Required (see the actors service): daprd enforces the first on its
+      # callers and presents the second to its app.
+      DAPR_API_TOKEN: ${DAPR_API_TOKEN:?DAPR_API_TOKEN is required (openssl rand -hex 32)}
+      APP_API_TOKEN: ${APP_API_TOKEN:?APP_API_TOKEN is required (openssl rand -hex 32)}
+    restart: unless-stopped
+
+  api:
+    image: ${API_IMAGE:?API_IMAGE is required, e.g. ghcr.io/mrmint/cellar-api:sha-abc1234}
+    volumes: !reset []
+    working_dir: /workspace/services/api
+    command: ["bun", "src/index.ts"]
+    ports: !override
+      # Loopback only, for a local `curl 127.0.0.1:$API_PORT/healthz` during a
+      # deploy; nginx-proxy reaches the container directly on the `bridge`
+      # network edge.sh attaches it to. ⚠ ON LOKI 3001 IS TAKEN by another
+      # service, so the default makes this `up` fail with "address already in
+      # use". Set API_PORT in .env.prod.
+      - "127.0.0.1:${API_PORT:-3001}:3001"
+    environment:
+      # E3 · the identity triple. All three are the *same string* as the actors
+      # service's BETTER_AUTH_URL above; `assertAuthIdentityCoherence`
+      # (services/api/src/config.ts) refuses to start if they diverge, which is
+      # otherwise a silent "every token fails verification".
+      AUTH_ISSUER: ${PUBLIC_APP_ORIGIN:?PUBLIC_APP_ORIGIN is required}
+      AUTH_AUDIENCE: ${PUBLIC_APP_ORIGIN:?PUBLIC_APP_ORIGIN is required}
+      # Passed *only* as the oracle for that assertion — services/api reads it for
+      # nothing else. It is a URL, not a credential, so it does not violate the
+      # "no secrets in services/api" rule (`assertNoDatabaseCredentials`).
+      BETTER_AUTH_URL: ${PUBLIC_APP_ORIGIN:?PUBLIC_APP_ORIGIN is required}
+      # Service-internal and deliberately NOT the public origin: fetching the
+      # key set over the public edge would make this process's startup depend on
+      # DNS, TLS and the router.
+      AUTH_JWKS_URL: ${AUTH_JWKS_URL:-http://actors:3002/api/auth/jwks}
+      # Presented to api-dapr on every actor invocation. Required, like the
+      # actors service's.
+      DAPR_API_TOKEN: ${DAPR_API_TOKEN:?DAPR_API_TOKEN is required (openssl rand -hex 32)}
+      # --- The public edge: nginx-proxy + acme-companion (header, note 3) ---
+      # nginx-proxy turns this into `location ~ ^/(graphql|healthz)$`: Yoga's
+      # one endpoint and the liveness route, exact, case-sensitive. `$$` is
+      # Compose's escape for a literal `$`. Same hostname as `actors`; neither
+      # claims "/", so everything else on the hostname is nginx-proxy's 404.
+      VIRTUAL_HOST: ${PUBLIC_EDGE_HOST:?PUBLIC_EDGE_HOST is required}
+      VIRTUAL_PATH: "~ ^/(graphql|healthz)$$"
+      VIRTUAL_PORT: "3001"
+      LETSENCRYPT_HOST: ${PUBLIC_EDGE_HOST:?PUBLIC_EDGE_HOST is required}
+      LETSENCRYPT_TEST: ${ACME_STAGING:-false}
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      actors:
+        condition: service_healthy
+
+  api-dapr:
+    labels:
+      cellar.config-fingerprint: ${DAPR_CONFIG_HASH:-}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      DAPR_API_TOKEN: ${DAPR_API_TOKEN:?DAPR_API_TOKEN is required (openssl rand -hex 32)}
+      APP_API_TOKEN: ${APP_API_TOKEN:?APP_API_TOKEN is required (openssl rand -hex 32)}
+    restart: unless-stopped
+
+  # --- Frontend: NOT deployed here ------------------------------------------
+  # The base file's `client` service builds and serves Next.js in a container
+  # so the local stack (and the Playwright suite) needs no host dev server.
+  # **Production serves this app from Vercel**, not from Loki
+  # (docs/architecture/deploy-loki.md §2.5: three server-side variables on the
+  # Vercel project point it at this stack), so the container must not start
+  # here — the deploy workflow runs a bare
+  # `docker compose … up -d --remove-orphans` with no service list
+  # (.github/workflows/deploy-loki.yaml), which would otherwise build Next on
+  # Loki and publish it on 0.0.0.0:3003, past the edge.
+  #
+  # An overlay cannot *remove* a service, so this gates it behind a profile
+  # nothing ever enables: a service with any profile is skipped unless that
+  # profile is active or the service is named explicitly on the command line.
+  # `profiles` merges by appending, so the base file — which declares none —
+  # keeps starting the client in the development lane.
+  client:
+    profiles: ["vercel-serves-the-frontend"]
+
+  # --- Observability -------------------------------------------------------
+  otel-lgtm:
+    # The pinned default is the base file's tag; see the UPGRADE CHECKLIST on
+    # the base service before overriding it — ./grafana/otel-lgtm/prometheus.yaml
+    # is a copy of that tag's file and has to move with it.
+    image: ${OTEL_LGTM_IMAGE:-grafana/otel-lgtm:0.32.1}
+    # Changes when infra/grafana/** changes (provisioning, dashboards, alert
+    # rules, the Prometheus override), so a deploy recreates this container
+    # exactly then — Grafana reads alerting provisioning only at startup, and
+    # Prometheus its config file. See "CONFIG FINGERPRINTS" in the header.
+    labels:
+      cellar.config-fingerprint: ${OTEL_LGTM_CONFIG_HASH:-}
+    # Grafana, bound to the LAN interface only — a kernel-level bind, so the
+    # socket does not exist on the WAN interface at all, and Loki's router does
+    # not forward 3010 (deploy-loki.md §2.2). This is the bind Caddy's :3010
+    # listener used to carry; with Caddy gone it sits on the container itself.
+    # LAN_BIND_ADDR must be this machine's LAN address (<loki-lan-ip>, set in
+    # infra/.env.prod); the default is loopback, so forgetting it makes the
+    # dashboard local-only rather than public. Grafana is deliberately NOT put
+    # behind nginx-proxy: that would give it a public hostname, and the only
+    # thing keeping it off the WAN would then be NETWORK_ACCESS=internal.
+    # `!override`, because Compose appends port lists: the base's
+    # `${BIND_ADDR:-127.0.0.1}:${GRAFANA_PORT:-3010}:3000` would otherwise stay.
+    ports: !override
+      - "${LAN_BIND_ADDR:-127.0.0.1}:3010:3000"
+    volumes:
+      # E3b fills this directory (dashboards, alert rules, contact points).
+      #
+      # ⚠ THIS MOUNT SHADOWS THE IMAGE'S OWN PROVISIONING. `grafana/otel-lgtm`
+      # ships `datasources/grafana-datasources.yaml` (Prometheus, Tempo, Loki,
+      # Pyroscope, wired to each other with exemplar and trace↔log links) and
+      # `dashboards/grafana-dashboards.yaml` (the RED-metrics and JVM
+      # dashboards) at this exact path. Mounting over the directory removes
+      # them, and Grafana then comes up with no data sources at all — which
+      # looks like a broken collector, not a missing file.
+      #
+      # So infra/grafana/provisioning must carry its own copies. Dump the
+      # originals to start from (same tag as `image:` above):
+      #
+      #   docker run --rm --entrypoint tar grafana/otel-lgtm:0.32.1 \
+      #     -C /otel-lgtm/grafana/conf/provisioning -cf - . | tar -xf - -C infra/grafana/provisioning
+      #
+      # (Read-only, so Grafana cannot rewrite what source control owns.)
+      - ./grafana/provisioning:/otel-lgtm/grafana/conf/provisioning:ro
+      # Repeated from the base file for the reader of this one; Compose merges
+      # service volumes by container path, so this is the same single mount
+      # (checked in the rendered config), not a second one. It is what makes a
+      # deploy's recreate of this container stop wiping Loki, Prometheus,
+      # Tempo and Grafana's alert state — see the base file's comment.
+      - otel-lgtm-data:/data
+    environment:
+      ENABLE_LOGS_ALL: "true"
+      # LOGIN REQUIRED. The image defaults anonymous access ON with org role
+      # ADMIN (/otel-lgtm/run-grafana.sh), and this overlay used to leave that
+      # default in place while saying it kept "the anonymous viewer
+      # read-only" — measured false on 2026-09-27: anonymous `GET
+      # /api/datasources` and `/api/admin/settings` both answered 200. With
+      # :3010 open to every private address, that was an
+      # unauthenticated admin console for anyone on the LAN (and anyone who
+      # could reach the LAN).
+      #
+      # "false" is the one value run-grafana.sh checks before it sets the
+      # Admin org role, so this line turns off both halves. Sign in as `admin`
+      # with GRAFANA_ADMIN_PASSWORD.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # ⚠ APPLIED ONLY WHEN grafana.db IS FIRST CREATED. Grafana seeds the
+      # admin user from this on an empty database and never reads it again,
+      # and /data is now a volume — so changing GRAFANA_ADMIN_PASSWORD later
+      # changes nothing, silently. To rotate, follow
+      # docs/architecture/deploy-loki.md ("Rotating the Grafana admin
+      # password"), then update .env.prod to match.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Published on the LAN address above, so Grafana's generated absolute URLs
+      # have to name that address, not the container.
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3010/}
+      # REQUIRED here, unlike the base file. There, a missing webhook falls back
+      # to `https://discord.invalid/alerts-not-configured` so a dev stack
+      # provisions cleanly (an EMPTY url is fatal to Grafana's provisioning);
+      # in production that fallback meant every alert fired, every page went
+      # to a host that cannot resolve, and nothing refused to start. `:?` makes
+      # a blank or missing value fail the render, and the deploy's
+      # "Refuse published development secrets" step
+      # (scripts/deploy/check-prod-config.mjs) refuses the `.invalid`
+      # placeholder spelled out explicitly. Self-tested in stack-ci
+      # (scripts/deploy/prod-config-selftest.sh).
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:?DISCORD_WEBHOOK_URL is required in production (the Discord webhook behind the discord-ops contact point)}
+    # No `healthcheck:` here: the base file's curl-based check applies. The one
+    # this overlay used to carry ran `wget`, which grafana/otel-lgtm does not
+    # ship, so it could never pass and the container was permanently
+    # "unhealthy" (measured on 0.32.1: `exec: "wget": executable file not
+    # found`).
+
+  # --- Dapr control plane --------------------------------------------------
+  placement:
+    restart: unless-stopped
+
+  scheduler:
+    restart: unless-stopped
+
+volumes:
+  # Declared by the base file; repeated so this file names every volume it
+  # mounts. Survives `docker compose down` (not `down -v`).
+  otel-lgtm-data:

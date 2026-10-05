@@ -1,0 +1,39 @@
+# REQUIRED BY THE RUNTIME, NOT BY THE DESIGN. Read this before changing it.
+#
+# The plan (A2/§6.4) says "no state store component" and defers to A5 the
+# question of whether reminders work without one. A2 answered it early, by
+# accident: daprd 1.18.3 refuses to *host* actors at all without one. With no
+# component marked `actorStateStore: "true"` the sidecar logs
+#
+#   "Actor state store not configured - actor hosting disabled until one is
+#    configured, but invocation enabled"
+#
+# and then reports zero actor types to placement, so every invocation fails with
+# `did not find address for actor 'PingActor/<id>'` — including a call the actor
+# host makes to its own sidecar. Actor hosting is gated on the component's
+# existence, independent of whether any actor ever reads or writes actor state.
+#
+# So the component exists, and is deliberately `state.in-memory`:
+#
+#   - Actors in this design keep NO Dapr state. Postgres is the truth and the
+#     in-memory aggregate is a cache (target-stack §3), so there is nothing here
+#     to lose on restart.
+#   - Reminders are NOT stored here. They moved to the Scheduler service in Dapr
+#     1.15, which is why `scheduler` is in the compose file. Reminder durability
+#     comes from the scheduler's etcd volume, not from this component.
+#   - It costs no infrastructure and holds no credentials, which keeps
+#     "services/actors is the only process with a Postgres connection" true of the
+#     sidecar as well as the app.
+#
+# If actors ever genuinely need Dapr state, swap this for `state.postgresql`
+# against the same database and revisit the single-writer rule first.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: actorstate
+spec:
+  type: state.in-memory
+  version: v1
+  metadata:
+    - name: actorStateStore
+      value: "true"

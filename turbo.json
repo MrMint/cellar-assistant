@@ -1,0 +1,124 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalDependencies": [
+    "packages/schema/schema.graphql",
+    "tsconfig.base.json",
+    "biome.json",
+    "package.json",
+    "bun.lock",
+    "bunfig.toml"
+  ],
+  "globalEnv": ["NODE_ENV", "CI"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@cellar-assistant/schema#build": {
+      "outputs": ["graphql-env.d.ts"]
+    },
+    "@cellar-assistant/client#codegen": {
+      "dependsOn": ["@cellar-assistant/schema#build"],
+      "outputs": [
+        "src/lib/api/graphcache-schema.generated.ts",
+        "src/lib/api/graphcache-keys.generated.ts"
+      ]
+    },
+    "@cellar-assistant/client#build": {
+      "dependsOn": ["^build", "@cellar-assistant/client#codegen"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": [
+        "NEXT_PUBLIC_*",
+        "PUBLIC_FILES_HOST",
+        "FILES_S3_PUBLIC_URL",
+        "MINIO_PORT"
+      ]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "@cellar-assistant/schema#typecheck": {
+      "dependsOn": ["build"]
+    },
+    "@cellar-assistant/client#typecheck": {
+      "dependsOn": ["^build", "@cellar-assistant/client#codegen"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "@cellar-assistant/client#test": {
+      "dependsOn": ["^build", "@cellar-assistant/client#codegen"],
+      "cache": false,
+      "env": ["GRAPHQL_API_URL", "BETTER_AUTH_ORIGIN"]
+    },
+    // services/api's suite reads well outside its own package, and turbo's
+    // default inputs are the package's own files only — measured with
+    // `turbo run test --filter=@cellar-assistant/api --dry=json`: 82 inputs,
+    // 0 outside services/api. So a local `bun run test` after a client-only,
+    // actors-only or Dockerfile-only change replayed a cached pass. What the
+    // tests read, and which test reads it:
+    //   services/client/src, client tsconfig   client-documents.test.ts
+    //   services/actors/src                    model-backed-fields.test.ts,
+    //                                          schema/actor-surface.test.ts
+    //   packages/*/src                         both of those (contracts, the
+    //                                          analysis programs' roots)
+    //   every Dockerfile / .dockerignore /
+    //   workspace manifest                     dockerfile-workspaces.test.ts
+    // CI does not use turbo, so it was never affected.
+    "@cellar-assistant/api#test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/services/client/src/**",
+        "$TURBO_ROOT$/services/client/tsconfig.json",
+        "$TURBO_ROOT$/services/actors/src/**",
+        "$TURBO_ROOT$/packages/*/src/**",
+        "$TURBO_ROOT$/services/*/package.json",
+        "$TURBO_ROOT$/packages/*/package.json",
+        "$TURBO_ROOT$/services/*/Dockerfile",
+        "$TURBO_ROOT$/services/*/Dockerfile.dockerignore",
+        "$TURBO_ROOT$/.dockerignore"
+      ]
+    },
+    "lint": {},
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "@cellar-assistant/actors#test": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      // Turborepo 2.x runs tasks in STRICT env mode: a task sees only what is
+      // named here, plus globalEnv and turbo's own passthrough list. TMPDIR is
+      // not on that list — measured by printing `env` from inside
+      // `packages/db/transform/test-db.sh` under `turbo run test` (unset) and
+      // from a shell (/var/folders/.../T/). Anything reading ${TMPDIR:-/tmp}
+      // therefore resolved to a different path under turbo than by hand, which
+      // is how the shared test-database dump ended up existing twice with two
+      // different hashes and each path rebuilding the other's template. The
+      // dump itself no longer depends on TMPDIR, but the lock directory
+      // (`mktemp -d`) still does, so declare it and keep the two paths
+      // identical.
+      "env": [
+        "ACTORS_TEST_DATABASE_URL",
+        "AUTH_TEST_ADMIN_URL",
+        "DST_CONTAINER",
+        "DST_USER",
+        "DST_PASSWORD",
+        "PGHOST",
+        "PGPORT",
+        "DUMP",
+        "TMPDIR",
+        "ACTORS_TEST_DB_REBUILD",
+        "TEST_DB_LOCK_WAIT",
+        "TEST_DB_LOCK_MAX_HOLD",
+        "TEST_DB_RUN_TTL"
+      ]
+    },
+    "@cellar-assistant/e2e#test": {
+      "cache": false,
+      "env": ["E2E_BASE_URL", "E2E_START_SERVER"]
+    }
+  }
+}

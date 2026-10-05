@@ -1,0 +1,907 @@
+# E3b · Alert rules for the outbox dead-letter path and unexpected actor
+# errors. Provisioned (not click-ops'd), so they exist from the first `docker
+# compose up` and survive a Grafana volume wipe.
+#
+# ## THE LANDMINE THIS FILE EXISTS TO DODGE
+#
+# docs/architecture/target-stack.md §7 documents it explicitly, and it is
+# worth restating here because it is exactly backwards from what looks
+# natural: "Loki indexes OTLP resource attributes, not log-record attributes
+# ... `{service_name="actors", event_name="outbox.dead_letter"}` matches
+# nothing — indistinguishable, from the query side, from the event never
+# having been emitted."
+#
+# `services/actors/src/lib/telemetry.ts`'s own header comment (line 6) gives the
+# WRONG form as an example query — it predates this finding and was not
+# corrected when target-stack.md was; flagged separately, not fixed here (out
+# of this file's scope). Do not copy that comment's query shape.
+#
+# Verified empirically against this repo's own running dev stack
+# (2026-09-10), not just reasoned about — real dead-letter rows already exist
+# in this stack's Loki from earlier outbox testing:
+#
+#   {service_name="actors", event_name="outbox.dead_letter"}                 -> 0 results (the landmine)
+#   {service_name="actors"} | event_name="outbox.dead_letter"                -> 11 results
+#   {service_name="actors"} | event_name="outbox.dead_letter"
+#     | outbox_method="process"                                             -> 7 results
+#
+# Two things had to be checked, not assumed, to get the second query right:
+#
+#   1. `event.name` (the OTLP attribute services/actors emits) arrives at the
+#      Loki API as the structured-metadata key `event_name` — dots become
+#      underscores, exactly as `service.name` becomes the label `service_name`
+#      (target-stack.md's own worked example). Confirmed against real data.
+#   2. Every OTHER attribute services/actors emits alongside an event follows the
+#      same dot-to-underscore rule: `outbox.method` (the actual attribute name
+#      in services/actors/src/actors/outbox-actor.ts) arrives as `outbox_method`,
+#      NOT `method`. A rule filtering on `method="removeFriendOtherSide"`
+#      would silently match nothing — the same failure mode as the headline
+#      landmine, one level down. Confirmed against real data (`outbox_method`
+#      populated; bare `method` is not a key in the stream at all).
+#
+# ## Coverage
+#
+#   1. removeFriendOtherSide dead-letter — target-stack.md §7's specific,
+#      named acceptance criterion. "A dead-lettered removeFriendOtherSide
+#      fails open, and needs an alert rather than a dashboard": the surviving
+#      one-sided `friends` row leaves someone who un-friended another user
+#      still visible to them under FRIENDS visibility, with nothing else in
+#      the system ever surfacing it.
+#   2. Any-method dead-letter — the general case the task asked for
+#      alongside #1: every dead letter is a permanently-failed delivery
+#      (MAX_ATTEMPTS exhausted; `outbox-actor.ts`), not a transient retry, so
+#      there is nothing to wait out before alerting.
+#   3. Actor call failures — `event.name = "actor.unexpected_error"`,
+#      emitted by `services/actors/src/lib/actor-error-envelope.ts` exactly when
+#      an actor method throws something that is NOT one of the five typed
+#      `ActorError`s (i.e. a genuine bug, not a deliberate domain error a
+#      caller is meant to handle). Distinct from the outbox rules above: this
+#      fires on the direct, synchronous call path (API -> actor), not on
+#      background delivery.
+#
+# `for: 0s` on all three: a dead letter is already the end of MAX_ATTEMPTS
+# retries (not a transient blip to wait out), and an unexpected actor error is
+# a bug on the direct call path — in both cases, the condition being true for
+# one evaluation cycle already IS the incident.
+#
+# ## Where these now deliver (2026-09-18)
+#
+# Still no `notification_settings` block on any rule, and now for a better
+# reason than before: `contact-points-and-policies.yaml` beside this file
+# provisions a root notification policy whose catch-all receiver is
+# `discord-ops`, so every rule here inherits real delivery without naming it.
+# A rule added to this file in future is routed by default rather than by
+# remembering to route it.
+#
+# Until 2026-09-18 the development and shared lanes never loaded this file at
+# all: `infra/docker-compose.yml`'s `otel-lgtm` service had no bind mount for
+# this directory, so `GET /api/v1/provisioning/alert-rules` answered `[]` and
+# the Alerting page showed an empty list — which reads as "nothing is wrong",
+# not "nothing is loaded". That service now mounts it read-only, the same path
+# as `docker-compose.prod.yml`. Measured 2026-09-26 against `cellar-stack`
+# (Grafana 13.2.0): the bind mount is present in `docker inspect`, and every
+# rule in this file is listed by the provisioning API with `provenance: file`.
+# "The file parses" was never the evidence; that listing is.
+#
+# ## `execErrState`, not `execErrorState`
+#
+# Every rule below used to spell it `execErrorState`. Grafana's provisioning
+# struct tags the field `yaml:"execErrState"`
+# (pkg/services/provisioning/alerting/rules_types.go) and ignores unknown
+# keys, so that line was dead configuration for as long as it existed. It went
+# unnoticed only because its value, `Alerting`, is also the default Grafana
+# applies when the key is absent — the API read back `execErrState: Alerting`
+# either way. It is spelled correctly now; nothing's behaviour changes. But a
+# rule copied from here with the old spelling and a *different* value would
+# have silently kept the default instead.
+#
+# ## `queryType: instant`, not `range` — every window below used to be DOUBLE
+#
+# Until 2026-09-27 every rule here said `queryType: range` (in both the data
+# entry and the model), and the `instant: true` beside it was ignored. As a
+# range query, Grafana asks Loki for `sum(count_over_time(...[W]))` at every
+# step across `relativeTimeRange` (R), Loki OMITS the steps whose count is
+# zero, and the `last` reducer then takes the last NON-EMPTY step — so an event
+# kept a rule firing until it had left the window at every step, i.e. for
+# R + W, not W. With R = W on every rule, each window was twice what its
+# comment says: 10 minutes for the edge rules, 180 for the 90-minute ones.
+#
+# Measured, not reasoned (2026-09-27, Grafana 13.2.0, `POST /api/v1/eval`
+# with an explicit `now`, against the real 2026-09-26T15:38:07.634Z
+# `maintenance.dead_letter_regression` event in `cellar-stack`'s Loki):
+#
+#                       +89 min  +91 min  +179 min  +181 min
+#   range   (old)        1        1        1         empty
+#   instant (now)        1        empty    empty     empty
+#
+# Grafana's own state history (`GET /api/annotations?type=alert`) shows the
+# same doubling on every real firing it holds: the regression Alerting
+# 15:38:50 -> Normal 18:38:50 on 09-26 (180 min), the backlog rule
+# 15:41:20 -> 18:41:20 (180), "any method" 15:38:30 -> 15:48:30 (10), and
+# "unexpected error" 09-27 21:23:30 -> 21:33:30 (10). Every rule is now an instant query,
+# evaluated at the rule's evaluation time, so W is the whole window and every
+# "resolves N minutes later" below is true as written. R is kept equal to W
+# for readability; an instant query only uses its `to` (0 = now).
+#
+# The dead-man's switch was never affected — `or vector(0)` gives every step a
+# value, so its last step was always `now` — and instant is the same query
+# without steps. Re-measured both forms at three instants (inside the
+# 2026-09-23 outage: 0 -> fires; two healthy mornings: 2-3 -> OK) at windows of
+# 150, 186 and 190 minutes: identical results. A range form of that query was
+# reported returning 0 at 186/190 minutes on a healthy reporter; an instant
+# query has no step to misalign, which is one more reason not to go back.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: outbox-and-actor-errors
+    folder: Cellar Assistant
+    interval: 1m
+    rules:
+      - uid: outbox-dl-remove-friend-other-side
+        title: "Outbox dead-letter: removeFriendOtherSide (fails open — see target-stack.md §7)"
+        condition: C
+        for: 0s
+        # An empty LogQL result (zero matching log lines) means "zero
+        # dead-letters" / "zero unexpected errors" — the healthy case, not
+        # an unknown one. Verified empirically: sum(count_over_time(...))
+        # over a window with no matching lines returns Loki's EMPTY vector,
+        # not a zero-valued one, which is what makes this explicit rather
+        # than relying on Grafana's own default.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: actors
+          # A PAGE, since 2026-09-27. It carried `severity: critical` from the
+          # start but not this label, and the page route in
+          # contact-points-and-policies.yaml matches `urgency=page` and nothing
+          # else — so the one rule target-stack.md §7 names as needing "an
+          # alert rather than a dashboard" went out as an ordinary root-route
+          # notification (30s wait, 4h repeat) beside every other dead letter.
+          #
+          # Delivery measured end to end on `cellar-stack`, 2026-09-27, with
+          # DISCORD_WEBHOOK_URL pointed at a throwaway sink container: a
+          # SYNTHETIC-tagged OTLP record (`outbox.dead_letter`,
+          # `outbox.method=removeFriendOtherSide`) pushed to otel-lgtm:4318 at
+          # 21:54:19.957 -> Alerting at the 21:54:30 evaluation -> a
+          # Discord-shaped POST (`username`, `content`, `embeds[]`) at
+          # 21:54:46.7, i.e. the page route's 10s; the "any method" rule fired on
+          # the same record and went out at 21:55:03.4, the root's 30s. Normal
+          # at 21:59:30 (the instant [5m] window), RESOLVED posted 22:02:27.
+          # Negative control first: the same attributes with a different
+          # event_name fired nothing over two evaluations and the sink stayed
+          # empty.
+          urgency: page
+        annotations:
+          summary: "A removeFriendOtherSide delivery dead-lettered. The surviving friends row may leave a removed friend with FRIENDS-visible access."
+          description: >-
+            target-stack.md §7: isFriend matches either direction of the
+            friends table by design, so a dead-lettered confirm fails safe —
+            but a dead-lettered removeFriendOtherSide does not. The mirror row
+            survives and keeps isFriend true for the person who was supposed
+            to be removed. removeFriend's own guard re-enqueues on a repeat
+            call, but nothing else in the system will ever surface this
+            without this alert. Check Loki:
+            {service_name="actors"} | event_name="outbox.dead_letter" | outbox_method="removeFriendOtherSide"
+          runbook_url: "docs/architecture/backup-restore.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="actors"} |
+                event_name="outbox.dead_letter" |
+                outbox_method="removeFriendOtherSide" [5m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query
+
+      - uid: outbox-dead-letter-any-method
+        title: "Outbox dead-letter: any method"
+        condition: C
+        for: 0s
+        # An empty LogQL result (zero matching log lines) means "zero
+        # dead-letters" / "zero unexpected errors" — the healthy case, not
+        # an unknown one. Verified empirically: sum(count_over_time(...))
+        # over a window with no matching lines returns Loki's EMPTY vector,
+        # not a zero-valued one, which is what makes this explicit rather
+        # than relying on Grafana's own default.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          team: actors
+        annotations:
+          summary: "One or more outbox deliveries dead-lettered (MAX_ATTEMPTS exhausted) in the last 5 minutes."
+          description: >-
+            General coverage alongside the removeFriendOtherSide-specific
+            rule above: every dead letter has already exhausted all retries
+            (services/actors/src/actors/outbox-actor.ts), so there is nothing
+            transient left to wait out. Break down by target actor and method
+            in Grafana Explore:
+            {service_name="actors"} | event_name="outbox.dead_letter"
+          runbook_url: "docs/architecture/backup-restore.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="actors"} |
+                event_name="outbox.dead_letter" [5m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query
+
+      - uid: actor-unexpected-error
+        title: "Actor call failure: unexpected (non-domain) error"
+        condition: C
+        for: 0s
+        # An empty LogQL result (zero matching log lines) means "zero
+        # dead-letters" / "zero unexpected errors" — the healthy case, not
+        # an unknown one. Verified empirically: sum(count_over_time(...))
+        # over a window with no matching lines returns Loki's EMPTY vector,
+        # not a zero-valued one, which is what makes this explicit rather
+        # than relying on Grafana's own default.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          team: actors
+        annotations:
+          summary: "An actor method threw something other than a typed ActorError — a bug, not a handled domain error."
+          description: >-
+            Emitted by services/actors/src/lib/actor-error-envelope.ts on the
+            direct synchronous call path (API -> actor), distinct from the
+            outbox dead-letter rules above (background delivery). One of the
+            five typed ActorErrors never reaches this path — only a genuine
+            unexpected exception does. Recent occurrences:
+            {service_name="actors"} | event_name="actor.unexpected_error"
+          runbook_url: "docs/architecture/backup-restore.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="actors"} |
+                event_name="actor.unexpected_error" [5m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query
+
+  # --- The standing backlog, as opposed to new failures --------------------
+  #
+  # Added 2026-09-18, and it covers a gap the three rules above cannot: they
+  # are EDGE-triggered. `count_over_time(... | event_name="outbox.dead_letter"
+  # [5m])` counts the log event emitted at the instant a row transitions to
+  # `dead` (outbox-actor.ts), so a row that dead-lettered last week emits
+  # nothing today and no rule above will ever mention it again.
+  #
+  # That was not hypothetical. On 2026-09-18 eleven rows had been sitting dead
+  # in the outbox since 2026-09-10 — ten of them MenuScanActor.process — and
+  # every rule above was, correctly, silent about all of them. What surfaced
+  # them was MaintenanceActor.reportDeadLetters, which had never run in this
+  # system's life until it was scheduled in 28777ccf.
+  #
+  # `maintenance.dead_letters` is the LEVEL-triggered counterpart: the actor
+  # re-reads the outbox every hour (DEAD_LETTER_REPORT_INTERVAL_MS = 60 min)
+  # and emits this event on every run that finds something an operator still
+  # has to act on, so it keeps asserting a backlog that already exists instead
+  # of announcing a new one.
+  #
+  # ## "Backlog" means UNACKNOWLEDGED rows since 1763eac8 (2026-09-20)
+  #
+  # This paragraph used to say the actor counts `where status = 'dead'` and
+  # emits while that count is above zero. It no longer does, and the rule's
+  # meaning moved with it. The event now fires on `newDead` — dead rows with no
+  # row in `outbox_dead_letter_acks` — or on `stuck_delivering > 0` (rows wedged
+  # in 'delivering' for over 20 minutes, which cannot be acknowledged and which
+  # nothing else in this file sees). An acknowledged row stays `dead`, stays in
+  # the table as evidence and is still counted in the line's `dead` attribute,
+  # but it no longer makes this rule fire. So this rule says "someone has triage
+  # to do", not "the outbox contains dead rows". Measured 2026-09-26: 23 dead
+  # rows, all 23 acknowledged, and this rule correctly silent.
+  #
+  # A run with nothing to act on emits `maintenance.dead_letters_clear`
+  # instead — a different name, so it never matches here — and a run that
+  # finds a regression emits `maintenance.dead_letter_regression` in addition
+  # to this one. Both have their own rules, in the next group.
+  #
+  # ## The 90-minute window is the whole design, and 5m would be a bug
+  #
+  # The obvious thing is to copy the `[5m]` from the rules above. It flaps
+  # once an hour, forever: the event lands, the rule fires, five minutes later
+  # the window empties and the rule resolves, and fifty-five minutes later it
+  # does it again. `repeat_interval` cannot damp that, because each cycle is a
+  # NEW firing rather than a repeat of one — a policy set to "once a day" would
+  # still emit 24 firing + 24 resolved notifications, and the channel would be
+  # muted by lunchtime.
+  #
+  # A window longer than the emission interval makes the condition CONTINUOUSLY
+  # true for as long as the backlog persists, which is what it actually is. One
+  # firing notification, then whatever `repeat_interval` says, then one
+  # resolved when the queue finally drains. 90 minutes = the 60-minute cycle
+  # plus half of one again, so a late or skipped cycle does not open a gap.
+  #
+  # Pair this with the 24h `repeat_interval` on this rule's route in
+  # contact-points-and-policies.yaml. Together they answer the "any dead
+  # letters vs. the count increased" question by having it both ways: the rules
+  # above page immediately on an increase, this one reminds once a day that the
+  # level is still non-zero. Neither is a substitute for the other, and the
+  # MenuScanActor.process backlog that stood from 2026-09-10 until it was
+  # acknowledged on 2026-09-20 is exactly why — it was a level with no
+  # increases.
+  - orgId: 1
+    name: outbox-backlog-digest
+    folder: Cellar Assistant
+    # Deliberately slower than the 1m group above. Nothing here is urgent — a
+    # standing backlog is days old by definition — and a 90-minute LogQL
+    # window evaluated every minute is twelve times the Loki work for no signal.
+    interval: 5m
+    rules:
+      - uid: outbox-backlog-standing
+        # ⚠ This title is matched verbatim by the `alertname` object_matcher in
+        # contact-points-and-policies.yaml. Changing it silently drops this
+        # rule back onto the root route's 4h repeat_interval — it keeps
+        # delivering, just six times a day instead of once. Change both.
+        title: "Outbox backlog: dead-lettered rows are standing"
+        condition: C
+        for: 0s
+        # An empty LogQL result means no run in the last 90 minutes found
+        # anything to act on. That is the healthy case ONLY IF runs are
+        # happening at all: this rule cannot tell a triaged outbox from a
+        # reporter that stopped, because both emit no `maintenance.dead_letters`.
+        # `OK` is safe here because `dead-letter-reporter-silent` in the next
+        # group watches exactly that difference — without it, this line would
+        # be the same "all clear by virtue of being switched off" the actor's
+        # own doc comment warns about.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          team: actors
+        annotations:
+          summary: "The outbox holds dead-lettered rows nobody has acknowledged, or rows stuck in 'delivering'. MaintenanceActor has reported them within the last 90 minutes."
+          description: >-
+            Level-triggered, not edge-triggered: this says the backlog EXISTS,
+            not that it grew. It counts UNACKNOWLEDGED dead rows only, plus
+            rows stuck in 'delivering' for over 20 minutes. It stays firing
+            until every unacknowledged dead row is triaged — acknowledged
+            (it stays in the table as evidence), requeued, or deleted — and
+            nothing is stuck, and it re-notifies once a day until then. The
+            counts and the worst offender are in the log line itself — Grafana
+            only sees that one was emitted. Read it:
+            {service_name="actors"} | event_name="maintenance.dead_letters"
+            and break the backlog down by target with
+            {service_name="actors"} | event_name="outbox.dead_letter"
+            — or get the report now rather than within the hour:
+            `… exec actors bun scripts/operator.ts report`. Acknowledge a
+            triaged row with `… exec actors bun scripts/operator.ts ack --by
+            <you> --note "<why>" [--ids <id,…> | --target-actor <Type>
+            --method <m>] [--before <ISO-8601>]`, where `…` is
+            `docker compose -f infra/docker-compose.yml -f
+            infra/docker-compose.prod.yml --env-file infra/.env.prod` on Loki
+            (on the shared dev lane: `docker exec cellar-stack-actors-1 bun
+            scripts/operator.ts <cmd>`). `… operator.ts drain` runs one drain
+            turn now. deploy-loki.md §4.3.
+          runbook_url: "docs/architecture/backup-restore.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 5400
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="actors"} |
+                event_name="maintenance.dead_letters" [90m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query
+
+  # --- The reporter itself: its loudest event, and its silence --------------
+  #
+  # Added 2026-09-26. `MaintenanceActor.reportDeadLetters` (1763eac8) emits
+  # separately NAMED events so that alert rules can route them differently,
+  # and says so in its own doc comment beside `DEAD_LETTER_ALARM`: "a name is
+  # the only part of an event an alert rule can route on: `infra/` hangs a page
+  # off the regression, a ticket off the ordinary alarm, and a dead-man's-switch
+  # off the absence of the heartbeat." Until this group existed only the ticket
+  # was hung. A regression — something already triaged, failing again, the
+  # most valuable thing that alarm can say — paged nobody. And a reporter that
+  # stopped running looked exactly like one reporting all-clear, because the
+  # backlog rule above reads "no event" as healthy.
+  #
+  # Per run, from `deadLetterEvents` (maintenance-actor.ts):
+  #
+  #   maintenance.dead_letter_regression  ERROR  0 or 1; only ever WITH the next
+  #   maintenance.dead_letters            ERROR  ┐ exactly one of these two,
+  #   maintenance.dead_letters_clear      INFO   ┘ on every run, never both
+  #
+  # (`maintenance.dead_letters_acknowledged` shares the prefix but is emitted by
+  # an operator's `acknowledgeDeadLetters` call, not by the report. It must not
+  # count as the report being alive, which is why nothing below uses a regex.)
+  #
+  # Same landmine as everything else in this file: `event_name` is structured
+  # metadata, filtered AFTER the pipe. Verified 2026-09-26 against live Loki:
+  #   sum(count_over_time({service_name="actors", event_name="maintenance.dead_letters_clear"}[150m]))
+  #     -> empty (the landmine)
+  #   sum(count_over_time({service_name="actors"} | event_name="maintenance.dead_letters_clear" [150m]))
+  #     -> 3
+  - orgId: 1
+    name: dead-letter-reporter
+    folder: Cellar Assistant
+    # 1m, not the digest group's 5m. The regression is a page, and the absence
+    # rule's `for` below is measured in evaluations; neither query costs Loki
+    # anything worth saving (a handful of lines an hour match either one).
+    interval: 1m
+    rules:
+      # ## The regression — a page, not a ticket
+      #
+      # `maintenance.dead_letter_regression` means a `(target_actor, method)`
+      # pair holds acknowledged dead rows AND unacknowledged ones — or a row
+      # that was acknowledged, requeued and dead-lettered again under the same
+      # id (a18c8f1f: an acknowledgement covers only the death it was written
+      # after): an operator looked at this failure, decided it was dealt with,
+      # and it has happened again. It is emitted on EVERY hourly run while that is true, so it is
+      # level-shaped, exactly like `maintenance.dead_letters`, and gets the same
+      # 90-minute window for the same reason — `[5m]` would fire and resolve
+      # once an hour, forever (see the backlog group's header).
+      #
+      # It clears when the new rows are acknowledged (or requeued/deleted). The
+      # resolve lags that by at most 90 minutes: the last regression event
+      # predates the acknowledgement, and the window forgets it 90 minutes
+      # after it was emitted.
+      #
+      # It always fires alongside `outbox-backlog-standing`, because a
+      # regression row is also an unacknowledged one. That is intended: this is
+      # the page, routed on `urgency: page` to a route that notifies within
+      # seconds and repeats hourly; the backlog rule is the daily ticket for the
+      # same rows. Different alertnames, so different notification groups.
+      #
+      # Measured 2026-09-26 on `cellar-stack`, with a real regression: a fresh
+      # `MenuScanActor.process` row (a pair with 19 acknowledged dead rows)
+      # dead-lettered through the drainer at 15:37:55, the report emitted this
+      # event at 15:38:07, and this rule was Alerting at 15:38:50 with value 1.
+      # The stream-selector form of the same query returned nothing. The probe
+      # rows were deleted afterwards.
+      - uid: dead-letter-regression
+        title: "Dead-letter REGRESSION: an acknowledged outbox target is failing again"
+        condition: C
+        for: 0s
+        # Empty means no run in the last 90 minutes found a regression. Like
+        # the backlog rule, that is healthy only if runs are happening — see
+        # `dead-letter-reporter-silent` below.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: actors
+          # Matched by the page route in contact-points-and-policies.yaml. A
+          # label rather than the title, so renaming this rule cannot quietly
+          # demote it to the root route (the backlog rule's ⚠ is that trap).
+          urgency: page
+        annotations:
+          summary: "REGRESSION: an outbox target someone already acknowledged has dead-lettered again. A fix did not hold."
+          description: >-
+            MaintenanceActor.reportDeadLetters found a (target_actor, method)
+            pair with both acknowledged dead rows and new failures.
+            Acknowledgement is per row and per death: it covers only the
+            failure it was written after, so neither a new row nor an
+            acknowledged row that was requeued and died again is pre-silenced.
+            Acknowledging a row that died again replaces its earlier
+            acknowledgement. The line names the worst
+            pair and its counts: {service_name="actors"} |
+            event_name="maintenance.dead_letter_regression" — then the new
+            failures themselves: {service_name="actors"} |
+            event_name="outbox.dead_letter". Fix the cause, then acknowledge the
+            new rows: `docker compose -f infra/docker-compose.yml -f
+            infra/docker-compose.prod.yml --env-file infra/.env.prod exec actors
+            bun scripts/operator.ts ack --by <you> --note "<why>" [--ids <id,…>
+            | --target-actor <Type> --method <m>] [--before <ISO-8601>]` (shared
+            dev lane: `docker exec cellar-stack-actors-1 bun
+            scripts/operator.ts ack …`; `report` re-runs the report now,
+            deploy-loki.md §4.3). This resolves within 90 minutes of the
+            acknowledgement (90 minutes after the last report that still saw
+            the regression).
+          runbook_url: "docs/architecture/target-stack.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 5400
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="actors"} |
+                event_name="maintenance.dead_letter_regression" [90m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query
+
+      # ## The dead-man's switch — fires on what is NOT there
+      #
+      # ### What counts as proof of life: BOTH run events, not the heartbeat
+      #
+      # The heartbeat (`maintenance.dead_letters_clear`) is emitted only on a
+      # run with nothing to act on. A run that finds a backlog emits
+      # `maintenance.dead_letters` INSTEAD. So "no heartbeat" also means "the
+      # reporter is alive and shouting", and a switch keyed on the heartbeat
+      # alone would page "the reporter is dead" on top of every real backlog,
+      # for as long as the backlog stood. That is not hypothetical — evaluated
+      # against live Loki at 2026-09-20T12:00Z, when the reporter was running
+      # hourly and emitting the ERROR on every run:
+      #   heartbeat alone  ... | event_name="maintenance.dead_letters_clear" [150m]  -> 0  (would page)
+      #   either event     ... | event_name="maintenance.dead_letters_clear"
+      #                          or event_name="maintenance.dead_letters"  [150m]     -> 2  (correct)
+      # Exactly one of the two is emitted per run, so their sum counts runs.
+      #
+      # ### The window: 150 minutes
+      #
+      # The run re-arms itself at `now() + 60 min` (database clock) when it finishes
+      # (DEAD_LETTER_REPORT_INTERVAL_MS), so intervals are 60 minutes plus
+      # delivery latency and never shorter. Measured over the whole of this
+      # Loki's retention, 2026-09-19T16:16Z to 2026-09-26T15:08Z — 86 intervals:
+      #
+      #   39  60.0 - 61.6 min   the steady state
+      #   45  63   - 120.1 min  late. 44 of the 45 fell due while the laptop
+      #                         serving this lane was asleep (`pmset -g log`);
+      #                         the one that did not was 63.0 min, mid-restart.
+      #    2  885, 3298 min     real outages: 14.7 h mostly asleep, and 55 h
+      #                         with the stack down (2026-09-21 -> 09-24)
+      #
+      # Nothing at all between 120.1 and 884.7 minutes. 150 sits 30 minutes
+      # above the worst benign gap ever seen, even on a machine that sleeps,
+      # and below both outages. On an always-on host it means two consecutive
+      # reports (due at +60 and +120) have both failed to appear, plus half a
+      # cycle of margin — the same "one cycle and a half again" margin the
+      # 90-minute windows above use. It also clears the self-heal path: if the
+      # chain's outbox row is lost, the hourly watchdog (`receiveReminder`)
+      # re-arms it due-now within 60 minutes, so a lost chain costs at most
+      # ~120 minutes and does not page. Two misses in a row is the watchdog
+      # failing too, which is exactly what this rule exists to report.
+      #
+      # Tighter (90m) would page on every single missed cycle — including 13
+      # of the sleep gaps above — and on a chain the watchdog was about to
+      # heal. Looser (a day) would let the report be dead for most of a day
+      # while this file's other rules read "no event" as healthy.
+      #
+      # ### Absence semantics — the inverse of every other rule here
+      #
+      # `sum(count_over_time(...))` over a window with no matching line returns
+      # Loki's EMPTY vector, not a zero (this file's header already says so;
+      # re-verified: evaluated at 2026-09-23T12:00Z, inside the 55 h outage,
+      # the bare query returns `[]`). Grafana calls an empty result NoData.
+      # Every other rule in this file maps NoData to OK, correctly, because for
+      # them empty means "nothing bad happened". Here empty is the bad thing.
+      # Two independent guards, so it cannot be gotten backwards silently:
+      #
+      #   1. `or vector(0)` turns absence into a real 0, so the healthy and
+      #      unhealthy states are both concrete numbers and the threshold
+      #      (`lt 1`) decides — same query at 2026-09-23T12:00Z returns 0.
+      #   2. `noDataState: Alerting` anyway, fail-closed: if the fallback is
+      #      ever dropped or stops working, NoData means "no proof of life"
+      #      and fires rather than reading as healthy. `execErrState:
+      #      Alerting` for the same reason — a switch that cannot query Loki
+      #      cannot see the heartbeat either, and must say so.
+      #
+      # `for: 5m`, unlike the `0s` everywhere else, is a debounce and not the
+      # tolerance (the window is the tolerance). An absence rule is uniquely
+      # exposed to evaluation timing: a host resuming from sleep can evaluate
+      # Grafana a few seconds before the overdue report is delivered, and the
+      # late gaps above show that resume happening dozens of times a week in
+      # this lane. Five minutes is noise against a 150-minute window.
+      #
+      # ### Known false positive — now only on an EMPTY data volume
+      #
+      # Until 2026-09-27 `otel-lgtm` kept Loki's data in the container's
+      # writable layer, so every RECREATE (an env change, an image bump, a prod
+      # deploy) wiped it and this rule fired about five minutes later,
+      # resolving at the next report up to an hour on. /data is now the named
+      # volume `otel-lgtm-data` in both compose files, and a recreate keeps
+      # Loki's history (verified: see docs/architecture/deploy-loki.md,
+      # "Observability data and retention"). What still has no history is a
+      # FRESH volume — the first start on a new host, or after
+      # `docker compose down -v` — and after one of those, expect exactly one
+      # of these.
+      - uid: dead-letter-reporter-silent
+        title: "Dead-letter reporter is silent: no report for 150 minutes"
+        condition: C
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: actors
+          urgency: page
+        annotations:
+          summary: "MaintenanceActor.reportDeadLetters has not reported for 150 minutes (it runs hourly). Until it does, no dead-letter backlog, regression or stuck delivery will be reported, and the other outbox rules' silence means nothing."
+          description: >-
+            Neither maintenance.dead_letters_clear (the INFO heartbeat) nor
+            maintenance.dead_letters (the ERROR alarm) has reached Loki from
+            service_name="actors" in 150 minutes; exactly one of them is
+            emitted by every run. Candidates, most likely first: the actors
+            host is down or not exporting telemetry (check
+            {service_name="actors"} for ANY line); the report's outbox chain
+            is dead AND the hourly watchdog did not re-arm it (look for
+            maintenance.reminder_failed, or a dead MaintenanceActor
+            reportDeadLetters row in public.outbox); the outbox drain is stuck
+            (outbox.drain_failed). Also fires once, spuriously, when otel-lgtm
+            starts on an EMPTY data volume (a new host, or after `down -v`),
+            because Loki then holds no history.
+          runbook_url: "docs/architecture/target-stack.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 9000
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="actors"} |
+                event_name="maintenance.dead_letters_clear" or
+                event_name="maintenance.dead_letters" [150m])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query

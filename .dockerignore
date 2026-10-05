@@ -1,0 +1,55 @@
+# Build context for services/api/Dockerfile and services/actors/Dockerfile (E3b).
+# Both are built with the repo root as context — `docker build -f services/api/Dockerfile .`
+# — because the `workspace:*` protocol needs the root package.json (which is
+# where the workspace globs live under bun) and the packages/* dependency
+# closure visible at build time. Without this file that
+# context includes every already-installed node_modules in the repo (100s of MB
+# per project) plus .git, secrets, and the legacy Nhost stack.
+#
+# Keep in sync by hand: there is no automated check that a new top-level
+# directory gets added here.
+
+**/node_modules
+**/.turbo
+**/dist
+**/.next
+.git
+
+# Legacy Nhost stack — D9 removes it after cutover; irrelevant to services/api and
+# services/actors either way, and functions/ is a separate pnpm 10 context that
+# the bun migration deliberately left alone.
+nhost
+functions
+
+# The Next.js frontend and the browser suite. Neither ships in a backend
+# image, and services/client's dependency tree is by far the largest in the
+# repo — but their **manifests** must stay in the context. With one root
+# lockfile, `--frozen-lockfile` compares that lockfile against every workspace
+# member it can see; a member whose package.json is missing reads as drift and
+# fails the install, even though neither backend depends on it. The `!` lines re-include just those two files
+# (a later rule wins in .dockerignore, same as .gitignore).
+services/client
+!services/client/package.json
+packages/e2e
+!packages/e2e/package.json
+# packages/analysis is the architecture scans' test-time foundation: a
+# devDependency of actors, api and db that no runtime stage copies and a
+# `--production` install never links. Same treatment as e2e — sources out,
+# manifest in, for the --frozen-lockfile reason above.
+packages/analysis
+!packages/analysis/package.json
+scripts
+
+# Secrets and local-only files. Never let these reach a build context.
+.secrets
+infra/.env
+infra/.env.prod
+infra/.env*.local
+cookies.txt
+*.log
+.DS_Store
+
+# Editor/tooling noise
+.vscode
+.claude
+.mcp.json

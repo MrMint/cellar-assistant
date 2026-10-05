@@ -1,0 +1,55 @@
+name: Feature request
+description: Suggest a new capability or an improvement to an existing one.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        This is a hobby-scale project, so please treat a feature request as the
+        start of a conversation rather than a queued item. If you intend to
+        build it yourself, say so — that changes the answer.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that you can't do today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like instead
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options:
+        - Frontend (services/client)
+        - GraphQL API (services/api)
+        - Actor host / auth (services/actors)
+        - Database or migrations (packages/db)
+        - Local dev stack / scripts
+        - Docs
+        - Not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: offer
+    attributes:
+      label: Would you like to build it?
+      options:
+        - label: I'd be willing to open a pull request for this.
+          required: false

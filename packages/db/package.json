@@ -1,0 +1,36 @@
+{
+  "name": "@cellar-assistant/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./orm": "./src/orm.ts",
+    "./writers": "./src/writers.ts",
+    "./migrate": "./src/migrate/ledger.ts"
+  },
+  "scripts": {
+    "build": "echo 'no build step: consumed as TypeScript source'",
+    "test": "bun run --bun vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "db:check": "drizzle-kit check",
+    "db:generate": "drizzle-kit generate",
+    "db:pull": "drizzle-kit pull --init",
+    "db:migrate": "node src/migrate/cli.ts",
+    "db:drift": "./scripts/check-drift.sh",
+    "transform": "./transform/run.sh",
+    "test-db": "./transform/test-db.sh"
+  },
+  "devDependencies": {
+    "@cellar-assistant/analysis": "workspace:*",
+    "@types/pg": "catalog:",
+    "drizzle-kit": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:"
+  }
+}

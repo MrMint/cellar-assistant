@@ -1,0 +1,833 @@
+# The post-Nhost stack (docs/architecture/target-stack.md).
+#
+#   bun run stack:up           docker compose -f infra/docker-compose.yml up
+#   bun run stack:down
+#
+# The repo's root docker-compose.yaml is unrelated MCP tooling (qdrant, serena,
+# context7) and is left alone; this file has its own project name so the two
+# never share containers or volumes.
+#
+# Ports (defaults; override in infra/.env) avoid the running Nhost stack, which
+# holds Postgres 5432, and leave 3000 to the user's own `bun run dev`:
+#
+#   3001  services/api          GraphQL at /graphql, liveness at /healthz
+#   3002  services/actors       actor host (Dapr calls it) + better-auth at /api/auth/*
+#   3003  services/client       Next.js, BUILT INTO ITS IMAGE (see the service)
+#   3010  grafana           traces/metrics/logs from both sidecars
+#   5433  postgres 18       postgis + pgvector + pg_trgm + pgcrypto
+#   9100  minio S3 API      9101 is the MinIO console
+#
+# MinIO's S3 port has TWO addresses, and which one a presigned URL carries
+# depends on who will dial it: `localhost:9100` for a browser, `minio:9000` for
+# anything inside this network. See the E3 block below — the difference is not
+# cosmetic, it is what makes a signature verify.
+#
+# **3000 is deliberately not used by this file.** It belongs to the host-run
+# Next dev server (`bun run dev`), which the user keeps running all day and
+# which AGENTS.md forbids an agent from starting or stopping. The containerised
+# client publishes 3003 instead so both can be up at once. The browser suite's
+# own `baseURL` default is this port, so `bun run test:e2e` needs no override;
+# `E2E_BASE_URL=http://localhost:3000` points it at a host dev server instead.
+#
+# The AI provider is not a container: `ollama` runs on the host and the actors
+# service reaches it at host.docker.internal:11434 (services/actors/README.md).
+#
+# Sidecar HTTP ports are 3501 (api) and 3502 (actors), reachable only inside the
+# compose network.
+name: cellar-stack
+
+# E3 · TWO AUTHORITIES FOR MINIO, and the split is the point.
+#
+# SigV4 puts the `Host` header inside the signature (`X-Amz-SignedHeaders=host`),
+# so a presigned URL's authority and its signed authority are the same string by
+# construction: a proxy cannot rewrite it in flight and a DNS alias cannot rescue
+# it. Whoever dials the URL must dial exactly the name it was signed for, or
+# MinIO answers `SignatureDoesNotMatch`.
+#
+# The trap E3 spent a day in: **there is no single name that means MinIO from
+# both a host browser and a container**, on Docker Desktop for macOS. Measured
+# 2026-09-18, all of it:
+#
+#   minio:9000                   containers yes, host no (no such name)
+#   host.docker.internal:9100    containers yes, host NO — `curl` exits 6,
+#                                `dscacheutil` returns nothing; Docker Desktop
+#                                injects that name into containers, never into
+#                                the host
+#   localhost:9100               host yes, containers no (their own loopback)
+#   *.localhost:9100             resolves on both, and still fails: Bun and
+#                                Chromium hard-map `.localhost` to loopback and
+#                                never consult /etc/hosts
+#   192.168.65.254:9100          containers yes, host no (macOS has no route
+#   <container IP>:9000          into Docker's networks — both time out)
+#
+# So the authority a *browser* must dial and the authority a *container* must
+# dial are different strings, and every presigned URL therefore has to be signed
+# for the position of the thing that will use it. That is what these two pairs
+# say, and `services/actors/src/lib/s3-presign.ts` has the full argument plus
+# the two rejected alternatives (a per-machine /etc/hosts entry; a public
+# wildcard-loopback domain like the now-hijacked `vcap.me`).
+#
+#   FILES_S3_ENDPOINT / FILES_S3_PORT                    browser-facing
+#   FILES_S3_INTERNAL_ENDPOINT / FILES_S3_INTERNAL_PORT  in-network
+#
+# Nothing here changes MinIO's container port or its published port, so
+# `minio-init`, the healthcheck and the prod overlay are untouched — and
+# `dapr/components/files-binding.yaml` stays on the *internal* authority,
+# because every call the sidecar makes through it is server-side.
+#
+# Production overrides only the first pair (the public files hostname, 443) and
+# inherits the second, so there too the browser-facing URLs name the public
+# host and everything a container dials goes to `minio:9000` in-network. It
+# used to claim a single-name shape through a network alias on Caddy, which the
+# inherited pair had quietly contradicted all along; with the edge behind the
+# host's shared nginx-proxy the split is deliberate in both lanes.
+x-node-app: &node-app
+  # Both interpreters, deliberately. Bun runs the apps (their `CMD`s and the
+  # `command:` overrides below both say `bun`), but a real `node` has to stay
+  # reachable for the A/B and for the one-shot `migrate:*` / `db:seed` scripts,
+  # which were never measured on bun and stay on node.
+  #
+  # Why this is built rather than `image: oven/bun:1.4.2`: **in the oven images
+  # `node` is a symlink to bun.** Measured — `node -e 'process.versions'` there
+  # prints `{"bun":"1.4.2","node":"26.3.0"}`. On that base the node fallback
+  # would look like it worked while running bun twice, which is precisely the
+  # silent revert the runtime guard tests exist to catch. This mirrors what
+  # `services/{api,actors}/Dockerfile` already do for the shipped images.
+  #
+  # The layer is cached after the first `stack:up`; the copy is one binary.
+  build:
+    dockerfile_inline: |
+      FROM node:24-bookworm-slim
+      COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+  # Source is mounted, not baked: apps run straight off the workspace with
+  # Node 24's built-in TypeScript type stripping, so there is no build step and
+  # no image to rebuild on every edit. The isolated store's node_modules
+  # symlinks resolve to
+  # real paths inside the mount, which is what keeps type stripping legal (Node
+  # refuses to strip types under node_modules).
+  volumes:
+    - ..:/workspace
+  restart: unless-stopped
+
+x-daprd: &daprd
+  image: daprio/daprd:1.18.3
+  # Each sidecar is a normal container on the compose network rather than
+  # sharing its app's network namespace. `network_mode: "service:<app>"` also
+  # works, but then restarting the app tears down the namespace the sidecar is
+  # living in and every call fails with "fetch failed" until the sidecar is
+  # restarted too. Split containers + --app-channel-address survive
+  # `docker compose restart <app>`.
+  volumes:
+    - ./dapr/components:/dapr/components:ro
+    - ./dapr/config.yaml:/dapr/config.yaml:ro
+  # No `extra_hosts` needed: every call a sidecar makes through the `files`
+  # binding is server-side, so the binding stays on the in-network authority
+  # (`dapr/components/files-binding.yaml`), which plain compose DNS resolves.
+  restart: unless-stopped
+
+services:
+  postgres:
+    build:
+      context: ./postgres
+    # Run a real init as PID 1 so the postmaster is not the container's
+    # reaper. Without this, Postgres IS PID 1, so any process orphaned inside
+    # the container is reparented to the postmaster, which treats a reaped
+    # child's exit status >= 2 as a crashed backend: it terminates every
+    # connection in the cluster and runs crash recovery. Measured 2026-09-23:
+    # `docker exec … sh -c '(sleep 1; exit 2) &'` crash-recovered the cluster;
+    # the same with `exit 1` was only logged. A directly exec'd process is safe
+    # (its parent is the runtime shim); an orphan is not — and the healthcheck
+    # below is one route to an orphan, since a timeout under load kills its
+    # `sh -c` wrapper and leaves `pg_isready` behind, which exits 2 on "no
+    # response". Three such recoveries hit the shared lane on 2026-09-21 at
+    # load ~150, each killing every agent's connections.
+    init: true
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cellar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cellar}
+      POSTGRES_DB: ${POSTGRES_DB:-cellar}
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # PG18 images want a single mount at /var/lib/postgresql (data lands in
+      # a major-version subdirectory so pg_upgrade --link works). Mounting
+      # /var/lib/postgresql/data makes the entrypoint refuse to start.
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cellar} -d ${POSTGRES_DB:-cellar}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # The object store is pgsty/silo, a maintained fork of MinIO with the same
+  # on-disk format, so it runs on the existing `minio-data` volume as is.
+  # Upstream MinIO's community images were deleted from Docker Hub
+  # (`minio/minio`, `minio/mc`: "pull access denied", 2026-09), and the
+  # project is archived: advisories after the archive are fixed only in the
+  # paid AIStor, including a presigned-signature bypass on our upload path.
+  # The service keeps the name `minio`, and the image is pinned by multi-arch
+  # digest. Production overrides it with `MINIO_IMAGE`, the client image with
+  # `MC_IMAGE`.
+  #
+  # Measured against this pin (RELEASE.2026-09-16T00-00-00Z):
+  #   - The binary is `silo`. The entrypoint maps a leading `server` (or
+  #     `minio`) to `silo server`, so the `command:` below is unchanged.
+  #   - MINIO_ROOT_USER / MINIO_ROOT_PASSWORD and the other MINIO_* variables
+  #     are still the names it reads.
+  #   - The healthcheck is `silo healthcheck` (liveness on :9000). The image
+  #     also ships `mc` (a symlink to `mcli`) and curl, but the purpose-built
+  #     probe needs neither an alias nor a client.
+  #   - CORS: with nothing configured it reflects ANY Origin, with
+  #     `Access-Control-Allow-Credentials: true`, which is the old MinIO
+  #     default. Browser uploads worked only because of that. CORS is now
+  #     explicit (`FILES_CORS_ALLOWED_ORIGINS`), in two layers.
+  #     MINIO_API_CORS_ALLOW_ORIGIN below is the server-wide list. The bucket
+  #     rule `minio-init` sets narrows methods and headers, and it takes
+  #     precedence for the bucket. Pinned by
+  #     services/actors/src/lib/s3-cors.live.test.ts.
+  #   - Unsigned `x-amz-*` request headers are rejected (the fork, since
+  #     2026-09). The browser PUT sends only `content-type`, pinned by
+  #     services/client/src/lib/api/files.test.ts.
+  minio:
+    image: ${MINIO_IMAGE:-docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z@sha256:635197cb9f36d01bee221d34d1c7d7960f6a95c48b0b6c01d99cd13bdae51a46}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cellar}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cellar-dev-secret}
+      # The browser origins allowed to call the S3 API cross-origin, as a
+      # comma-separated list. The default is the user's `bun run dev` (3000)
+      # plus the containerised client (CLIENT_PORT, 3003). The per-worktree
+      # lane exports its own derived web port (scripts/stack/stack.sh).
+      # Production sets PUBLIC_APP_ORIGIN. NO SPACES after the commas: silo
+      # matches each entry byte for byte, so " http://localhost:3003" (with
+      # the leading space) never matches. Measured. `minio-init` tolerates
+      # spaces; this list does not.
+      MINIO_API_CORS_ALLOW_ORIGIN: ${FILES_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:${CLIENT_PORT:-3003}}
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${MINIO_PORT:-9100}:9000"
+      - "${BIND_ADDR:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9101}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "silo", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # The bucket, its (non-)public policy and its lifecycle, applied on every
+  # `up` — each step is idempotent, and production reuses this service (the
+  # overlay only swaps the credentials), so this is the one place any of them
+  # is configured. `set -eu`: the prod overlay makes `actors` wait for this to
+  # complete SUCCESSFULLY, so a failed step must fail the container rather than
+  # fall through to the `echo` and exit 0.
+  #
+  # LIFECYCLE: `uploads/` expires after one day. FileActor signs every upload
+  # PUT for `uploads/<kind>/<id>` and `verify` copies it to the served key and
+  # deletes it (services/actors/src/actors/file-actor.ts), so nothing under
+  # `uploads/` is ever read. What lingers there is a PUT made with the
+  # still-live 15-minute URL AFTER verify, or an upload whose row was never
+  # verified (MaintenanceActor reaps those rows at 24h) — garbage either way.
+  # `mc ilm import` REPLACES the bucket's whole lifecycle configuration with
+  # this one document, which is what makes a re-run a no-op rather than a
+  # second copy of the rule (`mc ilm rule add` appends a new rule each time).
+  # Check it: `mc ilm rule ls local/<bucket>`.
+  #
+  # CORS: `mc cors set` likewise REPLACES the bucket's whole CORS document. One
+  # rule: the FILES_CORS_ALLOWED_ORIGINS origins, PUT (the browser upload) and
+  # GET, and the one request header the browser sends (`content-type`). For
+  # this bucket it takes precedence over the server-wide
+  # MINIO_API_CORS_ALLOW_ORIGIN on `minio` above: a preflight from any other
+  # origin gets 403 and no Allow-Origin. Check it: `mc cors get local/<bucket>`.
+  # An empty list fails the container, because "no rule" here would fall back
+  # to the server-wide list rather than deny.
+  #
+  # The image is pgsty/mc, the client half of the silo fork. Its binary is
+  # still `mc`, and every command below behaved the same against silo when
+  # measured.
+  minio-init:
+    image: ${MC_IMAGE:-docker.io/pgsty/mc:RELEASE.2026-09-16T00-00-00Z@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd}
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+        mc anonymous set none "local/$${MINIO_BUCKET}"
+        mc ilm import "local/$${MINIO_BUCKET}" <<'LIFECYCLE'
+        {"Rules":[{"ID":"expire-unverified-uploads","Status":"Enabled","Filter":{"Prefix":"uploads/"},"Expiration":{"Days":1}}]}
+        LIFECYCLE
+        cors_origins=""
+        for origin in $$(printf '%s' "$${FILES_CORS_ALLOWED_ORIGINS}" | tr ', ' '\n\n'); do
+          cors_origins="$${cors_origins}<AllowedOrigin>$${origin}</AllowedOrigin>"
+        done
+        if [ -z "$${cors_origins}" ]; then
+          echo "FILES_CORS_ALLOWED_ORIGINS is empty; refusing to leave the bucket on the server-wide CORS list" >&2
+          exit 1
+        fi
+        printf '<CORSConfiguration><CORSRule>%s<AllowedMethod>PUT</AllowedMethod><AllowedMethod>GET</AllowedMethod><AllowedHeader>content-type</AllowedHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>' "$${cors_origins}" > /tmp/cors.xml
+        mc cors set "local/$${MINIO_BUCKET}" /tmp/cors.xml
+        echo "bucket $${MINIO_BUCKET} ready (uploads/ expires after 1 day; CORS for $${FILES_CORS_ALLOWED_ORIGINS})"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cellar}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cellar-dev-secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-cellar-files}
+      # The same list as MINIO_API_CORS_ALLOW_ORIGIN on `minio`, from the same
+      # variable.
+      FILES_CORS_ALLOWED_ORIGINS: ${FILES_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:${CLIENT_PORT:-3003}}
+    restart: "no"
+
+  # --- Dapr control plane -------------------------------------------------
+  # Placement hands out actor-type partitions. Scheduler owns reminders: they
+  # moved out of the actor state store into this service in Dapr 1.15, which is
+  # why it is not optional here even though no state store is declared.
+  placement:
+    image: daprio/placement:1.18.3
+    command:
+      - "/placement"
+      - "--port=50005"
+      - "--healthz-port=8080"
+      - "--log-level=info"
+    restart: unless-stopped
+
+  scheduler:
+    image: daprio/scheduler:1.18.3
+    user: "0:0"
+    command:
+      - "/scheduler"
+      - "--port=50006"
+      - "--healthz-port=8080"
+      - "--etcd-data-dir=/var/run/dapr/scheduler"
+      - "--log-level=info"
+    volumes:
+      - scheduler-data:/var/run/dapr/scheduler
+    restart: unless-stopped
+
+  # --- Applications -------------------------------------------------------
+  actors:
+    <<: *node-app
+    working_dir: /workspace/services/actors
+    command: ["bun", "src/index.ts"]
+    environment:
+      APP_PORT: "3002"
+      APP_HOST: "0.0.0.0"
+      DAPR_HOST: "actors-dapr"
+      DAPR_HTTP_PORT: "3502"
+      # What this app presents to its sidecar (every invocation, reminder and
+      # binding call — @dapr/dapr's client reads the same variable), and what
+      # it requires of the sidecar on /actors/* and /dapr/*
+      # (src/lib/dapr-app-token.ts). Must equal actors-dapr's values below.
+      DAPR_API_TOKEN: ${DAPR_API_TOKEN:-cellar-dev-dapr-api-token}
+      APP_API_TOKEN: ${APP_API_TOKEN:-cellar-dev-app-api-token}
+      # The only process with a Postgres connection (target-stack §1).
+      DATABASE_URL: postgres://${POSTGRES_USER:-cellar}:${POSTGRES_PASSWORD:-cellar}@postgres:5432/${POSTGRES_DB:-cellar}
+      # A8 · `FileActor` signs upload PUT URLs itself (`src/lib/s3-presign.ts`)
+      # because the `files` binding can only presign GET — same credentials the
+      # binding's sidecar (`actors-dapr`, below) already gets.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cellar}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cellar-dev-secret}
+      # E3 · the BROWSER-facing authority: the published host port, which is
+      # what a browser on this machine can dial and therefore what every URL
+      # handed to one is signed for (`FileActor.createUploadTarget`,
+      # `FileActor.presignRead`). A literal rather than `${FILES_S3_ENDPOINT:-…}`
+      # because it has to agree with the `client` image's `FILES_S3_PUBLIC_URL`
+      # build arg — that build bakes the CSP — and a variable that moved only
+      # one of the two would surface as a blocked upload, not a startup error.
+      # `assertBareHostname` in s3-presign.ts is why host and port are separate.
+      #
+      # That literal also makes this lane *immune* to a class of failure the
+      # host-run lane has to guard against: a stray `FILES_S3_*` in a shell or
+      # in a `.env` cannot reach these processes. Compose sets the variable, and
+      # bun's auto-loaded `.env` does not override a variable the environment
+      # already carries — so the only way to move this authority is to edit
+      # this file, which is the same edit that moves the client build arg.
+      # `bun run dev:doctor` warns about inherited `FILES_S3_*` because
+      # `dapr run` *does* hand a caller's environment to a host process, where
+      # `minio:9000` resolves to nothing.
+      FILES_S3_ENDPOINT: localhost
+      FILES_S3_PORT: "${MINIO_PORT:-9100}"
+      FILES_S3_USE_SSL: "false"
+      FILES_S3_BUCKET: ${MINIO_BUCKET:-cellar-files}
+      # …and the IN-NETWORK authority, for everything this container dials
+      # itself: the `CopyObject` in `FileActor.verify` that rewrites the stored
+      # media type, and `FileActor.presignReadInternal`, whose URL the AI seams
+      # fetch from inside this network (`src/lib/ai/images.ts`). `localhost`
+      # here would mean this container. Unset in production, where one name is
+      # correct from both sides.
+      FILES_S3_INTERNAL_ENDPOINT: minio
+      FILES_S3_INTERNAL_PORT: "9000"
+      # A6 · better-auth. X2 merged its five tables into the main database, so
+      # this is the same URL as DATABASE_URL above and the same pool serves
+      # both. It stays a separate variable because it is separately a
+      # credential — `services/api` asserts on boot that neither reaches it — and
+      # because `scripts/migrate-users.ts` names source and target separately.
+      AUTH_DATABASE_URL: postgres://${POSTGRES_USER:-cellar}:${POSTGRES_PASSWORD:-cellar}@postgres:5432/${POSTGRES_DB:-cellar}
+      # A5 · structured events to the collector below, which routes logs into
+      # Loki. `{service_name="actors", event_name="outbox.dead_letter"}` is the
+      # Grafana query that A5's dead-letter acceptance criterion asks for.
+      # Unset (the default off compose) means stdout only.
+      #
+      # The service name is a LITERAL, like api's below: it becomes Loki's
+      # `service_name` label, and every rule in grafana/provisioning/alerting
+      # selects `{service_name="actors"}`. Interpolated, one stray
+      # OTEL_SERVICE_NAME in a shell or in infra/.env renamed the stream and
+      # left every actors alert evaluating an empty selector — which reads as
+      # healthy, not as broken.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4318}
+      OTEL_SERVICE_NAME: actors
+      # A5 · lets `ProbeJobActor` SIGKILL this container on request, which is how
+      # "the outbox survives a kill before delivery" is proved end to end. A
+      # development-stack switch: E3 must leave it unset in production.
+      ACTORS_PROBE_ALLOW_KILL: ${ACTORS_PROBE_ALLOW_KILL:-1}
+      # Not `:?` — that would make `docker compose config` (CI) fail on a
+      # checkout with no infra/.env. The app refuses to start without it
+      # instead: readAuthConfig() throws `[auth] BETTER_AUTH_SECRET is required`.
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3002}
+      # W4 security F3 · the secret the Next proxy (the `client` service below)
+      # proves itself with, so its x-cellar-client-ip is trusted by
+      # better-auth's limiter (services/actors/src/auth/client-ip.ts). A
+      # published development default, like the Dapr tokens: the actor host
+      # refuses exactly this value in production, and so does
+      # scripts/deploy/check-prod-config.mjs, which derives it from this file.
+      AUTH_PROXY_SECRET: ${AUTH_PROXY_SECRET:-cellar-dev-auth-proxy-secret-not-for-production}
+      # better-auth CSRF-checks the browser's `Origin` against this list — the
+      # Next auth proxy forwards that header verbatim
+      # (`services/client/src/lib/api/proxy.ts`), so every origin the app is
+      # *served on* has to be in it or every POST 403s.
+      #
+      # The containerised client's origin is APPENDED unconditionally rather
+      # than folded into the default, because `infra/.env` overriding the
+      # variable must not silently un-trust a service in this same compose
+      # project. Comma-separated; `readAuthConfig` trims and drops empties
+      # (`services/actors/src/auth/config.ts`). The production overlay replaces
+      # the whole value — a loopback entry there is a startup error by design.
+      AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-http://localhost:3000},http://localhost:${CLIENT_PORT:-3003}
+      AUTH_REHASH_ON_SIGNIN: ${AUTH_REHASH_ON_SIGNIN:-true}
+      # X1 · the AI provider behind semantic search, menu scanning, recipe
+      # photos, item onboarding and tier-list insights. Defaults to `ollama`,
+      # which needs no credentials: run `ollama serve` on the host and pull the
+      # two models (services/actors/README.md · Local AI). Unset AI_PROVIDER
+      # entirely to run with no model — every AI feature then fails with an
+      # error naming itself, which is deliberate; it never degrades to a stub.
+      AI_PROVIDER: ${AI_PROVIDER-ollama}
+      # Ollama runs on the developer's machine, not in this network.
+      OLLAMA_ENDPOINT: ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_MODEL_LOW: ${OLLAMA_MODEL_LOW:-gemma3:4b}
+      OLLAMA_MODEL_MEDIUM: ${OLLAMA_MODEL_MEDIUM:-gemma3:4b}
+      OLLAMA_MODEL_HIGH: ${OLLAMA_MODEL_HIGH:-gemma3:4b}
+      # Every halfvec column in the database is 768 wide; the provider is asked
+      # for that width where the API supports asking, and EmbeddingActor
+      # rechecks what it got.
+      AI_EMBEDDING_DIMENSIONS: ${AI_EMBEDDING_DIMENSIONS:-768}
+      AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-120000}
+      # BudgetActor's operator overrides (services/actors/src/actors/budget-actor.ts,
+      # parseModelPrices / parseRequestCaps). Empty means "no overrides" — both
+      # parsers return {} for a blank string — and a malformed value makes
+      # BudgetActor throw a ValidationError when it loads (once per
+      # activation), rather than silently metering at list price. Formats in
+      # infra/.env.example. Listed here because nothing reaches a container
+      # unless this file names it.
+      AI_MODEL_PRICES: ${AI_MODEL_PRICES:-}
+      AI_BUDGET_MAX_REQUESTS: ${AI_BUDGET_MAX_REQUESTS:-}
+      # Per-user hourly/daily caps over the defaults in budget-actor.ts
+      # (USER_CAPS); same empty-means-none and throw-on-malformed rules.
+      BUDGET_USER_CAPS: ${BUDGET_USER_CAPS:-}
+      # Hosted providers. PLACEHOLDERS ONLY here — real values belong in the
+      # gitignored infra/.env. Setting AI_PROVIDER to one of these without its
+      # credentials makes the actor host refuse to start (that is the point).
+      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+      GOOGLE_GCP_PROJECT_ID: ${GOOGLE_GCP_PROJECT_ID:-}
+      GOOGLE_GCP_LOCATION: ${GOOGLE_GCP_LOCATION:-global}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      GOOGLE_APPLICATION_CREDENTIALS_JSON: ${GOOGLE_APPLICATION_CREDENTIALS_JSON:-}
+      # EMPTY by default, on purpose: an empty value reads as unset
+      # (services/actors/src/lib/ai/config.ts), and unset lets the embedding
+      # model pick its endpoint (`embeddingLocation`, vertex-ai.ts) —
+      # `global` for gemini-embedding-2, the only place Vertex serves it;
+      # a region for text-embedding-*, which has no global endpoint. Any value
+      # set here wins over that, so a region here 404s every gemini-embedding-2
+      # call; neither fixed value is right for both model families.
+      VERTEX_AI_EMBEDDING_LOCATION: ${VERTEX_AI_EMBEDDING_LOCATION:-}
+      # Per-provider model overrides, read as `<PREFIX>_MODEL_{LOW,MEDIUM,HIGH}`
+      # and `<PREFIX>_EMBEDDING_MODEL` (services/actors/src/lib/ai/config.ts).
+      # EMPTY by default so the code's own defaults apply — an empty value
+      # reads as unset there. Before these were listed, setting one in
+      # infra/.env did nothing in a container: nothing reaches one unless this
+      # file names it. `src/lib/ai/env-passthrough.test.ts` in services/actors
+      # derives the names from the config reader and fails if one is missing
+      # here or from scripts/stack/stack.sh's PASSTHROUGH_ENV.
+      GOOGLE_AI_MODEL_LOW: ${GOOGLE_AI_MODEL_LOW:-}
+      GOOGLE_AI_MODEL_MEDIUM: ${GOOGLE_AI_MODEL_MEDIUM:-}
+      GOOGLE_AI_MODEL_HIGH: ${GOOGLE_AI_MODEL_HIGH:-}
+      GOOGLE_AI_EMBEDDING_MODEL: ${GOOGLE_AI_EMBEDDING_MODEL:-}
+      VERTEX_AI_MODEL_LOW: ${VERTEX_AI_MODEL_LOW:-}
+      VERTEX_AI_MODEL_MEDIUM: ${VERTEX_AI_MODEL_MEDIUM:-}
+      VERTEX_AI_MODEL_HIGH: ${VERTEX_AI_MODEL_HIGH:-}
+      VERTEX_AI_EMBEDDING_MODEL: ${VERTEX_AI_EMBEDDING_MODEL:-}
+      # The OpenAI-compatible provider (a local vLLM / llama.cpp server; see
+      # scripts/ai/local-model.sh). Mostly a host-run-lane provider, but
+      # passed through so AI_PROVIDER=openai-compatible is configurable here
+      # too. In a container the endpoint has to name the host —
+      # http://host.docker.internal:<port> — since the code's localhost
+      # default is the container itself.
+      OPENAI_COMPAT_ENDPOINT: ${OPENAI_COMPAT_ENDPOINT:-}
+      OPENAI_COMPAT_EMBEDDING_ENDPOINT: ${OPENAI_COMPAT_EMBEDDING_ENDPOINT:-}
+      OPENAI_COMPAT_API_KEY: ${OPENAI_COMPAT_API_KEY:-}
+      OPENAI_COMPAT_MODEL_LOW: ${OPENAI_COMPAT_MODEL_LOW:-}
+      OPENAI_COMPAT_MODEL_MEDIUM: ${OPENAI_COMPAT_MODEL_MEDIUM:-}
+      OPENAI_COMPAT_MODEL_HIGH: ${OPENAI_COMPAT_MODEL_HIGH:-}
+      OPENAI_COMPAT_EMBEDDING_MODEL: ${OPENAI_COMPAT_EMBEDDING_MODEL:-}
+      OPENAI_COMPAT_MAX_TOKENS: ${OPENAI_COMPAT_MAX_TOKENS:-}
+      OPENAI_COMPAT_EMBEDDING_TRUNCATE: ${OPENAI_COMPAT_EMBEDDING_TRUNCATE:-}
+      # A provider is enabled only when both halves are non-empty. Real values
+      # belong in the gitignored infra/.env; infra/.env.example has placeholders.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      FACEBOOK_OAUTH_CLIENT_ID: ${FACEBOOK_OAUTH_CLIENT_ID:-}
+      FACEBOOK_OAUTH_CLIENT_SECRET: ${FACEBOOK_OAUTH_CLIENT_SECRET:-}
+      DISCORD_OAUTH_CLIENT_ID: ${DISCORD_OAUTH_CLIENT_ID:-}
+      DISCORD_OAUTH_CLIENT_SECRET: ${DISCORD_OAUTH_CLIENT_SECRET:-}
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${ACTORS_PORT:-3002}:3002"
+    # Docker Desktop resolves host.docker.internal natively; Linux needs this
+    # mapping, and OLLAMA_ENDPOINT above points at it. MinIO needs no such
+    # entry: this container reaches it as `minio:9000` over compose DNS
+    # (FILES_S3_INTERNAL_ENDPOINT above).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  actors-dapr:
+    <<: *daprd
+    command:
+      - "/daprd"
+      - "--app-id=actors"
+      - "--app-port=3002"
+      - "--app-protocol=http"
+      - "--app-channel-address=actors"
+      - "--dapr-listen-addresses=0.0.0.0"
+      - "--dapr-http-port=3502"
+      - "--dapr-grpc-port=50002"
+      - "--placement-host-address=placement:50005"
+      - "--scheduler-host-address=scheduler:50006"
+      - "--resources-path=/dapr/components"
+      - "--config=/dapr/config.yaml"
+      - "--log-level=info"
+      - "--enable-metrics=true"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cellar}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cellar-dev-secret}
+      # Dapr API tokens (docs/architecture/target-stack.md, "Dapr API
+      # tokens"). DAPR_API_TOKEN: daprd refuses any caller of its HTTP/gRPC
+      # API that does not present it as `dapr-api-token` (401; only
+      # GET /v1.0/healthz is exempt). APP_API_TOKEN: daprd presents it to its
+      # app on every call, and the actors app refuses its actor routes without
+      # it. The defaults are PUBLISHED development values, so this lane
+      # exercises the same path production does; production requires real
+      # ones (docker-compose.prod.yml). Both sidecars share both values.
+      DAPR_API_TOKEN: ${DAPR_API_TOKEN:-cellar-dev-dapr-api-token}
+      APP_API_TOKEN: ${APP_API_TOKEN:-cellar-dev-app-api-token}
+    depends_on:
+      - actors
+      - placement
+      - scheduler
+
+  api:
+    <<: *node-app
+    working_dir: /workspace/services/api
+    command: ["bun", "src/index.ts"]
+    environment:
+      APP_PORT: "3001"
+      APP_HOST: "0.0.0.0"
+      DAPR_HOST: "api-dapr"
+      DAPR_HTTP_PORT: "3501"
+      # Presented to api-dapr on every actor invocation (src/dapr.ts). Not a
+      # database credential, so assertNoDatabaseCredentials has no opinion.
+      DAPR_API_TOKEN: ${DAPR_API_TOKEN:-cellar-dev-dapr-api-token}
+      # A7 · the API verifies better-auth's EdDSA tokens against the JWKS the
+      # actors app publishes. The URL is service-internal; the issuer is the
+      # public origin better-auth signs with (BETTER_AUTH_URL), so the two
+      # differ and both are needed.
+      AUTH_JWKS_URL: ${AUTH_JWKS_URL:-http://actors:3002/api/auth/jwks}
+      AUTH_ISSUER: ${BETTER_AUTH_URL:-http://localhost:3002}
+      # Structured events to the same collector the actors service uses, so they
+      # land in Loki as `{service_name="api"}`. The endpoint mirrors actors'
+      # line exactly. The service name is a LITERAL, not `${OTEL_SERVICE_NAME:-api}`
+      # — and so is actors': one OTEL_SERVICE_NAME in a shell or infra/.env would
+      # otherwise rename a service's streams, or give both the same name, and
+      # every alert rule and dashboard keys on `service_name`.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4318}
+      OTEL_SERVICE_NAME: api
+      # Deliberately no DATABASE_URL: services/api holds no database credentials and
+      # asserts as much on boot.
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${API_PORT:-3001}:3001"
+
+  api-dapr:
+    <<: *daprd
+    command:
+      - "/daprd"
+      - "--app-id=api"
+      - "--app-port=3001"
+      - "--app-protocol=http"
+      - "--app-channel-address=api"
+      - "--dapr-listen-addresses=0.0.0.0"
+      - "--dapr-http-port=3501"
+      - "--dapr-grpc-port=50001"
+      - "--placement-host-address=placement:50005"
+      - "--scheduler-host-address=scheduler:50006"
+      - "--resources-path=/dapr/components"
+      - "--config=/dapr/config.yaml"
+      - "--log-level=info"
+      - "--enable-metrics=true"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cellar}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cellar-dev-secret}
+      # The same two tokens as actors-dapr's, with the same reasons.
+      DAPR_API_TOKEN: ${DAPR_API_TOKEN:-cellar-dev-dapr-api-token}
+      APP_API_TOKEN: ${APP_API_TOKEN:-cellar-dev-app-api-token}
+    depends_on:
+      - api
+      - placement
+      - scheduler
+
+  # --- Frontend -----------------------------------------------------------
+  # services/client, BUILT INTO AN IMAGE rather than bind-mounted like the two
+  # backend apps above. That difference is the whole point of this service:
+  #
+  #   - `api` and `actors` run their TypeScript source straight off the
+  #     `..:/workspace` mount, because both runtimes execute .ts directly and
+  #     there is nothing to build.
+  #   - Next has a real build. Doing it in `docker compose build` is what makes
+  #     the full app servable with **no host process** — and therefore what lets
+  #     an agent run `bun run test:e2e` at all, since AGENTS.md forbids agents
+  #     from starting `bun run dev` (the user owns that, on 3000).
+  #
+  # So: no `volumes: ..:/workspace` here. The mount would shadow the image's
+  # `.next` and its node_modules, which is the trap
+  # infra/docker-compose.prod.yml needs `!reset` for on the other two services.
+  # Rebuild after changing client source:
+  #
+  #   docker compose -f infra/docker-compose.yml build client
+  #   docker compose -f infra/docker-compose.yml up -d client
+  #
+  # For an edit-reload loop, use `bun run dev` on the host instead — that is
+  # what it is for.
+  client:
+    build:
+      # Repo root, not services/client: the `workspace:*` protocol needs the
+      # root package.json and packages/schema. See the Dockerfile's header.
+      context: ..
+      dockerfile: services/client/Dockerfile
+      args:
+        # Baked into the CSP and into NEXT_PUBLIC_FILE_ORIGINS at build time —
+        # see the ARG's comment in the Dockerfile. Must equal the origin the
+        # `actors` service signs browser-facing URLs for, i.e. FILES_S3_ENDPOINT
+        # + FILES_S3_PORT above: the browser has to dial the exact authority the
+        # URL was signed for, and `connect-src` has to permit it. Changing it
+        # needs a rebuild, not a restart: `bun run stack:client:build`.
+        FILES_S3_PUBLIC_URL: ${FILES_S3_PUBLIC_URL:-http://localhost:9100}
+    # NO `command:` — DELIBERATELY. The image's CMD is
+    # `bun run --bun next start`, and a compose `command:` silently overrides
+    # it; that is how this project once ran a whole "migration" on the wrong
+    # interpreter while every dashboard stayed green. The two app services
+    # above must set one because their `dockerfile_inline` base has no CMD at
+    # all; this service has a real Dockerfile, so the interpreter is decided in
+    # exactly one place. To A/B the Node path, override it explicitly and
+    # visibly instead:
+    #   docker compose run --rm client node node_modules/.bin/next start
+    environment:
+      # Server-only, never NEXT_PUBLIC_*: the browser talks to same-origin
+      # proxy routes (`/api/graphql`, `/api/auth/*`) and this Next server does
+      # the rest, which is what keeps `connect-src 'self'` satisfiable.
+      # Service names, not localhost — these are resolved inside the network
+      # (the defaults in services/client/src/lib/api/config.ts assume the host
+      # lane's published ports).
+      GRAPHQL_API_URL: http://api:3001/graphql
+      BETTER_AUTH_ORIGIN: http://actors:3002
+      # Presented on every request this server makes to the actor host
+      # (services/client/src/lib/api/proxy-secret.ts); must equal the actors'
+      # value above. Server-only — never NEXT_PUBLIC_*.
+      AUTH_PROXY_SECRET: ${AUTH_PROXY_SECRET:-cellar-dev-auth-proxy-secret-not-for-production}
+      # PORT/HOSTNAME come from the image (3000 / 0.0.0.0); only the published
+      # host port below is configurable, because moving the container's own
+      # port would also move EXPOSE and the healthcheck for no gain.
+    ports:
+      # 3003 by default, NOT 3000: see the port note in this file's header.
+      # `CLIENT_PORT` and not `WEB_PORT` on purpose — `bun run dev:env` exports
+      # `WEB_PORT` for the host-run lane's Next server, and reusing the name
+      # would make `eval "$(bun run dev:env)"; bun run stack:up` publish this
+      # container on the port that shell's own dev server wants.
+      - "${BIND_ADDR:-127.0.0.1}:${CLIENT_PORT:-3003}:3000"
+    # `node` is the real Node 24 in this image (the base is node:24-slim — the
+    # whole reason the Dockerfile does not use an oven/bun base), so the
+    # healthcheck needs no curl, which node:24-bookworm-slim does not ship.
+    # /sign-in is the same page the Playwright suite lands on first.
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3000/sign-in').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      # A cold `next start` boot plus the first render of /sign-in is seconds,
+      # not tens of seconds (nothing compiles — that is the dev server) — but
+      # the container waits on api/actors being reachable, so give it slack.
+      retries: 12
+      start_period: 15s
+    depends_on:
+      - api
+      - actors
+    restart: unless-stopped
+
+  # --- Observability ------------------------------------------------------
+  # Traces, metrics and logs in one container; both sidecars export OTLP to it,
+  # and its Prometheus scrapes the Dapr runtime's own metrics (see the
+  # prometheus.yaml mount below).
+  otel-lgtm:
+    # PINNED, to the exact build this lane had been running. Resolved
+    # 2026-09-27, not guessed: the running container's image carried
+    # `org.opencontainers.image.version=0.32.1`, and
+    # `docker buildx imagetools inspect grafana/otel-lgtm:0.32.1` returns the
+    # same index digest it was started from (sha256:7fd8eaad…0e3c4). `latest`
+    # had ALREADY moved on the registry by then (sha256:b966ea10…), so the next
+    # pull on the floating tag would have swapped Grafana (v13.2.0), Loki
+    # (v3.7.7), Prometheus (v3.14.0) and Tempo (v3.0.3) at once — under a data
+    # volume that now outlives the container, and on every production deploy,
+    # whose workflow runs `docker compose pull`.
+    #
+    # ⚠ UPGRADE CHECKLIST — bump this tag, and in the same commit re-copy
+    # ./grafana/otel-lgtm/prometheus.yaml from the NEW image (that file's
+    # header says how). The retention flags below are CLI flags of the bundled
+    # servers and are worth re-checking against the new versions' `-help`.
+    image: grafana/otel-lgtm:0.32.1
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${GRAFANA_PORT:-3010}:3000"
+    volumes:
+      # Without this the dev lane had NO provisioning at all: the container
+      # reported `Mounts: []`, and `/api/v1/provisioning/alert-rules` and
+      # `/contact-points` both answered `[]`. So the E3b outbox rules had never
+      # existed on :3010 -- an operator opening the Alerting page saw an empty
+      # list, which reads as "nothing is wrong" rather than "nothing is loaded".
+      # Only docker-compose.prod.yml mounted it; this mirrors that path exactly.
+      #
+      # ⚠ Shadows the image's own provisioning, same as prod -- see the longer
+      # note there before adding files to this directory.
+      - ./grafana/provisioning:/otel-lgtm/grafana/conf/provisioning:ro
+      # A single-file override of the image's Prometheus config: the upstream
+      # file verbatim plus scrape jobs for the four Dapr processes. Only the
+      # one file is shadowed; the rest of /otel-lgtm stays the image's.
+      - ./grafana/otel-lgtm/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
+      # EVERYTHING the five servers store lives under /data: Loki's chunks and
+      # WAL, Prometheus' TSDB, Tempo's blocks, Pyroscope, and Grafana's own
+      # database (alert state, silences, annotations, the notification log)
+      # plus its downloaded plugins. The image declares no VOLUME, so until
+      # this line all of it lived in the container's writable layer: `docker
+      # restart` kept it, but every RECREATE — an image bump, an env change, a
+      # prod deploy — wiped it, and the dead-letter reporter's dead-man's
+      # switch then paged ~5 minutes later because Loki's history had gone.
+      #
+      # Persisting it has three consequences, each handled here or in the docs:
+      #   - disk grows until something deletes it -> retention flags below;
+      #   - GF_SECURITY_ADMIN_PASSWORD (prod overlay) applies only when
+      #     grafana.db is first created -> rotation procedure in
+      #     docs/architecture/deploy-loki.md;
+      #   - plugins downloaded for one Grafana version survive into the next ->
+      #     the image's own run-grafana.sh `refresh_stale_managed_plugins`
+      #     handles it (verified against a persisted volume, same doc).
+      - otel-lgtm-data:/data
+    environment:
+      ENABLE_LOGS_ALL: "true"
+      # --- Retention: the image sets none of its own that bounds Loki. ------
+      # Measured on 0.32.1's effective configs (2026-09-27): Loki
+      # `retention_enabled: false` / `retention_period: 0s` — unbounded;
+      # Prometheus `storageRetention: 15d` (its built-in default); Tempo
+      # `block_retention: 336h` (its default, and its hourly retention job was
+      # observed deleting blocks); Pyroscope `-retention-period` 31d default.
+      # These go through the image's own *_EXTRA_ARGS hooks (run-loki.sh,
+      # run-prometheus.sh, run-tempo.sh), so no config file is overridden to
+      # set them. Values and the disk arithmetic behind them:
+      # docs/architecture/deploy-loki.md ("Observability data and retention").
+      #
+      #   logs     30 days   the alert source; a month of history for triage
+      #   metrics  30 days   capped at 5 GB as well, whichever binds first
+      #   traces   14 days   the bulkiest per event and the least re-read
+      #
+      # Loki needs the compactor's retention switched on AND a delete-request
+      # store before `-store.retention` does anything; `filesystem` is the only
+      # object store this single-node Loki has.
+      LOKI_EXTRA_ARGS: "-compactor.retention-enabled=true -compactor.delete-request-store=filesystem -store.retention=720h"
+      PROMETHEUS_EXTRA_ARGS: "--storage.tsdb.retention.time=30d --storage.tsdb.retention.size=5GB"
+      # Tempo 3's single binary schedules retention in the backend-scheduler
+      # and executes it in the backend-worker; both carry the setting, so both
+      # get it.
+      TEMPO_EXTRA_ARGS: "-backend-scheduler.provider.work.compaction.block-retention=336h -backend-worker.compaction.block-retention=336h"
+      # run-all.sh forwards SIGTERM to the six servers and SIGKILLs any still
+      # running after this many seconds. The image default is 5, and on 0.32.1
+      # that kills two of them mid-shutdown on EVERY stop — measured
+      # 2026-09-27 on a throwaway copy of this service: after SIGTERM, Loki
+      # logged "Loki stopped" at +16 s and Tempo "Tempo stopped" at +30 s. With
+      # the data now on a volume that outlives the container, a clean stop is
+      # worth 30 seconds. stop_grace_period below must stay longer than this,
+      # or Docker's own SIGKILL lands first.
+      LGTM_SHUTDOWN_TIMEOUT_SECONDS: "40"
+      # --- Grafana auth: anonymous ADMIN, in this file only. ----------------
+      # The image defaults GF_AUTH_ANONYMOUS_ENABLED=true with org role Admin
+      # (/otel-lgtm/run-grafana.sh), and this file keeps that on purpose: the
+      # port is published on BIND_ADDR, which defaults to 127.0.0.1, so the
+      # only caller is someone already on this machine, and every agent and
+      # doc in this repo checks alerting with a bare `curl localhost:3010/api/…`.
+      # Production turns it OFF (docker-compose.prod.yml). If you set
+      # BIND_ADDR=0.0.0.0, this Grafana becomes an unauthenticated admin
+      # console for your whole LAN until you set it back.
+      # Put the real webhook in infra/.env (gitignored) to make alerts deliver.
+      #
+      # The default is NOT empty, and must not be: measured on Grafana 13.2.0,
+      # an empty Discord url is a FATAL provisioning error --
+      # "could not find webhook url property in settings" -- which fails the
+      # provisioning module, then NotificationService and SecretsService with
+      # it, and the container exits. An absent optional secret must not take
+      # the dev stack down.
+      #
+      # `.invalid` is reserved by RFC 2606 and can never resolve, so an
+      # unconfigured stack provisions cleanly and any delivery attempt fails
+      # loudly against a guaranteed-nonexistent host, rather than silently
+      # succeeding at posting nowhere -- or, worse, somewhere real.
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-https://discord.invalid/alerts-not-configured}
+    # Longer than LGTM_SHUTDOWN_TIMEOUT_SECONDS, so run-all.sh's own
+    # SIGTERM-then-SIGKILL sequence finishes before Docker's.
+    stop_grace_period: 50s
+    # Replaces the image's HEALTHCHECK, which treats a component that refuses
+    # connections as "not running (skipping)" and reports healthy — a Loki
+    # that crashed would read green. Every server this stack depends on must
+    # answer. `curl` because the image has no wget (measured: the prod
+    # overlay's old `wget --spider` check could never pass).
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "curl -fsS -o /dev/null http://127.0.0.1:3000/api/health && curl -fsS -o /dev/null http://127.0.0.1:3100/ready && curl -fsS -o /dev/null http://127.0.0.1:9090/-/ready && curl -fsS -o /dev/null http://127.0.0.1:3200/ready && curl -fsS -o /dev/null http://127.0.0.1:13133/ready"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  minio-data:
+  scheduler-data:
+  # otel-lgtm's /data. Deliberately NOT in scripts/backup/ — see
+  # docs/architecture/backup-restore.md.
+  otel-lgtm-data:

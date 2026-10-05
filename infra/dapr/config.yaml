@@ -1,0 +1,18 @@
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: cellar-config
+spec:
+  tracing:
+    samplingRate: "1"
+    otel:
+      endpointAddress: "otel-lgtm:4318"
+      isSecure: false
+      protocol: http
+  metrics:
+    enabled: true
+  features:
+    # §8.5: reentrancy stays off. Dapr deadlocks an actor called back inside its
+    # own turn; cross-actor work goes through the outbox instead.
+    - name: ActorReentrancy
+      enabled: false

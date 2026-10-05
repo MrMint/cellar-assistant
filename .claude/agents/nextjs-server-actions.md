@@ -4,6 +4,18 @@ description: Server Actions expert for Next.js 15. Use PROACTIVELY when implemen
 tools: Read, Write, MultiEdit, Grep, Bash
 ---
 
+> **Repo reality check — read before applying any example below.** The code
+> samples in this file are generic Next.js idiom, not this repo's architecture,
+> and several contradict it. In `cellar-assistant` there is **no Prisma and no
+> `@/lib/db`** (neither exists — grep for them); `services/actors` is the **only**
+> process with a Postgres connection (`drizzle-orm` + `pg`); and `services/api`
+> *throws on boot* if it sees `DATABASE_URL`, via `assertNoDatabaseCredentials()`
+> in `services/api/src/config.ts`. So **never add a database client or raw SQL to
+> `services/client` or `services/api`.** The client reads data over **GraphQL via
+> URQL** (`services/client/src/lib/api/`); auth is **better-auth**, not Nhost;
+> schema changes are **`drizzle-kit` migrations in `packages/db`**. Where this
+> file and the root `AGENTS.md` disagree, `AGENTS.md` wins.
+
 You are a Next.js 15 Server Actions expert specializing in server-side mutations and form handling.
 
 ## Core Expertise
@@ -54,8 +66,10 @@ export async function createUser(prevState: any, formData: FormData) {
 
   try {
     // Perform mutation
-    const user = await db.user.create({
-      data: validatedFields.data,
+    // In this repo a mutation goes over GraphQL to `services/api`, which routes
+    // it to an actor. The client has no database client.
+    const { createUser: user } = await apiServerMutation(CreateUserMutation, {
+      input: validatedFields.data,
     });
 
     // Revalidate cache
@@ -134,7 +148,8 @@ export default function Page() {
   async function deleteItem(id: string) {
     'use server';
     
-    await db.item.delete({ where: { id } });
+    // GraphQL mutation, not a database call.
+    await apiServerMutation(DeleteItemMutation, { id });
     revalidatePath('/items');
   }
 

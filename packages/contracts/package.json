@@ -1,0 +1,29 @@
+{
+  "name": "@cellar-assistant/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ctx": "./src/ctx.ts",
+    "./actors": "./src/actors.ts",
+    "./barcodes": "./src/barcodes.ts",
+    "./categories": "./src/categories.ts",
+    "./errors": "./src/errors.ts",
+    "./item-types": "./src/item-types.ts",
+    "./items": "./src/items.ts",
+    "./page": "./src/page.ts",
+    "./proxy": "./src/proxy.ts"
+  },
+  "scripts": {
+    "build": "echo 'no build step: consumed as TypeScript source'",
+    "test": "bun run --bun vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint ."
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

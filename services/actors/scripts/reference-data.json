@@ -1,0 +1,1686 @@
+{
+  "beer_style": [
+    {
+      "value": "ALTBIER",
+      "comment": null
+    },
+    {
+      "value": "AMBER_ALE",
+      "comment": null
+    },
+    {
+      "value": "BARLEY_WINE",
+      "comment": null
+    },
+    {
+      "value": "BERLINER_WEISSE",
+      "comment": null
+    },
+    {
+      "value": "BIERE_DE_GARDE",
+      "comment": null
+    },
+    {
+      "value": "BITTER",
+      "comment": null
+    },
+    {
+      "value": "BLONDE_ALE",
+      "comment": null
+    },
+    {
+      "value": "BOCK",
+      "comment": null
+    },
+    {
+      "value": "BROWN_ALE",
+      "comment": null
+    },
+    {
+      "value": "CREAM_ALE",
+      "comment": null
+    },
+    {
+      "value": "DOPPELBOCK",
+      "comment": null
+    },
+    {
+      "value": "DORTMUNDER_EXPORT",
+      "comment": null
+    },
+    {
+      "value": "DUNKEL",
+      "comment": null
+    },
+    {
+      "value": "DUNKELWEIZEN",
+      "comment": null
+    },
+    {
+      "value": "EISBOCK",
+      "comment": null
+    },
+    {
+      "value": "FLANDERS_RED_ALE",
+      "comment": null
+    },
+    {
+      "value": "FRUIT_BEER",
+      "comment": null
+    },
+    {
+      "value": "GEUZE",
+      "comment": null
+    },
+    {
+      "value": "GOLDEN_SUMMER_ALE",
+      "comment": null
+    },
+    {
+      "value": "GOSE",
+      "comment": null
+    },
+    {
+      "value": "HEFEWEIZEN",
+      "comment": null
+    },
+    {
+      "value": "HELLES",
+      "comment": null
+    },
+    {
+      "value": "HERB_AND_SPICED_BEER",
+      "comment": null
+    },
+    {
+      "value": "HONEY_BEER",
+      "comment": null
+    },
+    {
+      "value": "INDIA_PALE_ALE",
+      "comment": null
+    },
+    {
+      "value": "KOLSCH",
+      "comment": null
+    },
+    {
+      "value": "LAMBIC",
+      "comment": null
+    },
+    {
+      "value": "LIGHT_ALE",
+      "comment": null
+    },
+    {
+      "value": "MAIBOCK_HELLES_BOCK",
+      "comment": null
+    },
+    {
+      "value": "MALT_LIQUOR",
+      "comment": null
+    },
+    {
+      "value": "MILD",
+      "comment": null
+    },
+    {
+      "value": "OKTOBERFESTBIER_MARZENDBIER",
+      "comment": null
+    },
+    {
+      "value": "OLD_ALE",
+      "comment": null
+    },
+    {
+      "value": "OUD_BRUIN",
+      "comment": null
+    },
+    {
+      "value": "PALE_ALE",
+      "comment": null
+    },
+    {
+      "value": "PILSENER_PILSNER_PILS",
+      "comment": null
+    },
+    {
+      "value": "PORTER",
+      "comment": null
+    },
+    {
+      "value": "RED_ALE",
+      "comment": null
+    },
+    {
+      "value": "ROGGENBIER",
+      "comment": null
+    },
+    {
+      "value": "RYE_BEER",
+      "comment": null
+    },
+    {
+      "value": "SAISON",
+      "comment": null
+    },
+    {
+      "value": "SCHWARZBIER",
+      "comment": null
+    },
+    {
+      "value": "SCOTCH_ALE",
+      "comment": null
+    },
+    {
+      "value": "SMOKED_BEER",
+      "comment": null
+    },
+    {
+      "value": "STEAM_BEER",
+      "comment": null
+    },
+    {
+      "value": "STOUT",
+      "comment": null
+    },
+    {
+      "value": "VEGETABLE_BEER",
+      "comment": null
+    },
+    {
+      "value": "VIENNA_LAGER",
+      "comment": null
+    },
+    {
+      "value": "WEISSBIER",
+      "comment": null
+    },
+    {
+      "value": "WEIZENBOCK",
+      "comment": null
+    },
+    {
+      "value": "WILD_BEER",
+      "comment": null
+    },
+    {
+      "value": "WITBIER",
+      "comment": null
+    },
+    {
+      "value": "WOOD_AGED_BEER",
+      "comment": null
+    }
+  ],
+  "coffee_cultivar": [
+    {
+      "value": "ARUSHAN",
+      "comment": null
+    },
+    {
+      "value": "BENGUET",
+      "comment": null
+    },
+    {
+      "value": "BERGENDAL_SIDIKALANG",
+      "comment": null
+    },
+    {
+      "value": "BERNARDINA",
+      "comment": null
+    },
+    {
+      "value": "BLUE_MOUNTAIN",
+      "comment": null
+    },
+    {
+      "value": "BONIFIEUR",
+      "comment": null
+    },
+    {
+      "value": "BOURBON",
+      "comment": null
+    },
+    {
+      "value": "BRUTTE",
+      "comment": null
+    },
+    {
+      "value": "BUGISHU",
+      "comment": null
+    },
+    {
+      "value": "CATIMOR",
+      "comment": null
+    },
+    {
+      "value": "CATUAI",
+      "comment": null
+    },
+    {
+      "value": "CATURRA",
+      "comment": null
+    },
+    {
+      "value": "CHARRIER",
+      "comment": null
+    },
+    {
+      "value": "FRENCH_MISSION",
+      "comment": null
+    },
+    {
+      "value": "GEISHA",
+      "comment": null
+    },
+    {
+      "value": "HARAR",
+      "comment": null
+    },
+    {
+      "value": "JAVA",
+      "comment": null
+    },
+    {
+      "value": "K7",
+      "comment": null
+    },
+    {
+      "value": "KONA",
+      "comment": null
+    },
+    {
+      "value": "MARACATURRA",
+      "comment": null
+    },
+    {
+      "value": "MARAGOGIPE",
+      "comment": null
+    },
+    {
+      "value": "MAYAGUEZ",
+      "comment": null
+    },
+    {
+      "value": "MOCHA",
+      "comment": null
+    },
+    {
+      "value": "MUNDO_NOVO",
+      "comment": null
+    },
+    {
+      "value": "ORANGE_YELLOW_BOURBON",
+      "comment": null
+    },
+    {
+      "value": "PACAMARA",
+      "comment": null
+    },
+    {
+      "value": "PACAS",
+      "comment": null
+    },
+    {
+      "value": "PACHE_COLIS",
+      "comment": null
+    },
+    {
+      "value": "PACHE_COMUM",
+      "comment": null
+    },
+    {
+      "value": "RUIRU_11",
+      "comment": null
+    },
+    {
+      "value": "S795",
+      "comment": null
+    },
+    {
+      "value": "SAGADA",
+      "comment": null
+    },
+    {
+      "value": "SANTOS",
+      "comment": null
+    },
+    {
+      "value": "SARCHIMOR",
+      "comment": null
+    },
+    {
+      "value": "SELECTION_9",
+      "comment": null
+    },
+    {
+      "value": "SIDAMO",
+      "comment": null
+    },
+    {
+      "value": "SL28",
+      "comment": null
+    },
+    {
+      "value": "SL34",
+      "comment": null
+    },
+    {
+      "value": "STARMAYA",
+      "comment": null
+    },
+    {
+      "value": "SULAWESI_TORAJA",
+      "comment": null
+    },
+    {
+      "value": "SUMATRA",
+      "comment": null
+    },
+    {
+      "value": "TIMOR_ARABUSTA",
+      "comment": null
+    },
+    {
+      "value": "TYPICA",
+      "comment": null
+    },
+    {
+      "value": "YIRGACHEFFE",
+      "comment": null
+    }
+  ],
+  "country": [
+    {
+      "value": "AFGHANISTAN",
+      "comment": null
+    },
+    {
+      "value": "ALBANIA",
+      "comment": null
+    },
+    {
+      "value": "ALGERIA",
+      "comment": null
+    },
+    {
+      "value": "ANDORRA",
+      "comment": null
+    },
+    {
+      "value": "ANGOLA",
+      "comment": null
+    },
+    {
+      "value": "ANTIGUA_AND_BARBUDA",
+      "comment": null
+    },
+    {
+      "value": "ARGENTINA",
+      "comment": null
+    },
+    {
+      "value": "ARMENIA",
+      "comment": null
+    },
+    {
+      "value": "AUSTRALIA",
+      "comment": null
+    },
+    {
+      "value": "AUSTRIA",
+      "comment": null
+    },
+    {
+      "value": "AZERBAIJAN",
+      "comment": null
+    },
+    {
+      "value": "BAHAMAS",
+      "comment": null
+    },
+    {
+      "value": "BAHRAIN",
+      "comment": null
+    },
+    {
+      "value": "BANGLADESH",
+      "comment": null
+    },
+    {
+      "value": "BARBADOS",
+      "comment": null
+    },
+    {
+      "value": "BELARUS",
+      "comment": null
+    },
+    {
+      "value": "BELGIUM",
+      "comment": null
+    },
+    {
+      "value": "BELIZE",
+      "comment": null
+    },
+    {
+      "value": "BENIN",
+      "comment": null
+    },
+    {
+      "value": "BHUTAN",
+      "comment": null
+    },
+    {
+      "value": "BOLIVIA",
+      "comment": null
+    },
+    {
+      "value": "BOSNIA_AND_HERZEGOVINA",
+      "comment": null
+    },
+    {
+      "value": "BOTSWANA",
+      "comment": null
+    },
+    {
+      "value": "BRAZIL",
+      "comment": null
+    },
+    {
+      "value": "BRUNEI",
+      "comment": null
+    },
+    {
+      "value": "BULGARIA",
+      "comment": null
+    },
+    {
+      "value": "BURKINA_FASO",
+      "comment": null
+    },
+    {
+      "value": "BURUNDI",
+      "comment": null
+    },
+    {
+      "value": "CAMBODIA",
+      "comment": null
+    },
+    {
+      "value": "CAMEROON",
+      "comment": null
+    },
+    {
+      "value": "CANADA",
+      "comment": null
+    },
+    {
+      "value": "CAPE_VERDE_CABO_VERDE",
+      "comment": null
+    },
+    {
+      "value": "CENTRAL_AFRICAN_REPUBLIC",
+      "comment": null
+    },
+    {
+      "value": "CHAD",
+      "comment": null
+    },
+    {
+      "value": "CHILE",
+      "comment": null
+    },
+    {
+      "value": "CHINA",
+      "comment": null
+    },
+    {
+      "value": "COLOMBIA",
+      "comment": null
+    },
+    {
+      "value": "COMOROS",
+      "comment": null
+    },
+    {
+      "value": "CONGO_DEMOCRATIC_REPUBLIC_OF_THE",
+      "comment": null
+    },
+    {
+      "value": "CONGO_REPUBLIC_OF_THE",
+      "comment": null
+    },
+    {
+      "value": "COSTA_RICA",
+      "comment": null
+    },
+    {
+      "value": "COTE_DIVOIRE",
+      "comment": null
+    },
+    {
+      "value": "CROATIA",
+      "comment": null
+    },
+    {
+      "value": "CUBA",
+      "comment": null
+    },
+    {
+      "value": "CYPRUS",
+      "comment": null
+    },
+    {
+      "value": "CZECH_REPUBLIC",
+      "comment": null
+    },
+    {
+      "value": "DENMARK",
+      "comment": null
+    },
+    {
+      "value": "DJIBOUTI",
+      "comment": null
+    },
+    {
+      "value": "DOMINICA",
+      "comment": null
+    },
+    {
+      "value": "DOMINICAN_REPUBLIC",
+      "comment": null
+    },
+    {
+      "value": "ECUADOR",
+      "comment": null
+    },
+    {
+      "value": "EGYPT",
+      "comment": null
+    },
+    {
+      "value": "EL_SALVADOR",
+      "comment": null
+    },
+    {
+      "value": "EQUATORIAL_GUINEA",
+      "comment": null
+    },
+    {
+      "value": "ERITREA",
+      "comment": null
+    },
+    {
+      "value": "ESTONIA",
+      "comment": null
+    },
+    {
+      "value": "ESWATINI",
+      "comment": null
+    },
+    {
+      "value": "ETHIOPIA",
+      "comment": null
+    },
+    {
+      "value": "FIJI",
+      "comment": null
+    },
+    {
+      "value": "FINLAND",
+      "comment": null
+    },
+    {
+      "value": "FRANCE",
+      "comment": null
+    },
+    {
+      "value": "GABON",
+      "comment": null
+    },
+    {
+      "value": "GAMBIA",
+      "comment": null
+    },
+    {
+      "value": "GEORGIA",
+      "comment": null
+    },
+    {
+      "value": "GERMANY",
+      "comment": null
+    },
+    {
+      "value": "GHANA",
+      "comment": null
+    },
+    {
+      "value": "GREECE",
+      "comment": null
+    },
+    {
+      "value": "GRENADA",
+      "comment": null
+    },
+    {
+      "value": "GUATEMALA",
+      "comment": null
+    },
+    {
+      "value": "GUINEA",
+      "comment": null
+    },
+    {
+      "value": "GUINEA_BISSAU",
+      "comment": null
+    },
+    {
+      "value": "GUYANA",
+      "comment": null
+    },
+    {
+      "value": "HAITI",
+      "comment": null
+    },
+    {
+      "value": "HONDURAS",
+      "comment": null
+    },
+    {
+      "value": "HUNGARY",
+      "comment": null
+    },
+    {
+      "value": "ICELAND",
+      "comment": null
+    },
+    {
+      "value": "INDIA",
+      "comment": null
+    },
+    {
+      "value": "INDONESIA",
+      "comment": null
+    },
+    {
+      "value": "IRAN",
+      "comment": null
+    },
+    {
+      "value": "IRAQ",
+      "comment": null
+    },
+    {
+      "value": "IRELAND",
+      "comment": null
+    },
+    {
+      "value": "ISRAEL",
+      "comment": null
+    },
+    {
+      "value": "ITALY",
+      "comment": null
+    },
+    {
+      "value": "JAMAICA",
+      "comment": null
+    },
+    {
+      "value": "JAPAN",
+      "comment": null
+    },
+    {
+      "value": "JORDAN",
+      "comment": null
+    },
+    {
+      "value": "KAZAKHSTAN",
+      "comment": null
+    },
+    {
+      "value": "KENYA",
+      "comment": null
+    },
+    {
+      "value": "KIRIBATI",
+      "comment": null
+    },
+    {
+      "value": "KOSOVO",
+      "comment": null
+    },
+    {
+      "value": "KUWAIT",
+      "comment": null
+    },
+    {
+      "value": "KYRGYZSTAN",
+      "comment": null
+    },
+    {
+      "value": "LAOS",
+      "comment": null
+    },
+    {
+      "value": "LATVIA",
+      "comment": null
+    },
+    {
+      "value": "LEBANON",
+      "comment": null
+    },
+    {
+      "value": "LESOTHO",
+      "comment": null
+    },
+    {
+      "value": "LIBERIA",
+      "comment": null
+    },
+    {
+      "value": "LIBYA",
+      "comment": null
+    },
+    {
+      "value": "LIECHTENSTEIN",
+      "comment": null
+    },
+    {
+      "value": "LITHUANIA",
+      "comment": null
+    },
+    {
+      "value": "LUXEMBOURG",
+      "comment": null
+    },
+    {
+      "value": "MADAGASCAR",
+      "comment": null
+    },
+    {
+      "value": "MALAWI",
+      "comment": null
+    },
+    {
+      "value": "MALAYSIA",
+      "comment": null
+    },
+    {
+      "value": "MALDIVES",
+      "comment": null
+    },
+    {
+      "value": "MALI",
+      "comment": null
+    },
+    {
+      "value": "MALTA",
+      "comment": null
+    },
+    {
+      "value": "MARSHALL_ISLANDS",
+      "comment": null
+    },
+    {
+      "value": "MAURITANIA",
+      "comment": null
+    },
+    {
+      "value": "MAURITIUS",
+      "comment": null
+    },
+    {
+      "value": "MEXICO",
+      "comment": null
+    },
+    {
+      "value": "MICRONESIA",
+      "comment": null
+    },
+    {
+      "value": "MOLDOVA",
+      "comment": null
+    },
+    {
+      "value": "MONACO",
+      "comment": null
+    },
+    {
+      "value": "MONGOLIA",
+      "comment": null
+    },
+    {
+      "value": "MONTENEGRO",
+      "comment": null
+    },
+    {
+      "value": "MOROCCO",
+      "comment": null
+    },
+    {
+      "value": "MOZAMBIQUE",
+      "comment": null
+    },
+    {
+      "value": "MYANMAR",
+      "comment": null
+    },
+    {
+      "value": "NAMIBIA",
+      "comment": null
+    },
+    {
+      "value": "NAURU",
+      "comment": null
+    },
+    {
+      "value": "NEPAL",
+      "comment": null
+    },
+    {
+      "value": "NETHERLANDS",
+      "comment": null
+    },
+    {
+      "value": "NEW_ZEALAND",
+      "comment": null
+    },
+    {
+      "value": "NICARAGUA",
+      "comment": null
+    },
+    {
+      "value": "NIGER",
+      "comment": null
+    },
+    {
+      "value": "NIGERIA",
+      "comment": null
+    },
+    {
+      "value": "NORTH_KOREA",
+      "comment": null
+    },
+    {
+      "value": "NORTH_MACEDONIA",
+      "comment": null
+    },
+    {
+      "value": "NORWAY",
+      "comment": null
+    },
+    {
+      "value": "OMAN",
+      "comment": null
+    },
+    {
+      "value": "PAKISTAN",
+      "comment": null
+    },
+    {
+      "value": "PALAU",
+      "comment": null
+    },
+    {
+      "value": "PANAMA",
+      "comment": null
+    },
+    {
+      "value": "PAPUA_NEW_GUINEA",
+      "comment": null
+    },
+    {
+      "value": "PARAGUAY",
+      "comment": null
+    },
+    {
+      "value": "PERU",
+      "comment": null
+    },
+    {
+      "value": "PHILIPPINES",
+      "comment": null
+    },
+    {
+      "value": "POLAND",
+      "comment": null
+    },
+    {
+      "value": "PORTUGAL",
+      "comment": null
+    },
+    {
+      "value": "QATAR",
+      "comment": null
+    },
+    {
+      "value": "ROMANIA",
+      "comment": null
+    },
+    {
+      "value": "RUSSIA",
+      "comment": null
+    },
+    {
+      "value": "RWANDA",
+      "comment": null
+    },
+    {
+      "value": "SAINT_KITTS_AND_NEVIS",
+      "comment": null
+    },
+    {
+      "value": "SAINT_LUCIA",
+      "comment": null
+    },
+    {
+      "value": "SAINT_VINCENT_AND_THE_GRENADINES",
+      "comment": null
+    },
+    {
+      "value": "SAMOA",
+      "comment": null
+    },
+    {
+      "value": "SAN_MARINO",
+      "comment": null
+    },
+    {
+      "value": "SAO_TOME_AND_PRINCIPE",
+      "comment": null
+    },
+    {
+      "value": "SAUDI_ARABIA",
+      "comment": null
+    },
+    {
+      "value": "SCOTLAND",
+      "comment": null
+    },
+    {
+      "value": "SENEGAL",
+      "comment": null
+    },
+    {
+      "value": "SERBIA",
+      "comment": null
+    },
+    {
+      "value": "SEYCHELLES",
+      "comment": null
+    },
+    {
+      "value": "SIERRA_LEONE",
+      "comment": null
+    },
+    {
+      "value": "SINGAPORE",
+      "comment": null
+    },
+    {
+      "value": "SLOVAKIA",
+      "comment": null
+    },
+    {
+      "value": "SLOVENIA",
+      "comment": null
+    },
+    {
+      "value": "SOLOMON_ISLANDS",
+      "comment": null
+    },
+    {
+      "value": "SOMALIA",
+      "comment": null
+    },
+    {
+      "value": "SOUTH_AFRICA",
+      "comment": null
+    },
+    {
+      "value": "SOUTH_KOREA",
+      "comment": null
+    },
+    {
+      "value": "SOUTH_SUDAN",
+      "comment": null
+    },
+    {
+      "value": "SPAIN",
+      "comment": null
+    },
+    {
+      "value": "SRI_LANKA",
+      "comment": null
+    },
+    {
+      "value": "SUDAN",
+      "comment": null
+    },
+    {
+      "value": "SURINAME",
+      "comment": null
+    },
+    {
+      "value": "SWEDEN",
+      "comment": null
+    },
+    {
+      "value": "SWITZERLAND",
+      "comment": null
+    },
+    {
+      "value": "SYRIA",
+      "comment": null
+    },
+    {
+      "value": "TAJIKISTAN",
+      "comment": null
+    },
+    {
+      "value": "TANZANIA",
+      "comment": null
+    },
+    {
+      "value": "THAILAND",
+      "comment": null
+    },
+    {
+      "value": "TIMOR_LESTE",
+      "comment": null
+    },
+    {
+      "value": "TOGO",
+      "comment": null
+    },
+    {
+      "value": "TONGA",
+      "comment": null
+    },
+    {
+      "value": "TRINIDAD_AND_TOBAGO",
+      "comment": null
+    },
+    {
+      "value": "TUNISIA",
+      "comment": null
+    },
+    {
+      "value": "TURKEY",
+      "comment": null
+    },
+    {
+      "value": "TURKMENISTAN",
+      "comment": null
+    },
+    {
+      "value": "TUVALU",
+      "comment": null
+    },
+    {
+      "value": "UGANDA",
+      "comment": null
+    },
+    {
+      "value": "UKRAINE",
+      "comment": null
+    },
+    {
+      "value": "UNITED_ARAB_EMIRATES",
+      "comment": null
+    },
+    {
+      "value": "UNITED_KINGDOM",
+      "comment": null
+    },
+    {
+      "value": "UNITED_STATES",
+      "comment": null
+    },
+    {
+      "value": "URUGUAY",
+      "comment": null
+    },
+    {
+      "value": "UZBEKISTAN",
+      "comment": null
+    },
+    {
+      "value": "VANUATU",
+      "comment": null
+    },
+    {
+      "value": "VATICAN_CITY",
+      "comment": null
+    },
+    {
+      "value": "VENEZUELA",
+      "comment": null
+    },
+    {
+      "value": "VIETNAM",
+      "comment": null
+    },
+    {
+      "value": "WALES",
+      "comment": null
+    },
+    {
+      "value": "YEMEN",
+      "comment": null
+    },
+    {
+      "value": "ZAMBIA",
+      "comment": null
+    },
+    {
+      "value": "ZIMBABWE",
+      "comment": null
+    }
+  ],
+  "sake_category": [
+    {
+      "value": "daiginjo",
+      "comment": "Super premium sake with rice polished to 50% or less"
+    },
+    {
+      "value": "futsushu",
+      "comment": "Regular sake - most common type"
+    },
+    {
+      "value": "genshu",
+      "comment": "Undiluted sake - full strength"
+    },
+    {
+      "value": "ginjo",
+      "comment": "Premium sake with rice polished to 60% or less"
+    },
+    {
+      "value": "honjozo",
+      "comment": "Premium sake with small amount of distilled alcohol added"
+    },
+    {
+      "value": "junmai",
+      "comment": "Pure rice sake with no added alcohol"
+    },
+    {
+      "value": "junmai_daiginjo",
+      "comment": "Pure rice daiginjo sake - highest quality pure rice"
+    },
+    {
+      "value": "junmai_ginjo",
+      "comment": "Pure rice ginjo sake - no added alcohol"
+    },
+    {
+      "value": "koshu",
+      "comment": "Aged sake - developed complex flavors"
+    },
+    {
+      "value": "namazake",
+      "comment": "Unpasteurized sake - fresh and vibrant"
+    },
+    {
+      "value": "nigorizake",
+      "comment": "Cloudy/unfiltered sake - rustic and rich"
+    },
+    {
+      "value": "taruzake",
+      "comment": "Cedar cask sake - woody aromatics"
+    },
+    {
+      "value": "tokubetsu_honjozo",
+      "comment": "Special honjozo sake with enhanced quality"
+    },
+    {
+      "value": "tokubetsu_junmai",
+      "comment": "Special pure rice sake with unique characteristics"
+    }
+  ],
+  "sake_rice_variety": [
+    {
+      "value": "aizan",
+      "comment": "Sweet, fruity variety - premium quality"
+    },
+    {
+      "value": "akita_sake_komachi",
+      "comment": "Akita variety - regional specialty"
+    },
+    {
+      "value": "dewasansan",
+      "comment": "Yamagata variety - fruity and aromatic"
+    },
+    {
+      "value": "ginpu",
+      "comment": "Hokkaido variety - clean and light"
+    },
+    {
+      "value": "gohyakumangoku",
+      "comment": "Popular Niigata variety - clean and crisp"
+    },
+    {
+      "value": "hattan_nishiki",
+      "comment": "Hiroshima variety - elegant and refined"
+    },
+    {
+      "value": "kamenoo",
+      "comment": "Historic variety - traditional character"
+    },
+    {
+      "value": "miyamanishiki",
+      "comment": "Cold-climate variety from mountain regions"
+    },
+    {
+      "value": "omachi",
+      "comment": "Heirloom variety from Okayama - rich and complex"
+    },
+    {
+      "value": "wakamizu",
+      "comment": "Fukuoka variety - southern region specialty"
+    },
+    {
+      "value": "yamadanishiki",
+      "comment": "King of sake rice - premium quality from Hyogo"
+    },
+    {
+      "value": "yumesansui",
+      "comment": "Aichi variety - modern development"
+    }
+  ],
+  "sake_type": [
+    {
+      "value": "dry",
+      "comment": "Karakuchi - dry sake with clean finish"
+    },
+    {
+      "value": "earthy",
+      "comment": "Earthy and mineral notes from terroir"
+    },
+    {
+      "value": "floral",
+      "comment": "Floral aromatics with elegant bouquet"
+    },
+    {
+      "value": "fruity",
+      "comment": "Fruity aromatics with floral and fruit notes"
+    },
+    {
+      "value": "light",
+      "comment": "Tanrei - light and clean, delicate flavor"
+    },
+    {
+      "value": "medium_dry",
+      "comment": "Medium dry sake - balanced with slight dryness"
+    },
+    {
+      "value": "medium_sweet",
+      "comment": "Medium sweet sake - balanced with subtle sweetness"
+    },
+    {
+      "value": "rich",
+      "comment": "Nōjun - rich and full-bodied, complex flavors"
+    },
+    {
+      "value": "sweet",
+      "comment": "Amakuchi - sweet sake with residual sugars"
+    },
+    {
+      "value": "umami",
+      "comment": "Savory and umami-rich with deep flavors"
+    }
+  ],
+  "spirit_type": [
+    {
+      "value": "AMARO_APERITIF_VERMOUTH",
+      "comment": null
+    },
+    {
+      "value": "BAIJIU",
+      "comment": null
+    },
+    {
+      "value": "BOURBON",
+      "comment": null
+    },
+    {
+      "value": "BRANDY_COGNAC",
+      "comment": null
+    },
+    {
+      "value": "GIN",
+      "comment": null
+    },
+    {
+      "value": "LIQUEURS",
+      "comment": null
+    },
+    {
+      "value": "MEZCAL",
+      "comment": null
+    },
+    {
+      "value": "MOONSHINE",
+      "comment": null
+    },
+    {
+      "value": "RUM",
+      "comment": null
+    },
+    {
+      "value": "SCOTCH",
+      "comment": null
+    },
+    {
+      "value": "SOJU",
+      "comment": null
+    },
+    {
+      "value": "TEQUILA",
+      "comment": null
+    },
+    {
+      "value": "VODKA",
+      "comment": null
+    },
+    {
+      "value": "WHISKEY",
+      "comment": null
+    }
+  ],
+  "tea_category": [
+    {
+      "value": "black",
+      "comment": "Fully oxidized tea - bold, robust flavors"
+    },
+    {
+      "value": "blend",
+      "comment": "Blended tea - combination of multiple tea types or flavors"
+    },
+    {
+      "value": "chai",
+      "comment": "Spiced tea blend - typically black tea with warming spices"
+    },
+    {
+      "value": "dark",
+      "comment": "Post-fermented tea including hei cha varieties"
+    },
+    {
+      "value": "green",
+      "comment": "Unoxidized tea - grassy, fresh, vegetal notes"
+    },
+    {
+      "value": "herbal",
+      "comment": "Herbal tisane - caffeine-free infusions from plants other than Camellia sinensis"
+    },
+    {
+      "value": "mate",
+      "comment": "South American yerba mate - high caffeine, grassy and smoky"
+    },
+    {
+      "value": "oolong",
+      "comment": "Partially oxidized tea - complex flavor spectrum between green and black"
+    },
+    {
+      "value": "pu_erh",
+      "comment": "Post-fermented aged tea - earthy, complex, often aged for years"
+    },
+    {
+      "value": "rooibos",
+      "comment": "South African red bush tea - naturally caffeine-free, sweet and earthy"
+    },
+    {
+      "value": "white",
+      "comment": "Minimally processed tea - delicate, subtle flavors"
+    },
+    {
+      "value": "yellow",
+      "comment": "Lightly oxidized tea - mellow, smooth with slight oxidation"
+    }
+  ],
+  "wine_style": [
+    {
+      "value": "DESSERT",
+      "comment": null
+    },
+    {
+      "value": "RED",
+      "comment": null
+    },
+    {
+      "value": "ROSE",
+      "comment": null
+    },
+    {
+      "value": "SPARKLING",
+      "comment": null
+    },
+    {
+      "value": "WHITE",
+      "comment": null
+    }
+  ],
+  "wine_variety": [
+    {
+      "value": "AGLIANICO",
+      "comment": null
+    },
+    {
+      "value": "ALBARINO_ALVARINHO",
+      "comment": null
+    },
+    {
+      "value": "ARNEIS",
+      "comment": null
+    },
+    {
+      "value": "ASTI",
+      "comment": null
+    },
+    {
+      "value": "BARBERA",
+      "comment": null
+    },
+    {
+      "value": "BLAUFRANKISCH",
+      "comment": null
+    },
+    {
+      "value": "BLEND",
+      "comment": null
+    },
+    {
+      "value": "CABERNET_FRANC",
+      "comment": null
+    },
+    {
+      "value": "CABERNET_SAUVIGNON",
+      "comment": null
+    },
+    {
+      "value": "CARIGNAN",
+      "comment": null
+    },
+    {
+      "value": "CARMENERE",
+      "comment": null
+    },
+    {
+      "value": "CAVA",
+      "comment": null
+    },
+    {
+      "value": "CHAMPAGNE",
+      "comment": null
+    },
+    {
+      "value": "CHARDONNAY",
+      "comment": null
+    },
+    {
+      "value": "CHENIN_BLANC",
+      "comment": null
+    },
+    {
+      "value": "CINSAULT",
+      "comment": null
+    },
+    {
+      "value": "CORVINA",
+      "comment": null
+    },
+    {
+      "value": "CREMANT",
+      "comment": null
+    },
+    {
+      "value": "DOLCETTO",
+      "comment": null
+    },
+    {
+      "value": "FURMINT",
+      "comment": null
+    },
+    {
+      "value": "GAMAY",
+      "comment": null
+    },
+    {
+      "value": "GARGANEGA",
+      "comment": null
+    },
+    {
+      "value": "GEWURZTRAMINER",
+      "comment": null
+    },
+    {
+      "value": "GRENACHE",
+      "comment": null
+    },
+    {
+      "value": "GRUNER_VELTLINER",
+      "comment": null
+    },
+    {
+      "value": "LAMBRUSCO",
+      "comment": null
+    },
+    {
+      "value": "MALBEC",
+      "comment": null
+    },
+    {
+      "value": "MALVASIA",
+      "comment": null
+    },
+    {
+      "value": "MARSANNE",
+      "comment": null
+    },
+    {
+      "value": "MERLOT",
+      "comment": null
+    },
+    {
+      "value": "MOURVEDRE_MONASTRELL",
+      "comment": null
+    },
+    {
+      "value": "MULLER_THURGAU",
+      "comment": null
+    },
+    {
+      "value": "MUSCADET",
+      "comment": null
+    },
+    {
+      "value": "NEBBIOLO",
+      "comment": null
+    },
+    {
+      "value": "PETITE_SIRAH",
+      "comment": null
+    },
+    {
+      "value": "PETIT_VERDOT",
+      "comment": null
+    },
+    {
+      "value": "PINOTAGE",
+      "comment": null
+    },
+    {
+      "value": "PINOT_BLANC",
+      "comment": null
+    },
+    {
+      "value": "PINOT_GRIGIO_PINOT_GRIS",
+      "comment": null
+    },
+    {
+      "value": "PINOT_NOIR",
+      "comment": null
+    },
+    {
+      "value": "PRIMITIVO",
+      "comment": null
+    },
+    {
+      "value": "PROSECCO",
+      "comment": null
+    },
+    {
+      "value": "RED_BLEND",
+      "comment": null
+    },
+    {
+      "value": "RHONE_BLENDS",
+      "comment": null
+    },
+    {
+      "value": "RIESLING",
+      "comment": null
+    },
+    {
+      "value": "ROUSSANNE",
+      "comment": null
+    },
+    {
+      "value": "SANGIOVESE",
+      "comment": null
+    },
+    {
+      "value": "SAUVIGNON_BLANC",
+      "comment": null
+    },
+    {
+      "value": "SEMILLON",
+      "comment": null
+    },
+    {
+      "value": "SYRAH_SHIRAZ",
+      "comment": null
+    },
+    {
+      "value": "TEMPRANILLO",
+      "comment": null
+    },
+    {
+      "value": "TORRONTES",
+      "comment": null
+    },
+    {
+      "value": "VERDEJO",
+      "comment": null
+    },
+    {
+      "value": "VIOGNIER",
+      "comment": null
+    },
+    {
+      "value": "ZINFANDEL",
+      "comment": null
+    }
+  ]
+}

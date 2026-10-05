@@ -1,0 +1,507 @@
+# E3 deploy pipeline (migration-plan.md §"E3 · Loki infra"): on merge to
+# `main`, build `services/api` and `services/actors` images and publish them to GHCR;
+# the self-hosted runner on Loki then pulls and `docker compose up -d`s the
+# prod stack (`infra/docker-compose.prod.yml`, owned by E3a).
+#
+# This workflow is NOT the only thing a merge to `main` deploys: the `nhost`
+# GitHub app redeploys production Nhost Cloud on every merge to `main` too.
+# See docs/architecture/e4-decisions.md, decision 15, before merging anything.
+#
+# ⚠️ READ BEFORE ASSUMING THIS RUNS TODAY. `runs-on: [self-hosted, loki]`
+# below has no runner behind it yet: `gh api repos/MrMint/cellar-assistant/
+# actions/runners` returns zero runners for this repo (checked 2026-09-10).
+# "The existing self-hosted runner on Loki" that migration-plan.md §E3
+# refers to does not exist — no runner is registered for this repository.
+# Loki is a separate, resource-constrained physical host
+# (docs/architecture/target-stack.md). Until a runner carrying the `loki` label is registered on that
+# host (repo-scoped or org-scoped, either works), the `deploy` job below will
+# queue forever and the `build` job is all that actually runs. See this
+# workstream's report for the full writeup.
+#
+# The `[self-hosted, loki]` label pair is this file's own choice, not an
+# observed convention. Rename both the label here and on the registered
+# runner together if a different name is preferred.
+#
+# ⚠️ THIS REPOSITORY IS PUBLIC. A persistent self-hosted runner registered to
+# it can be targeted by ANY workflow file a fork pull request brings with it
+# (`runs-on: [self-hosted, loki]` in the PR's own YAML), so it hands code
+# execution on Loki — Docker, i.e. root, and the shared nginx-proxy's
+# vhost.d — to whoever can get a PR's workflows run. Nothing in THIS file can
+# prevent that; the guards below only keep this file itself from running for
+# a PR. Read docs/architecture/deploy-loki.md §2.6 before registering a
+# runner: the recommended deploy does not use one on Loki at all.
+#
+# Hardening that does live here: never add a `pull_request` /
+# `pull_request_target` trigger; every action is pinned to a full commit SHA
+# (the comment names the release it was taken from — bump both together);
+# and both jobs carry a guard that refuses to run outside the upstream
+# repository or for a pull_request event.
+name: deploy-loki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+      - "services/actors/**"
+      - "packages/**"
+      # The prod stack is BOTH compose files — the overlay inherits every
+      # service, environment and volume it does not override from the base
+      # file — so a change to either one is a change to production.
+      - "infra/docker-compose.yml"
+      - "infra/docker-compose.prod.yml"
+      # The edge's per-host nginx config, installed into the host's shared
+      # nginx-proxy by scripts/deploy/edge.sh (the deploy job below).
+      - "infra/nginx-proxy/**"
+      - "infra/dapr/**"
+      - "infra/grafana/**"
+      - "infra/postgres/**"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "package.json"
+      - ".dockerignore"
+      # Read by the build job's smoke step and the deploy job's secret guard.
+      - "scripts/ci/**"
+      - "scripts/deploy/**"
+      - ".github/workflows/deploy-loki.yaml"
+  # Manual redeploy with no code change — e.g. after editing infra/.env.prod
+  # on Loki directly, or to re-pull after a registry hiccup.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  # GHCR push (build job) and GHCR pull (deploy job) both ride the same
+  # `GITHUB_TOKEN` — no extra registry secret needed for either half.
+  packages: write
+
+# One deploy in flight at a time; never cancel one mid-`up -d` — that is how
+# a stack gets left half-started. A second push queues behind the first
+# instead of racing it.
+concurrency:
+  group: deploy-loki
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  # `ghcr.io/mrmint/cellar-api` / `ghcr.io/mrmint/cellar-actors` — matches the
+  # names infra/.env.prod.example already uses for API_IMAGE/ACTORS_IMAGE
+  # (E3a's file; do not rename one side without the other).
+  # docker/metadata-action lower-cases this for us; ghcr.io requires it.
+  IMAGE_OWNER: ${{ github.repository_owner }}
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Build once on a GitHub-hosted runner (free, fast, arm64/amd64 either
+  # way via buildx) rather than on Loki itself — Loki is resource-constrained
+  # and shares its CPU and memory with other long-running workloads, so a
+  # container build there would contend with them.
+  # Matches migration-plan.md's split: "GitHub Actions builds ... the
+  # existing self-hosted runner ... pulls".
+  # ---------------------------------------------------------------------
+  build:
+    if: github.repository == 'MrMint/cellar-assistant' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+            dockerfile: services/api/Dockerfile
+          - app: actors
+            dockerfile: services/actors/Dockerfile
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tags: `latest` (a debugging convenience — `docker pull ...:latest` by
+      # hand — never what the deploy job below actually applies) plus the
+      # short commit sha, `sha-<7 chars>` (docker/metadata-action's default
+      # `type=sha` format). That second form is load-bearing: it is exactly
+      # what infra/.env.prod.example's API_IMAGE/ACTORS_IMAGE example values
+      # look like (`ghcr.io/mrmint/cellar-api:sha-0000000`) and what the
+      # deploy job recomputes byte-for-byte from `github.sha` to pin `up -d`
+      # to this build specifically — see that job's comment.
+      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        id: meta
+        with:
+          images: ghcr.io/${{ env.IMAGE_OWNER }}/cellar-${{ matrix.app }}
+          tags: |
+            type=raw,value=latest
+            type=sha
+
+      # Build context is the repo root for both — see the header comment in
+      # each Dockerfile (the `workspace:*` protocol needs the root manifest,
+      # which is where the workspace globs live under bun, and the dependency
+      # closure present at install time). `--progress=plain` piped nowhere special here since
+      # build-push-action already streams to the job log continuously; the
+      # 600s-silent-build failure mode this workstream hit locally is a
+      # property of an unattended background shell, not of Actions' own log
+      # streaming.
+      #
+      # Built and LOADED first, smoke-tested, and only then pushed: an image
+      # whose entry point cannot resolve its own imports must never reach GHCR,
+      # because the deploy job pulls whatever the sha tag names. The smoke
+      # (scripts/ci/image-smoke.sh) is the same one stack-ci's `images` job runs
+      # on every PR. The push step rebuilds from the layer cache the first build
+      # just wrote, so it is the same image, not a second build of the source.
+      #
+      # WHY THIS GATE LIVES HERE AND NOT AS "deploy only after stack-ci": a
+      # workflow cannot `needs:` a job in another workflow, and a `workflow_run`
+      # trigger would silently skip every deploy stack-ci's path filter skips
+      # (a change to this file, or to packages/e2e, deploys but runs no
+      # stack-ci). Making stack-ci a REQUIRED status check on `main` is the
+      # repository-settings half — branch protection, not a file here — and a
+      # path-filtered required check blocks PRs it never ran on unless the
+      # filter is dropped, so that choice is the owner's (docs/architecture/
+      # deploy-loki.md §2.6).
+      - name: Build (not pushed yet)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: cellar-${{ matrix.app }}:smoke
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Smoke-test the image before publishing it
+        run: scripts/ci/image-smoke.sh ${{ matrix.app }} cellar-${{ matrix.app }}:smoke
+
+      - name: Push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+
+  # ---------------------------------------------------------------------
+  # Pull + apply on Loki itself. See the header comment: no runner with the
+  # `loki` label is registered against this repo yet, so this job queues
+  # until one is. Once registered, it needs: Docker + the compose v2 plugin
+  # (>= 2.24 — infra/docker-compose.prod.yml's `!override`/`!reset` merge
+  # keys need it, per that file's own header comment), permission to run
+  # both (docker group or root), and infra/.env.prod already present at
+  # ENV_FILE_PATH below. That file is gitignored and never touches this
+  # workflow's checkout — docs/architecture/deploy-loki.md §2.4 has the human
+  # place it on Loki once, outside of git, the same way infra/.env is on
+  # every developer's machine now; this job only ever reads it.
+  #
+  # `infra/docker-compose.prod.yml` is an OVERLAY (its own header comment:
+  # "Never used alone") — every command below passes BOTH `-f` files, base
+  # then overlay, exactly as docs/architecture/deploy-loki.md §4/§5/§6 do.
+  # ---------------------------------------------------------------------
+  deploy:
+    needs: build
+    # Never on a fork, never for a pull request — see the header. (A fork PR
+    # can still bring its own workflow file; this guard does not stop that.)
+    if: github.repository == 'MrMint/cellar-assistant' && github.event_name != 'pull_request'
+    runs-on: [self-hosted, loki]
+    timeout-minutes: 15
+    env:
+      # Repo variable, not a secret (it is a path, not a credential) — set
+      # it under Settings → Actions → Variables if Loki's checkout does not
+      # live at this default.
+      ENV_FILE_PATH: ${{ vars.LOKI_ENV_FILE_PATH || '/opt/cellar-assistant/infra/.env.prod' }}
+      # The public edge is the host's existing nginx-proxy, not a service of
+      # this stack (infra/docker-compose.prod.yml, header note 3). These say
+      # where it is; take them from `docker inspect nginx-proxy`. Repo
+      # variables, not secrets — paths and names. scripts/deploy/edge.sh reads
+      # all four. LOKI_NGINX_PROXY_VHOST_DIR has no default in the repository
+      # and is REQUIRED: the first step below fails the job if it is unset.
+      COMPOSE_ENV_FILE: ${{ vars.LOKI_ENV_FILE_PATH || '/opt/cellar-assistant/infra/.env.prod' }}
+      NGINX_PROXY_VHOST_DIR: ${{ vars.LOKI_NGINX_PROXY_VHOST_DIR }}
+      NGINX_PROXY_CONTAINER: ${{ vars.LOKI_NGINX_PROXY_CONTAINER || 'nginx-proxy' }}
+      NGINX_PROXY_NETWORK: ${{ vars.LOKI_NGINX_PROXY_NETWORK || 'bridge' }}
+    steps:
+      - name: Require the vhost.d path
+        run: |
+          if [ -z "$NGINX_PROXY_VHOST_DIR" ]; then
+            echo "::error::Set the repository variable LOKI_NGINX_PROXY_VHOST_DIR to the host path nginx-proxy mounts at /etc/nginx/vhost.d (docs/architecture/deploy-loki.md §2.6)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # No registry-credential secret to create: GITHUB_TOKEN is issued to
+      # every job (self-hosted runners included) and can always pull a
+      # package published by this same repository/org.
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The exact tags docker/metadata-action's `type=sha` gave the images
+      # `needs.build` just pushed (its default short-sha format,
+      # `sha-<7 chars>` — matches infra/.env.prod.example's own
+      # `API_IMAGE=ghcr.io/mrmint/cellar-api:sha-0000000` example verbatim).
+      # GitHub Actions expressions have no substring function, hence a shell
+      # step rather than computing this in `env:` directly. Written to
+      # $GITHUB_ENV, which every later step in this job inherits, and which
+      # docker compose prefers over whatever static value --env-file supplies
+      # for the same name — so every push to main moves the running stack to
+      # that push's own images with no edit to infra/.env.prod required,
+      # while docs/architecture/deploy-loki.md §6's manual-rollback procedure
+      # (hand-editing API_IMAGE/ACTORS_IMAGE in infra/.env.prod, then
+      # `up -d api actors`) keeps working exactly as documented — it only
+      # "sticks" until the next merge-triggered deploy moves forward again,
+      # which is the correct behaviour for a rollback versus a permanent pin.
+      - name: Pin this deploy to the images just built
+        run: |
+          SHA_TAG="sha-$(echo "${{ github.sha }}" | cut -c1-7)"
+          echo "API_IMAGE=ghcr.io/${{ github.repository_owner }}/cellar-api:${SHA_TAG}" >> "$GITHUB_ENV"
+          echo "ACTORS_IMAGE=ghcr.io/${{ github.repository_owner }}/cellar-actors:${SHA_TAG}" >> "$GITHUB_ENV"
+
+      - name: Confirm infra/.env.prod exists on this host
+        run: |
+          if [ ! -f "$ENV_FILE_PATH" ]; then
+            echo "::error::$ENV_FILE_PATH not found on this runner. Create it by hand on Loki first (docs/architecture/deploy-loki.md §2.4, infra/.env.prod.example for the shape E3a defines) — this workflow deliberately never writes it."
+            exit 1
+          fi
+
+      # A config-only commit must still reach the running containers, and
+      # `up -d` alone does not do that: it recreates a container when its
+      # compose config changes, never because a bind-mounted file did — and
+      # Grafana reads alerting provisioning only at startup, Prometheus its
+      # config file, daprd its components. So each directory those services
+      # mount from is hashed here, and infra/docker-compose.prod.yml puts the
+      # hash on the service as a `cellar.config-fingerprint` label (its header,
+      # note 7, has the why, including the single-file-mount trap that rules
+      # out an in-place reload). Same files -> same label -> `up -d` leaves the
+      # container alone; any change -> that one service is recreated.
+      #
+      # With otel-lgtm's image pinned and /data on a volume, that recreate
+      # keeps Loki's history, so it no longer trips the dead-letter reporter's
+      # dead-man's switch. Markdown is excluded so a README edit restarts
+      # nothing.
+      - name: Fingerprint bind-mounted config
+        run: |
+          fp() { find "$1" -type f ! -name '*.md' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16; }
+          {
+            echo "OTEL_LGTM_CONFIG_HASH=$(fp infra/grafana)"
+            echo "DAPR_CONFIG_HASH=$(fp infra/dapr)"
+          } | tee -a "$GITHUB_ENV"
+
+      # `--no-deps` is intentionally absent for `pull`: Postgres builds from
+      # source (infra/docker-compose.yml's `build: ./postgres`) and is
+      # skipped by `pull` on its own — the next step builds it; MinIO, the Dapr
+      # sidecars and otel-lgtm are `image:` references and do not need
+      # rebuilding on every merge, but re-pulling them is cheap and keeps a
+      # stale local image from silently lingering forever. Only the sidecars
+      # (1.18.3) and otel-lgtm (0.32.1) are pinned to an exact version; MinIO
+      # (`latest`) floats unless infra/.env.prod pins it, so this pull can move
+      # it and the `up -d` below will then recreate it. nginx-proxy is not ours
+      # and is never pulled here.
+      - name: Pull images
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+            --env-file "$ENV_FILE_PATH" pull
+
+      # `pull` skips a build service, and `up -d` never rebuilds an image that
+      # already exists — so before this step a change to infra/postgres/**
+      # triggered a deploy (it is in `paths:` above) that applied nothing. Built
+      # from the host's layer cache and WITHOUT `--pull`: a deploy that did not
+      # touch infra/postgres rebuilds to the same image ID and recreates
+      # nothing, and the floating base tag (`imresamu/postgis:18-3.6-bookworm`)
+      # moves only when someone runs `build --pull postgres` on purpose.
+      - name: Build Postgres (infra/postgres)
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+            --env-file "$ENV_FILE_PATH" build postgres
+
+      # The overlay makes every secret `:?` (required, non-blank) — which a
+      # value copied from the development lane is. This refuses any
+      # secret-named variable that equals a default the BASE file publishes
+      # (`cellar-dev-dapr-api-token`, `cellar-dev-secret`, Postgres's `cellar`,
+      # the `discord.invalid` alert placeholder, …), derived by rendering the
+      # base file with an empty environment rather than from a list. Both
+      # renders go straight down a pipe — the production one holds every
+      # secret — and the checker prints variable names only. It runs on the
+      # `node` inside the actors image just pulled, so this runner needs no
+      # Node of its own; `--network none` because it needs nothing else.
+      # Self-tested in stack-ci (scripts/deploy/prod-config-selftest.sh).
+      - name: Refuse published development secrets
+        run: |
+          set -o pipefail
+          dev() {
+            env -i PATH="$PATH" HOME="$HOME" ${DOCKER_HOST:+DOCKER_HOST="$DOCKER_HOST"} \
+              docker compose -f infra/docker-compose.yml --env-file /dev/null config --format json
+          }
+          prod() {
+            docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+              --env-file "$ENV_FILE_PATH" config --format json
+          }
+          { printf '{"dev":'; dev; printf ',"prod":'; prod; printf '}'; } \
+            | docker run --rm -i --network none --entrypoint node "$ACTORS_IMAGE" \
+                --input-type=module -e "$(cat scripts/deploy/check-prod-config.mjs)"
+
+      # H1 · SCHEMA FIRST, THEN CODE. Every migration in the image being
+      # deployed is applied before any container of that image starts serving;
+      # a failed or refused migration fails this step, and with it the deploy,
+      # while the previous images are still the ones running.
+      #
+      # Run from the NEW actors image, as a one-shot container on the compose
+      # network — not from this runner's checkout. That image carries
+      # packages/db (migrations/ and src/migrate/) and pg, so the migrations
+      # applied are byte-for-byte the ones the code starting next was built
+      # with; the database is reached as `postgres:5432` with the DATABASE_URL
+      # the overlay already gives the actor host, so the credential never
+      # leaves the container and never appears in this job's log (the CLI
+      # prints the URL redacted); and this runner needs neither bun nor Node.
+      # `node`, not bun, because the root `db:migrate` script is `node …` and
+      # the image ships both (services/actors/Dockerfile).
+      #
+      # The CLI (packages/db/src/migrate/cli.ts) holds an advisory lock for the
+      # whole run, applies each migration in its own transaction, refuses a
+      # checksum mismatch or a half-present adoption, and re-reads the ledger
+      # afterwards — any of those is a non-zero exit here. `--no-deps` because
+      # only Postgres is needed, and it is brought up (and, after an
+      # infra/postgres change, recreated on the image built above) first.
+      #
+      # The OLD actor host is still serving while this runs, so a migration
+      # has to be one the running code tolerates — add, backfill, then drop in
+      # a later release (docs/architecture/deploy-loki.md §4.1).
+      - name: Migrate the database (before the new images start)
+        run: |
+          set -o pipefail
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+            --env-file "$ENV_FILE_PATH" up -d --wait --wait-timeout 180 postgres
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+            --env-file "$ENV_FILE_PATH" run --rm --no-deps -T actors \
+            sh -c 'MIGRATE_DATABASE_URL="$DATABASE_URL" exec node /workspace/packages/db/src/migrate/cli.ts'
+
+      # `--wait` blocks until every service is running and every healthcheck
+      # passes — including the actor host's (better-auth's key set, which needs
+      # the HTTP server, the auth mount and the database), which a bare `up -d`
+      # never waited for. A container that goes unhealthy, or is not healthy
+      # within the timeout, fails the step. The one-shot `minio-init` would
+      # otherwise fail `--wait` by exiting (0) — measured on compose v5.5.1 —
+      # which is why the overlay makes `actors` depend on it completing
+      # successfully (the files binding needs its bucket anyway).
+      #
+      # The edge's nginx config goes in FIRST, while the previous containers
+      # are still serving. nginx-proxy includes `vhost.d/<host>` only if the
+      # file exists when docker-gen regenerates, and a regenerate happens on
+      # the container events `up` and `attach` cause — so a file installed
+      # after them would sit unused until some unrelated container event on
+      # the host. edge.sh tests each file with the proxy's own `nginx -t`
+      # before it is put where nginx-proxy can include it, refuses to
+      # overwrite a file at that path that is not ours, and reloads the proxy
+      # only if something changed. A broken file here is not a cellar outage
+      # but every service on Loki, which is why it is tested in isolation
+      # first and rolled back on a failed full-config test.
+      - name: Install the edge's nginx config into nginx-proxy
+        run: scripts/deploy/edge.sh install
+
+      - name: Apply
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+            --env-file "$ENV_FILE_PATH" up -d --remove-orphans --wait --wait-timeout 300
+
+      # Connect api, actors and minio — exactly the services carrying
+      # VIRTUAL_HOST — to nginx-proxy's network (Loki's default `bridge`,
+      # which Compose cannot attach a service to; edge.sh's header), then
+      # prove the routing through the proxy on loopback, addressed as the
+      # public names: /healthz and /api/auth/jwks answer, `/`, `/actors/*`,
+      # `/dapr/*` and a dot-segment walk are the edge's 404, and the two
+      # non-canonical spellings that do reach the actor host are its 400.
+      # A recreate in Apply dropped the old connection, so between Apply and
+      # this step the edge answers 502 for whatever was recreated.
+      # EDGE_VERIFY_INSECURE because on a first deploy the certificate may not
+      # be issued yet (or is a staging one): this step proves routing; the
+      # certificate is deploy-loki.md §5's check.
+      - name: Attach to nginx-proxy and verify the edge
+        env:
+          EDGE_VERIFY_INSECURE: "1"
+        run: |
+          scripts/deploy/edge.sh attach
+          scripts/deploy/edge.sh verify
+
+      # services/api's `/healthz` is a static "ok" (services/api/src/yoga.ts)
+      # that answers whatever the actor host is doing, so it proves only that
+      # the api container is up. Asked inside the container rather than on the
+      # host's loopback publish: on Loki, 127.0.0.1:3001 — this step's old
+      # default — belongs to another service, which would have answered 200
+      # for a stack that never started.
+      - name: Wait for services/api to report healthy
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+            --env-file "$ENV_FILE_PATH" exec -T api node --input-type=module -e '
+              for (let i = 0; i < 30; i++) {
+                try {
+                  const r = await fetch("http://127.0.0.1:3001/healthz");
+                  if (r.ok && (await r.text()) === "ok") {
+                    console.log("services/api is healthy");
+                    process.exit(0);
+                  }
+                } catch {}
+                await new Promise((r) => setTimeout(r, 2000));
+              }
+              console.error("::error::services/api did not answer /healthz within 60s of up -d");
+              process.exit(1);
+            '
+
+      # The real actor-host signal: one actor turn, end to end. `PingActor.ping`
+      # (services/actors/src/actors/ping-actor.ts) is invoked through
+      # actors-dapr exactly the way every actor call is — sidecar, placement,
+      # the app channel with APP_API_TOKEN, the new actor host's routing and
+      # method allow-list, an activation, a turn — and touches no database and
+      # no actor state. Asked from inside the actors container (the sidecar
+      # publishes nothing) with the DAPR_API_TOKEN that container already
+      # holds; nothing secret is printed. One fixed activation key, so repeated
+      # deploys reuse one activation instead of minting new ones.
+      #
+      # Why not the sidecar's `/v1.0/metadata` (`hostReady`, registered types):
+      # MEASURED stale — with the actor host stopped, actors-dapr still
+      # answered hostReady=true and 48 actor types from before. A turn cannot
+      # be answered from a cache. If PingActor is ever deleted (its own header
+      # says it will be), this step fails loudly and needs another read-only
+      # method; it cannot pass by not checking. Retries for a minute:
+      # placement dissemination can trail the healthcheck.
+      - name: Verify the actor host serves an actor turn
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+            --env-file "$ENV_FILE_PATH" exec -T actors node --input-type=module -e '
+              const url = `http://${process.env.DAPR_HOST}:${process.env.DAPR_HTTP_PORT}/v1.0/actors/PingActor/deploy-check/method/ping`;
+              const init = {
+                method: "POST",
+                headers: { "dapr-api-token": process.env.DAPR_API_TOKEN ?? "", "content-type": "application/json" },
+                body: JSON.stringify([{ viewerId: null, kind: "system", requestId: "deploy-check" }, "deploy-check"]),
+              };
+              let last = "no answer";
+              for (let i = 0; i < 30; i++) {
+                try {
+                  const r = await fetch(url, init);
+                  const body = await r.text();
+                  if (r.ok && JSON.parse(body).pong === true) {
+                    console.log(`PingActor answered a turn through actors-dapr: ${body}`);
+                    process.exit(0);
+                  }
+                  last = `HTTP ${r.status}`;
+                } catch (e) { last = String(e?.message ?? e); }
+                await new Promise((r) => setTimeout(r, 2000));
+              }
+              console.error(`::error::no actor turn through actors-dapr within 60s: ${last}`);
+              process.exit(1);
+            '
+
+      - name: Logs of the application containers, on failure
+        if: failure()
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+            --env-file "$ENV_FILE_PATH" logs --tail=100 postgres actors actors-dapr api api-dapr
+
+      - name: Prune dangling images
+        if: always()
+        run: docker image prune -f

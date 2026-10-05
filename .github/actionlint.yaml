@@ -1,0 +1,7 @@
+# actionlint config. The only thing it currently needs to know is the custom
+# self-hosted runner label deploy-loki.yaml's `deploy` job asks for — without
+# this, actionlint flags "loki" as an unknown runner label on every run.
+# `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest -color`
+self-hosted-runner:
+  labels:
+    - loki

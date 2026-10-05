@@ -1,0 +1,515 @@
+# CI for the post-Nhost backend stack only: services/api, services/actors, the
+# five library packages, and infra/*.
+# The Next.js app (services/client) and the browser suite (packages/e2e) are
+# covered elsewhere and are not built or tested here. The `paths` negations
+# below keep this workflow off them — except services/client/src, which two
+# backend tests read (see the push list).
+name: stack-ci
+
+# The two `paths` lists below are identical on purpose; edit both together.
+#
+# The rule they follow: EVERY file a step below reads is listed, or is under a
+# listed directory. A filter that misses an input does not fail — it skips the
+# run, and stack-ci is not a required check, so the PR merges on the other
+# checks' green with no backend check on it at all. Until 2026-09-27 this list
+# omitted every root input, so a Renovate bump of the `workspaces.catalog` in
+# package.json (where all seven legs get pg, drizzle-*, jose, vitest, typescript,
+# graphql, gql.tada and @types/* from) plus bun.lock would have run no backend
+# CI — while deploy-loki.yaml, which DOES trigger on package.json / bun.lock /
+# bunfig.toml, built and published images from that dependency set. The root
+# entries, and which step reads each:
+#
+#   package.json      the catalog + trustedDependencies (Install, Check
+#                     dependency build scripts); packageManager and the biome
+#                     pin (both "Check the pinned tool versions" steps)
+#   bun.lock          what `--frozen-lockfile` installs; the cache key
+#   bunfig.toml       install settings (minimumReleaseAge, …)
+#   .nvmrc            setup-node's version; scripts/check-node-version.mjs;
+#                     services/actors/src/auth/migrate-users.test.ts reads it
+#   scripts/check-node-version.mjs, scripts/check-blocked-builds.mjs,
+#   scripts/deploy/**, scripts/ci/**
+#                     run as steps, by path (the last two from the compose
+#                     and images jobs)
+#   scripts/cutover/**
+#                     the services/actors leg's "Cutover harness" steps run
+#                     scripts/cutover/test/files-phase.sh and
+#                     host-guards.sh, which drive cutover.sh and read its SQL
+#   tsconfig.base.json  extended by all seven matrix projects' tsconfig
+#   biome.json, .gitignore
+#                     the lint job; biome.json sets `vcs.useIgnoreFile`, so
+#                     the root .gitignore decides which files biome checks
+#   .dockerignore, services/client/Dockerfile{,.dockerignore},
+#   services/client/package.json, packages/e2e/package.json
+#                     services/api/src/dockerfile-workspaces.test.ts holds
+#                     every service Dockerfile (the client's too) and its
+#                     build-context ignore file to the full workspace list,
+#                     so these are read although nothing here builds them
+#
+# Deliberately NOT listed, because nothing here reads them: `turbo.json` (no
+# step invokes turbo — each leg runs its own package's `typecheck`/`test`
+# script in its own directory; add it if a step ever calls `turbo`), the rest
+# of `scripts/`, and `nhost/` (test-db.sh hashes
+# `nhost/migrations` into a LOCAL template-cache fingerprint; CI has no cached
+# template and always builds from packages/db/transform/nhost-schema.sql,
+# which `packages/**` covers).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      # services/client is the Next app; app-ci.yaml owns it and this matrix
+      # does not list it. Without this negation every frontend-only edit would
+      # start seven backend legs against an unchanged tree.
+      - "!services/client/**"
+      # ...except the client source two backend tests read:
+      #  - services/api/src/client-documents.test.ts parses every `graphql()`
+      #    literal under services/client/src and runs the real cost limits over
+      #    each operation, so a client-only change that pushes a document past
+      #    a limit fails there, by operation name, before a page does. It
+      #    walks the whole tree, so nothing narrower than src/** is complete.
+      #  - services/actors/src/lib/ai/place-review.test.ts holds
+      #    PLACE_REVIEW_CATEGORIES against
+      #    services/client/src/components/place-api/placeFormat.ts.
+      # The cost: a PR touching services/client/src now starts the seven
+      # backend legs too. Order matters — a positive pattern after a negation
+      # re-includes.
+      - "services/client/src/**"
+      # ...and the client image's install inputs, which
+      # services/api/src/dockerfile-workspaces.test.ts reads.
+      - "services/client/Dockerfile"
+      - "services/client/Dockerfile.dockerignore"
+      - "services/client/package.json"
+      - "packages/**"
+      - "!packages/e2e/**"
+      - "packages/e2e/package.json"
+      - "infra/**"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+      - ".nvmrc"
+      - "scripts/check-node-version.mjs"
+      - "scripts/check-blocked-builds.mjs"
+      - "scripts/deploy/**"
+      - "scripts/ci/**"
+      - "scripts/cutover/**"
+      - "tsconfig.base.json"
+      - "biome.json"
+      - ".gitignore"
+      - ".dockerignore"
+      - ".github/workflows/stack-ci.yaml"
+  pull_request:
+    paths:
+      - "services/**"
+      # See the push list above for why each entry is here.
+      - "!services/client/**"
+      - "services/client/src/**"
+      - "services/client/Dockerfile"
+      - "services/client/Dockerfile.dockerignore"
+      - "services/client/package.json"
+      - "packages/**"
+      - "!packages/e2e/**"
+      - "packages/e2e/package.json"
+      - "infra/**"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+      - ".nvmrc"
+      - "scripts/check-node-version.mjs"
+      - "scripts/check-blocked-builds.mjs"
+      - "scripts/deploy/**"
+      - "scripts/ci/**"
+      - "scripts/cutover/**"
+      - "tsconfig.base.json"
+      - "biome.json"
+      - ".gitignore"
+      - ".dockerignore"
+      - ".github/workflows/stack-ci.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stack-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Two literals, one place each. Corepack does not manage bun — it only ever
+# understood npm/yarn/pnpm — so `packageManager` in package.json is inert as far
+# as setup-bun is concerned and the version has to be spelled out here. The
+# "Check the pinned tool versions" step in both jobs below asserts them against
+# package.json rather than leaving a comment asking someone to remember.
+env:
+  BUN_VERSION: "1.4.2"
+  BIOME_VERSION: "2.5.3"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # Where `packages/db/transform/test-db.sh` finds Postgres and its source
+    # dump. Job-level because the vitest globalSetup runs the same script again
+    # inside the Test step (a no-op once the template's fingerprint matches).
+    #
+    # DST_CONTAINER, DST_USER and DST_PASSWORD are deliberately *not* set here:
+    # the scripts' own defaults (`cellar-stack-postgres-1`, `cellar`, `cellar`)
+    # already match the container `infra/docker-compose.yml` starts below, one
+    # `name: cellar-stack` is hardcoded there for exactly this reason (a
+    # `services:` service container's name is generated per job and cannot be
+    # written down; a compose-started one is stable and known ahead of time).
+    env:
+      DUMP: ${{ github.workspace }}/packages/db/transform/nhost-schema.sql
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - services/api
+          - services/actors
+          - packages/analysis
+          - packages/contracts
+          - packages/db
+          - packages/policy
+          - packages/schema
+    steps:
+      - uses: actions/checkout@v6
+
+      # Node is NOT vestigial here, and this step is NOT a leftover from before
+      # the bun migration. Every test suite in this matrix except one runs on
+      # bun (`bun run --bun vitest run`), but a real Node still does real work:
+      #
+      #  - `tsc` ships a `#!/usr/bin/env node` bin, so the Typecheck step below
+      #    is a Node process on all seven legs.
+      #  - the `packages/schema` leg's test IS `node scripts/check-generated.ts`
+      #    — a `.ts` file run through Node's built-in type stripping, which
+      #    needs the .nvmrc major specifically.
+      #  - MEASURED under bun 1.4.2, and the reason deleting this step is not a
+      #    cleanup: with NO `node` on PATH, `bun run <script>` where the script
+      #    says `node foo.ts` does not fail — bun silently substitutes ITSELF
+      #    (`process.versions.bun` set, `execPath` the bun binary) and the step
+      #    goes green on the wrong runtime. Dropping setup-node would not break
+      #    the schema leg; it would quietly move it to bun, and the same is true
+      #    of `migrate:users` / `migrate:files` / `db:seed` wherever they run.
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Check the pinned tool versions still match package.json
+        run: |
+          # `bun -e` takes a JS program, and its template literals must reach
+          # bun unexpanded — single quotes are the point, not an oversight.
+          # shellcheck disable=SC2016
+          bun -e '
+            const pkg = await Bun.file("package.json").json();
+            const pins = [
+              ["bun", pkg.packageManager.replace(/^bun@/, ""), Bun.version],
+              ["@biomejs/biome", pkg.devDependencies["@biomejs/biome"], process.env.BIOME_VERSION],
+            ];
+            let drifted = 0;
+            for (const [tool, wanted, pinned] of pins) {
+              if (wanted !== pinned) {
+                console.error(
+                  `::error::${tool} is pinned to ${pinned} in this workflow but package.json wants ${wanted}. Bump both together.`,
+                );
+                drifted = 1;
+              }
+            }
+            process.exit(drifted);
+          '
+
+      # `bun install --filter` does NOT run the root package's lifecycle
+      # scripts — MEASURED, and unlike pnpm, which ran them on a filtered
+      # install too. So package.json's `preinstall` guard
+      # (scripts/check-node-version.mjs) never fires on these legs. The
+      # `node-version-file: .nvmrc` above is what actually pins the version in
+      # CI; running the guard explicitly keeps a wrong Node major reading as a
+      # wrong Node major instead of as type-stripping errors deep in a run.
+      - name: Check Node version
+        run: node scripts/check-node-version.mjs
+
+      # Bun's global module cache — `bun pm cache`, i.e. ~/.bun/install/cache.
+      # setup-bun caches the bun BINARY by itself and nothing else, so without
+      # this step all seven legs re-download their closures on every run
+      # (services/actors alone is 258 packages). `bun.lock` is the only correct
+      # key: `--frozen-lockfile` installs exactly what the lockfile pins, so
+      # nothing else can change what gets fetched. The key carries the project
+      # because each leg installs a different closure, and because seven legs
+      # racing to reserve one shared key just logs six failures.
+      - name: Cache bun's module cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-cache-${{ runner.os }}-${{ matrix.project }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-cache-${{ runner.os }}-${{ matrix.project }}-
+
+      # One lockfile at the root (bun.lock) — bun has no other shape.
+      # `--filter` still narrows what is *installed* to this leg's dependency
+      # closure; the `./path...` form and the trailing closure operator are both
+      # supported, verified for the six values `matrix.project` had before
+      # packages/analysis (whose closure is typescript, vitest and @types/node).
+      #
+      # `--frozen-lockfile` here means what it says and no more: it refuses a
+      # lockfile edit. It does NOT re-check `bunfig.toml`'s `minimumReleaseAge`
+      # the way pnpm re-checked its own on every install — under bun that is a
+      # resolution-time filter only, so this step trusts the committed lockfile.
+      # The 24-hour supply-chain window is enforced when someone resolves a new
+      # version locally, not here.
+      - name: Install
+        run: bun install --frozen-lockfile --filter "./${{ matrix.project }}..."
+
+      # Replaces pnpm's `strictDepBuilds`, which failed the install outright
+      # (ERR_PNPM_IGNORED_BUILDS) when a dependency's build script had not been
+      # ruled on — the check that caught this repo's lost corepack pin. Bun has
+      # no equivalent: under the isolated linker it uses for a workspace it
+      # skips an unreviewed script SILENTLY, and `bun pm untrusted` still
+      # reports "Found 0" while the script is skipped. This script reads the
+      # installed tree instead; see its header for the measurement table. Do
+      # not swap it for `bun pm untrusted`.
+      - name: Check dependency build scripts
+        run: node scripts/check-blocked-builds.mjs
+
+      - name: Typecheck
+        working-directory: ${{ matrix.project }}
+        run: bun run typecheck
+
+      # Does tables.ts match the migrations? `drizzle-kit check` (the snapshot
+      # chain) is only half of it: `drizzle-kit generate` against a scratch
+      # copy of migrations/ must write nothing, or tables.ts changed without
+      # the migration it implies. Until this step that question was first asked
+      # by scripts/cutover/cutover.sh's `baseline` phase — during the
+      # production freeze. No database; see the script's header.
+      - name: Schema drift (drizzle-kit check + generate into a scratch copy)
+        if: matrix.project == 'packages/db'
+        working-directory: packages/db
+        run: bun run db:drift
+
+      # X4 · real Postgres for the two legs that need it: services/actors' A6
+      # tests (better-auth sign-in, OAuth linking, the user migration script)
+      # and its database-backed actor suite; and packages/db's
+      # `src/migrate/cli.test.ts` — `db:migrate`'s advisory lock and read-back,
+      # which skipped on this leg until it had a server (DB_TEST_ADMIN_URL on
+      # the Test step makes it required). `infra/docker-compose.yml`'s
+      # `postgres` service is a build of `infra/postgres` — PG18 with postgis
+      # and pgvector, the same image `bun run stack:up` gives a developer —
+      # which a plain `services:` container can't be, because `services:` only
+      # accepts a pre-built image, never a `build:` context. `--wait` blocks
+      # until the compose healthcheck (`pg_isready`) passes.
+      #
+      # The services/actors leg starts MinIO too, and runs `minio-init` (the
+      # `cellar-files` bucket), so the three suites that talk to a real object
+      # store run here instead of skipping: scripts/migrate-files.live.test.ts
+      # (the file migration's CLI, made REQUIRED below by
+      # FILES_S3_LIVE_REQUIRED=1), src/lib/s3-presign.live.test.ts, and the
+      # cutover harness step. Until this, all three had only ever run on a
+      # laptop with `bun run stack:up`.
+      - name: Start Postgres (infra/postgres)
+        if: matrix.project == 'packages/db'
+        run: docker compose -f infra/docker-compose.yml up -d --build --wait postgres
+
+      - name: Start Postgres and MinIO (infra/postgres, minio)
+        if: matrix.project == 'services/actors'
+        run: |
+          docker compose -f infra/docker-compose.yml up -d --build --wait postgres minio
+          docker compose -f infra/docker-compose.yml run --rm minio-init
+
+      # X3 · the actors suite owns its database. It is built by
+      # `packages/db/transform/test-db.sh` — the transform, then `db:migrate`
+      # for every migration (packages/db/src/migrate/), never
+      # `drizzle-kit migrate`, which cannot replay the introspected baseline
+      # (packages/db/README.md). The same script the harness's vitest
+      # globalSetup runs locally; here it runs as its own step so a build
+      # failure reads as a build failure rather than 589 skipped tests.
+      #
+      # X4 · `$DUMP` is the checked-in schema-only baseline
+      # (`packages/db/transform/nhost-schema.sql`, see that directory's
+      # README), not a live Nhost dump — there is no Nhost container in CI —
+      # so this always runs with `--no-dump` and never conditionally skips.
+      # An unbuildable database is a failure here, same as everywhere else:
+      # no more `ACTORS_TEST_DB_OPTIONAL` escape hatch.
+      - name: Build the actors test database
+        if: matrix.project == 'services/actors'
+        run: packages/db/transform/test-db.sh --no-dump
+
+      # Each project's own `test` script, and that indirection is load-bearing.
+      # Six of the seven are `bun run --bun vitest run`: the `--bun` is what
+      # actually moves the runtime, because vitest's bin carries a
+      # `#!/usr/bin/env node` shebang and plain `bun run vitest` honours it and
+      # hands the whole tree back to Node — same wall-clock, no bun, and
+      # completely silent about it. Do not inline a bare `vitest run` here.
+      # The seventh, `packages/schema`, is `node scripts/check-generated.ts` and
+      # stays on Node deliberately (see the setup-node comment above).
+      - name: Test
+        working-directory: ${{ matrix.project }}
+        env:
+          # Consumed by services/actors/src/auth/testing.ts. Those tests already own
+          # their databases — one `auth_test_*` scratch database per test file,
+          # dropped and recreated on entry.
+          AUTH_TEST_ADMIN_URL: postgres://cellar:cellar@localhost:5433/postgres
+          # The database the run owns, on the compose stack's usual 5433.
+          # Never `cellar`: sharing the development database with the suite is
+          # exactly what X3 removed.
+          ACTORS_TEST_DATABASE_URL: postgres://cellar:cellar@localhost:5433/cellar_test
+          # Consumed by packages/db/src/migrate/cli.test.ts, and only on the
+          # packages/db leg: set, it makes that file REQUIRED — an unreachable
+          # server fails the run instead of skipping it, which is what it did
+          # here (quietly, falling back to AUTH_TEST_ADMIN_URL on a leg with no
+          # Postgres) until this leg started one. Empty on every other leg,
+          # none of which runs that file.
+          DB_TEST_ADMIN_URL: ${{ matrix.project == 'packages/db' && 'postgres://cellar:cellar@localhost:5433/postgres' || '' }}
+          # scripts/migrate-files.live.test.ts skips itself when no MinIO
+          # answers on localhost:9100; set, an unreachable MinIO FAILS it
+          # instead. Only the services/actors leg has one (step above).
+          FILES_S3_LIVE_REQUIRED: ${{ matrix.project == 'services/actors' && '1' || '' }}
+        run: bun run test
+
+      # The real scripts/cutover/cutover.sh — its `files` phase in every mode
+      # (storage-api against a stub of hasura-storage, s3, rows-only, the
+      # docker runner), its refusals, and `dump`/`restore` of a custom-format
+      # archive including a truncated one — against scratch databases and
+      # buckets in the Postgres and MinIO started above. Its defaults are this
+      # compose stack's names. It asserts; a case that does not hold fails it.
+      - name: Cutover harness (scripts/cutover/test/files-phase.sh)
+        if: matrix.project == 'services/actors'
+        run: scripts/cutover/test/files-phase.sh
+
+      # What the 2026-10-04 rehearsal on Loki found that no macOS run could:
+      # the default PG_CLIENT_IMAGE booting a server instead of psql/pg_dump
+      # (`SRC_DSN=… preflight`/`dump` against a scratch Nhost-shaped database),
+      # GNU join refusing smoke's whole-line-sorted input, and a missing `bunx`
+      # surfacing at phase 10 instead of before phase 1. Same Postgres as above.
+      - name: Cutover harness (scripts/cutover/test/host-guards.sh)
+        if: matrix.project == 'services/actors'
+        run: scripts/cutover/test/host-guards.sh
+
+      # Leaves no container behind on a self-hosted runner. `if: always()`
+      # because a failed Test step must not skip cleanup.
+      - name: Stop Postgres
+        if: always() && (matrix.project == 'services/actors' || matrix.project == 'packages/db')
+        run: docker compose -f infra/docker-compose.yml down -v
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # No setup-node here on purpose, and unlike the matrix job above that is
+      # NOT load-bearing in reverse: biome's npm entry point is a
+      # `#!/usr/bin/env node` launcher that execs a native binary, and with no
+      # `node` on PATH at all bun runs the launcher itself — measured, exit 0.
+      # Bun is needed because a GitHub-hosted runner does not ship it; nothing
+      # in this job touches the workspace's own dependencies, so it never
+      # installs and has no build scripts to check.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Check the pinned tool versions still match package.json
+        run: |
+          # `bun -e` takes a JS program, and its template literals must reach
+          # bun unexpanded — single quotes are the point, not an oversight.
+          # shellcheck disable=SC2016
+          bun -e '
+            const pkg = await Bun.file("package.json").json();
+            const pins = [
+              ["bun", pkg.packageManager.replace(/^bun@/, ""), Bun.version],
+              ["@biomejs/biome", pkg.devDependencies["@biomejs/biome"], process.env.BIOME_VERSION],
+            ];
+            let drifted = 0;
+            for (const [tool, wanted, pinned] of pins) {
+              if (wanted !== pinned) {
+                console.error(
+                  `::error::${tool} is pinned to ${pinned} in this workflow but package.json wants ${wanted}. Bump both together.`,
+                );
+                drifted = 1;
+              }
+            }
+            process.exit(drifted);
+          '
+
+      # Formatting + lint + import sorting, scoped to the new stack. `bunx`
+      # fetches the pinned binary and needs no install step of its own, which is
+      # why there is no bun cache step in this job either — one ~20 MB download
+      # is cheaper than reserving and restoring a cache entry for it.
+      - name: Biome check
+        run: bunx @biomejs/biome@${{ env.BIOME_VERSION }} check services packages
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate compose file
+        run: docker compose -f infra/docker-compose.yml config --quiet
+
+      # The production overlay is what deploy-loki.yaml applies, and until
+      # this step nothing rendered it before a deploy did. The self-test
+      # renders base + overlay from an env file built out of
+      # infra/.env.prod.example (so a `:?` variable the example forgot fails
+      # here), then proves scripts/deploy/check-prod-config.mjs — the deploy's
+      # "Refuse published development secrets" step — passes that config and
+      # refuses each published development secret one at a time, and that a
+      # blank DISCORD_WEBHOOK_URL fails the render. It also proves the guard's
+      # edge half refuses every way the nginx-proxy surface could widen, and
+      # that infra/nginx-proxy/vhost.d/*.conf pass `nginx -t` in the image Loki
+      # runs. No secret involved: every value is generated. `node` is the
+      # runner image's own; the checker has no imports.
+      - name: Validate the production overlay and the deploy's secret guard
+        run: scripts/deploy/prod-config-selftest.sh
+
+  # M1 · the api and actors images, built exactly as deploy-loki.yaml builds
+  # them (repo-root context, the same Dockerfile, buildx on ubuntu-latest) and
+  # then smoke-tested by scripts/ci/image-smoke.sh — `bun build` of the entry
+  # inside the image, the entry loaded under bun and node until it stops at its
+  # own config check, and (actors) no Next.js in the store. Until this job the
+  # only build was the post-merge one in deploy-loki.yaml, and nothing checked
+  # the hand-written runtime `COPY packages/…` lists at all, so an api that
+  # started importing a package its image does not copy would pass every other
+  # check here and fail at boot, first seen on `main`. deploy-loki.yaml runs the
+  # same script before it pushes. Read-only cache: PRs reuse deploy's layers
+  # (same scope names) without writing their own over them.
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+            dockerfile: services/api/Dockerfile
+          - app: actors
+            dockerfile: services/actors/Dockerfile
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the ${{ matrix.app }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: cellar-${{ matrix.app }}:ci
+          cache-from: type=gha,scope=${{ matrix.app }}
+
+      - name: Smoke-test the ${{ matrix.app }} image
+        run: scripts/ci/image-smoke.sh ${{ matrix.app }} cellar-${{ matrix.app }}:ci
+
+# A4 landed the single-writer test (plan §1.2) in packages/db — it reads the
+# Drizzle schema and statically scans services/actors/src, so it needs no database
+# and runs in the packages/db leg. The no-actor-state test (§1.3) runs in the
+# services/actors leg for the same reason.
+# A7 landed the schema pipeline in two halves, both covered by the matrix above:
+# services/api's snapshot test compares printSchema output against the checked-in
+# packages/schema/schema.graphql, and packages/schema's test regenerates
+# graphql-env.d.ts from that file and fails if it has drifted.
+# TODO(A5): add an integration leg that brings infra/docker-compose.yml up and
+#           exercises the outbox and a reminder. A2 verified the compose stack by
+#           hand; wiring it into CI needs the compose stack to be fast enough and
+#           is cheapest to add once there is something worth asserting. That leg
+#           is also where A4's harness tests should run for real. X3 built the
+#           database side of that: `packages/db/transform/test-db.sh` gives the
+#           run its own `cellar_test`, and the "Build the actors test database"
+#           step above (X4) now runs it for real in every services/actors run,
+#           against the Postgres the "Start Postgres" step brings up.

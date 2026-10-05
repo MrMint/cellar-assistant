@@ -1,0 +1,2 @@
+ALTER TABLE "outbox" ADD COLUMN "attributed_to" uuid;--> statement-breakpoint
+CREATE INDEX "idx_api_usage_log_reservation_id" ON "api_usage_log" ((metadata ->> 'reservationId'::text)) WHERE ((metadata ->> 'reservationId'::text) IS NOT NULL);

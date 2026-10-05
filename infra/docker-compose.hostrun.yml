@@ -1,0 +1,73 @@
+# Overlay for the **host-run lane** (`bun run dev:up`, see
+# `docs/architecture/local-dev-stacks.md`).
+#
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.hostrun.yml \
+#     up -d postgres minio minio-init placement scheduler otel-lgtm
+#
+# In that lane `services/api` and `services/actors` — and their two daprd sidecars —
+# are **host processes** under `dapr run -f`, not containers. Four consequences,
+# and this file is all four:
+#
+#   1. The sidecars are outside the compose network, so `placement` and
+#      `scheduler` have to be reachable from the host. The base file keeps them
+#      unpublished because in the all-compose lane only the sidecar containers
+#      talk to them.
+#   2. The host sidecars export OTLP to the collector, so `otel-lgtm`'s 4317/4318
+#      have to be published too. `ports` merges by appending, so the base file's
+#      `${GRAFANA_PORT}:3000` survives this overlay.
+#   3. Nothing here starts `api`/`actors`/`api-dapr`/`actors-dapr`. Compose has no
+#      way to *remove* a service in an overlay, so the caller names the six infra
+#      services explicitly instead — `scripts/stack/stack.sh` does exactly that.
+#   4. `otel-lgtm`'s Prometheus scrapes the sidecars as `actors-dapr:9090` /
+#      `api-dapr:9090`, which do not exist here, so it mounts a per-stack copy of
+#      its config instead — see the `otel-lgtm` entry below.
+#
+# This file is an ADDITION. `infra/docker-compose.yml` is untouched by the
+# host-run lane, and `bun run stack:up` (the all-compose lane CI and the
+# Playwright suite use) never loads this overlay. The port variables all default
+# to the base ports, so loading it with no environment set reproduces the
+# `cellar-stack` numbers.
+services:
+  placement:
+    ports:
+      - "${PLACEMENT_PORT:-50005}:50005"
+
+  scheduler:
+    ports:
+      - "${SCHEDULER_PORT:-50006}:50006"
+    # The scheduler does not merely accept the address a client dialled — it
+    # answers with the address daprd should use from then on, and by default
+    # that is its own container IP. A host sidecar dials 127.0.0.1:50246, is
+    # told "use 172.30.0.4:50006", and every reminder after that fails with
+    # `rpc error: code = Canceled ... while waiting for connections to become
+    # ready`, because a container IP is not routable from a macOS host. That is
+    # what `--override-broadcast-host-port` exists for, and it is the one flag
+    # this lane cannot do without.
+    #
+    # `command` REPLACES rather than merges in a compose override, so the base
+    # file's flags are repeated here. Keep the two in step; the only difference
+    # is meant to be the last line.
+    command:
+      - "/scheduler"
+      - "--port=50006"
+      - "--healthz-port=8080"
+      - "--etcd-data-dir=/var/run/dapr/scheduler"
+      - "--log-level=info"
+      - "--override-broadcast-host-port=${SCHEDULER_BROADCAST:-127.0.0.1:50006}"
+
+  otel-lgtm:
+    ports:
+      - "${OTLP_GRPC_PORT:-4317}:4317"
+      - "${OTLP_HTTP_PORT:-4318}:4318"
+    # Replaces the base file's Prometheus-config mount: compose merges `volumes`
+    # by CONTAINER path, so this entry wins and every other mount survives.
+    # `stack.sh` generates the file (`generate_prometheus_config`) from the
+    # committed one with the two sidecar targets rewritten to
+    # `host.docker.internal:<ACTORS_|API_DAPR_METRICS_PORT>`, and exports its
+    # path here. Unset — this overlay loaded by hand — it falls back to the
+    # committed file, i.e. the base lane's behaviour: those two targets `up == 0`.
+    volumes:
+      - ${HOSTRUN_PROMETHEUS_CONFIG:-./grafana/otel-lgtm/prometheus.yaml}:/otel-lgtm/prometheus.yaml:ro
+    # Docker Desktop resolves host.docker.internal natively; Linux needs this.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

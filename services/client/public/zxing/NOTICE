@@ -1,0 +1,31 @@
+zxing_reader.wasm — third-party notice
+======================================
+
+zxing_reader.wasm in this directory is copied unmodified from the npm package
+zxing-wasm 3.1.3 (dist/reader/zxing_reader.wasm; SHA-256
+2ebda08a93eea3efcd8399cda6b276e6a0b1de4fec60b4d8988a047de4c6d1ba), a dependency
+of barcode-detector. It is distributed under the licences below, not under this
+repository's licence.
+
+zxing-wasm 3.1.3 — https://github.com/Sec-ant/zxing-wasm
+  zxing-wasm specific code: MIT License, see LICENSE-MIT.
+    Copyright (c) 2023 Ze-Zheng Wu
+  src/cpp/ZXingWasm.cpp: Apache License 2.0, see LICENSE-APACHE-2.0.
+    Copyright 2016 Nu-book Inc.
+    Copyright 2023 Axel Waggershauser
+    Copyright 2023 Ze-Zheng Wu
+
+zxing-cpp, commit a17fd9dc65d6aa0dd2f660fdfca7a6a6613d938f (the submodule
+zxing-wasm 3.1.3 pins) — https://github.com/zxing-cpp/zxing-cpp
+  Apache License 2.0, see LICENSE-APACHE-2.0 (zxing-cpp's LICENSE file at that
+  commit, verbatim). Copyright is held by the zxing-cpp authors per source
+  file, including:
+    Copyright 2016 Nu-book Inc.
+    Copyright 2016 ZXing authors
+    Copyright Axel Waggershauser
+
+The reader build does not include zint (used only by zxing-wasm's writer).
+
+Refresh this file, the two licence texts and the .wasm together whenever the
+barcode-detector / zxing-wasm dependency is bumped
+(services/client/src/hooks/useBarcodeScanner.ts).

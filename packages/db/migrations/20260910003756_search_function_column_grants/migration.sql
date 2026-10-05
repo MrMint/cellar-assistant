@@ -1,0 +1,33 @@
+-- Hand-written SQL lane (migration-plan.md §8.6, workstream A3b).
+--
+-- Column-level grants — "if the deployment ends up wanting them" per the TODO
+-- this migration replaces (see the removed TODO item 3 in
+-- 20260909043234_hand_written_sql_lane/migration.sql).
+--
+-- Checked against the source: the only column-level GRANTs in the live Nhost
+-- database belong to `nhost_hasura` — a blanket SELECT/INSERT/UPDATE/REFERENCES
+-- on every column of every application table, applied automatically the moment
+-- Hasura tracks a table. It is not a deliberate restriction to reproduce; it is
+-- Hasura's own tracking mechanism, and Hasura is gone (migration-plan §3,
+-- "Removed at cutover": `hdb_catalog.*`).
+--
+-- The target stack (target-stack.md §6.5, §1 "Database") has exactly one
+-- Postgres role: the one `apps/actors` connects as, which owns every table it
+-- created via `drizzle-kit migrate` and therefore already holds every privilege
+-- implicitly, on every column, with no GRANT needed. `apps/api` holds no
+-- database credentials at all (target-stack.md §1, §6.5 Q6) and never connects,
+-- so there is no second, lesser-privileged role to grant a restricted column
+-- set to. Confirmed against the running dev stack: `cellar-stack-postgres-1`
+-- has exactly one role (`cellar`), a superuser.
+--
+-- Nothing to grant today. This migration is a deliberate no-op, left in place
+-- so the decision is recorded rather than silently absent — the same pattern
+-- A3 used for `admin.credentials` (migration-plan §9: "purpose unknown; confirm
+-- before dropping"). Revisit when apps/actors' Postgres role stops being a
+-- superuser that owns the schema (E3 Loki infra, or if a read-only reporting
+-- role is ever added) — add the actual GRANT statements as a new
+-- `drizzle-kit generate --custom` migration at that point; do not edit this one.
+
+--> statement-breakpoint
+
+-- Down: nothing was granted, nothing to revoke.
