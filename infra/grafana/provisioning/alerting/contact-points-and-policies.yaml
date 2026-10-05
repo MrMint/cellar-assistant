@@ -1,199 +1,60 @@
-# E3b (follow-up) · The delivery half of alerting.
+# Alert routing: UI-only, by decision (2026-10-05).
 #
-# `outbox-and-actor-alerts.yaml` beside this file is the DETECTION half, and it
-# has been complete since 2026-09-10. This file is the half that was missing:
-# until it existed, every rule in this directory routed to Grafana's built-in
-# `grafana-default-email` receiver, which that file's own header accurately
-# described as "present but unable to deliver". An alert that fires into a
-# receiver with no SMTP behind it reaches exactly the people who happen to open
-# the Alerting page, i.e. nobody.
+# The rules beside this file are the DETECTION half of alerting, and they are
+# unchanged: every one still evaluates, fires and resolves, and shows on
+# Grafana's Alerting page (Alert rules / Active notifications) on the LAN. What
+# this file used to add — delivery to a Discord webhook through a `discord-ops`
+# contact point, with a 10s/1h page route and a 24h backlog-digest route — was
+# removed on the owner's decision to drop the Discord alert webhook. Nothing
+# here sends anything off the box, and no deploy needs a webhook secret.
 #
-# ## THE SECRET IS NOT IN THIS FILE, AND MUST NOT BE
+# So "someone is alerted" now means "someone opens the Alerting page". That is
+# the accepted cost. To get push delivery back, see "Adding a contact point
+# later" in docs/architecture/deploy-loki.md §9.7; the whole previous tree
+# (receiver, routes, timings and the measurements behind them) is this file's
+# last version before 2026-10-05: `git log -p -- <this file>`.
 #
-# This repository is public. A Discord webhook URL is a credential in the only
-# sense that matters — anyone holding it can post to the channel as the
-# integration, with no further authentication — so committing one is publishing
-# it. `$DISCORD_WEBHOOK_URL` below is expanded by Grafana's provisioning reader
-# from the `otel-lgtm` container's environment; the value lives in the
-# gitignored `infra/.env`, and `infra/.env.example` documents the variable with
-# no value beside it.
+# ## Why the root receiver is `empty`, and why this file exists at all
 #
-# Measured against grafana/otel-lgtm:latest (Grafana 13.2.0, 2026-09-18) rather
-# than assumed, because three things about this were each plausible and wrong:
+# Measured against grafana/otel-lgtm:0.32.1 (Grafana 13.2.0), 2026-10-05, on a
+# throwaway container with this directory mounted:
 #
-#   1. **Env expansion reaches the ALERTING provisioning loader**, not just the
-#      datasource/dashboard loaders where the feature is documented. Confirmed
-#      end to end: with `DISCORD_WEBHOOK_URL` set in the container environment,
-#      a notification actually arrived at the URL it named. `$VAR` and `${VAR}`
-#      both work; `$$` escapes a literal `$`, which is why
-#      `../datasources/grafana-datasources.yaml` is full of `$${__value.raw}`.
-#   2. **An UNSET variable expands to the empty string, silently.** Grafana
-#      logs no warning and the contact point provisions happily with an empty
-#      URL; the failure appears only when a notification is attempted. So
-#      "Grafana started cleanly" is not evidence the secret is present — see
-#      the health-check command at the bottom of this comment.
-#   3. **Discord's `url` is a SECURE setting.** It is written here under plain
-#      `settings`, which is the documented provisioning shape, but Grafana
-#      moves it into encrypted storage on load and the provisioning API reads
-#      it back as `[REDACTED]`. A redacted read-back therefore proves storage,
-#      NOT interpolation — only an actual delivery distinguishes a correctly
-#      expanded URL from the literal string `$DISCORD_WEBHOOK_URL`.
+#   * `empty` is the receiver Grafana's own default Alertmanager config ships
+#     in this image: a receiver with NO integrations. Routing to it delivers
+#     nothing and attempts nothing — no SMTP error per notification, no DNS
+#     lookup — while the alerts themselves stay visible in the UI. It survives
+#     the old provisioning (the alertmanager config there held `empty` beside
+#     `discord-ops`), so it exists on an upgraded /data volume as well as a
+#     fresh one; both were measured.
+#   * A contact point with no integrations cannot be file-provisioned:
+#     `receivers: []` is skipped without a word, and a policy naming it then
+#     fails — "receiver 'ui-only' does not exist". That error is FATAL: the
+#     provisioning module fails, Grafana exits, and run-all.sh takes the whole
+#     otel-lgtm container down with it. Same for `grafana-default-email`,
+#     which the previous provisioning had removed from the stored config.
+#     Hence `empty`, which is already there.
+#   * `deleteContactPoints` removes the file-provisioned `discord-ops` from a
+#     volume that still holds it (cellar-stack's did). On a fresh volume the
+#     uid does not exist and the delete is a silent no-op, so the entry is
+#     safe to keep; drop it once no volume predating 2026-10-05 is left.
 #
-# ## Verifying delivery without waiting for an incident
-#
-# The command this block used to give, `POST /api/v1/provisioning/contact-points/test`,
-# does not exist on Grafana 13.2.0 (404), and the older
-# `/api/alertmanager/grafana/config/api/v1/receivers/test` answers 410 "This
-# endpoint has been removed" — measured 2026-09-27. The replacement tests the
-# PROVISIONED receiver with the URL Grafana actually stored, so the webhook
-# never goes on a command line and a wrong or missing variable shows up here:
-#
-#   curl -s -u admin:<password> -X POST -H 'Content-Type: application/json' \
-#     http://<grafana>/apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers/ZGlzY29yZC1vcHM/test \
-#     -d '{"integration":{"uid":"discord-ops","type":"discord","settings":{},"secureFields":{"url":true}}}'
-#
-# (`ZGlzY29yZC1vcHM` is this receiver's API name — `GET …/namespaces/default/receivers`
-# lists them; `-u admin:admin` on the dev lane, `GRAFANA_ADMIN_PASSWORD` in prod,
-# where anonymous access is off.) It posts a real "TestAlert" to the real channel.
-# READ THE BODY, NOT THE STATUS CODE: it answers HTTP 200 either way.
-# `{"status":"success"}` means the webhook accepted it; against the unset
-# default it answers `{"status":"failure", "error":"… lookup discord.invalid …
-# no such host"}` — measured, which is also how you know it used the stored URL.
-# Passing `"settings":{"url":"<a url>"}` instead tests an arbitrary URL; pointed
-# at a throwaway sink it delivered a Discord-shaped body (`username`,
-# `content`, `embeds`).
+# Provisioning `policies` REPLACES THE ENTIRE ROOT POLICY TREE and makes it
+# read-only in the UI, which is what keeps a hand-edited tree from silently
+# diverging from this repository. (`resetPolicies` would also land on `empty`,
+# measured, but leaves the tree editable.)
 apiVersion: 1
 
-# --- Where notifications go ------------------------------------------------
-contactPoints:
+deleteContactPoints:
   - orgId: 1
-    name: discord-ops
-    receivers:
-      - uid: discord-ops
-        type: discord
-        # Send the resolved notification too. For the backlog digest below
-        # this is the *only* signal that the queue finally drained: that rule
-        # is level-triggered, so "resolved" is real news, not noise.
-        disableResolveMessage: false
-        settings:
-          url: $DISCORD_WEBHOOK_URL
-          # Grafana's stock templates. `default.message` already renders the
-          # summary/description annotations and the runbook link that
-          # outbox-and-actor-alerts.yaml sets on every rule, so there is
-          # nothing to add and a hand-rolled template would only drift from it.
-          title: '{{ template "default.title" . }}'
-          message: '{{ template "default.message" . }}'
+    uid: discord-ops
 
-# --- Which notifications go there, and how often ---------------------------
-#
-# ⚠ Provisioning `policies` REPLACES THE ENTIRE ROOT POLICY TREE and makes it
-# read-only in the UI. That is deliberate: the root receiver was `empty` before
-# this file, so there was nothing to preserve, and a tree that can be edited in
-# the UI is a tree that silently diverges from this repository on the next
-# container restart.
-#
-# ## Alert fatigue is the failure mode this tree is shaped against
-#
-# The rules in outbox-and-actor-alerts.yaml are NOT all the same shape, and
-# treating them the same would make the whole channel ignorable within a day:
-#
-#   * `outbox.dead_letter` / `actor.unexpected_error` are EDGE-triggered. Their
-#     queries count *log events* in a 5-minute window, so they fire when a row
-#     newly dead-letters and resolve five minutes later. The 11 rows that have
-#     been sitting dead in the outbox since 2026-09-10 do not re-emit anything
-#     and therefore do not page — that backlog is invisible to these three.
-#   * `maintenance.dead_letters` is LEVEL-triggered: MaintenanceActor re-reads
-#     the outbox every hour and emits on every run that finds UNACKNOWLEDGED
-#     dead rows (or rows stuck in 'delivering'). Since 1763eac8 an operator can
-#     acknowledge a triaged row, which stops it counting without deleting it;
-#     until then a standing backlog is true on every single cycle, indefinitely
-#     — as the MenuScanActor.process backlog was, 2026-09-10 to 2026-09-20.
-#
-# So the two get different repeat intervals, below. The level-triggered rule's
-# own 90-minute query window (see the rule) is what stops it flapping once an
-# hour; this tree is what stops it *repeating* more than once a day.
-#
-# ## And one route that is louder than the root, not quieter (2026-09-26)
-#
-# Three rules are pages: a dead-letter REGRESSION (a triaged failure failing
-# again), the dead-man's switch on the dead-letter reporter itself, and — since
-# 2026-09-27 — a dead-lettered `removeFriendOtherSide`, the one delivery that
-# fails OPEN (target-stack.md §7). That rule was always `severity: critical`
-# but lacked the label below, so it went out on the root route. What
-# "louder" can mean here is bounded by what this tree has: there is ONE
-# receiver, so a page cannot reach a different person or channel than a
-# ticket does — that would need a second contact point (a pager, or a Discord
-# message that mentions someone), which does not exist yet. What IS
-# expressible is timing and labelling, and the page route below uses all of
-# it: it notifies faster than the root (10s vs 30s group_wait), reminds four
-# times as often (1h vs 4h; the backlog digest is 24h), and both rules carry
-# `severity: critical`, which the stock `default.title` and `default.message`
-# templates both print. (All three carry it.) So the regression is no longer one more quiet line
-# under the daily digest; it is the message that keeps coming back every hour
-# until someone acts.
-#
-# It matches on a LABEL, `urgency=page`, set on the rule, not on `alertname`.
-# The backlog route below matches a title verbatim and carries a ⚠ because a
-# rename silently demotes it; a label survives a rename.
-#
-# Measured 2026-09-26 with a real regression on `cellar-stack`: the alert
-# reached the notifier at 15:38:50.095 and was dispatched at 15:39:00.096 —
-# this route's 10s, not the root's 30s — and the Alertmanager's aggregation
-# key for it was `{}/{urgency="page"}:{alertname=…}`, i.e. this child route.
-# An ordinary dead letter in the same minute went out under the root's `{}`.
 policies:
   - orgId: 1
-    receiver: discord-ops
-    # Everything in this Grafana instance routes to Discord by default. There
-    # are no other rules — otel-lgtm ships dashboards and datasources, not
-    # alerts — so a catch-all root costs nothing and guarantees a new rule
-    # cannot be added into silence.
+    receiver: empty
+    # Kept from the delivering tree so the Alertmanager's view of active
+    # alerts is still grouped per rule. The rules' `urgency: page` labels are
+    # kept too: nothing routes on them now, but they mark which rules a
+    # future page route should match.
     group_by:
       - grafana_folder
       - alertname
-    # None of the LogQL queries carry per-method labels (they all `sum()` away
-    # everything), so each rule produces exactly one alert instance and
-    # grouping is effectively per-rule. Grouping by `outbox_method` would be
-    # better, and is not available without changing the queries.
-    group_wait: 30s
-    group_interval: 5m
-    # Default re-notification for the edge-triggered rules. They resolve on
-    # their own within ~5 minutes of the last event, so this only bites when
-    # something is failing continuously — which is when a reminder is wanted.
-    repeat_interval: 4h
-    routes:
-      # Pages: `dead-letter-regression`, `dead-letter-reporter-silent` and
-      # `outbox-dl-remove-friend-other-side` in outbox-and-actor-alerts.yaml;
-      # `outbox-drain-silent` and `outbox-backlog-stuck` in
-      # outbox-liveness-alerts.yaml; `api-jwks-unavailable` in api-alerts.yaml;
-      # `actors-process-fatal` in actors-process-alerts.yaml.
-      # `grep -rn 'urgency: page'` is the list.
-      # First, so a future rule that is both a page and matches a later route
-      # is routed as a page.
-      #
-      # repeat_interval 1h is the cadence the reporter re-asserts either
-      # condition at, and the off switch is one action — acknowledge the
-      # regressed rows, or get the reporter running — so the repetition is a
-      # nag with an exit, not the unexitable noise the digest below avoids.
-      # After an acknowledgement the regression resolves within 90 minutes of
-      # the last regression event (an instant query over [90m] since
-      # 2026-09-27 — it was 180 before; see that file's header), so at most
-      # TWO hourly reminders can land after someone has acted, and usually one.
-      # The removeFriendOtherSide page is edge-shaped ([5m]) and resolves on
-      # its own; this repeat only bites if it keeps happening.
-      - receiver: discord-ops
-        object_matchers:
-          - ["urgency", "=", "page"]
-        group_wait: 10s
-        group_interval: 5m
-        repeat_interval: 1h
-      # The standing-backlog digest. One message when the backlog appears, one
-      # a day while it persists, one when it clears. At the hourly emission
-      # rate this is the difference between 1 and 24 notifications a day, and
-      # the 24-a-day version is how a channel gets muted.
-      - receiver: discord-ops
-        object_matchers:
-          - ["alertname", "=", "Outbox backlog: dead-lettered rows are standing"]
-        group_wait: 1m
-        group_interval: 30m
-        repeat_interval: 24h

@@ -15,8 +15,10 @@
 #   * `sum(count_over_time(...))` over no matching line is an EMPTY vector, so
 #     `noDataState: OK` is the healthy case.
 #
-# Delivery is inherited: the root policy in contact-points-and-policies.yaml
-# sends everything to `discord-ops`, and `urgency: page` selects the page route.
+# Routing is inherited from contact-points-and-policies.yaml, which since
+# 2026-10-05 sends everything to the integration-less `empty` receiver: these
+# alerts show on Grafana's Alerting page and are delivered nowhere.
+# `urgency: page` is kept as the label a future page route would match.
 #
 # ## Event caps — why no rule here adds `telemetry.suppressed` back
 #
@@ -53,8 +55,9 @@ groups:
       # worth knowing about anyway.
       #
       # Measured on `cellar-stack`, 2026-09-27, with SYNTHETIC-tagged OTLP
-      # records under service.name=api and DISCORD_WEBHOOK_URL pointed at a
-      # throwaway sink: `auth_reason=expired` (the negative control) left this
+      # records under service.name=api, while alerts still went to a webhook
+      # contact point (removed 2026-10-05), pointed at a throwaway sink:
+      # `auth_reason=expired` (the negative control) left this
       # Normal for two evaluations and posted nothing; `jwks_unavailable`
       # pushed at 22:11:31 -> Alerting 22:12:20 -> page posted 22:12:30 (page
       # route, 10s) -> Normal 22:17:20 -> RESOLVED posted 22:17:30.

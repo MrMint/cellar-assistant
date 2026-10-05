@@ -506,14 +506,12 @@ unit-norm, no NaN, no error, and one at cosine `-0.0016` against the reference.
   above refuses it. Postgres, MinIO's S3 port and the API are on loopback;
   Grafana is on the LAN address; the actor host publishes nothing.
 - **Missing configuration.** Every required variable uses compose's `:?`, so an
-  incomplete `infra/.env.prod` fails the `up` naming the variable —
-  `DISCORD_WEBHOOK_URL` included, since a blank one used to fall back to the
-  base file's `discord.invalid` placeholder.
+  incomplete `infra/.env.prod` fails the `up` naming the variable.
 - **Published development secrets.** Before anything starts, the deploy refuses
   any secret-named variable that equals a default `infra/docker-compose.yml`
   publishes for the development lane (`cellar-dev-dapr-api-token`,
-  `cellar-dev-app-api-token`, `cellar-dev-secret`, Postgres's `cellar`, the
-  `discord.invalid` placeholder, …). The list is derived from the base file, not
+  `cellar-dev-app-api-token`, `cellar-dev-secret`, Postgres's `cellar`, …).
+  The list is derived from the base file, not
   written down (`scripts/deploy/check-prod-config.mjs`); stack-ci self-tests it
   (`scripts/deploy/prod-config-selftest.sh`). Run it by hand from §4.1. The
   apps hold the same line where the values are spent, for a deployment that
@@ -1346,27 +1344,50 @@ sidecars are host processes, scrapes a generated copy of this file instead —
 `docs/architecture/local-dev-stacks.md`, "Dapr runtime metrics". Production and
 `cellar-stack` never load it.)
 
-### 9.7 Alert delivery — what is proven, and what is left to you
+### 9.7 Alert delivery — none, by decision
 
-Proven on `cellar-stack` with `DISCORD_WEBHOOK_URL` pointed, at `up` time, at a
-throwaway sink container on the compose network that recorded every POST:
-SYNTHETIC-tagged OTLP records pushed to `otel-lgtm:4318` made real rules fire,
-and each one reached the sink as a Discord-shaped payload (`username`,
-`content`, `embeds[]`) on the route its labels select — page route at 10 s,
-root at 30 s — followed by a `[RESOLVED]` message. Each rule had a negative
-control that left it Normal and the sink empty. The rule comments in
-`infra/grafana/provisioning/alerting/` carry the timestamps. The synthetic
-records remain in Loki, tagged `synthetic=true`.
+Alerts are visible in Grafana on the LAN; no external delivery is configured.
+The owner dropped the Discord alert webhook on 2026-10-05. Every rule in
+`infra/grafana/provisioning/alerting/` still evaluates, fires and resolves, and
+shows on Grafana's Alerting page (`http://<LAN address>:3010/alerting`); the
+root notification policy routes everything to `empty`, a receiver with no
+integrations that is already present in Grafana's default config for
+`grafana/otel-lgtm:0.32.1`. Nothing is sent off the box, nothing is attempted
+and logged as a failure, and `infra/.env.prod` needs no webhook. During the
+cutover's 24-hour watch, "watching alerts" means opening that page.
 
-What cannot be proven from here is **your** webhook. `DISCORD_WEBHOOK_URL` is
-blank in `infra/.env.prod.example`, and the production overlay now refuses to
-render with it blank (`:?`) — before that, blank meant the base file's reserved
-`discord.invalid` placeholder, so every alert fired and every notification
-failed with nothing refusing to start. The deploy also refuses the placeholder
-spelled out. A *wrong* URL is still undetectable from here, so after deploying, send the test message whose command is at the top of
-`contact-points-and-policies.yaml` — with `-u admin:<GRAFANA_ADMIN_PASSWORD>`,
-since anonymous access is off — and look for it in the channel. It tests the
-URL Grafana actually stored, and it answers HTTP 200 whether or not delivery
-worked: read the body for `"status":"success"`. (The command that file used to
-give no longer exists on Grafana 13.2.0 — 404 — and the receivers/test route
-before it answers 410; both measured.)
+**Adding a contact point later.** The delivering configuration this replaced
+is the last version of `contact-points-and-policies.yaml` before 2026-10-05
+(`git log -p -- infra/grafana/provisioning/alerting/contact-points-and-policies.yaml`):
+a Discord contact point,
+a 10 s / 1 h page route on `urgency=page` (the label is still on the rules),
+and a 24 h digest route for the standing-backlog rule. To add one back:
+
+1. In `contact-points-and-policies.yaml`, add a `contactPoints:` entry
+   (`type: discord`, `webhook`, `email`, …) whose secret setting reads an
+   environment variable (`url: $ALERT_WEBHOOK_URL`). **Never commit the value**;
+   this repository is public and a webhook URL is a credential. Then point
+   `policies[0].receiver` (and any routes you restore) at it, and drop the
+   `deleteContactPoints` entry if you reuse the `discord-ops` uid.
+2. Pass the variable to `otel-lgtm` in `infra/docker-compose.prod.yml` as
+   `${ALERT_WEBHOOK_URL:?…}`, and list it blank in `infra/.env.prod.example`.
+   Its secret-shaped name puts it under `scripts/deploy/check-prod-config.mjs`
+   and the self-test's blank-render check automatically.
+3. Know three things measured on Grafana 13.2.0 before you trust it: an
+   **unset** variable expands to the empty string silently; an **empty**
+   Discord URL is a fatal provisioning error that takes the whole container
+   down, so the dev file needs a non-empty default (the old one used
+   `https://discord.invalid/…`); and a policy naming a receiver that does not
+   exist is fatal too. The API reads a secure setting back as `[REDACTED]`,
+   which proves storage, not interpolation. Only a delivered test message
+   proves the URL:
+   `POST /apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers/<base64 name>/test`
+   (the full command, with the body, is in that earlier version of the file).
+   It answers HTTP 200 either way, so read the body for `"status":"success"`.
+
+What was proven while delivery existed (2026-09-27, `cellar-stack`, a
+throwaway sink on the compose network): SYNTHETIC-tagged OTLP records made real
+rules fire and reach the sink on the route their labels selected — page route
+at 10 s, root at 30 s — followed by `[RESOLVED]`, each with a negative control.
+The rule comments carry the timestamps; the evaluation half of that still
+holds.

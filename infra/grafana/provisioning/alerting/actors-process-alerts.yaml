@@ -26,9 +26,10 @@
 #   * `sum(count_over_time(...))` over no matching line is an EMPTY vector, so
 #     `noDataState: OK` is the healthy case.
 #
-# Delivery is inherited from contact-points-and-policies.yaml: the root policy
-# sends everything to `discord-ops`, and `urgency: page` selects the page route
-# (10s group_wait, 1h repeat) over the root (30s, 4h).
+# Routing is inherited from contact-points-and-policies.yaml, which since
+# 2026-10-05 sends everything to the integration-less `empty` receiver: these
+# alerts show on Grafana's Alerting page and are delivered nowhere.
+# `urgency: page` is kept as the label a future page route would match.
 #
 # ## What is deliberately NOT alerted on
 #
@@ -66,7 +67,8 @@ groups:
       # api's JWKS page, and for the same reason: a single occurrence already IS
       # the incident, and there is no transient version of "the process died".
       # It resolves five minutes after the last crash; a crash loop keeps it
-      # firing, and the page route's 1h repeat keeps reminding.
+      # firing (visible on the Alerting page; nothing re-notifies since
+      # external delivery was removed on 2026-10-05).
       #
       # Measured 2026-09-27 on a per-worktree lane's own otel-lgtm (Grafana
       # 13.2.0, project `cellar-epic-burnell-4b4be9`, provisioning reloaded
@@ -76,10 +78,11 @@ groups:
       # first: 5 x `actor.deactivate_unheld` and 5 x an ERROR event named
       # `process.unhandled_rejection_control` at 18:03:59 left this Normal for
       # two evaluations. One `process.fatal` pushed at 18:05:44 -> Alerting at
-      # the 18:06:20 evaluation -> dispatched to discord-ops at 18:06:35 (the
-      # page route: under the root's 30s group_wait; the unconfigured lane's
-      # `discord.invalid` URL made the post itself fail, as designed) ->
-      # Normal at 18:11:20, the five-minute window.
+      # the 18:06:20 evaluation -> dispatched by the page route at 18:06:35
+      # (under the root's 30s group_wait; the lane had no real webhook, so the
+      # post itself failed, as designed then) -> Normal at 18:11:20, the
+      # five-minute window. That route and the webhook contact point were
+      # removed on 2026-10-05; the evaluation timings still hold.
       - uid: actors-process-fatal
         title: "Actor host crashed: uncaught exception (process.fatal)"
         condition: C

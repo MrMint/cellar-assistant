@@ -1,7 +1,7 @@
 // Refuse a production compose config that still carries a PUBLISHED development
 // secret — `cellar-dev-dapr-api-token`, `cellar-dev-app-api-token`,
-// `cellar-dev-secret`, Postgres's `cellar`, the `discord.invalid` alert
-// placeholder — in any secret-named variable of any service.
+// `cellar-dev-secret`, Postgres's `cellar` — in any secret-named variable of
+// any service.
 //
 // The production overlay already makes each of those variables `:?` (required
 // and non-blank), but "non-blank" is exactly what a copied development value is.

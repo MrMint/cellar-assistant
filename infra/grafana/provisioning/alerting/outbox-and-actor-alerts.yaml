@@ -64,14 +64,18 @@
 # a bug on the direct call path — in both cases, the condition being true for
 # one evaluation cycle already IS the incident.
 #
-# ## Where these now deliver (2026-09-18)
+# ## Where these go (2026-10-05)
 #
-# Still no `notification_settings` block on any rule, and now for a better
-# reason than before: `contact-points-and-policies.yaml` beside this file
-# provisions a root notification policy whose catch-all receiver is
-# `discord-ops`, so every rule here inherits real delivery without naming it.
-# A rule added to this file in future is routed by default rather than by
-# remembering to route it.
+# Still no `notification_settings` block on any rule:
+# `contact-points-and-policies.yaml` beside this file provisions the root
+# notification policy, so every rule here is routed by default rather than by
+# remembering to route it. From 2026-09-18 that root delivered to a Discord
+# webhook; since 2026-10-05 it is the integration-less `empty` receiver, so
+# these alerts are visible on Grafana's Alerting page and delivered nowhere.
+# The routing comments below that mention a page route, a 24h digest route or
+# repeat intervals describe that delivering tree (in that file's git history,
+# the last version before 2026-10-05), which is the one to restore if push
+# delivery comes back.
 #
 # Until 2026-09-18 the development and shared lanes never loaded this file at
 # all: `infra/docker-compose.yml`'s `otel-lgtm` service had no bind mount for
@@ -160,8 +164,9 @@ groups:
           # alert rather than a dashboard" went out as an ordinary root-route
           # notification (30s wait, 4h repeat) beside every other dead letter.
           #
-          # Delivery measured end to end on `cellar-stack`, 2026-09-27, with
-          # DISCORD_WEBHOOK_URL pointed at a throwaway sink container: a
+          # Delivery measured end to end on `cellar-stack`, 2026-09-27, while
+          # alerts still went to a webhook contact point (removed 2026-10-05),
+          # pointed at a throwaway sink container: a
           # SYNTHETIC-tagged OTLP record (`outbox.dead_letter`,
           # `outbox.method=removeFriendOtherSide`) pushed to otel-lgtm:4318 at
           # 21:54:19.957 -> Alerting at the 21:54:30 evaluation -> a
@@ -475,10 +480,11 @@ groups:
     interval: 5m
     rules:
       - uid: outbox-backlog-standing
-        # ⚠ This title is matched verbatim by the `alertname` object_matcher in
-        # contact-points-and-policies.yaml. Changing it silently drops this
-        # rule back onto the root route's 4h repeat_interval — it keeps
-        # delivering, just six times a day instead of once. Change both.
+        # This title was matched verbatim by the 24h digest route's `alertname`
+        # object_matcher in contact-points-and-policies.yaml (removed with
+        # external delivery, 2026-10-05). If that route comes back, a rename
+        # here silently drops this rule onto the root route's repeat — change
+        # both.
         title: "Outbox backlog: dead-lettered rows are standing"
         condition: C
         for: 0s
@@ -503,7 +509,7 @@ groups:
             rows stuck in 'delivering' for over 20 minutes. It stays firing
             until every unacknowledged dead row is triaged — acknowledged
             (it stays in the table as evidence), requeued, or deleted — and
-            nothing is stuck, and it re-notifies once a day until then. The
+            nothing is stuck. The
             counts and the worst offender are in the log line itself — Grafana
             only sees that one was emitted. Read it:
             {service_name="actors"} | event_name="maintenance.dead_letters"

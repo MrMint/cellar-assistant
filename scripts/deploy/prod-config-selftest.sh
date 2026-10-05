@@ -16,7 +16,9 @@
 #      secret-named variable the base file gives a non-empty default is set to
 #      exactly that default, and the guard must exit 1 naming it. The list is
 #      derived from the base render, so it cannot go stale.
-#   4. DISCORD_WEBHOOK_URL left blank fails the render (the overlay's `:?`).
+#   4. A required secret left blank fails the render (the overlay's `:?`),
+#      for every `:?` variable .env.prod.example leaves blank — derived from
+#      the overlay, so a new required secret is covered the day it lands.
 #   5. The guard REFUSES each way the edge could widen — a VIRTUAL_PATH dropped
 #      or widened, a VIRTUAL_HOST on a service that must not have one,
 #      VIRTUAL_DEST set, a port on every interface — by mutating the good
@@ -119,23 +121,36 @@ while IFS=$'\t' read -r name value; do
   tested=$((tested + 1))
   echo "ok 3.$tested - refuses the published development value of $name, without printing it"
 done <<<"$pairs"
-# The dev render has five today (DAPR_API_TOKEN, APP_API_TOKEN,
-# MINIO_ROOT_PASSWORD, POSTGRES_PASSWORD, DISCORD_WEBHOOK_URL); fewer than
-# three means the loop above stopped seeing them, not that they went away.
+# The dev render has five today (APP_API_TOKEN, AUTH_PROXY_SECRET,
+# DAPR_API_TOKEN, MINIO_ROOT_PASSWORD, POSTGRES_PASSWORD — DISCORD_WEBHOOK_URL
+# left with the alert webhook, 2026-10-05); fewer than three means the loop
+# above stopped seeing them, not that they went away.
 if [ "$tested" -lt 3 ]; then
   echo "not ok 3 - only $tested published secret(s) exercised; the derivation is broken" >&2
   exit 1
 fi
 
-# 4 — alerting fails closed.
-NODISCORD="$WORK/no-discord.env"
-grep -v '^DISCORD_WEBHOOK_URL=' "$GOOD" >"$NODISCORD"
-echo 'DISCORD_WEBHOOK_URL=' >>"$NODISCORD"
-if clean docker compose -f "$BASE" -f "$PROD" --env-file "$NODISCORD" config --quiet 2>/dev/null; then
-  echo "not ok 4 - the prod overlay rendered with DISCORD_WEBHOOK_URL blank" >&2
+# 4 — every required secret fails closed when blank. The names are the
+# overlay's own `${NAME:?…}` references that are secret-named and that
+# .env.prod.example leaves blank for the operator to fill.
+required=0
+while IFS= read -r name; do
+  grep -q "^${name}=$" "$EXAMPLE" || continue
+  BLANK="$WORK/blank-$name.env"
+  grep -v "^${name}=" "$GOOD" >"$BLANK"
+  printf '%s=\n' "$name" >>"$BLANK"
+  if clean docker compose -f "$BASE" -f "$PROD" --env-file "$BLANK" config --quiet 2>/dev/null; then
+    echo "not ok 4 - the prod overlay rendered with $name blank" >&2
+    exit 1
+  fi
+  required=$((required + 1))
+  echo "ok 4.$required - a blank $name fails the production render"
+done < <(grep -oE '\$\{[A-Z0-9_]+:\?' "$PROD" | sed -E 's/^\$\{//; s/:\?$//' | sort -u |
+  grep -E '(PASSWORD|SECRET|TOKEN|WEBHOOK_URL|API_KEY|CREDENTIALS_JSON)$')
+if [ "$required" -lt 3 ]; then
+  echo "not ok 4 - only $required required secret(s) exercised; the derivation is broken" >&2
   exit 1
 fi
-echo "ok 4 - a blank DISCORD_WEBHOOK_URL fails the production render"
 
 # 5 — the edge's shape fails closed.
 # shellcheck disable=SC2016  # JS, for node — not the shell

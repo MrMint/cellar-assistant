@@ -792,20 +792,9 @@ services:
       # Production turns it OFF (docker-compose.prod.yml). If you set
       # BIND_ADDR=0.0.0.0, this Grafana becomes an unauthenticated admin
       # console for your whole LAN until you set it back.
-      # Put the real webhook in infra/.env (gitignored) to make alerts deliver.
-      #
-      # The default is NOT empty, and must not be: measured on Grafana 13.2.0,
-      # an empty Discord url is a FATAL provisioning error --
-      # "could not find webhook url property in settings" -- which fails the
-      # provisioning module, then NotificationService and SecretsService with
-      # it, and the container exits. An absent optional secret must not take
-      # the dev stack down.
-      #
-      # `.invalid` is reserved by RFC 2606 and can never resolve, so an
-      # unconfigured stack provisions cleanly and any delivery attempt fails
-      # loudly against a guaranteed-nonexistent host, rather than silently
-      # succeeding at posting nowhere -- or, worse, somewhere real.
-      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-https://discord.invalid/alerts-not-configured}
+      # No alert-delivery secret: alerts are UI-only (Grafana's Alerting page),
+      # with no external contact point -- see
+      # ./grafana/provisioning/alerting/contact-points-and-policies.yaml.
     # Longer than LGTM_SHUTDOWN_TIMEOUT_SECONDS, so run-all.sh's own
     # SIGTERM-then-SIGKILL sequence finishes before Docker's.
     stop_grace_period: 50s

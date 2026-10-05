@@ -364,6 +364,16 @@ the default branch yet.
 
 ### Step 7 — alert delivery
 
+> **Superseded 2026-10-05: there is no external alert delivery.** The owner dropped the Discord
+> alert webhook, and the release-announcement workflow that used the same secret with it. The
+> rules still evaluate and fire, and are visible on Grafana's Alerting page on the LAN; the root
+> policy now routes to the integration-less `empty` receiver
+> (`infra/grafana/provisioning/alerting/contact-points-and-policies.yaml`), production needs no
+> `DISCORD_WEBHOOK_URL`, and the GitHub repository secret of that name is no longer used by
+> anything. What follows is the history of the delivering design. Adding a contact point later:
+> `deploy-loki.md` §9.7. The cost is the one this section's original finding names: the
+> `removeFriendOtherSide` privacy alert is, again, a dashboard someone has to look at.
+
 The webhook already exists: `DISCORD_WEBHOOK_URL` is a repository secret today (confirmed with
 `gh api repos/<owner>/<repo>/actions/secrets`; the listing is not reproduced here — this file is
 public and a secret *inventory* is worth withholding even when the values are not in it),
@@ -398,9 +408,9 @@ Two corrections to the framing while measuring this:
 
 ### What is left
 
-Two tasks, neither of which is a judgement call: **provision the Discord contact point** (URL in
-hand) and **install the nightly backups**. Both are better done before the freeze and neither
-stops it. The first is now only setting `DISCORD_WEBHOOK_URL` in `infra/.env.prod` (see above).
+~~Two tasks, neither of which is a judgement call: **provision the Discord contact point** (URL in
+hand) and **install the nightly backups**.~~ **Since 2026-10-05, one: install the nightly
+backups.** The Discord contact point was removed (see the note at the top of this step). It is better done before the freeze and does not stop it.
 
 **Blocks E4: no.**
 

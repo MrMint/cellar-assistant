@@ -2459,6 +2459,8 @@ through the proxy), and whether Grafana's `remote_ip private_ranges` guard sees 
 Loki — the LAN-interface port binding is the enforcement that actually holds. The nightly backup
 schedule is **documented, not installed**: this machine is not Loki. Alert rules currently have no
 delivery channel; the Discord webhook already used by `release-discord.yaml` is the natural target.
+(2026-10-05: a Discord contact point was built and then dropped by decision, along with
+`release-discord.yaml`; alerts are UI-only — `e4-decisions.md` step 7.)
 
 **X11 outcome (2026-09-10) — the stale-capability sweep, and the worst systemic defect in this
 migration.** Sixteen prose claims across the frontend were checked against the SDL and the running
@@ -2533,13 +2535,11 @@ and the rollback paragraph changed with it.
 - **(0c) Rehearse.** Run the full E1 sequence and the **complete E2 Playwright suite** against the
   rehearsal database — `E2E_BASE_URL` points the suite wherever that stack serves. This is the
   only place E2 runs; see step 5.
-- **(0d)** Provision the Grafana Discord contact point (`DISCORD_WEBHOOK_URL` is already a
-  repository secret) and install the nightly `pg_dump` + MinIO mirror from
-  `docs/architecture/backup-restore.md`. The contact point itself is provisioned from the repo
-  since `ace0d2fd`; what this step still needs is the webhook value in `infra/.env.prod` on Loki.
-  `infra/.env.prod.example` lists it, and since 2026-09-28 the production overlay requires it
-  (`:?`) and the deploy refuses the `discord.invalid` placeholder, so a blank value stops the
-  deploy instead of silently routing every alert nowhere.
+- **(0d)** Install the nightly `pg_dump` + MinIO mirror from
+  `docs/architecture/backup-restore.md`. (This step also used to provision the Grafana Discord
+  contact point; the Discord alert webhook was dropped on 2026-10-05, so alerts are visible in
+  Grafana on the LAN and delivered nowhere, and production needs no webhook value —
+  `e4-decisions.md` step 7.)
 - **(0e) Set `AUTH_PROXY_SECRET` — one value, two places — before the first deploy that carries
   it.** A user action; nothing in this repository can set either. Generate it once
   (`openssl rand -hex 32`) and put the same string in `infra/.env.prod` on Loki **and** in the
@@ -2606,8 +2606,8 @@ exist in production and seeding them there is a live credential hole
 (`scripts/cutover/README.md:48-53`); (6) flip Vercel env to Loki + deploy the new frontend — this
 is where (0a)'s second gate is lifted: restore the release app's bypass on the `production`
 ruleset (or fast-forward `production` by hand), and only then merge the pending release PR;
-(7) watch for 24h — alerts land in the Discord contact point from step 0d, and in Grafana's own
-Alerting page regardless. Start the day-30 checklist (decision 11) here. Once the watch is over,
+(7) watch for 24h — alerts land in Grafana's own Alerting page, which is the only place they land
+since external delivery was dropped (2026-10-05), so the watch means looking at it. Start the day-30 checklist (decision 11) here. Once the watch is over,
 delete the cutover's `$WORK` directory: its dump holds every production row, `admin.credentials`'
 private key included.
 

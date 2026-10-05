@@ -233,13 +233,15 @@ a baseline to alarm on drift from.** Re-run monthly once real data exists on Lok
   test against.
 - **Nightly schedule is documented, not installed** (§4) — do this as part of
   Loki's first real deploy.
-- ~~**Alert routing has no delivery channel yet.**~~ **Done in `ace0d2fd`.**
+- **Alert routing delivers nowhere, by decision (2026-10-05).** The Discord
+  contact point described next was removed with the alert webhook; alerts are
+  visible on Grafana's Alerting page on the LAN only, and a failed backup
+  alert reaches whoever looks. History:
+  ~~**Alert routing has no delivery channel yet.**~~ **Done in `ace0d2fd`.**
   The rules no longer fall through to `grafana-default-email`:
   `infra/grafana/provisioning/alerting/contact-points-and-policies.yaml`
-  provisions a `discord-ops` contact point as the root receiver, reading
-  `$DISCORD_WEBHOOK_URL` from the Grafana container's environment. What
-  remains is an operator step, not a build step: put the real webhook in
-  `infra/.env.prod` on Loki. Delivery itself was proven end to end on
-  2026-09-27 against a throwaway webhook sink, rule by rule
-  (`deploy-loki.md` §9.7); your webhook is the one part only a real test
-  message can prove.
+  provisioned a `discord-ops` contact point as the root receiver, reading
+  `$DISCORD_WEBHOOK_URL` from the Grafana container's environment, and
+  delivery was proven end to end on 2026-09-27 against a throwaway webhook
+  sink, rule by rule. Both the contact point and the variable were removed on
+  2026-10-05; `deploy-loki.md` §9.7 says how to add a contact point back.

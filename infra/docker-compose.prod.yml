@@ -435,17 +435,9 @@ services:
       # Published on the LAN address above, so Grafana's generated absolute URLs
       # have to name that address, not the container.
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3010/}
-      # REQUIRED here, unlike the base file. There, a missing webhook falls back
-      # to `https://discord.invalid/alerts-not-configured` so a dev stack
-      # provisions cleanly (an EMPTY url is fatal to Grafana's provisioning);
-      # in production that fallback meant every alert fired, every page went
-      # to a host that cannot resolve, and nothing refused to start. `:?` makes
-      # a blank or missing value fail the render, and the deploy's
-      # "Refuse published development secrets" step
-      # (scripts/deploy/check-prod-config.mjs) refuses the `.invalid`
-      # placeholder spelled out explicitly. Self-tested in stack-ci
-      # (scripts/deploy/prod-config-selftest.sh).
-      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:?DISCORD_WEBHOOK_URL is required in production (the Discord webhook behind the discord-ops contact point)}
+      # No alert webhook: alerts are visible in Grafana on the LAN and
+      # delivered nowhere (contact-points-and-policies.yaml). Adding a contact
+      # point later: docs/architecture/deploy-loki.md §9.7.
     # No `healthcheck:` here: the base file's curl-based check applies. The one
     # this overlay used to carry ran `wget`, which grafana/otel-lgtm does not
     # ship, so it could never pass and the container was permanently

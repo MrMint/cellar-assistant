@@ -448,8 +448,8 @@ jobs:
       # infra/.env.prod.example (so a `:?` variable the example forgot fails
       # here), then proves scripts/deploy/check-prod-config.mjs — the deploy's
       # "Refuse published development secrets" step — passes that config and
-      # refuses each published development secret one at a time, and that a
-      # blank DISCORD_WEBHOOK_URL fails the render. It also proves the guard's
+      # refuses each published development secret one at a time, and that
+      # each required secret left blank fails the render. It also proves the guard's
       # edge half refuses every way the nginx-proxy surface could widen, and
       # that infra/nginx-proxy/vhost.d/*.conf pass `nginx -t` in the image Loki
       # runs. No secret involved: every value is generated. `node` is the

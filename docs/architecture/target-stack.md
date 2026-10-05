@@ -420,6 +420,12 @@ or nothing. The register is with the maintainer. Do not re-derive it here.
   operator step the alert depends on: `DISCORD_WEBHOOK_URL` must be in `infra/.env`, and a contact
   point with no webhook behind it is the same silence this bullet was written about.
 
+  **2026-10-05: delivery removed by decision.** The Discord contact point and its webhook variable
+  are gone; the root policy routes to the integration-less `empty` receiver, so this alert fires
+  and is visible on Grafana's Alerting page and reaches nobody who is not looking at it — the
+  silence described above, now chosen rather than accidental. Restoring push delivery:
+  `deploy-loki.md` §9.7.
+
   **Superseded by `1763eac8` (2026-09-20): "act on what it reports" now has a mechanism, and it
   has been used.** `MaintenanceActor.acknowledgeDeadLetters` records a triage decision per
   `outbox.id` in `outbox_dead_letter_acks`; the dead row itself stays, as evidence. The hourly

@@ -324,7 +324,7 @@ jobs:
       # value copied from the development lane is. This refuses any
       # secret-named variable that equals a default the BASE file publishes
       # (`cellar-dev-dapr-api-token`, `cellar-dev-secret`, Postgres's `cellar`,
-      # the `discord.invalid` alert placeholder, …), derived by rendering the
+      # …), derived by rendering the
       # base file with an empty environment rather than from a list. Both
       # renders go straight down a pipe — the production one holds every
       # secret — and the checker prints variable names only. It runs on the
