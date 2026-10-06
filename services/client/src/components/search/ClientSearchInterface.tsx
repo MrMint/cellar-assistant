@@ -14,13 +14,17 @@ import {
 import { useActor } from "@xstate/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { includes } from "ramda";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { MdClose, MdScanner, MdSearch } from "react-icons/md";
+import { MdCamera, MdClose, MdScanner, MdSearch } from "react-icons/md";
+import { useClient } from "urql";
 import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { uploadSearchPhoto } from "@/lib/items/image-search";
 import { BarcodeScanner } from "../common/BarcodeScanner";
+import { CameraCapture } from "../common/CameraCapture";
 import { interactiveSearchMachine } from "./actors/interactiveSearch";
-import { barcodeSearchHref } from "./adapter";
+import { barcodeSearchHref, imageSearchHref } from "./adapter";
 import { modalScale } from "./motion-variants";
 
 const SEARCH_EXAMPLES_DESKTOP = [
@@ -51,11 +55,17 @@ interface ClientSearchInterfaceProps {
  * `82450ad1:src/components/search/ClientSearchInterface.tsx`, restored.
  *
  * Same box: animated placeholder, no submit button, a 300 ms debounce that
- * navigates to `?q=`, the clear button and the Scan button opening the barcode
- * scanner in a framer-motion card. Two changes, both data-side:
+ * navigates to `?q=`, the clear button, and the Scan and Photo buttons opening
+ * the barcode scanner or the camera in a framer-motion card. Two changes, both
+ * data-side:
  *
- * - **No Photo button.** Image search is a chosen drop (G32); the camera half
- *   of the old machine went with it.
+ * - **A photo is uploaded, then navigates to `?image=<fileId>`** (G32). The
+ *   old `imageSearchAction` posted the capture's base64 data URL to a server
+ *   action and serialized the result rows into `?image_results=<JSON>`. Now
+ *   the capture goes up the presigned path (`image-search`) and the server
+ *   page searches with the file id. The machine stays in `imageSearching`
+ *   through the upload and the navigation. A failed upload says so under the
+ *   box, where the old flow returned to idle silently.
  * - **A scan navigates to `?barcode=<code>`.** The old `barcodeSearchAction`
  *   serialized whole result rows into the URL (`?barcode_results=<JSON>`,
  *   forgeable and unbounded, §7) — and its search was a stub that returned
@@ -84,14 +94,42 @@ export const ClientSearchInterface = ({
     input: {},
   });
   const [isNavigating, startNavigation] = useTransition();
+  const urqlClient = useClient();
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   // The old action resolved after its redirect; a transition's end is the
-  // same moment for a client navigation.
+  // same moment for a client navigation. An image search is still uploading
+  // until `photoNavigating` says the navigation has started.
+  const [photoNavigating, setPhotoNavigating] = useState(false);
   useEffect(() => {
     if (state.value === "barcodeSearching" && !isNavigating) {
       send({ type: "SEARCH_COMPLETE" });
     }
-  }, [state.value, isNavigating, send]);
+    if (state.value === "imageSearching" && photoNavigating && !isNavigating) {
+      setPhotoNavigating(false);
+      send({ type: "SEARCH_COMPLETE" });
+    }
+  }, [state.value, isNavigating, photoNavigating, send]);
+
+  const handlePhoto = (image: string) => {
+    send({ type: "CAPTURED", image });
+    setPhotoError(null);
+    uploadSearchPhoto(urqlClient, image)
+      .then((fileId) => {
+        const href = imageSearchHref(fileId);
+        if (href === null) throw new Error("The photo could not be uploaded.");
+        setPhotoNavigating(true);
+        startNavigation(() => router.push(href));
+      })
+      .catch((error: unknown) => {
+        setPhotoError(
+          error instanceof Error
+            ? error.message
+            : "The photo could not be uploaded.",
+        );
+        send({ type: "SEARCH_ERROR" });
+      });
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -124,8 +162,11 @@ export const ClientSearchInterface = ({
     "(prefers-reduced-motion: reduce)",
   );
 
-  const isIdle = state.value !== "barcode";
-  const isSearching = state.value === "barcodeSearching";
+  const isIdle = !includes(state.value, ["barcode", "image"]);
+  const isSearching = includes(state.value, [
+    "barcodeSearching",
+    "imageSearching",
+  ]);
 
   return (
     <Box>
@@ -168,38 +209,73 @@ export const ClientSearchInterface = ({
                       </IconButton>
                     )}
                     {searchQuery ? (
-                      <IconButton
-                        variant="soft"
-                        color="neutral"
-                        size="sm"
-                        aria-label="Scan barcode"
-                        onClick={() => send({ type: "SEARCH_BARCODE" })}
-                        sx={{
-                          borderRadius: "50%",
-                          "--IconButton-size": "30px",
-                        }}
-                      >
-                        <MdScanner style={{ fontSize: "1.1rem" }} />
-                      </IconButton>
+                      <>
+                        <IconButton
+                          variant="soft"
+                          color="neutral"
+                          size="sm"
+                          aria-label="Scan barcode"
+                          onClick={() => send({ type: "SEARCH_BARCODE" })}
+                          sx={{
+                            borderRadius: "50%",
+                            "--IconButton-size": "30px",
+                          }}
+                        >
+                          <MdScanner style={{ fontSize: "1.1rem" }} />
+                        </IconButton>
+                        <IconButton
+                          variant="soft"
+                          color="neutral"
+                          size="sm"
+                          aria-label="Search by photo"
+                          onClick={() => send({ type: "SEARCH_IMAGE" })}
+                          sx={{
+                            borderRadius: "50%",
+                            "--IconButton-size": "30px",
+                          }}
+                        >
+                          <MdCamera style={{ fontSize: "1.1rem" }} />
+                        </IconButton>
+                      </>
                     ) : (
-                      <Button
-                        variant="soft"
-                        color="neutral"
-                        size="sm"
-                        startDecorator={
-                          <MdScanner style={{ fontSize: "1rem" }} />
-                        }
-                        onClick={() => send({ type: "SEARCH_BARCODE" })}
-                        sx={{
-                          borderRadius: "lg",
-                          fontSize: "xs",
-                          fontWeight: "md",
-                          px: 1.5,
-                          "--Button-minHeight": "30px",
-                        }}
-                      >
-                        Scan
-                      </Button>
+                      <>
+                        <Button
+                          variant="soft"
+                          color="neutral"
+                          size="sm"
+                          startDecorator={
+                            <MdScanner style={{ fontSize: "1rem" }} />
+                          }
+                          onClick={() => send({ type: "SEARCH_BARCODE" })}
+                          sx={{
+                            borderRadius: "lg",
+                            fontSize: "xs",
+                            fontWeight: "md",
+                            px: 1.5,
+                            "--Button-minHeight": "30px",
+                          }}
+                        >
+                          Scan
+                        </Button>
+                        <Button
+                          variant="soft"
+                          color="neutral"
+                          size="sm"
+                          startDecorator={
+                            <MdCamera style={{ fontSize: "1rem" }} />
+                          }
+                          onClick={() => send({ type: "SEARCH_IMAGE" })}
+                          sx={{
+                            borderRadius: "lg",
+                            fontSize: "xs",
+                            fontWeight: "md",
+                            px: 1.5,
+                            "--Button-minHeight": "30px",
+                          }}
+                        >
+                          Photo
+                        </Button>
+                      </>
                     )}
                   </Stack>
                 }
@@ -235,9 +311,21 @@ export const ClientSearchInterface = ({
                       },
                     }}
                   >
-                    Searching by barcode...
+                    {state.value === "barcodeSearching"
+                      ? "Searching by barcode..."
+                      : "Analyzing image..."}
                   </Typography>
                 </Stack>
+              )}
+
+              {photoError !== null && !isSearching && (
+                <Typography
+                  level="body-sm"
+                  color="danger"
+                  sx={{ textAlign: "center" }}
+                >
+                  {photoError}
+                </Typography>
               )}
             </Stack>
           </motion.div>
@@ -272,6 +360,36 @@ export const ClientSearchInterface = ({
                   sx={{ justifyContent: "flex-end" }}
                 >
                   <Button onClick={() => send({ type: "CANCEL" })}>
+                    Cancel
+                  </Button>
+                </CardContent>
+              </Card>
+            </Box>
+          </motion.div>
+        )}
+
+        {state.value === "image" && (
+          <motion.div
+            key="image"
+            variants={prefersReducedMotion ? undefined : modalScale}
+            initial={prefersReducedMotion ? false : "initial"}
+            animate="animate"
+            exit="exit"
+          >
+            <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.md })}>
+              <Card sx={{ padding: "1rem" }}>
+                <Typography level="title-lg" textAlign="center">
+                  Take a picture of the item
+                </Typography>
+                <CameraCapture onCapture={handlePhoto} />
+                <CardContent
+                  orientation="horizontal"
+                  sx={{ justifyContent: "space-between" }}
+                >
+                  <Button
+                    onClick={() => send({ type: "CANCEL" })}
+                    color="neutral"
+                  >
                     Cancel
                   </Button>
                 </CardContent>

@@ -49,6 +49,38 @@ export const OnboardingBarcodeQuery = graphql(
 );
 
 /**
+ * `82450ad1:…/actors/searchByImage.ts`'s `GetImageVector` + `ImageSearchQuery`
+ * (`image_search … distance <= 0.3, limit: 10`, four `*ItemCardFragment`s) as
+ * one document: `itemSearch(imageFileId:)` embeds the display photo and
+ * matches it server-side (G32). `itemTypes` narrows it to the type being
+ * added — see `searchByImage`.
+ */
+export const OnboardingImageMatchQuery = graphql(
+  `
+  query OnboardingImageMatches(
+    $imageFileId: ID!
+    $itemTypes: [ItemType!]
+    $first: Int!
+  ) {
+    itemSearch(imageFileId: $imageFileId, itemTypes: $itemTypes, first: $first) {
+      __typename
+      ... on ItemSearchConnection {
+        edges {
+          node {
+            item {
+              ...ItemCard
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ItemCardFragment, ActorErrorFieldsFragment],
+);
+
+/**
  * Brands the onboarding form's `BrandPicker` offers — the old
  * `SearchBrands($search: "%term%", limit: 10)` over `brands(_ilike)`. Now
  * `brandSearch(term:)`, which takes a term rather than a pattern (so

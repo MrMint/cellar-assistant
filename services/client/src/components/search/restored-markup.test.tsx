@@ -1,7 +1,8 @@
 /**
  * Render tests for the restored `/search` pieces, asserting the **old** markup
- * and copy (`82450ad1:src/components/search/*`), and the two deliberate
- * differences: no Photo button (G32) and absolute card links.
+ * and copy (`82450ad1:src/components/search/*`) — the Scan and Photo buttons
+ * included, image search (G32) being back — and the one deliberate
+ * difference, absolute card links.
  *
  * The discovery section (G31, restored): Recent Activity and Nearby Places
  * with the old headings, lines and empty states, and — the robustness fix —
@@ -58,20 +59,21 @@ const render = (node: ReactNode) =>
 const text = (html: string) => html.replace(/<[^>]+>/g, " ");
 
 describe("ClientSearchInterface (restored)", () => {
-  test("an empty box offers Scan and nothing else — no Photo (G32)", () => {
+  test("an empty box offers the old Scan and Photo buttons, in that order", () => {
     const html = render(<ClientSearchInterface />);
     assert.match(html, /<input/);
-    assert.match(text(html), /Scan/);
-    assert.doesNotMatch(text(html), /Photo/);
+    assert.match(text(html), /Scan\s+Photo/);
     // No submit button: the old box navigated on a debounce.
     assert.doesNotMatch(text(html), /\bSearch\b/);
   });
 
-  test("a query swaps the Scan button for the round scan icon and adds clear", () => {
+  test("a query swaps both buttons for the round scan and camera icons and adds clear", () => {
     const html = render(<ClientSearchInterface initialQuery="barolo" />);
     assert.match(html, /value="barolo"/);
     assert.match(html, /aria-label="Scan barcode"/);
+    assert.match(html, /aria-label="Search by photo"/);
     assert.doesNotMatch(text(html), /Scan\b(?! barcode)/);
+    assert.doesNotMatch(text(html), /\bPhoto\b/);
   });
 });
 

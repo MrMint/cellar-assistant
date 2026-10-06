@@ -102,6 +102,13 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "scan, network-only, read once to choose a next state — not a list to " +
       "page, and the machine drops an answer for a state it has left.",
   },
+  "common/OnboardingWizard/actors/searchByImage.ts": {
+    calls: 1,
+    reason:
+      "An xstate promise actor (`searchingByImage`, G32): one " +
+      "itemSearch(imageFileId) per display photo, network-only, read once to " +
+      "choose a next state — the same shape as searchByBarcode beside it.",
+  },
   "common/OnboardingWizard/actors/uploadItemImage.ts": {
     calls: 1,
     reason:

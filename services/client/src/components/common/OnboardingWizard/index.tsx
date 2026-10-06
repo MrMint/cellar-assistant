@@ -3,6 +3,7 @@
 import { useMachine } from "@xstate/react";
 import { includes, isNotNil } from "ramda";
 import { useClient } from "urql";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { Barcode } from "@/constants";
 import { AnimationShowcase } from "../AnimationShowcase";
 import { BarcodeStep } from "./BarcodeStep";
@@ -21,15 +22,20 @@ export type OnboardingResult = {
 
 export type OnboardingWizardProps = {
   onComplete: (result: OnboardingResult) => void;
+  /** The type being added: the display-photo match looks only among these. */
+  itemType?: ApiItemType;
 };
 
 /**
  * `82450ad1:src/components/common/OnboardingWizard/index.tsx`: barcode →
- * (existing matches) → back label → front label → display photo. Verbatim
- * except that `userId` is gone (nothing sends one) and the image-search
- * states are (G32).
+ * (existing matches) → back label → front label → display photo → (photo
+ * matches, G32). Verbatim except that `userId` is gone (nothing sends one) and
+ * the photo match is narrowed to `itemType`.
  */
-export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
+export const OnboardingWizard = ({
+  onComplete,
+  itemType,
+}: OnboardingWizardProps) => {
   const urqlClient = useClient();
 
   const [state, send] = useMachine(
@@ -53,7 +59,7 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
           }),
       },
     }),
-    { input: { urqlClient } },
+    { input: { urqlClient, itemType } },
   );
 
   const { barcode } = state.context;
@@ -67,10 +73,10 @@ export const OnboardingWizard = ({ onComplete }: OnboardingWizardProps) => {
           onSkip={() => send({ type: "SKIP" })}
         />
       )}
-      {includes(state.value, ["searching"]) && (
+      {includes(state.value, ["searching", "searchingByImage"]) && (
         <AnimationShowcase statusText="Searching..." />
       )}
-      {includes(state.value, ["chooseExisting"]) &&
+      {includes(state.value, ["chooseExisting", "chooseExistingImage"]) &&
         isNotNil(state.context.existingItems) && (
           <ExistingItems
             items={state.context.existingItems}

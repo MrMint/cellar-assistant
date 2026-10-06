@@ -16,6 +16,13 @@ export type SearchByBarcodeInput = {
   urqlClient: Client;
 };
 
+/** G32: the display photo, as captured, and the type being added. */
+export type SearchByImageInput = {
+  displayImage?: string;
+  urqlClient: Client;
+  itemType?: ApiItemType;
+};
+
 export type InsertCellarItemInput = {
   urqlClient: Client;
   itemId: string;

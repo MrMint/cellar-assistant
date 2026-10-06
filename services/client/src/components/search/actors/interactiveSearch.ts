@@ -3,10 +3,8 @@ import type { Barcode } from "@/constants";
 
 /**
  * `82450ad1:src/components/search/actors/interactiveSearch.ts`, restored
- * without its image half: `SEARCH_IMAGE`, `image`, `CAPTURED` and
- * `imageSearching` drove the Photo button, and image search is a chosen drop
- * (G32 — `itemSearch` takes an embedding the client would have to hold, and
- * nothing turns a photo into one). The barcode half is unchanged.
+ * whole — the barcode half and, with image search back (G32), the camera half
+ * the Photo button drives.
  */
 export const interactiveSearchMachine = createMachine({
   id: "interactive-search",
@@ -15,6 +13,7 @@ export const interactiveSearchMachine = createMachine({
     input: Record<string, never>;
     context: {
       barcode?: Barcode;
+      imageDataUrl?: string;
     };
     events:
       | {
@@ -23,6 +22,8 @@ export const interactiveSearchMachine = createMachine({
         }
       | { type: "CANCEL" }
       | { type: "SEARCH_BARCODE" }
+      | { type: "SEARCH_IMAGE" }
+      | { type: "CAPTURED"; image: string }
       | { type: "SEARCH_COMPLETE" }
       | { type: "SEARCH_ERROR" };
   },
@@ -31,6 +32,7 @@ export const interactiveSearchMachine = createMachine({
     idle: {
       on: {
         SEARCH_BARCODE: "barcode",
+        SEARCH_IMAGE: "image",
       },
     },
     barcode: {
@@ -44,7 +46,25 @@ export const interactiveSearchMachine = createMachine({
         CANCEL: "idle",
       },
     },
+    image: {
+      on: {
+        CAPTURED: {
+          actions: assign({
+            imageDataUrl: ({ event }) => event.image,
+          }),
+          target: "imageSearching",
+        },
+        CANCEL: "idle",
+      },
+    },
     barcodeSearching: {
+      on: {
+        SEARCH_COMPLETE: "idle",
+        SEARCH_ERROR: "idle",
+        CANCEL: "idle",
+      },
+    },
+    imageSearching: {
       on: {
         SEARCH_COMPLETE: "idle",
         SEARCH_ERROR: "idle",

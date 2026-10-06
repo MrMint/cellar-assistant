@@ -12,6 +12,7 @@ import {
   apiActivityKinds,
   barcodeSearchHref,
   collectionStatsLine,
+  imageSearchHref,
   MAX_BARCODE_LENGTH,
   nearbyPlacesFromNodes,
   searchResultFromCard,
@@ -61,7 +62,8 @@ describe("searchStateFromParams (the old hasActiveSearch)", () => {
     assert.deepEqual(searchStateFromParams({}), {
       query: null,
       barcode: null,
-      imageSearch: false,
+      imageFileId: null,
+      legacyImageLink: false,
       hasActiveSearch: false,
     });
   });
@@ -85,19 +87,20 @@ describe("searchStateFromParams (the old hasActiveSearch)", () => {
     const long = "1".repeat(MAX_BARCODE_LENGTH + 1);
     assert.equal(searchStateFromParams({ barcode: long }).barcode, null);
   });
-  test("an old image-search link lands on the G32 notice", () => {
-    assert.equal(
-      searchStateFromParams({ image_results: "%5B%5D" }).imageSearch,
-      true,
-    );
-    assert.equal(
-      searchStateFromParams({ image_no_results: "true" }).imageSearch,
-      true,
-    );
-    assert.equal(
-      searchStateFromParams({ image_no_results: "false" }).imageSearch,
-      false,
-    );
+  test("?image= carries an uploaded photo's file id, not result rows (G32)", () => {
+    const id = "0B5F8C2E-9D61-4C7A-8F0E-3A1B2C4D5E6F";
+    const state = searchStateFromParams({ image: ` ${id} ` });
+    assert.equal(state.imageFileId, id.toLowerCase());
+    assert.equal(state.hasActiveSearch, true);
+    assert.equal(searchStateFromParams({ image: "../etc" }).imageFileId, null);
+  });
+  test("an old image-results link, with no photo behind it, asks for a new one", () => {
+    const legacy = (params: Record<string, string>) =>
+      searchStateFromParams(params as never);
+    assert.equal(legacy({ image_results: "%5B%5D" }).legacyImageLink, true);
+    assert.equal(legacy({ image_no_results: "true" }).legacyImageLink, true);
+    assert.equal(legacy({ image_no_results: "false" }).legacyImageLink, false);
+    assert.equal(legacy({ image_results: "%5B%5D" }).imageFileId, null);
   });
   test("the old stub's ?barcode_no_results= is ignored", () => {
     assert.equal(
@@ -105,6 +108,19 @@ describe("searchStateFromParams (the old hasActiveSearch)", () => {
         .hasActiveSearch,
       false,
     );
+  });
+});
+
+describe("imageSearchHref", () => {
+  test("a file id goes to ?image= and round-trips", () => {
+    const id = "0b5f8c2e-9d61-4c7a-8f0e-3a1b2c4d5e6f";
+    const href = imageSearchHref(id) ?? "";
+    assert.equal(href, `/search?image=${id}`);
+    const back = new URL(href, "http://x").searchParams.get("image") ?? "";
+    assert.equal(searchStateFromParams({ image: back }).imageFileId, id);
+  });
+  test("anything that is not a file id goes nowhere", () => {
+    assert.equal(imageSearchHref("not-a-file"), null);
   });
 });
 

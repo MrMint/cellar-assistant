@@ -6,6 +6,7 @@ import type { Barcode } from "@/constants";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
 import { searchByBarcode } from "./actors/searchByBarcode";
+import { searchByImage } from "./actors/searchByImage";
 import type {
   DefaultValuesResult,
   FetchDefaultsInput,
@@ -448,7 +449,7 @@ export const pictureOnboardingMachine = createMachine(
     id: "onboarding-wizard-sub",
     initial: "barcode",
     types: {} as {
-      input: { urqlClient: Client };
+      input: { urqlClient: Client; itemType?: ApiItemType };
       context: {
         barcode?: Barcode;
         frontLabelDataUrl?: string;
@@ -457,6 +458,7 @@ export const pictureOnboardingMachine = createMachine(
         existingItems?: ExistingItem[];
         existingItemId?: string;
         urqlClient: Client;
+        itemType?: ApiItemType;
       };
       events:
         | {
@@ -468,10 +470,13 @@ export const pictureOnboardingMachine = createMachine(
         | { type: "CHOOSE_ITEM"; existingItemId: string }
         | { type: "CAPTURED"; image: string };
       actions: { type: "handleDone" };
-      actors: { src: "searchByBarcode"; logic: typeof searchByBarcode };
+      actors:
+        | { src: "searchByBarcode"; logic: typeof searchByBarcode }
+        | { src: "searchByImage"; logic: typeof searchByImage };
     },
     context: ({ input }) => ({
       urqlClient: input.urqlClient,
+      itemType: input.itemType,
     }),
     states: {
       barcode: {
@@ -552,15 +557,64 @@ export const pictureOnboardingMachine = createMachine(
       },
       display: {
         on: {
-          // Old: a photo of a new item went to `searchingByImage` first.
-          // Image search is a chosen drop (G32), so it is done here.
-          CAPTURED: {
+          // A photo of an item already chosen (by barcode) is just its
+          // display image; a photo of a new one is first matched against
+          // the catalogue (G32).
+          CAPTURED: [
+            {
+              guard: ({ context }) => isNotNil(context.existingItemId),
+              actions: assign({
+                displayImageDataUrl: ({ event }) => event.image,
+              }),
+              target: "done",
+            },
+            {
+              guard: ({ context }) => isNil(context.existingItemId),
+              actions: assign({
+                displayImageDataUrl: ({ event }) => event.image,
+              }),
+              target: "searchingByImage",
+            },
+          ],
+          BACK: "front",
+          SKIP: "done",
+        },
+      },
+      searchingByImage: {
+        invoke: {
+          src: "searchByImage",
+          input: ({
+            context: { displayImageDataUrl, urqlClient, itemType },
+          }) => ({
+            displayImage: displayImageDataUrl,
+            urqlClient,
+            itemType,
+          }),
+          onDone: [
+            {
+              guard: ({ event }) => not(isEmpty(event.output)),
+              target: "chooseExistingImage",
+              actions: assign({
+                existingItems: ({ event }) => event.output,
+              }),
+            },
+            {
+              target: "done",
+            },
+          ],
+          // An upload or search that failed outright is treated like one that
+          // found nothing: the photo is kept and the wizard finishes.
+          onError: { target: "done" },
+        },
+      },
+      chooseExistingImage: {
+        on: {
+          CHOOSE_ITEM: {
             actions: assign({
-              displayImageDataUrl: ({ event }) => event.image,
+              existingItemId: ({ event }) => event.existingItemId,
             }),
             target: "done",
           },
-          BACK: "front",
           SKIP: "done",
         },
       },
@@ -570,5 +624,5 @@ export const pictureOnboardingMachine = createMachine(
       },
     },
   },
-  { actors: { searchByBarcode } },
+  { actors: { searchByBarcode, searchByImage } },
 );

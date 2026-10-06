@@ -77,6 +77,7 @@ export const MAX_BARCODE_LENGTH = 64;
 export type SearchParams = {
   q?: string | string[];
   barcode?: string | string[];
+  image?: string | string[];
   image_results?: string | string[];
   image_no_results?: string | string[];
   activity?: string | string[];
@@ -87,8 +88,13 @@ export type SearchState = {
   query: string | null;
   /** The scanned code, or null. */
   barcode: string | null;
-  /** An old `?image_results=` / `?image_no_results=` link (G32). */
-  imageSearch: boolean;
+  /** The uploaded search photo's file id (`?image=`, G32), or null. */
+  imageFileId: string | null;
+  /**
+   * An old `?image_results=<JSON>` / `?image_no_results=` link, which carried
+   * whole result rows rather than a photo — nothing to search again.
+   */
+  legacyImageLink: boolean;
   /** The old `hasActiveSearch`: any of the above hides the landing view. */
   hasActiveSearch: boolean;
 };
@@ -104,8 +110,12 @@ const single = (value: string | string[] | undefined): string | undefined =>
  *   serialized whole result rows into the URL (forgeable and unbounded, §7);
  *   now the URL carries only the code, and the server looks it up. A code that
  *   is blank or implausibly long is ignored rather than sent.
- * - `?image_results=` / `?image_no_results=` are old image-search links. Image
- *   search is a chosen drop (G32); the page says so instead of a landing view.
+ * - `?image=<fileId>` replaces the old `?image_results=<JSON>` the same way
+ *   (G32): the Photo button uploads the capture and the URL carries only the
+ *   file id; the server searches with it. Anything that is not a uuid is
+ *   ignored rather than sent.
+ * - `?image_results=` / `?image_no_results=` are old image-search links with
+ *   no photo behind them; the page asks for a new one.
  *   The old `?barcode_no_results=` came only from the stub and is ignored.
  */
 export const searchStateFromParams = (params: SearchParams): SearchState => {
@@ -113,16 +123,31 @@ export const searchStateFromParams = (params: SearchParams): SearchState => {
   const code = single(params.barcode)?.trim() ?? "";
   const barcode =
     code !== "" && code.length <= MAX_BARCODE_LENGTH ? code : null;
-  const imageSearch =
+  const image = single(params.image)?.trim().toLowerCase() ?? "";
+  const imageFileId = UUID.test(image) ? image : null;
+  const legacyImageLink =
     single(params.image_results) !== undefined ||
     single(params.image_no_results) === "true";
   const query = q === "" ? null : q;
   return {
     query,
     barcode,
-    imageSearch,
-    hasActiveSearch: query !== null || barcode !== null || imageSearch,
+    imageFileId,
+    legacyImageLink,
+    hasActiveSearch:
+      query !== null ||
+      barcode !== null ||
+      imageFileId !== null ||
+      legacyImageLink,
   };
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Where an uploaded search photo goes: `/search?image=<fileId>` (G32). */
+export const imageSearchHref = (fileId: string): string | null => {
+  const id = fileId.trim().toLowerCase();
+  return UUID.test(id) ? `/search?image=${encodeURIComponent(id)}` : null;
 };
 
 /**

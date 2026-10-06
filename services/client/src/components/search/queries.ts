@@ -80,6 +80,38 @@ export const SearchItemsQuery = graphql(
   [ItemCardFragment, ActorErrorFieldsFragment],
 );
 
+/**
+ * The old page's "Image search results" (G32). Legacy's server action embedded
+ * the photo and ran `image_search` (`distance <= 0.3`, `limit: 10`); now
+ * `itemSearch(imageFileId:)` does both, with the API's image defaults
+ * (`maxDistance` 0.4, `limit` 10). `first` is the whole set, as for text.
+ */
+export const SearchImageQuery = graphql(
+  `
+  query SearchImage($imageFileId: ID!, $first: Int!) {
+    itemSearch(imageFileId: $imageFileId, first: $first) {
+      __typename
+      ... on ItemSearchConnection {
+        edges {
+          node {
+            __typename
+            id
+            name
+            type
+            distance
+            item {
+              ...ItemCard
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ItemCardFragment, ActorErrorFieldsFragment],
+);
+
 /** The old page's "Barcode search results" — which the stub never filled. */
 export const SearchBarcodeQuery = graphql(
   `

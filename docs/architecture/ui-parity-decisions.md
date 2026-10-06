@@ -37,7 +37,14 @@ wave merges.
 
 ## Not decided here
 
-- Chosen drop G32 (image search): stays dropped until the user says otherwise.
+- G32 (image search) was answered by the user on 2026-10-05 — restore it, the
+  way old production did it: the photo embedded alone with
+  `gemini-embedding-2` and matched against the stored vectors, now both the
+  item vectors and a new vector per stored photo (`item_image_vectors`).
+  `/search`'s Photo button and the onboarding display-photo match are back;
+  `itemSearch(imageFileId:)`. Needs Vertex or the Gemini API; on Ollama it
+  answers `IMAGE_SEARCH_UNAVAILABLE` and the UI says photo search is not
+  available.
   G31 (the `/search` activity feed and nearby strip) was answered by the user on
   2026-10-05 — restore it; see item 19.
 - Anything that changes production data or URLs beyond row 1.

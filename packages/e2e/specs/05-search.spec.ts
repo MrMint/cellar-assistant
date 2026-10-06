@@ -96,18 +96,19 @@ test("semantic item search returns ranked results", async ({ api }) => {
 const searchBox = (page: import("@playwright/test").Page) =>
   page.getByRole("textbox").first();
 
-test("the restored landing view: greeting, collection line, Scan, five quick links", async ({
+test("the restored landing view: greeting, collection line, Scan, Photo, five quick links", async ({
   primary,
 }) => {
-  // `82450ad1:src/app/(authenticated)/search/page.tsx`. No tabs, no Photo
-  // button (G32), no Brands/Recipes chips: the old page had none of them.
+  // `82450ad1:src/app/(authenticated)/search/page.tsx`. Scan and Photo (G32,
+  // restored — 14-image-search drives it); no tabs, no Brands/Recipes chips:
+  // the old page had none of them.
   const noise = watch(primary);
   await primary.goto("/search");
   await expect(
     primary.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ }),
   ).toBeVisible();
   await expect(primary.getByRole("button", { name: "Scan" })).toBeVisible();
-  await expect(primary.getByRole("button", { name: "Photo" })).toHaveCount(0);
+  await expect(primary.getByRole("button", { name: "Photo" })).toBeVisible();
   await expect(primary.getByRole("tab")).toHaveCount(0);
   const main = primary.locator("a[href] .MuiChip-root");
   await expect(main).toHaveText([
@@ -215,12 +216,12 @@ test("a scanned code is looked up server-side from ?barcode=", async ({
   expect(noise.pageErrors).toEqual([]);
 });
 
-test("an old image-search link is told image search is gone (G32)", async ({
+test("an old image-results link, with no photo behind it, asks for a new one (G32)", async ({
   primary,
 }) => {
   await primary.goto("/search?image_no_results=true");
   await expect(
-    primary.getByText(/Image search is no longer available/),
+    primary.getByText(/This image search link has expired/),
   ).toBeVisible();
 });
 

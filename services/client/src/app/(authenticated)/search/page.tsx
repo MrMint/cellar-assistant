@@ -34,6 +34,7 @@ import {
 } from "@/components/search/queries";
 import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
 import { ServerBarcodeResults } from "@/components/search/ServerBarcodeResults";
+import { ServerImageResults } from "@/components/search/ServerImageResults";
 import { ServerSearchResults } from "@/components/search/ServerSearchResults";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
@@ -46,12 +47,12 @@ import { getServerUser } from "@/utilities/auth-server";
  * quick links, and the discovery section under them — Recent Activity
  * (`?activity=`) and Nearby Places (G31, restored at the user's request over
  * `me.recentActivity` / `me.nearbyPlaces`). Active search (`?q=`,
- * `?barcode=`): the box and the results.
+ * `?barcode=`, `?image=`): the box and the results. Image search (the Photo
+ * button, G32) is back: the photo is uploaded and `?image=` carries its file
+ * id where the old `?image_results=` carried the rows themselves.
  *
  * Not restored, each by decision rather than omission:
  *
- * - **Image search** (the Photo button and `?image_results=`): chosen drop,
- *   G32. An old image-results link lands on a notice saying so.
  * - **The rewrite's tabs** (brands, people, recipes) and its two extra quick
  *   links: the old page had neither, and the old UI wins where they overlap
  *   (UI parity decision 2). Brand search lives on `/brands`, people on
@@ -66,7 +67,8 @@ interface SearchPageProps {
 export default async function Search({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = await searchParams;
   const state = searchStateFromParams(resolvedSearchParams);
-  const { query, barcode, imageSearch, hasActiveSearch } = state;
+  const { query, barcode, imageFileId, legacyImageLink, hasActiveSearch } =
+    state;
   const activityKinds = activityKindsFromParams(resolvedSearchParams);
 
   const user = await getServerUser();
@@ -158,13 +160,22 @@ export default async function Search({ searchParams }: SearchPageProps) {
           <>
             <ClientSearchInterface initialQuery={query ?? undefined} />
 
-            {imageSearch && (
+            {imageFileId !== null && (
+              <Stack spacing={2}>
+                <Typography level="title-lg">Image search results</Typography>
+                <Suspense fallback={null}>
+                  <ServerImageResults imageFileId={imageFileId} />
+                </Suspense>
+              </Stack>
+            )}
+
+            {imageFileId === null && legacyImageLink && (
               <Stack spacing={2}>
                 <Typography level="title-lg">Image search results</Typography>
                 <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
                   <Typography level="body-lg" sx={{ textAlign: "center" }}>
-                    Image search is no longer available. Search by name or scan
-                    a barcode instead.
+                    This image search link has expired. Tap Photo to search with
+                    a new picture.
                   </Typography>
                   <Link href="/add" style={{ textDecoration: "none" }}>
                     <Button variant="outlined" startDecorator={<MdAdd />}>
