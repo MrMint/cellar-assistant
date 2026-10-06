@@ -42,12 +42,13 @@ import type { EmbeddingModelIdentity } from "../vectors.ts";
 import { embeddingModelKey, setEmbeddingModel } from "../vectors.ts";
 import type { ModelBudget, SeamModels } from "./budget.ts";
 import { meteredProviderFor } from "./budget.ts";
-import type { Env } from "./config.ts";
+import type { EmbeddingInputDialect, Env } from "./config.ts";
 import { readAIProviderConfig, selectProvider } from "./config.ts";
 import { createAIProvider } from "./factory.ts";
 import { isGeminiEmbedding2 } from "./gemini.ts";
 import type { ImageLoader } from "./images.ts";
 import { daprImageLoader } from "./images.ts";
+import { LLAMACPP_EMBEDDING_VARIANT } from "./openai-compatible.ts";
 import {
   providerEmbedder,
   providerImageEmbedder,
@@ -151,22 +152,40 @@ export const SEAMS = {
  *
  * The width is `EMBEDDING_DIMENSIONS`, not the configured
  * `AI_EMBEDDING_DIMENSIONS`: `EmbeddingActor` refuses any other, so no vector
- * of another width is ever stored. Images are embedded only by
- * `gemini-embedding-2` on the two Google providers (`./gemini.ts`).
+ * of another width is ever stored. Images are embedded by
+ * `gemini-embedding-2` on the two Google providers (`./gemini.ts`), and by
+ * `openai-compatible` under the llama.cpp multimodal dialect
+ * (`./openai-compatible.ts`, `createLlamacppEmbedder`).
+ *
+ * Under that dialect the model is written with a suffix —
+ * `Qwen/Qwen3-VL-Embedding-2B#llamacpp-qwen3vl.v1-576` — naming the prompt
+ * template's version and the image budget. Both change the vectors as surely
+ * as the model does (the template moved a text vector to cosine 0.894; the
+ * image budget moved an image vector to 0.962), so either change has to read
+ * as a new model, which is what makes the re-embed job walk every row again.
+ * The same model under the default `openai` dialect keeps its old key: its
+ * vectors are text-only and untemplated, a different space.
  */
 export const embeddingModelIdentity = (
   provider: AIProvider["name"],
   model: string,
-): EmbeddingModelIdentity => ({
-  key: embeddingModelKey({
-    provider,
-    model,
-    dimensions: EMBEDDING_DIMENSIONS,
-  }),
-  acceptsImages:
-    (provider === "vertex-ai" || provider === "google-ai") &&
-    isGeminiEmbedding2(model),
-});
+  embeddingInput: EmbeddingInputDialect = "openai",
+): EmbeddingModelIdentity => {
+  const llamacpp =
+    provider === "openai-compatible" &&
+    embeddingInput === "llamacpp-multimodal";
+  return {
+    key: embeddingModelKey({
+      provider,
+      model: llamacpp ? `${model}#${LLAMACPP_EMBEDDING_VARIANT}` : model,
+      dimensions: EMBEDDING_DIMENSIONS,
+    }),
+    acceptsImages:
+      llamacpp ||
+      ((provider === "vertex-ai" || provider === "google-ai") &&
+        isGeminiEmbedding2(model)),
+  };
+};
 
 /**
  * Wire every seam in {@link SEAMS} onto an already-built provider.
@@ -186,11 +205,14 @@ export const installSeams = (
   loadImages: ImageLoader = daprImageLoader,
   models: SeamModels = modelsFor(provider),
   budget?: ModelBudget,
+  embeddingInput: EmbeddingInputDialect = "openai",
 ): void => {
   // Not a seam, but installed with the embedder and from the same answer:
   // which embedding every vector this process writes is recorded as, and what
   // `regenerateVector` compares a stored vector's `embedding_model` against.
-  setEmbeddingModel(embeddingModelIdentity(provider.name, models.embedding));
+  setEmbeddingModel(
+    embeddingModelIdentity(provider.name, models.embedding, embeddingInput),
+  );
   for (const seam of MODEL_SEAMS) {
     const spec: SeamSpec = SEAMS[seam];
     spec.install(
@@ -256,10 +278,15 @@ export const installAI = (options: InstallOptions = {}): InstallResult => {
     options.loadImages,
     { ...config.models, embedding: config.embeddingModel },
     options.budget,
+    config.provider === "openai-compatible" ? config.embeddingInput : "openai",
   );
 
   const models = [
     `embed=${config.embeddingModel}@${config.embeddingDimensions}`,
+    ...(config.provider === "openai-compatible" &&
+    config.embeddingInput === "llamacpp-multimodal"
+      ? [`embed-input=llamacpp-multimodal#${LLAMACPP_EMBEDDING_VARIANT}`]
+      : []),
     `low=${config.models.low}`,
     `medium=${config.models.medium}`,
     `high=${config.models.high}`,

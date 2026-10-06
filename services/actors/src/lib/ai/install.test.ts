@@ -286,7 +286,24 @@ describe("installSeams records which embedding every vector is made by", () => {
     });
   });
 
-  it("takes images only for gemini-embedding-2 on the two Google providers", () => {
+  it("records llama.cpp's multimodal dialect, with its variant, as image-capable", () => {
+    // No provider injected: the real openai-compatible provider is built from
+    // the env, which is the path boot takes. Nothing is fetched to build it.
+    installAI({
+      env: {
+        AI_PROVIDER: "openai-compatible",
+        OPENAI_COMPAT_EMBEDDING_ENDPOINT: "http://localhost:8091",
+        OPENAI_COMPAT_EMBEDDING_INPUT: "llamacpp-multimodal",
+      },
+      loadImages,
+    });
+    expect(embeddingModel()).toEqual({
+      key: "openai-compatible:Qwen/Qwen3-VL-Embedding-2B#llamacpp-qwen3vl.v1-576@768/RETRIEVAL_DOCUMENT",
+      acceptsImages: true,
+    });
+  });
+
+  it("takes images only for gemini-embedding-2 on the two Google providers, or the llama.cpp dialect", () => {
     expect(embeddingModelIdentity("vertex-ai", "gemini-embedding-2")).toEqual({
       key: "vertex-ai:gemini-embedding-2@768/RETRIEVAL_DOCUMENT",
       acceptsImages: true,

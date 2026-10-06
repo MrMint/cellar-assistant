@@ -499,6 +499,13 @@ services:
       OPENAI_COMPAT_EMBEDDING_MODEL: ${OPENAI_COMPAT_EMBEDDING_MODEL:-}
       OPENAI_COMPAT_MAX_TOKENS: ${OPENAI_COMPAT_MAX_TOKENS:-}
       OPENAI_COMPAT_EMBEDDING_TRUNCATE: ${OPENAI_COMPAT_EMBEDDING_TRUNCATE:-}
+      # `llamacpp-multimodal` = llama.cpp's llama-server serving
+      # Qwen3-VL-Embedding, the local lane's text-AND-image embeddings (image
+      # search, item vectors fused with their label photos). Empty means
+      # `openai`, text only. From this container llama-server must listen
+      # beyond loopback, so start it with --api-key and set
+      # OPENAI_COMPAT_API_KEY to match (services/actors/README.md).
+      OPENAI_COMPAT_EMBEDDING_INPUT: ${OPENAI_COMPAT_EMBEDDING_INPUT:-}
       # A provider is enabled only when both halves are non-empty. Real values
       # belong in the gitignored infra/.env; infra/.env.example has placeholders.
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}

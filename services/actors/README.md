@@ -19,9 +19,12 @@ an injectable seam rather than an AI client of its own:
 | review of a user-submitted place | `PlaceReviewer` | `src/actors/place-creation-actor.ts` |
 | image search (`itemSearch(imageFileId:)`), stored-photo vectors | `ImageEmbedder` (query and document slots) | `src/lib/image-embeddings.ts` |
 
-**Image search needs `gemini-embedding-2`** (`AI_PROVIDER=vertex-ai` or
-`google-ai`). It embeds the photo on its own into the space the item vectors
-live in, which no Ollama or OpenAI-compatible embedding model can. On any other
+**Image search needs an embedding that takes images**: `gemini-embedding-2`
+(`AI_PROVIDER=vertex-ai` or `google-ai`) when deployed, or locally
+**Qwen3-VL-Embedding on llama.cpp's `llama-server`** under
+`OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal` ([below](#local-image-embeddings-llama-server)).
+Either embeds the photo on its own into the space the item vectors live in,
+which no Ollama or plain OpenAI-shaped embedding can. On any other
 configuration — including the per-worktree lane's default `ollama` — a photo
 search is a `ConflictError` with reason `IMAGE_SEARCH_UNAVAILABLE`, nothing is
 fetched or charged, and the client says photo search isn't available. Stored
@@ -96,6 +99,13 @@ So the local recommendation is, in order: `llama-server` or LM Studio through
 `openai-compatible`; or `AI_PROVIDER=ollama` for zero setup; then vLLM. All of
 them are the same provider and the same two variables.
 
+**For image search locally, the answer is narrower:** chat and vision on
+Ollama's `/v1`, embeddings on `llama-server` serving Qwen3-VL-Embedding-2B —
+[Local image embeddings](#local-image-embeddings-llama-server). It is the only
+local setup measured to put text and images in one space and fuse them into one
+vector, and it needs one more variable than the rest, because OpenAI's
+`/v1/embeddings` shape cannot carry an image.
+
 ### Running with a model, locally
 
 #### `openai-compatible`, against whichever server
@@ -164,6 +174,139 @@ Three checks, and the second exists because of a real, silent corruption:
    fields the prompt cannot answer, and they must come back omitted. If a
    server's grammar compiler promoted them to `required`, the decoder *cannot*
    omit them and the model confabulates instead. See `src/lib/ai/prompts.ts`.
+
+#### Local image embeddings (llama-server)
+
+What turns on image search (`/search` Photo, the onboarding photo match) and
+item vectors fused with their label photos, on a Mac, with no cloud. Chat and
+the vision seams stay on **Ollama** (`gemma3:4b` through its `/v1` route);
+embeddings go to **llama.cpp's `llama-server` serving
+Qwen3-VL-Embedding-2B** (GGUF + its mmproj vision tower). Measured
+2026-10-05 on an M4 Pro (`docs/architecture/findings/vllm-provider.md` §8.6
+and the LocalEmbedResearch report it cites): cosine 0.9986 / 0.994 / 0.995
+against Qwen's reference code for text / image / fused, retrieval 9/9
+text→image and 4/4 image→image, **~1.0 s per image and 30–50 ms per text**,
+about **3.6 GB** resident.
+
+**Install** — once, either of these (not both; nothing else is needed):
+
+```bash
+brew install llama.cpp      # the formula is 0.6.0, same series as the pinned build
+# or, without brew, the pinned release (b11433, what was measured):
+curl -L -o /tmp/llama.tgz https://github.com/ggml-org/llama.cpp/releases/download/b11433/llama-b11433-bin-macos-arm64.tar.gz
+mkdir -p ~/.local/share && tar xzf /tmp/llama.tgz -C ~/.local/share
+xattr -dr com.apple.quarantine ~/.local/share/llama-b11433
+export LLAMA_SERVER=~/.local/share/llama-b11433/llama-server
+```
+
+**Weights, pinned.** Qwen publishes no GGUF of the embedding model, so this is
+the community conversion `mradermacher/Qwen3-VL-Embedding-2B-GGUF` at revision
+`bf4d4a2678123d5c0c1b6bd1c6fd72cba753c0b9` (`Q8_0` + `mmproj-Q8_0`, ~2.3 GB),
+checked against pinned sha256 digests:
+
+```bash
+scripts/ai/local-model.sh embed-install   # prompts, then downloads outside the repo
+```
+
+(It also accepts the same revision already in `~/.cache/huggingface`.)
+
+**Run** — bound to `127.0.0.1`, because llama-server has no auth by default and
+allows CORS from every origin:
+
+```bash
+ollama serve && ollama pull gemma3:4b      # chat + vision, as before
+scripts/ai/local-model.sh embed-up         # llama-server on 127.0.0.1:8091
+```
+
+which is exactly:
+
+```bash
+llama-server -m <dir>/Qwen3-VL-Embedding-2B.Q8_0.gguf \
+  --mmproj <dir>/Qwen3-VL-Embedding-2B.mmproj-Q8_0.gguf \
+  --embedding --pooling last -ngl 99 \
+  --host 127.0.0.1 --port 8091 \
+  -np 1 -c 4096 -ub 2048 -b 2048 \
+  --image-max-tokens 576 --cache-ram 0
+```
+
+**Configure** the actor host (`scripts/ai/local-model.sh env llama` prints
+this). The per-worktree lane passes every one of these through
+(`PASSTHROUGH_ENV` in `scripts/stack/stack.sh`); export them before
+`bun run dev:up`, or put them in `infra/.env`:
+
+```bash
+export AI_PROVIDER=openai-compatible
+export OPENAI_COMPAT_ENDPOINT=http://localhost:11434            # Ollama /v1: chat + vision
+export OPENAI_COMPAT_MODEL_LOW=gemma3:4b
+export OPENAI_COMPAT_MODEL_MEDIUM=gemma3:4b
+export OPENAI_COMPAT_MODEL_HIGH=gemma3:4b
+export OPENAI_COMPAT_EMBEDDING_ENDPOINT=http://localhost:8091   # llama-server
+export OPENAI_COMPAT_EMBEDDING_MODEL=Qwen/Qwen3-VL-Embedding-2B
+export OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal
+```
+
+**The compose lane** (`infra/.env`, actor host in a container) has to reach
+the host, so llama-server must listen beyond loopback — **with a key**:
+
+```bash
+LLAMA_EMBED_HOST=0.0.0.0 OPENAI_COMPAT_API_KEY=<k> scripts/ai/local-model.sh embed-up
+# infra/.env:
+#   OPENAI_COMPAT_ENDPOINT=http://host.docker.internal:11434
+#   OPENAI_COMPAT_EMBEDDING_ENDPOINT=http://host.docker.internal:8091
+#   OPENAI_COMPAT_API_KEY=<k>        # Ollama ignores the header
+```
+
+`embed-up` passes the key as `LLAMA_API_KEY`, so it never appears in `ps`, and
+refuses a non-loopback host without one.
+
+**Check it, then re-embed:**
+
+```bash
+OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal \
+OPENAI_COMPAT_EMBEDDING_ENDPOINT=http://localhost:8091 \
+OPENAI_COMPAT_ENDPOINT=http://localhost:11434 OPENAI_COMPAT_MODEL_MEDIUM=gemma3:4b \
+  scripts/ai/local-model.sh verify        # vision tower, image budget, text→image, fusion
+bun run dev:doctor                         # "image embeddings: … embeds images"
+bun scripts/operator.ts reembed            # from services/actors, against the running host
+```
+
+What the dialect does (`src/lib/ai/openai-compatible.ts`,
+`createLlamacppEmbedder`), and why each part is there:
+
+- **The request** is llama-server's own `{input: {prompt_string,
+  multimodal_data}}`. Each image is a **media marker** in the prompt plus a
+  base64 entry; the marker is **random per server start**, so it is read from
+  `GET /props`, cached, and read again (once) when the server answers a
+  marker mismatch — a restart. `image_data` is silently ignored on this route.
+- **Every input is wrapped in Qwen3-VL-Embedding's chat template**, text
+  included: instruction as the system turn, images (bare markers) before text.
+  Untemplated text ranked with an 18% smaller margin.
+- **A dropped image fails loudly.** If `usage.prompt_tokens` is under 64 per
+  image, the vector is text only, and it is refused rather than stored as
+  multimodal.
+- **2048 → 768 by Matryoshka truncation plus renormalisation.** llama-server
+  ignores `dimensions`; `OPENAI_COMPAT_EMBEDDING_TRUNCATE` defaults to true
+  under this dialect (an explicit `false` still refuses).
+- **The stored identity carries the template version and the image budget** —
+  `openai-compatible:Qwen/Qwen3-VL-Embedding-2B#llamacpp-qwen3vl.v1-576@768/RETRIEVAL_DOCUMENT`
+  (`embeddingModelIdentity` in `src/lib/ai/install.ts`), and `acceptsImages`
+  is true, which is the one switch image search and item fusion read. Changing
+  the template, the 576-token cap or the model makes every row stale for the
+  re-embed job. **Resolution is identity**: images are shrunk to 768 px before
+  they are sent (`src/lib/image-downscale.ts`, exactly 576 tokens), the server
+  is capped at 576, and `verify` measures that the cap is in force.
+
+**Switching to it is a re-embed**, like any embedding change: every stored
+vector reads as stale, and `scripts/operator.ts reembed` walks them. Similarity
+thresholds tuned for Gemini do not transfer — Qwen cosines sit lower — so dev
+results show whether a feature works, not whether production's thresholds are
+right.
+
+Without llama-server, nothing breaks: the provider does no network at boot,
+`dev:doctor` reports it, and with any text-only embedding image search answers
+`IMAGE_SEARCH_UNAVAILABLE`. A configured but stopped llama-server fails every
+embedding (text search too) at call time, with a connection error naming the
+port.
 
 #### The zero-setup path: Ollama
 
@@ -285,7 +428,12 @@ The suite builds and runs against `cellar_test` (`packages/db/transform/test-db.
 never the development database. No test reaches a model: every AI test either
 injects a fake at the seam boundary or an injected transport at `fetch`.
 `src/lib/ai/ollama.live.test.ts` is the one exception and skips itself unless an
-Ollama daemon is actually reachable.
+Ollama daemon is actually reachable. `src/lib/ai/llamacpp-embeddings.live.test.ts`
+is opt-in the same way — `LLAMACPP_EMBED_ENDPOINT=http://127.0.0.1:8091` — and
+ranks text→image, image→image and image→document over the client's own six
+category pictures against a real llama-server; `llamacpp-embeddings.test.ts`
+holds the same contract against a fake one (marker from `/props`, restart,
+template, dropped image, truncation, identity).
 
 `src/lib/ai/openai-compatible.test.ts` carries the two groups worth reading:
 that a schema's `required` array **round-trips verbatim at every node** (the

@@ -13,7 +13,11 @@
  * proves intolerable, the escape hatch is a base URL, not a rewrite.
  *
  *  - content:    `POST {endpoint}/v1/chat/completions`
- *  - embeddings: `POST {embeddingEndpoint}/v1/embeddings`
+ *  - embeddings: `POST {embeddingEndpoint}/v1/embeddings` — OpenAI's
+ *    `{input: string}` by default, or llama.cpp's multimodal
+ *    `{input: {prompt_string, multimodal_data}}` under
+ *    `OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal`, which is how the
+ *    local lane embeds images (`createLlamacppEmbedder` below).
  *
  * Two endpoints because `vllm serve <model>` is one model per process, while
  * `AIProvider` demands both a chat model and an embedding model. See
@@ -209,6 +213,14 @@ export const createOpenAICompatibleProvider = (
       fetchImpl,
     });
 
+  const llamacpp = createLlamacppEmbedder(
+    config,
+    embedBase,
+    headers,
+    call,
+    fetchImpl,
+  );
+
   return {
     name: PROVIDER,
 
@@ -290,24 +302,29 @@ export const createOpenAICompatibleProvider = (
     async generateEmbeddings(
       request: EmbeddingRequest,
     ): Promise<EmbeddingResponse> {
+      if (config.embeddingInput === "llamacpp-multimodal") {
+        return await llamacpp.embed(request);
+      }
       if (request.type === "image") {
-        // Reachable only once `Embedder` widens past `{ text }`; see
-        // `findings/vllm-provider.md` §8.6. Until then this is the same
-        // refusal the other three providers give, and for the same reason:
-        // nothing in this database stores an image vector yet.
+        // OpenAI's `/v1/embeddings` has no image input at all, so no server
+        // spoken to in this dialect can honour this. The same refusal the
+        // other text-only providers give.
         throw new ConflictError(
-          "the openai-compatible provider is wired for text embeddings only. " +
-            "Multimodal embedding needs `Embedder` widened past `{ text }` " +
-            "and every stored vector re-embedded with the same model — see " +
-            "docs/architecture/findings/vllm-provider.md §8.6.",
+          "the openai-compatible provider is wired for text embeddings only " +
+            "under OPENAI_COMPAT_EMBEDDING_INPUT=openai (the default). Image " +
+            "embedding needs llama.cpp's llama-server with " +
+            "OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal, or " +
+            "gemini-embedding-2 on google-ai / vertex-ai.",
         );
       }
       if ((request.images ?? []).length > 0) {
         // Refused, not dropped: the caller would store a text-only vector
         // under an identity that says images went in (`../vectors.ts`).
         throw new ConflictError(
-          "the openai-compatible provider embeds text only; only gemini-embedding-2 " +
-            "(google-ai, vertex-ai) embeds images with it",
+          "the openai-compatible provider embeds text only under " +
+            "OPENAI_COMPAT_EMBEDDING_INPUT=openai; images need " +
+            "llamacpp-multimodal (llama-server) or gemini-embedding-2 " +
+            "(google-ai, vertex-ai)",
         );
       }
       const model = request.model ?? config.embeddingModel;
@@ -335,40 +352,336 @@ export const createOpenAICompatibleProvider = (
         `generateEmbeddings(${model})`,
       );
 
-      if (!isRecord(raw) || !Array.isArray(raw.data)) {
-        throw new ConflictError(
-          `${PROVIDER} /v1/embeddings at ${embedBase} returned no \`data\` ` +
-            `array for model "${model}": ` +
-            `${JSON.stringify(raw)?.slice(0, 300) ?? "undefined"}`,
-        );
-      }
-      const [first] = raw.data;
-      if (!isRecord(first)) {
-        throw new ConflictError(
-          `${PROVIDER} /v1/embeddings at ${embedBase} returned an empty ` +
-            `\`data\` array for model "${model}"`,
-        );
-      }
-      if (typeof first.embedding === "string") {
-        throw new ConflictError(
-          `${PROVIDER} /v1/embeddings at ${embedBase} returned a base64 ` +
-            `embedding for model "${model}" despite encoding_format=float. ` +
-            "This server does not honour the field; it cannot be used as an " +
-            "embedding backend without one that does.",
-        );
-      }
-
-      const received = requireVector(
-        first.embedding,
-        PROVIDER,
-        "data[0].embedding",
-      );
+      const received = firstEmbedding(raw, model, embedBase);
       return {
         embeddings: fitDimensions(received, wanted, model, embedBase, config),
         metadata: { model, dimensions: wanted, provider: PROVIDER },
       };
     },
   };
+};
+
+/**
+ * `data[0].embedding` out of a `/v1/embeddings` answer, or a `ConflictError`
+ * saying which of the three ways it was missing.
+ */
+const firstEmbedding = (
+  raw: unknown,
+  model: string,
+  embedBase: string,
+): number[] => {
+  if (!isRecord(raw) || !Array.isArray(raw.data)) {
+    throw new ConflictError(
+      `${PROVIDER} /v1/embeddings at ${embedBase} returned no \`data\` ` +
+        `array for model "${model}": ` +
+        `${JSON.stringify(raw)?.slice(0, 300) ?? "undefined"}`,
+    );
+  }
+  const [first] = raw.data;
+  if (!isRecord(first)) {
+    throw new ConflictError(
+      `${PROVIDER} /v1/embeddings at ${embedBase} returned an empty ` +
+        `\`data\` array for model "${model}"`,
+    );
+  }
+  if (typeof first.embedding === "string") {
+    throw new ConflictError(
+      `${PROVIDER} /v1/embeddings at ${embedBase} returned a base64 ` +
+        `embedding for model "${model}" despite encoding_format=float. ` +
+        "This server does not honour the field; it cannot be used as an " +
+        "embedding backend without one that does.",
+    );
+  }
+  return requireVector(first.embedding, PROVIDER, "data[0].embedding");
+};
+
+/* -------------------------------------------------------------------------- */
+/* llama.cpp's multimodal embedding dialect                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The version of the prompt {@link qwen3VLEmbeddingPrompt} builds. **Part of
+ * every stored vector's identity** (`install.ts` `embeddingModelIdentity`):
+ * a change to the template moves every vector exactly as a change of model
+ * does, so bump this with it and the re-embed job treats the old rows as
+ * stale. The same goes for any change to `INSTRUCTIONS` or
+ * `DEFAULT_INSTRUCTION`, which the template carries verbatim.
+ */
+export const LLAMACPP_TEMPLATE_VERSION = "llamacpp-qwen3vl.v1";
+
+/**
+ * The image budget, in tokens, these vectors are made at — and also part of
+ * their identity, because **resolution is identity**: the same photograph at
+ * full resolution and at 576 tokens scored cosine 0.962 apart.
+ *
+ * It holds from both ends. The seams shrink every image to 768 px on its long
+ * side before it gets here (`../image-downscale.ts`), and Qwen3-VL's vision
+ * tower makes one token per 32 × 32 px (16 px patches, merged 2 × 2), so 768 ×
+ * 768 is exactly 576. The server is started with `--image-max-tokens 576`
+ * (`services/actors/README.md`), and `scripts/ai/local-model.sh verify` checks
+ * that it was.
+ */
+export const LLAMACPP_IMAGE_MAX_TOKENS = 576;
+
+/** `<template>-<image cap>`, the suffix `embeddingModelIdentity` writes. */
+export const LLAMACPP_EMBEDDING_VARIANT = `${LLAMACPP_TEMPLATE_VERSION}-${LLAMACPP_IMAGE_MAX_TOKENS}`;
+
+/**
+ * The most images one embedding takes. The same cap as
+ * `GEMINI_EMBEDDING_MAX_IMAGES`; items send at most three. Measured: text plus
+ * six images took 5.8 s, well inside the 100 s `regenerateVector` timeout.
+ */
+export const LLAMACPP_MAX_IMAGES = 6;
+
+/**
+ * The floor `usage.prompt_tokens` must clear per image. A 768 px image is
+ * hundreds of tokens (562 for one measured photo); a prompt in which the image
+ * was **not** consumed — a field the server ignores, a marker it did not
+ * recognise — counts only its text, under fifty. 64 sits far below the one and
+ * above the other.
+ */
+export const LLAMACPP_MIN_TOKENS_PER_IMAGE = 64;
+
+/** Qwen3-VL-Embedding's own default system message, for an untasked input. */
+const DEFAULT_INSTRUCTION = "Represent the user's input.";
+
+/**
+ * Qwen3-VL-Embedding's chat template, as its reference `format_model_input`
+ * renders it: the instruction as the system turn, then the images before the
+ * text in one user turn, then an open assistant turn whose last token is
+ * pooled (`--pooling last`).
+ *
+ * Each image is a **bare** media marker. llama.cpp's mtmd adds
+ * `<|vision_start|>…<|vision_end|>` itself; writing them here too measured
+ * cosine 0.974 against the reference instead of 0.998.
+ *
+ * Text is templated too, not only images. The seam's older `instruction\ntext`
+ * still ranks, but its margin was 18% smaller (0.201 against 0.245) and its
+ * vector sat at cosine 0.894 from the templated one.
+ */
+export const qwen3VLEmbeddingPrompt = (input: {
+  readonly instruction: string;
+  readonly content: string;
+  readonly marker: string;
+  readonly images: number;
+}): string =>
+  `<|im_start|>system\n${input.instruction}<|im_end|>\n` +
+  `<|im_start|>user\n${input.marker.repeat(input.images)}${input.content}<|im_end|>\n` +
+  "<|im_start|>assistant\n";
+
+/** `http://h:8091/v1` → `http://h:8091`: `/props` is served at the root. */
+export const serverRoot = (embedBase: string): string =>
+  embedBase.replace(/\/v\d+$/, "");
+
+/**
+ * The stale-marker answer. Measured on b11433, a prompt whose markers do not
+ * match its `multimodal_data` is a 500 reading `Failed to tokenize prompt`;
+ * the server log, and other builds, say `number of media markers … does not
+ * match`.
+ */
+const isMarkerMismatch = (error: unknown): boolean =>
+  error instanceof ConflictError &&
+  /failed to tokenize prompt|media marker/i.test(error.message);
+
+/**
+ * `{input: {prompt_string, multimodal_data}}` against llama.cpp's
+ * `llama-server` serving Qwen3-VL-Embedding — the one local configuration that
+ * puts text and images in one space, and fuses them into one vector the way
+ * production's `gemini-embedding-2` item vectors are.
+ *
+ * Why a dialect and not just a base URL: OpenAI's `/v1/embeddings` has no way
+ * to carry an image. llama-server takes its own object instead, in which each
+ * image is a media marker in the prompt and a base64 entry in
+ * `multimodal_data` — and the marker is **random per server start**, so it is
+ * read from `GET /props`, cached, and read again when the server says the
+ * markers do not match (a restart). `image_data`, the field the older
+ * completion route used, is silently ignored here: the prompt is embedded as
+ * text and a plausible vector comes back. The `usage.prompt_tokens` check
+ * below is what turns that into an error.
+ *
+ * Three shapes, the same as `gemini-embedding-2`'s:
+ *  - text only — the search phrase, an image-less item;
+ *  - images only (`type: "image"`, exactly one image) — a search photo or one
+ *    stored `item_image`, with Qwen's default instruction;
+ *  - text plus up to six images — an item document.
+ */
+const createLlamacppEmbedder = (
+  config: OpenAICompatibleConfig,
+  embedBase: string,
+  headers: Readonly<Record<string, string>>,
+  call: (url: string, body: unknown, what: string) => Promise<unknown>,
+  fetchImpl: FetchLike,
+) => {
+  const propsUrl = `${serverRoot(embedBase)}/props`;
+  let marker: Promise<string> | null = null;
+
+  const readMarker = async (): Promise<string> => {
+    let response: Awaited<ReturnType<FetchLike>>;
+    try {
+      response = await fetchImpl(propsUrl, {
+        method: "GET",
+        headers: { ...headers },
+        signal: AbortSignal.timeout(config.timeoutMs),
+      });
+    } catch (error) {
+      throw new ConflictError(
+        `${PROVIDER} could not read llama-server's media marker at ${propsUrl}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      throw new ConflictError(
+        `${PROVIDER} GET ${propsUrl} failed (${response.status}): ` +
+          `${text.slice(0, 300)}. OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal ` +
+          "needs llama.cpp's llama-server at OPENAI_COMPAT_EMBEDDING_ENDPOINT.",
+      );
+    }
+    let props: unknown;
+    try {
+      props = JSON.parse(text);
+    } catch {
+      throw new ConflictError(
+        `${PROVIDER} GET ${propsUrl} returned a body that is not JSON; is ` +
+          "OPENAI_COMPAT_EMBEDDING_ENDPOINT really a llama-server?",
+      );
+    }
+    if (isRecord(props) && isRecord(props.modalities)) {
+      if (props.modalities.vision !== true) {
+        throw new ConflictError(
+          `the llama-server at ${propsUrl} has no vision tower loaded ` +
+            "(modalities.vision is not true). Start it with the model's " +
+            "mmproj file (`--mmproj`, or `-hf`, which fetches it).",
+        );
+      }
+    }
+    const found = isRecord(props) ? props.media_marker : undefined;
+    if (typeof found !== "string" || found === "") {
+      throw new ConflictError(
+        `the llama-server at ${propsUrl} reports no media_marker, so it is ` +
+          "older than this dialect expects (llama.cpp b11433 and later " +
+          "publish one per start). Upgrade llama.cpp; see " +
+          "services/actors/README.md.",
+      );
+    }
+    return found;
+  };
+
+  /** Cached per provider; `refresh` re-reads it, once, after a restart. */
+  const mediaMarker = (refresh = false): Promise<string> => {
+    if (marker === null || refresh) {
+      const next = readMarker();
+      // A failed read is not cached: the next call asks again.
+      next.catch(() => {
+        if (marker === next) marker = null;
+      });
+      marker = next;
+    }
+    return marker;
+  };
+
+  const embed = async (
+    request: EmbeddingRequest,
+  ): Promise<EmbeddingResponse> => {
+    const model = request.model ?? config.embeddingModel;
+    const wanted = request.dimensions ?? config.embeddingDimensions;
+    const images = request.images ?? [];
+
+    if (request.type === "image" && images.length !== 1) {
+      throw new ConflictError(
+        `an image-only embedding takes exactly one image; ${images.length} ` +
+          "were sent",
+      );
+    }
+    if (images.length > LLAMACPP_MAX_IMAGES) {
+      throw new ConflictError(
+        `${PROVIDER} (llamacpp-multimodal) embeds at most ` +
+          `${LLAMACPP_MAX_IMAGES} images per request; ${images.length} were sent`,
+      );
+    }
+    const encoded = images.map((image, index) => {
+      // Checked for the same reason the chat path checks: a byte string the
+      // server cannot decode should fail here, naming which image it was.
+      requireImageMime(
+        image,
+        OPENAI_IMAGE_MIMES,
+        `${PROVIDER} embedding image ${index + 1} of ${images.length}`,
+      );
+      return Buffer.from(image).toString("base64");
+    });
+
+    const instruction =
+      request.taskType === undefined
+        ? DEFAULT_INSTRUCTION
+        : INSTRUCTIONS[request.taskType];
+    // An image-only request carries no text: a text part would make it a
+    // document vector (`gemini.ts` makes the same point).
+    const content = request.type === "image" ? "" : request.content;
+
+    const send = async (currentMarker: string): Promise<unknown> =>
+      await call(
+        `${embedBase}/embeddings`,
+        {
+          model,
+          input: {
+            prompt_string: qwen3VLEmbeddingPrompt({
+              instruction,
+              content,
+              marker: currentMarker,
+              images: encoded.length,
+            }),
+            // Never `image_data`: silently ignored on this route.
+            multimodal_data: encoded,
+          },
+          encoding_format: "float",
+        },
+        `generateEmbeddings(${model}, llamacpp-multimodal)`,
+      );
+
+    const raw = await withImageContext(images, async () => {
+      // Text alone needs no marker, so it never waits on `/props`.
+      if (encoded.length === 0) return await send("");
+      let current = await mediaMarker();
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          return await send(current);
+        } catch (error) {
+          // The server restarted under us and drew a new marker: read it and
+          // ask once more. A second mismatch, or a "fresh" marker that is the
+          // same one, is a real failure and propagates.
+          if (attempt > 1 || !isMarkerMismatch(error)) throw error;
+          const fresh = await mediaMarker(true);
+          if (fresh === current) throw error;
+          current = fresh;
+        }
+      }
+    });
+
+    if (encoded.length > 0) {
+      const consumed =
+        isRecord(raw) && isRecord(raw.usage)
+          ? raw.usage.prompt_tokens
+          : undefined;
+      const floor = encoded.length * LLAMACPP_MIN_TOKENS_PER_IMAGE;
+      if (typeof consumed !== "number" || consumed < floor) {
+        throw new ConflictError(
+          `${PROVIDER} sent ${encoded.length} image(s) to ${embedBase} and the ` +
+            `server reports ${typeof consumed === "number" ? `${consumed} prompt tokens` : "no usage.prompt_tokens"}, ` +
+            `under the ${floor} that many images take at the very least. The ` +
+            "images were not embedded, and the vector that came back is text " +
+            "only; it is refused rather than stored as a multimodal one.",
+        );
+      }
+    }
+
+    const received = firstEmbedding(raw, model, embedBase);
+    return {
+      embeddings: fitDimensions(received, wanted, model, embedBase, config),
+      metadata: { model, dimensions: wanted, provider: PROVIDER },
+    };
+  };
+
+  return { embed };
 };
 
 /**

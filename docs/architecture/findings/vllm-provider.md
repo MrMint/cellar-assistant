@@ -33,6 +33,7 @@ provider does not commit to Qwen for *deployed* vectors — Vertex deploys, and 
 `outputDimensionality`. It is multimodal too: since `f3b5db81` `EmbeddingRequest.images` carries
 up to six images into one vector, and since `09e5b0c9` an item's *document* vector is embedded with
 its label and display images. Searching *by* an image (§8.6) still needs the query side widened.
+*(2026-10-05: it has been, and locally through llama-server too — see the update at §8.6.)*
 
 ---
 
@@ -223,6 +224,20 @@ explicitly if you want the grammar semantics to be reproducible across versions.
 
 
 ### 8.6 Restoring image search needs one more change, beyond the provider
+
+> **Update 2026-10-05: done, on both halves.** G32 (`1dcc0987`) widened the seam —
+> `EmbeddingRequest.type: "image"`, `ImageEmbedder`, `item_image_vectors` — for
+> `gemini-embedding-2`. The local half is `OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal`:
+> llama.cpp's `llama-server` (b11433) serving Qwen3-VL-Embedding-2B (community Q8_0 GGUF +
+> mmproj, `mradermacher/Qwen3-VL-Embedding-2B-GGUF@bf4d4a26`), reached through
+> `openai-compatible` with llama-server's own `{prompt_string, multimodal_data}` input, Qwen's
+> chat template, and the per-start media marker read from `/props`. Measured on the M4 Pro
+> against Qwen's own transformers code on MPS: mean cosine 0.9986 text / 0.994 image / 0.995
+> fused at full resolution; retrieval 9/9 text→image, 9/9 text→document, 4/4 image→image,
+> 4/4 image→document, at 2048 and at 768 (Matryoshka); ~1.0 s per image at
+> `--image-max-tokens 576`, 30–50 ms per text, 3.6 GB RSS; vectors bit-identical across server
+> restarts. `services/actors/README.md` ("Local image embeddings") has the setup. What follows
+> is the original analysis, kept for the reasoning.
 
 A provider alone is **not sufficient**. The embedder seam is text-only at both ends —
 `Embedder = (input: { readonly text: string }) => Promise<readonly number[]>` in

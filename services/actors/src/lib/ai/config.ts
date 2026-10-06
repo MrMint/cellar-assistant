@@ -156,7 +156,32 @@ export type OpenAICompatibleConfig = Common & {
    * cannot check it for you.
    */
   readonly truncateEmbeddings: boolean;
+  /**
+   * `OPENAI_COMPAT_EMBEDDING_INPUT`: what shape `/v1/embeddings` is sent.
+   *
+   *  - `"openai"` (the default): OpenAI's own `{input: string}`, text only.
+   *    Every compatible server takes it; none of them can take an image in it.
+   *  - `"llamacpp-multimodal"`: llama.cpp `llama-server`'s own
+   *    `{input: {prompt_string, multimodal_data}}`, with the prompt wrapped in
+   *    Qwen3-VL-Embedding's chat template and the server's per-start media
+   *    marker read from `GET /props`. This is the one local configuration that
+   *    embeds images, so it is also the one that sets `acceptsImages`
+   *    (`install.ts` `embeddingModelIdentity`) and turns on image search and
+   *    item-document fusion. `openai-compatible.ts` has the measurements.
+   *
+   * Strict, like `flag()`: a typo throws at boot instead of silently embedding
+   * text only under an identity that claims images.
+   */
+  readonly embeddingInput: EmbeddingInputDialect;
 };
+
+/** The two `/v1/embeddings` request shapes; see `OpenAICompatibleConfig`. */
+export const EMBEDDING_INPUT_DIALECTS = [
+  "openai",
+  "llamacpp-multimodal",
+] as const;
+
+export type EmbeddingInputDialect = (typeof EMBEDDING_INPUT_DIALECTS)[number];
 
 export type AIProviderConfig =
   | OllamaConfig
@@ -281,6 +306,22 @@ const flag = (env: Env, name: string, fallback: boolean): boolean => {
   );
 };
 
+/** `OPENAI_COMPAT_EMBEDDING_INPUT`, strictly: a typo throws, as in `flag()`. */
+const embeddingInputDialect = (env: Env): EmbeddingInputDialect => {
+  const raw = read(env, "OPENAI_COMPAT_EMBEDDING_INPUT");
+  if (raw === undefined) return "openai";
+  const match = EMBEDDING_INPUT_DIALECTS.find(
+    (dialect) => dialect === raw.toLowerCase(),
+  );
+  if (match === undefined) {
+    throw new ValidationError(
+      `OPENAI_COMPAT_EMBEDDING_INPUT must be one of ` +
+        `${EMBEDDING_INPUT_DIALECTS.join(", ")}, got "${raw}"`,
+    );
+  }
+  return match;
+};
+
 const qualityModels = (
   env: Env,
   prefix: string,
@@ -376,7 +417,8 @@ export const readAIProviderConfig = (
     case "openai-compatible": {
       const endpoint =
         read(env, "OPENAI_COMPAT_ENDPOINT") ?? DEFAULT_OPENAI_COMPAT_ENDPOINT;
-      return {
+      const embeddingInput = embeddingInputDialect(env);
+      return requireLlamacppModel({
         provider,
         endpoint,
         // One base serves both routes on every server but vLLM; see the type.
@@ -384,11 +426,17 @@ export const readAIProviderConfig = (
           read(env, "OPENAI_COMPAT_EMBEDDING_ENDPOINT") ?? endpoint,
         apiKey: read(env, "OPENAI_COMPAT_API_KEY") ?? null,
         maxTokens: optionalPositiveInt(env, "OPENAI_COMPAT_MAX_TOKENS"),
+        // On by default under the llama.cpp dialect, because that dialect's
+        // template is Qwen3-VL-Embedding's and that model is documented
+        // Matryoshka (64–2048), while llama-server ignores `dimensions` and
+        // always answers 2048. An explicit `false` is still honoured, and then
+        // the width check refuses — which is what asking for it means.
         truncateEmbeddings: flag(
           env,
           "OPENAI_COMPAT_EMBEDDING_TRUNCATE",
-          false,
+          embeddingInput === "llamacpp-multimodal",
         ),
+        embeddingInput,
         ...common(
           env,
           "OPENAI_COMPAT",
@@ -403,7 +451,7 @@ export const readAIProviderConfig = (
           },
           "Qwen/Qwen3-VL-Embedding-2B",
         ),
-      };
+      });
     }
 
     case "google-ai":
@@ -431,6 +479,35 @@ export const readAIProviderConfig = (
         ...common(env, "VERTEX_AI", GEMINI_CHAT_MODELS, GEMINI_EMBEDDING_MODEL),
       });
   }
+};
+
+/**
+ * Refuses `OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal` with an
+ * embedding model that is not Qwen3-VL-Embedding.
+ *
+ * llama-server ignores the `model` field — it embeds with whatever GGUF it was
+ * started on — so the name is only a label here, but it is the label every
+ * stored vector's identity is written under. The dialect wraps every input in
+ * **Qwen3-VL-Embedding's** chat template and truncates on the strength of
+ * **its** Matryoshka training; under any other name both claims are false, and
+ * the vectors would be filed as something they are not.
+ */
+const requireLlamacppModel = (
+  config: OpenAICompatibleConfig,
+): OpenAICompatibleConfig => {
+  if (
+    config.embeddingInput === "llamacpp-multimodal" &&
+    !/qwen3-vl-embedding/i.test(config.embeddingModel)
+  ) {
+    throw new ValidationError(
+      `OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal builds ` +
+        "Qwen3-VL-Embedding's prompt template, but " +
+        `OPENAI_COMPAT_EMBEDDING_MODEL is "${config.embeddingModel}". Serve ` +
+        "Qwen3-VL-Embedding from llama-server and name it (the default, " +
+        "Qwen/Qwen3-VL-Embedding-2B), or use OPENAI_COMPAT_EMBEDDING_INPUT=openai.",
+    );
+  }
+  return config;
 };
 
 /**

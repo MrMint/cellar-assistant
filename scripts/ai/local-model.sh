@@ -3,6 +3,7 @@
 #
 #   scripts/ai/local-model.sh verify     is a server answering, and correctly?
 #   scripts/ai/local-model.sh up         start vLLM's two servers
+#   scripts/ai/local-model.sh embed-up   start llama-server: text+image embeddings
 #   scripts/ai/local-model.sh env        the exports the actor host needs
 #
 # Full documentation: services/actors/README.md · Local AI
@@ -52,6 +53,40 @@ EMBED_BASE="${OPENAI_COMPAT_EMBEDDING_ENDPOINT:-http://localhost:$EMBED_PORT}"
 CHAT_MODEL="${OPENAI_COMPAT_MODEL_MEDIUM:-Qwen/Qwen3-VL-2B-Instruct}"
 EMBED_MODEL="${OPENAI_COMPAT_EMBEDDING_MODEL:-Qwen/Qwen3-VL-Embedding-2B}"
 DIMENSIONS="${AI_EMBEDDING_DIMENSIONS:-768}"
+EMBED_INPUT="${OPENAI_COMPAT_EMBEDDING_INPUT:-openai}"
+
+# --- llama-server: the local text+image embedding server ---------------------
+#
+# llama.cpp's `llama-server` serving Qwen3-VL-Embedding-2B (GGUF + its mmproj
+# vision tower), reached with OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal
+# (`services/actors/src/lib/ai/openai-compatible.ts`, createLlamacppEmbedder).
+# Everything below is PINNED, because each of these changes the vectors:
+#
+#  - the build: b11433 is what was measured against Qwen's reference code
+#    (cosine 0.9986 text, 0.994 image). Newer builds probably work; a build
+#    without `media_marker` in /props does not, and the provider says so.
+#  - the weights: there is no official Qwen GGUF of the embedding model, so
+#    this is a community conversion at a fixed revision, checked by sha256.
+#  - `--image-max-tokens 576`: resolution is part of a vector's identity
+#    (cosine 0.962 between full-res and 576 tokens), and the identity key
+#    says 576 (`LLAMACPP_IMAGE_MAX_TOKENS`). `verify` measures it.
+#  - `--pooling last`: Qwen3-VL-Embedding pools the last token.
+LLAMA_BUILD_PINNED="b11433"
+LLAMA_SERVER="${LLAMA_SERVER:-llama-server}"
+LLAMA_EMBED_HOST="${LLAMA_EMBED_HOST:-127.0.0.1}"
+LLAMA_EMBED_PORT="${LLAMA_EMBED_PORT:-8091}"
+LLAMA_IMAGE_MAX_TOKENS=576
+LLAMA_GGUF_REPO="mradermacher/Qwen3-VL-Embedding-2B-GGUF"
+LLAMA_GGUF_REVISION="bf4d4a2678123d5c0c1b6bd1c6fd72cba753c0b9"
+LLAMA_GGUF_MODEL="Qwen3-VL-Embedding-2B.Q8_0.gguf"
+LLAMA_GGUF_MODEL_SHA256="26fadde153b2266d244de4752c2dcba35be78872bdeeb005390b74689d45d851"
+LLAMA_GGUF_MMPROJ="Qwen3-VL-Embedding-2B.mmproj-Q8_0.gguf"
+LLAMA_GGUF_MMPROJ_SHA256="fa5a22b400fcfa32453656fdc7063bd2c80007030a79cb4f07f7c19cb1e40e8e"
+# Outside the repo, like the vLLM venv. Also checked: the Hugging Face cache,
+# which is where `llama-server -hf` would have put the same revision.
+LLAMA_MODEL_DIR="${CELLAR_LLAMA_MODEL_DIR:-$HOME/.cache/cellar-assistant/models/qwen3-vl-embedding-2b/$LLAMA_GGUF_REVISION}"
+LLAMA_HF_SNAPSHOT="$HOME/.cache/huggingface/hub/models--mradermacher--Qwen3-VL-Embedding-2B-GGUF/snapshots/$LLAMA_GGUF_REVISION"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 say()  { printf '==> %s\n' "$*" >&2; }
 warn() { printf 'WARN %s\n' "$*" >&2; }
@@ -70,6 +105,31 @@ need_python() {
 probe_base() {
   local base="$1"
   curl -fsS --max-time 5 "${base%/}/v1/models" 2>/dev/null || return 1
+}
+
+# One line about a llama-server's /props: does it embed images? Exit 1 if not.
+llamacpp_props_line() {
+  local base="${1%/}" body
+  base="${base%/v1}"
+  local auth=()
+  [ -z "${OPENAI_COMPAT_API_KEY:-}" ] || auth=(-H "authorization: Bearer $OPENAI_COMPAT_API_KEY")
+  if ! body="$(curl -fsS --max-time 5 ${auth[@]+"${auth[@]}"} "$base/props" 2>/dev/null)"; then
+    printf '%-11s %-34s no /props (not a llama-server, down, or needs OPENAI_COMPAT_API_KEY)\n' "images" "$base"
+    return 1
+  fi
+  printf '%s' "$body" | python3 -c '
+import json, sys
+try:
+    p = json.load(sys.stdin)
+except Exception:
+    print("%-11s %-34s unparseable /props" % ("images", sys.argv[1])); sys.exit(1)
+vision = (p.get("modalities") or {}).get("vision") is True
+marker = bool(p.get("media_marker"))
+state = "embeds images" if vision and marker else (
+    "NO vision tower (start with --mmproj)" if not vision else "no media_marker (upgrade llama.cpp)")
+print("%-11s %-34s %s, build %s" % ("images", sys.argv[1], state, p.get("build_info", "?")))
+sys.exit(0 if vision and marker else 1)
+' "$base"
 }
 
 cmd_status() {
@@ -93,6 +153,11 @@ except Exception:
       rc=1
     fi
   done
+  # Under the llama.cpp dialect, /v1/models answering is not enough: the
+  # embedding server needs a vision tower and a published media marker.
+  if [ "$EMBED_INPUT" = "llamacpp-multimodal" ]; then
+    llamacpp_props_line "$EMBED_BASE" || rc=1
+  fi
   # A single-base server (LM Studio, llama-server, Ollama's /v1) serves both
   # routes from one port, which is the config default and not a problem.
   if [ "$CHAT_BASE" = "$EMBED_BASE" ]; then
@@ -124,6 +189,25 @@ cmd_verify() {
   need_python
   local failures=0
 
+  if [ "$EMBED_INPUT" = "llamacpp-multimodal" ]; then
+    say "embeddings: llama-server at $EMBED_BASE (llamacpp-multimodal: text + images)"
+    verify_llamacpp || failures=$((failures + 1))
+  else
+    verify_openai_embeddings || failures=$((failures + 1))
+  fi
+
+  verify_abstention || failures=$((failures + 1))
+
+  if [ "$failures" -eq 0 ]; then
+    say "all checks passed — set AI_PROVIDER=openai-compatible (see \`env\`)"
+    return 0
+  fi
+  die "$failures check(s) failed; see above"
+}
+
+# The text-only embedding checks, for OPENAI_COMPAT_EMBEDDING_INPUT=openai.
+verify_openai_embeddings() {
+  local failures=0
   say "embeddings: $EMBED_BASE ($EMBED_MODEL, expecting ${DIMENSIONS}d)"
   local embed_body
   embed_body="$(curl -fsS --max-time 300 "${EMBED_BASE%/}/v1/embeddings" \
@@ -188,7 +272,155 @@ else:
 sys.exit(0 if ok else 1)
 ' || failures=$((failures + 1))
   fi
+  [ "$failures" -eq 0 ]
+}
 
+# The llama-server checks, for OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal.
+# Each one is a way this setup was measured to go silently wrong:
+#
+#  1. No vision tower, or a build with no `media_marker` — the provider refuses
+#     both at call time; this says so before anything is stored.
+#  2. The text vector: 2048 wide (the server ignores `dimensions`), finite, and
+#     no component dominating its 768 Matryoshka prefix. 0.18 of the norm was
+#     measured healthy at 768, so the line is 0.25.
+#  3. **The image budget.** A 1024 px picture must cost the 576 tokens the
+#     stored identity claims, plus mtmd's two wrapper tokens. More means the
+#     server was started without `--image-max-tokens 576` (full resolution:
+#     cosine 0.962 from what the identity says); fewer means a lower cap.
+#     Either way every image vector would be filed under the wrong identity,
+#     with no error anywhere.
+#  4. **Images actually reach the vector**: text finds the right one of three
+#     pictures, and an item with its picture is not the text-only vector. A
+#     server that ignored the images would still return plausible vectors.
+verify_llamacpp() {
+  EMBED_BASE="$EMBED_BASE" API_KEY="${OPENAI_COMPAT_API_KEY:-}" \
+    DIMENSIONS="$DIMENSIONS" CAP="$LLAMA_IMAGE_MAX_TOKENS" \
+    PINNED="$LLAMA_BUILD_PINNED" FIXTURES="$REPO_ROOT/services/client/src/images" \
+    python3 -c '
+import base64, json, math, os, re, sys, urllib.request
+
+base = os.environ["EMBED_BASE"].rstrip("/")
+root = re.sub(r"/v[0-9]+$", "", base)
+want = int(os.environ["DIMENSIONS"])
+cap = int(os.environ["CAP"])
+fixtures = os.environ["FIXTURES"]
+headers = {"content-type": "application/json"}
+if os.environ.get("API_KEY"):
+    headers["authorization"] = "Bearer " + os.environ["API_KEY"]
+
+def get(path):
+    req = urllib.request.Request(root + path, headers=headers)
+    return json.load(urllib.request.urlopen(req, timeout=10))
+
+def post(body):
+    req = urllib.request.Request(root + "/v1/embeddings",
+                                 data=json.dumps(body).encode(), headers=headers)
+    return json.load(urllib.request.urlopen(req, timeout=300))
+
+try:
+    props = get("/props")
+except Exception as exc:
+    print("FAIL  GET %s/props: %s" % (root, exc))
+    print("      Start it: scripts/ai/local-model.sh embed-up")
+    sys.exit(1)
+
+build = str(props.get("build_info", "?"))
+if os.environ["PINNED"] in build:
+    print("ok    llama-server %s (the pinned build)" % build)
+else:
+    print("WARN  llama-server %s; %s is the build that was measured." % (build, os.environ["PINNED"]))
+if (props.get("modalities") or {}).get("vision") is not True:
+    print("FAIL  no vision tower loaded: start it with the mmproj (--mmproj).")
+    sys.exit(1)
+marker = props.get("media_marker")
+if not isinstance(marker, str) or not marker:
+    print("FAIL  /props has no media_marker: this build is too old for the")
+    print("      llamacpp-multimodal dialect. Upgrade llama.cpp.")
+    sys.exit(1)
+print("ok    vision tower loaded; media marker published")
+
+DEF = "Represent the user\x27s input."
+QUERY = "Represent this search query for retrieving relevant items."
+DOC = "Represent this item for retrieval."
+
+def embed(instr, text="", images=()):
+    data = [base64.b64encode(open(os.path.join(fixtures, p), "rb").read()).decode()
+            for p in images]
+    prompt = ("<|im_start|>system\n%s<|im_end|>\n<|im_start|>user\n%s%s<|im_end|>\n"
+              "<|im_start|>assistant\n") % (instr, marker * len(data), text)
+    raw = post({"input": {"prompt_string": prompt, "multimodal_data": data},
+                "encoding_format": "float"})
+    return raw["data"][0]["embedding"], (raw.get("usage") or {}).get("prompt_tokens")
+
+def prefix(v):
+    s = v[:want]
+    n = math.sqrt(sum(x * x for x in s))
+    return [x / n for x in s]
+
+def cos(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+ok = True
+text, _ = embed(QUERY, "a bottle of red wine")
+if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in text):
+    print("FAIL  the text vector has a non-numeric or non-finite component"); sys.exit(1)
+if len(text) < want:
+    print("FAIL  %d dimensions, narrower than the %d-wide halfvec columns" % (len(text), want))
+    sys.exit(1)
+short = prefix(text)
+peak = max(abs(x) for x in short)
+print("ok    text: %d dimensions, truncated to %d and renormalised" % (len(text), want))
+if peak > 0.25:
+    print("WARN  one component is %.0f%% of the %d-d prefix (0.18 measured healthy)" % (100 * peak, want))
+else:
+    print("ok    peak component %.0f%% of the %d-d prefix" % (100 * peak, want))
+
+_, empty = embed(DEF)
+_, one = embed(DEF, images=["wine1.png"])
+if not isinstance(empty, int) or not isinstance(one, int):
+    print("FAIL  no usage.prompt_tokens: the image budget cannot be measured"); sys.exit(1)
+# mtmd wraps each image in <|vision_start|>…<|vision_end|>: two tokens that
+# are not the image budget. Measured on b11433: 578 for a 576-token image.
+spent = one - empty
+if cap <= spent <= cap + 2:
+    print("ok    a 1024 px image costs %d tokens (%d + its two wrapper tokens):" % (spent, cap))
+    print("      --image-max-tokens %d is in force" % cap)
+else:
+    print("FAIL  a 1024 px image cost %d tokens; the stored identity says %d." % (spent, cap))
+    print("      Restart llama-server with --image-max-tokens %d (embed-up does)," % cap)
+    print("      or every image vector is filed under an identity it does not have.")
+    ok = False
+
+pictures = ["wine1.png", "coffee1.png", "tea1.png"]
+queries = ["a bottle of red wine with a glass", "a bag of roasted coffee beans",
+           "a teapot and a cup of tea"]
+images = [prefix(embed(DEF, images=[p])[0]) for p in pictures]
+hits = 0
+for want_index, q in enumerate(queries):
+    qv = prefix(embed(QUERY, q)[0])
+    got = max(range(len(images)), key=lambda i: cos(qv, images[i]))
+    hits += got == want_index
+if hits == len(queries):
+    print("ok    text -> image: %d/%d phrases found their picture" % (hits, len(queries)))
+else:
+    print("FAIL  text -> image: %d/%d. The images are not reaching the vectors" % (hits, len(queries)))
+    print("      as they should; check the model and mmproj are the pinned pair.")
+    ok = False
+
+fused = prefix(embed(DOC, "House red. wine.", ["wine1.png"])[0])
+alone = prefix(embed(DOC, "House red. wine.")[0])
+if cos(fused, alone) < 0.99:
+    print("ok    an item with its picture is not its text-only vector (cosine %.3f)" % cos(fused, alone))
+else:
+    print("FAIL  an item with its picture embeds to its text-only vector (cosine %.3f):" % cos(fused, alone))
+    print("      the image was dropped.")
+    ok = False
+sys.exit(0 if ok else 1)
+'
+}
+
+verify_abstention() {
+  local failures=0
   say "structured output: $CHAT_BASE ($CHAT_MODEL) — is abstention sayable?"
   # Five properties, exactly one required, and a prompt asking for only that
   # one. This isolates the SERVER's grammar from the MODEL's willingness: if
@@ -270,12 +502,7 @@ if present:
 sys.exit(0)
 ' || failures=$((failures + 1))
   fi
-
-  if [ "$failures" -eq 0 ]; then
-    say "all checks passed — set AI_PROVIDER=openai-compatible (see \`env\`)"
-    return 0
-  fi
-  die "$failures check(s) failed; see above"
+  [ "$failures" -eq 0 ]
 }
 
 # The abstention probe's request body. Built in python3 rather than printf:
@@ -334,6 +561,10 @@ print(json.dumps({
 # ---------------------------------------------------------------------------
 
 cmd_env() {
+  if [ "${1:-}" = "llama" ] || [ "$EMBED_INPUT" = "llamacpp-multimodal" ]; then
+    cmd_env_llama
+    return
+  fi
   cat <<EOF
 export AI_PROVIDER=openai-compatible
 export OPENAI_COMPAT_ENDPOINT=$CHAT_BASE
@@ -353,6 +584,148 @@ EOF
 #   OPENAI_COMPAT_ENDPOINT=http://host.docker.internal:8000
 #   OPENAI_COMPAT_EMBEDDING_ENDPOINT=http://host.docker.internal:8001
 EOF
+}
+
+# Chat and vision on Ollama's own /v1 route, embeddings on llama-server.
+cmd_env_llama() {
+  cat <<EOF
+export AI_PROVIDER=openai-compatible
+export OPENAI_COMPAT_ENDPOINT=http://localhost:11434
+export OPENAI_COMPAT_MODEL_LOW=gemma3:4b
+export OPENAI_COMPAT_MODEL_MEDIUM=gemma3:4b
+export OPENAI_COMPAT_MODEL_HIGH=gemma3:4b
+export OPENAI_COMPAT_EMBEDDING_ENDPOINT=http://localhost:$LLAMA_EMBED_PORT
+export OPENAI_COMPAT_EMBEDDING_MODEL=Qwen/Qwen3-VL-Embedding-2B
+export OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal
+export AI_EMBEDDING_DIMENSIONS=$DIMENSIONS
+EOF
+  cat <<EOF
+
+# OPENAI_COMPAT_EMBEDDING_TRUNCATE defaults to true under llamacpp-multimodal
+# (Qwen3-VL-Embedding is Matryoshka; llama-server always answers 2048).
+#
+# In infra/.env (the compose lane) the actor host is a container, so name the
+# host, and llama-server has to listen beyond loopback — with a key:
+#   OPENAI_COMPAT_ENDPOINT=http://host.docker.internal:11434
+#   OPENAI_COMPAT_EMBEDDING_ENDPOINT=http://host.docker.internal:$LLAMA_EMBED_PORT
+#   OPENAI_COMPAT_API_KEY=<k>
+#   LLAMA_EMBED_HOST=0.0.0.0 OPENAI_COMPAT_API_KEY=<k> $0 embed-up
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# embed-install / embed-up / embed-down — llama-server
+# ---------------------------------------------------------------------------
+
+llama_server_bin() {
+  command -v "$LLAMA_SERVER" >/dev/null 2>&1 || die "no llama-server on PATH.
+  Install llama.cpp (services/actors/README.md · Local image embeddings):
+    brew install llama.cpp
+  or the pinned release tarball ($LLAMA_BUILD_PINNED), and point LLAMA_SERVER at it."
+  command -v "$LLAMA_SERVER"
+}
+
+# The pinned GGUF pair: our own download first, then the Hugging Face cache.
+llama_weights_dir() {
+  local dir
+  for dir in "$LLAMA_MODEL_DIR" "$LLAMA_HF_SNAPSHOT"; do
+    if [ -f "$dir/$LLAMA_GGUF_MODEL" ] && [ -f "$dir/$LLAMA_GGUF_MMPROJ" ]; then
+      printf '%s' "$dir"
+      return 0
+    fi
+  done
+  return 1
+}
+
+cmd_embed_install() {
+  local dir
+  if dir="$(llama_weights_dir)"; then
+    say "the pinned weights are already at $dir"
+    return 0
+  fi
+  cat >&2 <<EOF
+This downloads Qwen3-VL-Embedding-2B (Q8_0 GGUF + its mmproj vision tower,
+~2.3 GB) from $LLAMA_GGUF_REPO
+at revision $LLAMA_GGUF_REVISION, into
+  $LLAMA_MODEL_DIR
+and checks both files against pinned sha256 digests. Nothing goes into the repo.
+EOF
+  printf 'Continue? [y/N] ' >&2
+  local answer file sum
+  read -r answer
+  case "$answer" in [yY]*) ;; *) die "cancelled" ;; esac
+  mkdir -p "$LLAMA_MODEL_DIR"
+  for pair in "$LLAMA_GGUF_MODEL|$LLAMA_GGUF_MODEL_SHA256" "$LLAMA_GGUF_MMPROJ|$LLAMA_GGUF_MMPROJ_SHA256"; do
+    file="${pair%%|*}"
+    sum="${pair#*|}"
+    curl -fL --progress-bar -o "$LLAMA_MODEL_DIR/$file.part" \
+      "https://huggingface.co/$LLAMA_GGUF_REPO/resolve/$LLAMA_GGUF_REVISION/$file"
+    if [ "$(shasum -a 256 "$LLAMA_MODEL_DIR/$file.part" | cut -d' ' -f1)" != "$sum" ]; then
+      rm -f "$LLAMA_MODEL_DIR/$file.part"
+      die "$file does not match its pinned sha256; refusing it"
+    fi
+    mv "$LLAMA_MODEL_DIR/$file.part" "$LLAMA_MODEL_DIR/$file"
+  done
+  say "installed. Next: $0 embed-up"
+}
+
+cmd_embed_up() {
+  local bin dir version
+  bin="$(llama_server_bin)"
+  dir="$(llama_weights_dir)" || die "the pinned weights are not here yet. Run: $0 embed-install"
+  mkdir -p "$RUN_DIR"
+
+  version="$("$bin" --version 2>&1 | sed -n 's/.*build \([0-9][0-9]*\).*/b\1/p' | head -1)"
+  if [ "$version" != "$LLAMA_BUILD_PINNED" ]; then
+    warn "llama-server is ${version:-an unknown build}; $LLAMA_BUILD_PINNED is the build that was measured."
+    warn "\`$0 verify\` with OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal checks this one."
+  fi
+
+  if curl -fsS --max-time 3 "http://127.0.0.1:$LLAMA_EMBED_PORT/health" >/dev/null 2>&1; then
+    say "something already answers on :$LLAMA_EMBED_PORT — not starting a second server"
+    return 0
+  fi
+
+  # llama-server has no auth by default and allows CORS from every origin, so
+  # beyond loopback it gets a key, passed by environment (LLAMA_API_KEY) so it
+  # never shows in `ps`.
+  local key=""
+  case "$LLAMA_EMBED_HOST" in
+    127.0.0.1|localhost|::1) ;;
+    *)
+      key="${OPENAI_COMPAT_API_KEY:-}"
+      [ -n "$key" ] || die "LLAMA_EMBED_HOST=$LLAMA_EMBED_HOST listens beyond loopback; set OPENAI_COMPAT_API_KEY
+  (the same value the actor host sends) so the server demands it."
+      ;;
+  esac
+
+  say "starting llama-server: Qwen3-VL-Embedding-2B on $LLAMA_EMBED_HOST:$LLAMA_EMBED_PORT"
+  LLAMA_API_KEY="$key" nohup "$bin" \
+    -m "$dir/$LLAMA_GGUF_MODEL" --mmproj "$dir/$LLAMA_GGUF_MMPROJ" \
+    --embedding --pooling last -ngl 99 \
+    --host "$LLAMA_EMBED_HOST" --port "$LLAMA_EMBED_PORT" \
+    -np 1 -c 4096 -ub 2048 -b 2048 \
+    --image-max-tokens "$LLAMA_IMAGE_MAX_TOKENS" --cache-ram 0 \
+    >"$RUN_DIR/llama-embed.log" 2>&1 &
+  printf '%s' "$!" >"$RUN_DIR/llama-embed.pid"
+  say "  log: $RUN_DIR/llama-embed.log (loads in a few seconds; ~3.6 GB resident)"
+  say "then: OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal OPENAI_COMPAT_EMBEDDING_ENDPOINT=http://localhost:$LLAMA_EMBED_PORT OPENAI_COMPAT_ENDPOINT=http://localhost:11434 OPENAI_COMPAT_MODEL_MEDIUM=gemma3:4b $0 verify"
+}
+
+cmd_embed_down() {
+  local pidfile="$RUN_DIR/llama-embed.pid" pid
+  if [ -f "$pidfile" ]; then
+    pid="$(cat "$pidfile")"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      kill -TERM "$pid" 2>/dev/null || true
+      say "stopped llama-server (pid $pid)"
+    else
+      say "llama-server (pid ${pid:-?}) was not running"
+    fi
+    rm -f "$pidfile"
+  else
+    say "nothing of ours was running"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -466,6 +839,7 @@ cmd_down() {
 cmd_logs() {
   local which="${1:-embed}"
   local f="$RUN_DIR/vllm-$which.log"
+  [ "$which" = "llama" ] && f="$RUN_DIR/llama-embed.log"
   [ -f "$f" ] || die "no log at $f (try: $0 logs chat)"
   tail -f "$f"
 }
@@ -478,12 +852,18 @@ usage() {
 
 Commands
   verify            width, degeneracy and abstention checks against the server
+                    (with OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal: the
+                    llama-server image checks instead of the text-only ones)
   status            is anything answering /v1/models?
-  env               export lines for AI_PROVIDER=openai-compatible
+  env [llama]       export lines for AI_PROVIDER=openai-compatible
+                    (`llama`: Ollama for chat, llama-server for embeddings)
+  embed-install     download the pinned Qwen3-VL-Embedding GGUF pair (prompts)
+  embed-up          start llama-server for text+image embeddings (:8091)
+  embed-down        stop it
   install           create the vLLM venv outside the repo (prompts first)
   up                start vLLM's embedding + chat servers
   down              stop the servers this script started
-  logs [embed|chat] tail a server log
+  logs [embed|chat|llama] tail a server log
 
 `verify`, `status` and `env` work against ANY OpenAI-compatible server — LM
 Studio, llama-server, an MLX shim, Ollama's own /v1. Only `install`/`up`/`down`
@@ -494,8 +874,12 @@ Environment
   OPENAI_COMPAT_EMBEDDING_ENDPOINT   embed base   (default http://localhost:8001)
   OPENAI_COMPAT_MODEL_MEDIUM         chat model
   OPENAI_COMPAT_EMBEDDING_MODEL      embedding model
+  OPENAI_COMPAT_EMBEDDING_INPUT      openai (default) or llamacpp-multimodal
   AI_EMBEDDING_DIMENSIONS            expected width (default 768)
   CELLAR_VLLM_VENV                   venv path (default ~/.cache/cellar-assistant/vllm)
+  LLAMA_SERVER                       llama-server binary (default: on PATH)
+  LLAMA_EMBED_HOST / LLAMA_EMBED_PORT  where embed-up listens (127.0.0.1:8091)
+  CELLAR_LLAMA_MODEL_DIR             where embed-install puts the weights
 EOF
 }
 
@@ -507,6 +891,9 @@ main() {
     status)  cmd_status "$@" ;;
     env)     cmd_env "$@" ;;
     install) cmd_install "$@" ;;
+    embed-install) cmd_embed_install "$@" ;;
+    embed-up) cmd_embed_up "$@" ;;
+    embed-down) cmd_embed_down "$@" ;;
     up)      cmd_up "$@" ;;
     down)    cmd_down "$@" ;;
     logs)    cmd_logs "$@" ;;

@@ -120,6 +120,7 @@ OPENAI_COMPAT_MODEL_HIGH
 OPENAI_COMPAT_EMBEDDING_MODEL
 OPENAI_COMPAT_MAX_TOKENS
 OPENAI_COMPAT_EMBEDDING_TRUNCATE
+OPENAI_COMPAT_EMBEDDING_INPUT
 VERTEX_AI_EMBEDDING_LOCATION
 GOOGLE_AI_MODEL_LOW
 GOOGLE_AI_MODEL_MEDIUM
@@ -2124,7 +2125,12 @@ doctor_ai() {
         else
           d_warn "configured but nothing listening: AI_PROVIDER=$effective and no server answered"
           printf '%s\n' "$probe" | sed -n 's/^/        /p'
-          d_hint "scripts/ai/local-model.sh up     (or export AI_PROVIDER= for the erroring state)"
+          if [ "${OPENAI_COMPAT_EMBEDDING_INPUT:-$(env_value OPENAI_COMPAT_EMBEDDING_INPUT "")}" = "llamacpp-multimodal" ]; then
+            # The llama-server lane: chat on Ollama's /v1, embeddings on llama-server.
+            d_hint "ollama serve (chat)  +  scripts/ai/local-model.sh embed-up (embeddings)"
+          else
+            d_hint "scripts/ai/local-model.sh up     (or export AI_PROVIDER= for the erroring state)"
+          fi
         fi
       else
         d_warn "AI_PROVIDER=$effective but scripts/ai/local-model.sh is missing — cannot probe"
@@ -2152,6 +2158,97 @@ doctor_ai() {
       d_cont "degraded mode."
       ;;
   esac
+
+  doctor_image_embeddings "$effective"
+}
+
+# ---------------------------------------------------------------------------
+# Image embeddings: whether this lane can embed a photograph at all — image
+# search, the onboarding photo match, item vectors fused with label photos.
+#
+# Locally only one setup can: llama.cpp's llama-server serving
+# Qwen3-VL-Embedding, reached with OPENAI_COMPAT_EMBEDDING_INPUT=
+# llamacpp-multimodal (services/actors/README.md, "Local image embeddings").
+# Anything else is text-only, and image search then answers
+# IMAGE_SEARCH_UNAVAILABLE by design — a known-good state, reported as INFO.
+#
+# The provider never touches the network at boot, so a configured llama-server
+# that is down does not stop the actor host; every embedding call (text search
+# too) fails at CALL time instead. That is what this reports, before you find
+# it in a dead-lettered outbox row.
+# ---------------------------------------------------------------------------
+doctor_image_embeddings() {
+  local effective="$1" input endpoint probe root key auth=() body state
+  input="${OPENAI_COMPAT_EMBEDDING_INPUT:-$(env_value OPENAI_COMPAT_EMBEDDING_INPUT "")}"
+  key="${OPENAI_COMPAT_API_KEY:-$(env_value OPENAI_COMPAT_API_KEY "")}"
+  [ -z "$key" ] || auth=(-H "authorization: Bearer $key")
+
+  if [ "$effective" = "openai-compatible" ] && [ "$input" = "llamacpp-multimodal" ]; then
+    endpoint="${OPENAI_COMPAT_EMBEDDING_ENDPOINT:-$(env_value OPENAI_COMPAT_EMBEDDING_ENDPOINT "")}"
+    endpoint="${endpoint:-${OPENAI_COMPAT_ENDPOINT:-$(env_value OPENAI_COMPAT_ENDPOINT "http://localhost:8000")}}"
+  else
+    endpoint="http://localhost:8091"
+  fi
+  # Probed from this host: infra/.env names the host as the compose lane sees
+  # it, host.docker.internal, which is localhost from here.
+  probe="$(printf '%s' "$endpoint" | sed -e 's#host\.docker\.internal#localhost#' -e 's#/*$##' -e 's#/v[0-9]*$##')"
+
+  state="down"
+  if body="$(curl -fsS -m 3 ${auth[@]+"${auth[@]}"} "$probe/props" 2>/dev/null)"; then
+    state="$(printf '%s' "$body" | python3 -c '
+import json, sys
+try:
+    p = json.load(sys.stdin)
+except Exception:
+    print("notllama"); sys.exit()
+vision = (p.get("modalities") or {}).get("vision") is True
+print("images" if vision and p.get("media_marker") else ("novision" if not vision else "nomarker"))
+' 2>/dev/null || echo notllama)"
+  elif [ "$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$probe/props" 2>/dev/null)" = "401" ]; then
+    state="unauthorized"
+  fi
+
+  if [ "$effective" = "openai-compatible" ] && [ "$input" = "llamacpp-multimodal" ]; then
+    case "$state" in
+      images)
+        d_ok "image embeddings: llama-server at $probe is reachable and embeds images"
+        d_hint "the image budget and ranking:  OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal scripts/ai/local-model.sh verify"
+        ;;
+      novision)
+        d_warn "image embeddings: llama-server at $probe has NO vision tower loaded"
+        d_cont "every image embedding is refused; restart it with the mmproj"
+        d_hint "scripts/ai/local-model.sh embed-down && scripts/ai/local-model.sh embed-up"
+        ;;
+      nomarker)
+        d_warn "image embeddings: llama-server at $probe publishes no media_marker — too old"
+        d_hint "upgrade llama.cpp (services/actors/README.md pins the build)"
+        ;;
+      unauthorized)
+        d_warn "image embeddings: llama-server at $probe wants an API key this lane does not have"
+        d_hint "set OPENAI_COMPAT_API_KEY to the key llama-server was started with"
+        ;;
+      *)
+        d_warn "image embeddings: configured (llamacpp-multimodal) but no llama-server answers at $probe"
+        d_cont "the host still boots; every embedding — text search included — fails at CALL"
+        d_cont "time, and image search with it"
+        d_hint "scripts/ai/local-model.sh embed-up      (or unset OPENAI_COMPAT_EMBEDDING_INPUT)"
+        ;;
+    esac
+    return 0
+  fi
+
+  if [ "$effective" = "vertex-ai" ] || [ "$effective" = "google-ai" ]; then
+    d_info "image embeddings: by gemini-embedding-2 on $effective, if that is the embedding model"
+    return 0
+  fi
+  d_info "image embeddings: not configured — $effective embeds text only, so image search"
+  d_cont "answers IMAGE_SEARCH_UNAVAILABLE. That is the expected state, not a fault."
+  if [ "$state" = "images" ]; then
+    d_cont "A llama-server that embeds images IS listening on $probe. To use it (a re-embed):"
+    d_hint "eval \"\$(scripts/ai/local-model.sh env llama)\"   then restart the apps and run reembed"
+  else
+    d_hint "to turn it on: services/actors/README.md, \"Local image embeddings (llama-server)\""
+  fi
 }
 
 # ---------------------------------------------------------------------------

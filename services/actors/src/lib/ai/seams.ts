@@ -161,8 +161,10 @@ export const providerEmbedder =
  * text-plus-images item vectors.
  *
  * **The capability check comes first, before the image is fetched or the
- * budget is charged.** Only `gemini-embedding-2` on the two Google providers
- * embeds an image (`embeddingModelIdentity`'s `acceptsImages`); asking any
+ * budget is charged.** Only `gemini-embedding-2` on the two Google providers,
+ * and Qwen3-VL-Embedding on llama-server under
+ * `OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal`, embed an image
+ * (`embeddingModelIdentity`'s `acceptsImages`); asking any
  * other model would be a provider refusal at best and, on a model that
  * quietly accepted it, a vector in the wrong space filed as a match. So a
  * process that cannot do this says so, with the branchable
@@ -179,7 +181,10 @@ export const providerImageEmbedder =
       throw new ConflictError(
         `the configured embedding (${model?.key ?? "none"}) cannot embed a ` +
           "photograph: image search needs gemini-embedding-2 on " +
-          "AI_PROVIDER=vertex-ai or google-ai. Nothing was fetched or charged.",
+          "AI_PROVIDER=vertex-ai or google-ai, or llama-server under " +
+          "AI_PROVIDER=openai-compatible with " +
+          "OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal. Nothing was " +
+          "fetched or charged.",
         "IMAGE_SEARCH_UNAVAILABLE",
       );
     }

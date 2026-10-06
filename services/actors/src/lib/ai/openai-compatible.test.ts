@@ -653,7 +653,7 @@ describe("embeddings", () => {
     });
   }
 
-  it("refuses type:image until the embedder seam widens", async () => {
+  it("refuses type:image under the default openai dialect", async () => {
     const { fetchImpl } = recorder([embeddingReply(768)]);
     await expect(
       providerFor(config, fetchImpl).generateEmbeddings({

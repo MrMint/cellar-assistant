@@ -130,6 +130,8 @@ What it knows, and why each one is in there:
 - **An empty or half-built database** — counted honestly, see below.
 - **The MinIO bucket**, and whether `minio-init` finished or failed.
 - **The AI provider, as three states**, because only one of them is a problem.
+- **Image embeddings**: whether a `llama-server` that embeds images is
+  configured, reachable and has its vision tower — see below.
 - **Test-suite prerequisites that live outside this stack**, see below.
 
 ### A fresh worktree's Postgres is empty — and "empty" is not zero tables
@@ -200,6 +202,41 @@ first: `export_passthrough` **defaults `AI_PROVIDER` to `ollama`**, so "I never
 set it" does not mean "unset" here. That default is deliberate — a local model
 that needs no credentials — and `doctor` says so rather than letting you
 conclude the seam is broken.
+
+### Image embeddings: text-only is the default, and that is fine
+
+Image search, the onboarding photo match and item vectors fused with their
+label photos need an embedding that takes images. Locally that is one setup:
+llama.cpp's `llama-server` serving Qwen3-VL-Embedding-2B, with chat staying on
+Ollama, selected by `OPENAI_COMPAT_EMBEDDING_INPUT=llamacpp-multimodal`
+(`services/actors/README.md`, "Local image embeddings (llama-server)"). It is
+**opt-in**: this lane's default stays `ollama`, which embeds text only, so a
+photo search answers `IMAGE_SEARCH_UNAVAILABLE` — the client's "photo search
+isn't available", by design. `doctor` reports that as INFO, and also notices a
+vision-capable llama-server already listening on `:8091`.
+
+Opted in, it reports one of: reachable and embeds images (OK); no answer at the
+configured endpoint; no vision tower (`--mmproj` missing); a build too old to
+publish `media_marker`; or an API key the lane lacks. None of these stops the
+actor host booting — the provider does no network at boot — but a configured
+llama-server that is down fails **every** embedding at call time, text search
+included, which is why it is a WARN.
+
+```bash
+scripts/ai/local-model.sh embed-install    # pinned GGUF pair, outside the repo
+scripts/ai/local-model.sh embed-up         # 127.0.0.1:8091
+eval "$(scripts/ai/local-model.sh env llama)"
+bun run dev:down && bun run dev:up --detach   # the apps read env at start
+```
+
+Every variable involved is on `PASSTHROUGH_ENV` and in the compose actors
+`environment:` — `src/lib/ai/env-passthrough.test.ts` fails if one is missing —
+because an unlisted name reaches neither lane and the feature silently stays
+off. On the compose lane llama-server must listen beyond loopback, so start it
+with `LLAMA_EMBED_HOST=0.0.0.0 OPENAI_COMPAT_API_KEY=<k>` and put the same key
+in `infra/.env`. Switching either way is a re-embed (`scripts/operator.ts
+reembed`): the stored identity names the dialect, its template version and the
+image budget.
 
 ### Running the tests from a fresh worktree
 
@@ -502,7 +539,10 @@ one is a consequence of the apps being host processes:
    `infra/docker-compose.hostrun.yml` passes
    `--override-broadcast-host-port=127.0.0.1:<SCHEDULER_PORT>` for exactly this.
 4. **Ollama.** `host.docker.internal:11434` on compose, `localhost:11434` on the
-   host. Shared between stacks on purpose: it holds no per-stack state.
+   host. Shared between stacks on purpose: it holds no per-stack state. The same
+   goes for an opt-in `llama-server` on `:8091` (image embeddings), with one
+   difference: on compose it must listen beyond loopback, so it needs
+   `--api-key` (`scripts/ai/local-model.sh embed-up` with `LLAMA_EMBED_HOST`).
 5. **Presigned URLs.** See below.
 6. **The apps are not restarted by `docker compose restart`.** Use `dev:down` then
    `dev:up`, or Ctrl-C and re-run in the foreground. **After registering a new
