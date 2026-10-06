@@ -42,6 +42,8 @@
  */
 import type {
   ForwardGeocodeResult,
+  GooglePlaceDetailsResult,
+  GooglePlacePrefill,
   GooglePlaceSuggestion,
   GooglePlacesSearchResult,
   PlaceSearchHit,
@@ -51,6 +53,7 @@ import {
   GeocodeActorDescriptor,
   GooglePlacesActorDescriptor,
   geocodeActorId,
+  googlePlaceDetailsActorId,
   googlePlacesActorId,
   offsetPage,
   PLACE_SEARCH_RESULT_CAP,
@@ -275,6 +278,65 @@ builder.queryField("googlePlaceSuggestions", (t) =>
         )
         .search(input);
     },
+  }),
+);
+
+const GooglePlacePrefillType = builder
+  .objectRef<GooglePlacePrefill>("GooglePlacePrefill")
+  .implement({
+    description:
+      "What the create-place form pre-fills from a picked Google listing — " +
+      "and nothing more (G21).",
+    fields: (t) => ({
+      googlePlaceId: t.exposeString("googlePlaceId"),
+      name: t.exposeString("name", { nullable: true }),
+      phone: t.exposeString("phone", {
+        nullable: true,
+        description:
+          "E.164 when Google gave an international number, else its national one.",
+      }),
+      website: t.exposeString("website", { nullable: true }),
+      editorialSummary: t.exposeString("editorialSummary", { nullable: true }),
+      types: t.exposeStringList("types"),
+    }),
+  });
+
+const GooglePlaceDetailsPayload = builder
+  .objectRef<GooglePlaceDetailsResult>("GooglePlaceDetailsPayload")
+  .implement({
+    fields: (t) => ({
+      details: t.field({
+        type: GooglePlacePrefillType,
+        nullable: true,
+        description:
+          "Null when the budget denied the call or Google has no such place; " +
+          "the form then stays as the user left it.",
+        resolve: (payload) => payload.details,
+      }),
+      charged: t.exposeBoolean("charged", {
+        description:
+          "False when the API budget denied the call; nothing was spent.",
+      }),
+      reason: t.exposeString("reason"),
+    }),
+  });
+
+builder.queryField("googlePlaceDetails", (t) =>
+  t.field({
+    type: GooglePlaceDetailsPayload,
+    description:
+      "G21 — a picked Google suggestion's name, phone, website, summary and " +
+      "types, before the place exists, for the create-place form " +
+      "(GooglePlacesActor). Signed in only; charged to the Places details " +
+      "budget once per listing per activation.",
+    args: { googlePlaceId: t.arg.string({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(
+          GooglePlacesActorDescriptor,
+          googlePlaceDetailsActorId(args.googlePlaceId),
+        )
+        .details({ googlePlaceId: args.googlePlaceId }),
   }),
 );
 

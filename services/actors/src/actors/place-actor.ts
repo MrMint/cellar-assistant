@@ -131,21 +131,22 @@
  *
  * Two edges, both deliberate:
  *
- *  - **The user half does not queue a photo-only resume.** It still answers
- *    `fresh` whenever the details are, which is the one place its "answers
- *    what the queued turn would have" claim is loose. Queueing would make the
- *    place page poll for a `detailsFetchedAt` a photo resume never moves —
- *    the three-minute wait `enrichFromGoogle`'s doc describes — and the
- *    redelivery is what finishes a crashed loop. If the outbox gave up on the
- *    row instead (it went `dead`), the operator remedy is an **admin**
- *    `enrichFromGoogle` without `force`: it takes this same resume path and
- *    pays only for the missing photos. `refreshFromSource`, or `force`, also
- *    works but buys the details and every photo again.
+ *  - **The user half queues a photo-only resume** when the details are fresh
+ *    but their photo loop is unfinished (`#queuePhotoResume`), and answers
+ *    `queued` with the enrichment attached. It used to answer `fresh` and
+ *    leave this to the redelivery — but a migrated row has no redelivery
+ *    coming, and its photos were never fetched (the old place page re-asked
+ *    for exactly this case). The client polls `photosFetchedAt`, not
+ *    `detailsFetchedAt`, for it. The row is queued through
+ *    `enqueueOutboxOnce`, so re-opening the page while one is live adds
+ *    nothing. If the outbox gave up on the row (it went `dead`), the next
+ *    user ask queues a new one; an **admin** `enrichFromGoogle` without
+ *    `force` takes the same resume path synchronously. `refreshFromSource`,
+ *    or `force`, also works but buys the details and every photo again.
  *  - **A row with no marker and fresh details** — `photos_fetched_at` null,
  *    as a migrated row may be — is treated as unfinished, so the first
  *    non-forced system turn inside its window downloads its missing photos
- *    once, up to `maxPhotos`, and stamps it. That turn happens only on a
- *    redelivery or an admin call; the user half never queues one for it.
+ *    once, up to `maxPhotos`, and stamps it.
  *
  * ## What this actor is *not*
  *
@@ -258,7 +259,7 @@ import {
 import { requirePrivileged, requireSignedIn } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
 import { ARCS } from "../lib/item-arcs.ts";
-import { enqueueOutbox } from "../lib/outbox.ts";
+import { enqueueOutbox, enqueueOutboxOnce } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import {
   menuItemRowToDto,
@@ -863,9 +864,14 @@ export class PlaceActor
 
     if (!bypassesPolicy(ctx)) {
       // The queued turn would answer "fresh" and do nothing (doc above), so
-      // say so now instead of queueing a no-op the page would wait on.
+      // say so now instead of queueing a no-op the page would wait on —
+      // unless the photo loop for those details never finished, which the
+      // queued turn *would* act on (module doc, "A photo loop that dies").
       const fresh = this.#freshResult();
-      if (fresh !== null) return fresh;
+      if (fresh !== null) {
+        if (this.#unfinishedPhotos(maxPhotos) === null) return fresh;
+        return await this.#queuePhotoResume(ctx, fresh, maxPhotos);
+      }
 
       // Request-driven half: validate, queue, return. Eight external
       // round-trips do not belong in a user's turn (§8.5).
@@ -902,6 +908,52 @@ export class PlaceActor
       maxPhotos,
       force: input.force === true,
     });
+  }
+
+  /**
+   * The user half's answer for fresh details whose photos never finished: a
+   * migrated place enriched before its photos were fetched
+   * (`photos_fetched_at` null), or a photo loop that died. The old place page
+   * re-asked in exactly this case, and the outbox redelivery that would
+   * otherwise finish it never comes for a migrated row.
+   *
+   * Queues one **self-targeted** row through `enqueueOutboxOnce`, so a place
+   * page that re-asks on every open adds no second row while one is pending or
+   * being delivered — the in-flight delivery will see the same missing photos.
+   * The payload carries no `force`, so the system turn takes `#enrich`'s
+   * non-forced path: fresh details → `#resumePhotos`, which downloads only the
+   * referenced photos with no stored row, each reserved separately with
+   * `BudgetActor` (a denial stops the loop and leaves the marker unset).
+   * Google's details are never bought again on this path. A resume with
+   * nothing missing (`[]`: no references, or all stored) costs no Google call
+   * and only stamps the marker, so the place stops asking.
+   *
+   * Answers `queued`, with the fresh enrichment attached, so the page polls for
+   * `photosFetchedAt`; when a live row already covers it, the answer is the
+   * same — the work is queued either way.
+   */
+  async #queuePhotoResume(
+    ctx: Ctx,
+    fresh: EnrichFromGoogleResult,
+    maxPhotos: number,
+  ): Promise<EnrichFromGoogleResult> {
+    const rowId = await this.tx(
+      async (tx) =>
+        await enqueueOutboxOnce(
+          tx,
+          OUTBOX_TARGETS["PlaceActor.enrichFromGoogle"],
+          { targetId: this.key, payload: { maxPhotos } },
+          { attributeTo: ctx, includeDelivering: true },
+        ),
+    );
+    return {
+      ...fresh,
+      status: "queued",
+      reason:
+        rowId === null
+          ? "photos for these details are already queued"
+          : "queued a photo-only resume for the outbox; the details are fresh",
+    };
   }
 
   /**

@@ -6,10 +6,11 @@
  * disabled, "Create new list" → "Create & add" with the old default name.
  *
  * Data: `GetTierListsForItem` (a Hasura filter on `list_type` and
- * `created_by_id` with seven nil-uuid `_or` arms) → the viewer's visible lists
- * narrowed client-side (`tierListOptionsFor`) plus the entity's own
- * `tierListEntries` (G8) for membership. A list beyond the first 100 visible
- * is not offered (G33, a server-side filter, is not built).
+ * `created_by_id` with seven nil-uuid `_or` arms) → every page of the
+ * viewer's visible lists (`useAllMyTierLists`) narrowed client-side
+ * (`tierListOptionsFor`) plus the entity's own `tierListEntries` (G8) for
+ * membership. The walk is what keeps the viewer's own lists on offer when
+ * they can see more than 100 (G33, a server-side filter, is not built).
  */
 
 import {
@@ -45,6 +46,7 @@ import {
   GetTierListsForPlaceQuery,
   TIER_LISTS_PAGE_SIZE,
 } from "./queries";
+import { useAllMyTierLists } from "./useAllMyTierLists";
 
 // =============================================================================
 // Helpers
@@ -107,9 +109,13 @@ export function AddToTierListModal({
     pause: !open || !isPlace,
     requestPolicy: "network-only",
   });
-  const fetching = isPlace ? placeFetching : itemFetching;
-  const data = isPlace ? placeData : itemData;
-  const listsResult = unwrapResult(data?.myTierLists, "TierListConnection");
+  // network-only for the same reason: a list created elsewhere must show.
+  const {
+    lists,
+    viewerId,
+    loading: listsLoading,
+  } = useAllMyTierLists({ active: open, fresh: true });
+  const fetching = (isPlace ? placeFetching : itemFetching) || listsLoading;
   const entityEntries = isPlace
     ? (() => {
         const place = unwrapResult(placeData?.place, "Place");
@@ -128,9 +134,9 @@ export function AddToTierListModal({
   const [creating, setCreating] = useState(false);
 
   const tierLists = tierListOptionsFor(
-    listsResult.ok ? listsResult.data.edges.map((edge) => edge.node) : [],
+    lists,
     entityEntries.map((edge) => edge.node),
-    data?.me?.id ?? null,
+    viewerId,
     entityType,
   );
   const busy = addingToListId != null || creating;

@@ -297,8 +297,9 @@ const inMonthOf = (month: MonthAnchor): SQL => {
 
 /**
  * The only `(service, endpoint)` pairs a **search actor** may charge, and what
- * each costs — see `BudgetActor.reserveForSearch`. Both are C1's
- * `GooglePlacesActor` endpoints; the costs match
+ * each costs — see `BudgetActor.reserveForSearch`. All three are
+ * `GooglePlacesActor` endpoints (C1's two searches, G21's pre-fill details);
+ * the costs match
  * `services/actors/src/lib/google-places.ts`'s `API_COST_CENTS`, duplicated here
  * rather than imported so that widening the cost table cannot silently widen
  * what a request may spend.
@@ -306,6 +307,9 @@ const inMonthOf = (month: MonthAnchor): SQL => {
 export const SEARCH_SPENDERS: Readonly<Record<string, number>> = {
   "google_places/autocomplete": 1,
   "google_places/nearby_search": 4,
+  // G21: the create-place pre-fill (`GooglePlacesActor.details`). The same
+  // endpoint, price and per-user cap as an enrichment's details call.
+  "google_places/place_details": 3,
 };
 
 /* -------------------------------------------------------------------------- */

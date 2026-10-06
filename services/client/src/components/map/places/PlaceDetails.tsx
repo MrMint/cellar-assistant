@@ -244,6 +244,11 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     place: placeData,
     userInteraction,
     menuItems,
+    menuItemCount,
+    hasMoreMenuItems,
+    loadingMoreMenuItems,
+    menuLoadMoreError,
+    loadMoreMenuItems,
     enrichment,
     googlePhotos,
     tierListEntries,
@@ -789,7 +794,7 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
               Menu
               {menuItems.length > 0 && (
                 <Chip size="sm" variant="soft" color="primary" sx={{ ml: 1 }}>
-                  {menuItems.length}
+                  {menuItemCount}
                 </Chip>
               )}
             </Tab>
@@ -803,6 +808,10 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
                 placeId={placeData.id}
                 userId={userId}
                 menuItems={menuItems}
+                hasMore={hasMoreMenuItems}
+                loadingMore={loadingMoreMenuItems}
+                loadMoreError={menuLoadMoreError}
+                onLoadMore={loadMoreMenuItems}
               />
             ) : (
               <Box sx={{ textAlign: "center", py: 4 }}>

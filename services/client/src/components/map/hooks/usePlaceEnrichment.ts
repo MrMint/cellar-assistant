@@ -20,6 +20,15 @@ import { usePlaceActions } from "../actions";
  * that never lands (no Google key, no budget, no match) moves nothing and an
  * unbounded poll would run for the life of the tab. It never runs during
  * render or on the server (the old page enriched during SSR, §7).
+ *
+ * Also kept: the old place page asked again when the details were there but
+ * the photos never came (`enrichment && !photos_fetched_at`) — a migrated
+ * place enriched before photos were fetched, or a photo loop that died. Here
+ * that is `photosPending`: the hook asks once (same memo), and `PlaceActor`
+ * queues a photo-only resume (`QUEUED`) or answers `FRESH` when there is
+ * nothing to fetch. A queued resume is polled the same bounded way until
+ * `photosFetchedAt` is stamped. The spinner stays the details spinner — the
+ * old page fetched the photos without one.
  */
 
 const POLL_INTERVAL_MS = 15_000;
@@ -45,6 +54,8 @@ interface UsePlaceEnrichmentOptions {
   loaded: boolean;
   /** Whether `Place.enrichment` is already present. */
   hasEnrichment: boolean;
+  /** Details present but `enrichment.photosFetchedAt` is null. */
+  photosPending?: boolean;
   /** Re-read the place, network-only. */
   refetch: () => void;
 }
@@ -53,6 +64,7 @@ export function usePlaceEnrichment({
   placeId,
   loaded,
   hasEnrichment,
+  photosPending = false,
   refetch,
 }: UsePlaceEnrichmentOptions): { isEnriching: boolean } {
   const { enrichPlaceAction } = usePlaceActions();
@@ -60,9 +72,13 @@ export function usePlaceEnrichment({
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
 
-  // Ask once per place (per TTL) when the place has no enrichment.
+  // Something is still owed: the details, or the photos that go with them.
+  const pending = !hasEnrichment || photosPending;
+
+  // Ask once per place (per TTL) when the place has no enrichment, or has
+  // details whose photos were never fetched.
   useEffect(() => {
-    if (!placeId || !loaded || hasEnrichment) return;
+    if (!placeId || !loaded || !pending) return;
     const last = requestedAt.get(placeId);
     if (last !== undefined && Date.now() - last < REQUEST_TTL_MS) return;
     rememberRequest(placeId);
@@ -78,14 +94,14 @@ export function usePlaceEnrichment({
     return () => {
       cancelled = true;
     };
-  }, [placeId, loaded, hasEnrichment, enrichPlaceAction]);
+  }, [placeId, loaded, pending, enrichPlaceAction]);
 
-  const isEnriching =
-    waitingFor !== null && waitingFor === placeId && !hasEnrichment;
+  const waiting = waitingFor !== null && waitingFor === placeId && pending;
+  const isEnriching = waiting && !hasEnrichment;
 
-  // Bounded poll while a queued enrichment is outstanding.
+  // Bounded poll while a queued enrichment (or photo resume) is outstanding.
   useEffect(() => {
-    if (!isEnriching) return;
+    if (!waiting) return;
     let ticks = 0;
     const timer = setInterval(() => {
       ticks += 1;
@@ -97,7 +113,7 @@ export function usePlaceEnrichment({
       refetchRef.current();
     }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [isEnriching]);
+  }, [waiting]);
 
   return { isEnriching };
 }

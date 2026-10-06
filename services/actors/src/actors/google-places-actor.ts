@@ -64,6 +64,28 @@
  * could pay. Reserving first and not refunding is the conservative pair. If
  * refunds are wanted, `BudgetActor` is where that belongs, not here.
  *
+ * ## G21: `details`, the create-place pre-fill
+ *
+ * The old form called `enrich_place_from_google({ googlePlaceId })` before the
+ * place existed, to fill phone, website and description. `details` is that,
+ * keyed by `googlePlaceDetailsActorId(googlePlaceId)` rather than the search
+ * hash, so one activation is one listing. It follows every rule above:
+ * signed-in only, `reserveForSearch` before Google (`place_details`, on the
+ * allow-list at its 3¢ price), a denial is `details: null, charged: false`,
+ * and the activation is the cache — the same pick twice is charged once. The
+ * field mask is `PREFILL_DETAILS_FIELD_MASK`: only the fields the form fills.
+ *
+ * **It does not save the post-create enrichment's details call.** That call
+ * (`PlaceActor.enrichFromGoogle`, delivered by the outbox once the place is
+ * bound to this listing) still buys details — the full mask, photos and hours
+ * included, which this pre-fill deliberately does not fetch. Handing these
+ * over instead would need `PlaceActor` (an entity actor) to read this search
+ * actor's activation, which §8.5 forbids, or the API to pass Google's answer
+ * through the client-reachable enrichment input, which would make the
+ * server-owned Google binding trust what a caller says Google returned. A
+ * picked-then-created place therefore costs one pre-fill call plus the
+ * enrichment it always cost.
+ *
  * ## Viewer: not in the key
  *
  * Google's answer does not depend on who asked. `triggeredBy` differs per
@@ -75,6 +97,9 @@ import { randomUUID } from "node:crypto";
 import type {
   ActorCategory,
   Ctx,
+  GooglePlaceDetailsInput,
+  GooglePlaceDetailsResult,
+  GooglePlacePrefill,
   GooglePlaceSuggestion,
   GooglePlacesActorInterface,
   GooglePlacesSearchInput,
@@ -85,6 +110,7 @@ import {
   GOOGLE_NEARBY_MAX_RESULTS,
   GOOGLE_NEARBY_RADIUS_M,
   GooglePlacesActorDescriptor,
+  googlePlaceDetailsActorId,
   googlePlacesActorId,
   isLngLat,
   ValidationError,
@@ -97,11 +123,15 @@ import {
 } from "../lib/budget-reservers.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
-import type { GooglePlacesClient } from "../lib/google-places.ts";
+import type {
+  GooglePlaceDetails,
+  GooglePlacesClient,
+} from "../lib/google-places.ts";
 import {
   API_COST_CENTS,
   GOOGLE_PLACES_SERVICE,
   googlePlacesClient,
+  PREFILL_DETAILS_FIELD_MASK,
 } from "../lib/google-places.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 
@@ -118,6 +148,7 @@ export class GooglePlacesActor
   readonly #google: GooglePlacesClient;
   readonly #reserve: BudgetReserver;
   #result: GooglePlacesSearchResult | null = null;
+  #details: GooglePlaceDetailsResult | null = null;
 
   constructor(
     daprClient: DaprClient,
@@ -222,6 +253,53 @@ export class GooglePlacesActor
   }
 
   /**
+   * G21 — the create-place pre-fill (module doc). Charged once per activation
+   * through `reserveForSearch`; a denial or an unknown id is `details: null`,
+   * so the form stays usable with its fields empty.
+   */
+  async details(
+    ctx: Ctx,
+    input: GooglePlaceDetailsInput,
+  ): Promise<GooglePlaceDetailsResult> {
+    const viewer = requireSignedIn(ctx, "fetch Google place details");
+    const googlePlaceId = normaliseGooglePlaceId(input.googlePlaceId);
+    const expected = googlePlaceDetailsActorId(googlePlaceId);
+    if (expected !== this.key) {
+      throw new ValidationError(
+        `GooglePlacesActor(${this.key}) was asked for details that key to ` +
+          `${expected}. One activation is one listing, and that is what ` +
+          "stops one paid call from being billed twice.",
+      );
+    }
+    if (this.#details !== null) return this.#details;
+    this.#runs += 1;
+
+    const reservation = await this.#reserve(ctx, {
+      kind: { service: GOOGLE_PLACES_SERVICE, endpoint: "place_details" },
+      estimatedCostCents: API_COST_CENTS.place_details,
+      entityType: "place",
+      triggeredBy: viewer,
+      reservationId: this.#reservationId(),
+      metadata: { mode: "prefill", googlePlaceId },
+    });
+    if (!reservation.allowed) {
+      // Not cached, as for search: the budget may be raised.
+      return { details: null, charged: false, reason: reservation.reason };
+    }
+
+    const raw = await this.#google.details(googlePlaceId, {
+      fieldMask: PREFILL_DETAILS_FIELD_MASK,
+    });
+    const result: GooglePlaceDetailsResult = {
+      details: raw === null ? null : toPrefill(raw),
+      charged: true,
+      reason: raw === null ? "google returned no result" : reservation.reason,
+    };
+    this.#details = result;
+    return result;
+  }
+
+  /**
    * The key for the one Google call this turn is about to make: the actor key
    * for attribution when reading the ledger, plus a uuid for identity. Not
    * derived from anything that survives this turn — see the module doc.
@@ -230,6 +308,40 @@ export class GooglePlacesActor
     return `google-places:${this.key}:${randomUUID()}`;
   }
 }
+
+/** Google place ids are URL-safe base64-ish tokens; anything else is refused. */
+const GOOGLE_PLACE_ID = /^[A-Za-z0-9_-]{1,512}$/;
+
+const normaliseGooglePlaceId = (value: unknown): string => {
+  const id = typeof value === "string" ? value.trim() : "";
+  if (!GOOGLE_PLACE_ID.test(id)) {
+    throw new ValidationError("googlePlaceId must be a Google place id");
+  }
+  return id;
+};
+
+/**
+ * `+1 415-555-0100` → `+14155550100`: the form's phone input holds E.164, and
+ * `82450ad1` put Google's *national* format there, which its own validator
+ * then rejected. The national number is the fallback when there is no
+ * international one.
+ */
+export const toE164 = (international: string | null | undefined) => {
+  if (typeof international !== "string") return null;
+  const digits = international.replace(/[^\d]/g, "");
+  return international.trim().startsWith("+") && digits.length >= 7
+    ? `+${digits}`
+    : null;
+};
+
+export const toPrefill = (raw: GooglePlaceDetails): GooglePlacePrefill => ({
+  googlePlaceId: raw.googlePlaceId,
+  name: raw.name,
+  phone: toE164(raw.internationalPhone) ?? raw.phone,
+  website: raw.website,
+  editorialSummary: raw.editorialSummary,
+  types: raw.types,
+});
 
 const normalise = (
   input: GooglePlacesSearchInput,

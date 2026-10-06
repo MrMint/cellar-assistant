@@ -769,11 +769,43 @@ export const GeocodeActorDescriptor: ActorDescriptor<GeocodeActorInterface> = {
   category: "search",
   methods: {
     forward: {},
+/**
+ * G21: what the create-place form pre-fills from a picked Google suggestion,
+ * before the place exists — exactly the fields `82450ad1`'s
+ * `CreatePlaceForm.prefillFromGoogle` set (name, phone, website, the editorial
+ * summary as the description, and the types it mapped to categories), and
+ * nothing else. Fetched with a field mask of just these.
+ */
+export type GooglePlacePrefill = {
+  readonly googlePlaceId: string;
+  readonly name: string | null;
+  /** E.164 when Google gave an international number, else its national one. */
+  readonly phone: string | null;
+  readonly website: string | null;
+  readonly editorialSummary: string | null;
+  readonly types: readonly string[];
+};
+
+export type GooglePlaceDetailsInput = { readonly googlePlaceId: string };
+
+export type GooglePlaceDetailsResult = {
+  /** Null when the budget denied the call or Google had no such place. */
+  readonly details: GooglePlacePrefill | null;
+  /** `false` when `BudgetActor` denied the spend; nothing was spent. */
+  readonly charged: boolean;
+  readonly reason: string;
+};
+
     reverse: {},
   },
 };
 
 /** Viewer-insensitive: an address is an address. */
+  /** G21 — keyed by {@link googlePlaceDetailsActorId}, not the search hash. */
+  details(
+    ctx: Ctx,
+    input: GooglePlaceDetailsInput,
+  ): Promise<GooglePlaceDetailsResult>;
 export const geocodeActorId = (
   input: GeocodeInput,
   _viewerId: string | null,
@@ -782,9 +814,21 @@ export const geocodeActorId = (
     input.mode === "forward"
       ? { kind: "geocode", mode: "forward", query: normaliseText(input.query) }
       : {
+      details: {},
           kind: "geocode",
           mode: "reverse",
           lng: round5(input.location.lng),
+/**
+ * `GooglePlacesActor`'s key for a details pre-fill. Viewer-insensitive, like
+ * the search key: the same pick by anyone inside one activation is charged
+ * once. Its own `kind`, so it can never collide with a search activation.
+ */
+export const googlePlaceDetailsActorId = (googlePlaceId: string): string =>
+  searchHash({
+    kind: "google-place-details",
+    googlePlaceId: googlePlaceId.trim(),
+  });
+
           lat: round5(input.location.lat),
         },
   );

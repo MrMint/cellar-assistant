@@ -55,6 +55,7 @@ import {
   DuplicatePlacesQuery,
   EnrichPlaceMutation,
   GeocodeQuery,
+  GooglePlaceDetailsQuery,
   GooglePlaceSuggestionsQuery,
   MAP_FEATURE_LIMIT,
   MAP_PAGE_SIZE,
@@ -261,6 +262,16 @@ export interface GoogleAutocompleteSuggestion {
   types: string[];
 }
 
+/** G21 — what a picked Google suggestion pre-fills on the create-place form. */
+export interface GooglePlacePrefill {
+  googlePlaceId: string;
+  name: string | null;
+  phone: string | null;
+  website: string | null;
+  editorialSummary: string | null;
+  types: string[];
+}
+
 export interface CreatePlaceResult {
   success: boolean;
   placeId?: string;
@@ -417,6 +428,37 @@ export function usePlaceActions() {
         budgetExhausted:
           field != null && !field.charged && field.reason != null,
       };
+    };
+
+    /**
+     * G21 — a picked suggestion's details, for the form to pre-fill. Never
+     * throws: a transport failure, a budget denial or an unknown id is
+     * `details: null`, and the form stays usable with its fields empty.
+     */
+    const googlePlaceDetailsAction = async (
+      googlePlaceId: string,
+    ): Promise<{ details: GooglePlacePrefill | null }> => {
+      try {
+        const response = await client
+          .query(GooglePlaceDetailsQuery, { googlePlaceId })
+          .toPromise();
+        const details = response.data?.googlePlaceDetails.details ?? null;
+        return {
+          details:
+            details === null
+              ? null
+              : {
+                  googlePlaceId: details.googlePlaceId,
+                  name: details.name ?? null,
+                  phone: details.phone ?? null,
+                  website: details.website ?? null,
+                  editorialSummary: details.editorialSummary ?? null,
+                  types: [...details.types],
+                },
+        };
+      } catch {
+        return { details: null };
+      }
     };
 
     const googleNearbySearchAction = async (
@@ -611,6 +653,7 @@ export function usePlaceActions() {
       fetchPlaceByIdAction,
       googleNearbySearchAction,
       googleAutocompleteAction,
+      googlePlaceDetailsAction,
       enrichPlaceAction,
       createUserPlaceAction,
       uploadAndProcessMenuScan,

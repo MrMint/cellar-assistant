@@ -12,9 +12,12 @@
  *   every page (`loadAllEntries` in `adapter.ts`), because a reorder must name
  *   a band's full membership and the old page always held every entry.
  * - `GetTierListsForItem` (the viewer's own lists of one type, each with the
- *   entity's row if present) → the viewer's visible lists, narrowed to theirs
- *   and the type client-side (G33 not built), plus the entity's own
- *   `tierListEntries` (G8) for "Already added (band)".
+ *   entity's row if present) → the entity's own `tierListEntries` (G8) for
+ *   "Already added (band)", plus **every** visible list
+ *   (`MyTierListOptionsPageQuery`, walked to the end by `useAllMyTierLists`)
+ *   narrowed to the viewer's own and the type client-side. G33 (a server
+ *   filter) is not built, so the walk is what keeps a viewer who sees more
+ *   than 100 lists from losing their own.
  * - `GetUserItemReviews` → `Item.myReview` on the entry (fragments.ts).
  * - Every write is a named command returning a result union.
  */
@@ -114,20 +117,24 @@ export const TierListViewerQuery = graphql(`
   }
 `);
 
-/** "Add to Tier List" modal for an item: lists, and where the item already is. */
-export const GetTierListsForItemQuery = graphql(
+/**
+ * One page of the viewer's visible lists, with just what an "own lists of
+ * this type" picker needs — the map's tier-list filter and the "Add to Tier
+ * List" modal. `useAllMyTierLists` walks every page before either filters.
+ */
+export const MyTierListOptionsPageQuery = graphql(
   `
-    query GetTierListsForItem(
-      $itemId: ID!
-      $itemType: ItemType!
-      $first: Int!
-    ) {
+    query MyTierListOptionsPage($first: Int!, $after: String) {
       me {
         id
       }
-      myTierLists(first: $first) {
+      myTierLists(first: $first, after: $after) {
         __typename
         ... on TierListConnection {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           edges {
             node {
               __typename
@@ -140,6 +147,19 @@ export const GetTierListsForItemQuery = graphql(
         }
         ...ActorErrorFields
       }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
+/** "Add to Tier List" modal for an item: where the item already is. */
+export const GetTierListsForItemQuery = graphql(
+  `
+    query GetTierListsForItem(
+      $itemId: ID!
+      $itemType: ItemType!
+      $first: Int!
+    ) {
       item(id: $itemId, type: $itemType) {
         __typename
         ... on QueryItemSuccess {
@@ -168,24 +188,6 @@ export const GetTierListsForItemQuery = graphql(
 export const GetTierListsForPlaceQuery = graphql(
   `
     query GetTierListsForPlace($placeId: ID!, $first: Int!) {
-      me {
-        id
-      }
-      myTierLists(first: $first) {
-        __typename
-        ... on TierListConnection {
-          edges {
-            node {
-              __typename
-              id
-              name
-              listType
-              createdById
-            }
-          }
-        }
-        ...ActorErrorFields
-      }
       place(id: $placeId) {
         __typename
         ... on Place {

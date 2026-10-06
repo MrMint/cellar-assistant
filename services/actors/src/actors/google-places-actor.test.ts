@@ -14,6 +14,7 @@ import {
   adminCtx,
   BUDGET_ACTOR_ID,
   ForbiddenError,
+  googlePlaceDetailsActorId,
   googlePlacesActorId,
   ValidationError,
 } from "@cellar-assistant/contracts";
@@ -24,11 +25,13 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import type { BudgetReserver } from "../lib/budget-reservers.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import type {
+  GooglePlaceDetails,
   GooglePlacesClient,
   GoogleSuggestion,
 } from "../lib/google-places.ts";
 import {
   GOOGLE_PLACES_SERVICE,
+  PREFILL_DETAILS_FIELD_MASK,
   unconfiguredGooglePlacesClient,
 } from "../lib/google-places.ts";
 import {
@@ -39,7 +42,7 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import { BudgetActor } from "./budget-actor.ts";
-import { GooglePlacesActor } from "./google-places-actor.ts";
+import { GooglePlacesActor, toE164 } from "./google-places-actor.ts";
 
 const VIEWER = "11111111-1111-4111-8111-111111111111";
 const HERE = { lng: -83.0, lat: 40.0 };
@@ -418,6 +421,227 @@ describe.skipIf(skip)(
         const rows = await usageRows(db, viewer);
         expect(rows).toHaveLength(nearbySearch.mock.calls.length);
         expect(rows.every((row) => row.endpoint === "nearby_search")).toBe(
+          true,
+        );
+      });
+    });
+  },
+);
+
+/* -------------------------------------------------------------------------- */
+/* G21: `details`, the create-place pre-fill                                   */
+/* -------------------------------------------------------------------------- */
+
+const PICKED = "ChIJ_picked-Place_1";
+
+const googleDetails = (
+  overrides: Partial<GooglePlaceDetails> = {},
+): GooglePlaceDetails => ({
+  googlePlaceId: PICKED,
+  name: "Stagger Lee",
+  formattedAddress: null,
+  rating: null,
+  userRatingsTotal: null,
+  priceLevel: null,
+  website: "https://stagger.test",
+  phone: "(614) 555-0100",
+  internationalPhone: "+1 614-555-0100",
+  openingHours: null,
+  types: ["bar", "restaurant"],
+  businessStatus: null,
+  editorialSummary: "A dim, friendly bar.",
+  photos: [],
+  attributions: [],
+  ...overrides,
+});
+
+const detailsActor = (
+  google: GooglePlacesClient,
+  reserve: BudgetReserver,
+  googlePlaceId = PICKED,
+  db: DbOrTx = null as never,
+): GooglePlacesActor =>
+  new GooglePlacesActor(
+    new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" }),
+    new ActorId(googlePlaceDetailsActorId(googlePlaceId)),
+    db,
+    google,
+    reserve,
+  );
+
+describe("GooglePlacesActor.details (G21 — create-place pre-fill)", () => {
+  it("returns only the pre-fill fields, fetched with the pre-fill mask, charged once per activation", async () => {
+    const details = vi.fn<GooglePlacesClient["details"]>(async () =>
+      googleDetails(),
+    );
+    const reserve = vi.fn<BudgetReserver>(async () => allowed);
+    const actor = detailsActor(fakeGoogle({ details }), reserve);
+
+    const first = await actor.details(userCtx(), { googlePlaceId: PICKED });
+    const second = await actor.details(userCtx(), { googlePlaceId: PICKED });
+
+    expect(first).toEqual({
+      details: {
+        googlePlaceId: PICKED,
+        name: "Stagger Lee",
+        phone: "+16145550100",
+        website: "https://stagger.test",
+        editorialSummary: "A dim, friendly bar.",
+        types: ["bar", "restaurant"],
+      },
+      charged: true,
+      reason: "within budget",
+    });
+    expect(second).toEqual(first);
+    expect(details).toHaveBeenCalledTimes(1);
+    expect(details.mock.calls[0]?.[1]).toEqual({
+      fieldMask: PREFILL_DETAILS_FIELD_MASK,
+    });
+    // No photos, hours, rating or address in the mask.
+    expect(PREFILL_DETAILS_FIELD_MASK).not.toContain("photos");
+    expect(PREFILL_DETAILS_FIELD_MASK).not.toContain("regularOpeningHours");
+    expect(reserve).toHaveBeenCalledTimes(1);
+  });
+
+  it("reserves place_details at its price, with the caller's ctx, before Google", async () => {
+    const order: string[] = [];
+    const reserve = vi.fn<BudgetReserver>(async () => {
+      order.push("reserve");
+      return allowed;
+    });
+    await detailsActor(
+      fakeGoogle({
+        details: async () => {
+          order.push("google");
+          return googleDetails();
+        },
+      }),
+      reserve,
+    ).details(userCtx(), { googlePlaceId: PICKED });
+
+    expect(order).toEqual(["reserve", "google"]);
+    const [ctx, reservation] = reserve.mock.calls[0] ?? [];
+    expect(ctx?.kind).toBe("user");
+    expect(reservation?.kind).toEqual({
+      service: GOOGLE_PLACES_SERVICE,
+      endpoint: "place_details",
+    });
+    expect(reservation?.estimatedCostCents).toBe(3);
+    expect(reservation?.triggeredBy).toBe(VIEWER);
+  });
+
+  it("a budget denial is an empty, uncharged answer that is not cached", async () => {
+    const details = vi.fn(async () => googleDetails());
+    let answer = denied;
+    const actor = detailsActor(fakeGoogle({ details }), async () => answer);
+
+    const refused = await actor.details(userCtx(), { googlePlaceId: PICKED });
+    expect(refused).toEqual({
+      details: null,
+      charged: false,
+      reason: "budget exceeded",
+    });
+    expect(details).not.toHaveBeenCalled();
+
+    answer = allowed;
+    const later = await actor.details(userCtx(), { googlePlaceId: PICKED });
+    expect(later.details?.name).toBe("Stagger Lee");
+  });
+
+  it("an id Google does not know is charged and answers null details", async () => {
+    const result = await detailsActor(
+      fakeGoogle({ details: async () => null }),
+      async () => allowed,
+    ).details(userCtx(), { googlePlaceId: PICKED });
+    expect(result).toEqual({
+      details: null,
+      charged: true,
+      reason: "google returned no result",
+    });
+  });
+
+  it("falls back to the national number when there is no international one", async () => {
+    const result = await detailsActor(
+      fakeGoogle({
+        details: async () => googleDetails({ internationalPhone: null }),
+      }),
+      async () => allowed,
+    ).details(userCtx(), { googlePlaceId: PICKED });
+    expect(result.details?.phone).toBe("(614) 555-0100");
+    expect(toE164("+44 20 7946 0958")).toBe("+442079460958");
+    expect(toE164("020 7946 0958")).toBeNull();
+    expect(toE164(undefined)).toBeNull();
+  });
+
+  it("refuses anonymous callers, malformed ids and an id keyed elsewhere — before spending", async () => {
+    const reserve = vi.fn<BudgetReserver>(async () => allowed);
+    const actor = detailsActor(fakeGoogle(), reserve);
+    await expect(
+      actor.details(userCtx(null), { googlePlaceId: PICKED }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      actor.details(userCtx(), { googlePlaceId: "../places/x" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      actor.details(userCtx(), { googlePlaceId: "" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      actor.details(userCtx(), { googlePlaceId: "ChIJ_someone_else" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(reserve).not.toHaveBeenCalled();
+  });
+
+  it("never shares an activation with a search", () => {
+    expect(googlePlaceDetailsActorId(PICKED)).not.toBe(
+      googlePlacesActorId(
+        { mode: "autocomplete", input: PICKED, location: HERE },
+        null,
+      ),
+    );
+    expect(googlePlaceDetailsActorId(` ${PICKED} `)).toBe(
+      googlePlaceDetailsActorId(PICKED),
+    );
+  });
+});
+
+describe.skipIf(skip)(
+  "GooglePlacesActor.details → BudgetActor.reserveForSearch",
+  () => {
+    afterAll(closeTestDb);
+
+    it("the search door admits place_details, and writes one usage row per real call", async () => {
+      await withTestDb(async (db) => {
+        const viewer = crypto.randomUUID();
+        const budget = await activate(
+          createActor(BudgetActor, BUDGET_ACTOR_ID, db),
+        );
+        await budget.setBudget(adminCtx(crypto.randomUUID(), "budget-setup"), {
+          kind: { service: GOOGLE_PLACES_SERVICE, endpoint: "place_details" },
+          monthlyBudgetCents: 1_000_000,
+          freeTierMonthlyRequests: 0,
+          isEnabled: true,
+        });
+        const reserve: BudgetReserver = (ctx, input) =>
+          budget.reserveForSearch(ctx, input);
+        const details = vi.fn(async () => googleDetails());
+        const google = fakeGoogle({ details });
+
+        const first = detailsActor(google, reserve, PICKED, db);
+        expect(
+          (await first.details(userCtx(viewer), { googlePlaceId: PICKED }))
+            .charged,
+        ).toBe(true);
+        await first.details(userCtx(viewer), { googlePlaceId: PICKED });
+        // A re-activation (idle timeout) calls Google again and is a row.
+        await detailsActor(google, reserve, PICKED, db).details(
+          userCtx(viewer),
+          { googlePlaceId: PICKED },
+        );
+
+        expect(details).toHaveBeenCalledTimes(2);
+        const rows = await usageRows(db, viewer);
+        expect(rows).toHaveLength(2);
+        expect(rows.every((row) => row.endpoint === "place_details")).toBe(
           true,
         );
       });

@@ -10,6 +10,9 @@
  *   item's page, where adding to a cellar is real; an unmatched line has no
  *   item to add, so it shows no button rather than a pretend one, and its
  *   badge no longer promises that adding will create one.
+ * - Added: "Load more" under the list. The old read was unbounded; the API
+ *   pages a place's menu at 100 lines, so the owner (`usePlaceDetails`)
+ *   passes `hasMore` / `onLoadMore` and the next page is appended in place.
  */
 
 import {
@@ -56,11 +59,21 @@ interface PlaceMenuItemsProps {
   /** The old query's `$userId`; unused — the API knows the viewer. */
   userId?: string;
   menuItems: MenuItemWithSuggestions[];
+  /** More lines past those loaded (`pageInfo.hasNextPage`). */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  /** The last "Load more" failure, if any. */
+  loadMoreError?: string | null;
+  onLoadMore?: () => void;
 }
 
 export function PlaceMenuItems({
   placeId: _placeId,
   menuItems,
+  hasMore = false,
+  loadingMore = false,
+  loadMoreError = null,
+  onLoadMore,
 }: PlaceMenuItemsProps) {
   const [selectedItem, setSelectedItem] =
     useState<MenuItemWithSuggestions | null>(null);
@@ -275,6 +288,21 @@ export function PlaceMenuItems({
             </Stack>
           </Box>
         ))}
+        {loadMoreError && (
+          <Alert color="danger" size="sm">
+            {loadMoreError}
+          </Alert>
+        )}
+        {hasMore && onLoadMore && (
+          <Button
+            variant="outlined"
+            color="neutral"
+            loading={loadingMore}
+            onClick={onLoadMore}
+          >
+            Load more
+          </Button>
+        )}
       </Stack>
 
       {/* Item details modal */}

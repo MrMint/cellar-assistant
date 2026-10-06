@@ -36,7 +36,7 @@ type Exemption = { readonly calls: number; readonly reason: string };
  */
 const EXEMPT: Readonly<Record<string, Exemption>> = {
   "map/actions.ts": {
-    calls: 11,
+    calls: 12,
     reason:
       "The old map server actions as client functions (82450ad1's " +
       "map/actions.ts, place-actions.ts, menuScanning.ts): the map machine's " +
@@ -44,7 +44,10 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "500-feature limit) runs one at a time and xstate drops the answer of a " +
       "fetch it re-entered past; the form's geocode/Google/duplicate reads, " +
       "the deep-link read and the scan-status poll are one-shots whose " +
-      "callers carry a `cancelled` flag; the rest are submit-driven writes.",
+      "callers carry a `cancelled` flag; the G21 details pre-fill is a " +
+      "one-shot per pick whose caller keeps only the latest pick's answer " +
+      "(a request counter in CreatePlaceForm); the rest are submit-driven " +
+      "writes.",
   },
   "tier-list/AddEntryModal.tsx": {
     calls: 2,

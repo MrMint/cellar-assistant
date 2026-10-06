@@ -91,6 +91,12 @@ interface PlaceDetailsContentProps {
   place: Place;
   userInteraction?: UserInteraction;
   menuItems: MenuItemView[];
+  /** The menu's `totalCount` — every line, not just those loaded. */
+  menuItemCount?: number;
+  hasMoreMenuItems?: boolean;
+  loadingMoreMenuItems?: boolean;
+  menuLoadMoreError?: string | null;
+  onLoadMoreMenuItems?: () => void;
   loadingDetails: boolean;
   hasMenuItems: boolean;
   userId: string;
@@ -188,6 +194,11 @@ export function PlaceDetailsContent({
   place,
   userInteraction,
   menuItems,
+  menuItemCount,
+  hasMoreMenuItems,
+  loadingMoreMenuItems,
+  menuLoadMoreError,
+  onLoadMoreMenuItems,
   loadingDetails,
   hasMenuItems,
   userId,
@@ -660,7 +671,7 @@ export function PlaceDetailsContent({
             <Typography level="title-md">Menu Items</Typography>
             {hasMenuItems && (
               <Chip size="sm" variant="soft" color="primary">
-                {menuItems.length}
+                {menuItemCount ?? menuItems.length}
               </Chip>
             )}
           </Stack>
@@ -684,6 +695,10 @@ export function PlaceDetailsContent({
                 placeId={place.id}
                 userId={userId}
                 menuItems={menuItems}
+                hasMore={hasMoreMenuItems}
+                loadingMore={loadingMoreMenuItems}
+                loadMoreError={menuLoadMoreError}
+                onLoadMore={onLoadMoreMenuItems}
               />
             </Box>
           ) : (

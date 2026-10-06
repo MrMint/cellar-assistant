@@ -33,11 +33,14 @@ import {
 import { useMutation, useQuery } from "urql";
 import { Timestamp } from "@/components/common/Timestamp";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
+import { pageOf } from "@/lib/paging/paged-connection";
+import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { suggestionFrom } from "../adapter";
 import {
   ActOnSuggestionMutation,
   DiscoveryDataQuery,
   SAVED_PLACES_PAGE_SIZE,
+  SavedPlacesQuery,
   SUGGESTIONS_PAGE_SIZE,
 } from "../queries";
 
@@ -53,7 +56,9 @@ import {
  *   viewer had touched: a disclosure leak), with the line and place (G20);
  *   Accept / Reject → `actOnMenuScanSuggestion`.
  * - Saved Places: `myPlaceInteractions` filtered to favourite-or-visited, as
- *   the old `_or` did, with each place (G16) and its menu-line count.
+ *   the old `_or` did, with each place (G16) and its menu-line count. The
+ *   API pages it at 100, so "Load more" walks the rest (the old read was
+ *   unbounded); the tab's count is of the saved places loaded so far.
  * - Recent Additions is **not restored**: it read `cellar_items` by
  *   `source_type in (menu_discovery, menu_scan)` across the viewer's cellars,
  *   and the API has no viewer-level query for that (G22).
@@ -102,10 +107,41 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
 
   const [{ data, fetching, error }, reexecute] = useQuery({
     query: DiscoveryDataQuery,
-    variables: {
-      suggestions: SUGGESTIONS_PAGE_SIZE,
-      places: SAVED_PLACES_PAGE_SIZE,
-    },
+    variables: { suggestions: SUGGESTIONS_PAGE_SIZE },
+  });
+  const saved = usePagedConnection({
+    query: SavedPlacesQuery,
+    variables: (_args: null, after) => ({
+      first: SAVED_PLACES_PAGE_SIZE,
+      after,
+    }),
+    select: (answer) =>
+      pageOf(
+        unwrapResult(answer?.myPlaceInteractions, "PlaceInteractionConnection"),
+        (edge): SavedPlaceInteraction | null => {
+          const node = edge.node;
+          if (!node.isFavorite && !node.isVisited) return null;
+          return {
+            id: node.id,
+            is_favorite: node.isFavorite,
+            is_visited: node.isVisited,
+            last_visited_at: node.lastVisitedAt ?? undefined,
+            visit_count: node.visitCount,
+            place: {
+              id: node.place.id,
+              name: node.place.name,
+              primary_category: node.place.primaryCategory ?? undefined,
+              categories: [...node.place.categories],
+              street_address: node.place.streetAddress ?? undefined,
+              locality: node.place.locality ?? undefined,
+              rating: node.place.rating ?? undefined,
+              menu_items_count: node.place.menuItems.totalCount ?? 0,
+            },
+          };
+        },
+      ),
+    initial: null,
+    initialArgs: null,
   });
 
   const [, actOnSuggestion] = useMutation(ActOnSuggestionMutation);
@@ -114,10 +150,6 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
   const discoveries = unwrapResult(
     data?.myDiscoveries,
     "MatchSuggestionConnection",
-  );
-  const interactions = unwrapResult(
-    data?.myPlaceInteractions,
-    "PlaceInteractionConnection",
   );
   const pendingMatches: DiscoverySuggestion[] = discoveries.ok
     ? discoveries.data.edges
@@ -146,28 +178,9 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
           };
         })
     : [];
-  const savedPlaces: SavedPlaceInteraction[] = interactions.ok
-    ? interactions.data.edges
-        .map((edge) => edge.node)
-        .filter((node) => node.isFavorite || node.isVisited)
-        .map((node) => ({
-          id: node.id,
-          is_favorite: node.isFavorite,
-          is_visited: node.isVisited,
-          last_visited_at: node.lastVisitedAt ?? undefined,
-          visit_count: node.visitCount,
-          place: {
-            id: node.place.id,
-            name: node.place.name,
-            primary_category: node.place.primaryCategory ?? undefined,
-            categories: [...node.place.categories],
-            street_address: node.place.streetAddress ?? undefined,
-            locality: node.place.locality ?? undefined,
-            rating: node.place.rating ?? undefined,
-            menu_items_count: node.place.menuItems.totalCount ?? 0,
-          },
-        }))
-    : [];
+  const savedPlaces = saved.rows.filter(
+    (row): row is SavedPlaceInteraction => row !== null,
+  );
 
   const handleProcessMatch = async (
     suggestion: DiscoverySuggestion,
@@ -216,7 +229,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
     }
   };
 
-  if (fetching) {
+  if (fetching || (saved.status === "resetting" && saved.rows.length === 0)) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
         <CircularProgress />
@@ -224,7 +237,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
     );
   }
 
-  if (error || (data !== undefined && (!discoveries.ok || !interactions.ok))) {
+  if (error || (data !== undefined && !discoveries.ok) || saved.failure) {
     return (
       <Box sx={{ p: 2 }}>
         <Alert color="danger">Failed to load discovery data</Alert>
@@ -533,6 +546,17 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                   </Card>
                 );
               })
+            )}
+            {saved.hasNextPage && (
+              <Button
+                variant="outlined"
+                color="neutral"
+                loading={saved.status === "loadingMore"}
+                disabled={!saved.canLoadMore}
+                onClick={() => void saved.loadMore()}
+              >
+                Load more
+              </Button>
             )}
           </Stack>
         </TabPanel>

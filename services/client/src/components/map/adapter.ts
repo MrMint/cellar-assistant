@@ -673,3 +673,32 @@ export function suggestionFrom(node: SuggestionNode): SuggestionView {
         : null,
   };
 }
+
+/**
+ * G21 — the form values a Google listing's details pre-fill, as the old
+ * `prefillFromGoogle` set them: name, phone, website, and the editorial summary
+ * as the description. An absent field is left out, so it does not clear what
+ * the user (or the suggestion) already put there. A phone the form's E.164
+ * input would reject is left out too — the old form put Google's national
+ * format there, which its own validator then refused.
+ */
+export function googlePrefillFields(
+  details: {
+    name: string | null;
+    phone: string | null;
+    website: string | null;
+    editorialSummary: string | null;
+  },
+  isValidPhone: (phone: string) => boolean,
+): { name?: string; phone?: string; website?: string; description?: string } {
+  return {
+    ...(details.name ? { name: details.name } : {}),
+    ...(details.phone && isValidPhone(details.phone)
+      ? { phone: details.phone }
+      : {}),
+    ...(details.website ? { website: details.website } : {}),
+    ...(details.editorialSummary
+      ? { description: details.editorialSummary }
+      : {}),
+  };
+}

@@ -54,6 +54,8 @@ export const KEYLESS_TYPES = [
   "FriendRequestEdge",
   "GeocodeResult",
   "GoogleBindingCollision",
+  "GooglePlaceDetailsPayload",
+  "GooglePlacePrefill",
   "GooglePlaceSuggestion",
   "GooglePlaceSuggestionConnection",
   "GooglePlaceSuggestionEdge",

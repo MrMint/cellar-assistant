@@ -7,12 +7,15 @@
  * - Reverse geocode, Google nearby suggestions, Google autocomplete and the
  *   debounced duplicate check run as before, through `usePlaceActions`.
  * - Picking a Google suggestion pre-fills what the suggestion carries (its
- *   name, and categories from its types). The old form then called
- *   `enrich_place_from_google({ googlePlaceId })` *before* the place existed
- *   for phone/website/summary; the API has no pre-create details call (G21),
- *   so the place is created first and bound to that Google listing right
- *   after (`enrichPlaceFromGoogle(placeId, { googlePlaceId })`), which fills
- *   those fields on the place itself.
+ *   name, and categories from its types) at once, then — as the old form's
+ *   `enrich_place_from_google({ googlePlaceId })` did — asks for the
+ *   listing's details before the place exists (`googlePlaceDetails`, G21)
+ *   and fills name, phone, website and description from them, with the old
+ *   "Fetching place details..." chip and the search disabled while it runs.
+ *   A failure or a budget denial leaves the form as it was, usable. Only the
+ *   latest pick's answer lands. The place is still bound to that listing
+ *   right after it is created (`enrichPlaceFromGoogle(placeId,
+ *   { googlePlaceId })`), which stores the full enrichment and photos.
  * - `createPlace` gets a client-minted `placeId` (a retried submit is
  *   idempotent) and does the rate limit, duplicate re-check and AI review
  *   server-side — closed, where the old action failed open.
@@ -52,6 +55,7 @@ import {
   type GoogleNearbyPlace,
   usePlaceActions,
 } from "../actions";
+import { googlePrefillFields } from "../adapter";
 import { DuplicatePlaceCheck } from "./DuplicatePlaceCheck";
 import { GooglePlaceSearch } from "./GooglePlaceSearch";
 import { GooglePlaceSuggestions } from "./GooglePlaceSuggestions";
@@ -145,6 +149,7 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
   const router = useRouter();
   const {
     checkDuplicatePlacesAction,
+    googlePlaceDetailsAction,
     createUserPlaceAction,
     googleNearbySearchAction,
     reverseGeocodeAction,
@@ -163,7 +168,9 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
   const [selectedGooglePlaceId, setSelectedGooglePlaceId] = useState<
     string | null
   >(null);
-  const [enriching] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  /** Which pick's details may still land — a later pick retires earlier ones. */
+  const prefillRequest = useRef(0);
 
   const {
     control,
@@ -287,15 +294,11 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
     setDuplicatesConfirmed(true);
   }, []);
 
-  // Pre-fill the form from a Google suggestion (G21: no pre-create details
-  // call — the place is bound to this listing right after it is created).
-  const prefillFromGoogle = useCallback(
-    (suggestion: { googlePlaceId: string; name: string; types: string[] }) => {
-      setValue("name", suggestion.name, { shouldDirty: true });
-
-      // Map Google types to our category options
+  // Map Google types to our category options
+  const prefillCategories = useCallback(
+    (types: readonly string[]) => {
       const matchedCategories = CATEGORY_OPTIONS.filter((cat) =>
-        suggestion.types.some(
+        types.some(
           (t) =>
             t === cat.value || t.replace(/_/g, " ") === cat.label.toLowerCase(),
         ),
@@ -303,23 +306,61 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
       if (matchedCategories.length > 0) {
         setValue("categories", matchedCategories, { shouldDirty: true });
       }
-
-      setSelectedGooglePlaceId(suggestion.googlePlaceId);
     },
     [setValue],
+  );
+
+  // Pre-fill the form from a Google suggestion: what the suggestion carries
+  // at once, then the listing's details (G21) — the old `prefillFromGoogle`.
+  const prefillFromGoogle = useCallback(
+    async (suggestion: {
+      googlePlaceId: string;
+      name: string;
+      types: string[];
+    }) => {
+      setValue("name", suggestion.name, { shouldDirty: true });
+      prefillCategories(suggestion.types);
+      setSelectedGooglePlaceId(suggestion.googlePlaceId);
+
+      prefillRequest.current += 1;
+      const request = prefillRequest.current;
+      setEnriching(true);
+      try {
+        const { details } = await googlePlaceDetailsAction(
+          suggestion.googlePlaceId,
+        );
+        // A later pick owns the form now; this answer is stale.
+        if (request !== prefillRequest.current || details === null) return;
+        const fields = googlePrefillFields(details, isValidPhoneNumber);
+        if (fields.name) setValue("name", fields.name, { shouldDirty: true });
+        if (fields.phone) {
+          setValue("phone", fields.phone, { shouldDirty: true });
+        }
+        if (fields.website) {
+          setValue("website", fields.website, { shouldDirty: true });
+        }
+        if (fields.description) {
+          setValue("description", fields.description, { shouldDirty: true });
+        }
+        prefillCategories(details.types);
+      } finally {
+        if (request === prefillRequest.current) setEnriching(false);
+      }
+    },
+    [setValue, prefillCategories, googlePlaceDetailsAction],
   );
 
   const handleGooglePlaceSelect = useCallback(
     (place: GoogleNearbyPlace) => {
       setGooglePlacesDismissed(true);
-      prefillFromGoogle(place);
+      void prefillFromGoogle(place);
     },
     [prefillFromGoogle],
   );
 
   const handleGoogleAutocompleteSuggestionSelect = useCallback(
     (suggestion: GoogleAutocompleteSuggestion) => {
-      prefillFromGoogle(suggestion);
+      void prefillFromGoogle(suggestion);
     },
     [prefillFromGoogle],
   );

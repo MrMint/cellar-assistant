@@ -2160,6 +2160,65 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "GooglePlaceDetailsPayload",
+        fields: [
+          {
+            name: "charged",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "details",
+            type: { kind: "OBJECT", name: "GooglePlacePrefill" },
+          },
+          {
+            name: "reason",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "GooglePlacePrefill",
+        fields: [
+          {
+            name: "editorialSummary",
+            type: { kind: "SCALAR", name: "String" },
+          },
+          {
+            name: "googlePlaceId",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          { name: "name", type: { kind: "SCALAR", name: "String" } },
+          { name: "phone", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "types",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          { name: "website", type: { kind: "SCALAR", name: "String" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "GooglePlaceSuggestion",
         fields: [
           {
@@ -5150,6 +5209,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "geocode", type: { kind: "OBJECT", name: "GeocodeResult" } },
+          {
+            name: "googlePlaceDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "GooglePlaceDetailsPayload" },
+            },
+          },
           {
             name: "googlePlaceSuggestions",
             type: {

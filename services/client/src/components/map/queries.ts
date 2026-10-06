@@ -52,7 +52,6 @@ export const PLACE_TIER_LIST_ENTRIES_PAGE_SIZE = 20;
 export const SCANS_PAGE_SIZE = 50;
 export const SUGGESTIONS_PAGE_SIZE = 50;
 export const SAVED_PLACES_PAGE_SIZE = 100;
-export const MAP_TIER_LISTS_PAGE_SIZE = 100;
 
 // ---------------------------------------------------------------------------
 // Map
@@ -221,36 +220,6 @@ export const PlaceByIdQuery = graphql(
   [ActorErrorFieldsFragment],
 );
 
-/**
- * The tier lists the map may filter by — the old `GetUserPlaceTierLists`
- * (`list_type = place`, created by the viewer). G33 is not built, so the
- * viewer's visible lists are narrowed to theirs and to places client-side.
- */
-export const MapTierListsQuery = graphql(
-  `
-  query MapTierLists($first: Int!) {
-    me {
-      id
-    }
-    myTierLists(first: $first) {
-      __typename
-      ... on TierListConnection {
-        edges {
-          node {
-            id
-            name
-            listType
-            createdById
-          }
-        }
-      }
-      ...ActorErrorFields
-    }
-  }
-`,
-  [ActorErrorFieldsFragment],
-);
-
 // ---------------------------------------------------------------------------
 // One place (drawer and /places/[placeId])
 // ---------------------------------------------------------------------------
@@ -379,6 +348,10 @@ export const PlaceDetailsQuery = graphql(
         }
         menuItems(first: $menuItems) {
           totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           edges {
             node {
               ...MapMenuLine
@@ -405,6 +378,38 @@ export const PlaceDetailsQuery = graphql(
   }
 `,
   [MenuLineFragment, PlaceInteractionFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * The menu past its first page — "Load more" under the place's menu. The old
+ * `place_menu_items` read was unbounded; `Place.menuItems` pages at 100, so
+ * the first page rides on {@link PlaceDetailsQuery} and the rest come here.
+ */
+export const PlaceMenuItemsPageQuery = graphql(
+  `
+  query MapPlaceMenuItemsPage($id: ID!, $first: Int!, $after: String) {
+    place(id: $id) {
+      __typename
+      ... on Place {
+        id
+        menuItems(first: $first, after: $after) {
+          totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            node {
+              ...MapMenuLine
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [MenuLineFragment, ActorErrorFieldsFragment],
 );
 
 /**
@@ -508,6 +513,28 @@ export const GooglePlaceSuggestionsQuery = graphql(`
             }
           }
         }
+      }
+    }
+  }
+`);
+
+/**
+ * G21 — the old form's pre-create `enrich_place_from_google({ googlePlaceId })`:
+ * what a picked suggestion pre-fills (name, phone, website, summary, types).
+ * Budget-charged; `details: null` is a denial or an unknown id.
+ */
+export const GooglePlaceDetailsQuery = graphql(`
+  query MapGooglePlaceDetails($googlePlaceId: String!) {
+    googlePlaceDetails(googlePlaceId: $googlePlaceId) {
+      charged
+      reason
+      details {
+        googlePlaceId
+        name
+        phone
+        website
+        editorialSummary
+        types
       }
     }
   }
@@ -769,13 +796,13 @@ export const ActOnSuggestionMutation = graphql(
 // ---------------------------------------------------------------------------
 
 /**
- * The dashboard's two tabs that the API serves: pending matches from the
- * viewer's own scans (G20 for the place and the line), and saved places
- * (`PlaceInteraction.place`, G16; the line count from `menuItems.totalCount`).
+ * The dashboard's Pending Matches tab: suggestions from the viewer's own
+ * scans (G20 for the place and the line). Saved Places pages on its own
+ * ({@link SavedPlacesQuery}).
  */
 export const DiscoveryDataQuery = graphql(
   `
-  query MapDiscoveryData($suggestions: Int!, $places: Int!) {
+  query MapDiscoveryData($suggestions: Int!) {
     myDiscoveries(first: $suggestions) {
       __typename
       ... on MatchSuggestionConnection {
@@ -798,9 +825,26 @@ export const DiscoveryDataQuery = graphql(
       }
       ...ActorErrorFields
     }
-    myPlaceInteractions(first: $places) {
+  }
+`,
+  [SuggestionFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * The dashboard's Saved Places tab, one page at a time ("Load more" past
+ * 100): `PlaceInteraction.place` (G16), the line count from
+ * `menuItems.totalCount`.
+ */
+export const SavedPlacesQuery = graphql(
+  `
+  query MapSavedPlaces($first: Int!, $after: String) {
+    myPlaceInteractions(first: $first, after: $after) {
       __typename
       ... on PlaceInteractionConnection {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         edges {
           node {
             ...MapPlaceInteraction
@@ -823,5 +867,5 @@ export const DiscoveryDataQuery = graphql(
     }
   }
 `,
-  [SuggestionFragment, PlaceInteractionFragment, ActorErrorFieldsFragment],
+  [PlaceInteractionFragment, ActorErrorFieldsFragment],
 );

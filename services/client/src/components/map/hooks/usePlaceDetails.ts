@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery } from "urql";
 import {
   type ApiFailure,
   failureFromTransport,
   unwrapResult,
 } from "@/lib/api/result";
+import { type Page, toPage } from "@/lib/paging/paged-connection";
+import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import {
   enrichmentFrom,
   interactionFrom,
+  type MenuItemView,
   menuItemFrom,
   photosFrom,
   tierListEntriesFrom,
@@ -19,6 +22,7 @@ import {
   PLACE_PHOTOS_PAGE_SIZE,
   PLACE_TIER_LIST_ENTRIES_PAGE_SIZE,
   PlaceDetailsQuery,
+  PlaceMenuItemsPageQuery,
   RecordPlaceAccessMutation,
   RecordPlaceInteractionMutation,
 } from "../queries";
@@ -32,7 +36,21 @@ import { usePlaceEnrichment } from "./usePlaceEnrichment";
  *
  * Also fires `recordPlaceAccess` once per place (kept from D5: telemetry for
  * `PlaceRefreshJobActor`, never awaited by the render).
+ *
+ * The menu: the old `place_menu_items` read was unbounded, and
+ * `Place.menuItems` pages at 100. The first page rides on the place query;
+ * `loadMoreMenuItems` walks the rest through `PlaceMenuItemsPageQuery`, and
+ * `menuItemCount` is the connection's `totalCount`, so the tab badge says how
+ * many lines the place has, not how many are loaded. A re-read of the place
+ * (a save, the enrichment poll) keeps the pages already loaded past the
+ * first rather than collapsing the list under the viewer.
  */
+
+const EMPTY_MENU_PAGE: Page<MenuItemView> = {
+  rows: [],
+  endCursor: null,
+  hasNextPage: false,
+};
 
 /** The old `PlaceDetails` fragment, flattened. */
 export type PlaceDetailsData = {
@@ -84,6 +102,47 @@ export function usePlaceDetails(placeId: string | undefined) {
 
   const result = useMemo(() => unwrapResult(data?.place, "Place"), [data]);
   const raw = result.ok ? result.data : null;
+
+  const menu = usePagedConnection({
+    query: PlaceMenuItemsPageQuery,
+    variables: (id: string, after) => ({
+      id,
+      first: MENU_ITEMS_PAGE_SIZE,
+      after,
+    }),
+    select: (answer) => {
+      const place = unwrapResult(answer?.place, "Place");
+      if (!place.ok) return place;
+      return {
+        ok: true,
+        data: toPage(place.data.menuItems, (edge) => menuItemFrom(edge.node)),
+      };
+    },
+    initial: EMPTY_MENU_PAGE,
+    initialArgs: "",
+  });
+  const firstMenuPage = useMemo(
+    () =>
+      raw
+        ? toPage(raw.menuItems, (edge) => menuItemFrom(edge.node))
+        : EMPTY_MENU_PAGE,
+    [raw],
+  );
+  const { replace: replaceMenu } = menu;
+  const menuHeld = useRef({ args: menu.args, loaded: menu.rows.length });
+  menuHeld.current = { args: menu.args, loaded: menu.rows.length };
+  useEffect(() => {
+    if (!raw) return;
+    const held = menuHeld.current;
+    // Same place, and the viewer has paged past what the re-read returned.
+    if (held.args === raw.id && held.loaded > firstMenuPage.rows.length) {
+      return;
+    }
+    replaceMenu(firstMenuPage, raw.id);
+  }, [raw, firstMenuPage, replaceMenu]);
+  // Until the effect adopts a new place's first page, show that page.
+  const menuIsCurrent = raw !== null && menu.args === raw.id;
+  const menuRows = menuIsCurrent ? menu.rows : firstMenuPage.rows;
   const failure: ApiFailure | null = error
     ? failureFromTransport(error)
     : !fetching && data !== undefined && !result.ok
@@ -118,22 +177,32 @@ export function usePlaceDetails(placeId: string | undefined) {
     return {
       place,
       userInteraction: interactionFrom(raw.myInteraction),
-      menuItems: raw.menuItems.edges.map((edge) => menuItemFrom(edge.node)),
-      menuItemCount: raw.menuItems.totalCount,
+      menuItems: [...menuRows],
+      menuItemCount:
+        (menuIsCurrent ? menu.totalCount : null) ??
+        raw.menuItems.totalCount ??
+        menuRows.length,
       enrichment: enrichmentFrom(raw.enrichment),
       googlePhotos: photosFrom(raw.photos.edges.map((edge) => edge.node)),
       tierListEntries: tierListEntriesFrom(
         raw.tierListEntries.edges.map((edge) => edge.node),
       ),
     };
-  }, [raw]);
+  }, [raw, menuRows, menuIsCurrent, menu.totalCount]);
 
   const { isEnriching } = usePlaceEnrichment({
     placeId,
     loaded: raw !== null,
     hasEnrichment: raw?.enrichment != null,
+    photosPending:
+      raw?.enrichment != null && raw.enrichment.photosFetchedAt == null,
     refetch,
   });
+
+  const { loadMore: loadMoreMenu } = menu;
+  const loadMoreMenuItems = useCallback(() => {
+    void loadMoreMenu();
+  }, [loadMoreMenu]);
 
   /** Save/unsave and visit/unvisit; resolves to an error message or null. */
   const setInteraction = useCallback(
@@ -167,6 +236,12 @@ export function usePlaceDetails(placeId: string | undefined) {
       googlePhotos: [],
       tierListEntries: [],
     }),
+    hasMoreMenuItems: menuIsCurrent
+      ? menu.hasNextPage
+      : firstMenuPage.hasNextPage,
+    loadingMoreMenuItems: menu.status === "loadingMore",
+    menuLoadMoreError: menuIsCurrent ? (menu.failure?.message ?? null) : null,
+    loadMoreMenuItems,
     fetching: fetching && raw === null,
     failure,
     isEnriching,

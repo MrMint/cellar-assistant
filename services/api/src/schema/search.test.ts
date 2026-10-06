@@ -20,6 +20,7 @@ import {
   cellarItemSearchActorId,
   duplicatePlaceSearchActorId,
   geocodeActorId,
+  googlePlaceDetailsActorId,
   googlePlacesActorId,
   itemSearchActorId,
   placeSearchActorId,
@@ -82,6 +83,11 @@ const allSearchStubs = () => ({
     suggestions: [],
     charged: true,
     reason: "within free tier",
+  }),
+  "GooglePlacesActor.details": () => ({
+    details: null,
+    charged: true,
+    reason: "google returned no result",
   }),
   "GeocodeActor.forward": () => null,
   "GeocodeActor.reverse": () => null,
@@ -221,6 +227,12 @@ const FIELDS: readonly {
     viewerScoped: false,
   },
   {
+    actorType: "GooglePlacesActor",
+    document: `{ googlePlaceDetails(googlePlaceId: "ChIJ_picked") { charged } }`,
+    key: () => googlePlaceDetailsActorId("ChIJ_picked"),
+    viewerScoped: false,
+  },
+  {
     actorType: "GeocodeActor",
     document: `{ geocode(query: "2136 N High St") { displayName } }`,
     key: (ctx) =>
@@ -334,6 +346,69 @@ describe("C1 search fields (§2.3)", () => {
         suggestions: {
           edges: [{ node: { googlePlaceId: "g1", name: "Stagger Lee" } }],
         },
+      });
+    });
+  });
+
+  describe("`googlePlaceDetails` (G21)", () => {
+    it("returns only the pre-fill fields and says whether it spent money", async () => {
+      const { invoke, calls } = stubSidecar({
+        ...allSearchStubs(),
+        "GooglePlacesActor.details": () => ({
+          details: {
+            googlePlaceId: "ChIJ_picked",
+            name: "Stagger Lee",
+            phone: "+16145550100",
+            website: "https://stagger.test",
+            editorialSummary: "A dim, friendly bar.",
+            types: ["bar"],
+          },
+          charged: true,
+          reason: "within budget",
+        }),
+      });
+      const result = await run(
+        `{ googlePlaceDetails(googlePlaceId: "ChIJ_picked") {
+             charged reason
+             details { googlePlaceId name phone website editorialSummary types }
+           } }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+      expect(calls[0]?.method).toBe("details");
+      expect(calls[0]?.args[1]).toEqual({ googlePlaceId: "ChIJ_picked" });
+      expect(result.data?.googlePlaceDetails).toEqual({
+        charged: true,
+        reason: "within budget",
+        details: {
+          googlePlaceId: "ChIJ_picked",
+          name: "Stagger Lee",
+          phone: "+16145550100",
+          website: "https://stagger.test",
+          editorialSummary: "A dim, friendly bar.",
+          types: ["bar"],
+        },
+      });
+    });
+
+    it("a budget denial is null details, not an error", async () => {
+      const { invoke } = stubSidecar({
+        ...allSearchStubs(),
+        "GooglePlacesActor.details": () => ({
+          details: null,
+          charged: false,
+          reason: "budget exceeded",
+        }),
+      });
+      const result = await run(
+        `{ googlePlaceDetails(googlePlaceId: "ChIJ_picked") { charged reason details { name } } }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.googlePlaceDetails).toEqual({
+        charged: false,
+        reason: "budget exceeded",
+        details: null,
       });
     });
   });

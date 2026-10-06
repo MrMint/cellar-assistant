@@ -89,6 +89,11 @@ export type GooglePlaceDetails = {
   readonly priceLevel: number | null;
   readonly website: string | null;
   readonly phone: string | null;
+  /**
+   * `internationalPhoneNumber`, when the mask asked for it (the create-place
+   * pre-fill does; enrichment does not and stores `phone` as it always has).
+   */
+  readonly internationalPhone?: string | null;
   readonly openingHours: Record<string, unknown> | null;
   readonly types: readonly string[];
   readonly businessStatus: string | null;
@@ -126,8 +131,16 @@ export type GooglePlacesClient = {
     query: string,
     near: { readonly lng: number; readonly lat: number },
   ): Promise<{ readonly googlePlaceId: string } | null>;
-  /** `null` when the id is unknown to Google (a stale binding). */
-  details(googlePlaceId: string): Promise<GooglePlaceDetails | null>;
+  /**
+   * `null` when the id is unknown to Google (a stale binding). `fieldMask`
+   * defaults to everything enrichment stores; the create-place pre-fill (G21)
+   * passes {@link PREFILL_DETAILS_FIELD_MASK}, and fields outside the mask come
+   * back null/empty.
+   */
+  details(
+    googlePlaceId: string,
+    options?: { readonly fieldMask?: readonly string[] },
+  ): Promise<GooglePlaceDetails | null>;
   /** `null` when the photo could not be fetched. */
   photo(
     photoName: string,
@@ -192,6 +205,21 @@ const DETAILS_FIELD_MASK = [
   "photos",
   "attributions",
 ].join(",");
+
+/**
+ * G21's pre-fill: only what `82450ad1`'s create-place form filled in (name,
+ * phone, website, editorial summary, types). No photos, hours, rating or
+ * address: none of them reach the form, and a mask is what Google bills by.
+ */
+export const PREFILL_DETAILS_FIELD_MASK = [
+  "id",
+  "displayName",
+  "types",
+  "nationalPhoneNumber",
+  "internationalPhoneNumber",
+  "websiteUri",
+  "editorialSummary",
+] as const;
 
 const TEXT_SEARCH_FIELD_MASK = "places.id";
 
@@ -300,6 +328,7 @@ export const toGooglePlaceDetails = (
     priceLevel: priceLevelToInt(body.priceLevel),
     website: asString(body.websiteUri),
     phone: asString(body.nationalPhoneNumber),
+    internationalPhone: asString(body.internationalPhoneNumber),
     openingHours:
       typeof hours === "object" && hours !== null
         ? (hours as Record<string, unknown>)
@@ -348,10 +377,16 @@ export const httpGooglePlacesClient = (apiKey: string): GooglePlacesClient => {
       return typeof id === "string" ? { googlePlaceId: id } : null;
     },
 
-    async details(googlePlaceId) {
+    async details(googlePlaceId, options) {
       const response = await fetch(
         `${PLACES_API_BASE}/places/${encodeURIComponent(googlePlaceId)}`,
-        { headers: headers(DETAILS_FIELD_MASK) },
+        {
+          headers: headers(
+            options?.fieldMask === undefined
+              ? DETAILS_FIELD_MASK
+              : options.fieldMask.join(","),
+          ),
+        },
       );
       if (!response.ok) return null;
       return toGooglePlaceDetails(

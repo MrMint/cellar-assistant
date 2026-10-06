@@ -392,7 +392,9 @@ export type EnrichFromGoogleResult = {
    * - `queued` — a **user** asked; the work is an outbox row now (§8.5:
    *   enrichment is eight external round-trips and is not one of the two
    *   named request-driven long operations). Everything below except `fresh`
-   *   is only ever returned by the system turn.
+   *   is only ever returned by the system turn. `enrichment` is null, except
+   *   for a photo-only resume (fresh details whose photo loop never finished,
+   *   e.g. a migrated row with `photosFetchedAt` null), where it is attached.
    * - `enriched` — details fetched and written.
    * - `fresh` — an enrichment newer than the TTL already exists; nothing done.
    *   The one status both halves return: a user call inside the window gets

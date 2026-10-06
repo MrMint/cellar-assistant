@@ -1694,7 +1694,7 @@ describe.skipIf(skip)(
       });
     });
 
-    it("an admin repair without force resumes the photos too; the user half still answers fresh and queues nothing", async () => {
+    it("an admin repair without force resumes the photos too; the user half queues one photo-only resume", async () => {
       await withTestDb(async (db) => {
         const placeId = await seedPlace(db);
         const { reserve } = await budgetBackedReserver(db);
@@ -1728,16 +1728,18 @@ describe.skipIf(skip)(
         const actor = await activate(
           newPlaceActor(placeId, db, { ...seams, reserve }),
         );
-        // A signed-in user's click: fresh details, so no outbox row — the
-        // photo resume is the redelivery's (or the operator's) job.
+        // A signed-in user's click: fresh details but an unfinished photo
+        // loop, so one photo-only resume is queued — and nothing is bought in
+        // the user's turn.
         const user = await seedUser(db);
         const clicked = await actor.enrichFromGoogle(userCtx(user, "r-click"));
-        expect(clicked.status).toBe("fresh");
+        expect(clicked.status).toBe("queued");
+        expect(clicked.enrichment?.detailsFetchedAt).not.toBeNull();
         const queued = await db
           .select({ id: outbox.id })
           .from(outbox)
           .where(eq(outbox.targetId, placeId));
-        expect(queued).toHaveLength(0);
+        expect(queued).toHaveLength(1);
         expect(counting.calls.photo).toBe(0);
 
         // The outbox gave up on the row; the operator repairs it without force.
@@ -1750,6 +1752,199 @@ describe.skipIf(skip)(
         expect(counting.calls.details).toBe(1);
         expect(counting.calls.photo).toBe(2);
         expect(await usageRows(db, placeId)).toHaveLength(counting.paid());
+      });
+    });
+  },
+);
+
+/* -------------------------------------------------------------------------- */
+/* A migrated place with fresh details and no photos: the user half resumes    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The shape the Nhost transform leaves for a place that was enriched before
+ * its photos were ever fetched: fresh details, `photo_references` stored,
+ * `photos_fetched_at` null and no `place_google_photos` rows. The old place
+ * page re-asked in exactly this case (`82450ad1`'s
+ * `places/[placeId]/page.tsx`, `needsPhotos`).
+ */
+const seedMigratedEnrichment = async (
+  db: DbOrTx,
+  placeId: string,
+  googlePlaceId: string,
+  photoCount: number,
+) => {
+  await db.insert(placeGoogleEnrichments).values({
+    placeId,
+    googlePlaceId,
+    resolvedVia: "autocomplete",
+    detailsFetchedAt: new Date(),
+    photosFetchedAt: null,
+    photoReferences: Array.from({ length: photoCount }, (_, i) => ({
+      name: `places/${googlePlaceId}/photos/p${i}`,
+    })),
+  });
+};
+
+const outboxRowsFor = async (db: DbOrTx, placeId: string) =>
+  await db
+    .select({ id: outbox.id, method: outbox.method, payload: outbox.payload })
+    .from(outbox)
+    .where(eq(outbox.targetId, placeId));
+
+describe.skipIf(skip)(
+  "PlaceActor: a migrated place with fresh details and no photos",
+  () => {
+    afterAll(closeTestDb);
+
+    it("the user half queues one photo-only resume, and asking again while it is live queues nothing", async () => {
+      await withTestDb(async (db) => {
+        const placeId = await seedPlace(db);
+        await seedMigratedEnrichment(db, placeId, "ChIJ_MIGRATED", 3);
+        const counting = countingGoogle(3);
+        const user = await seedUser(db);
+        const actor = await activate(
+          newPlaceActor(placeId, db, { google: counting.google }),
+        );
+
+        const first = await actor.enrichFromGoogle(userCtx(user, "r-open"));
+        expect(first.status).toBe("queued");
+        expect(first.enrichment?.googlePlaceId).toBe("ChIJ_MIGRATED");
+        expect(first.enrichment?.photosFetchedAt).toBeNull();
+
+        const again = await actor.enrichFromGoogle(userCtx(user, "r-reopen"));
+        expect(again.status).toBe("queued");
+        expect(again.reason).toMatch(/already queued/);
+
+        const rows = await outboxRowsFor(db, placeId);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.method).toBe("enrichFromGoogle");
+        // No force: the delivery must take the non-forced resume path.
+        expect(rows[0]?.payload).not.toHaveProperty("force");
+        // Nothing external in a user's turn.
+        expect(counting.paid()).toBe(0);
+      });
+    });
+
+    it("the queued delivery fetches only the photos — never the details — charges each, and stamps the marker; then the place stops asking", async () => {
+      await withTestDb(async (db) => {
+        const placeId = await seedPlace(db);
+        await seedMigratedEnrichment(db, placeId, "ChIJ_MIGRATED_DELIVER", 2);
+        const { reserve, asked } = await budgetBackedReserver(db);
+        const counting = countingGoogle(2);
+        const user = await seedUser(db);
+        const seams = {
+          google: counting.google,
+          reserve,
+          storePhoto: filesPhotoStore(db),
+        };
+        const actor = await activate(newPlaceActor(placeId, db, seams));
+
+        const asked1 = await actor.enrichFromGoogle(userCtx(user, "r-open"));
+        expect(asked1.status).toBe("queued");
+        const [row] = await outboxRowsFor(db, placeId);
+        if (row === undefined) throw new Error("no outbox row");
+
+        // OutboxActor delivers that row to a fresh activation.
+        const delivered = await (
+          await activate(newPlaceActor(placeId, db, seams))
+        ).enrichFromGoogle(
+          deliveryCtx(row.id),
+          row.payload as { maxPhotos?: number },
+        );
+        expect(delivered.status).toBe("fresh");
+        expect(delivered.photos).toHaveLength(2);
+        expect(delivered.enrichment?.photosFetchedAt).not.toBeNull();
+        expect(counting.calls.details).toBe(0);
+        expect(counting.calls.textSearch).toBe(0);
+        expect(counting.calls.photo).toBe(2);
+        expect(asked.map((input) => input.kind.endpoint)).toEqual([
+          "photo",
+          "photo",
+        ]);
+        expect(await usageRows(db, placeId)).toHaveLength(counting.paid());
+
+        // Marker stamped: the next open answers fresh and queues nothing.
+        const after = await (
+          await activate(newPlaceActor(placeId, db, seams))
+        ).enrichFromGoogle(userCtx(user, "r-later"));
+        expect(after.status).toBe("fresh");
+        expect(await outboxRowsFor(db, placeId)).toHaveLength(1);
+        expect(counting.calls.photo).toBe(2);
+      });
+    });
+
+    it("a budget denial stops the resume without downloading, and leaves the marker unset", async () => {
+      await withTestDb(async (db) => {
+        const placeId = await seedPlace(db);
+        await seedMigratedEnrichment(db, placeId, "ChIJ_MIGRATED_BROKE", 2);
+        const counting = countingGoogle(2);
+        const actor = await activate(
+          newPlaceActor(placeId, db, {
+            google: counting.google,
+            reserve: denyAll,
+            storePhoto: noPhotoStore,
+          }),
+        );
+        const resumed = await actor.enrichFromGoogle(
+          deliveryCtx(crypto.randomUUID()),
+          { maxPhotos: 3 },
+        );
+        expect(resumed.status).toBe("fresh");
+        expect(resumed.reason).toMatch(/budget refused/);
+        expect(resumed.photos).toHaveLength(0);
+        expect(resumed.enrichment?.photosFetchedAt).toBeNull();
+        expect(counting.paid()).toBe(0);
+      });
+    });
+
+    it("a migrated place with no photo references is stamped by one free delivery, without a Google call", async () => {
+      await withTestDb(async (db) => {
+        const placeId = await seedPlace(db);
+        await seedMigratedEnrichment(db, placeId, "ChIJ_MIGRATED_BARE", 0);
+        const counting = countingGoogle(0);
+        const user = await seedUser(db);
+        const seams = { google: counting.google, reserve: denyAll };
+        const actor = await activate(newPlaceActor(placeId, db, seams));
+
+        expect(
+          (await actor.enrichFromGoogle(userCtx(user, "r-open"))).status,
+        ).toBe("queued");
+        const [row] = await outboxRowsFor(db, placeId);
+        if (row === undefined) throw new Error("no outbox row");
+        const delivered = await (
+          await activate(newPlaceActor(placeId, db, seams))
+        ).enrichFromGoogle(deliveryCtx(row.id), { maxPhotos: 3 });
+        expect(delivered.enrichment?.photosFetchedAt).not.toBeNull();
+        expect(counting.paid()).toBe(0);
+
+        expect(
+          (
+            await (
+              await activate(newPlaceActor(placeId, db, seams))
+            ).enrichFromGoogle(userCtx(user, "r-later"))
+          ).status,
+        ).toBe("fresh");
+      });
+    });
+
+    it("a place whose photo loop finished answers fresh to a user and queues nothing", async () => {
+      await withTestDb(async (db) => {
+        const placeId = await seedPlace(db);
+        const now = new Date();
+        await db.insert(placeGoogleEnrichments).values({
+          placeId,
+          googlePlaceId: "ChIJ_FINISHED",
+          resolvedVia: "autocomplete",
+          detailsFetchedAt: now,
+          photosFetchedAt: now,
+          photoReferences: [{ name: "places/ChIJ_FINISHED/photos/p0" }],
+        });
+        const user = await seedUser(db);
+        const actor = await activate(newPlaceActor(placeId, db));
+        const result = await actor.enrichFromGoogle(userCtx(user, "r-open"));
+        expect(result.status).toBe("fresh");
+        expect(await outboxRowsFor(db, placeId)).toHaveLength(0);
       });
     });
   },

@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "urql";
-import { unwrapResult } from "@/lib/api/result";
-import { MAP_TIER_LISTS_PAGE_SIZE, MapTierListsQuery } from "../queries";
+import { useAllMyTierLists } from "@/components/tier-list/useAllMyTierLists";
 
 /*
  * `82450ad1`'s `GetUserPlaceTierLists` (`list_type = place`, created by the
- * viewer, by name) → `myTierLists` narrowed to the viewer's own place lists
- * and sorted client-side (G33 is not built). The list ids then go to
+ * viewer, by name) → **every page** of `myTierLists` (`useAllMyTierLists`)
+ * narrowed to the viewer's own place lists and sorted client-side (G33 is
+ * not built). Narrowing only the first 100 visible lists dropped the
+ * viewer's own for anyone who sees more. The list ids then go to
  * `mapBrowse`/`placeSearch`, which reduce them through `canSeeTierList`.
  */
 
@@ -21,22 +21,17 @@ export function useTierListFilter(
   selectedTierListIds: string[],
   userId?: string,
 ) {
-  const [{ data, fetching }] = useQuery({
-    query: MapTierListsQuery,
-    variables: { first: MAP_TIER_LISTS_PAGE_SIZE },
-    pause: !userId,
+  const { lists, viewerId, loading } = useAllMyTierLists({
+    active: Boolean(userId),
   });
 
   const tierLists: TierListFilterOption[] = useMemo(() => {
-    const result = unwrapResult(data?.myTierLists, "TierListConnection");
-    const viewerId = data?.me?.id ?? null;
-    if (!result.ok || viewerId === null) return [];
-    return result.data.edges
-      .map((edge) => edge.node)
+    if (viewerId === null) return [];
+    return lists
       .filter((tl) => tl.listType === "place" && tl.createdById === viewerId)
       .map((tl) => ({ id: tl.id, name: tl.name }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [data]);
+  }, [lists, viewerId]);
 
   const allTierListIds = useMemo(
     () => tierLists.map((tl) => tl.id),
@@ -62,6 +57,6 @@ export function useTierListFilter(
     allTierListIds,
     effectiveSelectedIds,
     isFilterActive,
-    loading: fetching,
+    loading,
   };
 }

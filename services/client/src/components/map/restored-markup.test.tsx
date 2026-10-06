@@ -84,6 +84,37 @@ describe("PlaceMenuItems (restored)", () => {
       /No menu items available/,
     );
   });
+
+  test("Load more under the list while lines remain past the first page", () => {
+    const more = render(
+      <PlaceMenuItems
+        placeId="p1"
+        menuItems={[matched]}
+        hasMore
+        onLoadMore={() => {}}
+      />,
+    );
+    assert.match(more, />Load more</);
+    const done = render(
+      <PlaceMenuItems
+        placeId="p1"
+        menuItems={[matched]}
+        hasMore={false}
+        onLoadMore={() => {}}
+      />,
+    );
+    assert.doesNotMatch(done, /Load more/);
+    assert.match(
+      render(
+        <PlaceMenuItems
+          placeId="p1"
+          menuItems={[matched]}
+          loadMoreError="The server did not answer."
+        />,
+      ),
+      /The server did not answer\./,
+    );
+  });
 });
 
 describe("GoogleAttribution", () => {
@@ -221,6 +252,7 @@ describe("drawer content (restored)", () => {
     assert.match(html, /Saved/);
     assert.match(html, /Menu Items/);
     assert.match(html, /Kubota Junmai/);
+    assert.doesNotMatch(html, /Load more/);
     assert.match(html, /aria-label="Close place details"/);
   });
 
@@ -263,6 +295,40 @@ describe("drawer content (restored)", () => {
     assert.ok(html.includes(`${optimizedSrc(photo, 400)} 400w`));
     assert.match(html, /sizes="\(max-width: 600px\) 100vw, 720px"/);
     assert.ok(!html.includes(`src="${photo}"`));
+  });
+});
+
+describe("drawer menu badge counts every line, not the loaded page", () => {
+  test("totalCount in the chip, Load more below", () => {
+    const html = render(
+      <PlaceDetailsContent
+        place={{
+          id: "p1",
+          name: "Rusty Barrel",
+          primary_category: "bar",
+          categories: [],
+          street_address: null,
+          locality: null,
+          rating: null,
+        }}
+        userInteraction={null}
+        menuItems={[matched, unmatched]}
+        menuItemCount={240}
+        hasMoreMenuItems
+        onLoadMoreMenuItems={() => {}}
+        loadingDetails={false}
+        hasMenuItems
+        userId=""
+        variant="desktop"
+        onClose={() => {}}
+        refetch={() => {}}
+        setInteraction={async () => null}
+        enrichment={null}
+        googlePhotos={[]}
+      />,
+    );
+    assert.match(html, /Menu Items<\/[^>]+>.*?>240</s);
+    assert.match(html, />Load more</);
   });
 });
 

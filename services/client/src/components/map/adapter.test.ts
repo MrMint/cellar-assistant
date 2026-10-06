@@ -11,6 +11,7 @@ import {
   attributionLines,
   duplicateFrom,
   enrichmentFrom,
+  googlePrefillFields,
   interactionFrom,
   looksLikeAddress,
   mapItemsFromBrowse,
@@ -468,6 +469,45 @@ describe("searchMapPlaces", () => {
     await assert.rejects(
       searchMapPlaces(client, { bounds, semanticQuery: "wine" }),
       /No embedding provider/,
+    );
+  });
+});
+
+describe("googlePrefillFields (G21 — the old prefillFromGoogle)", () => {
+  const valid = (phone: string) => phone.startsWith("+");
+
+  test("fills name, phone, website and the summary as the description", () => {
+    assert.deepEqual(
+      googlePrefillFields(
+        {
+          name: "Stagger Lee",
+          phone: "+16145550100",
+          website: "https://stagger.test",
+          editorialSummary: "A dim, friendly bar.",
+        },
+        valid,
+      ),
+      {
+        name: "Stagger Lee",
+        phone: "+16145550100",
+        website: "https://stagger.test",
+        description: "A dim, friendly bar.",
+      },
+    );
+  });
+
+  test("leaves absent fields — and a phone the form would reject — alone", () => {
+    assert.deepEqual(
+      googlePrefillFields(
+        {
+          name: null,
+          phone: "(614) 555-0100",
+          website: null,
+          editorialSummary: "",
+        },
+        valid,
+      ),
+      {},
     );
   });
 });
