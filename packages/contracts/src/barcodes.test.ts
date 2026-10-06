@@ -463,7 +463,15 @@ describe("displayBarcode", () => {
     // The table can only hold the cases somebody thought of; the property is
     // what the search box depends on, so sample it. Bodies are spread across
     // the whole space and packed near zero, where the 8-digit forms live.
+    //
+    // ~960k (body, hint) pairs. They are checked with plain comparisons and
+    // asserted once at the end, not with two `expect()` calls per pair: ~1.9M
+    // matcher calls were most of this test's time, and took it to 5.9 s — past
+    // vitest's 5 s default — on a GitHub-hosted runner. Every pair is still
+    // checked; the first few that fail are what the assertion prints.
     const hints = [null, "UPC_A", "EAN_13", "UPC_E", "EAN_8", "ITF_14"];
+    const failures: string[] = [];
+    let failed = 0;
     let checked = 0;
     for (const length of [8, 12, 13, 14]) {
       const bodies = new Set<string>();
@@ -479,14 +487,21 @@ describe("displayBarcode", () => {
         const raw = withCheckDigit(body);
         for (const hint of hints) {
           const shown = displayBarcode(raw, hint);
-          expect(canonicalBarcodeCode(shown)).toBe(
-            canonicalBarcodeCode(raw, hint),
-          );
-          expect(shown.length).toBeLessThanOrEqual(14);
+          const back = canonicalBarcodeCode(shown);
+          const want = canonicalBarcodeCode(raw, hint);
+          if (back !== want || shown.length > 14) {
+            failed++;
+            if (failures.length < 20) {
+              failures.push(
+                `${raw} (${hint}) → ${shown} → ${back}, want ${want}`,
+              );
+            }
+          }
           checked++;
         }
       }
     }
+    expect(failures, `${failed} of ${checked} pairs failed`).toEqual([]);
     // Guards the loop itself: a sampler that generated nothing passes vacuously.
     expect(checked).toBeGreaterThan(400_000);
   });
