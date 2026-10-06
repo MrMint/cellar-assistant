@@ -40,6 +40,9 @@ on:
       - "bunfig.toml"
       - "package.json"
       - ".dockerignore"
+      # Both Dockerfiles COPY every workspace manifest (`--frozen-lockfile`
+      # checks bun.lock against all of them); `packages/**` covers the rest.
+      - "services/client/package.json"
       # The smoke test this job runs.
       - "scripts/ci/**"
       - ".github/workflows/deploy-loki.yaml"
