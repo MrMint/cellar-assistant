@@ -30,6 +30,14 @@ photos that predate that or another model's, by the vector re-embed job's
 `item_image_vectors` table: `scripts/operator.ts reembed --tables
 item_image_vectors`.
 
+A search photo (upload kind `image-search`) is short-lived: `ItemSearchActor`
+discards it — row and object, through `FileActor.discardSearchPhoto` — once the
+search has used it (or refused it as `IMAGE_SEARCH_UNAVAILABLE`), and
+`MaintenanceActor`'s daily reap deletes any unattached one older than 24h
+(`SEARCH_PHOTO_TTL_MS`), verified or not. Reloading `/search?image=<id>` after
+the cached result is gone reads as an expired link. An item's shared vector
+takes in only its newest **public** photo; a private one never shapes it.
+
 `src/index.ts` calls `installAI()` at boot, which installs a real implementation
 behind all seven seams — or, with no provider configured, installs nothing and
 leaves each seam throwing an error that names itself.

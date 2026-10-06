@@ -994,6 +994,122 @@ describe.skipIf(skip)("FileActor (A8)", () => {
     });
   });
 
+  /**
+   * G32: a search photo is short-lived. `ItemSearchActor` calls this once the
+   * photo's vector has been used; the rule about which files may go is here.
+   */
+  describe("discardSearchPhoto", () => {
+    /** An uploaded, verified file of `kind`, as `FileActor` would leave it. */
+    const uploaded = async (
+      db: DbOrTx,
+      uploaderId: string,
+      kind: string,
+      binding: FilesBinding = fakeBinding(),
+    ) => {
+      const fileId = freshId();
+      const actor = await activate(newFileActor(fileId, db, binding));
+      await actor.createUploadTarget(userCtx(uploaderId, "r1"), { kind });
+      await db.execute(sql`
+        update public.files set verified_at = now(), mime_type = 'image/jpeg'
+        where id = ${fileId}::uuid
+      `);
+      return {
+        fileId,
+        actor: await activate(newFileActor(fileId, db, binding)),
+      };
+    };
+
+    it("deletes the uploader's own search photo — row and both objects — and a later read is NotFound", async () => {
+      await withTestDb(async (db) => {
+        const uploaderId = await seedUser(db);
+        const del = vi.fn(async () => undefined);
+        const { fileId, actor } = await uploaded(
+          db,
+          uploaderId,
+          "image-search",
+          fakeBinding({ delete: del }),
+        );
+
+        await expect(
+          actor.discardSearchPhoto(userCtx(uploaderId, "r2")),
+        ).resolves.toEqual({ discarded: true });
+        expect(del.mock.calls).toEqual([
+          [`image-search/${fileId}`],
+          [`uploads/image-search/${fileId}`],
+        ]);
+        const [row] = await db.select().from(files).where(eq(files.id, fileId));
+        expect(row).toBeUndefined();
+        // What a reload of `/search?image=<id>` meets once the cached vector
+        // has gone: the image loader's read is NotFound.
+        const fresh = await activate(newFileActor(fileId, db));
+        await expect(
+          fresh.presignReadInternal(userCtx(uploaderId, "r3")),
+        ).rejects.toBeInstanceOf(NotFoundError);
+        // And again is not an error.
+        await expect(
+          fresh.discardSearchPhoto(userCtx(uploaderId, "r4")),
+        ).resolves.toEqual({ discarded: false });
+      });
+    });
+
+    it("leaves any other kind alone — a photo search over an item image must not delete it", async () => {
+      await withTestDb(async (db) => {
+        const uploaderId = await seedUser(db);
+        const del = vi.fn(async () => undefined);
+        const { fileId, actor } = await uploaded(
+          db,
+          uploaderId,
+          "item-image",
+          fakeBinding({ delete: del }),
+        );
+        await expect(
+          actor.discardSearchPhoto(userCtx(uploaderId, "r2")),
+        ).resolves.toEqual({ discarded: false });
+        expect(del).not.toHaveBeenCalled();
+        const [row] = await db.select().from(files).where(eq(files.id, fileId));
+        expect(row).not.toBeUndefined();
+      });
+    });
+
+    it("leaves another person's search photo alone, without an error", async () => {
+      await withTestDb(async (db) => {
+        const uploaderId = await seedUser(db);
+        const strangerId = await seedUser(db);
+        const { fileId, actor } = await uploaded(
+          db,
+          uploaderId,
+          "image-search",
+        );
+        await expect(
+          actor.discardSearchPhoto(userCtx(strangerId, "r2")),
+        ).resolves.toEqual({ discarded: false });
+        const [row] = await db.select().from(files).where(eq(files.id, fileId));
+        expect(row).not.toBeUndefined();
+      });
+    });
+
+    it("keeps a search photo somebody attached to an item", async () => {
+      await withTestDb(async (db) => {
+        const uploaderId = await seedUser(db);
+        const { fileId, actor } = await uploaded(
+          db,
+          uploaderId,
+          "image-search",
+        );
+        const wineId = await seedWine(db, uploaderId);
+        await db.execute(sql`
+          insert into public.item_image (user_id, file_id, wine_id, is_public)
+          values (${uploaderId}::uuid, ${fileId}::uuid, ${wineId}::uuid, true)
+        `);
+        await expect(
+          actor.discardSearchPhoto(userCtx(uploaderId, "r2")),
+        ).resolves.toEqual({ discarded: false });
+        const [row] = await db.select().from(files).where(eq(files.id, fileId));
+        expect(row).not.toBeUndefined();
+      });
+    });
+  });
+
   it("activating an id with no row reports NotFound", async () => {
     await withTestDb(async (db) => {
       const actor = await activate(newFileActor(freshId(), db));

@@ -3,9 +3,10 @@
  * now fed by `itemSearch(imageFileId:)` instead of `?image_results=<JSON>`.
  *
  * Asserts the **old** copy for the two outcomes the old block had (matches,
- * and "No items found matching the image" with "Add an item"), and that the
+ * and "No items found matching the image" with "Add an item"), that the
  * new "this deployment cannot embed a photo" answer is said as itself rather
- * than as "no items".
+ * than as "no items", and that a discarded photo reads as the page's
+ * existing "link has expired" message rather than an error.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -101,6 +102,25 @@ describe("ServerImageResults (restored, G32)", () => {
     const html = text(await render());
     assert.match(html, /Photo search isn(&#x27;|')t available here/);
     assert.doesNotMatch(html, /No items found/);
+  });
+
+  // A search photo is discarded once its search has used it (G32), so a
+  // reload after the cached result has gone finds no file: an expired link,
+  // said the way the old `?image_results=` links are — not an error page.
+  test("a photo that is no longer there is an expired link, with Add an item", async () => {
+    answer = {
+      __typename: "NotFoundError",
+      code: "NOT_FOUND",
+      reason: null,
+      message: "file 0b5f8c2e-9d61-4c7a-8f0e-3a1b2c4d5e6f not found",
+    };
+    const html = text(await render());
+    assert.match(
+      html,
+      /This image search link has expired\. Tap Photo to search with a new picture\./,
+    );
+    assert.match(html, /Add an item/);
+    assert.doesNotMatch(html, /Image search failed|No items found/);
   });
 
   test("any other refusal is an error, not an empty result", async () => {

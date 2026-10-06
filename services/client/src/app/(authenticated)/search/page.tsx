@@ -1,8 +1,7 @@
-import { Box, Button, Chip, Stack, Typography } from "@mui/joy";
+import { Box, Chip, Stack, Typography } from "@mui/joy";
 import Link from "next/link";
 import { Suspense } from "react";
 import {
-  MdAdd,
   MdFavorite,
   MdHome,
   MdLeaderboard,
@@ -34,7 +33,10 @@ import {
 } from "@/components/search/queries";
 import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
 import { ServerBarcodeResults } from "@/components/search/ServerBarcodeResults";
-import { ServerImageResults } from "@/components/search/ServerImageResults";
+import {
+  ExpiredImageSearch,
+  ServerImageResults,
+} from "@/components/search/ServerImageResults";
 import { ServerSearchResults } from "@/components/search/ServerSearchResults";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
@@ -172,17 +174,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
             {imageFileId === null && legacyImageLink && (
               <Stack spacing={2}>
                 <Typography level="title-lg">Image search results</Typography>
-                <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
-                  <Typography level="body-lg" sx={{ textAlign: "center" }}>
-                    This image search link has expired. Tap Photo to search with
-                    a new picture.
-                  </Typography>
-                  <Link href="/add" style={{ textDecoration: "none" }}>
-                    <Button variant="outlined" startDecorator={<MdAdd />}>
-                      Add an item
-                    </Button>
-                  </Link>
-                </Stack>
+                <ExpiredImageSearch />
               </Stack>
             )}
 

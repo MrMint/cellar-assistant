@@ -87,6 +87,16 @@ test("the Photo button photographs, uploads and searches — and says so honestl
         .or(primary.locator("a[href*='/wines/'], a[href*='/beers/']").first()),
     ).toBeVisible();
   }
+
+  // The photo has done its one job — searched, or refused by a stack that
+  // can never search with it — and is discarded, row and object.
+  const file = await api.raw(
+    `query F($id: ID!) { file(id: $id) { __typename } }`,
+    { id: imageFileId },
+  );
+  expect(file.data?.file?.__typename, JSON.stringify(file)).toBe(
+    "NotFoundError",
+  );
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 });
 

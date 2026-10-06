@@ -69,6 +69,26 @@ export type ReadTarget = {
 
 export type DeletedFile = { readonly id: string };
 
+/**
+ * G32's upload kind for a photo taken only to search with (`/search`'s Photo
+ * button, the onboarding wizard's display-photo match). Such a file is
+ * verified and then never attached: its whole use is one
+ * `itemSearch(imageFileId:)`. So it is short-lived — `ItemSearchActor`
+ * discards it once the search has used it ({@link InternalFileActorInterface.discardSearchPhoto}),
+ * and `MaintenanceActor` reaps any left over after {@link SEARCH_PHOTO_TTL_MS}.
+ */
+export const SEARCH_PHOTO_KIND = "image-search";
+
+/**
+ * How old an unattached `image-search` file may get before `MaintenanceActor`
+ * reaps it, verified or not — the safety net under the immediate discard.
+ * The reaper runs daily, so one can outlive this by up to a day.
+ */
+export const SEARCH_PHOTO_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** What `discardSearchPhoto` did: `false` when it left the file alone. */
+export type DiscardedSearchPhoto = { readonly discarded: boolean };
+
 export type FileActorInterface = {
   get(ctx: Ctx): Promise<FileDto>;
   createUploadTarget(
@@ -104,6 +124,16 @@ export type InternalFileActorInterface = {
    * to {@link presignRead}; only the authority differs.
    */
   presignReadInternal(ctx: Ctx): Promise<ReadTarget>;
+  /**
+   * G32: delete this file if — and only if — it is a search photo
+   * ({@link SEARCH_PHOTO_KIND}) the caller uploaded (or the caller is
+   * system/admin) and nothing references it. Anything else is left alone and
+   * answered `{ discarded: false }`, never an error: the caller is
+   * `ItemSearchActor` after a photo search, and a search may legitimately be
+   * run over a file that is not a search photo (an item image the viewer may
+   * read), which must survive it. A row already gone is `false` too.
+   */
+  discardSearchPhoto(ctx: Ctx): Promise<DiscardedSearchPhoto>;
 };
 
 export const FileActorDescriptor: ActorDescriptor<
@@ -125,5 +155,6 @@ export const FileActorDescriptor: ActorDescriptor<
   },
   internalMethods: {
     presignReadInternal: {},
+    discardSearchPhoto: {},
   },
 };

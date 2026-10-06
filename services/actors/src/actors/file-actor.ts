@@ -146,11 +146,14 @@ import {
   ConflictError,
   type CreateUploadTargetInput,
   type Ctx,
+  type DiscardedSearchPhoto,
   FileActorDescriptor,
   type FileActorInterface,
   type FileDto,
   ForbiddenError,
+  type InternalFileActorInterface,
   type ReadTarget,
+  SEARCH_PHOTO_KIND,
   type UploadTarget,
   ValidationError,
 } from "@cellar-assistant/contracts";
@@ -270,7 +273,7 @@ const SNIFF_BYTES = 16;
 
 export class FileActor
   extends EntityActorBase<FileAggregate>
-  implements FileActorInterface
+  implements FileActorInterface, InternalFileActorInterface
 {
   static readonly category: ActorCategory = FileActorDescriptor.category;
 
@@ -629,6 +632,37 @@ export class FileActor
     // were split.
     await this.#deleteObject(aggregate.file.key, "delete");
     await this.#deleteObject(uploadKeyOf(aggregate.file.key), "delete");
+  }
+
+  /**
+   * G32: a search photo has done its one job once `ItemSearchActor` has
+   * embedded it, so the search discards it — row and both objects, through
+   * {@link delete}. The `image-search` kind is what makes a file short-lived;
+   * anything else a photo search was run over (an item image the viewer may
+   * read, an upload of theirs not attached yet) is left exactly as it was.
+   *
+   * Every "no" is `{ discarded: false }`, not an error: the caller runs this
+   * after a search that has already succeeded, and a refusal here would only
+   * be logged. So it is the uploader's own (or system/admin), checked by
+   * `isOwner` here rather than by `delete`'s branch, which would answer a
+   * stranger's *public* file with `ForbiddenError`. A file somebody attached
+   * in the meantime cannot be deleted (every FK into `files` refuses) and is
+   * kept — that is `delete`'s `ConflictError`, and it is the answer, not a
+   * failure.
+   */
+  async discardSearchPhoto(ctx: Ctx): Promise<DiscardedSearchPhoto> {
+    const aggregate = this.aggregate;
+    if (aggregate === null) return { discarded: false };
+    const kind = (aggregate.file.metadata as { kind?: unknown } | null)?.kind;
+    if (kind !== SEARCH_PHOTO_KIND) return { discarded: false };
+    if (!isOwner(ctx, aggregate.file.uploadedBy)) return { discarded: false };
+    try {
+      await this.delete(ctx);
+    } catch (error) {
+      if (error instanceof ConflictError) return { discarded: false };
+      throw error;
+    }
+    return { discarded: true };
   }
 
   /** A best-effort object removal: logged, never thrown (see `delete`). */

@@ -12,6 +12,13 @@
  * than 24h **and are attached to nothing** are provisional targets nobody
  * finished uploading to, or finished and never told anyone about. All three
  * clauses matter — see `findOrphans` for what the missing third one cost.
+ *
+ * G32 added a second kind of orphan: a **search photo** (`image-search`,
+ * `SEARCH_PHOTO_KIND`), which is verified and then, by design, never
+ * attached. `ItemSearchActor` discards one as soon as its search has used it;
+ * this reaps any that slipped past that — a discard that failed, a photo
+ * uploaded and never searched — once older than `SEARCH_PHOTO_TTL_MS`,
+ * verified or not, and still only when nothing references it.
  * `reapOrphanFiles` finds them and, in one transaction:
  *
  *   - enqueues an `outbox` row targeting `FileActor(id).delete` for each —
@@ -124,6 +131,8 @@
 import {
   type ActorCategory,
   type Ctx,
+  SEARCH_PHOTO_KIND,
+  SEARCH_PHOTO_TTL_MS,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { sql } from "@cellar-assistant/db/orm";
@@ -677,10 +686,19 @@ export class MaintenanceActor
    * dead-letters. Measured the first time this actor was ever scheduled: seven
    * such rows, every one of them a file that a `menu_scans` row still points
    * at — i.e. not an orphan at all, merely an upload whose `verify` never ran.
+   *
+   * Plus, verified or not, every **search photo** (`metadata.kind =
+   * 'image-search'`, which `FileActor.createUploadTarget` records) older than
+   * `searchPhotoCutoff` and attached to nothing — the safety net under
+   * `ItemSearchActor`'s discard (class doc). One attached since is a real
+   * image now and is left alone, by the same clause as everything else.
    * Left unfixed, switching this actor on would have added a fresh dead letter
    * per attached file per day, into the one report that exists to be believed.
    */
-  protected async findOrphans(cutoff: Date): Promise<OrphanFile[]> {
+  protected async findOrphans(
+    cutoff: Date,
+    searchPhotoCutoff: Date,
+  ): Promise<OrphanFile[]> {
     const referents = await this.referencingColumns();
     // Identifiers come from `pg_constraint`, already quoted by `regclass`;
     // nothing here is caller-supplied.
@@ -692,8 +710,12 @@ export class MaintenanceActor
     const result = await this.db.execute<{ id: string; created_at: Date }>(sql`
       select f.id, f.created_at
       from public.files f
-      where f.verified_at is null
-        and f.created_at < ${cutoff.toISOString()}::timestamptz
+      where (
+          (f.verified_at is null
+            and f.created_at < ${cutoff.toISOString()}::timestamptz)
+          or (f.metadata ->> 'kind' = ${SEARCH_PHOTO_KIND}
+            and f.created_at < ${searchPhotoCutoff.toISOString()}::timestamptz)
+        )
         ${sql.join(
           unattached.map((clause) => sql` and ${clause}`),
           sql``,
@@ -732,7 +754,8 @@ export class MaintenanceActor
     );
 
     const cutoff = new Date(Date.now() - ORPHAN_AGE_MS);
-    const orphans = await this.findOrphans(cutoff);
+    const searchPhotoCutoff = new Date(Date.now() - SEARCH_PHOTO_TTL_MS);
+    const orphans = await this.findOrphans(cutoff, searchPhotoCutoff);
     const self = deliveryOf(ctx)?.outboxId ?? null;
 
     await this.tx(async (tx) => {

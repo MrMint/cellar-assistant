@@ -11,6 +11,7 @@
 import {
   adminCtx,
   ForbiddenError,
+  SEARCH_PHOTO_TTL_MS,
   systemCtx,
   userCtx,
   ValidationError,
@@ -69,6 +70,8 @@ const seedFile = async (
     uploadedBy?: string | null;
     verifiedAt?: Date | null;
     createdAt?: Date;
+    /** `metadata.kind`, as `FileActor.createUploadTarget` records it. */
+    kind?: string;
   } = {},
 ): Promise<string> => {
   const id = freshId();
@@ -76,7 +79,8 @@ const seedFile = async (
   await db.insert(files).values({
     id,
     bucket: "cellar-files",
-    key: `test/${id}`,
+    key: `${input.kind ?? "test"}/${id}`,
+    ...(input.kind === undefined ? {} : { metadata: { kind: input.kind } }),
     uploadedBy: input.uploadedBy ?? null,
     verifiedAt: input.verifiedAt ?? null,
     createdAt,
@@ -371,6 +375,72 @@ describe.skipIf(skip)("MaintenanceActor (A8)", () => {
       const result = await actor.reapOrphanFiles(systemCtx("test"));
 
       expect(result.scheduled).toContain(loose);
+      expect(result.scheduled).not.toContain(attached);
+    });
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /* G32: search photos are verified, never attached, and short-lived        */
+  /* ---------------------------------------------------------------------- */
+
+  it("reaps a search photo past its TTL even though it was verified — and only a search photo", async () => {
+    await withTestDb(async (db) => {
+      const userId = await seedUser(db);
+      const old = new Date(Date.now() - SEARCH_PHOTO_TTL_MS - HOUR_MS);
+      const staleSearchPhoto = await seedFile(db, {
+        uploadedBy: userId,
+        kind: "image-search",
+        createdAt: old,
+        verifiedAt: old,
+      });
+      const freshSearchPhoto = await seedFile(db, {
+        uploadedBy: userId,
+        kind: "image-search",
+        createdAt: new Date(Date.now() - HOUR_MS),
+        verifiedAt: new Date(Date.now() - HOUR_MS),
+      });
+      // The same age and state, any other kind: a real upload, kept.
+      const verifiedItemImage = await seedFile(db, {
+        uploadedBy: userId,
+        kind: "item-image",
+        createdAt: old,
+        verifiedAt: old,
+      });
+
+      const actor = await activate(
+        createActor(MaintenanceActor, "singleton-search-photos", db),
+      );
+      const result = await actor.reapOrphanFiles(systemCtx("test"));
+      expect(result.scheduled).toEqual([staleSearchPhoto]);
+      expect(result.scheduled).not.toContain(freshSearchPhoto);
+      expect(result.scheduled).not.toContain(verifiedItemImage);
+
+      // And the scheduled delete really deletes it.
+      expect(await drainFileDeletes(db)).toEqual([staleSearchPhoto]);
+      const [row] = await db
+        .select()
+        .from(files)
+        .where(eq(files.id, staleSearchPhoto));
+      expect(row).toBeUndefined();
+    });
+  });
+
+  it("does not reap a search photo somebody attached to something", async () => {
+    await withTestDb(async (db) => {
+      const userId = await seedUser(db);
+      const old = new Date(Date.now() - SEARCH_PHOTO_TTL_MS - HOUR_MS);
+      const attached = await seedFile(db, {
+        uploadedBy: userId,
+        kind: "image-search",
+        createdAt: old,
+        verifiedAt: old,
+      });
+      await db.insert(menuScans).values({ userId, originalImageId: attached });
+
+      const actor = await activate(
+        createActor(MaintenanceActor, "singleton-search-attached", db),
+      );
+      const result = await actor.reapOrphanFiles(systemCtx("test"));
       expect(result.scheduled).not.toContain(attached);
     });
   });

@@ -11,7 +11,10 @@
  *    in the key, so the two never share an activation;
  *  - **only the configured image embedding's vectors** are compared;
  *  - the photo is embedded as a `query`, as this viewer, and an
- *    `IMAGE_SEARCH_UNAVAILABLE` refusal reaches the caller unchanged.
+ *    `IMAGE_SEARCH_UNAVAILABLE` refusal reaches the caller unchanged;
+ *  - **the photo is discarded once the search has used it** — once per
+ *    result set, as the viewer, never instead of the result, and not after a
+ *    failure a retry could get past.
  */
 import type { Ctx, ItemSearchInput } from "@cellar-assistant/contracts";
 import {
@@ -23,6 +26,7 @@ import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
 import type { EmbedImage } from "../lib/embedding-client.ts";
+import type { DiscardSearchPhoto } from "../lib/search-photos.ts";
 import {
   blendedVector,
   seedItemImage,
@@ -62,6 +66,7 @@ const newActor = (
   db: DbOrTx,
   viewerId: string | null,
   embedImage: EmbedImage = photoAt0,
+  discardPhoto: DiscardSearchPhoto = async () => {},
 ): ItemSearchActor =>
   new ItemSearchActor(
     new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" }),
@@ -71,7 +76,17 @@ const newActor = (
       throw new Error("a photo search embeds no phrase");
     },
     embedImage,
+    discardPhoto,
   );
+
+/** A `DiscardSearchPhoto` that records `<viewer>:<fileId>` per call. */
+const recordingDiscard = () => {
+  const discarded: string[] = [];
+  const discard: DiscardSearchPhoto = async (ctx, fileId) => {
+    discarded.push(`${ctx.viewerId}:${fileId}`);
+  };
+  return { discarded, discard };
+};
 
 const search = async (
   db: DbOrTx,
@@ -224,6 +239,94 @@ describe.skipIf(skip)("ItemSearchActor — image search (G32)", () => {
       await expect(
         search(db, owner, { imageFileId: "not-a-uuid" }),
       ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe("discarding the search photo", () => {
+    it("discards it once the search has used it — as the viewer, once per result set", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const { discarded, discard } = recordingDiscard();
+        const input: ItemSearchInput = {
+          imageFileId: PHOTO.toUpperCase(),
+          maxDistance: 2,
+        };
+        const actor = newActor(input, db, owner, photoAt0, discard);
+        await actor.results(userCtx(owner), input, { first: 1, after: null });
+        await actor.results(userCtx(owner), input, { first: 5, after: null });
+        await actor.all(userCtx(owner), input);
+        expect(discarded).toEqual([`${owner}:${PHOTO}`]);
+      });
+    });
+
+    it("discards it after an IMAGE_SEARCH_UNAVAILABLE refusal too — no retry can use it", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const { discarded, discard } = recordingDiscard();
+        const input: ItemSearchInput = { imageFileId: PHOTO };
+        const refusal = await newActor(
+          input,
+          db,
+          owner,
+          async () => {
+            throw new ConflictError(
+              "ollama cannot embed a photo",
+              "IMAGE_SEARCH_UNAVAILABLE",
+            );
+          },
+          discard,
+        )
+          .all(userCtx(owner), input)
+          .catch((error: unknown) => error);
+        expect(refusal).toMatchObject({ reason: "IMAGE_SEARCH_UNAVAILABLE" });
+        expect(discarded).toEqual([`${owner}:${PHOTO}`]);
+      });
+    });
+
+    it("keeps it after a failure a retry could get past", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const { discarded, discard } = recordingDiscard();
+        const input: ItemSearchInput = { imageFileId: PHOTO };
+        await expect(
+          newActor(
+            input,
+            db,
+            owner,
+            async () => {
+              throw new ConflictError("the model timed out");
+            },
+            discard,
+          ).all(userCtx(owner), input),
+        ).rejects.toThrow("the model timed out");
+        expect(discarded).toEqual([]);
+      });
+    });
+
+    it("a discard that fails is logged, never the search's failure", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const wine = await seedWine(db, owner, "Still Found");
+        await seedItemVector(db, wine, unitVector(0));
+        const input: ItemSearchInput = { imageFileId: PHOTO, maxDistance: 2 };
+        const hits = await newActor(input, db, owner, photoAt0, async () => {
+          throw new Error("sidecar unreachable");
+        }).all(userCtx(owner), input);
+        expect(hits.map((hit) => hit.name)).toEqual(["Still Found"]);
+      });
+    });
+
+    it("a text search discards nothing", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const { discarded, discard } = recordingDiscard();
+        const input: ItemSearchInput = { vector: unitVector(0) };
+        await newActor(input, db, owner, photoAt0, discard).all(
+          userCtx(owner),
+          input,
+        );
+        expect(discarded).toEqual([]);
+      });
     });
   });
 });

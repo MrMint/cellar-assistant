@@ -98,6 +98,10 @@ import { withHnswScan } from "../lib/hnsw.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { SearchActorBase } from "../lib/search-actor-base.ts";
+import {
+  type DiscardSearchPhoto,
+  daprDiscardSearchPhoto,
+} from "../lib/search-photos.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
 
@@ -121,6 +125,7 @@ export class ItemSearchActor
 
   readonly #embed: EmbedQuery;
   readonly #embedImage: EmbedImage;
+  readonly #discardPhoto: DiscardSearchPhoto;
 
   constructor(
     daprClient: DaprClient,
@@ -128,10 +133,12 @@ export class ItemSearchActor
     db: DbOrTx = actorDb(),
     embed: EmbedQuery = daprEmbedQuery,
     embedImage: EmbedImage = daprEmbedQueryImage,
+    discardPhoto: DiscardSearchPhoto = daprDiscardSearchPhoto,
   ) {
     super(daprClient, id, db);
     this.#embed = embed;
     this.#embedImage = embedImage;
+    this.#discardPhoto = discardPhoto;
   }
 
   protected keyFor(input: ItemSearchInput, viewerId: string | null): string {
@@ -160,6 +167,56 @@ export class ItemSearchActor
   }
 
   protected async runSearch(
+    ctx: Ctx,
+    input: ItemSearchInput,
+  ): Promise<readonly ItemSearchHit[]> {
+    const imageFileId = input.imageFileId?.trim().toLowerCase() ?? "";
+    if (imageFileId === "") return this.#search(ctx, input);
+    let hits: readonly ItemSearchHit[];
+    try {
+      hits = await this.#search(ctx, input);
+    } catch (error) {
+      // A deployment that cannot embed a photo will refuse this one on every
+      // retry (the capability check runs before the file is read), so the
+      // photo has no use left either.
+      if (
+        error instanceof ConflictError &&
+        error.reason === "IMAGE_SEARCH_UNAVAILABLE"
+      ) {
+        await this.#discard(ctx, imageFileId);
+      }
+      throw error;
+    }
+    await this.#discard(ctx, imageFileId);
+    return hits;
+  }
+
+  /**
+   * G32: the search photo has done its one job — its vector made this
+   * result set, which this activation now caches for every page. So it is
+   * discarded (`../lib/search-photos.ts`): row and object, if it is the
+   * viewer's own `image-search` file; anything else is left alone by
+   * `FileActor.discardSearchPhoto`.
+   *
+   * Best-effort and after the result, never instead of it: a failure is
+   * logged and `MaintenanceActor` reaps the file at `SEARCH_PHOTO_TTL_MS`.
+   * A reload of `/search?image=<id>` after this is answered from this
+   * activation's cached result while it lives, and after its eviction (and
+   * `EmbeddingActor`'s) with `NotFoundError` from `FileActor` — which the
+   * page shows as an expired image-search link.
+   */
+  async #discard(ctx: Ctx, fileId: string): Promise<void> {
+    try {
+      await this.#discardPhoto(ctx, fileId);
+    } catch (error) {
+      console.warn(
+        `[ItemSearchActor] discarding search photo ${fileId} failed; ` +
+          `MaintenanceActor reaps it later: ${String(error)}`,
+      );
+    }
+  }
+
+  async #search(
     ctx: Ctx,
     input: ItemSearchInput,
   ): Promise<readonly ItemSearchHit[]> {
