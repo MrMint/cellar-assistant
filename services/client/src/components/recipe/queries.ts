@@ -359,3 +359,14 @@ export const DeleteRecipeReviewMutation = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/**
+ * `RecipePageQuery`'s variables for one recipe at the page's own sizes —
+ * shared by the ai-generator's read-back and its "with M ingredients" line,
+ * so the two are one request in URQL's cache rather than two.
+ */
+export const recipePageVariables = (recipeId: string) => ({
+  recipeId,
+  reviewFirst: RECIPE_REVIEWS_PAGE_SIZE,
+  versionFirst: RECIPE_VERSIONS_PAGE_SIZE,
+});

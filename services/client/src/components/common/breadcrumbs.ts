@@ -49,7 +49,11 @@ export function generateBreadcrumbs(
       segment.match(/^[0-9a-f-]{36}$/i) &&
       segments[i - 1] === "cellars"
     ) {
-      // Cellar ID - navigate to items page since /cellars/[cellarId] is not implemented
+      // Cellar ID → `/cellars/{id}/items`, the old target (82450ad1, whose
+      // `/cellars/[cellarId]` page only printed the id). That route now
+      // exists as a new-only overview (UI parity decision 2, pending the
+      // user's ratification); until it is ratified the crumb keeps the old
+      // behaviour and goes to the item list.
       const label = cellarName || "Cellar";
       breadcrumbs.push({ label, href: isLast ? undefined : `${href}/items` });
     } else if (ITEM_SEGMENTS.includes(segment)) {

@@ -18,27 +18,26 @@ import {
   MdVisibility,
 } from "react-icons/md";
 import { useQuery } from "urql";
+import { ApiError } from "@/components/cellar-api/ApiError";
 import { readFragment } from "@/lib/api/graphql";
-import { unwrapResult } from "@/lib/api/result";
+import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { recipeDetailsFromNode } from "./adapter";
 import { RecipeDetailsFragment, RecipeReviewFragment } from "./fragments";
-import {
-  RECIPE_REVIEWS_PAGE_SIZE,
-  RECIPE_VERSIONS_PAGE_SIZE,
-  RecipePageQuery,
-} from "./queries";
+import { RecipePageQuery, recipePageVariables } from "./queries";
 import { RecipeDetails } from "./RecipeDetails";
 import { RecipePhotoProcessor } from "./RecipePhotoProcessor";
 
-/** One generated recipe, read back and shown as the old page did, inline. */
-function GeneratedRecipe({ recipeId }: { recipeId: string }) {
-  const [{ data }, refetch] = useQuery({
+/**
+ * One generated recipe, read back and shown as the old page did, inline. A
+ * read-back that fails — a typed error, or the request itself — says so
+ * instead of leaving a gap where the recipe should be; the old page never
+ * read back (it had the recipe from the server action), so it had no such
+ * state to show.
+ */
+export function GeneratedRecipe({ recipeId }: { recipeId: string }) {
+  const [{ data, fetching, error }, refetch] = useQuery({
     query: RecipePageQuery,
-    variables: {
-      recipeId,
-      reviewFirst: RECIPE_REVIEWS_PAGE_SIZE,
-      versionFirst: RECIPE_VERSIONS_PAGE_SIZE,
-    },
+    variables: recipePageVariables(recipeId),
   });
   const result = useMemo(() => unwrapResult(data?.recipe, "Recipe"), [data]);
   const recipe = useMemo(
@@ -56,7 +55,16 @@ function GeneratedRecipe({ recipeId }: { recipeId: string }) {
         : null,
     [result],
   );
-  if (recipe === null || !result.ok) return null;
+  if (!result.ok) {
+    if (fetching && error === undefined) return null;
+    return (
+      <ApiError
+        title="The new recipe could not be loaded"
+        error={error === undefined ? result.error : failureFromTransport(error)}
+      />
+    );
+  }
+  if (recipe === null) return null;
   return (
     <RecipeDetails
       recipe={recipe}

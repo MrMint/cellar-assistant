@@ -20,13 +20,14 @@ import {
   MdInfoOutline,
   MdPhotoCamera,
 } from "react-icons/md";
-import { useClient, useMutation } from "urql";
+import { useClient, useMutation, useQuery } from "urql";
 import {
   describeUploadBlockers,
   UploadRejectedError,
   UploadUnavailableError,
   uploadFile,
 } from "@/lib/api/files";
+import { readFragment } from "@/lib/api/graphql";
 import {
   CancelRecipePhotoJobMutation,
   RECIPE_PHOTO_POLL_MS,
@@ -37,7 +38,9 @@ import {
 } from "@/lib/api/recipe-photos";
 import { unwrapResult } from "@/lib/api/result";
 import { Link } from "../common/Link";
-import { stageProgress } from "./adapter";
+import { recipeCreatedLine, stageProgress } from "./adapter";
+import { RecipeDetailsFragment } from "./fragments";
+import { RecipePageQuery, recipePageVariables } from "./queries";
 
 type Phase =
   | { kind: "idle" }
@@ -80,7 +83,8 @@ interface RecipePhotoProcessorProps {
  *   `RECIPE_PHOTO_TIMEOUT_MS` without cancelling anything.
  * - One recipe per photo (G30 is not built), so "Menu Analysis" and the
  *   enhancement count have nothing to show and are gone; the alert says
- *   "1 recipe".
+ *   "1 recipe with M ingredients", M read off the generated recipe — the
+ *   same `RecipePageQuery` the page's read-back runs, so one request.
  * - `placeId`/`menuItemId` are gone: menu linking moved to menu scans.
  */
 export function RecipePhotoProcessor({
@@ -96,6 +100,18 @@ export function RecipePhotoProcessor({
 
   /** An origin this build's CSP will not let the browser upload to. */
   const blockers = describeUploadBlockers();
+
+  const doneRecipeId = phase.kind === "done" ? phase.recipeId : null;
+  const [{ data: doneData }] = useQuery({
+    query: RecipePageQuery,
+    variables: recipePageVariables(doneRecipeId ?? ""),
+    pause: doneRecipeId === null,
+  });
+  const doneRecipe = unwrapResult(doneData?.recipe, "Recipe");
+  const ingredientCount = doneRecipe.ok
+    ? readFragment(RecipeDetailsFragment, doneRecipe.data).ingredients.edges
+        .length
+    : null;
 
   const isProcessing = phase.kind === "uploading" || phase.kind === "running";
   const jobId = phase.kind === "running" ? phase.jobId : null;
@@ -395,7 +411,7 @@ export function RecipePhotoProcessor({
                     Processing Complete
                   </Typography>
                   <Typography level="body-sm">
-                    Successfully created 1 recipe
+                    {recipeCreatedLine(ingredientCount)}
                   </Typography>
                 </Box>
               </Alert>

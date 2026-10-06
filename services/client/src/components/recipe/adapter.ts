@@ -473,3 +473,16 @@ export const stageProgress = (stage: string): number => {
   const index = (RECIPE_PHOTO_STAGES as readonly string[]).indexOf(stage);
   return index < 0 ? 0 : ((index + 1) / RECIPE_PHOTO_STAGES.length) * 100;
 };
+
+/**
+ * The ai-generator's "Processing Complete" line. The old one
+ * (`82450ad1:src/components/recipe/RecipePhotoProcessor.tsx:185`) read
+ * "Successfully created N recipe(s) with M ingredients"; a photo now makes
+ * exactly one recipe (G30 not built), so N is 1, and M is the generated
+ * recipe's ingredient count once its read-back arrives — until then (or if
+ * it fails) the line stops after "1 recipe" rather than print a wrong count.
+ */
+export const recipeCreatedLine = (ingredientCount: number | null): string =>
+  ingredientCount === null
+    ? "Successfully created 1 recipe"
+    : `Successfully created 1 recipe with ${ingredientCount} ingredients`;
