@@ -66,7 +66,7 @@ export const ItemFormField = ({
 
   const { field } = entry;
   const name = `attributes.${field.key}` as const;
-  const required = field.required === true;
+  const { required } = entry;
   const enumKey: EnumKey | undefined =
     field.kind === "reference"
       ? field.reference

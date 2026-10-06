@@ -2,6 +2,7 @@ import { Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
 import { MdFormatListNumbered } from "react-icons/md";
 import { BAND_JOY_COLORS, BAND_LABELS } from "@/components/tier-list/constants";
 import { Link } from "../common/Link";
+import { HeldBackNote } from "./HeldBackNote";
 
 export type ItemTierListEntry = {
   id: string;
@@ -19,7 +20,14 @@ export type ItemTierListEntry = {
  * being visible between the two reads arrives with a null `tierList`, which
  * renders as the old "Unknown list".
  */
-export function ItemTierLists({ entries }: { entries: ItemTierListEntry[] }) {
+export function ItemTierLists({
+  entries,
+  total,
+}: {
+  entries: ItemTierListEntry[];
+  /** `tierListEntries.totalCount`, when the API held rows back. */
+  total?: number | null;
+}) {
   if (entries.length === 0) {
     return null;
   }
@@ -62,6 +70,7 @@ export function ItemTierLists({ entries }: { entries: ItemTierListEntry[] }) {
             </Stack>
           ))}
         </Stack>
+        <HeldBackNote shown={entries.length} total={total} noun="lists" />
       </CardContent>
     </Card>
   );

@@ -15,10 +15,13 @@
  *   `ensureBarcode`, with a symbology the old field never knew (X11), and the
  *   wizard owns that flow; the edit form leaves the item's barcode alone.
  *
- * Required markers come from the database (`ITEM_FORM_RULES`), not from the
- * old forms: those also starred sake's vintage and category and tea's
- * category, which are nullable columns — on an edit form a star there would
- * only stop someone clearing a value the database allows to be empty.
+ * Required markers come from the database (`ITEM_FORM_RULES`), plus — in
+ * the **create** form only — the three the old forms starred over nullable
+ * columns: sake's Vintage and Category (`82450ad1:src/components/sake/
+ * SakeForm.tsx:192,238`) and tea's Category (`tea/TeaForm.tsx:236`). A new
+ * sake or tea needs them as it always did; on the edit form a star there would
+ * only stop someone clearing a value the database allows to be empty, so edit
+ * keeps the database's rule.
  */
 
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -37,7 +40,21 @@ export type FormEntry =
       field: AttributeField;
       /** A `Textarea`, as the old tea form had for two fields. */
       multiline?: boolean;
+      /** Starred and validated: the database's rule, or the old create form's. */
+      required: boolean;
     };
+
+/** Which form: the onboarding wizard's create, or an item's edit. */
+export type FormMode = "create" | "edit";
+
+/**
+ * Starred by the old create forms over columns the database leaves nullable
+ * (see the module comment) — create mode only.
+ */
+const CREATE_REQUIRED: Partial<Record<ApiItemType, readonly string[]>> = {
+  SAKE: ["vintageYear", "category"],
+  TEA: ["category"],
+};
 
 type Spec =
   | "name"
@@ -130,7 +147,10 @@ const LABELS = {
 } as const;
 
 /** The form's entries for one type, old order and labels. */
-export const formLayout = (type: ApiItemType): FormEntry[] =>
+export const formLayout = (
+  type: ApiItemType,
+  mode: FormMode = "edit",
+): FormEntry[] =>
   ORDER[type].map((spec): FormEntry => {
     if (typeof spec === "string") return { kind: spec, label: LABELS[spec] };
     const [key, label, multiline] = spec;
@@ -138,7 +158,10 @@ export const formLayout = (type: ApiItemType): FormEntry[] =>
     if (field === undefined) {
       throw new Error(`itemFormLayout: ${type} has no attribute ${key}`);
     }
-    return { kind: "attribute", label, field, multiline };
+    const required =
+      field.required === true ||
+      (mode === "create" && (CREATE_REQUIRED[type] ?? []).includes(key));
+    return { kind: "attribute", label, field, multiline, required };
   });
 
 /**

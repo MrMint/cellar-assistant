@@ -30,6 +30,24 @@
  * Every page size is a literal, not a variable: the API prices a nested page
  * as the product of the `first`s, and a variable is priced at its 100 maximum
  * (`services/api/src/limits.ts`, `MAX_QUERY_ROWS`).
+ *
+ * ## No silent caps
+ *
+ * The old pages read every one of these lists unbounded. Here each list asks
+ * for the API's 100-row page, and the server component reads the rest
+ * (`lib/paging/load-rest.ts`, `page-lists.ts`) through the `*PageQuery`
+ * documents at the bottom of this file, before the view sees any of it:
+ * brands, the viewer's cellars, co-owners and friends all page with `after`.
+ * Co-owners stay at 20 per cellar inline (100 cellars × 100 would be the
+ * whole 10,000-row budget) and only a cellar with more reads on.
+ *
+ * `cellars`, `tierListEntries`, `recipeIngredients` and a bottle's
+ * `checkIns` are reverse edges, which the API serves "at most 100 reachable,
+ * `totalCount` exact" (`services/api/src/schema/reverse-edges.ts`). One page
+ * of 100 is everything it will return, so they select `totalCount` and the
+ * views say "showing N of M" when the API held some back, rather than
+ * pretending the list ended — check-ins come newest first, so it is the
+ * oldest that are held back.
  */
 
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
@@ -83,7 +101,11 @@ export const ItemPageItemFragment = graphql(
         }
       }
     }
-    brands(first: 10) {
+    brands(first: 100) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       edges {
         node {
           ...ItemBrandRow
@@ -125,7 +147,8 @@ export const ItemPageItemFragment = graphql(
 export const ItemPageRelationsFragment = graphql(`
   fragment ItemPageRelations on Item {
     __typename
-    cellars(first: 20) {
+    cellars(first: 100) {
+      totalCount
       edges {
         node {
           __typename
@@ -138,7 +161,11 @@ export const ItemPageRelationsFragment = graphql(`
             displayName
             avatarUrl
           }
-          coOwners(first: 10) {
+          coOwners(first: 20) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
             edges {
               node {
                 __typename
@@ -151,7 +178,8 @@ export const ItemPageRelationsFragment = graphql(`
         }
       }
     }
-    tierListEntries(first: 20) {
+    tierListEntries(first: 100) {
+      totalCount
       edges {
         node {
           __typename
@@ -176,7 +204,8 @@ export const ItemPageRelationsFragment = graphql(`
 export const ItemPageRecipesFragment = graphql(`
   fragment ItemPageRecipes on Item {
     __typename
-    recipeIngredients(first: 20) {
+    recipeIngredients(first: 100) {
+      totalCount
       edges {
         node {
           __typename
@@ -212,6 +241,10 @@ export const ItemPageQuery = graphql(
     myCellars(first: 100) {
       __typename
       ... on CellarConnection {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         edges {
           node {
             __typename
@@ -294,6 +327,10 @@ export const CellarItemPageQuery = graphql(
     myFriends(first: 100) {
       __typename
       ... on FriendConnection {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         edges {
           node {
             user {
@@ -432,6 +469,123 @@ export const SetCellarItemDisplayImageMutation = graphql(
       ... on CellarItem {
         id
         displayImageId
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** The rest of an item's brands, after the first page of 100. */
+export const ItemBrandsPageQuery = graphql(
+  `
+  query ItemBrandsPage($itemId: ID!, $type: ItemType!, $after: String!) {
+    item(id: $itemId, type: $type) {
+      __typename
+      ... on QueryItemSuccess {
+        data {
+          __typename
+          id
+          brands(first: 100, after: $after) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            edges {
+              node {
+                ...ItemBrandRow
+              }
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ItemBrandFragment, ActorErrorFieldsFragment],
+);
+
+/** The rest of one cellar's co-owners, past the 20 the item page inlines. */
+export const CellarCoOwnersPageQuery = graphql(
+  `
+  query CellarCoOwnersPage($cellarId: ID!, $after: String!) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        coOwners(first: 100, after: $after) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            node {
+              __typename
+              id
+              displayName
+              avatarUrl
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** The rest of the viewer's cellars for "Add to Cellar", past 100. */
+export const AddableCellarsPageQuery = graphql(
+  `
+  query AddableCellarsPage($after: String!) {
+    myCellars(first: 100, after: $after) {
+      __typename
+      ... on CellarConnection {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        edges {
+          node {
+            __typename
+            id
+            name
+            createdById
+            coOwnerIds
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** The rest of the viewer's friends for the bulk check-in picker. */
+export const BottleFriendsPageQuery = graphql(
+  `
+  query BottleFriendsPage($after: String!) {
+    myFriends(first: 100, after: $after) {
+      __typename
+      ... on FriendConnection {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        edges {
+          node {
+            user {
+              __typename
+              id
+              displayName
+              avatarUrl
+            }
+          }
+        }
       }
       ...ActorErrorFields
     }

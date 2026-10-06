@@ -8,6 +8,7 @@ import {
   cellarItemRedirect,
   checkInFromNode,
   groupCheckInsByDay,
+  heldBackNote,
   isCellarOwner,
   itemCharacteristics,
   itemShareUrl,
@@ -403,5 +404,42 @@ describe("itemFormLayout (the old forms' order and labels)", () => {
     assert.equal(dateFromYear("2019", "2019-06-01"), "2019-06-01");
     assert.equal(dateFromYear("2020", "2019-06-01"), "2020-01-01");
     assert.equal(dateFromYear("", "2019-06-01"), "");
+  });
+});
+
+describe("heldBackNote (lists the API stops at 100 rows)", () => {
+  test("names what was held back, newest-first lists as 'newest'", () => {
+    assert.equal(
+      heldBackNote(100, 130, "check-ins", "newest"),
+      "Showing the newest 100 of 130 check-ins.",
+    );
+    assert.equal(
+      heldBackNote(100, 101, "cellars"),
+      "Showing the first 100 of 101 cellars.",
+    );
+  });
+
+  test("nothing when the list is whole or the count is unknown", () => {
+    assert.equal(heldBackNote(3, 3, "lists"), null);
+    assert.equal(heldBackNote(3, null, "lists"), null);
+    assert.equal(heldBackNote(3, undefined, "lists"), null);
+  });
+});
+
+describe("formLayout create mode (the old create forms' stars)", () => {
+  const starred = (type: "SAKE" | "TEA" | "WINE", mode: "create" | "edit") =>
+    formLayout(type, mode).flatMap((entry) =>
+      entry.kind === "attribute" && entry.required ? [entry.field.key] : [],
+    );
+
+  test("sake vintage + category and tea category are required on create", () => {
+    assert.deepEqual(starred("SAKE", "create"), ["vintageYear", "category"]);
+    assert.deepEqual(starred("TEA", "create"), ["category"]);
+  });
+
+  test("edit keeps the database's rule; other types are unchanged", () => {
+    assert.deepEqual(starred("SAKE", "edit"), []);
+    assert.deepEqual(starred("TEA", "edit"), []);
+    assert.deepEqual(starred("WINE", "create"), starred("WINE", "edit"));
   });
 });

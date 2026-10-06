@@ -26,6 +26,7 @@ import { unwrapResult } from "@/lib/api/result";
 import { Timestamp } from "../common/Timestamp";
 import { UserAvatar } from "../common/UserAvatar";
 import { groupCheckInsByDay } from "./adapter";
+import { HeldBackNote } from "./HeldBackNote";
 
 type User = {
   id: string;
@@ -46,6 +47,11 @@ export type ItemCheckInsProps = {
   cellarId: string;
   friends: User[];
   user: User;
+  /**
+   * `checkIns.totalCount`: the API returns the newest 100 (newest first), so
+   * past that the oldest are held back and the card says so.
+   */
+  total?: number | null;
 };
 
 /**
@@ -65,6 +71,7 @@ export const ItemCheckIns = ({
   cellarId,
   friends,
   user,
+  total,
 }: ItemCheckInsProps) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -189,6 +196,12 @@ export const ItemCheckIns = ({
             <ListDivider />
           </List>
         )}
+        <HeldBackNote
+          shown={checkIns.length}
+          total={total}
+          noun="check-ins"
+          order="newest"
+        />
       </Card>
       <Modal open={open}>
         <ModalDialog>

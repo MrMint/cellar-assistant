@@ -132,3 +132,95 @@ describe("BrandDetails (restored)", () => {
     assert.doesNotMatch(html, /Part of:/);
   });
 });
+
+describe("BrandDetailsClient: no silent caps (gaps #6, #7)", async () => {
+  const { Client, Provider } = await import("urql");
+  const { BrandDetailsClient } = await import("./BrandDetailsClient");
+  const client = new Client({
+    url: "http://test.invalid/graphql",
+    exchanges: [],
+  });
+  const renderClient = (props: Parameters<typeof BrandDetailsClient>[0]) =>
+    render(
+      <Provider value={client}>{<BrandDetailsClient {...props} />}</Provider>,
+    );
+
+  const brand = {
+    id: "b1",
+    name: "Vietti",
+    brandType: "winery",
+    createdAt: "2019-06-01T00:00:00Z",
+    parentBrand: null,
+  };
+  const page = <T,>(rows: T[], hasNextPage: boolean, totalCount: number) => ({
+    rows,
+    endCursor: hasNextPage ? "next" : null,
+    hasNextPage,
+    totalCount,
+  });
+  // Thirteen wines and one sake: past the old 12-link first page, the sake
+  // would have been missing from the groups until "Show more".
+  const links = [
+    ...Array.from({ length: 13 }, (_, index) => ({
+      id: `l${index}`,
+      isPrimary: false,
+      item: { id: `w${index}`, type: "WINE" as const, name: `Wine ${index}` },
+    })),
+    {
+      id: "l-sake",
+      isPrimary: false,
+      item: { id: "s1", type: "SAKE" as const, name: "Dassai" },
+    },
+  ];
+  const children = Array.from({ length: 24 }, (_, index) => ({
+    id: `c${index}`,
+    name: `Child ${index}`,
+    brandType: "winery",
+  }));
+  const places = Array.from({ length: 20 }, (_, index) => ({
+    id: `pb${index}`,
+    relationshipType: "serves",
+    place: { id: `p${index}`, name: `Place ${index}` },
+  }));
+
+  test("groups are built from every item link the server read", () => {
+    const html = renderClient({
+      brand,
+      initialItems: page(links, false, 14),
+      initialChildren: page(children, false, 24),
+      initialPlaces: page(places, false, 20),
+    });
+    assert.match(html, />wines \(13\)</);
+    assert.match(html, />sakes \(1\)</);
+    assert.match(html, /<h2[^>]*>Associated Items \(14\)<\/h2>/);
+    assert.doesNotMatch(html, />Show more</);
+  });
+
+  test("sub-brands and places past the first page offer Show more, under each list", () => {
+    const html = renderClient({
+      brand,
+      initialItems: page(links, false, 14),
+      initialChildren: page(children, true, 30),
+      initialPlaces: page(places, true, 45),
+    });
+    assert.equal([...html.matchAll(/>Show more</g)].length, 2);
+    assert.match(html, /<h2[^>]*>Associated Places \(45\)<\/h2>/);
+    // One under the "Owns brands:" chips, one under the place list.
+    const owns = html.indexOf("Owns brands:");
+    const placesHeading = html.indexOf("Associated Places");
+    const first = html.indexOf(">Show more<");
+    const second = html.indexOf(">Show more<", first + 1);
+    assert.ok(owns < first && first < html.indexOf("Associated Items"));
+    assert.ok(placesHeading < second);
+  });
+
+  test("an item read the server could not finish still offers Show more", () => {
+    const html = renderClient({
+      brand,
+      initialItems: page(links, true, 40),
+      initialChildren: page(children, false, 24),
+      initialPlaces: page(places, false, 20),
+    });
+    assert.equal([...html.matchAll(/>Show more</g)].length, 1);
+  });
+});

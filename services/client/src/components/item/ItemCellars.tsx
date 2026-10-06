@@ -9,6 +9,7 @@ import {
 } from "@mui/joy";
 import { Link } from "../common/Link";
 import { UserAvatar } from "../common/UserAvatar";
+import { HeldBackNote } from "./HeldBackNote";
 
 export type ItemCellarUser = {
   id: string;
@@ -23,13 +24,17 @@ export type ItemCellar = {
   co_owners: ItemCellarUser[];
 };
 
-type ItemCellarsProps = { cellars: ItemCellar[] };
+type ItemCellarsProps = {
+  cellars: ItemCellar[];
+  /** `cellars.totalCount`, when the API held rows back. */
+  total?: number | null;
+};
 
 /**
  * `82450ad1:src/components/item/ItemCellars.tsx`, verbatim but for ramda.
  * Fed by `Item.cellars` (G9) — non-empty bottles in cellars the viewer may see.
  */
-export const ItemCellars = ({ cellars }: ItemCellarsProps) => {
+export const ItemCellars = ({ cellars, total }: ItemCellarsProps) => {
   return (
     <Card>
       <Typography level="title-lg">Located in:</Typography>
@@ -64,6 +69,7 @@ export const ItemCellars = ({ cellars }: ItemCellarsProps) => {
           Not in any cellars, variety is the spice of life!
         </Typography>
       )}
+      <HeldBackNote shown={cellars.length} total={total} noun="cellars" />
     </Card>
   );
 };

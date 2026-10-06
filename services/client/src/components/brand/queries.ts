@@ -25,8 +25,11 @@
  *
  * `childBrands` and `places` are one collection call each whatever the page
  * size; `itemLinks` resolves `item` through one `ItemActor.get` per row. So
- * the items list asks for a screenful and pages on ("Show more"), where the
- * old page read every link at once. Every `first` over 100 is a `VALIDATION`
+ * the first read asks for a screenful of items, and the server then reads
+ * the rest ({@link BRAND_ITEMS_REST_PAGE_SIZE} at a time) before grouping —
+ * the old page read every link at once, and a group built from a partial list
+ * shows a type short or not at all. Sub-brands and places page with "Show
+ * more" ({@link BrandChildBrandsPageQuery}, {@link BrandPlacesPageQuery}). Every `first` over 100 is a `VALIDATION`
  * error rather than a clamp — and on `itemLinks`/`places`, plain connections
  * inside the `... on Brand` branch, a top-level one that blanks the page —
  * which `queries.test.ts` asserts against these constants.
@@ -46,6 +49,14 @@ export const BRAND_SEARCH_LIMIT = 50;
 
 /** Item links per page on a brand's page — the one per-row-cost edge. */
 export const BRAND_ITEMS_PAGE_SIZE = 12;
+
+/**
+ * Item links per follow-up read when the server reads the rest of a brand's
+ * items before grouping them by type. The old page read every `item_brands`
+ * row at once, and the grouped list ("Wines (3)") is only true over all of
+ * them — over the first 12, a type could look short or missing.
+ */
+export const BRAND_ITEMS_REST_PAGE_SIZE = 100;
 
 /** Places on a brand's page, in one go: they arrive joined. */
 export const BRAND_PLACES_PAGE_SIZE = 20;
@@ -273,4 +284,64 @@ export const BrandItemLinksPageQuery = graphql(
   }
 `,
   [BrandItemLinkFragment, ActorErrorFieldsFragment],
+);
+
+/** The next page of one brand's sub-brands ("Owns brands:" → Show more). */
+export const BrandChildBrandsPageQuery = graphql(
+  `
+  query BrandChildBrandsPage($id: ID!, $first: Int!, $after: String) {
+    brand(id: $id) {
+      __typename
+      ... on Brand {
+        __typename
+        id
+        childBrands(first: $first, after: $after) {
+          totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            cursor
+            node {
+              ...BrandCore
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [BrandCoreFragment, ActorErrorFieldsFragment],
+);
+
+/** The next page of one brand's places ("Associated Places" → Show more). */
+export const BrandPlacesPageQuery = graphql(
+  `
+  query BrandPlacesPage($id: ID!, $first: Int!, $after: String) {
+    brand(id: $id) {
+      __typename
+      ... on Brand {
+        __typename
+        id
+        places(first: $first, after: $after) {
+          totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            cursor
+            node {
+              ...BrandPlaceLink
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [BrandPlaceLinkFragment, ActorErrorFieldsFragment],
 );

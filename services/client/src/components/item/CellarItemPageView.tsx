@@ -26,6 +26,10 @@ export type CellarItemPageViewProps = {
   };
   cellar: { id: string; name: string };
   checkIns: CheckInRow[];
+  /** `checkIns.totalCount` — the API returns the newest 100. */
+  checkInsTotal?: number | null;
+  /** `recipeIngredients.totalCount` — the API returns 100. */
+  recipesTotal?: number | null;
   viewer: ItemCellarUser;
   friends: ItemCellarUser[];
   isOwner: boolean;
@@ -37,8 +41,9 @@ export type CellarItemPageViewProps = {
  * over `ITEM_VIEW_CONFIG` — one **bottle** (decision 1). Same grid: the
  * bottle's display photo (tap to set one) on the left; details,
  * characteristics, check-ins (once opened), the remaining slider, Share,
- * brands and, for sake and tea, recipes in the middle; the review form and
- * reviews on the right.
+ * brands (wine, coffee, sake, tea) and, for sake and tea, recipes in the
+ * middle; the review form and reviews on the right, then beer's and spirit's
+ * brands (`cellarBrandsColumn`).
  */
 export function CellarItemPageView({
   item,
@@ -46,12 +51,17 @@ export function CellarItemPageView({
   bottle,
   cellar,
   checkIns,
+  checkInsTotal,
+  recipesTotal,
   viewer,
   friends,
   isOwner,
   editHref,
 }: CellarItemPageViewProps) {
   const config = ITEM_VIEW_CONFIG[item.type];
+  const brands = (
+    <ItemBrands brands={item.brands} title={config.cellarBrandTitle} />
+  );
 
   return (
     <Stack spacing={2}>
@@ -101,6 +111,7 @@ export function CellarItemPageView({
                   cellarId={cellar.id}
                   friends={friends}
                   user={viewer}
+                  total={checkInsTotal}
                 />
               )}
               <ItemRemainingSlider
@@ -112,15 +123,13 @@ export function CellarItemPageView({
                 emptied={bottle.emptyAt}
               />
               <ItemShare itemId={item.itemId} itemType={item.type} />
-              <ItemBrands
-                brands={item.brands}
-                title={config.cellarBrandTitle}
-              />
+              {config.cellarBrandsColumn === "left" && brands}
               {config.cellarRecipes && (
                 <ItemRecipes
                   recipeIngredients={recipes}
                   title="Used in Recipes"
                   itemName={item.name}
+                  total={recipesTotal}
                 />
               )}
             </Stack>
@@ -139,6 +148,7 @@ export function CellarItemPageView({
                 endCursor={item.reviewsEndCursor}
                 hasNextPage={item.reviewsHasNextPage}
               />
+              {config.cellarBrandsColumn === "right" && brands}
             </Stack>
           </Grid>
         </Grid>

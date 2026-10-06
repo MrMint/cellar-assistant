@@ -4,14 +4,15 @@ import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import {
-  addableCellars,
   itemPageHref,
   itemRecipesFromFragment,
   itemRelationsFromFragment,
   itemViewFromFragment,
+  recipeIngredientsTotal,
 } from "./adapter";
 import { ItemPageQuery } from "./fragments";
 import { ItemPageView } from "./ItemPageView";
+import { allAddableCellars, allItemBrands, allItemCellars } from "./page-lists";
 
 /**
  * `/{type}s/[itemId]` for all six types — the old per-type `page.tsx` +
@@ -38,24 +39,29 @@ export async function ItemPage({
   }
 
   const viewerId = data.me?.id ?? null;
-  const item = itemViewFromFragment(result.data.data);
-  const relations = itemRelationsFromFragment(result.data.data);
-  const cellars = unwrapResult(data.myCellars, "CellarConnection");
+  const node = result.data.data;
+  const relations = itemRelationsFromFragment(node);
+  const myCellars = unwrapResult(data.myCellars, "CellarConnection");
+  // The old page read every list unbounded: read the rest before rendering.
+  const [brands, located, addable] = await Promise.all([
+    allItemBrands(apiServerQuery, node, { itemId, type }),
+    allItemCellars(apiServerQuery, node),
+    myCellars.ok
+      ? allAddableCellars(apiServerQuery, myCellars.data, viewerId)
+      : Promise.resolve([]),
+  ]);
+  const item = { ...itemViewFromFragment(node), brands };
 
   return (
     <ItemPageView
       item={item}
-      cellars={relations.cellars}
+      cellars={located.cellars}
+      cellarsTotal={located.total}
       tierLists={relations.tierLists}
-      recipes={itemRecipesFromFragment(result.data.data)}
-      addableCellars={
-        cellars.ok
-          ? addableCellars(
-              cellars.data.edges.map((edge) => edge.node),
-              viewerId,
-            )
-          : []
-      }
+      tierListsTotal={relations.tierListsTotal}
+      recipes={itemRecipesFromFragment(node)}
+      recipesTotal={recipeIngredientsTotal(node)}
+      addableCellars={addable}
       editHref={
         viewerId !== null && item.createdById === viewerId
           ? `${itemPageHref(type, itemId)}/edit`

@@ -10,10 +10,12 @@ import {
   isCellarOwner,
   itemRecipesFromFragment,
   itemViewFromFragment,
+  recipeIngredientsTotal,
   userFromProfile,
 } from "./adapter";
 import { CellarItemPageView } from "./CellarItemPageView";
 import { CellarBottleForQuery, CellarItemPageQuery } from "./fragments";
+import { allFriends, allItemBrands } from "./page-lists";
 
 /**
  * `/cellars/[cellarId]/{type}s/[id]` for all six types — one **bottle**, the
@@ -77,12 +79,23 @@ export async function CellarItemPage({
     data.me?.profile === null || data.me?.profile === undefined
       ? { id: viewerId ?? "", displayName: "You", avatarUrl: "" }
       : userFromProfile(data.me.profile);
-  const friends = unwrapResult(data.myFriends, "FriendConnection");
+  const friendsResult = unwrapResult(data.myFriends, "FriendConnection");
+  // The old page read brands and friends unbounded: read the rest first.
+  const [brands, friends] = await Promise.all([
+    allItemBrands(apiServerQuery, bottle.item, {
+      itemId: view.itemId,
+      type: view.type,
+    }),
+    friendsResult.ok
+      ? allFriends(apiServerQuery, friendsResult.data)
+      : Promise.resolve([]),
+  ]);
 
   return (
     <CellarItemPageView
-      item={view}
+      item={{ ...view, brands }}
       recipes={itemRecipesFromFragment(bottle.item)}
+      recipesTotal={recipeIngredientsTotal(bottle.item)}
       bottle={{
         id: bottle.id,
         openAt: bottle.openAt ?? null,
@@ -98,12 +111,9 @@ export async function CellarItemPage({
       }}
       cellar={{ id: cellar.id, name: cellar.name }}
       checkIns={bottle.checkIns.edges.map((edge) => checkInFromNode(edge.node))}
+      checkInsTotal={bottle.checkIns.totalCount ?? null}
       viewer={viewer}
-      friends={
-        friends.ok
-          ? friends.data.edges.map((edge) => userFromProfile(edge.node.user))
-          : []
-      }
+      friends={friends}
       isOwner={isCellarOwner(cellar, viewerId)}
       editHref={
         viewerId !== null && view.createdById === viewerId

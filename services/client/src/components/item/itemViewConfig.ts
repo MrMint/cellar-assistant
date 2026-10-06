@@ -12,6 +12,10 @@
  * - `brandsColumn`: wine, sake and tea listed brands in the right-hand column
  *   under the reviews; beer, spirit and coffee in the left one above "On
  *   Lists".
+ * - `cellarBrandsColumn`: the bottle page's own split, which is **not** the
+ *   item page's — beer and spirit put brands in the right-hand column under
+ *   the reviews (`CellarBeerDetails.tsx:141`, `CellarSpiritDetails.tsx:145`);
+ *   wine, coffee, sake and tea in the middle one under Share.
  * - `recipes` / `cellarRecipes`: "Used in Recipes". Beer, spirit and coffee
  *   fetched `recipe_ingredients` and never rendered them; wine showed them on
  *   the item page only, sake and tea on both pages.
@@ -36,6 +40,7 @@ export type ItemViewConfig = {
   brandTitle: string;
   cellarBrandTitle: string;
   brandsColumn: "left" | "right";
+  cellarBrandsColumn: "left" | "right";
   recipes: boolean;
   cellarRecipes: boolean;
   characteristicsTitle: string | null;
@@ -47,6 +52,7 @@ export const ITEM_VIEW_CONFIG = {
     brandTitle: "Wine Brands",
     cellarBrandTitle: "Wineries",
     brandsColumn: "right",
+    cellarBrandsColumn: "left",
     recipes: true,
     cellarRecipes: false,
     characteristicsTitle: null,
@@ -56,6 +62,7 @@ export const ITEM_VIEW_CONFIG = {
     brandTitle: "Breweries",
     cellarBrandTitle: "Beer Brands",
     brandsColumn: "left",
+    cellarBrandsColumn: "right",
     recipes: false,
     cellarRecipes: false,
     characteristicsTitle: null,
@@ -65,6 +72,7 @@ export const ITEM_VIEW_CONFIG = {
     brandTitle: "Distilleries",
     cellarBrandTitle: "Spirit Brands",
     brandsColumn: "left",
+    cellarBrandsColumn: "right",
     recipes: false,
     cellarRecipes: false,
     characteristicsTitle: null,
@@ -74,6 +82,7 @@ export const ITEM_VIEW_CONFIG = {
     brandTitle: "Roasters",
     cellarBrandTitle: "Roasters",
     brandsColumn: "left",
+    cellarBrandsColumn: "left",
     recipes: false,
     cellarRecipes: false,
     characteristicsTitle: null,
@@ -83,6 +92,7 @@ export const ITEM_VIEW_CONFIG = {
     brandTitle: "Breweries",
     cellarBrandTitle: "Breweries",
     brandsColumn: "right",
+    cellarBrandsColumn: "left",
     recipes: true,
     cellarRecipes: true,
     characteristicsTitle: "Sake Characteristics",
@@ -92,6 +102,7 @@ export const ITEM_VIEW_CONFIG = {
     brandTitle: "Tea Brands",
     cellarBrandTitle: "Brands",
     brandsColumn: "right",
+    cellarBrandsColumn: "left",
     recipes: true,
     cellarRecipes: true,
     characteristicsTitle: "Tea Characteristics",

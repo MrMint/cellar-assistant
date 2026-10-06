@@ -298,3 +298,177 @@ describe("ItemForm (restored {T}Form, edit mode)", () => {
     assert.match(html, /checked=""/);
   });
 });
+
+describe("CellarItemPageView: the bottle page's own brands column (gap #13b)", () => {
+  const bottle = {
+    id: "b1",
+    openAt: null,
+    emptyAt: null,
+    percentageRemaining: 100,
+    displayImage: null,
+  };
+  const base = {
+    recipes: [],
+    cellar: { id: "c", name: "Home" },
+    checkIns: [],
+    viewer: { id: "me", displayName: "Me", avatarUrl: "" },
+    friends: [],
+    editHref: null,
+    isOwner: true,
+    bottle,
+  };
+  const at = (html: string, needle: string) => {
+    const index = html.indexOf(needle);
+    assert.ok(index >= 0, `missing ${needle}`);
+    return index;
+  };
+
+  // `82450ad1:src/components/beer/CellarBeerDetails.tsx:141` and
+  // `spirit/CellarSpiritDetails.tsx:145`: brands under the reviews.
+  for (const [type, title] of [
+    ["BEER", "Beer Brands"],
+    ["SPIRIT", "Spirit Brands"],
+  ] as const) {
+    test(`${type}: brands in the right-hand column, after the reviews`, () => {
+      const html = render(
+        <CellarItemPageView {...base} item={{ ...tea, type }} />,
+      );
+      assert.ok(at(html, `${title} (1)`) > at(html, ">Reviews:<"));
+    });
+  }
+
+  // `wine/CellarWineDetails.tsx:136`, coffee, sake, tea: under Share.
+  for (const [type, title] of [
+    ["WINE", "Wineries"],
+    ["COFFEE", "Roasters"],
+    ["SAKE", "Breweries"],
+    ["TEA", "Brands"],
+  ] as const) {
+    test(`${type}: brands in the middle column, before the reviews`, () => {
+      const html = render(
+        <CellarItemPageView {...base} item={{ ...tea, type }} />,
+      );
+      assert.ok(at(html, `>${title} (1)<`) < at(html, ">Reviews:<"));
+    });
+  }
+});
+
+describe("lists the API stops at 100 rows say so (gap #8)", () => {
+  const user = { id: "me", displayName: "Me", avatarUrl: "" };
+  const checkIns = Array.from({ length: 100 }, (_, index) => ({
+    id: `ci${index}`,
+    createdAt: "2026-01-02T10:00:00Z",
+    user,
+  }));
+
+  test("a bottle with more check-ins than came back names the newest 100", () => {
+    const html = render(
+      <CellarItemPageView
+        item={tea}
+        recipes={[]}
+        cellar={{ id: "c", name: "Home" }}
+        checkIns={checkIns}
+        checkInsTotal={130}
+        viewer={user}
+        friends={[]}
+        editHref={null}
+        isOwner
+        bottle={{
+          id: "b1",
+          openAt: "2026-01-01T00:00:00Z",
+          emptyAt: null,
+          percentageRemaining: 40,
+          displayImage: null,
+        }}
+      />,
+    );
+    assert.match(html, /Showing the newest 100 of 130 check-ins\./);
+  });
+
+  test("a whole list carries no note", () => {
+    const html = render(
+      <CellarItemPageView
+        item={tea}
+        recipes={[]}
+        cellar={{ id: "c", name: "Home" }}
+        checkIns={checkIns.slice(0, 3)}
+        checkInsTotal={3}
+        viewer={user}
+        friends={[]}
+        editHref={null}
+        isOwner
+        bottle={{
+          id: "b1",
+          openAt: "2026-01-01T00:00:00Z",
+          emptyAt: null,
+          percentageRemaining: 40,
+          displayImage: null,
+        }}
+      />,
+    );
+    assert.doesNotMatch(html, /Showing the/);
+  });
+
+  test("Located in:, On Lists and Used in Recipes name what was held back", () => {
+    const cellars = Array.from({ length: 100 }, (_, index) => ({
+      id: `c${index}`,
+      name: `Cellar ${index}`,
+      createdBy: user,
+      co_owners: [],
+    }));
+    const html = render(
+      <ItemPageView
+        item={tea}
+        cellars={cellars}
+        cellarsTotal={140}
+        tierLists={[
+          { id: "e", band: 5, tier_list: { id: "l", name: "Best teas" } },
+        ]}
+        tierListsTotal={101}
+        recipes={[
+          {
+            id: "ri",
+            quantity: null,
+            unit: null,
+            is_optional: false,
+            recipe: {
+              id: "r",
+              name: "Tea Punch",
+              type: "cocktail",
+              image_url: null,
+              difficulty_level: 1,
+            },
+          },
+        ]}
+        recipesTotal={250}
+        addableCellars={[]}
+        editHref={null}
+      />,
+    );
+    assert.match(html, /Showing the first 100 of 140 cellars\./);
+    assert.match(html, /Showing the first 1 of 101 lists\./);
+    assert.match(html, /Showing the first 1 of 250 recipes\./);
+  });
+});
+
+describe("ItemForm edit mode keeps the database's required rule (gap #14b)", () => {
+  test("sake: Vintage and Category are not starred on edit, only Name", () => {
+    const html = render(
+      <ItemForm
+        id="s1"
+        type="SAKE"
+        defaultValues={{
+          name: "Dassai 45",
+          description: "",
+          country: "",
+          attributes: {},
+        }}
+        onSavedHref="/sakes/s1"
+      />,
+    );
+    const starred = [
+      ...html.matchAll(/<label[^>]*>([^<]*)<span[^>]*asterisk/g),
+    ].map((match) => match[1]);
+    assert.deepEqual(starred, ["Name"]);
+  });
+});

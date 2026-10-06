@@ -560,13 +560,19 @@ export const itemViewFromFragment = (
 /** `...ItemPageRelations` → "Located in:" and "On Lists". */
 export const itemRelationsFromFragment = (
   data: FragmentOf<typeof ItemPageRelationsFragment>,
-): { cellars: ItemCellar[]; tierLists: ItemTierListEntry[] } => {
+): {
+  cellars: ItemCellar[];
+  tierLists: ItemTierListEntry[];
+  /** `tierListEntries.totalCount` — exact, where the rows stop at 100. */
+  tierListsTotal: number | null;
+} => {
   const relations = readFragment(ItemPageRelationsFragment, data);
   return {
     cellars: relations.cellars.edges.map((edge) => cellarFromNode(edge.node)),
     tierLists: relations.tierListEntries.edges.map((edge) =>
       tierListEntryFromNode(edge.node),
     ),
+    tierListsTotal: relations.tierListEntries.totalCount ?? null,
   };
 };
 
@@ -577,3 +583,25 @@ export const itemRecipesFromFragment = (
   readFragment(ItemPageRecipesFragment, data).recipeIngredients.edges.map(
     (edge) => recipeIngredientFromNode(edge.node),
   );
+
+/** `recipeIngredients.totalCount` — exact, where the rows stop at 100. */
+export const recipeIngredientsTotal = (
+  data: FragmentOf<typeof ItemPageRecipesFragment>,
+): number | null =>
+  readFragment(ItemPageRecipesFragment, data).recipeIngredients.totalCount ??
+  null;
+
+/**
+ * "Showing N of M" for a list the API stops at 100 rows (`cellars`,
+ * `tierListEntries`, `recipeIngredients`, a bottle's `checkIns`), or null
+ * when nothing was held back — so a capped list is never a silent one.
+ */
+export const heldBackNote = (
+  shown: number,
+  total: number | null | undefined,
+  noun: string,
+  order: "first" | "newest" = "first",
+): string | null =>
+  total === null || total === undefined || total <= shown
+    ? null
+    : `Showing the ${order} ${shown} of ${total} ${noun}.`;

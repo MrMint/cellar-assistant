@@ -16,8 +16,12 @@ import { ITEM_VIEW_CONFIG } from "./itemViewConfig";
 export type ItemPageViewProps = {
   item: ItemView;
   cellars: ItemCellar[];
+  /** Exact counts where the API stops a list at 100 rows (null: unknown). */
+  cellarsTotal?: number | null;
   tierLists: ItemTierListEntry[];
+  tierListsTotal?: number | null;
   recipes: ItemRecipeIngredient[];
+  recipesTotal?: number | null;
   /** The viewer's cellars "Add to Cellar" offers. */
   addableCellars: { id: string; name: string }[];
   editHref: string | null;
@@ -33,8 +37,11 @@ export type ItemPageViewProps = {
 export function ItemPageView({
   item,
   cellars,
+  cellarsTotal,
   tierLists,
+  tierListsTotal,
   recipes,
+  recipesTotal,
   addableCellars,
   editHref,
 }: ItemPageViewProps) {
@@ -78,9 +85,9 @@ export function ItemPageView({
                 flavorProfile={item.flavorProfile}
                 ingredients={item.ingredients}
               />
-              <ItemCellars cellars={cellars} />
+              <ItemCellars cellars={cellars} total={cellarsTotal} />
               {config.brandsColumn === "left" && brands}
-              <ItemTierLists entries={tierLists} />
+              <ItemTierLists entries={tierLists} total={tierListsTotal} />
             </Stack>
           </Grid>
           <Grid xs={12} sm={12} lg={6}>
@@ -103,6 +110,7 @@ export function ItemPageView({
                   recipeIngredients={recipes}
                   title="Used in Recipes"
                   itemName={item.name}
+                  total={recipesTotal}
                 />
               )}
             </Stack>

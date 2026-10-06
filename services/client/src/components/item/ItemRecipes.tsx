@@ -6,6 +6,7 @@ import { MdRestaurant } from "react-icons/md";
 import { Link } from "@/components/common/Link";
 import beer1 from "@/images/beer1.png";
 import wine1 from "@/images/wine1.png";
+import { HeldBackNote } from "./HeldBackNote";
 
 const getDifficultyColor = (level: number) => {
   if (level <= 2) return "success";
@@ -71,6 +72,8 @@ export type ItemRecipesProps = {
   recipeIngredients: ItemRecipeIngredient[];
   title?: string;
   itemName?: string;
+  /** `recipeIngredients.totalCount`, when the API held rows back. */
+  total?: number | null;
 };
 
 /**
@@ -83,6 +86,7 @@ export const ItemRecipes = ({
   recipeIngredients,
   title = "Used in Recipes",
   itemName = "this item",
+  total,
 }: ItemRecipesProps) => {
   if (recipeIngredients.length === 0) {
     return null;
@@ -200,6 +204,11 @@ export const ItemRecipes = ({
             );
           })}
         </Stack>
+        <HeldBackNote
+          shown={recipeIngredients.length}
+          total={total}
+          noun="recipes"
+        />
       </CardContent>
     </Card>
   );

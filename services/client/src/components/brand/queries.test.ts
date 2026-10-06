@@ -46,10 +46,13 @@ import { type DocumentNode, Kind, print, visit } from "graphql";
 import {
   BRAND_CHILDREN_PAGE_SIZE,
   BRAND_ITEMS_PAGE_SIZE,
+  BRAND_ITEMS_REST_PAGE_SIZE,
   BRAND_PLACES_PAGE_SIZE,
   BRANDS_PAGE_SIZE,
+  BrandChildBrandsPageQuery,
   BrandDetailQuery,
   BrandItemLinksPageQuery,
+  BrandPlacesPageQuery,
 } from "./queries";
 
 /**
@@ -200,4 +203,40 @@ describe("A7g brand reverse-edge documents", () => {
       );
     }
   });
+});
+
+describe("the brand page reads every list (parity gaps #6, #7)", () => {
+  test("the item read-to-the-end page size is inside the cap", () => {
+    assert.ok(
+      Number.isInteger(BRAND_ITEMS_REST_PAGE_SIZE) &&
+        BRAND_ITEMS_REST_PAGE_SIZE >= 1 &&
+        BRAND_ITEMS_REST_PAGE_SIZE <= CONNECTION_CAP,
+      `BRAND_ITEMS_REST_PAGE_SIZE is ${BRAND_ITEMS_REST_PAGE_SIZE}`,
+    );
+  });
+
+  for (const [name, document, edge] of [
+    ["BrandChildBrandsPageQuery", BrandChildBrandsPageQuery, "childBrands"],
+    ["BrandPlacesPageQuery", BrandPlacesPageQuery, "places"],
+  ] as const) {
+    test(`${name} pages ${edge} and nothing else, with real counts`, () => {
+      const fields = selectedFields(document);
+      assert.ok(fields.has(edge), `${name} must select ${edge}`);
+      for (const sibling of [
+        "itemLinks",
+        "places",
+        "childBrands",
+        "parentBrand",
+      ]) {
+        if (sibling === edge) continue;
+        assert.ok(!fields.has(sibling), `${name} re-reads ${sibling}`);
+      }
+      for (const field of ["totalCount", "hasNextPage", "endCursor"]) {
+        assert.ok(fields.has(field), `${name} must select ${field}`);
+      }
+      assert.equal(firstArgumentVariables(document).get(edge), "first");
+      const text = print(document as never);
+      assert.match(text, /\.\.\.ActorErrorFields\b/);
+    });
+  }
 });

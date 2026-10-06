@@ -204,3 +204,35 @@ describe("OnboardingItemForm (the old {T}Form in create mode)", () => {
     assert.match(html, /value="081240050376"/);
   });
 });
+
+describe("OnboardingItemForm: the old create forms' required stars (gap #14b)", () => {
+  /** Labels Joy marks required: `<label …>Vintage<span …asterisk…>`. */
+  const starred = (html: string) =>
+    [...html.matchAll(/<label[^>]*>([^<]*)<span[^>]*asterisk/g)].map(
+      (match) => match[1],
+    );
+
+  test("sake: Name, Vintage and Category starred, as SakeForm.tsx:192,238", () => {
+    const html = render(
+      <OnboardingItemForm
+        type="SAKE"
+        itemOnboardingId="o"
+        defaultValues={formDefaultsFromOnboarding("SAKE", {})}
+        onCreated={noop}
+      />,
+    );
+    assert.deepEqual(starred(html), ["Name", "Vintage", "Category"]);
+  });
+
+  test("tea: Name and Category starred, as TeaForm.tsx:236", () => {
+    const html = render(
+      <OnboardingItemForm
+        type="TEA"
+        itemOnboardingId="o"
+        defaultValues={formDefaultsFromOnboarding("TEA", {})}
+        onCreated={noop}
+      />,
+    );
+    assert.deepEqual(starred(html), ["Name", "Category"]);
+  });
+});

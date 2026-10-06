@@ -7,7 +7,9 @@
  * - "Since" slices the year from the ISO string (`sinceYear`): the old
  *   `new Date(...).getFullYear()` could differ between server and browser.
  * - The two counts are the connections' `totalCount` when given, since the
- *   item list now pages; `itemsFooter` is where the page puts "Show more".
+ *   lists now page; `itemsFooter`, `childrenFooter` and `placesFooter` are
+ *   where the page puts each list's "Show more" (the old page read every row
+ *   at once and had none).
  */
 
 import {
@@ -90,6 +92,10 @@ export type BrandDetailsProps = {
   placeTotal?: number | null;
   /** Below the item list — the page's "Show more" while links remain. */
   itemsFooter?: ReactNode;
+  /** Below the "Owns brands:" chips — "Show more" while sub-brands remain. */
+  childrenFooter?: ReactNode;
+  /** Below the place list — "Show more" while places remain. */
+  placesFooter?: ReactNode;
 };
 
 const getItemDisplay = (item: BrandItem) => {
@@ -160,6 +166,8 @@ export const BrandDetails = ({
   itemTotal,
   placeTotal,
   itemsFooter,
+  childrenFooter,
+  placesFooter,
 }: BrandDetailsProps) => {
   const since = sinceYear(brand.created_at);
   const groupedItems = brand.item_brands.reduce(
@@ -284,6 +292,7 @@ export const BrandDetails = ({
                           </Link>
                         ))}
                       </Stack>
+                      {childrenFooter}
                     </Box>
                   )}
               </Stack>
@@ -401,6 +410,7 @@ export const BrandDetails = ({
                   ))}
                 </Stack>
               )}
+              {placesFooter}
             </CardContent>
           </Card>
         </Grid>

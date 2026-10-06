@@ -49,7 +49,7 @@ export const OnboardingItemForm = ({
   onCreated,
 }: OnboardingItemFormProps) => {
   const client = useClient();
-  const layout = formLayout(type);
+  const layout = formLayout(type, "create");
   const [brandName, setBrandName] = useState(defaultValues.brandName);
   const [barcode, setBarcode] = useState(sessionBarcode ?? "");
 
