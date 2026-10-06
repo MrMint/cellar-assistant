@@ -37,8 +37,9 @@ wave merges.
 
 ## Not decided here
 
-- Chosen drops G31 (activity feed) and G32 (image search): stay dropped until the
-  user says otherwise.
+- Chosen drop G32 (image search): stays dropped until the user says otherwise.
+  G31 (the `/search` activity feed and nearby strip) was answered by the user on
+  2026-10-05 — restore it; see item 19.
 - Anything that changes production data or URLs beyond row 1.
 
 ## Awaiting the user (collected 2026-10-05)
@@ -68,6 +69,8 @@ one-line or small change to reverse. Answer per item.
    the UI although the API supports it. — RecipesWave, SearchWave
 9. Search: the rewrite's brands/people/recipes tabs and two quick-link chips;
    text search capped at 10 results (the old cap); image search (G32). — SearchWave
+   (The discovery section — Recent Activity and Nearby Places — is no longer
+   dropped: restored under item 19.)
 10. Map: Discoveries "Recent Additions" (G22, no API), the favourites visit
     filter (G34; filtered nothing in production), the rewrite's place rating /
     notes / tags / want-to-visit panel. — MapPlacesWave
@@ -91,4 +94,16 @@ one-line or small change to reverse. Answer per item.
     Today a Vertex outage plus outbox retries can lock users out for up to a
     day. — E2EStability
 19. G22 recent additions from discoveries, G29 "can make", G30 multiple recipes
-    per photo, G31 activity feed — build, or stay dropped?
+    per photo — build, or stay dropped?
+    **G31 answered (user, 2026-10-05): restore.** `/search` again renders Recent
+    Activity (`?activity=` filters) and Nearby Places under the quick links, at
+    the old paths (`components/search/{SearchDiscovery,RecentActivity,
+    NearbyPlaces}.tsx`). Served by `me.recentActivity` and `me.nearbyPlaces`,
+    neither of which takes a user id: the server reads the viewer's own friend
+    rows, shows a tier-list entry only from a list `canSeeTierList` admits (a
+    friend's PRIVATE list never appears, name included — the old query showed
+    it) and a bottle only from a cellar `canSeeCellar` admits. Two deviations to
+    ratify: "Added" lists bottles added by you or a friend, where the old query
+    listed any visible cellar's newest bottles, a stranger's PUBLIC cellar's
+    included; and a relative time ("· 3 days ago") appears after hydration
+    rather than in the first paint (the hydration rule). — SearchDiscovery

@@ -55,5 +55,9 @@ import "./reverse-edges.ts";
 // `PlaceInteraction`, `MenuItemMatch`, `MenuScan` and `MatchSuggestion` —
 // refs from five modules, so it too comes after every one of them.
 import "./place-edges.ts";
+// UI parity G31: `/search`'s discovery fields on `Viewer` — activity entries
+// link `UserProfile`, `Item`, `ItemReview`, `TierListItem` and `Cellar`,
+// nearby places link `Place`, so it comes after every module declaring them.
+import "./discovery.ts";
 
 export const schema = builder.toSchema();

@@ -11,29 +11,45 @@ import {
 } from "react-icons/md";
 import { FadeIn, StaggerIn, StaggerItem } from "@/components/search/AnimateIn";
 import {
+  type ActivityEntry,
+  type ActivityKind,
+  activityFeedFromNodes,
+  activityKindsFromParams,
+  apiActivityKinds,
   collectionStatsLine,
+  type NearbyPlace,
+  nearbyPlacesFromNodes,
   type SearchParams,
   searchStateFromParams,
 } from "@/components/search/adapter";
 import { ClientSearchInterface } from "@/components/search/ClientSearchInterface";
 import { Greeting } from "@/components/search/Greeting";
-import { SearchCollectionStatsQuery } from "@/components/search/queries";
+import {
+  NEARBY_PLACES_LIMIT,
+  RECENT_ACTIVITY_CAP,
+  RECENT_ACTIVITY_PER_KIND,
+  SearchCollectionStatsQuery,
+  SearchNearbyPlacesQuery,
+  SearchRecentActivityQuery,
+} from "@/components/search/queries";
+import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
 import { ServerBarcodeResults } from "@/components/search/ServerBarcodeResults";
 import { ServerSearchResults } from "@/components/search/ServerSearchResults";
 import { apiServerQuery } from "@/lib/api/urql-server";
+import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
 import { getServerUser } from "@/utilities/auth-server";
 
 /**
  * `/search` — `82450ad1:src/app/(authenticated)/search/page.tsx`, restored.
  *
- * Landing view: greeting, the collection line, the search box and the five
- * quick links. Active search (`?q=`, `?barcode=`): the box and the results.
+ * Landing view: greeting, the collection line, the search box, the five
+ * quick links, and the discovery section under them — Recent Activity
+ * (`?activity=`) and Nearby Places (G31, restored at the user's request over
+ * `me.recentActivity` / `me.nearbyPlaces`). Active search (`?q=`,
+ * `?barcode=`): the box and the results.
  *
  * Not restored, each by decision rather than omission:
  *
- * - **The discovery feed and the nearby-places strip** below the quick links
- *   (`RecentActivity`, `NearbyPlaces`, `?activity=`): chosen drops, G31 and
- *   e4 §6b. The schema has no cross-user activity field.
  * - **Image search** (the Photo button and `?image_results=`): chosen drop,
  *   G32. An old image-results link lands on a notice saying so.
  * - **The rewrite's tabs** (brands, people, recipes) and its two extra quick
@@ -48,8 +64,10 @@ interface SearchPageProps {
 }
 
 export default async function Search({ searchParams }: SearchPageProps) {
-  const state = searchStateFromParams(await searchParams);
+  const resolvedSearchParams = await searchParams;
+  const state = searchStateFromParams(resolvedSearchParams);
   const { query, barcode, imageSearch, hasActiveSearch } = state;
+  const activityKinds = activityKindsFromParams(resolvedSearchParams);
 
   const user = await getServerUser();
 
@@ -128,6 +146,10 @@ export default async function Search({ searchParams }: SearchPageProps) {
                 </Stack>
               </StaggerIn>
             </Stack>
+
+            <Suspense fallback={null}>
+              <DiscoveryContent activityKinds={activityKinds} />
+            </Suspense>
           </Stack>
         )}
 
@@ -208,5 +230,65 @@ async function CollectionStats() {
     >
       {collectionStatsLine(stats)}
     </Typography>
+  );
+}
+
+/**
+ * The old `DiscoveryContent`: the activity feed and, when the geolocation
+ * cookie holds a position, the nearby strip's first page — both server-side,
+ * streamed in under the hero.
+ *
+ * Each half fails on its own and renders as empty: the old page swallowed a
+ * nearby failure (`nearbyPromise.catch(() => null)`), and a feed that cannot
+ * load is better absent than an error over the landing view.
+ */
+async function DiscoveryContent({
+  activityKinds,
+}: {
+  activityKinds: ActivityKind[];
+}) {
+  const cachedLocation = await getGeolocationFromCookie();
+
+  const [feed, nearbyPlaces] = await Promise.all([
+    apiServerQuery(SearchRecentActivityQuery, {
+      kinds: apiActivityKinds(activityKinds),
+      limit: RECENT_ACTIVITY_PER_KIND,
+      first: RECENT_ACTIVITY_CAP,
+    })
+      .then((data): ActivityEntry[] =>
+        activityFeedFromNodes(
+          data.me?.recentActivity.edges.map((edge) => edge.node) ?? [],
+        ),
+      )
+      .catch((error: unknown): ActivityEntry[] => {
+        console.error("Recent activity failed:", error);
+        return [];
+      }),
+    cachedLocation
+      ? apiServerQuery(SearchNearbyPlacesQuery, {
+          location: {
+            lat: cachedLocation.latitude,
+            lng: cachedLocation.longitude,
+          },
+          categories: null,
+          limit: NEARBY_PLACES_LIMIT,
+          first: NEARBY_PLACES_LIMIT,
+        })
+          .then((data): NearbyPlace[] =>
+            nearbyPlacesFromNodes(
+              data.me?.nearbyPlaces.edges.map((edge) => edge.node) ?? [],
+            ),
+          )
+          .catch((): undefined => undefined)
+      : Promise.resolve(undefined),
+  ]);
+
+  return (
+    <SearchDiscoveryContent
+      feed={feed}
+      activityKinds={activityKinds}
+      nearbyPlaces={nearbyPlaces}
+      cachedLocation={cachedLocation}
+    />
   );
 }

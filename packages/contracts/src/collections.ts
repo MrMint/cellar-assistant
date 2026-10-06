@@ -86,7 +86,12 @@ import type {
   FriendRequestStatus,
   RecipeCategory,
 } from "./enums.ts";
-import type { ItemBrandDto, ItemRef, ItemType } from "./items.ts";
+import type {
+  ItemBrandDto,
+  ItemRef,
+  ItemReviewDto,
+  ItemType,
+} from "./items.ts";
 import type { MatchSuggestionDto } from "./menu-scans.ts";
 import type { CappedList, Page, PageArgs } from "./page.ts";
 import type { PlaceBrandDto, PlaceMenuItemDto } from "./places.ts";
@@ -376,6 +381,66 @@ export const isFriendRequestFilter = (
 ): value is FriendRequestFilter =>
   (FRIEND_REQUEST_FILTERS as readonly string[]).includes(value);
 
+/* -------------------------------------------------------------------------- */
+/* Recent activity — /search's discovery feed (UI parity G31)                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The three kinds the old `/search` feed merged
+ * (`82450ad1:src/components/search/RecentActivity.tsx`): a bottle added to a
+ * cellar, an item review, an entry added to a tier list.
+ */
+export const ACTIVITY_KINDS = ["ADDED", "REVIEWED", "TIER_LISTED"] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+
+export const isActivityKind = (value: string): value is ActivityKind =>
+  (ACTIVITY_KINDS as readonly string[]).includes(value);
+
+/** The old feed's `limit: 6` per query — and the default here. */
+export const ACTIVITY_DEFAULT_LIMIT = 6;
+/** Rows held per kind, at most. Over it is a `VALIDATION` error. */
+export const ACTIVITY_MAX_LIMIT = 20;
+
+/**
+ * Which kinds, and how many of each. `kinds` empty means all three — the old
+ * `?activity=` with nothing selected.
+ */
+export type ActivityFilter = {
+  readonly kinds: readonly ActivityKind[];
+  readonly limit: number;
+};
+
+/**
+ * One feed row — **projection**: none of the three source rows has an entity
+ * actor addressable by its own id (`item_reviews` belongs to `ItemActor(item)`,
+ * `tier_list_items` to `TierListActor(list)`, `cellar_items` to
+ * `CellarActor(cellar)`). Everything an id *can* hydrate is an id: the author
+ * (`UserActor.getProfile`), the item (`ItemActor.get`), the list
+ * (`TierListActor.get`, which applies `canSeeTierList` again) and the cellar
+ * (`CellarActor.get`, `canSeeCellar` again).
+ *
+ * Exactly one of `review` / `tierListItem` / `cellarItemId` is set, by `kind`.
+ */
+export type ActivityEntryDto = {
+  readonly kind: ActivityKind;
+  /** The source row's id — unique within a kind, not across kinds. */
+  readonly id: string;
+  /** ISO-8601 `created_at` of the source row; the feed's order. */
+  readonly occurredAt: string;
+  /** Who did it: the reviewer, the list's creator, the bottle's adder. */
+  readonly userId: string;
+  /** The item, or `null` for a tier-listed place. */
+  readonly item: ItemRef | null;
+  /** The tier-listed place, or `null`. */
+  readonly placeId: string | null;
+  readonly review: ItemReviewDto | null;
+  readonly tierListItem: TierListItemDto | null;
+  /** 1-based position in the list (band desc, position asc), TIER_LISTED only. */
+  readonly rank: number | null;
+  readonly cellarId: string | null;
+  readonly cellarItemId: string | null;
+};
+
 /**
  * `FriendsCollectionActor(viewerId)` — collection actor, **C3**.
  *
@@ -407,6 +472,19 @@ export type FriendsCollectionActorInterface = {
     filter: FriendRequestFilter,
     page: PageArgs,
   ): Promise<Page<FriendRequestRowDto>>;
+  /**
+   * **projection** (see `ActivityEntryDto`) — UI parity G31. The newest
+   * `filter.limit` rows of each requested kind written by the viewer or one of
+   * their friends, merged newest first. Whose activity is decided here, from
+   * the viewer's own `friends` rows — no user id crosses the API — and each
+   * kind keeps its source's rule: a tier-list entry only from a list
+   * `canSeeTierList` admits, a bottle only from a cellar `canSeeCellar`
+   * admits. Reviews are world-readable to a signed-in viewer (`ItemActor`).
+   */
+  recentActivity(
+    ctx: Ctx,
+    filter: ActivityFilter,
+  ): Promise<readonly ActivityEntryDto[]>;
 };
 
 export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollectionActorInterface> =
@@ -416,6 +494,7 @@ export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollection
     methods: {
       friends: {},
       requests: {},
+      recentActivity: {},
     },
   };
 

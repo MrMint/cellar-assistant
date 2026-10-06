@@ -20,6 +20,8 @@
 
 export const KEYLESS_TYPES = [
   "AcceptFriendRequestPayload",
+  "ActivityEntryConnection",
+  "ActivityEntryEdge",
   "Barcode",
   "BrandConnection",
   "BrandEdge",
@@ -82,6 +84,9 @@ export const KEYLESS_TYPES = [
   "MenuScanEdge",
   "MutationCreateItemSuccess",
   "MutationUpdateItemSuccess",
+  "NearbyPlace",
+  "NearbyPlaceConnection",
+  "NearbyPlaceEdge",
   "NotFoundError",
   "PageInfo",
   "PlaceBrandConnection",

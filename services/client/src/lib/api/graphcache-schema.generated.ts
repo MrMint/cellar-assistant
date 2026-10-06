@@ -108,6 +108,95 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "OBJECT",
+        name: "ActivityEntry",
+        fields: [
+          { name: "cellar", type: { kind: "OBJECT", name: "Cellar" } },
+          { name: "cellarItemId", type: { kind: "SCALAR", name: "ID" } },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ActivityKind" },
+            },
+          },
+          {
+            name: "occurredAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          { name: "rank", type: { kind: "SCALAR", name: "Int" } },
+          { name: "review", type: { kind: "OBJECT", name: "ItemReview" } },
+          {
+            name: "tierListItem",
+            type: { kind: "OBJECT", name: "TierListItem" },
+          },
+          { name: "user", type: { kind: "OBJECT", name: "UserProfile" } },
+          {
+            name: "userId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ActivityEntryConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "ActivityEntryEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ActivityEntryEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ActivityEntry" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "INTERFACE",
         name: "ActorError",
         fields: [
@@ -3905,6 +3994,76 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "NearbyPlace",
+        fields: [
+          {
+            name: "distanceMeters",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+          {
+            name: "place",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Place" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "NearbyPlaceConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "NearbyPlaceEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "NearbyPlaceEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "NearbyPlace" },
             },
           },
         ],
@@ -7992,10 +8151,24 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
           {
+            name: "nearbyPlaces",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "NearbyPlaceConnection" },
+            },
+          },
+          {
             name: "profile",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "UserProfile" },
+            },
+          },
+          {
+            name: "recentActivity",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ActivityEntryConnection" },
             },
           },
           {

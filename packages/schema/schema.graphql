@@ -18,6 +18,69 @@ union AcceptFriendRequestResult = AcceptFriendRequestPayload | BudgetExceededErr
 
 union ActOnMenuScanSuggestionResult = BudgetExceededError | ConflictError | ForbiddenError | MatchSuggestionActionPayload | NotFoundError | ValidationError
 
+"""
+One row of the viewer's discovery feed — something the viewer or one of their friends did. Exactly one of `review`, `tierListItem` and `cellar` is set, by `kind`.
+"""
+type ActivityEntry {
+  """
+  The cellar the bottle went into, for ADDED, through the `Cellar` loader (`canSeeCellar` again).
+  """
+  cellar: Cellar
+  cellarItemId: ID
+
+  """`<kind>:<source row id>` — unique across kinds."""
+  id: ID!
+
+  """The item, through the shared loader. Null for a place."""
+  item: Item
+  kind: ActivityKind!
+  occurredAt: DateTime!
+
+  """The tier-listed place, for a TIER_LISTED place entry."""
+  place: Place
+
+  """
+  1-based place in its list — band high to low, then position — for TIER_LISTED; the old feed's `#N in <list>`.
+  """
+  rank: Int
+
+  """The review, for REVIEWED."""
+  review: ItemReview
+
+  """
+  The entry, for TIER_LISTED. Its `tierList` resolves through the `TierList` loader, whose actor applies `canSeeTierList` again.
+  """
+  tierListItem: TierListItem
+
+  """
+  Who did it, through the `UserProfile` loader — one `UserActor.getProfile` per distinct person on the page.
+  """
+  user: UserProfile
+  userId: ID!
+}
+
+type ActivityEntryConnection {
+  edges: [ActivityEntryEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type ActivityEntryEdge {
+  cursor: String!
+  node: ActivityEntry!
+}
+
+"""
+What happened: a bottle ADDED to a cellar, an item REVIEWED, an entry TIER_LISTED.
+"""
+enum ActivityKind {
+  ADDED
+  REVIEWED
+  TIER_LISTED
+}
+
 interface ActorError implements Error {
   """
   What kind of refusal this is. Branch on `reason` first when it is set, then on this; never on `message`.
@@ -2781,6 +2844,30 @@ type MutationCreateItemSuccess {
 
 type MutationUpdateItemSuccess {
   data: Item!
+}
+
+"""A place near the point you asked about, and how far it is."""
+type NearbyPlace {
+  """Great-circle distance from the point, in metres."""
+  distanceMeters: Float!
+
+  """
+  The place, through `PlaceActor.get` — one call per place on the page. The strip's summary fields (`priceLevel`, `enrichment`, `photos`) are each one more `PlaceActor` call per place.
+  """
+  place: Place!
+}
+
+type NearbyPlaceConnection {
+  edges: [NearbyPlaceEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type NearbyPlaceEdge {
+  cursor: String!
+  node: NearbyPlace!
 }
 
 """
@@ -5863,8 +5950,71 @@ type Viewer {
   ): ItemConnection!
   id: ID!
 
+  """
+  The /search Nearby Places strip: places in a ±0.018° box around `location` (the old strip's ~2km), nearest first. The same browse `mapBrowse` runs, on your own map actor; cluster bubbles are dropped, as the old strip dropped them.
+  """
+  nearbyPlaces(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """`places.categories` values, already mapped from types."""
+    categories: [String!]
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+
+    """
+    How many features the browse holds, 1 to 20; defaults to 6, the old strip's. Taken before clusters are dropped and before the distance sort, as the old strip's was. Over the cap is a `VALIDATION` error.
+    """
+    limit: Int
+    location: LngLatInput!
+  ): NearbyPlaceConnection!
+
   """The viewer's own profile row, including their email."""
   profile: UserProfile!
+
+  """
+  The /search discovery feed (UI parity G31): the newest `limit` of each requested kind done by you or a friend, merged newest first. Whose activity is decided server-side from your own friend list — there is no user-id argument — and a tier-list entry appears only from a list you may see, a bottle only from a cellar you may see.
+  """
+  recentActivity(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """Only these kinds; omitted or empty means all three."""
+    kinds: [ActivityKind!]
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+
+    """
+    Rows held per kind, 1 to 20 inclusive; defaults to 6, the old feed's. Over the cap is a `VALIDATION` error. Not pagination: `first`/`after` page the merged set.
+    """
+    limit: Int
+  ): ActivityEntryConnection!
   role: ViewerRole!
 }
 

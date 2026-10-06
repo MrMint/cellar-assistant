@@ -169,3 +169,47 @@ export function deleteCellarWithContents(cellarId: string): void {
     );
   }
 }
+
+/**
+ * Insert one active place at a point, for a spec that needs a place *near*
+ * somewhere without `createPlace`'s synchronous AI review and its 25/day
+ * quota (`/search`'s Nearby Places, G31). Remove it with {@link deletePlace}.
+ *
+ * Straight into `places` for the reason `deletePlace` reaches it: a place has
+ * no per-viewer lifecycle, and a fresh row is in no `PlaceActor`'s cache.
+ * `primary_category` is generated from `categories[1]` and `search_text` by a
+ * trigger, so neither is written here. Every interpolated value is checked
+ * first: the name to `[A-Za-z0-9 ]`, the point to finite WGS-84 numbers.
+ */
+export function insertPlace(input: {
+  id: string;
+  name: string;
+  lng: number;
+  lat: number;
+  category: string;
+}): void {
+  if (!UUID_PATTERN.test(input.id)) {
+    throw new Error(`insertPlace: not a uuid: ${input.id}`);
+  }
+  if (!/^[A-Za-z0-9 ]+$/.test(input.name)) {
+    throw new Error(`insertPlace: unsafe name ${JSON.stringify(input.name)}`);
+  }
+  if (!/^[a-z_]+$/.test(input.category)) {
+    throw new Error(`insertPlace: unsafe category ${input.category}`);
+  }
+  const { lng, lat } = input;
+  if (
+    !Number.isFinite(lng) ||
+    !Number.isFinite(lat) ||
+    Math.abs(lng) > 180 ||
+    Math.abs(lat) > 90
+  ) {
+    throw new Error(`insertPlace: not a WGS-84 point: ${lng},${lat}`);
+  }
+  psql(
+    "insert into places (id, name, location, categories, confidence, rating, is_active, source) " +
+      `values ('${input.id}', '${input.name}', ` +
+      `st_setsrid(st_makepoint(${lng}, ${lat}), 4326)::geography, ` +
+      `array['${input.category}']::text[], 0.9, 4.2, true, 'user')`,
+  );
+}

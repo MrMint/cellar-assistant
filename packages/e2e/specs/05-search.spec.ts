@@ -1,8 +1,17 @@
-import { BASE_URL } from "../fixtures/accounts.ts";
-import { createCellar, deleteCellars, unique } from "../fixtures/data.ts";
+import { BASE_URL, storageStatePath } from "../fixtures/accounts.ts";
+import {
+  createCellar,
+  deleteCellars,
+  ensureFriends,
+  ensureNotFriends,
+  friendIds,
+  unique,
+} from "../fixtures/data.ts";
+import { deletePlace, insertPlace } from "../fixtures/db.ts";
 import {
   bodyText,
   expect,
+  newContext,
   settleNetwork,
   test,
   watch,
@@ -236,4 +245,234 @@ test("anonymous callers are refused the brand catalog", async ({ browser }) => {
     `anonymous brand catalog read was not refused: ${JSON.stringify(body).slice(0, 300)}`,
   ).toBe("ForbiddenError");
   await ctx.close();
+});
+
+/* -------------------------------------------------------------------------- */
+/* Discovery (UI parity G31, restored)                                         */
+/* -------------------------------------------------------------------------- */
+
+type Api = {
+  query: (q: string, v?: Record<string, unknown>) => Promise<any>;
+};
+
+const viewerId = async (api: Api): Promise<string> =>
+  (await api.query("query { me { id } }")).me.id;
+
+/** A tea through `createItem` (no onboarding needed); items have no delete. */
+async function createTea(api: Api, name: string): Promise<string> {
+  const ref = await api.query(
+    `query { referenceData(kind: TEA_CATEGORY, first: 1) {
+       __typename ... on ReferenceRowConnection { edges { node { value } } }
+     } }`,
+  );
+  const category = ref.referenceData.edges[0]?.node.value;
+  expect(category, "no tea categories seeded").toBeTruthy();
+  const created = await api.query(
+    `mutation C($input: CreateItemInput!, $id: ID) {
+       createItem(type: TEA, itemId: $id, input: $input) {
+         __typename
+         ... on MutationCreateItemSuccess { data { id } }
+         ... on Error { message }
+       }
+     }`,
+    { id: crypto.randomUUID(), input: { name, tea: { category } } },
+  );
+  expect(
+    created.createItem.__typename,
+    JSON.stringify(created.createItem),
+  ).toBe("MutationCreateItemSuccess");
+  return created.createItem.data.id;
+}
+
+async function createTierList(
+  api: Api,
+  name: string,
+  privacy: "PRIVATE" | "FRIENDS",
+): Promise<string> {
+  const data = await api.query(
+    `mutation T($input: CreateTierListInput!) {
+       createTierList(input: $input) {
+         __typename ... on TierList { id } ... on Error { message }
+       }
+     }`,
+    { input: { name, privacy } },
+  );
+  expect(data.createTierList.__typename, JSON.stringify(data)).toBe("TierList");
+  return data.createTierList.id;
+}
+
+async function rank(api: Api, tierListId: string, teaId: string) {
+  const added = await api.query(
+    `mutation A($id: ID!, $input: AddTierListItemInput!) {
+       addTierListItem(tierListId: $id, input: $input) {
+         __typename ... on Error { message }
+       }
+     }`,
+    { id: tierListId, input: { entry: { id: teaId, type: "TEA" }, band: 4 } },
+  );
+  expect(added.addTierListItem.__typename, JSON.stringify(added)).toBe(
+    "TierListItem",
+  );
+}
+
+test("Recent Activity shows a friend's review and their FRIENDS list — never their PRIVATE one", async ({
+  api,
+  api2,
+  primary,
+}) => {
+  // The old feed took `$userIds` from the browser and showed a friend's
+  // PRIVATE tier list, name and all. `me.recentActivity` decides both
+  // server-side; this pins the two halves the user can see.
+  const [me, friend] = await Promise.all([viewerId(api), viewerId(api2)]);
+  // Leave the accounts as this found them: 03-friends starts from "not
+  // friends", and a friendship left behind here races its removal there.
+  const wereFriends = (await friendIds(api)).includes(friend);
+  await ensureFriends(api, api2, me, friend);
+
+  const teaName = unique("E5 Feed Tea");
+  const secretName = unique("E5 Secret List");
+  const sharedName = unique("E5 Shared List");
+  const teaId = await createTea(api2, teaName);
+  const review = await api2.query(
+    `mutation R($itemId: ID!) {
+       addItemReview(itemId: $itemId, type: TEA, input: { score: 4.5, text: { body: "E5 feed review" } }) {
+         __typename ... on Error { message }
+       }
+     }`,
+    { itemId: teaId },
+  );
+  expect(review.addItemReview.__typename, JSON.stringify(review)).toBe(
+    "ItemReview",
+  );
+  const secret = await createTierList(api2, secretName, "PRIVATE");
+  const shared = await createTierList(api2, sharedName, "FRIENDS");
+  try {
+    await rank(api2, secret, teaId);
+    await rank(api2, shared, teaId);
+
+    // Through the API: the PRIVATE list contributes no entry at all.
+    const feed = await api.query(
+      `query { me { recentActivity(kinds: [TIER_LISTED, REVIEWED], limit: 20, first: 40) {
+         edges { node { kind user { id } item { id }
+           tierListItem { tierListId tierList { name } } } }
+       } } }`,
+    );
+    const nodes = feed.me.recentActivity.edges.map((e: any) => e.node);
+    const listIds = nodes.map((n: any) => n.tierListItem?.tierListId);
+    expect(listIds, "the friend's FRIENDS list is missing").toContain(shared);
+    expect(listIds, "a friend's PRIVATE list leaked").not.toContain(secret);
+    expect(JSON.stringify(feed)).not.toContain(secretName);
+    expect(
+      nodes.some(
+        (n: any) =>
+          n.kind === "REVIEWED" &&
+          n.user?.id === friend &&
+          n.item?.id === teaId,
+      ),
+      "the friend's review is missing from the feed",
+    ).toBe(true);
+
+    // Through the page, filtered as the old toggles filter (?activity=).
+    const noise = watch(primary);
+    await primary.goto("/search?activity=reviewed");
+    await expect(
+      primary.getByText("Recent Activity", { exact: true }),
+    ).toBeVisible();
+    const reviewCard = primary.locator("a.MuiCard-root", { hasText: teaName });
+    await expect(reviewCard.first()).toBeVisible();
+    await expect(reviewCard.first()).toContainText("Rated 4.5");
+    await expect(reviewCard.first()).toHaveAttribute("href", `/teas/${teaId}`);
+
+    await primary.goto("/search?activity=tier-listed");
+    await expect(
+      primary.getByText(`#1 in ${sharedName}`).first(),
+    ).toBeVisible();
+    expect(await bodyText(primary)).not.toContain(secretName);
+    expect(noise.pageErrors, "the search page threw").toEqual([]);
+  } finally {
+    for (const id of [secret, shared]) {
+      await api2.query(
+        `mutation D($id: ID!) { deleteTierList(tierListId: $id) { __typename } }`,
+        { id },
+      );
+    }
+    if (!wereFriends) await ensureNotFriends(api, friend);
+  }
+});
+
+test("Nearby Places renders from the geolocation cookie, nearest first", async ({
+  primary,
+}) => {
+  // Somewhere with nothing else nearby (open Atlantic), so the strip's six
+  // are exactly ours; a fresh point per run so reruns do not collide.
+  const lat = 10 + Math.random();
+  const lng = -30 + Math.random();
+  const near = { id: crypto.randomUUID(), name: unique("E5 Near Bar") };
+  const far = { id: crypto.randomUUID(), name: unique("E5 Far Bar") };
+  insertPlace({ ...near, lng: lng + 0.001, lat, category: "wine_bar" });
+  insertPlace({ ...far, lng: lng + 0.01, lat: lat + 0.01, category: "bar" });
+  try {
+    await primary
+      .context()
+      .addCookies([
+        { name: "user_location", value: `${lat},${lng}`, url: BASE_URL },
+      ]);
+    const noise = watch(primary);
+    await primary.goto("/search");
+    await expect(
+      primary.getByText("Nearby Places", { exact: true }),
+    ).toBeVisible();
+    const cards = primary.locator('a.MuiCard-root[href^="/map?placeId="]');
+    await expect(cards).toHaveCount(2);
+    await expect(cards.nth(0)).toContainText(near.name);
+    await expect(cards.nth(0)).toContainText("Wine Bar");
+    await expect(cards.nth(0)).toContainText(/\d+m/);
+    await expect(cards.nth(0)).toHaveAttribute(
+      "href",
+      `/map?placeId=${near.id}`,
+    );
+    await expect(cards.nth(1)).toContainText(far.name);
+    await expect(primary.getByText("View all on map")).toBeVisible();
+    expect(noise.pageErrors, "the search page threw").toEqual([]);
+  } finally {
+    await deletePlace(near.id);
+    await deletePlace(far.id);
+  }
+});
+
+test("the landing view is visible before any script runs", async ({
+  browser,
+}) => {
+  // AnimateIn used to server-render `opacity:0` and wait for framer-motion to
+  // hydrate; with JavaScript off nothing but the search box ever appeared.
+  const ctx = await newContext(browser, {
+    storageState: storageStatePath("primary"),
+    javaScriptEnabled: false,
+  });
+  try {
+    const page = await ctx.newPage();
+    await page.goto("/search");
+    const chip = page.locator("a[href] .MuiChip-root", { hasText: "Cellars" });
+    await expect(chip).toBeVisible();
+    // The CSS entrance takes ~0.5s; what matters is where it comes to rest
+    // with no script at all — the old markup rested at opacity 0.
+    const restingOpacity = () =>
+      chip.evaluate((el) => {
+        let node: Element | null = el;
+        let min = 1;
+        while (node) {
+          min = Math.min(min, Number(getComputedStyle(node).opacity));
+          node = node.parentElement;
+        }
+        return min;
+      });
+    await expect
+      .poll(restingOpacity, {
+        message: "a quick-link chip stays hidden without JavaScript",
+        timeout: 5_000,
+      })
+      .toBe(1);
+  } finally {
+    await ctx.close();
+  }
 });

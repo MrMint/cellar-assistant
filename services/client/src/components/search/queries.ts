@@ -129,3 +129,189 @@ export const SearchCollectionStatsQuery = graphql(`
     }
   }
 `);
+
+/**
+ * The old feed's `limit: 6` per kind (UI parity G31). The server holds the
+ * newest six of each kind and merges them; the old client merged its three
+ * queries and kept {@link RECENT_ACTIVITY_CAP}.
+ */
+export const RECENT_ACTIVITY_PER_KIND = 6;
+/** The old `buildActivityFeed`'s `entries.slice(0, 8)`. */
+export const RECENT_ACTIVITY_CAP = 8;
+
+/**
+ * The old `RecentReviewsQuery`, `RecentTierListItemsQuery` and the
+ * `recent_cellar_items` half of `SearchDiscoveryQuery`, as one viewer-scoped
+ * field. The old three took `$userIds` from the browser and the tier-list one
+ * leaked a friend's PRIVATE list; `me.recentActivity` decides whose activity
+ * server-side and filters lists and cellars through the visibility policy.
+ *
+ * `item_images(limit: 1) { file_id placeholder }` → `images(first: 1)` with
+ * `file { url }` (a presigned read, as `ItemCardFragment` selects it), and a
+ * place's `google_photos(limit: 1)` → `photos(first: 1)`.
+ */
+export const SearchRecentActivityQuery = graphql(`
+  query SearchRecentActivity($kinds: [ActivityKind!], $limit: Int!, $first: Int!) {
+    me {
+      __typename
+      id
+      recentActivity(kinds: $kinds, limit: $limit, first: $first) {
+        edges {
+          node {
+            __typename
+            id
+            kind
+            occurredAt
+            rank
+            cellarItemId
+            user {
+              __typename
+              id
+              displayName
+              avatarUrl
+            }
+            item {
+              __typename
+              id
+              type
+              name
+              images(first: 1) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    placeholder
+                    file {
+                      __typename
+                      id
+                      url
+                    }
+                  }
+                }
+              }
+              ... on Wine {
+                __typename
+                vintage
+              }
+              ... on Sake {
+                __typename
+                vintageYear
+              }
+            }
+            place {
+              __typename
+              id
+              name
+              displayName
+              photos(first: 1) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    file {
+                      __typename
+                      id
+                      url
+                    }
+                  }
+                }
+              }
+            }
+            review {
+              __typename
+              id
+              score
+              text
+            }
+            tierListItem {
+              __typename
+              id
+              tierListId
+              tierList {
+                __typename
+                id
+                name
+              }
+            }
+            cellar {
+              __typename
+              id
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+`);
+
+/** The old strip's `limit: 6`. */
+export const NEARBY_PLACES_LIMIT = 6;
+
+/**
+ * The old `NearbyPlaces`' two server actions — `searchMapPlaces({ bounds:
+ * ±0.018°, limit: 6 })` and `getPlaceSummaries(ids)` — as one read:
+ * `me.nearbyPlaces` runs the same browse server-side and sorts by distance,
+ * and each `place` carries the summary fields (`enrichment` for hours, price
+ * and rating; the first stored photo).
+ */
+export const SearchNearbyPlacesQuery = graphql(`
+  query SearchNearbyPlaces(
+    $location: LngLatInput!
+    $categories: [String!]
+    $limit: Int!
+    $first: Int!
+  ) {
+    me {
+      __typename
+      id
+      nearbyPlaces(
+        location: $location
+        categories: $categories
+        limit: $limit
+        first: $first
+      ) {
+        edges {
+          node {
+            __typename
+            distanceMeters
+            place {
+              __typename
+              id
+              name
+              primaryCategory
+              rating
+              priceLevel
+              location {
+                __typename
+                lng
+                lat
+              }
+              enrichment {
+                __typename
+                placeId
+                googleOpeningHours
+                googlePriceLevel
+                googleRating
+                googleUserRatingsTotal
+              }
+              photos(first: 1) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    file {
+                      __typename
+                      id
+                      url
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`);
