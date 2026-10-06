@@ -167,6 +167,32 @@ jobs:
           - packages/db
           - packages/policy
           - packages/schema
+        # Two legs' tests type-check or run ANOTHER workspace's source, and a
+        # bare import in that source resolves through that workspace's own
+        # node_modules — which `--filter "./<project>..."` does not install,
+        # because the reading package does not (and cannot) depend on it:
+        #
+        #  - packages/db: src/writers.test.ts builds a full TypeScript program
+        #    over services/actors/src and needs Drizzle's types, from
+        #    services/actors/node_modules, to name the table each write hits.
+        #    Without them every write was `any`: the scan reported 134
+        #    unresolved writes and its negative control found none (the first
+        #    run of this workflow, 37404204231). A devDependency would be a
+        #    cycle — services/actors depends on packages/db.
+        #  - services/actors: src/auth/proxy-session-check.test.ts runs
+        #    services/client/src/proxy.ts unmodified, which imports
+        #    `next/server` from services/client/node_modules. A devDependency
+        #    on the client is not the fix either: turbo's `test` dependsOn
+        #    `^build`, so `bun run test` would run `next build` first.
+        #
+        # services/api's scans of services/client and services/actors need
+        # neither: they are repo-only programs, and @cellar-assistant/analysis
+        # resolves a workspace package to its source itself (workspacePaths).
+        include:
+          - project: packages/db
+            also_install: --filter "./services/actors..."
+          - project: services/actors
+            also_install: --filter "./services/client"
     steps:
       - uses: actions/checkout@v6
 
@@ -239,9 +265,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: bun-cache-${{ runner.os }}-${{ matrix.project }}-${{ hashFiles('bun.lock') }}
+          # `+reads` when the leg also installs another workspace's closure
+          # (`also_install` above), so an entry saved before it was added is
+          # not an exact hit that never gets re-saved with the larger set.
+          key: bun-cache-${{ runner.os }}-${{ matrix.project }}${{ matrix.also_install && '+reads' || '' }}-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            bun-cache-${{ runner.os }}-${{ matrix.project }}-
+            bun-cache-${{ runner.os }}-${{ matrix.project }}${{ matrix.also_install && '+reads' || '' }}-
 
       # One lockfile at the root (bun.lock) — bun has no other shape.
       # `--filter` still narrows what is *installed* to this leg's dependency
@@ -255,8 +284,12 @@ jobs:
       # resolution-time filter only, so this step trusts the committed lockfile.
       # The 24-hour supply-chain window is enforced when someone resolves a new
       # version locally, not here.
+      #
+      # `also_install` (packages/db and services/actors only; see the matrix)
+      # adds a second `--filter`, for the workspace whose source the leg's
+      # tests read.
       - name: Install
-        run: bun install --frozen-lockfile --filter "./${{ matrix.project }}..."
+        run: bun install --frozen-lockfile --filter "./${{ matrix.project }}..." ${{ matrix.also_install }}
 
       # Replaces pnpm's `strictDepBuilds`, which failed the install outright
       # (ERR_PNPM_IGNORED_BUILDS) when a dependency's build script had not been
