@@ -117,10 +117,18 @@ describe.skipIf(skip)("ItemActor — image vectors (G32)", () => {
         key: "ollama:nomic-embed-text@768/RETRIEVAL_DOCUMENT",
         acceptsImages: false,
       });
-      await (await actorFor(db, wine)).attachImage(userCtx(user, "r"), {
-        fileId: await seedVerifiedFile(db, user),
-      });
+      const older = await (await actorFor(db, wine)).attachImage(
+        userCtx(user, "r"),
+        { fileId: await seedVerifiedFile(db, user) },
+      );
       expect(await pending(db, wine)).toEqual([]);
+      // One test transaction is one `now()`: make the first photo older, as a
+      // separate request would have, so the next one is the item's newest
+      // public photo and so the vector's (`ItemActor`'s `vectorDisplayFileId`).
+      await db.execute(sql`
+        update public.item_image set created_at = now() - interval '1 hour'
+        where id = ${older.id}::uuid
+      `);
 
       setEmbeddingModel({ key: MODEL, acceptsImages: true });
       const image = await (await actorFor(db, wine)).attachImage(

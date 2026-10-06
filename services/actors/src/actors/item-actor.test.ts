@@ -1072,10 +1072,16 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
           const before = (await regenerations()).length;
 
           const textOnly = await activate(newItemActor(key, db, verify));
-          await textOnly.attachImage(userCtx(user, "r"), {
+          const older = await textOnly.attachImage(userCtx(user, "r"), {
             fileId: await seedFile(db, user, true),
           });
           expect(await regenerations()).toHaveLength(before);
+          // One test transaction is one `now()`: make the first photo older,
+          // as a separate request would have, so the next one is the newest.
+          await db.execute(sql`
+            update public.item_image set created_at = now() - interval '1 hour'
+            where id = ${older.id}::uuid
+          `);
 
           setEmbeddingModel({ key: MODEL, acceptsImages: true });
           const multimodal = await activate(newItemActor(key, db, verify));
@@ -1083,11 +1089,156 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
             fileId: await seedFile(db, user, true),
           });
           await multimodal.detachImage(userCtx(user, "r"), image.id);
+          // By reason, not by position: the outbox read has no order, and
+          // `create`'s own row is in there too.
           const rows = await regenerations();
-          expect(rows.slice(before).map((row) => row.payload)).toEqual([
+          expect(rows).toHaveLength(before + 2);
+          expect(
+            rows
+              .map((row) => row.payload)
+              .filter(
+                (payload) =>
+                  (payload as { reason?: unknown }).reason === "image",
+              ),
+          ).toEqual([
             { reason: "image", itemType: "WINE", itemId: ref.id },
             { reason: "image", itemType: "WINE", itemId: ref.id },
           ]);
+        });
+      });
+
+      /**
+       * Only a **public** photo may shape the shared item vector: another
+       * user's private photo must not steer what every viewer's search ranks
+       * against. The per-photo `item_image_vectors` are filtered at search
+       * time instead, and are not this test's business.
+       */
+      it("a private photo is never the vector's photo, however recent", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const stranger = await seedUser(db);
+          const { ref } = await createItem(db, "WINE", user);
+          const [publicPhoto, privatePhoto] = [
+            await seedFile(db, user, true),
+            await seedFile(db, stranger, true),
+          ];
+          for (const [owner, fileId, isPublic, age] of [
+            [user, publicPhoto, true, "2 days"],
+            [stranger, privatePhoto, false, "1 day"],
+          ] as const) {
+            await db.execute(sql`
+              insert into public.item_image
+                (user_id, file_id, wine_id, is_public, created_at)
+              values (${owner}::uuid, ${fileId}::uuid, ${ref.id}::uuid,
+                      ${isPublic}, now() - ${age}::interval)
+            `);
+          }
+          setEmbeddingModel({ key: MODEL, acceptsImages: true });
+          const { inputs, embed } = recordingEmbed(MODEL);
+          await (
+            await activate(newItemActor(actorIdFor(ref), db, noVerify, embed))
+          ).regenerateVector(deliveryCtx(randomUUID()));
+
+          const sent = inputs[0]?.imageFileIds ?? [];
+          expect(sent).not.toContain(privatePhoto);
+          expect(sent.at(-1)).toBe(publicPhoto);
+        });
+      });
+
+      it("an item whose only photo is private is embedded with no photo", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const { ref } = await createItem(db, "WINE", user);
+          await db.execute(sql`
+            update public.item_onboardings
+            set front_label_image_id = null, back_label_image_id = null
+            where id = (select item_onboarding_id from public.wines
+                        where id = ${ref.id}::uuid)
+          `);
+          const privatePhoto = await seedFile(db, user, true);
+          await db.execute(sql`
+            insert into public.item_image (user_id, file_id, wine_id, is_public)
+            values (${user}::uuid, ${privatePhoto}::uuid, ${ref.id}::uuid, false)
+          `);
+          setEmbeddingModel({ key: MODEL, acceptsImages: true });
+          const { inputs, embed } = recordingEmbed(MODEL);
+          await (
+            await activate(newItemActor(actorIdFor(ref), db, noVerify, embed))
+          ).regenerateVector(deliveryCtx(randomUUID()));
+          expect(inputs[0]?.imageFileIds).toEqual([]);
+          expect(await storedIdentity(db, ref)).toEqual([
+            { model: MODEL, images: imageSetKey([]) },
+          ]);
+        });
+      });
+
+      /**
+       * The re-queue follows the eligible photo, not every attach/detach:
+       * attaching a public photo makes it the newest public one (re-queue);
+       * a private one changes nothing (no re-queue); detaching re-queues only
+       * when the newest public photo was the one removed. `is_public` cannot
+       * change after attach — no method writes it — so these are the only
+       * transitions.
+       */
+      it("attach and detach re-queue the regenerate only when the eligible photo changes", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const { ref } = await createItem(db, "WINE", user);
+          const key = actorIdFor(ref);
+          const verify: VerifyFile = async (_ctx, id) => ({
+            id,
+            verifiedAt: new Date().toISOString(),
+          });
+          const regenerations = async () =>
+            (await pendingOutbox(db, key)).filter(
+              (row) => row.method === "regenerateVector",
+            ).length;
+          setEmbeddingModel({ key: MODEL, acceptsImages: true });
+          // A fresh activation per step, so each one reads the rows as the
+          // previous step left them — including the backdating below.
+          const actor = async () =>
+            await activate(newItemActor(key, db, verify));
+          const as = userCtx(user, "r");
+          // One test transaction means one `now()` for every insert; give
+          // each attach its own instant, later than the last, as separate
+          // requests would have.
+          let minutesAgo = 60;
+          const attach = async (isPublic: boolean) => {
+            const image = await (await actor()).attachImage(as, {
+              fileId: await seedFile(db, user, true),
+              isPublic,
+            });
+            minutesAgo -= 1;
+            await db.execute(sql`
+              update public.item_image
+              set created_at = now() - ${`${minutesAgo} minutes`}::interval
+              where id = ${image.id}::uuid
+            `);
+            return image;
+          };
+          const detach = async (imageId: string) =>
+            (await actor()).detachImage(as, imageId);
+
+          let count = await regenerations();
+          const step = async (what: string, expected: number) => {
+            const now = await regenerations();
+            expect(now - count, what).toBe(expected);
+            count = now;
+          };
+
+          const olderPublic = await attach(true);
+          await step("first public photo: re-queued", 1);
+          const privateOne = await attach(false);
+          await step("a private photo: the eligible set is unchanged", 0);
+          const newestPublic = await attach(true);
+          await step("a newer public photo: re-queued", 1);
+
+          await detach(privateOne.id);
+          await step("detaching a private photo: unchanged", 0);
+          await detach(olderPublic.id);
+          await step("detaching an older public photo: unchanged", 0);
+          await detach(newestPublic.id);
+          await step("detaching the eligible photo: re-queued", 1);
         });
       });
     });

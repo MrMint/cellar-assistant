@@ -109,7 +109,7 @@ import {
   teas,
   wines,
 } from "@cellar-assistant/db";
-import { eq, sql } from "@cellar-assistant/db/orm";
+import { and, eq, sql } from "@cellar-assistant/db/orm";
 import {
   bypassesPolicy,
   canSeeItemImage,
@@ -169,6 +169,15 @@ type GenericItemRow = typeof genericItems.$inferSelect;
 export type { ItemRow };
 
 type ItemImageRow = typeof itemImage.$inferSelect;
+
+/**
+ * The one `item_image` an item's shared vector may take in: its newest
+ * **public** photo, or none. Another user's private photo must not steer a
+ * catalog vector every viewer's search ranks against, so a private image is
+ * never eligible, however recent. `images` is newest first (`loadAggregate`).
+ */
+const vectorDisplayFileId = (images: readonly ItemImageRow[]): string | null =>
+  images.find((image) => image.isPublic)?.fileId ?? null;
 type ItemReviewRow = typeof itemReviews.$inferSelect;
 type ItemBrandRow = typeof itemBrands.$inferSelect;
 
@@ -804,6 +813,10 @@ export class ItemActor
     await requireVerifiedFile(this.#verifyFile, ctx, fileId, "an item image");
 
     await this.tx(async (tx) => {
+      const displayBefore = await this.#vectorDisplayFileIdIn(
+        tx,
+        aggregate.ref,
+      );
       await tx
         .insert(itemImage)
         .values({
@@ -815,7 +828,12 @@ export class ItemActor
           ...IMAGES.values(aggregate.ref),
         })
         .onConflictDoNothing({ target: itemImage.id });
-      await this.#enqueueImageRegenerate(tx, ctx, aggregate.ref);
+      // A public photo is the newest, so it becomes the vector's photo; a
+      // private one leaves the eligible set as it was (`vectorDisplayFileId`).
+      const displayAfter = await this.#vectorDisplayFileIdIn(tx, aggregate.ref);
+      if (displayAfter !== displayBefore) {
+        await this.#enqueueImageRegenerate(tx, ctx, aggregate.ref);
+      }
       await this.#enqueueImageEmbed(tx, ctx, imageId);
     });
 
@@ -841,22 +859,55 @@ export class ItemActor
     }
 
     await this.tx(async (tx) => {
+      const displayBefore = await this.#vectorDisplayFileIdIn(
+        tx,
+        aggregate.ref,
+      );
       await tx.delete(itemImage).where(eq(itemImage.id, imageId));
-      await this.#enqueueImageRegenerate(tx, ctx, aggregate.ref);
+      const displayAfter = await this.#vectorDisplayFileIdIn(tx, aggregate.ref);
+      if (displayAfter !== displayBefore) {
+        await this.#enqueueImageRegenerate(tx, ctx, aggregate.ref);
+      }
     });
     await this.reload();
     return { id: imageId };
   }
 
   /**
-   * When the configured embedding takes images, an item's newest image is one
-   * of its vector's inputs (`#embeddingImageIds`), so attaching or detaching
-   * one must re-embed — in the same transaction, like `update`'s enqueue. A
-   * change that leaves the image set as it was costs `regenerateVector` a
-   * `SELECT`: its identity check finds `embedding_images` unchanged and skips.
+   * When the configured embedding takes images, an item's newest **public**
+   * image is one of its vector's inputs (`#embeddingImageIds`), so an attach
+   * or detach that changes which photo that is must re-embed — in the same
+   * transaction, like `update`'s enqueue. The callers compare
+   * `#vectorDisplayFileIdIn` before and after the write and skip the enqueue
+   * when it is unchanged: a private photo attached, a private or older public one
+   * detached. (A redundant delivery would still only cost `regenerateVector`
+   * a `SELECT` — its identity check finds `embedding_images` unchanged.)
    * With a text-only model (or none) images are not inputs, and nothing is
    * enqueued.
+   *
+   * `is_public` is fixed at attach: no actor method, mutation or client
+   * control changes it afterwards, so attach and detach are the only two
+   * transitions that can move the eligible set.
    */
+  /**
+   * {@link vectorDisplayFileId} as the transaction sees it — read inside the
+   * attach/detach transaction, before and after the write, in
+   * `loadAggregate`'s order, so the comparison is against exactly what the
+   * next `regenerateVector` will load.
+   */
+  async #vectorDisplayFileIdIn(
+    tx: DbOrTx,
+    ref: ItemRef,
+  ): Promise<string | null> {
+    const images = await tx
+      .select()
+      .from(itemImage)
+      .where(and(IMAGES.where(ref), eq(itemImage.isPublic, true)))
+      .orderBy(sql`${itemImage.createdAt} desc, ${itemImage.id} desc`)
+      .limit(1);
+    return vectorDisplayFileId(images);
+  }
+
   async #enqueueImageRegenerate(
     tx: DbOrTx,
     ctx: Ctx,
@@ -1232,6 +1283,12 @@ export class ItemActor
    * onboarding photographed, then its most recent image — in that order, each
    * once. At most three, inside `gemini-embedding-2`'s six.
    *
+   * One narrowing legacy did not have: the most recent **public** image
+   * (`vectorDisplayFileId`). Legacy took the newest whatever its visibility,
+   * so somebody's private photo shaped the vector every viewer's search ranks
+   * against. Per-photo vectors (`item_image_vectors`) are unaffected — they
+   * are filtered by visibility at search time instead.
+   *
    * `item_onboardings` is `ItemOnboardingActor`'s table; this only reads it
    * (§1.2 is about writers). A missing or unlabelled onboarding contributes
    * nothing, as it did in legacy.
@@ -1252,9 +1309,8 @@ export class ItemActor
       if (labels?.front) ids.push(labels.front);
       if (labels?.back) ids.push(labels.back);
     }
-    // `images` is newest first (`loadAggregate`).
-    const display = aggregate.images[0]?.fileId;
-    if (display !== undefined) ids.push(display);
+    const display = vectorDisplayFileId(aggregate.images);
+    if (display !== null) ids.push(display);
     return [...new Set(ids)];
   }
 
