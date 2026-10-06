@@ -48,10 +48,9 @@ name: stack-ci
 # Deliberately NOT listed, because nothing here reads them: `turbo.json` (no
 # step invokes turbo — each leg runs its own package's `typecheck`/`test`
 # script in its own directory; add it if a step ever calls `turbo`), the rest
-# of `scripts/`, and `nhost/` (test-db.sh hashes
-# `nhost/migrations` into a LOCAL template-cache fingerprint; CI has no cached
-# template and always builds from packages/db/transform/nhost-schema.sql,
-# which `packages/**` covers).
+# of `scripts/`, and `nhost/` (frozen history nothing reads; every build,
+# here and locally, restores packages/db/transform/nhost-schema.sql, which
+# `packages/**` covers).
 on:
   push:
     branches: [main]
