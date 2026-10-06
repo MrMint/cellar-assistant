@@ -54,7 +54,27 @@ const GTIN_LENGTHS: ReadonlySet<number> = new Set([8, 12, 13, 14]);
  * `packages/db/migrations/20260928200000_canonical_barcode_codes` spells the
  * same set as `chr(9)`…`chr(13)` and `' '`.
  */
-const ASCII_EDGE_SPACE = /^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g;
+const isAsciiEdgeSpace = (code: number): boolean =>
+  code === 0x20 || (code >= 0x09 && code <= 0x0d);
+
+/**
+ * Strip {@link isAsciiEdgeSpace} characters from both ends, in linear time.
+ *
+ * This used to be `/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g`, whose second
+ * alternative is quadratic: on a run of whitespace that is *not* at the end
+ * (`"a" + "\t".repeat(n) + "x"`) the engine re-scans the rest of the run from
+ * every start position before `$` fails. The input is a caller's barcode
+ * (`createItem`'s `barcodeCode`, `Query.barcode`), bounded only by the API's
+ * 128 KiB body, and ~40k tabs already held the actor host's event loop for
+ * ~1.8 s. Index scanning has no backtracking to exploit.
+ */
+const trimAsciiEdgeSpace = (raw: string): string => {
+  let start = 0;
+  let end = raw.length;
+  while (start < end && isAsciiEdgeSpace(raw.charCodeAt(start))) start += 1;
+  while (end > start && isAsciiEdgeSpace(raw.charCodeAt(end - 1))) end -= 1;
+  return raw.slice(start, end);
+};
 
 /**
  * GS1's mod-10 check, over a digit string whose last digit is the check
@@ -135,7 +155,7 @@ const toGtin14 = (digits: string): string => digits.padStart(14, "0");
  * ## The rules, in order
  *
  * 1. **Trim** the six ASCII edge-whitespace characters (see
- *    `ASCII_EDGE_SPACE`); inner characters are never touched.
+ *    `trimAsciiEdgeSpace`); inner characters are never touched.
  * 2. **All digits, of a GTIN length, with a valid GS1 check digit → GTIN-14**:
  *    left-padded with zeros to 14 digits. `012345678905` (UPC-A),
  *    `0012345678905` (EAN-13) and `00012345678905` (GTIN-14) are one key.
@@ -183,7 +203,7 @@ export const canonicalBarcodeCode = (
   raw: string,
   symbology?: string | null,
 ): string => {
-  const code = raw.replace(ASCII_EDGE_SPACE, "");
+  const code = trimAsciiEdgeSpace(raw);
   if (!/^[0-9]+$/.test(code)) {
     return code.replace(/[a-z]/g, (letter) => letter.toUpperCase());
   }
