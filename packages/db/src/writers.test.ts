@@ -284,6 +284,10 @@ const NOT_DRIZZLE_SEAMS: readonly { seam: string; why: string }[] = [
     why: "the object store's DeleteObject, not Postgres",
   },
   {
+    seam: "FileActor.delete",
+    why: "the actor calling its own public `delete` (discardSearchPhoto); the `files` write inside it is scanned where it is written, in actors/file-actor.ts",
+  },
+  {
     seam: "ProfileStore.update",
     why: "the declared better-auth profile seam; its own writes are scanned in lib/profile-store.ts",
   },
