@@ -2,9 +2,10 @@
 
 import { Box, Stack, Typography } from "@mui/joy";
 import { useColorScheme } from "@mui/joy/styles";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { MAPLIBRE_WORKER_URL } from "@/components/map/maplibre/workerUrl";
 import { BAND_COLORS } from "../constants";
 import type { CountryHeatmapEntry } from "./computeInsightsStats";
 
@@ -109,6 +110,7 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
   useEffect(() => {
     if (!mapContainer.current || !hasEntries) return;
 
+    maplibregl.setWorkerUrl(MAPLIBRE_WORKER_URL);
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: mode === "dark" ? CARTO_DARK : CARTO_LIGHT,

@@ -43,6 +43,7 @@ import { POISymbolLayer } from "./POISymbolLayer";
 import { SelectedPlaceLayer } from "./SelectedPlaceLayer";
 import { UserLocationLayer } from "./UserLocationLayer";
 import { loadPOIIcons } from "./utils/iconLoader";
+import { MAPLIBRE_WORKER_URL } from "./workerUrl";
 
 interface MapLibreRendererProps {
   userId: string;
@@ -361,6 +362,7 @@ export function MapLibreRenderer({
     <Box sx={{ height: "100%", width: "100%", position: "relative" }}>
       <MapGL
         ref={mapRef}
+        workerUrl={MAPLIBRE_WORKER_URL}
         initialViewState={initialViewState}
         mapStyle={mapStyle}
         onLoad={handleMapLoad}
