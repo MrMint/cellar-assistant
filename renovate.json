@@ -1,4 +1,49 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:base"]
+  "extends": [
+    "config:recommended",
+    "schedule:weekly",
+    "group:allNonMajor",
+    "customManagers:biomeVersions"
+  ],
+  "timezone": "America/Chicago",
+  "minimumReleaseAge": "3 days",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "BUN_VERSION in workflow env blocks; CI fails when it drifts from packageManager",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": ["BUN_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "bun",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "BIOME_VERSION in workflow env blocks; CI fails when it drifts from package.json",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": ["BIOME_VERSION: \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "@biomejs/biome",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "The bun binary COPY inside the compose file's dockerfile_inline, which the docker-compose manager does not read",
+      "managerFilePatterns": ["/^infra/docker-compose\\.ya?ml$/"],
+      "matchStrings": ["COPY --from=oven/bun:(?<currentValue>[^\\s]+)"],
+      "depNameTemplate": "oven/bun",
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Every bun pin (packageManager, workflows, Dockerfiles, compose) moves in one PR, outside the weekly group, since a bun upgrade needs its own look (docs/architecture/toolchain-traps.md)",
+      "matchDepNames": ["bun", "oven/bun"],
+      "groupName": "bun"
+    },
+    {
+      "description": "Biome's package, workflow pins and biome.json $schema in one PR, outside the weekly group so new lint rules cannot red-wall it",
+      "matchDepNames": ["@biomejs/biome"],
+      "groupName": "biome"
+    }
+  ]
 }
