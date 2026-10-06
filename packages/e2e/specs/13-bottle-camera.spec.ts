@@ -10,7 +10,7 @@ import { expect, test, watch } from "../fixtures/test.ts";
  * Chromium's fake camera (as in 04b) supplies a test pattern, so this drives
  * the real capture → data URL decoded in the browser → presigned PUT →
  * `attachItemImage` → `updateCellarItem(displayImageId)` path, and checks the
- * bottle then shows the photo instead of the fallback art.
+ * bottle then carries the capture as its display image.
  *
  * A tea, as in 11 (`createItem` writes one without the onboarding flow).
  * Items have no delete, so the tea outlives the run; the cellar does not.
@@ -78,6 +78,7 @@ test("fixtures: a cellar with a bottle of tea", async ({ api }) => {
 
 test("Add a photo opens the live camera, and a capture becomes the bottle's photo", async ({
   primary,
+  api,
 }) => {
   test.setTimeout(120_000);
   const noise = watch(primary);
@@ -110,11 +111,20 @@ test("Add a photo opens the live camera, and a capture becomes the bottle's phot
     "CellarItem",
   );
 
-  // The dialog closes and the page refreshes onto the new photo.
+  // The dialog closes, and the bottle now carries the capture as its photo.
+  // Asserted on the API rather than on the "Update photo" chip: whether the
+  // picture then *loads* is the image optimizer's business (12), and a load
+  // failure flips the chip back to "Add a photo" by design.
   await expect(dialog).toBeHidden({ timeout: 30_000 });
-  await expect(primary.getByText("Update photo")).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(primary.getByText("Add a photo")).toBeHidden();
+  const read = await api.query(
+    `query B($cellarId: ID!, $bottleId: ID!) {
+       cellar(id: $cellarId) {
+         __typename
+         ... on Cellar { item(id: $bottleId) { displayImageId } }
+       }
+     }`,
+    { cellarId, bottleId },
+  );
+  expect(read.cellar.item?.displayImageId).toMatch(/^[0-9a-f-]{36}$/);
   expect(noise.pageErrors).toEqual([]);
 });
