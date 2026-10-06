@@ -91,7 +91,9 @@ describe("assertHardenedRouting", () => {
   });
 
   it("refuses an app with nothing registered — there is nothing to check yet", () => {
-    expect(() => assertHardenedRouting(express())).toThrow(/no router/);
+    expect(() => assertHardenedRouting(express())).toThrow(
+      /nothing is registered/,
+    );
   });
 
   it("catches settings applied after the router was created, which Express ignores", () => {

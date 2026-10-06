@@ -17,7 +17,7 @@ const serve = async (expected: string) => {
   const reached: string[] = [];
   const app = express();
   app.use(daprAppTokenMiddleware(expected));
-  app.all("*", (req, res) => {
+  app.all("/{*splat}", (req, res) => {
     reached.push(`${req.method} ${req.path}`);
     res.status(200).json({ ok: true });
   });

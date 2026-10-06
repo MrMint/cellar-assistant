@@ -133,7 +133,7 @@ const assembledHost = async (): Promise<Host> => {
 /** The same gates on Express's defaults: no routing fix, no path gate. */
 const unhardenedHost = async (): Promise<Host> => {
   const app = express();
-  app.all(`${AUTH_BASE_PATH}/*`, (_req, res) => {
+  app.all(`${AUTH_BASE_PATH}/{*splat}`, (_req, res) => {
     res.json({ auth: true });
   });
   installActorErrorEnvelope(app);
