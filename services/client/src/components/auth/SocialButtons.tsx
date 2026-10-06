@@ -88,6 +88,11 @@ export function SocialButtons({
   );
 }
 
-/** Shown where password sign-in used to be, when it no longer is. */
+/**
+ * Shown where password sign-in used to be, when it no longer is. Google and
+ * Discord only: better-auth 1.7.3 reports every Facebook email as unverified,
+ * so Facebook never links into an existing account by email
+ * (`services/actors/src/auth/credential-linking.test.ts`).
+ */
 export const FORMER_PASSWORD_USER_NOTE =
-  "Used a password before? Sign in with Google, Discord or Facebook using the same email to keep your account.";
+  "Used a password before? Sign in with Google or Discord using the same email to keep your account.";

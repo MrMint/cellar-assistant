@@ -101,6 +101,12 @@ describe("sign-in page", () => {
     assert.ok(!html.includes(">or<"));
     assert.ok(!html.includes("Sign in with your password"));
     assert.ok(html.includes(note));
+    // Facebook cannot link a former password user by email, so the note does
+    // not offer it.
+    assert.equal(
+      note,
+      "Used a password before? Sign in with Google or Discord using the same email to keep your account.",
+    );
     assert.ok(!/forgot/i.test(html));
   });
 });
