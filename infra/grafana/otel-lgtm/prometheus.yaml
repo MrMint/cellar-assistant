@@ -4,7 +4,9 @@
 # ⚠ COPIED FROM THE PINNED IMAGE, NOT WRITTEN FROM SCRATCH. Everything from
 # the `---` line down to the "CELLAR ADDITIONS" marker is byte-for-byte the
 # file that `grafana/otel-lgtm:0.32.1` ships (sha256 923c0489…d218a3c,
-# extracted 2026-09-27). The image's Prometheus is started with
+# extracted 2026-09-27). Re-extracted from 0.35.0 on 2026-10-05 for that bump:
+# byte-identical, same sha256, so the upstream half below is unchanged. The
+# image's Prometheus is started with
 # `--config.file=./prometheus.yaml`, so this file REPLACES that one rather than
 # adding to it. **When the image tag in the compose files changes, re-copy the
 # upstream half from the new image** and re-apply the section below:

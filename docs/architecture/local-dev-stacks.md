@@ -311,7 +311,7 @@ scheduler are per-stack containers in your own compose project. Install the
 binaries only:
 
 ```bash
-dapr init --slim --runtime-version 1.18.3
+dapr init --slim --runtime-version 1.18.4
 ```
 
 That writes `daprd`, `placement` and `scheduler` to `~/.dapr/bin` and **starts
@@ -588,7 +588,7 @@ Nothing said this before, and it has already misled an agent, so:
 | `actors` | **bind mount** `..:/workspace`, `bun src/index.ts` | on restart (and a NEW actor type needs its sidecar restarted too) |
 | `client` | **built into its image** (`services/client/Dockerfile`) | only after `bun run stack:client:build` |
 | `postgres` | built from `infra/postgres` | image rebuild |
-| `otel-lgtm` | pinned image `grafana/otel-lgtm:0.32.1`; **config** bind-mounted from `infra/grafana/` (provisioning directory, `otel-lgtm/prometheus.yaml`); data on the `otel-lgtm-data` volume | alert rules and dashboards: the admin reload API (below) or a recreate; Prometheus config: recreate |
+| `otel-lgtm` | pinned image `grafana/otel-lgtm:0.35.0`; **config** bind-mounted from `infra/grafana/` (provisioning directory, `otel-lgtm/prometheus.yaml`); data on the `otel-lgtm-data` volume | alert rules and dashboards: the admin reload API (below) or a recreate; Prometheus config: recreate |
 | everything else | pinned upstream images | n/a |
 
 `api` and `actors` are mounted because both runtimes execute TypeScript
@@ -982,7 +982,7 @@ watcher. `dev:doctor` names the container and lists the files that changed since
 it started.
 
 **`ERROR no daprd binary at ~/.dapr/bin/daprd`** — run
-`dapr init --slim --runtime-version 1.18.3`. Slim mode installs binaries and
+`dapr init --slim --runtime-version 1.18.4`. Slim mode installs binaries and
 starts nothing.
 
 **`render.mjs: ... unresolved placeholder(s): X`** — `dapr.template.yaml` names a
