@@ -25,6 +25,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
+import type { PasswordMode } from "@/lib/auth/password-mode";
+import { SocialButtons, useSocialSignIn } from "./SocialButtons";
 
 /**
  * The actor host's floor — `minPasswordLength: 9` in
@@ -43,7 +45,64 @@ const MIN_PASSWORD_LENGTH = 9;
  */
 const EMAIL_SHAPED = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 
-export function SignUpApiClient() {
+/**
+ * With `AUTH_PASSWORD_MODE` anything but `enabled`, the actor host refuses
+ * `/sign-up/email`, so the page offers the social buttons instead: better-auth
+ * creates the account on a new user's first social sign-in.
+ */
+export function SignUpApiClient({
+  passwordMode = "enabled",
+}: {
+  passwordMode?: PasswordMode;
+}) {
+  if (passwordMode !== "enabled") return <SocialSignUp />;
+  return <PasswordSignUp />;
+}
+
+function SocialSignUp() {
+  const { ssoError, redirectingTo, start } = useSocialSignIn("/cellars");
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        flexGrow: 1,
+      }}
+    >
+      <Sheet
+        variant="outlined"
+        sx={{
+          width: { xs: "100%", sm: "400px" },
+          maxWidth: "400px",
+          display: "flex",
+          flexDirection: "column",
+          padding: 3,
+          margin: 2,
+          borderRadius: "lg",
+        }}
+      >
+        <Stack gap={2}>
+          <Typography level="h3">Sign up for Cellar Assistant</Typography>
+          <Stack gap={1}>
+            <SocialButtons
+              busy={redirectingTo !== null}
+              redirectingTo={redirectingTo}
+              ssoError={ssoError}
+              onSelect={(provider) => void start(provider)}
+            />
+          </Stack>
+          <Divider />
+          <Typography level="body-sm">
+            Already have an account? <Link href="/sign-in">Sign in</Link>
+          </Typography>
+        </Stack>
+      </Sheet>
+    </Box>
+  );
+}
+
+function PasswordSignUp() {
   const router = useRouter();
   const [localError, setLocalError] = useState<string | null>(null);
   const { run, pending, error } = useAuthAction(authClient.signUp.email);

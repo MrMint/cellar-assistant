@@ -411,6 +411,12 @@ services:
       # the whole value — a loopback entry there is a startup error by design.
       AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-http://localhost:3000},http://localhost:${CLIENT_PORT:-3003}
       AUTH_REHASH_ON_SIGNIN: ${AUTH_REHASH_ON_SIGNIN:-true}
+      # enabled | signin-only | disabled (services/actors/src/auth/config.ts).
+      # `enabled` here: the seeded test@test.com / test2@test.com and the e2e
+      # suite are password accounts. Production sets signin-only in the overlay.
+      # The client service below reads the same variable to pick its UI, so
+      # the two must agree; a mismatch fails closed (this host refuses).
+      AUTH_PASSWORD_MODE: ${AUTH_PASSWORD_MODE:-enabled}
       # X1 · the AI provider behind semantic search, menu scanning, recipe
       # photos, item onboarding and tier-list insights. Defaults to `ollama`,
       # which needs no credentials: run `ollama serve` on the host and pull the
@@ -665,6 +671,11 @@ services:
       # (services/client/src/lib/api/proxy-secret.ts); must equal the actors'
       # value above. Server-only — never NEXT_PUBLIC_*.
       AUTH_PROXY_SECRET: ${AUTH_PROXY_SECRET:-cellar-dev-auth-proxy-secret-not-for-production}
+      # Which sign-in controls /sign-in and /sign-up render
+      # (services/client/src/lib/auth/password-mode.ts). Read at request time
+      # by the server components, so no rebuild is needed to change it. Must
+      # match the actors' value above.
+      AUTH_PASSWORD_MODE: ${AUTH_PASSWORD_MODE:-enabled}
       # PORT/HOSTNAME come from the image (3000 / 0.0.0.0); only the published
       # host port below is configurable, because moving the container's own
       # port would also move EXPOSE and the healthcheck for no gain.

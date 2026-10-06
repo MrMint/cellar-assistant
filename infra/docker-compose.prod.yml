@@ -193,6 +193,10 @@ services:
       # Only the *extra* origins: better-auth trusts BETTER_AUTH_URL's own
       # origin implicitly (context/helpers.mjs). Empty is the normal case.
       AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-}
+      # Social-first sign-in; no new password accounts. signin-only, not
+      # disabled: 4 existing password users have no social login.
+      # Vercel's AUTH_PASSWORD_MODE must match (deploy-loki.md).
+      AUTH_PASSWORD_MODE: ${AUTH_PASSWORD_MODE:-signin-only}
       # A8/E3 · a bare hostname; the minio client concatenates it into the
       # signed Host header. `filesS3Config` throws on a scheme, port or path.
       # With SSL on and no explicit port the signer defaults to 443, so the

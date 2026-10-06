@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { SignInApiClient } from "@/components/auth/SignInApiClient";
+import { readPasswordMode } from "@/lib/auth/password-mode";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 import { sanitizeReturnTo } from "@/utilities/sanitize-return-to";
 
@@ -23,5 +24,7 @@ export default async function SignIn({
     redirect(returnTo ?? "/cellars");
   }
 
-  return <SignInApiClient returnTo={returnTo} />;
+  return (
+    <SignInApiClient returnTo={returnTo} passwordMode={readPasswordMode()} />
+  );
 }

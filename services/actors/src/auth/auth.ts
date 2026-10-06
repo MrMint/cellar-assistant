@@ -67,6 +67,27 @@ const refuseDisabled = (user: unknown): void => {
   }
 };
 
+/**
+ * Every better-auth route that takes or sets a password, relative to the
+ * `/api/auth` base path. Under `AUTH_PASSWORD_MODE=disabled` these are
+ * `disabledPaths`, which better-auth's router answers with 404 before any
+ * handler runs (1.7.3, `api/index.mjs` `onRequest`).
+ *
+ * `/reset-password/:token` is absent because `disabledPaths` matches literal
+ * paths only; it needs no entry, since it only redeems a token minted by
+ * `/request-password-reset`, which is in the list (and refuses anyway without
+ * a `sendResetPassword`). `/set-password` is absent because it is
+ * `serverOnly` — not routed over HTTP at all.
+ */
+export const PASSWORD_PATHS = [
+  "/sign-in/email",
+  "/sign-up/email",
+  "/change-password",
+  "/verify-password",
+  "/request-password-reset",
+  "/reset-password",
+] as const;
+
 export type AuthInstance = ReturnType<typeof createAuth>["auth"];
 
 /**
@@ -183,12 +204,27 @@ export const createAuth = (config: AuthConfig, shared?: AuthDb) => {
       ),
     },
 
+    /**
+     * `AUTH_PASSWORD_MODE` (`./config.ts`). `signin-only` keeps the verifier
+     * and refuses `/sign-up/email` (better-auth checks `disableSignUp` there);
+     * `disabled` turns the whole block off.
+     *
+     * `enabled: false` alone is not enough: in better-auth 1.7.3 only
+     * `/sign-in/email` and `/sign-up/email` check it, while `/change-password`
+     * and `/verify-password` do not. So `disabled` also 404s every password
+     * path at the router ({@link passwordDisabledPaths}). No `account` row is
+     * read or written by any of this — a credential row simply sits unused
+     * until the mode allows it again.
+     */
     emailAndPassword: {
-      enabled: true,
+      enabled: config.passwordMode !== "disabled",
+      disableSignUp: config.passwordMode !== "enabled",
       // Matches the outgoing stack: nhost.toml sets passwordMinLength = 9.
       minPasswordLength: 9,
       password: createPassword({ rehash }),
     },
+    disabledPaths:
+      config.passwordMode === "disabled" ? [...PASSWORD_PATHS] : [],
 
     user: {
       additionalFields: {

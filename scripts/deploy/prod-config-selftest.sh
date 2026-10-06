@@ -26,6 +26,12 @@
 #   6. infra/nginx-proxy/vhost.d/*.conf pass `nginx -t` inside the nginx-proxy
 #      image Loki runs (NGINX_PROXY_IMAGE, digest-pinned below), as server-level
 #      includes — the same test scripts/deploy/edge.sh runs before installing.
+#   7. AUTH_PASSWORD_MODE reaches the containers: `enabled` on the dev render's
+#      actors AND client (the e2e suite signs in by password), `signin-only` on
+#      the production render's actors — from .env.prod.example, and by the
+#      overlay's default when .env.prod omits it. The guard refuses
+#      `enabled`, a missing or misspelled mode, and `disabled` with no OAuth
+#      pair, and accepts `disabled` with one.
 #
 # Needs docker (compose v2.24+) and node. Prints variable names, never values —
 # though every value here is a throwaway anyway.
@@ -181,6 +187,64 @@ for entry in "${mutations[@]}"; do
   fi
   echo "ok 5.$n - refuses a render that $what"
 done
+
+# 7 — the password mode is passed through, and the guard holds the line.
+# A missing pass-through has silently disabled a feature in this repo before, so
+# the rendered environment is checked, not the YAML.
+mode_of() { # <render json on stdin> <service>
+  node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+    const v = JSON.parse(s).services[process.argv[1]]?.environment?.AUTH_PASSWORD_MODE;
+    process.stdout.write(v === undefined ? "<unset>" : v); });' "$1"
+}
+for svc in actors client; do
+  got="$(render_dev | mode_of "$svc")"
+  if [ "$got" != "enabled" ]; then
+    echo "not ok 7 - dev render: $svc AUTH_PASSWORD_MODE is $got, want enabled" >&2
+    exit 1
+  fi
+done
+echo "ok 7.1 - dev render passes AUTH_PASSWORD_MODE=enabled to actors and client"
+got="$(render_prod "$GOOD" | mode_of actors)"
+if [ "$got" != "signin-only" ]; then
+  echo "not ok 7.2 - prod render: actors AUTH_PASSWORD_MODE is $got, want signin-only" >&2
+  exit 1
+fi
+echo "ok 7.2 - prod render passes AUTH_PASSWORD_MODE=signin-only (from .env.prod.example) to actors"
+NOMODE="$WORK/no-mode.env"
+grep -v '^AUTH_PASSWORD_MODE=' "$GOOD" >"$NOMODE"
+got="$(render_prod "$NOMODE" | mode_of actors)"
+if [ "$got" != "signin-only" ]; then
+  echo "not ok 7.3 - prod render without the variable: actors AUTH_PASSWORD_MODE is $got, want signin-only" >&2
+  exit 1
+fi
+echo "ok 7.3 - an .env.prod without AUTH_PASSWORD_MODE still renders signin-only"
+# shellcheck disable=SC2016  # JS, for node — not the shell
+refused=(
+  'sets it to enabled|(p) => { p.services.actors.environment.AUTH_PASSWORD_MODE = "enabled"; }'
+  'drops it|(p) => { delete p.services.actors.environment.AUTH_PASSWORD_MODE; }'
+  'misspells it|(p) => { p.services.actors.environment.AUTH_PASSWORD_MODE = "signin_only"; }'
+  'disables it with no OAuth pair|(p) => { const e = p.services.actors.environment; e.AUTH_PASSWORD_MODE = "disabled"; for (const k of Object.keys(e)) if (/_OAUTH_CLIENT_SECRET$/.test(k)) e[k] = ""; }'
+)
+n=3
+for entry in "${refused[@]}"; do
+  what="${entry%%|*}"
+  js="${entry#*|}"
+  n=$((n + 1))
+  set +e
+  out="$(guard_mutated "$js" 2>&1)"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 1 ] || ! grep -q '::error::auth:' <<<"$out"; then
+    echo "not ok 7.$n - check-prod-config accepted a render that $what (rc=$rc)" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+  echo "ok 7.$n - refuses a render whose AUTH_PASSWORD_MODE $what"
+done
+n=$((n + 1))
+# shellcheck disable=SC2016  # JS, for node — not the shell
+guard_mutated '(p) => { p.services.actors.environment.AUTH_PASSWORD_MODE = "disabled"; }' >/dev/null
+echo "ok 7.$n - accepts AUTH_PASSWORD_MODE=disabled when an OAuth pair is set"
 
 # 6 — the vhost snippets are valid nginx, in a digest-pinned nginx-proxy build.
 # Keep it in step with the image the host's edge stack runs; override with

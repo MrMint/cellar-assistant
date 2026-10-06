@@ -37,7 +37,11 @@ installProcessGuards();
 // X2: `actorDb()` is passed in, so better-auth writes its five tables through
 // the same pool and the same database as every actor. It used to open a second
 // pool against a second database (`auth_dev`); there is one of each now.
-const { auth } = createAuth(readAuthConfig(), actorDb());
+const authConfig = readAuthConfig();
+// One line at boot, so "which password mode is this host on" is answerable
+// from `docker logs` without exec'ing in (`src/auth/config.ts`).
+console.info(`[auth] AUTH_PASSWORD_MODE=${authConfig.passwordMode}`);
+const { auth } = createAuth(authConfig, actorDb());
 const app = createAppWithAuth(auth);
 
 // `pg`'s pool re-emits an error on an *idle* client (Postgres restarting,

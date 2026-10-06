@@ -154,6 +154,86 @@ export const readProxyTrust = (
   };
 };
 
+/**
+ * `AUTH_PASSWORD_MODE` — how much of email/password auth this host serves.
+ *
+ * Production sign-in is social-first (Google, Discord, Facebook) and this
+ * deployment sends no email at all, so there is no verification and no
+ * reset-by-email. The three modes:
+ *
+ *   - `enabled` — sign-up and sign-in by password. The default when unset,
+ *     and what the development lanes and the e2e suite run on (the seeded
+ *     `test@test.com` / `test2@test.com` are password accounts).
+ *   - `signin-only` — existing password users still sign in (and may change
+ *     their password); nobody can create a new password account
+ *     (`emailAndPassword.disableSignUp`). Exists because four of production's
+ *     password users have no social login on an address Google can cover.
+ *   - `disabled` — every password endpoint refuses: sign-up, sign-in,
+ *     change-password, verify-password and both reset steps.
+ *
+ * In no mode are `account` rows touched: a `credential` row survives
+ * `disabled`, so moving back to `signin-only` or `enabled` restores that
+ * user's password sign-in exactly. Reset-by-email is off in every mode,
+ * because `emailAndPassword.sendResetPassword` is never configured — better-
+ * auth refuses `/request-password-reset` with `RESET_PASSWORD_DISABLED`
+ * without one (1.7.3, `api/routes/password.mjs`).
+ *
+ * The Next client reads the same variable, server-side, to decide which
+ * controls to render (`services/client/src/lib/auth/password-mode.ts`). A
+ * mismatch fails closed: the UI may offer a form, but this host is what
+ * refuses.
+ */
+export const PASSWORD_MODES = ["enabled", "signin-only", "disabled"] as const;
+
+export type PasswordMode = (typeof PASSWORD_MODES)[number];
+
+/** Unset or empty means `enabled`; anything unrecognised refuses to start. */
+export const parsePasswordMode = (raw: string | undefined): PasswordMode => {
+  if (raw === undefined || raw === "") return "enabled";
+  const mode = PASSWORD_MODES.find((m) => m === raw);
+  if (mode === undefined) {
+    throw new Error(
+      `[auth] AUTH_PASSWORD_MODE must be one of ${PASSWORD_MODES.join(", ")}, but got ${JSON.stringify(raw)}.`,
+    );
+  }
+  return mode;
+};
+
+/**
+ * A password mode that removes the password door must leave another one.
+ *
+ * `disabled` with no social provider configured would lock every user out, so
+ * it is a refusal to start. `signin-only` with none still lets existing
+ * password users in but makes the app impossible to join, which is a loud
+ * warning rather than a refusal — it is a degraded state, not a lockout.
+ * Returns the warning it emitted, for the tests.
+ */
+export const assertPasswordModeHasSocialFallback = (
+  mode: PasswordMode,
+  providers: Pick<AuthConfig, "google" | "facebook" | "discord">,
+  warn: (message: string) => void = console.warn,
+): string | null => {
+  if (mode === "enabled") return null;
+  const configured = OAUTH_PROVIDER_IDS.filter(
+    (id) => providers[id] !== undefined,
+  );
+  if (configured.length > 0) return null;
+  if (mode === "disabled") {
+    throw new Error(
+      "[auth] AUTH_PASSWORD_MODE=disabled, but no social provider is configured " +
+        "(GOOGLE_OAUTH_*, DISCORD_OAUTH_*, FACEBOOK_OAUTH_* each need both CLIENT_ID " +
+        "and CLIENT_SECRET). That would leave no way to sign in at all. Configure a " +
+        "provider, or set AUTH_PASSWORD_MODE=signin-only.",
+    );
+  }
+  const message =
+    "[auth] WARNING: AUTH_PASSWORD_MODE=signin-only and no social provider is " +
+    "configured. Existing password users can sign in, but NOBODY can create an " +
+    "account. Configure GOOGLE_OAUTH_*, DISCORD_OAUTH_* or FACEBOOK_OAUTH_*.";
+  warn(message);
+  return message;
+};
+
 export type AuthConfig = {
   databaseUrl: string;
   secret: string;
@@ -161,6 +241,8 @@ export type AuthConfig = {
   trustedOrigins: string[];
   /** Transparent bcrypt→scrypt upgrade on successful sign-in. */
   rehashOnSignIn: boolean;
+  /** `AUTH_PASSWORD_MODE`; see {@link PasswordMode}. */
+  passwordMode: PasswordMode;
   google: { clientId: string; clientSecret: string } | undefined;
   facebook: { clientId: string; clientSecret: string } | undefined;
   discord: { clientId: string; clientSecret: string } | undefined;
@@ -335,6 +417,15 @@ export const readAuthConfig = (): AuthConfig => {
   // Boot refusal in production; `createAppWithAuth` reads it again for the
   // values (`./mount.ts`).
   readProxyTrust();
+  const passwordMode = parsePasswordMode(process.env.AUTH_PASSWORD_MODE);
+  const google = socialCredentials("GOOGLE_OAUTH");
+  const facebook = socialCredentials("FACEBOOK_OAUTH");
+  const discord = socialCredentials("DISCORD_OAUTH");
+  assertPasswordModeHasSocialFallback(passwordMode, {
+    google,
+    facebook,
+    discord,
+  });
   return {
     // X2: the *main* database. It was a separate one (`auth_dev`) while A3 was
     // rebuilding `packages/db`; the variable survives the merge because it is
@@ -353,8 +444,9 @@ export const readAuthConfig = (): AuthConfig => {
       .map((origin) => origin.trim())
       .filter((origin) => origin.length > 0),
     rehashOnSignIn: process.env.AUTH_REHASH_ON_SIGNIN !== "false",
-    google: socialCredentials("GOOGLE_OAUTH"),
-    facebook: socialCredentials("FACEBOOK_OAUTH"),
-    discord: socialCredentials("DISCORD_OAUTH"),
+    passwordMode,
+    google,
+    facebook,
+    discord,
   };
 };

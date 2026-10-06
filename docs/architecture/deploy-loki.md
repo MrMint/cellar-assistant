@@ -174,6 +174,26 @@ impossible.
 `services/actors/src/auth/config.test.ts` pins these against the mounted base path,
 so a change in either one fails CI rather than production.
 
+**Sign-in is social-first, and password sign-up is off.** This deployment sends
+no email, so it cannot verify an address or reset a password by mail, and a
+password sign-up would let anyone claim an address they do not own.
+`AUTH_PASSWORD_MODE` (`enabled` | `signin-only` | `disabled`,
+`services/actors/src/auth/config.ts`) is **`signin-only`** in production
+(`infra/.env.prod.example`, and the overlay's default): existing password
+users still sign in — four of them have no social login — and nobody can
+create a password account. `scripts/deploy/check-prod-config.mjs` refuses
+`enabled`, a missing or misspelled value, and `disabled` with no complete
+OAuth pair; the actor host refuses `disabled` with no provider at boot, warns
+for `signin-only` with none, and logs `[auth] AUTH_PASSWORD_MODE=…` on start.
+
+A password user who signs in with **Google or Discord** on the same verified
+email is linked into their existing account — same user id, same data, password
+kept (`services/actors/src/auth/credential-linking.test.ts`). **Facebook never
+links by email**: better-auth 1.7.3 reports every Facebook email as unverified,
+and `trustedProviders` stays empty on purpose (`src/auth/README.md`). Moving to
+`disabled` later touches no `account` row, so moving back restores password
+sign-in exactly.
+
 ### 2.4 Secrets — generate and place them
 
 ```bash
@@ -229,7 +249,7 @@ setting; nothing in this repository can change it. Mind the ordering hazard in
 `e4-decisions.md` decision 15: once it is set, the *next* Production build
 builds the new frontend.
 
-Then four server-side environment variables on the Vercel project (none is
+Then five server-side environment variables on the Vercel project (none is
 `NEXT_PUBLIC_`; the browser never learns the first two, and must never learn
 `AUTH_PROXY_SECRET`):
 
@@ -239,6 +259,14 @@ Then four server-side environment variables on the Vercel project (none is
 | `GRAPHQL_API_URL` | `https://loki.example.com/graphql` |
 | `PUBLIC_FILES_HOST` | `files.example.com` — same value as `infra/.env.prod`, bare hostname |
 | `AUTH_PROXY_SECRET` | **the same value as `infra/.env.prod`'s** (`openssl rand -hex 32`, ≥ 32 characters) |
+| `AUTH_PASSWORD_MODE` | **the same value as `infra/.env.prod`'s** — `signin-only` (§2.3) |
+
+`AUTH_PASSWORD_MODE` only decides what `/sign-in` and `/sign-up` render
+(`services/client/src/lib/auth/password-mode.ts`, read per request by the page
+server components); the actor host is what refuses. **Unset on Vercel means
+`enabled`**, which would show a password sign-up form the actor host then
+refuses with 400 — wrong, but closed. A value the client does not recognise
+renders as `disabled`.
 
 `AUTH_PROXY_SECRET` is how the actor host tells this Next server's requests from
 anyone else's at the edge. Every request the Next server makes to

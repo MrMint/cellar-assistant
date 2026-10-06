@@ -27,35 +27,40 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
-import { BsDiscord, BsFacebook } from "react-icons/bs";
-import { FcGoogle } from "react-icons/fc";
-import {
-  authClient,
-  startSocialSignIn,
-  useAuthAction,
-} from "@/lib/api/auth-client";
-import type { SocialProvider } from "@/lib/api/endpoints";
+import { authClient, useAuthAction } from "@/lib/api/auth-client";
+import type { PasswordMode } from "@/lib/auth/password-mode";
 import { LiquidBackground } from "./LiquidBackground";
+import {
+  FORMER_PASSWORD_USER_NOTE,
+  SocialButtons,
+  useSocialSignIn,
+} from "./SocialButtons";
 
-const PROVIDERS: {
-  id: SocialProvider;
-  label: string;
-  icon: React.ReactNode;
-}[] = [
-  { id: "google", label: "Continue with Google", icon: <FcGoogle /> },
-  { id: "discord", label: "Continue with Discord", icon: <BsDiscord /> },
-  { id: "facebook", label: "Continue with Facebook", icon: <BsFacebook /> },
-];
-
-export function SignInApiClient({ returnTo }: { returnTo?: string }) {
+/**
+ * `passwordMode` comes from the page's server component
+ * (`@/lib/auth/password-mode`), never from the browser's environment:
+ *
+ *   - `enabled` — the production page's layout exactly: social buttons, an
+ *     "or" divider, the email/password form.
+ *   - `signin-only` — social buttons first, then the password form folded
+ *     behind "Sign in with your password", for the existing password users
+ *     who have no social login. No new password accounts exist in this mode,
+ *     so the form is for a minority and is not the first thing on the page.
+ *   - `disabled` — social buttons and the note for former password users.
+ */
+export function SignInApiClient({
+  returnTo,
+  passwordMode = "enabled",
+}: {
+  returnTo?: string;
+  passwordMode?: PasswordMode;
+}) {
   const router = useRouter();
-  const [ssoError, setSsoError] = useState<string | null>(null);
-  const [redirectingTo, setRedirectingTo] = useState<SocialProvider | null>(
-    null,
-  );
   const { run, pending, error } = useAuthAction(authClient.signIn.email);
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   const destination = returnTo ?? "/cellars";
+  const { ssoError, redirectingTo, start } = useSocialSignIn(destination);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -77,21 +82,39 @@ export function SignInApiClient({ returnTo }: { returnTo?: string }) {
     [run, router, destination],
   );
 
-  const handleSocial = useCallback(
-    async (provider: SocialProvider) => {
-      setSsoError(null);
-      setRedirectingTo(provider);
-      const failure = await startSocialSignIn(provider, destination);
-      if (failure !== null) {
-        setSsoError(failure.message);
-        setRedirectingTo(null);
-      }
-    },
-    [destination],
-  );
-
   const busy = pending || redirectingTo !== null;
   const formError = error?.message ?? null;
+
+  const passwordForm = (
+    <form onSubmit={handleSubmit}>
+      <Stack gap={2} sx={{ mt: 2 }}>
+        <FormControl required error={formError !== null}>
+          <FormLabel>Email</FormLabel>
+          <Input
+            type="email"
+            name="email"
+            autoComplete="email"
+            required
+            disabled={busy}
+          />
+        </FormControl>
+        <FormControl required error={formError !== null}>
+          <FormLabel>Password</FormLabel>
+          <Input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            required
+            disabled={busy}
+          />
+          {formError !== null && <FormHelperText>{formError}</FormHelperText>}
+        </FormControl>
+        <Button loading={pending} type="submit" disabled={busy}>
+          Sign in
+        </Button>
+      </Stack>
+    </form>
+  );
 
   return (
     <Box
@@ -125,7 +148,10 @@ export function SignInApiClient({ returnTo }: { returnTo?: string }) {
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
         }}
       >
-        <Stack gap={1} sx={{ marginBottom: 2 }}>
+        <Stack
+          gap={1}
+          sx={{ marginBottom: passwordMode === "disabled" ? 0 : 2 }}
+        >
           <Stack gap={1} marginBottom={2}>
             <Typography level="h3">Sign in</Typography>
             <Typography level="body-sm">
@@ -133,57 +159,41 @@ export function SignInApiClient({ returnTo }: { returnTo?: string }) {
             </Typography>
           </Stack>
 
-          {PROVIDERS.map((provider) => (
-            <Button
-              key={provider.id}
-              onClick={() => void handleSocial(provider.id)}
-              variant="soft"
-              color="neutral"
-              fullWidth
-              disabled={busy}
-              loading={redirectingTo === provider.id}
-              startDecorator={provider.icon}
-            >
-              {provider.label}
-            </Button>
-          ))}
-          {ssoError !== null && (
-            <Typography level="body-sm" color="danger">
-              {ssoError}
+          <SocialButtons
+            busy={busy}
+            redirectingTo={redirectingTo}
+            ssoError={ssoError}
+            onSelect={(provider) => void start(provider)}
+          />
+          {passwordMode === "disabled" && (
+            <Typography level="body-sm" sx={{ mt: 1 }}>
+              {FORMER_PASSWORD_USER_NOTE}
             </Typography>
           )}
         </Stack>
-        <Divider>or</Divider>
-        <form onSubmit={handleSubmit}>
-          <Stack gap={2} sx={{ mt: 2 }}>
-            <FormControl required error={formError !== null}>
-              <FormLabel>Email</FormLabel>
-              <Input
-                type="email"
-                name="email"
-                autoComplete="email"
-                required
-                disabled={busy}
-              />
-            </FormControl>
-            <FormControl required error={formError !== null}>
-              <FormLabel>Password</FormLabel>
-              <Input
-                type="password"
-                name="password"
-                autoComplete="current-password"
-                required
-                disabled={busy}
-              />
-              {formError !== null && (
-                <FormHelperText>{formError}</FormHelperText>
-              )}
-            </FormControl>
-            <Button loading={pending} type="submit" disabled={busy}>
-              Sign in
+        {passwordMode === "enabled" && (
+          <>
+            <Divider>or</Divider>
+            {passwordForm}
+          </>
+        )}
+        {passwordMode === "signin-only" && (
+          <>
+            <Divider />
+            <Button
+              variant="plain"
+              color="neutral"
+              size="sm"
+              aria-expanded={passwordOpen}
+              aria-controls="password-sign-in"
+              onClick={() => setPasswordOpen((open) => !open)}
+              sx={{ mt: 1, alignSelf: "center" }}
+            >
+              Sign in with your password
             </Button>
-          </Stack>
-        </form>
+            {passwordOpen && <Box id="password-sign-in">{passwordForm}</Box>}
+          </>
+        )}
       </Sheet>
     </Box>
   );

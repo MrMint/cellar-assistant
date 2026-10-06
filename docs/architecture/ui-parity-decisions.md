@@ -86,6 +86,15 @@ one-line or small change to reverse. Answer per item.
 16. AI place-review categories now equal the restored create form's 25 slugs
     (12 added, 6 dropped: wine_shop, vineyard, taproom, coffee_roaster,
     tea_shop, izakaya). — FinalGate 90d1e8e9
+20. **Email verification is superseded by social-first sign-in in production
+    (user, 2026-10-05).** No email is sent at all, so verification and
+    reset-by-email are not restored. Production runs
+    `AUTH_PASSWORD_MODE=signin-only`: social buttons first, a collapsed
+    password form for the 4 existing password users with no social login, and
+    no password sign-up; dev and e2e stay `enabled`. Google/Discord link a
+    password user's account by email; Facebook cannot (better-auth reports its
+    email unverified). The old page's "Forgot your password?" link pointed at
+    `#replace-with-a-link` and is not restored. — SocialOnlyAuth
 
 ### Product questions
 17. Is a Google Places budget configured in production? Without one, place

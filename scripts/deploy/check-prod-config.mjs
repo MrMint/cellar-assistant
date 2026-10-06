@@ -179,10 +179,43 @@ for (const [svc, spec] of Object.entries(services)) {
 }
 for (const why of edgeErrors) console.error(`::error::edge: ${why}`);
 
-if (hits.length > 0 || edgeErrors.length > 0) process.exit(1);
+// --- Password auth ---------------------------------------------------------
+//
+// Production is social-first and sends no email, so there is no verification:
+// `enabled` would let anyone register a password account on an address they do
+// not own. `AUTH_PASSWORD_MODE` (services/actors/src/auth/config.ts) must
+// therefore be `signin-only` or `disabled` here, spelled exactly — the actor
+// host refuses an unknown value, but only at boot, after the old container is
+// gone. `disabled` with no complete OAuth pair is a total lockout, which the
+// host also refuses at boot; caught here first for the same reason.
+// The value is an enum, not a secret, so it is printed.
+const PROD_PASSWORD_MODES = ["signin-only", "disabled"];
+const OAUTH_PAIRS = ["GOOGLE_OAUTH", "FACEBOOK_OAUTH", "DISCORD_OAUTH"];
+const passwordErrors = [];
+const actorsEnv = env("actors");
+const passwordMode = actorsEnv.AUTH_PASSWORD_MODE;
+if (!PROD_PASSWORD_MODES.includes(passwordMode)) {
+  passwordErrors.push(
+    `actors.AUTH_PASSWORD_MODE is ${JSON.stringify(passwordMode ?? null)}; production must be one of ${PROD_PASSWORD_MODES.join(", ")} (no email is sent, so password sign-up cannot be verified).`,
+  );
+} else if (
+  passwordMode === "disabled" &&
+  !OAUTH_PAIRS.some(
+    (p) => actorsEnv[`${p}_CLIENT_ID`] && actorsEnv[`${p}_CLIENT_SECRET`],
+  )
+) {
+  passwordErrors.push(
+    "actors.AUTH_PASSWORD_MODE is disabled but no OAuth provider has both CLIENT_ID and CLIENT_SECRET set; nobody could sign in.",
+  );
+}
+for (const why of passwordErrors) console.error(`::error::auth: ${why}`);
+
+if (hits.length > 0 || edgeErrors.length > 0 || passwordErrors.length > 0)
+  process.exit(1);
 console.log(
   `check-prod-config: ${checked.length} secret-named variable(s) across ${new Set(checked.map((e) => e.service)).size} service(s); none equals one of the ${published.size} published development values.`,
 );
 console.log(
   `check-prod-config: edge shape ok — proxied: ${proxied.sort().join(", ")}; no port on every interface.`,
 );
+console.log(`check-prod-config: AUTH_PASSWORD_MODE=${passwordMode}.`);

@@ -115,6 +115,45 @@ Users who already used OAuth on Nhost are unaffected: their
 `(provider_id, account_id)`, so they match exactly and never reach the
 linking-by-email branch at all.
 
+**Password auth has three modes; production is `signin-only`.**
+`AUTH_PASSWORD_MODE` (`config.ts`, default `enabled`):
+
+| Mode | Sign-up | Sign-in | change/verify-password | Where |
+|---|---|---|---|---|
+| `enabled` | yes | yes | yes | dev, the shared lane, e2e (the seeded accounts are password accounts) |
+| `signin-only` | 400 (`disableSignUp`) | yes | yes | production |
+| `disabled` | 404 | 404 | 404 | available; refuses to boot with no social provider |
+
+Reset-by-email is refused in every mode: no `sendResetPassword` is configured
+because this deployment sends no email, and better-auth answers
+`/request-password-reset` with `RESET_PASSWORD_DISABLED` without one. That is
+also why email verification was never restored: social providers assert the
+address instead. `disabled` sets `emailAndPassword.enabled: false` **and**
+lists every password path in `disabledPaths` (`PASSWORD_PATHS` in `auth.ts`),
+because in 1.7.3 `enabled` gates only `/sign-in/email` and `/sign-up/email` —
+`/change-password` and `/verify-password` ignore it. No mode reads or writes an
+`account` row, so changing mode is reversible in both directions.
+`signin-only` with no social provider configured boots with a loud warning
+(nobody could join); `disabled` with none refuses to boot (nobody could sign
+in). Tests: `password-mode.test.ts`.
+
+**Migrated password users keep their account by signing in with Google or
+Discord — not Facebook.** A credential user whose address is verified (all 20
+migrated production users are) and who signs in with Google or Discord on the
+same address is linked into the same user row, keeping the credential account
+beside the new one. `credential-linking.test.ts` drives each provider's own
+`getUserInfo` with only the network stubbed, because `emailVerified` is decided
+there: Google's `email_verified` claim, Discord's `verified`, and for Facebook
+`profile.email_verified ?? false` from a Graph `/me` request that never asks for
+such a field — or a hard-coded `false` on the id-token path. **So Facebook
+never links by email in 1.7.3.** Adding `facebook` to `trustedProviders` would
+fix that by letting any Facebook account claim any local account with a
+matching address, which is the takeover the empty list exists to prevent; it is
+deliberately not done. A password user whose only social login is Facebook
+keeps signing in with their password under `signin-only`. Users who already had
+a Facebook identity on Nhost are unaffected — they match on the migrated
+`(provider_id, account_id)` and never reach linking by email.
+
 **Nhost OAuth tokens are not migrated.** They were issued to Nhost's client
 ids; A6 registers new OAuth applications, so they are useless under the new
 client. Only the identity binding moves.

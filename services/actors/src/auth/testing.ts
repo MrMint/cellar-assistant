@@ -109,6 +109,7 @@ export const testConfig = (
   baseUrl: "http://localhost:3002",
   trustedOrigins: ["http://localhost:3000"],
   rehashOnSignIn: true,
+  passwordMode: "enabled",
   // Placeholder credentials. No network call is made in these tests: the
   // provider is only needed so better-auth registers `google`/`facebook`/
   // `discord` as known provider ids.
