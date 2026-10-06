@@ -35,6 +35,7 @@ export {
   loadProject,
   PROGRAM_TIMEOUT_MS,
   type Project,
+  workspacePaths,
 } from "./project.ts";
 export {
   type CallLike,

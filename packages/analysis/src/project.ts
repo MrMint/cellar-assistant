@@ -13,9 +13,10 @@
  * cache — which is what makes a fixture program over a handful of in-memory
  * files cost milliseconds even when its files import real modules.
  */
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { isSpecPath, normalizePath } from "./files.ts";
 
@@ -113,9 +114,96 @@ export type LoadOptions = {
    * rule about *this repo's* symbols — identity across modules and packages,
    * literal types, re-exports. A rule that needs a library's types (Drizzle's
    * table names, Dapr's state manager) loads the full program instead.
+   *
+   * A workspace package (`@cellar-assistant/contracts`, `…/db/orm`) resolves
+   * to its source through its `exports`, not through a `node_modules`
+   * symlink — see {@link workspacePaths}.
    */
   readonly repoOnly?: boolean;
 };
+
+/* -------------------------------------------------------------------------- */
+/* Workspace packages, without node_modules                                    */
+/* -------------------------------------------------------------------------- */
+
+/** The repository root: this file is `packages/analysis/src/project.ts`. */
+const REPO_ROOT = normalizePath(
+  fileURLToPath(new URL("../../..", import.meta.url)),
+);
+
+let WORKSPACE_PATHS: Readonly<Record<string, string[]>> | undefined;
+
+/**
+ * A `paths` entry for every export of every workspace package, pointing at
+ * the file the export names — `@cellar-assistant/db/orm` →
+ * `<repo>/packages/db/src/orm.ts`.
+ *
+ * Why it exists: an import of a workspace package normally resolves through
+ * the importing package's own `node_modules/@cellar-assistant/*` symlink, so
+ * whether a repo-only program could see `services/client` → `@cellar-assistant/schema`
+ * depended on whether `services/client` was *installed*. CI installs one
+ * leg's closure (`bun install --filter "./services/api..."`), and there it was
+ * not: the client-documents harvest found no `graphql()` call at all, and
+ * every `services/actors` → `@cellar-assistant/*` import in the api leg's
+ * repo-only programs was silently `any`. A program that loads nothing from
+ * `node_modules` should not need `node_modules` to find the repo's own code.
+ *
+ * Read from the root `package.json`'s `workspaces.packages` (only `dir/*`
+ * globs, which is all it has; anything else throws rather than being
+ * half-read) and each package's string-valued `exports`.
+ */
+export const workspacePaths = (): Readonly<Record<string, string[]>> => {
+  if (WORKSPACE_PATHS !== undefined) return WORKSPACE_PATHS;
+  const readJson = (path: string): Record<string, unknown> =>
+    JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  const root = readJson(`${REPO_ROOT}/package.json`);
+  const globs = (root.workspaces as { packages?: unknown } | undefined)
+    ?.packages;
+  if (!Array.isArray(globs)) {
+    throw new Error(`${REPO_ROOT}/package.json has no workspaces.packages`);
+  }
+  const paths: Record<string, string[]> = {};
+  for (const glob of globs) {
+    if (typeof glob !== "string" || !/^[^*]+\/\*$/.test(glob)) {
+      throw new Error(
+        `workspacePaths reads only "dir/*" workspace globs, not ${JSON.stringify(glob)}`,
+      );
+    }
+    const parent = `${REPO_ROOT}/${glob.slice(0, -2)}`;
+    for (const entry of readdirSync(parent, { withFileTypes: true })) {
+      const manifest = `${parent}/${entry.name}/package.json`;
+      if (!entry.isDirectory() || !existsSync(manifest)) continue;
+      const { name, exports } = readJson(manifest);
+      if (typeof name !== "string" || exports === undefined) continue;
+      if (exports === null || typeof exports !== "object") {
+        throw new Error(`${manifest}: exports must be an object of subpaths`);
+      }
+      for (const [subpath, target] of Object.entries(exports)) {
+        if (typeof target !== "string") {
+          throw new Error(
+            `${manifest}: exports[${JSON.stringify(subpath)}] is not a plain path; workspacePaths reads only those`,
+          );
+        }
+        const specifier =
+          subpath === "." ? name : `${name}/${subpath.replace(/^\.\//, "")}`;
+        paths[specifier] = [normalizePath(join(parent, entry.name, target))];
+      }
+    }
+  }
+  WORKSPACE_PATHS = paths;
+  return paths;
+};
+
+/**
+ * `options`, with workspace packages resolving to source when the program
+ * loads nothing from `node_modules` (`noResolve`). A tsconfig's own `paths`
+ * win on a clash. A full program is left alone: it resolves through
+ * `node_modules` like `tsc` does, and needs the closure installed anyway.
+ */
+const withWorkspacePaths = (options: ts.CompilerOptions): ts.CompilerOptions =>
+  options.noResolve === true
+    ? { ...options, paths: { ...workspacePaths(), ...options.paths } }
+    : options;
 
 /**
  * The timeout for a scan's setup — building a program and making the
@@ -197,10 +285,11 @@ export const loadProject = (
     ),
     ...(options.extraRoots ?? []).flatMap(rootsUnder),
   ];
-  const compilerOptions: ts.CompilerOptions =
+  const compilerOptions: ts.CompilerOptions = withWorkspacePaths(
     options.repoOnly === true
       ? { ...parsed.options, noResolve: true }
-      : parsed.options;
+      : parsed.options,
+  );
   const program = ts.createProgram({
     rootNames: [...new Set(rootNames)],
     options: compilerOptions,
@@ -256,7 +345,8 @@ export type FixtureOptions = {
    * Real directories whose files join the fixture as roots — with
    * `options.noResolve`, the only way an import of a real module resolves,
    * and a cheap one: their parsed files are shared with every other program
-   * in the process.
+   * in the process. With `noResolve`, a workspace package's specifier
+   * reaches its root here by {@link workspacePaths}, installed or not.
    */
   readonly extraRoots?: readonly string[];
 };
@@ -269,9 +359,10 @@ export type FixtureOptions = {
 export const fixtureProject = ({
   files,
   root,
-  options = FIXTURE_OPTIONS,
+  options: given = FIXTURE_OPTIONS,
   extraRoots = [],
 }: FixtureOptions): Project => {
+  const options = withWorkspacePaths(given);
   fixtureCount += 1;
   const base = normalizePath(
     root ?? join(tmpdir(), `analysis-fixture-${process.pid}-${fixtureCount}`),

@@ -21,10 +21,12 @@ import {
   literalValues,
   loadProject,
   moduleSpecifiers,
+  normalizePath,
   type Project,
   propertyLiterals,
   sourceFileAt,
   sourceFiles,
+  workspacePaths,
 } from "./index.ts";
 
 const SRC = fileURLToPath(new URL(".", import.meta.url)).replace(/\/$/, "");
@@ -180,6 +182,33 @@ describe("repo-only programs", () => {
     const { calls } = findCalls(
       project,
       [{ module: `${SRC}/values.ts`, name: "unwrapExpression" }],
+      { rule: "r" },
+    );
+    expect(calls.map((site) => enclosingName(site.call))).toEqual(["go"]);
+  });
+
+  it("resolve a workspace package to its source, whether or not it is installed", () => {
+    // packages/analysis depends on no workspace package, so no install ever
+    // puts `@cellar-assistant/contracts` in its node_modules: this import
+    // resolves by `workspacePaths` or not at all. Before it, the same import
+    // from services/client/src resolved only where services/client was
+    // installed — which CI's api leg is not.
+    const contracts = normalizePath(`${SRC}/../../contracts/src`);
+    expect(workspacePaths()["@cellar-assistant/contracts/barcodes"]).toEqual([
+      `${contracts}/barcodes.ts`,
+    ]);
+    const project = fixtureProject({
+      root: `${SRC}/__fixture__`,
+      files: {
+        "use.ts": `import { canonicalBarcodeCode as c } from "@cellar-assistant/contracts/barcodes"; export const go = () => c("1");`,
+      },
+      options: { ...FIXTURE_OPTIONS, noResolve: true },
+      extraRoots: [contracts],
+    });
+    expect(external(project)).toBeLessThanOrEqual(1);
+    const { calls } = findCalls(
+      project,
+      [{ module: `${contracts}/barcodes.ts`, name: "canonicalBarcodeCode" }],
       { rule: "r" },
     );
     expect(calls.map((site) => enclosingName(site.call))).toEqual(["go"]);
