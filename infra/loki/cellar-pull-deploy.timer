@@ -1,0 +1,13 @@
+# Every five minutes after the previous tick FINISHED (OnUnitInactiveSec), so a
+# long deploy is never overlapped by the timer itself; pull-deploy.sh also takes
+# a lock against a concurrent manual run.
+[Unit]
+Description=Cellar Assistant pull-based deploy timer
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

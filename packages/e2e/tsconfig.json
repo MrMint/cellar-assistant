@@ -1,0 +1,33 @@
+{
+  // Deliberately does NOT extend ../../tsconfig.base.json, and must not be
+  // "tidied" into doing so. Base sets noUncheckedIndexedAccess and a lib of
+  // es2024 alone; this suite passes callbacks to page.evaluate() that run in
+  // the browser and touch `document`/`window`, and it has never been checked
+  // under noUncheckedIndexedAccess. Before R1 it was checked by the root
+  // tsconfig (which the Next app owned) — these options reproduce that, so the
+  // move changed where the suite lives and not what is demanded of it.
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": [
+    "specs/**/*.ts",
+    "fixtures/**/*.ts",
+    "global-setup.ts",
+    "playwright.config.ts"
+  ],
+  "exclude": ["node_modules", "artifacts"]
+}

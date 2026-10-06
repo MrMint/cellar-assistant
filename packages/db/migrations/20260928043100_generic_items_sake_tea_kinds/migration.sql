@@ -1,0 +1,1 @@
+ALTER TABLE "generic_items" DROP CONSTRAINT "generic_items_item_type_check", ADD CONSTRAINT "generic_items_item_type_check" CHECK ((item_type = ANY (ARRAY['spirit'::text, 'wine'::text, 'beer'::text, 'coffee'::text, 'sake'::text, 'tea'::text, 'ingredient'::text])));

@@ -1,0 +1,247 @@
+# Alert rules on services/api's own structured events (2026-09-27).
+#
+# The api ships its events over the same hand-rolled OTLP path as actors
+# (`OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_SERVICE_NAME=api` in
+# infra/docker-compose.yml), so they land in Loki under
+# `{service_name="api"}`. Every rule here follows the rules of
+# outbox-and-actor-alerts.yaml beside it, and for the same measured reasons:
+#
+#   * `event_name` and every other attribute is STRUCTURED METADATA, so it is
+#     filtered after the pipe, never in the stream selector, and dots become
+#     underscores (`auth.reason` -> `auth_reason`, `request.id` ->
+#     `request_id`);
+#   * every query is `queryType: instant`, so the `[W]` window is the whole
+#     window (a range query made every window R + W — see that file's header);
+#   * `sum(count_over_time(...))` over no matching line is an EMPTY vector, so
+#     `noDataState: OK` is the healthy case.
+#
+# Routing is inherited from contact-points-and-policies.yaml, which since
+# 2026-10-05 sends everything to the integration-less `empty` receiver: these
+# alerts show on Grafana's Alerting page and are delivered nowhere.
+# `urgency: page` is kept as the label a future page route would match.
+#
+# ## Event caps — why no rule here adds `telemetry.suppressed` back
+#
+# The api caps every non-boot event at 50 per minute per (event, class) and
+# reports the overflow as `telemetry.suppressed` with the dropped count. Both
+# thresholds below sit orders of magnitude under that cap (one event; three
+# requests in ten minutes), so suppression can only begin long after a rule has
+# already fired. The dashboard's API row does add the dropped counts back,
+# because a chart of totals is where the cap would otherwise lie.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: api
+    folder: Cellar Assistant
+    interval: 1m
+    rules:
+      # ## The api cannot verify anyone — a page
+      #
+      # `auth.token_rejected` with `auth_reason="jwks_unavailable"` (ERROR) means
+      # the api could not obtain the JWKS that services/actors publishes, so it
+      # cannot verify ANY bearer token: every signed-in request fails. The other
+      # reasons (expired, bad_signature, unknown_kid, claim_invalid, malformed,
+      # alg_not_allowed, no_subject, other) are about one token and are the
+      # dashboard's business, not a pager's.
+      #
+      # Threshold: ONE event in five minutes, `for: 0s`. Deliberately no
+      # repetition requirement: this is a home-scale app, and at its request
+      # rate a real JWKS outage can produce one rejection every few minutes —
+      # any rule that waits for a second or third occurrence may never fire. The
+      # known cost is a transient: an actors restart while the api is serving
+      # (a deploy, a crash loop) can reject a request or two. That is one page
+      # that resolves five minutes after the last event, and if it recurs it is
+      # worth knowing about anyway.
+      #
+      # Measured on `cellar-stack`, 2026-09-27, with SYNTHETIC-tagged OTLP
+      # records under service.name=api, while alerts still went to a webhook
+      # contact point (removed 2026-10-05), pointed at a throwaway sink:
+      # `auth_reason=expired` (the negative control) left this
+      # Normal for two evaluations and posted nothing; `jwks_unavailable`
+      # pushed at 22:11:31 -> Alerting 22:12:20 -> page posted 22:12:30 (page
+      # route, 10s) -> Normal 22:17:20 -> RESOLVED posted 22:17:30.
+      - uid: api-jwks-unavailable
+        title: "API cannot fetch the JWKS: every signed-in request is failing"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: api
+          urgency: page
+        annotations:
+          summary: "services/api rejected a token with auth_reason=jwks_unavailable: it cannot fetch the key set from services/actors, so it cannot verify anyone."
+          description: >-
+            The api fetches better-auth's JWKS from AUTH_JWKS_URL
+            (http://actors:3002/api/auth/jwks on compose). Check that the actors
+            host is up and answering that URL, then read the rejections:
+            {service_name="api"} | event_name="auth.token_rejected" |
+            auth_reason="jwks_unavailable" — and the api's own boot line for the
+            URL it is using: {service_name="api"} | event_name="api.boot".
+          runbook_url: "docs/architecture/target-stack.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="api"} |
+                event_name="auth.token_rejected" |
+                auth_reason="jwks_unavailable" [5m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query
+
+      # ## Sustained unexpected request failures — a ticket
+      #
+      # Counts REQUESTS, not events. A failed actor call usually produces both
+      # `actor.invocation_failed` and the `graphql.unexpected_error` it surfaces
+      # as, on the same `request_id`, and one response can carry several
+      # unexpected errors (one event per error_name x field). Counting lines
+      # would double- or triple-count one bad request. So the query groups by
+      # `request_id` first and counts the groups: distinct failing requests.
+      #
+      # Threshold: MORE THAN 2 distinct failing requests in a 10-minute window,
+      # continuously for 10 minutes (`for: 10m`). The `for` is what makes it
+      # "sustained": a single burst stays in the window for exactly 10 minutes,
+      # which does not outlast a 10-minute `for` (the condition drops at the
+      # first evaluation after the window empties), so one bad deploy minute
+      # or one user retrying a broken screen does not open a ticket. A code path
+      # that keeps failing — 3+ requests in every 10 minutes for 20 minutes —
+      # does. It is a ticket (severity warning, root route, 4h repeat), because
+      # each individual failure is already visible on the dashboard and in the
+      # masked error the user saw; what this adds is "it is not going away".
+      #
+      # Measured on `cellar-stack`, 2026-09-27 (SYNTHETIC-tagged records, sink
+      # as above). De-duplication control: two requests, each emitting one
+      # actor.invocation_failed and two graphql.unexpected_error lines — a
+      # naive line count of 6, this query 2 — stayed Normal. Then three more
+      # failing requests every four minutes from 22:12: Pending 22:13:20 ->
+      # Alerting 22:23:20 (exactly the 10m `for`) -> posted 22:23:55 on the
+      # root route (30s group_wait).
+      - uid: api-sustained-request-failures
+        title: "API: unexpected request failures are sustained (3+ failing requests per 10 min)"
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          team: api
+        annotations:
+          summary: "services/api has served more than two requests with an unexpected (masked) GraphQL error or a failed actor call in every 10-minute window for at least 10 minutes."
+          description: >-
+            Break it down on the Actor Observability dashboard's API row, or
+            directly: {service_name="api"} | event_name="graphql.unexpected_error"
+            (by graphql_field and error_name) and
+            {service_name="api"} | event_name="actor.invocation_failed" (by
+            actor_type, actor_method, failure_kind, failure_cause). A shared
+            request_id ties the two together. If actor.invocation_failed
+            dominates with failure_kind=network or timeout, look at the actors
+            host and its sidecar before the api; failure_cause=app_error joins
+            the host's actor.unexpected_error on request_id, and
+            app_channel_closed means daprd lost its connection to the host
+            mid-call (services/actors/src/lib/app-channel-connections.ts).
+          runbook_url: "docs/architecture/target-stack.md"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                count(sum by (request_id) (count_over_time({service_name="api"} |
+                event_name="graphql.unexpected_error" or
+                event_name="actor.invocation_failed" [10m])))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [2]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query

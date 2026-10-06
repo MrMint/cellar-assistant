@@ -1,0 +1,77 @@
+name: Bug report
+description: Something is broken or behaves differently than documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report.
+
+        **Security problems don't belong here.** Report them privately — see
+        [SECURITY.md](https://github.com/MrMint/cellar-assistant/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as test@test.com
+        2. Go to /cellars
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options:
+        - Frontend (services/client)
+        - GraphQL API (services/api)
+        - Actor host / auth (services/actors)
+        - Database or migrations (packages/db)
+        - Local dev stack / scripts
+        - CI
+        - Docs
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >
+        Output of `node -v`, `bun --version` and `docker --version`, plus your OS
+        and the commit or version you are on. If the dev stack is involved,
+        `bun run dev:doctor` output is the single most useful thing you can paste.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, errors or screenshots
+      description: Anything from the browser console, `bun run dev:logs`, or a failing test.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am on Node 24.14.0 and Bun 1.4.2, or the problem does not depend on them.
+          required: false
+        - label: I searched existing issues.
+          required: false

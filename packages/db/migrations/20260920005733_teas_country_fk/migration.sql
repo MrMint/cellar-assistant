@@ -1,0 +1,1 @@
+ALTER TABLE "teas" ADD CONSTRAINT "teas_country_country_value_fkey" FOREIGN KEY ("country") REFERENCES "country"("value");

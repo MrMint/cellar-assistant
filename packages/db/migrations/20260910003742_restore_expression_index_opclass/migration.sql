@@ -1,0 +1,2 @@
+DROP INDEX "idx_places_name_compact_trgm";--> statement-breakpoint
+CREATE INDEX "idx_places_name_compact_trgm" ON "places" USING gin (regexp_replace(lower(name), '[^a-z0-9]'::text, ''::text, 'g'::text) gin_trgm_ops);

@@ -1,0 +1,94 @@
+# Images for the Loki deploy: on every push to `main` that touches what the
+# production images or stack are built from, build `services/api` and
+# `services/actors` on a GitHub-hosted runner and smoke-test them
+# (scripts/ci/image-smoke.sh). Nothing is pushed anywhere and nothing is
+# deployed from here.
+#
+# THE DEPLOY IS PULL-BASED AND LIVES ON LOKI (docs/architecture/deploy-loki.md
+# §2.6, scripts/deploy/pull-deploy.sh). A timer on Loki notices a new head of
+# the branch it tracks, waits until every check-run on that commit — these two
+# jobs included, when they ran — has finished green, and then builds and
+# deploys that commit itself. GitHub cannot reach or command Loki, and there is
+# no self-hosted runner: this repository is public, and a runner registered to
+# it would run code from any fork pull request's own workflow files. Do not add
+# one back, and do not add a job here that deploys.
+#
+# What this workflow still does, and why it stays:
+#   - a green/red check-run on each `main` commit that touches the images,
+#     which the Loki deployer's CI gate reads like any other check;
+#   - the `type=gha` layer cache under the `api` / `actors` scopes, which
+#     stack-ci's `images` job reads (read-only) on every PR.
+#
+# This workflow is NOT the only thing a merge to `main` triggers: the `nhost`
+# GitHub app redeploys production Nhost Cloud on every merge to `main` too.
+# See docs/architecture/e4-decisions.md, decision 15, before merging anything.
+#
+# Hardening: never add a `pull_request` / `pull_request_target` trigger; every
+# action is pinned to a full commit SHA (the comment names the release it was
+# taken from — bump both together); read-only token; and the job refuses to
+# run outside the upstream repository.
+name: deploy-loki-images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+      - "services/actors/**"
+      - "packages/**"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "package.json"
+      - ".dockerignore"
+      # The smoke test this job runs.
+      - "scripts/ci/**"
+      - ".github/workflows/deploy-loki.yaml"
+  workflow_dispatch: {}
+
+# Nothing is published: the GITHUB_TOKEN needs no write scope at all.
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-loki-images
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'MrMint/cellar-assistant' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+            dockerfile: services/api/Dockerfile
+          - app: actors
+            dockerfile: services/actors/Dockerfile
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # Build context is the repo root for both — see the header comment in
+      # each Dockerfile (the `workspace:*` protocol needs the root manifest,
+      # which is where the workspace globs live under bun, and the dependency
+      # closure present at install time). This is the only job that WRITES the
+      # gha cache scopes stack-ci's `images` job reads.
+      #
+      # Loki builds its own images from the same commit (pull-deploy.sh) and
+      # runs the same smoke test on them before migrating anything, so a red
+      # result here and a refusal there have the same cause.
+      - name: Build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: cellar-${{ matrix.app }}:smoke
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Smoke-test the image
+        run: scripts/ci/image-smoke.sh ${{ matrix.app }} cellar-${{ matrix.app }}:smoke

@@ -1,0 +1,272 @@
+# Alert rules on the actor host's PROCESS-level events (2026-09-27).
+#
+# `services/actors/src/lib/process-guard.ts` (a45058da..11b2f62e) decides what
+# the host does with an error nothing caught, and reports it:
+#
+#   process.fatal                 ERROR  an uncaught exception; the event is
+#                                        flushed (`emitAndFlush`, 2s at most)
+#                                        and then the host EXITS 1
+#   process.unhandled_rejection   ERROR  one async operation failed with nobody
+#                                        awaiting it; the host KEEPS RUNNING
+#
+# and `services/actors/src/index.ts` adds one more beside them:
+#
+#   db.idle_client_error          WARN   `pg` dropped an idle pooled connection
+#                                        (Postgres restarted, failed over, or
+#                                        killed it). Before that listener, this
+#                                        was an uncaught exception and a crash.
+#
+# Until this file, nothing alerted on any of them. Every rule follows the
+# conventions of `outbox-and-actor-alerts.yaml` and `api-alerts.yaml` beside it,
+# for the reasons measured there:
+#
+#   * `event_name` is STRUCTURED METADATA — filtered after the pipe, never in
+#     the stream selector, where it silently matches nothing;
+#   * every query is `queryType: instant`, so `[W]` is the whole window;
+#   * `sum(count_over_time(...))` over no matching line is an EMPTY vector, so
+#     `noDataState: OK` is the healthy case.
+#
+# Routing is inherited from contact-points-and-policies.yaml, which since
+# 2026-10-05 sends everything to the integration-less `empty` receiver: these
+# alerts show on Grafana's Alerting page and are delivered nowhere.
+# `urgency: page` is kept as the label a future page route would match.
+#
+# ## What is deliberately NOT alerted on
+#
+# `actor.deactivate_unheld` (INFO, `src/lib/actor-route-guard.ts`): daprd asked
+# this host to deactivate an actor it does not hold — routine after a restart
+# or a placement rebalance, and answered with a 200. It is the benign outcome
+# the route guard exists to produce, so a rule on it would page on health.
+#
+# ## What these rules cannot see
+#
+# A host that dies WITHOUT running its handler — SIGKILL, the OOM killer, a
+# segfault in the runtime — emits no `process.fatal`. Nothing here detects that
+# case; `docker ps` restart counts do, and so, eventually, does the
+# dead-letter reporter's dead-man's switch in outbox-and-actor-alerts.yaml,
+# which goes quiet if the host never comes back. This file covers the crash the
+# host can explain, which is the one with a fixable cause attached.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: actors-process
+    folder: Cellar Assistant
+    interval: 1m
+    rules:
+      # ## The actor host crashed — a page
+      #
+      # `process.fatal` means an exception escaped every frame, and the host
+      # exited 1 straight after emitting it. Every in-flight actor turn on the
+      # host was lost with it; compose's `restart: unless-stopped` brings it
+      # back, which is exactly why this has to page: a crash that restarts
+      # cleanly is otherwise invisible, and a crash LOOP looks, from the outside,
+      # like a host that is mostly up.
+      #
+      # Threshold: ONE event in five minutes, `for: 0s` — the same shape as the
+      # api's JWKS page, and for the same reason: a single occurrence already IS
+      # the incident, and there is no transient version of "the process died".
+      # It resolves five minutes after the last crash; a crash loop keeps it
+      # firing (visible on the Alerting page; nothing re-notifies since
+      # external delivery was removed on 2026-10-05).
+      #
+      # Measured 2026-09-27 on a per-worktree lane's own otel-lgtm (Grafana
+      # 13.2.0, project `cellar-epic-burnell-4b4be9`, provisioning reloaded
+      # with `POST /api/admin/provisioning/alerting/reload`, no recreate), with
+      # SYNTHETIC-tagged OTLP records (`synthetic=true`) under
+      # service.name=actors, pushed to the lane's :4318. Negative control
+      # first: 5 x `actor.deactivate_unheld` and 5 x an ERROR event named
+      # `process.unhandled_rejection_control` at 18:03:59 left this Normal for
+      # two evaluations. One `process.fatal` pushed at 18:05:44 -> Alerting at
+      # the 18:06:20 evaluation -> dispatched by the page route at 18:06:35
+      # (under the root's 30s group_wait; the lane had no real webhook, so the
+      # post itself failed, as designed then) -> Normal at 18:11:20, the
+      # five-minute window. That route and the webhook contact point were
+      # removed on 2026-10-05; the evaluation timings still hold.
+      - uid: actors-process-fatal
+        title: "Actor host crashed: uncaught exception (process.fatal)"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: critical
+          team: actors
+          urgency: page
+        annotations:
+          summary: "The actor host hit an uncaught exception and exited 1. Every in-flight actor turn on it was lost; compose restarts it, so a running host is not evidence it is healthy."
+          description: >-
+            Read the crash: {service_name="actors"} | event_name="process.fatal"
+            — `error_name` says what was thrown and `process_origin` whether it
+            was a synchronous throw ("exception") or a rejected top-level await
+            ("unhandledRejection"). The message is deliberately not in the
+            event (telemetry.ts's rules); the stack is in the host's local log
+            (`docker logs <project>-actors-1`, or `bun run dev:logs`). More
+            than one event in the window is a crash loop: check the restart
+            count with `docker ps`.
+          runbook_url: "services/actors/src/lib/process-guard.ts"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum(count_over_time({service_name="actors"} |
+                event_name="process.fatal" [5m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query
+
+      # ## Errors the host survives, sustained — a ticket
+      #
+      # Two events, one rule, one alert INSTANCE PER EVENT (`sum by
+      # (event_name)`), so a notification says which of the two it is:
+      #
+      #   * `process.unhandled_rejection` — each one is a lost operation and a
+      #     bug at the place it was raised (process-guard.ts: "the backstop, not
+      #     the mechanism"). The host keeps serving, so one is dashboard
+      #     material; one that keeps recurring is a code path that is broken
+      #     for everyone who reaches it.
+      #   * `db.idle_client_error` — the pool dropped an idle connection. A
+      #     Postgres restart drops every idle client AT ONCE, which is a burst,
+      #     not a problem: the pool reconnects on demand. The same event
+      #     recurring for twenty minutes is a database or network that keeps
+      #     killing connections.
+      #
+      # Threshold: MORE THAN 2 events of one name in a 10-minute window,
+      # continuously for 10 minutes (`for: 10m`) — the api's sustained-failure
+      # shape, and the same arithmetic makes it burst-proof: a single burst,
+      # however large, sits in the window for exactly 10 minutes and so cannot
+      # outlast a 10-minute `for` (the first evaluation that could promote it to
+      # Alerting has a window that no longer contains the burst). So a Postgres
+      # restart never opens a ticket, and 3+ events in every 10 minutes for 20
+      # minutes does. Severity warning, root route, 4h repeat.
+      #
+      # Measured on the same lane and records as the page above. Burst control:
+      # 10 x `db.idle_client_error` at 18:03:59, once -> that instance Pending
+      # 18:04:20 -> back to Normal at 18:15:20, never Alerting. Positive: 3 x
+      # `process.unhandled_rejection` every 4 minutes from 18:04:05 -> Pending
+      # 18:04:20 -> Alerting 18:14:20 (exactly the 10m `for`) -> dispatched
+      # 18:14:50 (root route, 30s). The `_control` event name above never
+      # produced an instance, so the `or` filter is exact, not a prefix match.
+      - uid: actors-process-errors-sustained
+        title: "Actor host: unhandled rejections or dropped DB connections are sustained (3+ per 10 min)"
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          team: actors
+        annotations:
+          summary: "The actor host has logged more than two {{ $labels.event_name }} events in every 10-minute window for at least 10 minutes. It is still running; something keeps failing."
+          description: >-
+            process.unhandled_rejection: an async operation nobody awaited
+            failed, and the operation was lost — read
+            {service_name="actors"} | event_name="process.unhandled_rejection"
+            by error_name, and the stack in the host's local log; fix it where
+            it was raised. db.idle_client_error: Postgres (or something between
+            it and the host) keeps killing idle connections — check the
+            database's own logs and restart count, and
+            {service_name="actors"} | event_name="db.idle_client_error".
+          runbook_url: "services/actors/src/lib/process-guard.ts"
+        data:
+          - refId: A
+            datasourceUid: loki
+            queryType: instant
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: loki
+              queryType: instant
+              instant: true
+              expr: >-
+                sum by (event_name) (count_over_time({service_name="actors"} |
+                event_name="process.unhandled_rejection" or
+                event_name="db.idle_client_error" [10m]))
+          - refId: B
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ""
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [2]
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    type: last
+                  type: query

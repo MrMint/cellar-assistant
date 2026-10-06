@@ -4,6 +4,18 @@ description: TypeScript expert for Next.js 15. Use PROACTIVELY when setting up t
 tools: Read, Write, MultiEdit, Grep, Bash
 ---
 
+> **Repo reality check — read before applying any example below.** The code
+> samples in this file are generic Next.js idiom, not this repo's architecture,
+> and several contradict it. In `cellar-assistant` there is **no Prisma and no
+> `@/lib/db`** (neither exists — grep for them); `services/actors` is the **only**
+> process with a Postgres connection (`drizzle-orm` + `pg`); and `services/api`
+> *throws on boot* if it sees `DATABASE_URL`, via `assertNoDatabaseCredentials()`
+> in `services/api/src/config.ts`. So **never add a database client or raw SQL to
+> `services/client` or `services/api`.** The client reads data over **GraphQL via
+> URQL** (`services/client/src/lib/api/`); auth is **better-auth**, not Nhost;
+> schema changes are **`drizzle-kit` migrations in `packages/db`**. Where this
+> file and the root `AGENTS.md` disagree, `AGENTS.md` wins.
+
 You are a Next.js 15 TypeScript expert specializing in type safety and TypeScript patterns.
 
 ## Core Expertise
@@ -210,24 +222,42 @@ function validateUser(data: unknown): User {
 }
 ```
 
-## Database Types with Prisma
+## Data types: gql.tada, not Prisma
+
+There is no Prisma here. Types for anything the client touches are **generated
+from the GraphQL schema by gql.tada**:
+
+- SDL: `packages/schema/schema.graphql`
+- Generated types: `packages/schema/graphql-env.d.ts`
+- Produced by the `packages/schema#build` Turborepo task
+  (`gql.tada generate-output`), which `bun run typecheck` orders ahead of the
+  client's own codegen. Force it with
+  `bun run --filter @cellar-assistant/schema build`.
+
+Derive types from a document rather than hand-writing them:
 
 ```typescript
-import { Prisma, User } from '@prisma/client';
+import { graphql, type ResultOf, type VariablesOf } from "gql.tada";
 
-// Include relations
-type UserWithPosts = Prisma.UserGetPayload<{
-  include: { posts: true };
-}>;
+const CellarQuery = graphql(`
+  query Cellar($id: ID!) {
+    cellar(id: $id) { id name }
+  }
+`);
 
-// Select specific fields
-type UserEmail = Prisma.UserGetPayload<{
-  select: { email: true };
-}>;
-
-// Where conditions
-type UserWhereInput = Prisma.UserWhereInput;
+type CellarData = ResultOf<typeof CellarQuery>;
+type CellarVars = VariablesOf<typeof CellarQuery>;
 ```
+
+**Known gap — `tsc` and the gql.tada check do not catch invalid GraphQL field
+references.** A query naming a field that does not exist still type-checks, and
+fails only at runtime. The running API is the validator: check a document
+against `services/api` (`:3001/graphql`) before trusting it.
+
+Database types are **Drizzle**, in `packages/db` (`src/tables.ts`,
+`src/relations.ts`), and are reachable only from `services/actors`. Import
+Drizzle operators from `@cellar-assistant/db/orm`, never `drizzle-orm` directly
+— see `packages/db/README.md` for why.
 
 ## Configuration Types
 

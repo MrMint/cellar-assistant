@@ -1,0 +1,60 @@
+# Alert routing: UI-only, by decision (2026-10-05).
+#
+# The rules beside this file are the DETECTION half of alerting, and they are
+# unchanged: every one still evaluates, fires and resolves, and shows on
+# Grafana's Alerting page (Alert rules / Active notifications) on the LAN. What
+# this file used to add — delivery to a Discord webhook through a `discord-ops`
+# contact point, with a 10s/1h page route and a 24h backlog-digest route — was
+# removed on the owner's decision to drop the Discord alert webhook. Nothing
+# here sends anything off the box, and no deploy needs a webhook secret.
+#
+# So "someone is alerted" now means "someone opens the Alerting page". That is
+# the accepted cost. To get push delivery back, see "Adding a contact point
+# later" in docs/architecture/deploy-loki.md §9.7; the whole previous tree
+# (receiver, routes, timings and the measurements behind them) is this file's
+# last version before 2026-10-05: `git log -p -- <this file>`.
+#
+# ## Why the root receiver is `empty`, and why this file exists at all
+#
+# Measured against grafana/otel-lgtm:0.32.1 (Grafana 13.2.0), 2026-10-05, on a
+# throwaway container with this directory mounted:
+#
+#   * `empty` is the receiver Grafana's own default Alertmanager config ships
+#     in this image: a receiver with NO integrations. Routing to it delivers
+#     nothing and attempts nothing — no SMTP error per notification, no DNS
+#     lookup — while the alerts themselves stay visible in the UI. It survives
+#     the old provisioning (the alertmanager config there held `empty` beside
+#     `discord-ops`), so it exists on an upgraded /data volume as well as a
+#     fresh one; both were measured.
+#   * A contact point with no integrations cannot be file-provisioned:
+#     `receivers: []` is skipped without a word, and a policy naming it then
+#     fails — "receiver 'ui-only' does not exist". That error is FATAL: the
+#     provisioning module fails, Grafana exits, and run-all.sh takes the whole
+#     otel-lgtm container down with it. Same for `grafana-default-email`,
+#     which the previous provisioning had removed from the stored config.
+#     Hence `empty`, which is already there.
+#   * `deleteContactPoints` removes the file-provisioned `discord-ops` from a
+#     volume that still holds it (cellar-stack's did). On a fresh volume the
+#     uid does not exist and the delete is a silent no-op, so the entry is
+#     safe to keep; drop it once no volume predating 2026-10-05 is left.
+#
+# Provisioning `policies` REPLACES THE ENTIRE ROOT POLICY TREE and makes it
+# read-only in the UI, which is what keeps a hand-edited tree from silently
+# diverging from this repository. (`resetPolicies` would also land on `empty`,
+# measured, but leaves the tree editable.)
+apiVersion: 1
+
+deleteContactPoints:
+  - orgId: 1
+    uid: discord-ops
+
+policies:
+  - orgId: 1
+    receiver: empty
+    # Kept from the delivering tree so the Alertmanager's view of active
+    # alerts is still grouped per rule. The rules' `urgency: page` labels are
+    # kept too: nothing routes on them now, but they mark which rules a
+    # future page route should match.
+    group_by:
+      - grafana_folder
+      - alertname

@@ -1,0 +1,143 @@
+# Bun's install configuration. This file replaces the half of
+# `pnpm-workspace.yaml` that was *settings*; the half that was *structure* —
+# the workspace globs and the catalog — had to move into the root
+# package.json, because `bun install` does not read pnpm-workspace.yaml at
+# all. That was MEASURED, not assumed: with the globs left only in the YAML,
+# bun resolved zero workspace members and wrote an empty lockfile without
+# printing a warning. Anything about the workspace shape belongs in
+# package.json now; anything about how installs behave belongs here.
+#
+# package.json is JSON and cannot hold a comment, so the reasoning for the
+# three keys that had to live there is recorded at the bottom of this file.
+
+[install]
+
+# ---------------------------------------------------------------------------
+# Supply chain
+# ---------------------------------------------------------------------------
+# Refuse a version until it has been on the registry this long.
+#
+# UNITS TRAP: Bun reads this in SECONDS. pnpm read the same-named setting in
+# MINUTES. The old value was `minimumReleaseAge: 1440` (pnpm minutes = 24
+# hours); carried across literally it would mean 1440 SECONDS — a 24-*minute*
+# window that looks right in a diff and is worth almost nothing. 86400 is the
+# same 24 hours the pnpm config meant.
+#
+# The load-bearing part is that this is written down at all, not the number.
+# Under pnpm the reason to set it explicitly was that `minimumReleaseAgeStrict`
+# only defaulted to true when `minimumReleaseAge` was explicit — left implicit,
+# resolution silently fell back to a too-new version and the delay gave way
+# exactly when it would have mattered. Bun has no separate strict flag: the age
+# is a hard filter on resolution, so a range that only newer-than-cutoff
+# versions satisfy fails to resolve rather than quietly resolving anyway.
+#
+# Why not longer, which was the first instinct: 3 days was tried under pnpm and
+# MEASURED to leave this repo unable to install at all. vitest 5 -> vite 8 pins
+# `rolldown` exactly, rolldown pins its 22 platform bindings exactly, and those
+# were two days old — no older version satisfies the range, so a fresh
+# resolution produced no lockfile rather than an older one. A window that
+# bricks the install does not survive contact with a deadline; it gets deleted,
+# or buried under exclusions, and then the repo has neither a delay nor an
+# honest record of not having one. 24 hours leaves the tree resolvable.
+#
+# CI note: the age is re-checked on resolution, not on every install. A
+# `bun install --frozen-lockfile` against a committed bun.lock installs what
+# the lockfile already pins.
+minimumReleaseAge = 86400
+
+# Deliberately empty.
+#
+# KEY-NAME TRAP: the Bun key is `minimumReleaseAgeExcludes`, PLURAL. pnpm's
+# `minimumReleaseAgeExclude` (singular) is not an alias — Bun ignores unknown
+# keys in bunfig.toml silently, so the singular spelling looks like
+# configuration and does nothing. This list being empty is the only reason the
+# rename was cheap; write the wrong name with entries in it and the exclusions
+# just evaporate.
+#
+# The pnpm list was already empty for its own reasons: it had held
+# @tanstack/react-virtual@3.14.2, @tanstack/virtual-core@3.17.0 and
+# graphql@16.14.1, all dead twice over — there was no age rule to be excluded
+# from at the time, and all three named versions that are no longer installed.
+# Add an entry only to unblock a specific version you have decided to trust
+# early, and delete it once it is past the window.
+minimumReleaseAgeExcludes = []
+
+# ---------------------------------------------------------------------------
+# What did NOT port, and what replaced it
+# ---------------------------------------------------------------------------
+# pnpm-workspace.yaml carried `sharedWorkspaceLockfile: true`. Bun has no such
+# setting because it has no alternative: one `bun.lock` at the workspace root
+# is the only shape there is. The defect that flag was fixing — eight
+# per-member lockfiles, the version drift they invited, and Turbo's
+# "Workspace 'packages/db' not found in lockfile" warning on every run — cannot
+# recur here.
+#
+# pnpm's `allowBuilds` map became `trustedDependencies` in package.json, and
+# that swap LOSES ENFORCEMENT — by more than was expected going in. Under pnpm,
+# `strictDepBuilds` defaulted to true and an unreviewed dependency build script
+# FAILED THE INSTALL outright (ERR_PNPM_IGNORED_BUILDS); that is how
+# services/actors/Dockerfile's lost corepack pin was caught. The expectation was
+# that Bun would warn and exit 0. MEASURED with bun 1.4.2, against a throwaway
+# package whose postinstall writes a marker file:
+#
+#   linker     trusted?  ran?  install warned?              `bun pm untrusted`
+#   isolated   no        NO    NO — completely silent       "Found 0"  <-- WRONG
+#   isolated   yes       YES   n/a                          "Found 0"
+#   hoisted    no        NO    yes, "Blocked 1 postinstall"  lists it correctly
+#
+# This repo is the isolated row (see the linker note below), so an unreviewed
+# build script is skipped with NO signal at all, and the obvious CI check —
+# grep `bun pm untrusted` — is a false negative here. `scripts/check-blocked-
+# builds.mjs` reads the installed tree instead and exits 1 naming any package
+# with an install/postinstall script that is not in `trustedDependencies`. It
+# runs in both CI workflows right after every install step, and by hand as
+# `bun run check:builds`.
+#
+# LINKER. Bun 1.4.2 defaults to `linker = "isolated"` for a workspace, NOT
+# hoisted: the install produces `node_modules/.bun/<pkg>@<ver>/node_modules/...`
+# with each member's own node_modules holding symlinks into it — structurally
+# what pnpm's virtual store gave us. Nothing here selects that, and nothing
+# here should: leaving it at Bun's default is what kept phantom dependencies
+# from appearing in this migration. Verified after the switch — the only
+# packages any member can import without declaring them are the root's own two
+# devDependencies (@biomejs/biome, turbo), exactly as under pnpm. If a future
+# change ever sets `linker = "hoisted"`, that property is gone and every
+# member can reach every package in the tree.
+
+# ---------------------------------------------------------------------------
+# The three keys that had to move to package.json (JSON has no comments)
+# ---------------------------------------------------------------------------
+# 1. `workspaces.packages` — ["services/*", "packages/*"]. The eight members.
+#    Not a preference: bun reads the globs only from here (see the top of this
+#    file). Nothing else needs listing: D9 removed `functions/` from the repo
+#    outright — `git ls-files functions` is empty and only an orphaned
+#    node_modules is left on disk — so the "separate pnpm 10 context that must
+#    stay standalone-installable" this note used to carve out no longer exists.
+#
+# 2. `workspaces.catalog` — all ten entries, unchanged. One version per
+#    dependency, workspace-wide; every member referencing `catalog:` gets the
+#    version named there and a bump happens once. This is the direct antidote
+#    to what eight independent lockfiles invited. `jose` is the example that
+#    justifies it: services/api and services/actors pinned 6.2.3 while
+#    services/client carried ^6.2.3, so the same library could resolve to two
+#    versions across one request path.
+#
+# 3. `trustedDependencies` — the three packages allowed to run install and
+#    postinstall scripts. Re-measured under Bun rather than translated from the
+#    pnpm list on faith — but NOT with `bun pm untrusted`, which returns "Found
+#    0" here whatever the truth is (see the measurement table above). Measured
+#    by scanning every package in `node_modules/.bun` for a preinstall/install/
+#    postinstall script, which is what scripts/check-blocked-builds.mjs now does
+#    on every CI install. It found exactly the four pnpm had found, esbuild
+#    twice (0.25.12 and 0.28.2) and nothing else:
+#      @parcel/watcher  native file-watcher binary — since dropped from the
+#                       tree, so it is no longer trusted; three remain
+#      @swc/core        Next.js's compiler; downloads its platform binary
+#      esbuild          installs its own platform binary; without the script it
+#                       cannot run at all. Direct devDep of services/client and
+#                       transitive under vitest
+#      protobufjs       transitive under @dapr/dapr, which services/actors runs on
+#    esbuild is also in `bun pm default-trusted` (Bun's own 367-package list) and
+#    would run either way; the other two are not. It stays listed anyway, so
+#    the ruling is this repo's and not Bun's to change. Re-measure by running
+#    `bun run check:builds` after a clean install; do not reason about it.

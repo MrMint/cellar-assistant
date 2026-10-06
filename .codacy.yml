@@ -1,0 +1,21 @@
+---
+# Codacy repository configuration. Only paths here: which tools and patterns
+# run is still the Codacy dashboard's (Code patterns), which this file cannot
+# set.
+#
+# NOTE: per Codacy's docs, a configuration file takes precedence over the
+# dashboard's "Ignored files" list — anything ignored only there should be
+# copied here to stay ignored.
+#
+# Excluded: files a tool writes, which nobody edits by hand and whose findings
+# could only be fixed by changing the generator.
+exclude_paths:
+  # gql.tada introspection output (`packages/schema` build).
+  - "packages/schema/graphql-env.d.ts"
+  # graphcache key/schema codegen (`services/client/src/lib/api/*-codegen.ts`).
+  - "**/*.generated.ts"
+  # drizzle-kit migration snapshots.
+  - "packages/db/migrations/**/snapshot.json"
+  # Checked-in `pg_dump` of the legacy Nhost schema (X4 baseline); a fixture
+  # for the transform, not SQL this repo authors.
+  - "packages/db/transform/nhost-schema.sql"

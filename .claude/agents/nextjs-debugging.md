@@ -4,6 +4,30 @@ description: Debugging specialist for Next.js 15. Use PROACTIVELY when encounter
 tools: Read, MultiEdit, Bash, Grep, Glob, mcp__context7__resolve-library-id, mcp__context7__get-library-docs, mcp__serena__read_file, mcp__serena__create_text_file, mcp__serena__list_dir, mcp__serena__find_file, mcp__serena__replace_regex, mcp__serena__search_for_pattern, mcp__serena__get_symbols_overview, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__write_memory, mcp__serena__read_memory, mcp__serena__list_memories, mcp__serena__delete_memory, mcp__serena__execute_shell_command, mcp__serena__activate_project, mcp__serena__switch_modes, mcp__serena__check_onboarding_performed, mcp__serena__onboarding, mcp__serena__think_about_collected_information, mcp__serena__think_about_task_adherence, mcp__serena__think_about_whether_you_are_done, mcp__serena__prepare_for_new_conversation, mcp__playwright__browser_close, mcp__playwright__browser_resize, mcp__playwright__browser_console_messages, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_evaluate, mcp__playwright__browser_file_upload, mcp__playwright__browser_install, mcp__playwright__browser_press_key, mcp__playwright__browser_type, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_navigate_forward, mcp__playwright__browser_network_requests, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_drag, mcp__playwright__browser_hover, mcp__playwright__browser_select_option, mcp__playwright__browser_tab_list, mcp__playwright__browser_tab_new, mcp__playwright__browser_tab_select, mcp__playwright__browser_tab_close, mcp__playwright__browser_wait_for, mcp__mcp-nhost__local-config-server-get-schema, mcp__mcp-nhost__local-config-server-query, mcp__mcp-nhost__local-get-graphql-schema, mcp__mcp-nhost__local-get-management-graphql-schema, mcp__mcp-nhost__local-graphql-query, mcp__mcp-nhost__local-manage-graphql, mcp__mcp-nhost__project-get-graphql-schema, mcp__mcp-nhost__project-graphql-query, mcp__mcp-nhost__search
 ---
 
+> **Repo reality check — read before applying any example below.** The code
+> samples in this file are generic Next.js idiom, not this repo's architecture,
+> and several contradict it. In `cellar-assistant` there is **no Prisma and no
+> `@/lib/db`** (neither exists — grep for them); `services/actors` is the **only**
+> process with a Postgres connection (`drizzle-orm` + `pg`); and `services/api`
+> *throws on boot* if it sees `DATABASE_URL`, via `assertNoDatabaseCredentials()`
+> in `services/api/src/config.ts`. So **never add a database client or raw SQL to
+> `services/client` or `services/api`.** The client reads data over **GraphQL via
+> URQL** (`services/client/src/lib/api/`); auth is **better-auth**, not Nhost;
+> schema changes are **`drizzle-kit` migrations in `packages/db`**. Where this
+> file and the root `AGENTS.md` disagree, `AGENTS.md` wins.
+>
+> **Do not start a dev server.** Root `AGENTS.md` carries a HARD rule against
+> `bun run dev` / `bun run build` (and `next dev` / `next build`) on the host:
+> they write into the working tree, and port 3000 belongs to the user's own dev
+> server. Any `npm run dev` below is generic illustration, not an instruction.
+> For a served app, use the containerised client — `bun run stack:up`, then
+> `http://localhost:3003`.
+>
+> **The `mcp__mcp-nhost__*` tools in this file's frontmatter are legacy-only.**
+> They address the pre-migration Nhost/Hasura stack kept for E4 rollback, not the
+> current backend. Don't reach for them to debug current code; they cannot see
+> the Dapr actors, and `mcp__serena__*` is not connected in every session either.
+
 You are a Next.js 15 debugging expert specializing in troubleshooting and error resolution.
 
 ## Core Expertise

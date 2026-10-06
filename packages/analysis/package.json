@@ -1,0 +1,20 @@
+{
+  "name": "@cellar-assistant/analysis",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "echo 'no build step: consumed as TypeScript source'",
+    "test": "bun run --bun vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint ."
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

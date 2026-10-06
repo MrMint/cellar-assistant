@@ -1,0 +1,73 @@
+# Build context for services/client/Dockerfile ONLY.
+#
+# BuildKit prefers `<dockerfile-path>.dockerignore` over the repo-root
+# `.dockerignore` when it exists, and it REPLACES it rather than extending it —
+# so this file has to repeat the root file's exclusions, not just the difference.
+#
+# It exists because the root `.dockerignore` excludes `services/client` outright
+# (so the api/actors images don't drag the repo's largest dependency tree
+# through their contexts) and a root-level exclusion cannot be re-included from
+# inside a Dockerfile. This is the mirror image of that file: services/client
+# and packages/schema in (plus packages/contracts/src, below), the backend
+# source out, every package.json kept
+# because one root lockfile means `--frozen-lockfile` validates against every
+# workspace member it can see.
+#
+# Keep in sync by hand with `.dockerignore`: there is no automated check that a
+# new top-level directory reaches both.
+
+**/node_modules
+**/.turbo
+**/dist
+# The build produces .next inside the image; a host .next would only shadow it.
+**/.next
+.git
+
+# Legacy Nhost stack — irrelevant to this image, and `functions/` is a separate
+# pnpm 10 context the bun migration deliberately left alone.
+nhost
+functions
+
+# The backend services and the browser suite. None of them ships in the
+# frontend image and services/actors' tree (47 actor types plus the soak
+# scripts) is the bulk of what would otherwise be copied. Their **manifests**
+# stay: see the note above about --frozen-lockfile.
+services/api
+!services/api/package.json
+services/actors
+!services/actors/package.json
+packages/analysis
+!packages/analysis/package.json
+packages/contracts
+!packages/contracts/package.json
+# The one exception to "backend source out": contracts is a dependency of the
+# client (src/lib/items/barcode.ts imports `@cellar-assistant/contracts/barcodes`),
+# and `next build` type-checks that module's closure.
+!packages/contracts/src
+packages/contracts/src/**/*.test.ts
+packages/db
+!packages/db/package.json
+packages/policy
+!packages/policy/package.json
+packages/e2e
+!packages/e2e/package.json
+scripts
+
+# infra/ is the compose lane itself, not application source. Excluded as a
+# directory rather than by file so a new secret dropped in there can never
+# reach a build context.
+infra
+
+# Secrets and local-only files. Never let these reach a build context.
+.secrets
+.env
+.env*.local
+cookies.txt
+*.log
+.DS_Store
+
+# Editor/tooling noise
+.vscode
+.claude
+**/.claude
+.mcp.json

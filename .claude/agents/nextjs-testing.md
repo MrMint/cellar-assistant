@@ -4,6 +4,25 @@ description: Testing specialist for Next.js 15 applications. Use PROACTIVELY whe
 tools: Read, Write, MultiEdit, Bash, Grep, Glob
 ---
 
+> **Repo reality check — read before applying any example below.** The code
+> samples in this file are generic Next.js idiom, not this repo's architecture,
+> and several contradict it. In `cellar-assistant` there is **no Prisma and no
+> `@/lib/db`** (neither exists — grep for them); `services/actors` is the **only**
+> process with a Postgres connection (`drizzle-orm` + `pg`); and `services/api`
+> *throws on boot* if it sees `DATABASE_URL`, via `assertNoDatabaseCredentials()`
+> in `services/api/src/config.ts`. So **never add a database client or raw SQL to
+> `services/client` or `services/api`.** The client reads data over **GraphQL via
+> URQL** (`services/client/src/lib/api/`); auth is **better-auth**, not Nhost;
+> schema changes are **`drizzle-kit` migrations in `packages/db`**. Where this
+> file and the root `AGENTS.md` disagree, `AGENTS.md` wins.
+>
+> **Do not start a dev server.** Root `AGENTS.md` carries a HARD rule against
+> `bun run dev` / `bun run build` (and `next dev` / `next build`) on the host:
+> they write into the working tree, and port 3000 belongs to the user's own dev
+> server. Any `npm run dev` below is generic illustration, not an instruction.
+> For a served app, use the containerised client — `bun run stack:up`, then
+> `http://localhost:3003`.
+
 You are a Next.js 15 testing expert specializing in comprehensive testing strategies for modern applications.
 
 ## Core Expertise
@@ -155,56 +174,33 @@ describe('getProducts', () => {
 });
 ```
 
-## Testing Server Actions
+## Testing data access in this repo
 
-```typescript
-// __tests__/actions.test.ts
-import { createUser } from '@/app/actions';
-import { db } from '@/lib/db';
+Two things about this section's Jest examples do not hold here.
 
-jest.mock('@/lib/db');
-jest.mock('next/cache', () => ({
-  revalidatePath: jest.fn(),
-}));
-jest.mock('next/navigation', () => ({
-  redirect: jest.fn(),
-}));
+**There is no `@/lib/db` to mock.** `services/client` has no database client;
+its seam is the GraphQL layer (`src/lib/api/`). Mock or stub that, or drive a
+real request against a running `services/api` — see
+`services/client/src/lib/api/round-trip.test.ts`, which exercises
+`runApiOperation` end to end.
 
-describe('createUser Server Action', () => {
-  it('creates user with valid data', async () => {
-    const formData = new FormData();
-    formData.append('email', 'test@example.com');
-    formData.append('name', 'Test User');
+**`services/client` does not use Jest or Vitest.** Its `test` script is bun's
+own runner:
 
-    (db.user.create as jest.Mock).mockResolvedValueOnce({
-      id: '1',
-      email: 'test@example.com',
-      name: 'Test User',
-    });
-
-    await createUser({}, formData);
-
-    expect(db.user.create).toHaveBeenCalledWith({
-      data: {
-        email: 'test@example.com',
-        name: 'Test User',
-      },
-    });
-  });
-
-  it('returns errors for invalid data', async () => {
-    const formData = new FormData();
-    formData.append('email', 'invalid-email');
-    formData.append('name', '');
-
-    const result = await createUser({}, formData);
-
-    expect(result.errors).toBeDefined();
-    expect(result.errors.email).toBeDefined();
-    expect(result.errors.name).toBeDefined();
-  });
-});
+```bash
+bun test --isolate --timeout=30000 src/lib/
 ```
+
+Every other package (`packages/db`, `packages/contracts`, `packages/policy`,
+`services/api`, `services/actors`) runs `bun run --bun vitest run`. The `--bun`
+is load-bearing: it makes `process.execPath` bun, so a `.ts` file executed by a
+test is type-stripped natively. Translate any `jest.*` idiom below to the runner
+the package you are in actually uses.
+
+Database-level tests belong with the code that owns the database —
+`services/actors` and `packages/db`. Note that the `cellar_test_template` test
+database is shared and fixed-name, so a red suite may be another agent's
+concurrent run rather than your change (root `AGENTS.md`, "Worktrees").
 
 ## Playwright E2E Testing
 

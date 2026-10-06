@@ -1,0 +1,965 @@
+{
+  "title": "Cellar Assistant — Actor Observability",
+  "uid": "cellar-actor-observability",
+  "id": null,
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "tags": ["cellar-assistant", "actors", "outbox", "dapr"],
+  "timezone": "browser",
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "1m",
+  "description": "E3b: outbox dead-letter health (the alert rules in ../../alerting/outbox-and-actor-alerts.yaml key on the same queries as the panels below), unexpected actor errors, recent Dapr actor-call traces, and the Dapr runtime's own Prometheus metrics (sidecars, placement, scheduler). The services/api row at the bottom reads the api's own events (graphql.unexpected_error, auth.token_rejected, graphql.limit_refused, actor.invocation_failed, telemetry.suppressed).",
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Outbox health",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "removeFriendOtherSide dead-letters (24h)",
+      "description": "target-stack.md §7: a dead-lettered removeFriendOtherSide fails open — the surviving friends row keeps the removed person FRIENDS-visible. This must read 0. Anything else is the specific incident the alert rule of the same name fires on.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "sum(count_over_time({service_name=\"actors\"} | event_name=\"outbox.dead_letter\" | outbox_method=\"removeFriendOtherSide\" [24h])) OR vector(0)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": { "match": "null+nan", "result": { "text": "0" } }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Any-method dead-letters (24h)",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "sum(count_over_time({service_name=\"actors\"} | event_name=\"outbox.dead_letter\" [24h])) OR vector(0)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": { "match": "null+nan", "result": { "text": "0" } }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Unexpected actor errors (24h)",
+      "description": "event.name = actor.unexpected_error — an actor method threw something other than a typed ActorError. services/actors/src/lib/actor-error-envelope.ts.",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "sum(count_over_time({service_name=\"actors\"} | event_name=\"actor.unexpected_error\" [24h])) OR vector(0)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": { "match": "null+nan", "result": { "text": "0" } }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Outbox reclaimed (24h)",
+      "description": "A drain claimed a row but the process died before completing it (services/actors/src/actors/outbox-actor.ts #reclaimStale). Not itself an error — delivery is retried — but a rising count means something is crashing mid-delivery.",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "sum(count_over_time({service_name=\"actors\"} | event_name=\"outbox.reclaimed\" [24h])) OR vector(0)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "special",
+              "options": { "match": "null+nan", "result": { "text": "0" } }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Dead-letters by target actor / method",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "sum by (outbox_target_actor, outbox_method) (count_over_time({service_name=\"actors\"} | event_name=\"outbox.dead_letter\" [$__interval]))",
+          "legendFormat": "{{outbox_target_actor}}.{{outbox_method}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 60 } },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Unexpected actor errors by route",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "sum by (actor_route) (count_over_time({service_name=\"actors\"} | event_name=\"actor.unexpected_error\" [$__interval]))",
+          "legendFormat": "{{actor_route}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 60 } },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "logs",
+      "title": "Recent dead-letter and unexpected-error log lines",
+      "description": "{service_name=\"actors\"} | event_name=~\"outbox.dead_letter|actor.unexpected_error\" — note the pipe filter, not a stream-selector label match (docs/architecture/target-stack.md §7).",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 15 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "{service_name=\"actors\"} | event_name=~\"outbox.dead_letter|actor.unexpected_error\""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "Dapr actor calls (Tempo)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "traces",
+      "title": "Recent actor invocations",
+      "description": "E3 acceptance: \"a Dapr trace for one actor call is visible in Grafana.\" Populated automatically — infra/dapr/config.yaml sets tracing.samplingRate=1 and points every sidecar's OTLP exporter at otel-lgtm:4318, so this needs no extra instrumentation. Verified against this stack's own real traffic (2026-09-10): CallActor/ItemSearchActor/results, CallActor/EmbeddingActor/embed, CallActor/CellarActor/items all present.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "query": "{resource.service.name=\"actors\" || resource.service.name=\"api\"}",
+          "limit": 20
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "Dapr runtime (Prometheus: daprd sidecars, placement, scheduler)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Actor method calls / s, by actor type",
+      "description": "What actors-dapr delivered to the actor host (sidecar -> app, PUT actors/<Type>/{id}/method/<name>), including reminder callbacks (method/remind/...). Source: dapr_http_client_completed_count, scraped from actors-dapr:9090 by infra/grafana/otel-lgtm/prometheus.yaml.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (actor_type) (label_replace(rate(dapr_http_client_completed_count{app_id=\"actors\", path=~\"actors/[^/]+/[^/]+/method/.+\"}[$__rate_interval]), \"actor_type\", \"$1\", \"path\", \"actors/([^/]+)/.*\"))",
+          "legendFormat": "{{actor_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Actor method latency p95, by actor type (sidecar -> app)",
+      "description": "Round trip from actors-dapr into the actor host and back: the time the actor method itself took, plus the per-actor turn wait inside the app. Dapr reports it in milliseconds. Source: dapr_http_client_roundtrip_latency_bucket.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, actor_type) (label_replace(rate(dapr_http_client_roundtrip_latency_bucket{app_id=\"actors\", path=~\"actors/[^/]+/[^/]+/method/.+\"}[$__rate_interval]), \"actor_type\", \"$1\", \"path\", \"actors/([^/]+)/.*\")))",
+          "legendFormat": "{{actor_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean", "max"]
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Pending actor calls (waiting for the per-actor lock)",
+      "description": "dapr_runtime_actor_pending_actor_calls. ActorReentrancy is off (infra/dapr/config.yaml, target-stack §8.5), so an actor that calls back into itself inside its own turn deadlocks; that shows up here as a count that climbs and does not come back down.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 43
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (actor_type) (dapr_runtime_actor_pending_actor_calls{app_id=\"actors\"})",
+          "legendFormat": "{{actor_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Sidecar HTTP API requests / s, by app and status",
+      "description": "Calls each app made to its own sidecar (the Dapr HTTP API on :3501 / :3502): actor invocations, reminders, bindings, metadata. Source: dapr_http_server_request_count.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 43
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (app_id, status) (rate(dapr_http_server_request_count[$__rate_interval]))",
+          "legendFormat": "{{app_id}} {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Sidecar HTTP API 5xx ratio, by app",
+      "description": "Share of sidecar API responses that were 5xx. The `or ... * 0` arm makes a healthy app read 0 rather than no data.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 43
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(sum by (app_id) (rate(dapr_http_server_request_count{status=~\"5..\"}[$__rate_interval])) or sum by (app_id) (rate(dapr_http_server_request_count[$__rate_interval])) * 0) / sum by (app_id) (rate(dapr_http_server_request_count[$__rate_interval]))",
+          "legendFormat": "{{app_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "Dapr scrape targets up",
+      "description": "1 per daprd / placement / scheduler endpoint Prometheus can scrape. 0 means that process is down or unreachable from otel-lgtm. (In the per-worktree host-run lane the two sidecars are host processes and read 0 by design.)",
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 50
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "up{job=~\"dapr-sidecar|dapr-control-plane\"}",
+          "instant": true,
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "Placement: actor hosts registered",
+      "description": "dapr_placement_actor_runtimes_total: runtimes that host actor types. This stack has one actor host (services/actors); 0 means no sidecar is offering actor types to placement, and every actor call will fail to find a host.",
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 50
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(dapr_placement_actor_runtimes_total)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Scheduler: reminder jobs triggered vs undelivered / s",
+      "description": "Reminders live in the Dapr scheduler since 1.15 (docker-compose.yml, `scheduler`). Undelivered means the scheduler fired a job and no connected sidecar took it.",
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 50
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(dapr_scheduler_jobs_triggered_total[$__rate_interval]))",
+          "legendFormat": "triggered"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(dapr_scheduler_jobs_undelivered_total[$__rate_interval]))",
+          "legendFormat": "undelivered"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "services/api (Loki: {service_name=\"api\"})",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "GraphQL unexpected errors, by field and error",
+      "description": "graphql.unexpected_error: exactly the errors the api masked from the client, one event per (error_name, field) per response. Counts events, not requests — the rule api-sustained-request-failures counts distinct request_id instead.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range",
+          "expr": "sum by (graphql_field, error_name) (count_over_time({service_name=\"api\"} | event_name=\"graphql.unexpected_error\" [$__interval]))",
+          "legendFormat": "{{graphql_field}} {{error_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"]
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Token rejections, by reason",
+      "description": "auth.token_rejected. `expired` is routine (INFO); bad_signature / unknown_kid / claim_invalid / malformed / alg_not_allowed / no_subject / other are WARN; `jwks_unavailable` is ERROR and PAGES (rule api-jwks-unavailable): the api cannot verify anyone.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range",
+          "expr": "sum by (auth_reason) (count_over_time({service_name=\"api\"} | event_name=\"auth.token_rejected\" [$__interval]))",
+          "legendFormat": "{{auth_reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"]
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Query limit refusals, by code",
+      "description": "graphql.limit_refused: QUERY_TOO_DEEP / WIDE / COMPLEX / LARGE / EXPENSIVE / MANY_TOKENS, REQUEST_TOO_LARGE. A burst from one client is someone probing the limits, or a client bug.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 64
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range",
+          "expr": "sum by (limit_code) (count_over_time({service_name=\"api\"} | event_name=\"graphql.limit_refused\" [$__interval]))",
+          "legendFormat": "{{limit_code}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"]
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Actor invocation failures, by actor / method / kind",
+      "description": "actor.invocation_failed: failure_kind is status (the actor answered non-2xx), timeout or network. Usually paired with a graphql.unexpected_error on the same request_id — do not add the two panels together.",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 64
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range",
+          "expr": "sum by (actor_type, actor_method, failure_kind) (count_over_time({service_name=\"api\"} | event_name=\"actor.invocation_failed\" [$__interval]))",
+          "legendFormat": "{{actor_type}}.{{actor_method}} {{failure_kind}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"]
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Events dropped by the api's 50/min cap",
+      "description": "telemetry.suppressed carries the number of events the api dropped (telemetry_suppressed) per (event, class) window. Add these back to the panels above for true totals; anything here means a panel above is undercounting.",
+      "gridPos": {
+        "h": 7,
+        "w": 9,
+        "x": 0,
+        "y": 72
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range",
+          "expr": "sum by (telemetry_event) (sum_over_time({service_name=\"api\"} | event_name=\"telemetry.suppressed\" | unwrap telemetry_suppressed [$__interval]))",
+          "legendFormat": "{{telemetry_event}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"]
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "stat",
+      "title": "JWKS unavailable (24h)",
+      "description": "Must read 0. Anything else is the condition rule api-jwks-unavailable pages on.",
+      "gridPos": {
+        "h": 7,
+        "w": 5,
+        "x": 9,
+        "y": 72
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "instant",
+          "instant": true,
+          "expr": "sum(count_over_time({service_name=\"api\"} | event_name=\"auth.token_rejected\" | auth_reason=\"jwks_unavailable\" [24h])) OR vector(0)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": "logs",
+      "title": "Recent api error and rejection lines",
+      "gridPos": {
+        "h": 7,
+        "w": 10,
+        "x": 14,
+        "y": 72
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range",
+          "expr": "{service_name=\"api\"} | event_name=~\"graphql.unexpected_error|actor.invocation_failed|auth.token_rejected|graphql.limit_refused\""
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+# E3b. `infra/docker-compose.yml` (both lanes; prod inherits it) bind-mounts
+# this whole directory over `/otel-lgtm/grafana/conf/provisioning` inside the
+# `otel-lgtm` container, which SHADOWS the image's own copy of this exact file.
+# That copy registered three built-in dashboards whose JSON lives at the
+# image's `/otel-lgtm/` root: two "RED Metrics" dashboards and "JVM Metrics".
+#
+# Since 2026-09-27 NONE of the three is provisioned, deliberately:
+#
+#   * JVM Metrics — there is no JVM anywhere in this stack.
+#   * RED Metrics (classic histogram) / (exponential/native histogram) — every
+#     panel queries OpenTelemetry SDK HTTP-server metrics
+#     (`http_server_request_duration_*`, `http_server_duration_*`). Nothing
+#     here emits those: services/actors exports logs only, services/api
+#     nothing yet, and the Dapr sidecars export traces. Checked with
+#     `/api/v1/label/__name__/values` on `cellar-stack`'s Prometheus
+#     (grafana/otel-lgtm:0.32.1): no such metric name exists, so both
+#     dashboards could only ever render empty panels — which reads as "no
+#     traffic", not "wrong metric".
+#
+# Their replacement is `cellar-assistant/red-span-metrics.json`: the same
+# rate / errors / duration questions, answered from the span metrics Tempo's
+# metrics generator derives from the sidecars' traces. If an app ever exports
+# OTel HTTP-server metrics, the image's dashboards can come back with a
+# provider pointing at `/otel-lgtm/grafana-dashboard-red-metrics-classic.json`
+# (outside the mounted directory, so the image still ships it).
+apiVersion: 1
+
+providers:
+  # E3b · services/actors' outbox health, Dapr actor-call traces, the Dapr
+  # runtime's own metrics, and RED from span metrics. The JSON files live in
+  # this same mounted directory (dashboards/cellar-assistant/), so they move
+  # with a checkout/redeploy with no separate extraction step.
+  - name: "Cellar Assistant"
+    type: file
+    options:
+      path: /otel-lgtm/grafana/conf/provisioning/dashboards/cellar-assistant
+      foldersFromFilesStructure: false

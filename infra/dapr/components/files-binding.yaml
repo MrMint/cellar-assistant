@@ -1,0 +1,93 @@
+# S3-compatible output binding -> MinIO (target-stack §4).
+#
+# Swapping to GCS later is a change to this file, not to application code:
+# `bindings.gcp.bucket` offers `sign`/`signTTL` where this offers
+# `presign`/`presignTTL`. Browsers GET objects directly via a signed URL from
+# this binding; bytes never pass through the sidecar or services/api for reads.
+#
+# For MinIO over plain http both `disableSSL` and `insecureSSL` are required.
+#
+# Verified on A2's compose stack: `operation: presign` with `presignTTL: 15m`
+# returns a signed GetObject URL.
+#
+# A8, 2026-09-08: this binding cannot presign a **PUT**. Checked against
+# `dapr/components-contrib`'s `bindings/aws/s3/s3.go` — both the dedicated
+# `presign` operation and `create`'s `presignTTL` option call the AWS SDK's
+# `PresignGetObject` unconditionally (`presignObject()` in that file); there is
+# no `PresignPutObject` anywhere in the binding, and `create` *without*
+# `presignTTL` uploads the body through the sidecar instead, which the first
+# paragraph above rules out. So `FileActor.createUploadTarget`
+# (`services/actors/src/actors/file-actor.ts`) signs the upload URL itself, with
+# the `minio` client (`services/actors/src/lib/s3-presign.ts`), against this same
+# bucket and the same `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` credentials.
+# `verify`/`presignRead`/`delete` still go through this binding (`list`,
+# `presign`, `delete` operations) — only the upload URL is signed elsewhere.
+#
+# E3, 2026-09-18: this `endpoint` is the IN-NETWORK authority, and it stays
+# that way on purpose.
+#
+# Every call the sidecar makes through this binding is server-side — `list`
+# (for `stat`), `delete`, and the `presign` behind `readHead` — so `minio:9000`
+# is the right name for all of them, and it is the only name a container can
+# resolve. The binding cannot serve a browser: SigV4 covers the `Host` header,
+# and the AWS SDK signs the same endpoint it dials, so a URL this binding
+# presigns is always addressed to wherever *it* connects. Repointing it at a
+# browser-facing name (the original E3 plan) breaks the sidecar's own three
+# operations, because there is no name that means MinIO from both a host
+# browser and a container on Docker Desktop for macOS — measured, with the
+# alternatives, in `services/actors/src/lib/s3-presign.ts` and in the E3 block
+# of `infra/docker-compose.yml`.
+#
+# So the browser-facing URLs are signed by the app instead, for the authority a
+# browser can dial (`FILES_S3_ENDPOINT`/`FILES_S3_PORT`):
+# `FileActor.createUploadTarget`'s PUT already was, and `FileActor.presignRead`
+# now is too (`presignGetPublic` in `src/lib/files-binding.ts`). This binding
+# keeps `presignGetInternal`, whose URL is only ever fetched from inside the
+# network — `readHead`, and the AI seams via `FileActor.presignReadInternal`.
+#
+# Production uses this file unchanged. It used to mount an override pointing
+# the binding at the public files hostname, resolved internally through a
+# compose network alias on Caddy; with the edge moved behind the host's shared
+# nginx-proxy there is nothing to alias, and every call this binding makes is
+# server-side anyway, so `minio:9000` is right there too
+# (infra/docker-compose.prod.yml, header note 5).
+#
+# `scripts/stack/stack.sh`'s `generate_dapr_resources()` rewrites the literal
+# below to `http://localhost:${MINIO_PORT}` for the per-worktree host-run lane,
+# where app and sidecar are both host processes and one name is again correct
+# from both sides — and it asserts that the rewrite landed, so changing this
+# string without changing that sed fails `bun run dev:up` loudly.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: files
+spec:
+  type: bindings.aws.s3
+  version: v1
+  metadata:
+    - name: bucket
+      value: "cellar-files"
+    - name: endpoint
+      value: "http://minio:9000"
+    - name: region
+      value: "us-east-1"
+    - name: accessKey
+      secretKeyRef:
+        name: MINIO_ROOT_USER
+        key: MINIO_ROOT_USER
+    - name: secretKey
+      secretKeyRef:
+        name: MINIO_ROOT_PASSWORD
+        key: MINIO_ROOT_PASSWORD
+    - name: forcePathStyle
+      value: "true"
+    - name: disableSSL
+      value: "true"
+    - name: insecureSSL
+      value: "true"
+    - name: decodeBase64
+      value: "false"
+    - name: encodeBase64
+      value: "false"
+auth:
+  secretStore: envvars

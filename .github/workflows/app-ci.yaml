@@ -1,0 +1,345 @@
+# CI for the Next.js app — the half `stack-ci.yaml` excludes.
+#
+# X8: `stack-ci.yaml` is scoped to `services/**`, `packages/**` and `infra/**` and
+# says so at the top, which left the frontend with no CI at all: not typecheck,
+# not biome, not the unit tests. Six frontend workstreams' output was landing
+# unchecked. This workflow covers it.
+#
+# The app is `services/client` now, not the repo root. `stack-ci.yaml`'s
+# filter would otherwise have matched it through `services/**`, so that file
+# carries an explicit `!services/client/**` negation — this one owns the
+# frontend, that one owns the backends — except where one side's tests read the
+# other's tree. This filter names four backend files the client tests read (the
+# list below). `stack-ci.yaml` re-includes all of `services/client/src/**`,
+# because two backend tests read it (one walks every `graphql()` document in
+# it), so a client-source change runs both workflows by design (2f52ba10).
+#
+# D9 removed `functions/` from the workspace entirely — it has no tracked files
+# left, so nothing here refers to it. The two packages the root app used to
+# reach into it for are gone, the shared tsconfig is inlined into
+# `tsconfig.json`, and the GraphQL types come from `packages/schema`.
+name: app-ci
+
+# The two `paths` lists below are identical on purpose; edit both together.
+# Rule: every file a step reads is listed or under a listed directory — a
+# missed input skips the run silently rather than failing it. Checked
+# 2026-09-27 against every step, including the unit tests' own file reads,
+# which reach outside services/client in four places (entries marked below) —
+# and that check missed a fifth: item-spec.test.ts IMPORTS
+# packages/contracts/src/item-types.ts (and through it enums/items/reference),
+# so a PR editing ITEM_TYPE_SPECS alone ran no client test. Re-checked
+# 2026-09-28 by resolving every relative path and every repo-rooted
+# `join(repoRoot, …)` in services/client/src: the entries below plus
+# packages/schema and packages/e2e are the complete set.
+# `turbo.json` is listed although no step here invokes turbo: harmless
+# over-triggering, kept so a root task-graph change still gets one app run.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/client/**"
+      - "packages/e2e/**"
+      - "scripts/**"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "turbo.json"
+      - "biome.json"
+      # biome.json sets `vcs.useIgnoreFile`, so the root .gitignore decides
+      # which files the Biome check step looks at.
+      - ".gitignore"
+      - ".nvmrc"
+      # gql.tada's types come from here, and the D2 document tests read the
+      # checked-in SDL. A change to either can break the root build.
+      - "packages/schema/**"
+      # Read from outside services/client — the first four by the client unit
+      # tests, by path:
+      #   tables.ts          src/lib/items/barcode.test.ts,
+      #                      src/lib/dev-checks/static-options.test.ts
+      #   barcode-actor.ts   src/lib/items/barcode.test.ts
+      #   factory.ts, install.ts
+      #                      src/lib/dev-checks/capability-claims.test.ts
+      #                      (existence: they refute stale "no AI" claims)
+      - "packages/db/src/schema/tables.ts"
+      - "services/actors/src/actors/barcode-actor.ts"
+      - "services/actors/src/lib/ai/factory.ts"
+      - "services/actors/src/lib/ai/install.ts"
+      #   packages/contracts/src/**
+      #                      a workspace dependency of the client since
+      #                      522d1d1d, imported through its subpath exports:
+      #                      src/lib/dev-checks/item-spec.test.ts reads
+      #                      @cellar-assistant/contracts/item-types
+      #                      (ITEM_FORM_RULES vs ITEM_TYPE_SPECS), and
+      #                      production code src/lib/items/barcode.ts
+      #                      re-exports .../barcodes' displayBarcode. The
+      #                      client image COPYs packages/contracts/src and
+      #                      `next build` type-checks it. Its import closure
+      #                      is src/**
+      - "packages/contracts/src/**"
+      # The `image` job's install reads EVERY workspace manifest (one root
+      # lockfile: `--frozen-lockfile` checks it against all of them), so a
+      # backend-only manifest change can break the client image build.
+      - "services/*/package.json"
+      - "packages/*/package.json"
+      - ".github/workflows/app-ci.yaml"
+  pull_request:
+    paths:
+      - "services/client/**"
+      - "packages/e2e/**"
+      - "scripts/**"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "turbo.json"
+      - "biome.json"
+      - ".gitignore"
+      - ".nvmrc"
+      - "packages/schema/**"
+      # See the push list above for why these are here.
+      - "packages/db/src/schema/tables.ts"
+      - "services/actors/src/actors/barcode-actor.ts"
+      - "services/actors/src/lib/ai/factory.ts"
+      - "services/actors/src/lib/ai/install.ts"
+      - "packages/contracts/src/**"
+      - "services/*/package.json"
+      - "packages/*/package.json"
+      - ".github/workflows/app-ci.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Two literals, one place each. Corepack does not manage bun — it only ever
+# understood npm/yarn/pnpm — so `packageManager` in package.json is inert as far
+# as setup-bun is concerned and the version has to be spelled out here. The
+# "Check the pinned tool versions" step below asserts both against package.json
+# rather than leaving a comment asking someone to remember.
+env:
+  BUN_VERSION: "1.4.2"
+  BIOME_VERSION: "2.5.3"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Node is NOT vestigial here, and this step is NOT a leftover from before
+      # the bun migration. Bun runs the installs and the unit tests now, but on
+      # this leg a real Node still does real work:
+      #
+      #  - `tsc` and `next` ship `#!/usr/bin/env node` bins, and `bun run`
+      #    honours a node shebang whenever a `node` is on PATH. The Typecheck
+      #    and Generate-Next-types steps below are Node processes.
+      #  - `scripts/check-node-version.mjs` is a no-op without one: run under
+      #    bun it prints "skipping" and exits 0 by design, because the type
+      #    stripping it guards is Node's, not bun's.
+      #  - MEASURED under bun 1.4.2, and the reason deleting this step is not a
+      #    cleanup: with NO `node` on PATH, `bun run <script>` where the script
+      #    says `node foo.ts` does not fail — bun silently substitutes ITSELF
+      #    (`process.versions.bun` set, `execPath` the bun binary) and the step
+      #    goes green on the wrong runtime. Dropping setup-node would not break
+      #    a leg; it would quietly move it to bun with every gate still green.
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Check the pinned tool versions still match package.json
+        run: |
+          # `bun -e` takes a JS program, and its template literals must reach
+          # bun unexpanded — single quotes are the point, not an oversight.
+          # shellcheck disable=SC2016
+          bun -e '
+            const pkg = await Bun.file("package.json").json();
+            const pins = [
+              ["bun", pkg.packageManager.replace(/^bun@/, ""), Bun.version],
+              ["@biomejs/biome", pkg.devDependencies["@biomejs/biome"], process.env.BIOME_VERSION],
+            ];
+            let drifted = 0;
+            for (const [tool, wanted, pinned] of pins) {
+              if (wanted !== pinned) {
+                console.error(
+                  `::error::${tool} is pinned to ${pinned} in this workflow but package.json wants ${wanted}. Bump both together.`,
+                );
+                drifted = 1;
+              }
+            }
+            process.exit(drifted);
+          '
+
+      # `bun install --filter` does NOT run the root package's lifecycle
+      # scripts — MEASURED, and unlike pnpm, which ran them on a filtered
+      # install too. So package.json's `preinstall` guard
+      # (scripts/check-node-version.mjs) never fires on this leg. The
+      # `node-version-file: .nvmrc` above is what actually pins the version in
+      # CI; running the guard explicitly keeps the failure mode it was written
+      # for — a wrong Node major surfacing as unrelated-looking type-stripping
+      # errors deep in a run — a one-line failure here instead.
+      - name: Check Node version
+        run: node scripts/check-node-version.mjs
+
+      # Bun's global module cache — `bun pm cache`, i.e. ~/.bun/install/cache.
+      # setup-bun caches the bun BINARY by itself and nothing else, so without
+      # this step every run re-downloads the client's whole 502-package closure.
+      # `bun.lock` is the only correct key: `--frozen-lockfile` installs exactly
+      # what the lockfile pins, so nothing else can change what gets fetched.
+      # The `client` segment keeps this workflow from racing stack-ci's six legs
+      # to reserve one shared key.
+      - name: Cache bun's module cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-cache-${{ runner.os }}-client-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-cache-${{ runner.os }}-client-
+
+      # The trailing `...` adds the client's workspace dependencies — since D9
+      # that is `packages/schema` and nothing else. Bun's `--filter` supports
+      # the same closure operator, verified.
+      #
+      # The SECOND `--filter` is the workspace ROOT (`cellar-assistant` is the
+      # root package's name), and it is not tidiness — without it the Unit
+      # tests step below FAILS. MEASURED on a cold checkout: a filtered install
+      # installs no root `node_modules/.bin` at all, and
+      # `src/lib/api/graphcache-schema-codegen.ts` spawns
+      # `<repo root>/node_modules/.bin/biome` by absolute path (deliberately —
+      # biome is a root devDependency because it lints every package). So
+      # `graphcache-schema.test.ts` and `graphcache-keys.test.ts` die with
+      # ENOENT: 263 pass / 2 fail against a baseline of 265. A developer never
+      # sees it, because a developer's tree always has the root install. With
+      # the root in the filter: 265 pass / 0 fail, and the only cost is the
+      # root's two devDependencies (biome, turbo).
+      #
+      # One consequence, MEASURED, that refines the note on the Check-Node-
+      # version step above: `bun install --filter` skips root lifecycle scripts
+      # only while the ROOT IS NOT ONE OF THE SELECTED WORKSPACES. Naming it
+      # here makes `preinstall` fire again, so on this leg the Node guard now
+      # runs twice — once as its own named step, once inside the installer.
+      # That is not a reason to delete the step: it is what turns a wrong Node
+      # major into a one-line failure at a step called "Check Node version"
+      # instead of `error: preinstall script from "cellar-assistant" exited
+      # with 1` buried in install output, and stack-ci's six legs do NOT select
+      # the root, so there the explicit step is the only guard there is.
+      #
+      # `--frozen-lockfile` here means what it says and no more: it refuses a
+      # lockfile edit. It does NOT re-check `bunfig.toml`'s `minimumReleaseAge`
+      # the way pnpm re-checked its own on every install — under bun that is a
+      # resolution-time filter only, so this step trusts the committed lockfile.
+      # The 24-hour supply-chain window is enforced when someone resolves a new
+      # version locally, not here.
+      - name: Install
+        run: |
+          bun install --frozen-lockfile \
+            --filter "@cellar-assistant/client..." \
+            --filter cellar-assistant
+
+      # Replaces pnpm's `strictDepBuilds`, which failed the install outright
+      # (ERR_PNPM_IGNORED_BUILDS) when a dependency's build script had not been
+      # ruled on. Bun has no equivalent: under the isolated linker it uses for
+      # a workspace it skips an unreviewed script SILENTLY — no warning at
+      # install time, and `bun pm untrusted` reports "Found 0" while the script
+      # is skipped. This script reads the installed tree instead; see its
+      # header for the measurement table. Do not swap it for `bun pm untrusted`.
+      - name: Check dependency build scripts
+        run: node scripts/check-blocked-builds.mjs
+
+      # `next-env.d.ts` is gitignored, so a cold checkout does not have it, and
+      # without it `tsc` cannot resolve `next/image-types/global` — every
+      # `import beer from "@/images/beer1.png"` becomes TS2307 and the typecheck
+      # fails with ~30 errors that say nothing about the change under review.
+      # `next typegen` writes it (plus `.next/types/routes.d.ts`) in ~2s without
+      # running a build.
+      - name: Generate Next types
+        working-directory: services/client
+        run: bun run typegen
+
+      - name: Typecheck
+        working-directory: services/client
+        run: bun run typecheck
+
+      # `stack-ci.yaml`'s lint job runs `biome check services packages`, which
+      # now covers services/client but still not packages/e2e's own sources in a
+      # job that installs Playwright. Biome's own `files.includes` still applies,
+      # so `packages/e2e/artifacts` (gitignored; it holds live session tokens) is
+      # skipped. Run from the repo root so biome.json resolves.
+      #
+      # `bunx` fetches the pinned binary on its own, so this step deliberately
+      # does not depend on the install above.
+      - name: Biome check
+        if: ${{ !cancelled() }}
+        run: bunx @biomejs/biome@${{ env.BIOME_VERSION }} check services/client packages/e2e
+
+      # `test:unit` widened E2's `test:api` from `src/lib/api/*.test.ts` to all
+      # of `src/lib`, which is what brings X7's client-boundary scan into CI.
+      # The runner is `bun test --isolate --timeout=30000 src/lib/` — that is
+      # bun's own test runner, not vitest, and both flags are load-bearing:
+      #
+      #  - `--isolate` restores what `node --test` got for free by running one
+      #    process per file. Bare `bun test` shares a single global across all
+      #    files, and `process.env`, a `globalThis` property and a
+      #    monkeypatched `globalThis.fetch` were all measured leaking between
+      #    them. Three files here do precisely that — `files.test.ts` swaps
+      #    `fetch`, `geo-cookie/client.test.ts` redefines `document`/`location`,
+      #    `csp.test.ts` rewrites `NODE_ENV`.
+      #  - `--timeout=30000` overrides bun's 5s per-test default, which
+      #    `node --test` does not impose and which also applies to `before()`
+      #    hooks. Six of these files sign in inside `before()` — the operation
+      #    most likely to exceed 5s against a cold stack — and a hook timeout
+      #    surfaces as an unhelpful `(unnamed)` failure.
+      #
+      # `package.json` cannot hold comments, which is why that reasoning lives
+      # here. Do not "simplify" the positional back to a glob: `bun test`
+      # treats positionals as substring filters, and the old `node --test`
+      # argument list selects zero tests out of 417 files. It exits 1 rather
+      # than reporting a green empty run, but the failure reads as nonsense.
+      #
+      # No stack runs here, and that no longer hollows the suite out. D2's
+      # document validation used to be ~66 tests that POSTed to a running API
+      # and skipped themselves without one — here, always — so their green was
+      # a count of skips. They are now offline (`src/lib/api/documents.test.ts`
+      # validates every document against packages/schema/schema.graphql, which
+      # is what graphql-yoga validates against). The one file that still skips
+      # without a stack is `src/lib/api/round-trip.test.ts` (the auth proxy's
+      # end-to-end steps); `grep -rl 'stack is down' services/client/src` lists
+      # it plus a comment in brand-documents.test.ts that says why that file
+      # stopped skipping.
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        working-directory: services/client
+        run: bun run test
+
+  # M1 · the client image, built exactly as `bun run stack:client:build` and the
+  # e2e lane build it (repo-root context, services/client/Dockerfile, its own
+  # Dockerfile.dockerignore) — `next build` runs INSIDE the image, so this is
+  # also the only place CI runs a production Next build at all. Not pushed:
+  # production serves the frontend from Vercel (deploy-loki.md §2.5), so this
+  # image exists for the local/e2e lane, and a Dockerfile that stopped building
+  # used to be found by the next person to run stack:client:build.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the client image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/client/Dockerfile
+          push: false
+          cache-from: type=gha,scope=client
+          cache-to: type=gha,mode=max,scope=client
+
+# No browser leg on purpose. E2's Playwright suite needs `bun run stack:up` (an
+# eight-container compose stack), a dev server and a seeded database, and it
+# currently has real failures of its own; gating merges on it would red-wall
+# every PR. E2's own recommendation was a separate, non-blocking browser job
+# once those failures land — that is the right next step here, not this one.

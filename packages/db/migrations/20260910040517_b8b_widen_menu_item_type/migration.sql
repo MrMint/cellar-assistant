@@ -1,0 +1,1 @@
+ALTER TABLE "place_menu_items" DROP CONSTRAINT "place_menu_items_detected_item_type_check", ADD CONSTRAINT "place_menu_items_detected_item_type_check" CHECK ((detected_item_type = ANY (ARRAY['wine'::text, 'beer'::text, 'spirit'::text, 'coffee'::text, 'sake'::text, 'tea'::text, 'cocktail'::text, 'unknown'::text])));

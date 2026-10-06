@@ -1,0 +1,20 @@
+# One tick of the pull-based deploy (scripts/deploy/pull-deploy.sh), as a
+# systemd USER unit for the account that owns the production stack on Loki.
+# Installed by infra/loki/install-pull-deploy.sh, and only when that account
+# has linger enabled (otherwise user units stop at logout and cron is used).
+[Unit]
+Description=Cellar Assistant pull-based deploy (one tick)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/lib/cellar-pull-deploy/pull-deploy.sh
+Nice=10
+# A cold image build on Loki is the long pole; the compose waits inside carry
+# their own timeouts.
+TimeoutStartSec=90min
+# 75 = another run holds the lock: not a failure. 3 (refused: CI red, not a
+# fast-forward) and 1 (deploy failed) leave the unit failed, which is the point:
+# `systemctl --user --failed` shows it.
+SuccessExitStatus=75

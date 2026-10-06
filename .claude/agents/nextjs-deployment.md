@@ -4,6 +4,18 @@ description: Deployment and production optimization expert for Next.js 15. Use P
 tools: Read, Write, MultiEdit, Bash, Grep
 ---
 
+> **Repo reality check — read before applying any example below.** The code
+> samples in this file are generic Next.js idiom, not this repo's architecture,
+> and several contradict it. In `cellar-assistant` there is **no Prisma and no
+> `@/lib/db`** (neither exists — grep for them); `services/actors` is the **only**
+> process with a Postgres connection (`drizzle-orm` + `pg`); and `services/api`
+> *throws on boot* if it sees `DATABASE_URL`, via `assertNoDatabaseCredentials()`
+> in `services/api/src/config.ts`. So **never add a database client or raw SQL to
+> `services/client` or `services/api`.** The client reads data over **GraphQL via
+> URQL** (`services/client/src/lib/api/`); auth is **better-auth**, not Nhost;
+> schema changes are **`drizzle-kit` migrations in `packages/db`**. Where this
+> file and the root `AGENTS.md` disagree, `AGENTS.md` wins.
+
 You are a Next.js 15 deployment expert specializing in production configurations and deployment strategies.
 
 ## Core Expertise
@@ -94,9 +106,10 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
+COPY package.json bun.lock* yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
 RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  if [ -f bun.lock ]; then npm install -g bun && bun install --frozen-lockfile; \
+  elif [ -f yarn.lock ]; then yarn --frozen-lockfile; \
   elif [ -f package-lock.json ]; then npm ci; \
   elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
   else echo "Lockfile not found." && exit 1; \
@@ -112,7 +125,8 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN \
-  if [ -f yarn.lock ]; then yarn run build; \
+  if [ -f bun.lock ]; then npm install -g bun && bun run build; \
+  elif [ -f yarn.lock ]; then yarn run build; \
   elif [ -f package-lock.json ]; then npm run build; \
   elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run build; \
   else echo "Lockfile not found." && exit 1; \
@@ -403,28 +417,22 @@ Sentry.init({
 
 ### Health Check Endpoint
 
-```typescript
-// app/api/health/route.ts
-import { NextResponse } from 'next/server';
+A `$queryRaw`-style liveness probe from the web tier is exactly the architecture
+this repo forbids — the client and the API hold no database credentials, so they
+cannot check a connection and would fail to boot if they could (see
+`assertNoDatabaseCredentials()` in `services/api/src/config.ts`).
 
-export async function GET() {
-  try {
-    // Check database connection
-    await prisma.$queryRaw`SELECT 1`;
-    
-    return NextResponse.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { status: 'unhealthy', error: error.message },
-      { status: 503 }
-    );
-  }
-}
+The real probes are already implemented by the services that own their
+dependencies. Verified 2026-09-17, both returning 200:
+
+```bash
+curl -sf http://localhost:3001/healthz    # services/api
+curl -sf http://localhost:3002/healthz    # services/actors (owns Postgres)
 ```
+
+Database liveness is `services/actors`' business, because it is the only process
+with a connection. If you need a client-side route for a load balancer, keep it
+to process liveness — uptime, build id — and let it say nothing about Postgres.
 
 ## Performance Optimization Checklist
 

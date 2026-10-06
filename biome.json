@@ -19,9 +19,13 @@
       "!**/dist",
       "!**/build",
       "!**/graphql-env.d.ts",
+      "!packages/db/migrations",
+      "!packages/db/src/schema/tables.ts",
+      "!packages/db/src/schema/relations.ts",
       "!**/wisconsin-places.json",
       "!CHANGELOG.md",
-      "!nhost"
+      "!nhost",
+      "!packages/e2e/artifacts"
     ]
   },
   "formatter": {
@@ -56,5 +60,21 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/e2e/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off",
+            "noAssignInExpressions": "off"
+          },
+          "correctness": {
+            "noEmptyPattern": "off"
+          }
+        }
+      }
+    }
+  ]
 }
