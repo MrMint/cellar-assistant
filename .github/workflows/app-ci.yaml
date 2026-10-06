@@ -125,7 +125,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Node is NOT vestigial here, and this step is NOT a leftover from before
       # the bun migration. Bun runs the installs and the unit tests now, but on
@@ -143,7 +143,7 @@ jobs:
       #    (`process.versions.bun` set, `execPath` the bun binary) and the step
       #    goes green on the wrong runtime. Dropping setup-node would not break
       #    a leg; it would quietly move it to bun with every gate still green.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
 
@@ -193,7 +193,7 @@ jobs:
       # The `client` segment keeps this workflow from racing stack-ci's six legs
       # to reserve one shared key.
       - name: Cache bun's module cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-cache-${{ runner.os }}-client-${{ hashFiles('bun.lock') }}
@@ -325,12 +325,12 @@ jobs:
   image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build the client image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: services/client/Dockerfile
