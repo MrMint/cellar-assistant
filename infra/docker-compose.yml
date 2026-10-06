@@ -110,7 +110,7 @@ x-node-app: &node-app
   restart: unless-stopped
 
 x-daprd: &daprd
-  image: daprio/daprd:1.18.3
+  image: daprio/daprd:1.18.4
   # Each sidecar is a normal container on the compose network rather than
   # sharing its app's network namespace. `network_mode: "service:<app>"` also
   # works, but then restarting the app tears down the namespace the sidecar is
