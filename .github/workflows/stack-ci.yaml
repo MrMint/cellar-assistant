@@ -442,7 +442,7 @@ jobs:
       - name: Validate compose file
         run: docker compose -f infra/docker-compose.yml config --quiet
 
-      # The production overlay is what deploy-loki.yaml applies, and until
+      # The production overlay is what Loki's pull-deploy.sh applies, and until
       # this step nothing rendered it before a deploy did. The self-test
       # renders base + overlay from an env file built out of
       # infra/.env.prod.example (so a `:?` variable the example forgot fails
@@ -457,6 +457,15 @@ jobs:
       - name: Validate the production overlay and the deploy's secret guard
         run: scripts/deploy/prod-config-selftest.sh
 
+      # The pull-based deployer that runs on Loki (scripts/deploy/pull-deploy.sh)
+      # and its installer, against fakes: a local git repository as the remote,
+      # a recording `docker`, check-runs fixtures. Asserts the §4.1 order, the
+      # CI gate (wait / refuse), no `up` after a failed migration, rollback after
+      # a failed `up` or health check, the lock, fast-forward-only, pause, and
+      # the cron/systemd choice. No Docker daemon, no network.
+      - name: Self-test the pull-based deployer
+        run: scripts/deploy/test/pull-deploy.sh
+
   # M1 · the api and actors images, built exactly as deploy-loki.yaml builds
   # them (repo-root context, the same Dockerfile, buildx on ubuntu-latest) and
   # then smoke-tested by scripts/ci/image-smoke.sh — `bun build` of the entry
@@ -466,8 +475,9 @@ jobs:
   # the hand-written runtime `COPY packages/…` lists at all, so an api that
   # started importing a package its image does not copy would pass every other
   # check here and fail at boot, first seen on `main`. deploy-loki.yaml runs the
-  # same script before it pushes. Read-only cache: PRs reuse deploy's layers
-  # (same scope names) without writing their own over them.
+  # same script on `main`, and Loki's pull-deploy.sh runs it on the images it
+  # builds itself before migrating anything. Read-only cache: PRs reuse
+  # deploy-loki.yaml's layers (same scope names) without writing their own.
   images:
     runs-on: ubuntu-latest
     strategy:

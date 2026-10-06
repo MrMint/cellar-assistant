@@ -7,9 +7,10 @@ executed on Loki — see
 run and which have only been reasoned about.
 **Audience:** whoever does the first production deploy of the post-Nhost stack.
 
-This covers the public edge, TLS and identity. The deploy *pipeline* (GitHub
-Actions building the images, the self-hosted runner pulling them) and backups
-are E3b's, in `.github/workflows/` and `docs/architecture/backup-restore.md`.
+This covers the public edge, TLS and identity, and the deploy pipeline — which
+is pull-based: Loki fetches, builds and deploys itself (§2.6, §4.1;
+`scripts/deploy/pull-deploy.sh`, `infra/loki/`). Backups are
+`docs/architecture/backup-restore.md`.
 
 ---
 
@@ -289,83 +290,107 @@ every presigned upload (§7.1). Two consequences:
 > production they are deliberately different hosts. The comment has been
 > corrected.
 
-### 2.6 GitHub — what the deploy pipeline needs
+### 2.6 The deploy pipeline — pull-based, run by Loki itself
 
-> ⚠️ **Do not register a persistent self-hosted runner on Loki while this
-> repository is public.** A pull request from a fork runs *the workflow files
-> in that pull request*, not the ones on `main`, so anyone who can get a PR's
-> workflows run (a past contributor, or a first-time one once approved) can
-> add `runs-on: [self-hosted, loki]` to a workflow of their own and execute
-> arbitrary code on Loki — with Docker (root-equivalent on the host), write
-> access to the shared nginx-proxy's `vhost.d`, and `infra/.env.prod` on disk.
-> Nothing in `deploy-loki.yaml` can prevent that: its repository/event guard
-> and SHA-pinned actions protect that file, not the runner. GitHub's own
-> guidance is to use self-hosted runners only with private repositories.
->
-> **Recommended instead — pick one; neither puts a runner on Loki:**
->
-> 1. **Pull-based deploy (preferred).** The `build` job stays as it is on
->    GitHub-hosted runners and publishes `sha-<7>` images to GHCR. On Loki, a
->    systemd timer (or cron) under a dedicated deploy user polls GHCR for a
->    new `sha-*` tag of both images, confirms that sha is a commit on `main`,
->    checks it out, and runs the same steps as the `deploy` job — the secret
->    guard, migrate, `scripts/deploy/edge.sh install`, `up -d --wait`,
->    `edge.sh attach` and `verify`. GitHub never reaches Loki and nothing on
->    Loki accepts work from GitHub; a fork PR's `GITHUB_TOKEN` is read-only, so
->    it cannot push an image for Loki to pick up.
-> 2. **GitHub-hosted job reaching Loki over SSH with a forced command.** The
->    deploy job runs on `ubuntu-latest` and connects to Loki (port forward or
->    a Tailscale ACL) with a key whose `authorized_keys` entry is
->    `command="/opt/cellar-assistant/deploy.sh",restrict` — the key can run that
->    one script, which takes only the commit sha and validates it, and nothing
->    else. Keep the private key as a secret of a GitHub *environment*
->    (`production`) whose deployment branches are limited to `main`, so fork
->    PRs never see it.
->
-> Either means replacing the `deploy` job in `.github/workflows/deploy-loki.yaml`
-> (it still targets `[self-hosted, loki]`, so with no runner registered it
-> queues and never runs). **If a self-hosted runner is used anyway:** make it
-> `--ephemeral` (one job, then re-registered by a wrapper), run it as a
-> dedicated non-login user, set *Settings → Actions → Fork pull request
-> workflows* to require approval for **all** external contributors, keep every
-> action SHA-pinned, and never add a `pull_request*` trigger to a workflow
-> that can reach it.
+**Decided 2026-10-05.** Nothing on GitHub can reach or command Loki. A timer on
+Loki, as the unprivileged user that owns the stack, runs
+`scripts/deploy/pull-deploy.sh` every five minutes; it notices a new head of
+the branch it tracks, checks it, builds it and deploys it (§4.1). The how-to —
+install, force a deploy, pause, roll back — is `infra/loki/README.md`.
 
-**No repository secret.** `.github/workflows/deploy-loki.yaml` pushes and pulls
-GHCR images with the `GITHUB_TOKEN` every job is issued (self-hosted runners
-included), and reads every application secret from `infra/.env.prod` on Loki
-itself, which never passes through GitHub. What it does need:
+**Why not a runner on Loki.** This repository is public. A pull request from a
+fork runs *the workflow files in that pull request*, not the ones on `main`, so
+anyone who can get a PR's workflows run could add `runs-on: [self-hosted,
+loki]` to a workflow of their own and execute arbitrary code on Loki — with
+Docker (root-equivalent on the host), write access to the shared nginx-proxy's
+`vhost.d`, and the production env file on disk. Nothing in a workflow file can
+prevent that, and GitHub's own guidance is to use self-hosted runners only with
+private repositories. The old `deploy` job (`runs-on: [self-hosted, loki]`) is
+deleted, and no runner was ever registered. A GitHub-hosted job reaching in
+over SSH with a forced-command key was the other option; it still puts an
+inbound path and a deploy credential on GitHub, which the pull model has
+neither of.
 
-- **A self-hosted runner on Loki carrying the `loki` label** — none is
-  registered yet (the workflow's header), so the `deploy` job queues until one
-  is. **Read the warning above before registering one.** It needs Docker with
-  the compose v2 plugin ≥ 2.24, permission to run both, `jq` and `curl`, and
-  **write access to nginx-proxy's `vhost.d`** (`<vhost.d path>`; grant it to
-  the runner's user or group specifically — see §7).
-- **Optionally, repository *variables*** (paths and names, not secrets), each
-  only if the default is wrong: `LOKI_ENV_FILE_PATH`
-  (`/opt/cellar-assistant/infra/.env.prod`), `LOKI_NGINX_PROXY_CONTAINER`
-  (`nginx-proxy`), `LOKI_NGINX_PROXY_NETWORK` (`bridge`). Take the last two
-  from `docker inspect nginx-proxy`; if the edge stack is ever rebuilt with
-  different names, set them here rather than editing the workflow.
-- **One required repository variable, `LOKI_NGINX_PROXY_VHOST_DIR`** — the
-  host path of nginx-proxy's `vhost.d` (`<vhost.d path>`; the `Source` of the
-  mount whose `Destination` is `/etc/nginx/vhost.d` in `docker inspect
-  nginx-proxy`). It has no default in the repository: the deploy job fails
-  before touching anything if it is unset.
+**What decides what gets deployed.** Two candidates were weighed:
 
-- **A decision, not a secret: whether `stack-ci` gates merges.** The deploy
-  cannot wait on another workflow, so it smoke-tests its own images before
-  pushing them (`scripts/ci/image-smoke.sh`, the same check `stack-ci`'s
-  `images` job runs on every PR). Everything else `stack-ci` checks — the
-  suites, typecheck, the schema drift check — gates a deploy only if it is a
-  *required status check* on `main` (branch protection). It is not one today,
-  and because it is path-filtered, making it required as-is would leave PRs it
-  never ran on waiting for it forever; it would need its `paths` dropped, or a
+| | (a) GHCR images built by Actions | (b) the git commit, built on Loki — **chosen** |
+|---|---|---|
+| Exists before a merge to `main` | no — the build job runs only on `main`, and merging is gated (e4-decisions decision 15) | yes, any branch; today that is `migrate-off-nhost` |
+| Credential on Loki | a PAT with `read:packages` unless the packages are made public | none — a public repository is read anonymously |
+| What Loki trusts | a mutable tag (`sha-<7>`) that any workflow with `packages: write` on `main` could re-push, unless digests are carried through a second trusted channel | a commit id: `git archive <sha>` of the object fetched is the tree, byte for byte |
+| Cost on Loki | a pull | a build — niced, one image at a time, on the host's layer cache |
+| Matches the first deploy | no | yes: the hand-made first deploy (§4) built on Loki from a `git archive` too |
+
+For a single-owner repository (b) is the simpler *and* the stronger one: no
+registry, no token, no tag to trust, and one path for the first deploy and
+every later one. What it costs is CPU on a shared 4-core host during a build —
+the reason `deploy-loki.yaml` built on GitHub in the first place
+(e4-decisions decision 14, now superseded on this point);
+`PULL_DEPLOY_NICE` (default 10) and building one image at a time keep that
+polite, and an unchanged layer rebuilds in seconds. The deployer also runs
+`scripts/ci/image-smoke.sh` on what it built, so the guarantee the GHCR path
+had — "an image that cannot load its own imports is never deployed" — holds
+here too. The `build` job in `.github/workflows/deploy-loki.yaml` stays, as a
+build-and-smoke check on `main` and the writer of the layer cache stack-ci's
+`images` job reads; it pushes nothing, and its token is read-only.
+
+**The integrity checks, in order** (each refusal is logged and leaves the
+running stack alone):
+
+1. **Only the tracked branch** (`PULL_DEPLOY_BRANCH`: `main` for every merge,
+   `production` for releases only, `migrate-off-nhost` until the merge).
+   `--sha` deploys a specific commit, which must be reachable from that branch.
+2. **Forward only.** On a timer tick the new head must be a descendant of the
+   deployed commit. A force-push that rewinds or replaces the branch is
+   refused, not followed; a human deploys such a commit with `--sha`. (This is
+   also what stops a tick from deploying `production` while it still points at
+   the pre-migration `82450ad1`.)
+3. **CI green.** Every check-run GitHub reports on the commit (unauthenticated
+   REST read, `GET /repos/{repo}/commits/{sha}/check-runs`, latest run of each)
+   has completed as `success`, `neutral` or `skipped`. Any other conclusion
+   refuses; a pending check, or none reported yet, waits for the next tick.
+   `PULL_DEPLOY_REQUIRED_CHECKS` names checks that must be present and green;
+   `PULL_DEPLOY_IGNORE_CHECKS` names checks not gated on.
+4. **No silent retry.** A commit whose deploy failed is held until a newer
+   commit arrives or someone runs `--force`; a five-minute timer must not
+   re-run a failing migration or roll back twelve times an hour.
+
+Signatures are not verified. Merges made in GitHub's UI carry GitHub's own
+web-flow signature, which says GitHub made the merge, not who asked for it;
+commits pushed from a workstation are unsigned (`bb52163f`, the migration
+commit, among them — `git log --format=%G?`). With one owner the trust anchor
+is the same either way: the GitHub account that can push to the branch. `git verify-commit` against an
+`allowedSignersFile` slots in after step 2 if that ever changes.
+
+**What it needs on Loki** — all of it already there on 2026-10-05 except the
+config: Docker with the compose plugin ≥ 2.24 (2.29.7 measured), `git`, `jq`,
+`curl`, `flock`, the user in the `docker` group, and write access to
+nginx-proxy's `vhost.d` (§7). The config file
+(`~/.config/cellar-pull-deploy/config`, from
+`infra/loki/pull-deploy.env.example`) names the branch and
+`NGINX_PROXY_VHOST_DIR`, the one value with no default. The schedule is a
+systemd user timer if the user has linger enabled, else a user crontab line —
+`loginctl show-user loki -p Linger` said `no` on 2026-10-05, so cron.
+
+**No repository secret, no repository variable.** The `LOKI_*` repository
+variables the old deploy job read are unused; delete them if they were ever
+set.
+
+**Observability.** `~/cellar-prod/state/status.json` (last check, last
+attempt with its failing step, last success), `~/cellar-prod/logs/pull-deploy.log`
+(a line per change of state), and a full log per attempt beside it. There is
+no Grafana rule for "deploy failed or stale": the status file lives on the
+host, not in the stack's telemetry, and alerts are delivered nowhere anyway
+(§9.7). `pull-deploy.sh status` is the check.
+
+- **A decision, not a secret: whether `stack-ci` gates merges.** The deployer
+  only sees the check-runs that ran. Everything `stack-ci` checks — the
+  suites, typecheck, the schema drift check — is in that set when it ran on the
+  commit, but it is path-filtered, so a commit it skipped is gated by whatever
+  did run. Making it a *required status check* on `main` (branch protection)
+  is what makes "on `main`" imply "passed `stack-ci`"; as-is it would leave
+  PRs it never ran on waiting forever, so it needs its `paths` dropped, or a
   small always-run summary job to require instead.
-
-An earlier version of this section asked for "registry credentials" secrets;
-the workflow has never read one.
 
 ### 2.7 AI — Vertex AI, not a model on the box
 
@@ -534,12 +559,12 @@ unit-norm, no NaN, no error, and one at cosine `-0.0016` against the reference.
   anything left is a late PUT or an upload never verified. The actor host
   waits for `minio-init` to finish successfully. Check it with
   `mc ilm rule ls <alias>/<bucket>`.
-- **Config-only changes.** The deploy workflow hashes `infra/grafana` and
+- **Config-only changes.** `pull-deploy.sh` hashes `infra/grafana` and
   `infra/dapr` into a label on the services that mount them, so a commit that
   only changes an alert rule or a Dapr component recreates exactly that service
   (§9.4). The nginx-proxy vhost files are mounted into nothing of ours, so they
   get no label: `edge.sh install` copies them and reloads the proxy explicitly,
-  and `infra/nginx-proxy/**` is in the workflow's `paths`.
+  on every deploy.
 - **Observability data.** Loki, Prometheus, Tempo and Grafana's own state live
   on the `otel-lgtm-data` volume with bounded retention (§9.3), so recreating
   `otel-lgtm` keeps its history.
@@ -549,7 +574,7 @@ unit-norm, no NaN, no error, and one at cosine `-0.0016` against the reference.
 ## 4. First deploy
 
 There is no edge container to start and no staging dance of our own: the first
-deploy is the workflow (or the same steps by hand), with certificates from
+deploy is these steps by hand (every later one is `pull-deploy.sh`, §4.1), with certificates from
 Let's Encrypt **staging** first, so a wrong DNS record costs nothing against the
 production rate limit the host's other names share.
 
@@ -594,53 +619,95 @@ unused. (Reasoned from acme-companion's `letsencrypt_service`, which keys the
 staging path off the directory URL; not yet run on Loki.)
 
 **After any manual `up` that recreates `api`, `actors` or `minio`, run
-`scripts/deploy/edge.sh attach`.** The workflow does it for you; by hand it is
+`scripts/deploy/edge.sh attach`.** `pull-deploy.sh` does it for you; by hand it is
 the one step that is easy to forget, and the edge answers 502 until it runs.
 
 ### 4.1 Every deploy after the first — schema first, then code
 
 The first deploy's database comes out of the cutover (`scripts/cutover/`), whose
 `migrate` phase seeds the migration ledger (`cellar_meta.schema_migrations`).
-From then on, **every schema change reaches production through the deploy
-workflow, before the image that needs it starts**. `deploy-loki.yaml` does this
-in order, and any failing step stops the deploy with the previous images still
-running:
+From then on, **every schema change reaches production through the deploy,
+before the image that needs it starts**. `scripts/deploy/pull-deploy.sh`, run
+on Loki by its timer once a new commit has passed §2.6's checks, does this in
+order; each step is a line in `~/cellar-prod/logs/pull-deploy.log` and its
+output goes to that attempt's own log:
 
-1. `pull`, then `build postgres` (so an `infra/postgres` change is applied, not
-   just triggered).
-2. **Refuse published development secrets**, and an edge shape that widened
-   (§3).
-3. **Install the edge's nginx config** into nginx-proxy (`edge.sh install`,
+1. **Export** the commit with `git archive` into
+   `~/cellar-prod/releases/<sha>/` — never edited afterwards, because the
+   containers created from it bind-mount their config from it.
+2. **Build** `postgres`, the actors image and the api image (in that order, one
+   at a time, niced, without `--pull`: an unchanged layer is a cache hit), tagged
+   `cellar-prod-{api,actors}:<sha8>`; then **smoke** both with
+   `scripts/ci/image-smoke.sh`.
+3. **Refuse published development secrets**, and an edge shape that widened
+   (§3) — the release's `check-prod-config.mjs`, in the new actors image.
+4. **Install the edge's nginx config** into nginx-proxy (`edge.sh install`,
    §3) — before anything is recreated, because nginx-proxy only includes a
    `vhost.d/<host>` file that exists when it regenerates.
-4. **Migrate.** `up -d --wait postgres`, then a one-shot container of the *new*
-   actors image runs `db:migrate` (`packages/db/src/migrate/cli.ts`) against
-   the DATABASE_URL the overlay gives the actor host. The image carries
+5. **Migrate.** `up -d --wait postgres`, then a one-shot container of the *new*
+   actors image runs `db:migrate --status` (logged: pending or up to date) and
+   then `db:migrate` (`packages/db/src/migrate/cli.ts`) against the
+   DATABASE_URL the overlay gives the actor host. The image carries
    `packages/db`, so the migrations applied are exactly the ones the new code
    was built with, and the credential never leaves the container. The CLI
    takes an advisory lock, runs each migration in its own transaction, refuses
    a checksum mismatch or a half-present adoption, and re-reads the ledger
    afterwards; any of those is a non-zero exit.
-5. `up -d --remove-orphans --wait` — every healthcheck, the actor host's
-   included.
-6. **Attach and verify the edge** (`edge.sh attach`, then `edge.sh verify` with
+6. `up -d --remove-orphans --wait` — every healthcheck, the actor host's
+   included — with the release's images and config fingerprints (§9.4)
+   exported over the env file.
+7. **Attach and verify the edge** (`edge.sh attach`, then `edge.sh verify` with
    `EDGE_VERIFY_INSECURE=1`: routing, not the certificate).
-7. `services/api`'s `/healthz` from inside the container, then one `PingActor`
+8. `services/api`'s `/healthz` from inside the container, then one `PingActor`
    turn through actors-dapr (sidecar → placement → app channel → the new actor
    host).
 
-The same, by hand (a manual deploy, or re-running a step the workflow failed):
+Then `DEPLOYED_SHA`, `state/release.env` (the running images and fingerprints),
+`state/current` and `state/status.json` move to the new commit, and release
+trees and images older than the newest three are pruned (never the running one
+or the one it replaced).
+
+**When a step fails, the stack is never taken down.**
+
+- **Steps 1–4:** nothing running has changed (`edge.sh install` restores its own
+  files when the proxy's full `nginx -t` fails). The attempt is recorded as
+  `failed` and the old stack keeps serving.
+- **Step 5 (migrate):** there is no `up`. The old app containers were never
+  touched; if the postgres image changed it is re-tagged to the previous one
+  and postgres re-applied, and the previous release's vhost files are
+  re-installed.
+- **Steps 6–8:** the previous release is re-applied in full — its compose
+  files, its images, its vhost files — and verified with the same steps 7–8.
+  The attempt ends `rolled_back`, or `rollback_failed` if that did not verify,
+  which needs a human.
+
+**Migrations are forward-only, and a rollback does not undo them.** Whatever
+part of a release's migrations committed stays committed — each runs in its
+own transaction, so a failure leaves the ones before it applied and the failing
+one not. The previous actor host boots against that schema because its
+boot-preflight allows migrations it does not know (below), and keeps working
+because migrations are written to be tolerated by the code already running
+(next paragraph). A commit whose deploy failed is not retried by the timer;
+fix forward with a new commit, or `pull-deploy.sh --force` once the cause is
+gone (`infra/loki/README.md`).
+
+The same, by hand (the first deploy, or a step `pull-deploy.sh` cannot do for
+you). Run it from the release tree you are deploying; `state/release.env`
+carries the images and fingerprints, and must come after the env file (before
+the first `pull-deploy.sh` deploy it does not exist yet — drop that flag, and
+the images come from `.env.prod`):
 
 ```bash
-C="docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file infra/.env.prod"
-export COMPOSE_ENV_FILE=infra/.env.prod NGINX_PROXY_VHOST_DIR='<vhost.d path>'
+cd ~/cellar-prod/releases/<sha>
+C="docker compose -p cellar-prod -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file $HOME/cellar-prod/env/.env.prod --env-file $HOME/cellar-prod/state/release.env"
+export COMPOSE_ENV_FILE=$HOME/cellar-prod/env/.env.prod COMPOSE_PROJECT=cellar-prod NGINX_PROXY_VHOST_DIR='<vhost.d path>'
 
 # What is pending? Read-only; exit 3 means "pending", 0 "up to date".
 $C run --rm --no-deps -T actors \
   sh -c 'MIGRATE_DATABASE_URL="$DATABASE_URL" exec node /workspace/packages/db/src/migrate/cli.ts --status'
 
-# Apply — ACTORS_IMAGE in infra/.env.prod must already name the image you are
-# about to deploy, since its migrations are the ones that run.
+# Apply — ACTORS_IMAGE must already name the image you are about to deploy,
+# since its migrations are the ones that run.
 scripts/deploy/edge.sh install
 $C up -d --wait postgres
 $C run --rm --no-deps -T actors \
@@ -649,6 +716,9 @@ $C up -d --remove-orphans --wait
 scripts/deploy/edge.sh attach
 scripts/deploy/edge.sh verify
 ```
+
+(`edge.sh` reads one env file; it renders the config only for hostnames and
+service names, which do not depend on `release.env`.)
 
 **A migration runs while the previous actor host is still serving.** Write
 migrations the running code tolerates: add a column or table in one release,
@@ -662,8 +732,8 @@ image's `db:migrate` only warns about ledger rows it does not know.
 `cellar_meta.schema_migrations` with the migrations its image ships, and if any is missing — or
 was recorded from a different `migration.sql` — it exits and prints each one (`missing: <name>`,
 `changed: <name>`) with the command to run. A migration the database has and the image lacks is
-allowed: that is §6's rollback. So skipping step 3 above no longer boots and fails at query time
-hours later; it fails the `up --wait` in step 4, naming the migration. Under `NODE_ENV=production`
+allowed: that is §6's rollback. So skipping step 5 above no longer boots and fails at query time
+hours later; it fails the `up --wait` in step 6, naming the migration. Under `NODE_ENV=production`
 (the image sets it) the same preflight also refuses `DAPR_API_TOKEN`, `APP_API_TOKEN` or
 `MINIO_ROOT_PASSWORD` holding the development default `infra/docker-compose.yml` publishes — by
 sha256, naming the variable and never the value — so a deploy that skipped
@@ -897,13 +967,31 @@ merge is never a Loki-only event.
 
 ## 6. Rolling back and stopping
 
+**A failed deploy rolls itself back** (§4.1). To roll back a deploy that
+*succeeded* but is wrong, deploy the older commit through the same path — it
+re-runs every check and every verification step, and its release tree and
+images are usually still on disk (the newest three are kept):
+
 ```bash
-# Roll the apps back to a previous image without touching data (or the schema —
-# see §4.1: migrations are forward-only, so the older image must tolerate them):
-#   edit API_IMAGE / ACTORS_IMAGE in infra/.env.prod, then
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
-  --env-file infra/.env.prod up -d api actors
-COMPOSE_ENV_FILE=infra/.env.prod scripts/deploy/edge.sh attach   # the recreate dropped it
+~/.local/lib/cellar-pull-deploy/pull-deploy.sh pause            # or the timer moves forward again
+~/.local/lib/cellar-pull-deploy/pull-deploy.sh --sha <older-sha>
+# fix forward on the branch, then:
+~/.local/lib/cellar-pull-deploy/pull-deploy.sh resume
+```
+
+The schema is not rolled back — migrations are forward-only (§4.1), so the
+older image must tolerate them, which is what the add-then-drop rule above
+guarantees. By hand, without the deployer (e.g. it is the thing that broke):
+
+```bash
+# Roll the apps back to a previous image without touching data or schema:
+#   set API_IMAGE / ACTORS_IMAGE in ~/cellar-prod/state/release.env (or, before
+#   the first pull deploy, in env/.env.prod) to the older cellar-prod-*:<sha8>, then
+cd ~/cellar-prod/releases/<older-sha>
+docker compose -p cellar-prod -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+  --env-file ~/cellar-prod/env/.env.prod --env-file ~/cellar-prod/state/release.env up -d api actors
+COMPOSE_ENV_FILE=~/cellar-prod/env/.env.prod COMPOSE_PROJECT=cellar-prod \
+  scripts/deploy/edge.sh attach   # the recreate dropped it
 
 # Stop everything, keeping volumes (database, objects, telemetry):
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
@@ -1113,7 +1201,8 @@ Stated plainly, because the difference matters when something fails at 2am.
   issuance for the two new names (staging first, §4); `docker network connect
   bridge` against Loki's Compose and Docker (reasoned to behave as
   measured on the Mac — it is a plain daemon call — but not run); the
-  runner's write access to `vhost.d`; and the whole public path, DNS and
+  deploy user's write access to `vhost.d`; `pull-deploy.sh` against the real
+  daemon (its self-test runs it against fakes); and the whole public path, DNS and
   any DNS proxy included. §5 is the first test of each.
 - **The switch from staging to production certificates.** Reasoned from
   acme-companion's source (staging keys off the directory URL and lands in
@@ -1302,7 +1391,7 @@ takes about 30 seconds and every server logs its own shutdown.
 
 `docker compose up -d` recreates a container when its compose config changes,
 never because a bind-mounted file did, and Grafana reads alerting provisioning
-only at start. So the deploy workflow hashes `infra/grafana` and `infra/dapr`
+only at start. So `pull-deploy.sh` hashes `infra/grafana` and `infra/dapr`
 (Markdown excluded) into a `cellar.config-fingerprint` label on `otel-lgtm` and
 both sidecars (Caddy, and `infra/caddy`, were in this list until the edge moved
 to the host's nginx-proxy; its vhost files are installed and reloaded by
@@ -1313,7 +1402,8 @@ only. An in-place reload is not a substitute, because several of these are
 that replaces the file — on Docker Desktop the container's view became "No such
 file" after an atomic rename; on Linux it keeps serving the old inode.
 
-Deploying by hand? Either export the two hashes the workflow computes, or
+Deploying by hand? Pass `--env-file ~/cellar-prod/state/release.env` after the
+env file (it carries the two hashes `pull-deploy.sh` computed), or
 `up -d --force-recreate otel-lgtm` after a config change. With the data on
 a volume, recreating `otel-lgtm` costs a telemetry gap of well under a minute
 and nothing else.

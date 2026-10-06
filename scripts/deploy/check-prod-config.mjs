@@ -30,8 +30,8 @@
 //
 // Runs as a plain Node ESM program with no imports, so the deploy can hand it
 // to the node inside the image it is deploying (`node --input-type=module -e`)
-// on a runner that has no Node of its own. Wired into
-// .github/workflows/deploy-loki.yaml ("Refuse published development secrets")
+// on a host that has no Node of its own. Wired into
+// scripts/deploy/pull-deploy.sh (its `guard` step, on Loki)
 // and self-tested in stack-ci's `compose` job (scripts/deploy/prod-config-selftest.sh).
 
 /** Variable names that hold a credential. Matched against the NAME, per service. */

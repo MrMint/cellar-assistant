@@ -2437,7 +2437,9 @@ Grafana sits on the LAN address, Postgres/MinIO/api on loopback, and the actors 
   correctly 55 lines further down — the two passages had contradicted each other since A2.
 - **There is no self-hosted runner for this repository.** The plan assumed one existed; none is
   registered, so the deploy job queues forever until someone registers a runner with the `loki`
-  label (or the deploy moves off a self-hosted runner — `deploy-loki.md` §2.6).
+  label (or the deploy moves off a self-hosted runner — `deploy-loki.md` §2.6). **Resolved
+  2026-10-05:** it moved off — Loki pulls, builds and deploys itself (`scripts/deploy/pull-deploy.sh`),
+  and the `deploy` job is deleted.
 - **Compose appends port lists rather than merging them by container port.** The first prod overlay
   looked correct and still left MinIO's console published on `0.0.0.0`; `!override` is required.
 - **The Grafana provisioning bind mount shadows the image's own**, so declaring it without copying

@@ -5,8 +5,8 @@
 #   scripts/deploy/edge.sh attach    # after `up`: connect the proxied services
 #   scripts/deploy/edge.sh verify    # after attach: prove the routing through the proxy
 #
-# Run from the repository root (the deploy workflow's checkout, or Loki's
-# clone). docs/architecture/deploy-loki.md §1 and §3 explain the shape; this is
+# Run from the repository root (a release tree on Loki, as
+# scripts/deploy/pull-deploy.sh does, or any checkout). docs/architecture/deploy-loki.md §1 and §3 explain the shape; this is
 # the part of it Compose cannot express.
 #
 # WHY A SCRIPT AND NOT COMPOSE. On Loki, nginx-proxy lives on Docker's DEFAULT
@@ -24,12 +24,13 @@
 # in which that set is anything else, so this script needs no list of its own.
 #
 # Environment:
-#   COMPOSE_ENV_FILE        REQUIRED. infra/.env.prod (the deploy's ENV_FILE_PATH).
+#   COMPOSE_ENV_FILE        REQUIRED. The production env file (on Loki,
+#                           ~/cellar-prod/env/.env.prod; pull-deploy.sh passes it).
 #   NGINX_PROXY_VHOST_DIR   REQUIRED for `install`. The HOST path mounted at
 #                           /etc/nginx/vhost.d in the proxy (the `Source` of
 #                           that mount in `docker inspect nginx-proxy`). No
-#                           default: the deploy sets it from the repository
-#                           variable LOKI_NGINX_PROXY_VHOST_DIR.
+#                           default: pull-deploy.sh takes it from its config
+#                           (~/.config/cellar-pull-deploy/config).
 #   NGINX_PROXY_CONTAINER   default nginx-proxy
 #   NGINX_PROXY_NETWORK     default bridge — the network the proxy is on
 #   COMPOSE_FILES           default infra/docker-compose.yml:infra/docker-compose.prod.yml

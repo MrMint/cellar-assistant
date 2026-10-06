@@ -348,8 +348,13 @@ have used, because on cutover day there is nothing on Loki to redeploy over. So 
 convenience whose absence costs one command, not a precondition. ~~Register it in the week after,
 under whatever label.~~ **Updated 2026-10-05:** the repository is public, so a persistent
 self-hosted runner on Loki would run code from any fork PR's own workflow files. Do not register
-one; automate subsequent deploys with a pull-based timer on Loki or a GitHub-hosted job over a
-forced-command SSH key instead (`deploy-loki.md` §2.6 has both).
+one. **Implemented the same day: the deploy is pull-based.** `deploy-loki.yaml`'s `deploy` job is
+deleted; a timer on Loki runs `scripts/deploy/pull-deploy.sh` as the stack's own user, which deploys
+the tracked branch's head once it is a fast-forward of what runs and every check-run on it is
+green — building the images on Loki from the commit, not pulling them from GHCR, so nothing needs a
+merge to `main` or a registry credential (`deploy-loki.md` §2.6 has the comparison, §4.1 the
+sequence and rollback, `infra/loki/README.md` the how-to). The first deploy stays the by-hand path
+above; installing the timer after it is `infra/loki/install-pull-deploy.sh`.
 
 The "runner queues forever" fact is unchanged and still worth knowing — re-verified 2026-09-18:
 
@@ -521,6 +526,14 @@ GitHub-hosted runner in the first place.
 
 Note this is independent of decision 5's missing *deploy* runner: the `build` job runs on
 `ubuntu-latest` and needs no self-hosted runner at all.
+
+**Superseded 2026-10-05: Loki builds its own images, and GHCR is no longer in the deploy path.**
+The pull-based deployer (decision 5; `deploy-loki.md` §2.6) builds from the commit on Loki, which
+is what the first deploy was already doing — no GHCR packages exist, and none could until a merge
+to `main`. The objection above still stands as a cost, and is answered rather than ignored: builds
+run niced, one image at a time, on the host's layer cache, and only when a new commit has passed
+CI. `deploy-loki.yaml` now builds and smoke-tests on `main` and publishes nothing; this
+prerequisite — "the images do not exist until `main`" — no longer applies to the deploy.
 
 **Blocks E4: no** — the runbook step is added, behind decision 15's gates.
 

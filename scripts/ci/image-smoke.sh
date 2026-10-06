@@ -6,8 +6,9 @@
 #   scripts/ci/image-smoke.sh actors <image>
 #
 # Run by stack-ci's `images` job on every PR (against images built exactly as
-# deploy-loki.yaml builds them) and by deploy-loki.yaml's own build job before
-# it pushes, so an image that cannot start is never published.
+# deploy-loki.yaml builds them), by deploy-loki.yaml's own build job on `main`,
+# and on Loki by scripts/deploy/pull-deploy.sh on the images it builds, before
+# it migrates anything — so an image that cannot start is never deployed.
 #
 # Why this exists: each runtime stage's `COPY packages/…` list is written by
 # hand. services/api/src/dockerfile-workspaces.test.ts guards the manifests and

@@ -59,7 +59,7 @@
 #      atomic rename on the host; on Linux it keeps serving the old inode.
 #      Either way a Grafana reload API call inside the container would re-read
 #      stale config. Each of those services therefore carries a
-#      `cellar.config-fingerprint` label that .github/workflows/deploy-loki.yaml
+#      `cellar.config-fingerprint` label that scripts/deploy/pull-deploy.sh
 #      sets to a hash of the directory it mounts from; a changed hash is a
 #      changed label, which `up -d` answers with a recreate of that service and
 #      nothing else. Unset (any manual `up`), the label is empty and nothing is
@@ -142,7 +142,7 @@ services:
 
   # --- Applications --------------------------------------------------------
   actors:
-    image: ${ACTORS_IMAGE:?ACTORS_IMAGE is required, e.g. ghcr.io/mrmint/cellar-actors:sha-abc1234}
+    image: ${ACTORS_IMAGE:?ACTORS_IMAGE is required, e.g. cellar-prod-actors:abc12345}
     # See note 1 at the top of this file: without this the base's workspace bind
     # mount would shadow the image.
     volumes: !reset []
@@ -251,7 +251,7 @@ services:
     # Merged with the base file's `postgres: service_healthy`. Two reasons, one
     # of them load-bearing for the deploy: FileActor and the files binding need
     # the bucket `minio-init` creates, and `docker compose up --wait` (what
-    # .github/workflows/deploy-loki.yaml runs, so the healthchecks above are
+    # scripts/deploy/pull-deploy.sh runs, so the healthchecks above are
     # actually awaited) FAILS on a one-shot container that exits 0 unless
     # something depends on it with `service_completed_successfully` — measured
     # on compose v5.5.1: `container …-oneshot-1 exited (0)`, exit 1.
@@ -277,7 +277,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ${API_IMAGE:?API_IMAGE is required, e.g. ghcr.io/mrmint/cellar-api:sha-abc1234}
+    image: ${API_IMAGE:?API_IMAGE is required, e.g. cellar-prod-api:abc12345}
     volumes: !reset []
     working_dir: /workspace/services/api
     command: ["bun", "src/index.ts"]
@@ -346,9 +346,9 @@ services:
   # **Production serves this app from Vercel**, not from Loki
   # (docs/architecture/deploy-loki.md §2.5: three server-side variables on the
   # Vercel project point it at this stack), so the container must not start
-  # here — the deploy workflow runs a bare
+  # here — the deploy runs a bare
   # `docker compose … up -d --remove-orphans` with no service list
-  # (.github/workflows/deploy-loki.yaml), which would otherwise build Next on
+  # (scripts/deploy/pull-deploy.sh), which would otherwise build Next on
   # Loki and publish it on 0.0.0.0:3003, past the edge.
   #
   # An overlay cannot *remove* a service, so this gates it behind a profile

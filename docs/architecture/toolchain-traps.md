@@ -342,8 +342,9 @@ the one-shot scripts, and there is nothing to roll back for it.
   use. Running them would have dropped another session's `cellar_test`, and
   `Stop Postgres`'s `down -v` would have taken the volumes with it. The steps
   are unchanged from before phase 6; only their surrounding comments moved.
-- **`deploy-loki.yaml`'s `deploy` job has no runner** (`[self-hosted, loki]`; none registered).
-  Its `build` job on `ubuntu-latest` is all that runs. Nothing in that workflow is Node- or
+- **`deploy-loki.yaml` has no `deploy` job any more** (2026-10-05): the deploy is pull-based, run
+  on Loki by `scripts/deploy/pull-deploy.sh` (`deploy-loki.md` §2.6). Its `build` job on
+  `ubuntu-latest` is all there is. Nothing in that workflow is Node- or
   pnpm-shaped, so the toolchain move left it alone; the consequences for the cutover are
   `e4-decisions.md` decisions 5 and 14, not this file's problem.
 - **`release-please` needs no bun change, and that was measured rather than
