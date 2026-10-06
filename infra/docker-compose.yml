@@ -289,7 +289,7 @@ services:
   # moved out of the actor state store into this service in Dapr 1.15, which is
   # why it is not optional here even though no state store is declared.
   placement:
-    image: daprio/placement:1.18.3
+    image: daprio/placement:1.18.4
     command:
       - "/placement"
       - "--port=50005"
