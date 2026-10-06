@@ -1678,7 +1678,6 @@ type GoogleBindingCollision {
   googlePlaceId: String!
 }
 
-type GooglePlaceSuggestion {
 type GooglePlaceDetailsPayload {
   """False when the API budget denied the call; nothing was spent."""
   charged: Boolean!
@@ -1704,6 +1703,7 @@ type GooglePlacePrefill {
   website: String
 }
 
+type GooglePlaceSuggestion {
   googlePlaceId: ID!
 
   """Present for nearby results; absent from autocomplete."""
@@ -3551,11 +3551,11 @@ type Query {
   geocode(query: String!): GeocodeResult
 
   """
-  """
   G21 — a picked Google suggestion's name, phone, website, summary and types, before the place exists, for the create-place form (GooglePlacesActor). Signed in only; charged to the Places details budget once per listing per activation.
   """
   googlePlaceDetails(googlePlaceId: String!): GooglePlaceDetailsPayload!
 
+  """
   Google Places autocomplete or nearby search (GooglePlacesActor). Each distinct query at a distinct point is charged once per activation, not once per keystroke.
   """
   googlePlaceSuggestions(
