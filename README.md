@@ -283,7 +283,7 @@ service, you must offer its users the corresponding source.
 ## A note on history
 
 This project ran on Nhost and Hasura until 2026 and has since migrated to the
-stack described above. A pre-migration Nhost stack is still present in the tree
-as a rollback path and as a `pg_dump` source; it is not where new work happens,
-and the instructions for it are not repeated here. See the "Legacy rollback
-path only" section of [`AGENTS.md`](AGENTS.md) if you need it.
+stack described above. The local Nhost stack is retired; the rollback of record
+is a checkout of the pre-migration commit `82450ad1`, and the `nhost/` directory
+still in this tree is frozen history that nothing executes. See "Nhost: retired,
+and how rollback works" in [`AGENTS.md`](AGENTS.md).

@@ -43,7 +43,8 @@ with its own way of failing quietly:
                           bucket (minio-init is a one-shot container, so `up -d`
                           re-runs it — a deleted bucket heals here)
 3/7  database schema      clone from a running cellar-* stack, or build from the
-                          Nhost transform if there is nothing to clone from
+                          checked-in Nhost baseline (transform/run.sh) if there
+                          is nothing to clone from
 4/7  apps + sidecars      `dev:up --detach`
 5/7  readiness            `dev:wait` — a real PingActor call, not a port probe
 6/7  seed + sign-in       `dev:seed`, then a real better-auth sign-in as
@@ -255,13 +256,13 @@ Three prerequisites of `bun run test` live outside this stack entirely, and
    every run DROPs and re-CREATEs a shared `cellar_test`; the per-run databases
    had already replaced that when this file landed in `4e067928`. What is still
    shared is the template's fingerprint, so worktrees whose transform files
-   differ rebuild it when they alternate — which is why `--tests` prefers this
-   worktree's own Postgres whenever it can build there.
-2. Building the *template* re-dumps the legacy Nhost database by default, so
-   that stack has to be up for a first build (`nhost up --apply-seeds`) —
-   unless you point `DUMP` at the checked-in
-   `packages/db/transform/nhost-schema.sql` and pass `--no-dump`, which needs
-   no Nhost stack at all (X4; it is what CI does).
+   differ rebuild it when they alternate — which is why `--tests` uses this
+   worktree's own Postgres.
+2. Building the *template* restores the checked-in
+   `packages/db/transform/nhost-schema.sql` (X4) and needs no Nhost stack —
+   the same input CI uses. It used to re-dump the legacy Nhost container by
+   default; that container, and the local Nhost stack, are gone since
+   2026-10-05 (AGENTS.md, "Nhost: retired, and how rollback works").
 3. One client test file, `src/lib/api/round-trip.test.ts` (the auth proxy's
    end-to-end steps), **skips itself** unless a sign-in as `test@test.com`
    succeeds against `:3002`, so a green suite with its skips proves less than it
@@ -509,8 +510,8 @@ bun run dev:prune -- --apply  # `docker compose -p <name> down --volumes --remov
 ```
 
 `cellar-stack` is excluded by name and never pruned. Projects that are not
-`cellar-*` — including the legacy `epic-burnell-*` Nhost stack — are not
-considered at all.
+`cellar-*` — such as a legacy Nhost stack brought up from a `82450ad1`
+checkout, named after its directory — are not considered at all.
 
 ---
 
