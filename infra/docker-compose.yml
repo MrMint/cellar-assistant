@@ -441,6 +441,11 @@ services:
       # Per-user hourly/daily caps over the defaults in budget-actor.ts
       # (USER_CAPS); same empty-means-none and throw-on-malformed rules.
       BUDGET_USER_CAPS: ${BUDGET_USER_CAPS:-}
+      # Google Places API (New): place details, nearby/text search, photos and
+      # enrichment (services/actors/src/lib/google-places.ts). Empty leaves
+      # Places unconfigured: those calls throw rather than return nothing.
+      # Production uses a key restricted to places.googleapis.com.
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
       # Hosted providers. PLACEHOLDERS ONLY here — real values belong in the
       # gitignored infra/.env. Setting AI_PROVIDER to one of these without its
       # credentials makes the actor host refuse to start (that is the point).
