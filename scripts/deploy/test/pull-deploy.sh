@@ -335,7 +335,14 @@ chmod +x "$H/ibin/"*
 IHOME="$H/ihome"
 mkdir -p "$IHOME"
 printf '0 3 * * * /usr/bin/true # someone else\n' > "$FAKE_STATE/crontab"
-inst() { RC=0; HOME="$IHOME" PATH="$H/ibin:$PATH" "$INSTALLER" "$@" > "$H/iout" 2>&1 || RC=$?; }
+# XDG_CONFIG_HOME is unset, not inherited: the installer puts its units in
+# ${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user, and GitHub's ubuntu runners
+# export XDG_CONFIG_HOME=/home/runner/.config. Inherited, the units went to the
+# runner's real config dir instead of $IHOME — "linger on -> units installed"
+# failed there (stack-ci 37404204231) while passing on macOS, where it is
+# unset, and "uninstall: units removed" passed without testing anything. On a
+# Linux workstation it would have written into the developer's own user units.
+inst() { RC=0; env -u XDG_CONFIG_HOME HOME="$IHOME" PATH="$H/ibin:$PATH" "$INSTALLER" "$@" > "$H/iout" 2>&1 || RC=$?; }
 inst
 check "installer: exit 0" eq "$RC" 0
 check "installer: script installed and executable" test -x "$IHOME/.local/lib/cellar-pull-deploy/pull-deploy.sh"
