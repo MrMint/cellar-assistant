@@ -69,11 +69,10 @@ export type ItemCardProps = {
  * Markup, sections and styles are the old card's. Four substitutions, each
  * listed in `src/components/LEGACY-RESTORE.md`:
  *
- * 1. **The image** is a plain `<img>` on the presigned `displayImageUrl`
- *    rather than `next/image` on a Nhost storage URL — `next.config.mjs`
- *    explains why presigned reads never go through the optimizer. The old
- *    blur placeholder becomes the `<img>`'s background. The bundled fallback
- *    art still goes through `next/image`, as before.
+ * 1. **The image** is `next/image` on the presigned `displayImageUrl` rather
+ *    than on a Nhost storage URL — same props as before. Presigned reads are
+ *    stable per window now, so the optimizer's cache can hit
+ *    (`next.config.mjs`, `imagesConfig`).
  * 2. **The favourite toggle** is `toggleFavorite` (one mutation that reports
  *    the state after the toggle) instead of the add/delete server actions
  *    keyed on a favourite row id. The optimistic flip and revert are the old
@@ -129,24 +128,18 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         sx={{ aspectRatio: { xs: 1.2, sm: 1 }, padding: 0, overflow: "hidden" }}
       >
         {isNotNil(item.displayImageUrl) && (
-          // biome-ignore lint/performance/noImgElement: presigned reads must not go through /_next/image (next.config.mjs, D10).
-          <img
+          <Image
             style={{
               aspectRatio: "1",
               objectFit: "cover",
               height: "auto",
               width: "auto",
-              backgroundImage: isNotNil(placeholder)
-                ? `url("${placeholder}")`
-                : undefined,
-              backgroundSize: "cover",
             }}
             src={item.displayImageUrl}
             alt={fallback.alt}
             height={400}
             width={400}
-            loading="lazy"
-            decoding="async"
+            placeholder={placeholder}
           />
         )}
         {isNil(item.displayImageUrl) && (

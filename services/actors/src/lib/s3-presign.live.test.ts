@@ -29,7 +29,10 @@ import {
   filesS3Config,
   presignedGetUrl,
   presignedPutUrl,
+  presignedStableGetUrl,
+  readUrlWindowSettings,
   setObjectMediaType,
+  stableReadWindow,
 } from "./s3-presign.ts";
 
 const HOST = process.env.FILES_S3_LIVE_ENDPOINT ?? "localhost";
@@ -149,5 +152,28 @@ describe.skipIf(skip)("setObjectMediaType against MinIO (W4 F5)", () => {
       }),
     ).rejects.toMatchObject({ code: "PreconditionFailed" });
     expect((await read(key)).status).toBe(404);
+  });
+
+  /**
+   * Stable read URLs: the store has to *honour* the signed
+   * `response-cache-control` override, or the browser still revalidates every
+   * load. Also proves the window-dated signature verifies — its `X-Amz-Date`
+   * is in the past, up to a whole window ago.
+   */
+  it("serves a stable read URL with the signed Cache-Control", async () => {
+    const key = `${prefix}/item-image/${randomUUID()}`;
+    await client.putObject(config.bucket, key, Buffer.from(JPEG), JPEG.length, {
+      "Content-Type": "image/jpeg",
+    });
+    const window = stableReadWindow(new Date(), readUrlWindowSettings({}));
+    const url = await presignedStableGetUrl(config, key, window);
+    expect(await presignedStableGetUrl(config, key, window)).toBe(url);
+
+    const response = await fetch(url);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe(
+      "private, max-age=86400, immutable",
+    );
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(JPEG);
   });
 });

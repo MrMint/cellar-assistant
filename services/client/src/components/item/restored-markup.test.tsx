@@ -9,12 +9,13 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import {
+  NextImageConfig,
+  nextImageModule,
+  optimizedSrc,
+} from "../../test-support/next-image";
 
-mock.module("next/image", () => ({
-  default: (props: { alt: string }) => (
-    <span data-next-image="art" data-alt={props.alt} />
-  ),
-}));
+mock.module("next/image", () => nextImageModule("art"));
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
   usePathname: () => "/teas/t1",
@@ -24,6 +25,7 @@ mock.module("next/navigation", () => ({
 const { ItemPageView } = await import("./ItemPageView");
 const { CellarItemPageView } = await import("./CellarItemPageView");
 const { ItemForm } = await import("./ItemForm");
+const { ItemImage } = await import("./ItemImage");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -130,6 +132,28 @@ describe("ItemPageView (restored {T}Details)", () => {
 
   test("the fallback picture when there is no image", () => {
     assert.match(html, /data-alt="A picture of a glass"/);
+  });
+});
+
+describe("ItemImage (restored)", () => {
+  test("a presigned photo goes through /_next/image at the old 500 px", () => {
+    const photo = "https://files.test/cellar-files/item-image/i.jpg?sig=1";
+    const html = renderToStaticMarkup(
+      <NextImageConfig>
+        <ItemImage
+          url={photo}
+          placeholder="png;base64,AAAA"
+          fallback={{ src: "/x.png", width: 1, height: 1 }}
+        />
+      </NextImageConfig>,
+    );
+    assert.ok(html.includes(`${optimizedSrc(photo, 500)} 1x`), html);
+    assert.ok(html.includes(`src="${optimizedSrc(photo, 1080)}"`));
+    assert.match(
+      html,
+      /background-image:url\(&quot;data:image\/png;base64,AAAA/,
+    );
+    assert.doesNotMatch(html, /data-next-image="art"/);
   });
 });
 

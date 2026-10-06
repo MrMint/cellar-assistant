@@ -14,7 +14,7 @@
  *   (`processMenuScan` appended each scan to it).
  * - Save / Mark Visited → `recordPlaceInteraction`; the visit count is the
  *   server's, not `visit_count + 1` computed here.
- * - Photos are the mirrored `Place.photos` (presigned `<img>`); Google's
+ * - Photos are the mirrored `Place.photos` (presigned, through `next/image`); Google's
  *   attribution blocks are printed with "Powered by Google".
  */
 
@@ -36,6 +36,7 @@ import {
   Tabs,
   Typography,
 } from "@mui/joy";
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -599,10 +600,11 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
       {googlePhotos[0]?.url && (
         <Card sx={{ mb: 3, p: 0, overflow: "hidden" }}>
           <AspectRatio ratio="16/9">
-            {/* biome-ignore lint/performance/noImgElement: presigned reads must not go through /_next/image (next.config.mjs, D10). */}
-            <img
+            <Image
               src={googlePhotos[0].url}
               alt={placeData.name}
+              fill
+              sizes="(max-width: 720px) 100vw, 720px"
               style={{ objectFit: "cover" }}
             />
           </AspectRatio>

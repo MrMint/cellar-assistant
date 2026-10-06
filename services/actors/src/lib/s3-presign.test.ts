@@ -24,13 +24,18 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_READ_URL_MIN_VALIDITY_SECONDS,
+  DEFAULT_READ_URL_WINDOW_SECONDS,
   describeAuthorityMismatch,
   type FilesS3Config,
   filesS3Config,
   filesS3InternalConfig,
   presignedGetUrl,
   presignedPutUrl,
+  presignedStableGetUrl,
+  readUrlWindowSettings,
   signedOrigin,
+  stableReadWindow,
 } from "./s3-presign.ts";
 
 /**
@@ -286,5 +291,103 @@ describe("describeAuthorityMismatch", () => {
     expect(describeAuthorityMismatch("not a url", DEV_ENV)).toContain(
       "not a URL",
     );
+  });
+});
+
+/**
+ * Stable read URLs (production, 2026-10-06: every page load signed a new URL
+ * for the same image, so the browser cache never hit). The URL has to be a
+ * pure function of (key, window), and every URL handed out has to leave the
+ * caller at least the documented minimum of validity.
+ */
+describe("stable read URLs", () => {
+  const settings = readUrlWindowSettings({});
+  const HOUR = 60 * 60 * 1000;
+  /** A window start, so offsets below are unambiguous. */
+  const START = Date.UTC(2026, 9, 6);
+  const sign = (at: number, key = KEY) =>
+    presignedStableGetUrl(
+      filesS3Config(PROD_ENV),
+      key,
+      stableReadWindow(new Date(at), settings),
+    );
+
+  it("defaults to a 24 h window and a 1 h minimum validity", () => {
+    expect(settings).toEqual({
+      windowSeconds: DEFAULT_READ_URL_WINDOW_SECONDS,
+      minValiditySeconds: DEFAULT_READ_URL_MIN_VALIDITY_SECONDS,
+    });
+    expect(DEFAULT_READ_URL_WINDOW_SECONDS).toBe(86_400);
+    expect(DEFAULT_READ_URL_MIN_VALIDITY_SECONDS).toBe(3_600);
+  });
+
+  it("signs the same URL for the same key anywhere inside one window", async () => {
+    const first = await sign(START + 1000);
+    expect(await sign(START + 1000)).toBe(first);
+    expect(await sign(START + 13 * HOUR)).toBe(first);
+    expect(await sign(START + 24 * HOUR - 1000)).toBe(first);
+  });
+
+  it("signs a different URL in the next window, and for another key", async () => {
+    const first = await sign(START + 1000);
+    expect(await sign(START + 24 * HOUR)).not.toBe(first);
+    expect(await sign(START + 1000, `${KEY}.other`)).not.toBe(first);
+  });
+
+  it("dates the signature at the window start and expires it window + minimum later", async () => {
+    const url = new URL(await sign(START + 7 * HOUR));
+    expect(url.searchParams.get("X-Amz-Date")).toBe("20261006T000000Z");
+    expect(url.searchParams.get("X-Amz-Expires")).toBe(String(86_400 + 3_600));
+  });
+
+  it("always leaves at least the minimum validity, even a second before the boundary", () => {
+    for (const offset of [
+      0,
+      1000,
+      12 * HOUR,
+      24 * HOUR - 1000,
+      24 * HOUR - 1,
+    ]) {
+      const now = START + offset;
+      const window = stableReadWindow(new Date(now), settings);
+      const remaining = window.expiresAt.getTime() - now;
+      expect(remaining).toBeGreaterThan(settings.minValiditySeconds * 1000);
+      expect(remaining).toBeLessThanOrEqual(
+        (settings.windowSeconds + settings.minValiditySeconds) * 1000,
+      );
+      expect(window.expiresAt.getTime()).toBe(
+        window.requestDate.getTime() + window.expirySeconds * 1000,
+      );
+    }
+  });
+
+  it("signs a private, immutable Cache-Control into the URL", async () => {
+    const url = new URL(await sign(START));
+    expect(url.searchParams.get("response-cache-control")).toBe(
+      "private, max-age=86400, immutable",
+    );
+    // In the query string, so inside the signature: a holder cannot edit it.
+    expect(url.searchParams.get("X-Amz-Signature")).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("reads the window from the environment and refuses bad values by name", () => {
+    expect(
+      readUrlWindowSettings({
+        FILES_READ_URL_WINDOW_SECONDS: "3600",
+        FILES_READ_URL_MIN_VALIDITY_SECONDS: "600",
+      }),
+    ).toEqual({ windowSeconds: 3600, minValiditySeconds: 600 });
+    expect(() =>
+      readUrlWindowSettings({ FILES_READ_URL_WINDOW_SECONDS: "1.5" }),
+    ).toThrow(/FILES_READ_URL_WINDOW_SECONDS/);
+    expect(() =>
+      readUrlWindowSettings({ FILES_READ_URL_MIN_VALIDITY_SECONDS: "10" }),
+    ).toThrow(/FILES_READ_URL_MIN_VALIDITY_SECONDS/);
+    // SigV4 caps a presign at 7 days; the pair may not add up past it.
+    expect(() =>
+      readUrlWindowSettings({
+        FILES_READ_URL_WINDOW_SECONDS: String(7 * 86_400),
+      }),
+    ).toThrow(/7-day/);
   });
 });

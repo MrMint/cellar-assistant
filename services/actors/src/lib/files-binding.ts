@@ -68,7 +68,8 @@ import {
   filesS3Config,
   filesS3InternalConfig,
   type MediaTypeCopyOptions,
-  presignedGetUrl,
+  presignedStableGetUrl,
+  type StableReadWindow,
   setObjectMediaType,
 } from "./s3-presign.ts";
 
@@ -120,8 +121,13 @@ export type FilesBinding = {
    * Signed in process against `FILES_S3_ENDPOINT`/`FILES_S3_PORT` rather than
    * by the binding, which can only ever sign for the endpoint it dials. See
    * this module's E3 section.
+   *
+   * Takes a {@link StableReadWindow}, not a TTL: the URL is signed with the
+   * window's start as its date, so it is the same string for every call in
+   * the window and a browser can cache it (`s3-presign.ts`, "Stable read
+   * URLs").
    */
-  presignGetPublic(key: string, ttlSeconds: number): Promise<string>;
+  presignGetPublic(key: string, window: StableReadWindow): Promise<string>;
   /**
    * A GET URL for a caller **inside** this network — the AI seams, and
    * `readHead` below. GET-only, per `presignObject()` in the binding source.
@@ -213,8 +219,8 @@ export const daprFilesBinding = (client: DaprClient): FilesBinding => ({
     };
   },
 
-  async presignGetPublic(key, ttlSeconds) {
-    return presignedGetUrl(filesS3Config(), key, ttlSeconds);
+  async presignGetPublic(key, window) {
+    return presignedStableGetUrl(filesS3Config(), key, window);
   },
 
   async presignGetInternal(key, ttlSeconds) {

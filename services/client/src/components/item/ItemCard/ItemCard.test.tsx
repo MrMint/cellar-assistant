@@ -6,9 +6,9 @@
  * when its value is.
  *
  * Server-rendered with `react-dom/server`, which is what the first paint of a
- * client component is anyway; no DOM library needed. `next/image` is stubbed
- * because bun imports a `.png` as a path string, not the static-image object
- * Next's loader produces.
+ * client component is anyway; no DOM library needed. `next/image` is the
+ * real one for the presigned photo and a stub for bundled art
+ * (`src/test-support/next-image.tsx` says why).
  */
 
 import { mock } from "bun:test";
@@ -17,12 +17,13 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import {
+  NextImageConfig,
+  nextImageModule,
+  optimizedSrc,
+} from "../../../test-support/next-image";
 
-mock.module("next/image", () => ({
-  default: (props: { alt: string }) => (
-    <span data-next-image="fallback" data-alt={props.alt} />
-  ),
-}));
+mock.module("next/image", () => nextImageModule("fallback"));
 
 const { ItemCard } = await import("./index");
 
@@ -32,10 +33,11 @@ const client = new Client({
 });
 /** Markup with Emotion's inline `<style>` tags removed — structure only. */
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
-  );
+  renderToStaticMarkup(
+    <NextImageConfig>
+      <Provider value={client}>{node}</Provider>
+    </NextImageConfig>,
+  ).replace(/<style[^>]*>[^<]*<\/style>/g, "");
 
 /** The card's section skeleton, in document order. */
 const skeleton = (html: string): string[] =>
@@ -77,9 +79,13 @@ describe("ItemCard (restored)", () => {
       "Divider",
       "Divider",
     ]);
-    // Presigned image as a plain <img>, never through /_next/image.
-    assert.match(html, /<img[^>]+src="https:\/\/files\.test\/x\.jpg\?sig=1"/);
-    assert.doesNotMatch(html, /_next\/image/);
+    // The presigned photo goes through the optimizer, as the old card's Nhost
+    // URL did: 400 px at 1x, the next configured size (828) at 2x, never the
+    // original bytes.
+    const photo = "https://files.test/x.jpg?sig=1";
+    assert.ok(html.includes(`src="${optimizedSrc(photo, 828)}"`), html);
+    assert.ok(html.includes(`${optimizedSrc(photo, 400)} 1x`));
+    assert.doesNotMatch(html, /src="https:\/\/files\.test/);
     assert.match(
       html,
       /background-image:url\(&quot;data:image\/png;base64,AAAA&quot;\)/,

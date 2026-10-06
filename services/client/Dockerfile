@@ -120,6 +120,14 @@ RUN bun run --bun next build
 # ---- runtime ----------------------------------------------------------------
 FROM base AS runtime
 ENV NODE_ENV=production
+# Again, at runtime: `next start` re-evaluates next.config.mjs
+# (`loadConfig(PHASE_PRODUCTION_SERVER)`), and `images.remotePatterns` /
+# `dangerouslyAllowLocalIP` are read from THAT evaluation, not from the build's.
+# Without this the optimizer refuses every presigned item photo with 400
+# "url parameter is not allowed" even though the CSP baked at build allows the
+# host. Same default and same compose build arg as the build stage.
+ARG FILES_S3_PUBLIC_URL=http://localhost:9100
+ENV FILES_S3_PUBLIC_URL=${FILES_S3_PUBLIC_URL}
 WORKDIR /workspace
 
 # The full install, devDependencies included, rather than a second

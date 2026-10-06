@@ -28,7 +28,11 @@ import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
 import { type FilesBinding, ObjectChangedError } from "../lib/files-binding.ts";
-import { MAX_UPLOAD_BYTES } from "../lib/s3-presign.ts";
+import {
+  MAX_UPLOAD_BYTES,
+  readUrlWindowSettings,
+  stableReadWindow,
+} from "../lib/s3-presign.ts";
 import {
   activate,
   closeTestDb,
@@ -592,11 +596,30 @@ describe.skipIf(skip)("FileActor (A8)", () => {
       ).rejects.toBeInstanceOf(ConflictError);
 
       await actor.verify(userCtx(uploaderId, "r3"));
+      const before = Date.now();
       const read = await actor.presignRead(userCtx(uploaderId, "r4"));
       expect(read.url).toBe("https://example.test/signed-get");
+      // Signed for the current stable window (s3-presign.ts, "Stable read
+      // URLs"), not with a per-call TTL — and the expiry the caller is told is
+      // the window's, which is never less than the minimum validity from now.
+      const settings = readUrlWindowSettings();
+      const window = stableReadWindow(new Date(before), settings);
       expect(presignGetPublic).toHaveBeenCalledWith(
         `item-image/${fileId}`,
-        expect.any(Number),
+        window,
+      );
+      expect(read.expiresAt).toBe(window.expiresAt.toISOString());
+      expect(Date.parse(read.expiresAt) - Date.now()).toBeGreaterThan(
+        settings.minValiditySeconds * 1000 - 5_000,
+      );
+
+      // A second read inside the same window hands the signer the same window,
+      // so the binding signs the same URL.
+      await actor.presignRead(userCtx(uploaderId, "r5"));
+      expect(presignGetPublic).toHaveBeenNthCalledWith(
+        2,
+        `item-image/${fileId}`,
+        window,
       );
     });
   });

@@ -3,8 +3,8 @@
  * readers are here).
  *
  * `PlaceGooglePhoto.storageFileId` (an Nhost storage id fed to
- * `getNhostStorageUrl`) → `url`, the presigned `PlacePhoto.file.url` (D10:
- * drawn with a plain `<img>`, never through `/_next/image`), plus the photo's
+ * `getNhostStorageUrl`) → `url`, the presigned `PlacePhoto.file.url` (drawn
+ * through `next/image`, as before — see `next.config.mjs`, `imagesConfig`), plus the photo's
  * own `attributions`, which Google's terms require next to the image.
  * `PlaceEnrichment.photoReferences` is gone: the API mirrors the photos and
  * exposes them as `Place.photos`.

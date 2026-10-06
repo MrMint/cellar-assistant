@@ -123,7 +123,10 @@
  *     caller is `src/lib/ai/images.ts`, which downloads the image bytes to
  *     hand a vision model.
  *
- * Same row, same visibility check, same TTL; only the authority differs. Two
+ * Same row, same visibility check; the authority differs, and so does the
+ * lifetime (`presignRead` signs a stable per-window URL a browser can cache —
+ * `src/lib/s3-presign.ts`, "Stable read URLs"; the internal one keeps a 30m
+ * TTL). Two
  * names rather than one method with a flag, so that a caller standing in the
  * wrong place is visible in a diff — and `describeAuthorityMismatch` in
  * `src/lib/s3-presign.ts` turns the mistake into a message that names both
@@ -169,6 +172,8 @@ import {
   filesS3Config,
   MAX_UPLOAD_BYTES,
   presignedPutUrl,
+  readUrlWindowSettings,
+  stableReadWindow,
 } from "../lib/s3-presign.ts";
 
 export type FileRow = typeof files.$inferSelect;
@@ -197,7 +202,14 @@ export const fileRowToDto = (row: FileRow): FileDto => ({
 
 /** A2's own presign demonstration used 15m; kept the same here for the PUT side. */
 const UPLOAD_TTL_SECONDS = 15 * 60;
-/** Matches Nhost's own `storage.buckets.download_expiration` default (30m). */
+/**
+ * The in-network read's TTL (`presignReadInternal`). Matches Nhost's own
+ * `storage.buckets.download_expiration` default (30m). The browser-facing
+ * `presignRead` no longer uses a per-call TTL: it signs a stable URL per
+ * window (`stableReadWindow` in `src/lib/s3-presign.ts`), valid for
+ * `FILES_READ_URL_WINDOW_SECONDS` + `FILES_READ_URL_MIN_VALIDITY_SECONDS`
+ * from the window start — never less than the minimum from now.
+ */
 const READ_TTL_SECONDS = 30 * 60;
 
 const KIND_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -483,8 +495,13 @@ export class FileActor
    * **browser-facing** authority, because that is who this one is for.
    */
   async presignRead(ctx: Ctx): Promise<ReadTarget> {
-    return this.#readTarget(ctx, (key) =>
-      this.#binding.presignGetPublic(key, READ_TTL_SECONDS),
+    // Read per call, so a bad value fails the read that needs it with a
+    // message naming the variable, rather than the actor host's boot.
+    const window = stableReadWindow(new Date(), readUrlWindowSettings());
+    return this.#readTarget(
+      ctx,
+      (key) => this.#binding.presignGetPublic(key, window),
+      window.expiresAt,
     );
   }
 
@@ -494,11 +511,15 @@ export class FileActor
    * on. Signed for the in-network authority; see the module doc.
    *
    * Not a cheaper or looser `presignRead`: identical visibility check,
-   * identical "verified first" rule, identical TTL.
+   * identical "verified first" rule. Only the lifetime differs, and it is
+   * shorter: this URL is fetched once and thrown away, so it gains nothing
+   * from the browser-facing URL's per-window stability.
    */
   async presignReadInternal(ctx: Ctx): Promise<ReadTarget> {
-    return this.#readTarget(ctx, (key) =>
-      this.#binding.presignGetInternal(key, READ_TTL_SECONDS),
+    return this.#readTarget(
+      ctx,
+      (key) => this.#binding.presignGetInternal(key, READ_TTL_SECONDS),
+      new Date(Date.now() + READ_TTL_SECONDS * 1000),
     );
   }
 
@@ -506,6 +527,7 @@ export class FileActor
   async #readTarget(
     ctx: Ctx,
     sign: (key: string) => Promise<string>,
+    expiresAt: Date,
   ): Promise<ReadTarget> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
@@ -514,7 +536,7 @@ export class FileActor
     }
     return {
       url: await sign(aggregate.file.key),
-      expiresAt: new Date(Date.now() + READ_TTL_SECONDS * 1000).toISOString(),
+      expiresAt: expiresAt.toISOString(),
     };
   }
 

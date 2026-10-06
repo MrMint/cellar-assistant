@@ -8,6 +8,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { NextImageConfig, optimizedSrc } from "../../test-support/next-image";
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
@@ -221,6 +222,47 @@ describe("drawer content (restored)", () => {
     assert.match(html, /Menu Items/);
     assert.match(html, /Kubota Junmai/);
     assert.match(html, /aria-label="Close place details"/);
+  });
+
+  test("the mirrored photo goes through /_next/image, as the old Nhost one did", () => {
+    const photo =
+      "https://files.test/cellar-files/place-photo/p.jpg?X-Amz-Signature=1";
+    const html = renderToStaticMarkup(
+      <NextImageConfig>
+        <Provider value={client}>
+          <PlaceDetailsContent
+            place={{
+              id: "p1",
+              name: "Rusty Barrel",
+              primary_category: "bar",
+              categories: [],
+              street_address: null,
+              locality: null,
+              rating: null,
+            }}
+            userInteraction={null}
+            menuItems={[]}
+            loadingDetails={false}
+            hasMenuItems={false}
+            userId=""
+            variant="desktop"
+            onClose={() => {}}
+            refetch={() => {}}
+            setInteraction={async () => null}
+            enrichment={null}
+            googlePhotos={[
+              { id: "ph", url: photo, displayOrder: 0, attributions: [] },
+            ]}
+          />
+        </Provider>
+      </NextImageConfig>,
+    );
+    // `fill` + the old `sizes`: the browser picks a width from the srcset,
+    // and the largest configured width is the fallback `src`.
+    assert.ok(html.includes(`src="${optimizedSrc(photo, 1080)}"`), html);
+    assert.ok(html.includes(`${optimizedSrc(photo, 400)} 400w`));
+    assert.match(html, /sizes="\(max-width: 600px\) 100vw, 720px"/);
+    assert.ok(!html.includes(`src="${photo}"`));
   });
 });
 

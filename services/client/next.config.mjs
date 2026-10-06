@@ -127,6 +127,113 @@ const fileOrigins = (warn = true) => {
  */
 const publicFileOrigins = fileOrigins(false).join(" ");
 
+/** Loopback names: a files origin on one of these can only be a local lane. */
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * `images.remotePatterns` entry for one file origin from {@link fileOrigins}:
+ * that exact scheme, host and port, any path, any query (the presigned
+ * signature lives in the query).
+ *
+ * Any path rather than `/<bucket>/**`: the bucket is the actor host's
+ * `FILES_S3_BUCKET`, which this build does not see, and a mismatch would be a
+ * broken image on every card. Nothing is lost by it — this is the deployment's
+ * own MinIO, which answers 403 to anything that is not a valid signature, so
+ * the optimizer can fetch nothing through this entry that a signed URL did not
+ * already authorise.
+ */
+export const fileImagePattern = (origin) => {
+  const url = new URL(origin);
+  return {
+    protocol: url.protocol === "http:" ? "http" : "https",
+    hostname: url.hostname,
+    // `""` for the scheme's default port, which is what Next compares against
+    // (`URL#port` is empty there too).
+    port: url.port,
+    pathname: "/**",
+  };
+};
+
+/**
+ * Remote images the app renders through `/_next/image`, and how they are
+ * cached. Evaluated from `process.env` on every call, so the test can vary
+ * it; Next evaluates it at build time **and again at `next start`**
+ * (`loadConfig(PHASE_PRODUCTION_SERVER)`), so a self-hosted server needs the
+ * same file-host variable at runtime as at build — `services/client/Dockerfile`
+ * sets it in both stages. Vercel takes the build's.
+ *
+ * ## The file host is back (D10 reversed, 2026-10-06)
+ *
+ * D10 kept presigned reads out of the optimizer for three reasons. Two were
+ * about the URL changing on every render — a cache key that could never hit,
+ * and a cached entry outliving its source. Both are gone: `FileActor.presignRead`
+ * now signs **one URL per object per window** (24 h by default,
+ * `services/actors/src/lib/s3-presign.ts`, "Stable read URLs"), so the same
+ * image is the same `url=` all day, the optimizer's cache hits, and no page
+ * ever asks for a URL after its window rolls over. The third, the SSRF
+ * allowlist, is bounded by {@link fileImagePattern}: one origin, ours, which
+ * serves nothing unsigned.
+ *
+ * What it buys: production measured full originals (up to 4.6 MB) downloaded
+ * for 400 px cards. Through the optimizer they are WebP at the rendered width.
+ *
+ * ## `minimumCacheTTL` is the window, not 31 days
+ *
+ * Production at `82450ad1` used 31 days for Nhost storage URLs, which never
+ * changed. A presigned URL changes every window, so an optimizer entry older
+ * than the window is one no page will request again — a longer TTL adds no
+ * hits. It only lets anyone holding an old `/_next/image?url=<signed URL>`
+ * keep fetching the image from the optimizer's (public) cache long after the
+ * URL itself stopped verifying. So the floor is the default window, 24 h. For
+ * file-host images it is moot anyway: Next takes the larger of this and the
+ * upstream `max-age`, and the actor host signs `max-age=<window>` into every
+ * read URL. Raise `FILES_READ_URL_WINDOW_SECONDS` there and this follows.
+ *
+ * ## `dangerouslyAllowLocalIP`: only when the file host is loopback
+ *
+ * Next 16 refuses to optimise an image whose host resolves to a private
+ * address. Both local lanes serve files from `localhost`: the host-run dev
+ * server (`NODE_ENV=development`) and the `cellar-stack` client container,
+ * which is a production build whose `FILES_S3_PUBLIC_URL` is
+ * `http://localhost:9100` (the container reaches it through the
+ * `client-files-loopback` forwarder in `infra/docker-compose.yml`). The flag
+ * is derived from that rather than from a variable someone could set: a build
+ * whose file host is loopback cannot be serving real users, because no
+ * browser but the developer's could fetch its images.
+ */
+export const imagesConfig = () => {
+  const origins = fileOrigins(false);
+  const loopbackOnly =
+    origins.length > 0 &&
+    origins.every((origin) => LOOPBACK_HOSTS.has(new URL(origin).hostname));
+  return {
+    dangerouslyAllowLocalIP:
+      process.env.NODE_ENV === "development" || loopbackOnly,
+    // See "`minimumCacheTTL` is the window" above. Was 31 days (2678400).
+    minimumCacheTTL: 86400,
+    // Only webp — default includes avif+webp which doubles transformations per image.
+    formats: ["image/webp"],
+    // Only the sizes actually used in the app (200, 400, 500px display sizes + 2x DPR).
+    // Default device/image size lists generate many unused variants per image.
+    deviceSizes: [400, 500, 828, 1080],
+    imageSizes: [200, 400, 500],
+    remotePatterns: [
+      // Item photos and mirrored place photos: presigned GETs on our MinIO.
+      ...origins.map(fileImagePattern),
+      // OAuth avatars: stable, unsigned, public URLs.
+      { protocol: "https", hostname: "s.gravatar.com" },
+      { protocol: "https", hostname: "cdn.discordapp.com" },
+      { protocol: "https", hostname: "platform-lookaside.fbsbx.com" },
+      { protocol: "https", hostname: "graph.facebook.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      // Brand logos and recipe pictures are NOT here: `Brand.logoUrl` and
+      // `Recipe.imageUrl` are free-form URLs on any producer's host, which no
+      // pattern can bound without becoming an open SSRF proxy. They stay
+      // plain `<img>` (`BrandCard`, `RecipeDetails`, …).
+    ],
+  };
+};
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {
@@ -142,64 +249,7 @@ const nextConfig = {
       bodySizeLimit: "10mb",
     },
   },
-  /**
-   * `remotePatterns` deliberately has **no entry for the file host** (D10).
-   *
-   * Item images are served from MinIO by presigned GET URLs: 30-minute TTL,
-   * with the expiry and the signature in the query string. Running those
-   * through `/_next/image` is wrong three ways, and the middle one is a broken
-   * image rather than a slow one:
-   *
-   *   1. **The cache key is the whole URL, signature included.** Every render
-   *      presigns afresh, so every render is a cache miss and a fresh
-   *      transformation. The optimizer's cache — the thing `minimumCacheTTL`
-   *      below exists to protect — cannot hit even once, so it is pure cost.
-   *   2. **`minimumCacheTTL` is 31 days and the URL lives 30 minutes.** The
-   *      only way an entry is ever reused is if the same signed URL is
-   *      requested twice, and on a miss the optimizer refetches the `src` it
-   *      was given — by then a URL MinIO answers `AccessDenied` to. A cached
-   *      entry that outlives its own source is a broken image waiting for a
-   *      cold cache, which is exactly the failure mode a long TTL is supposed
-   *      to prevent.
-   *   3. **It is an SSRF allowlist.** `remotePatterns` lets the optimizer
-   *      fetch, server-side, any URL matching the pattern. Adding the file
-   *      host to it buys nothing here (see 1) and widens that surface.
-   *
-   * So presigned reads render through a plain `<img>` instead — see
-   * `ImageTile` in `src/components/item-api/ItemImages.tsx`. The tradeoff is
-   * real and accepted: no server-side resize and no WebP transcode for item
-   * photos, so the original bytes go over the wire. It is paid down with a
-   * Joy `AspectRatio` box that reserves the space before the bytes arrive (so
-   * no layout shift), plus `loading="lazy"` and `decoding="async"` on the tag
-   * itself. The right long-term fix is to resize on the way
-   * *in* — one derivative per upload, in `FileActor` — not to re-derive one
-   * per view from a URL that expires. `img-src` already allows the host.
-   *
-   * The other patterns here are OAuth avatars: stable, unsigned, public URLs.
-   * They are exactly what the optimizer is good at, and they stay.
-   */
-  images: {
-    dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
-    // Cache transformed images for 31 days — item images rarely change.
-    // Default is 60s which causes the same transformation to be regenerated
-    // repeatedly throughout the day, burning through the free tier limit.
-    minimumCacheTTL: 2678400,
-    // Only webp — default includes avif+webp which doubles transformations per image.
-    formats: ["image/webp"],
-    // Only the sizes actually used in the app (200, 400, 500px display sizes + 2x DPR).
-    // Default device/image size lists generate many unused variants per image.
-    deviceSizes: [400, 500, 828, 1080],
-    imageSizes: [200, 400, 500],
-    remotePatterns: [
-      { protocol: "https", hostname: "s.gravatar.com" },
-      { protocol: "https", hostname: "cdn.discordapp.com" },
-      { protocol: "https", hostname: "platform-lookaside.fbsbx.com" },
-      { protocol: "https", hostname: "graph.facebook.com" },
-      { protocol: "https", hostname: "lh3.googleusercontent.com" },
-      // The `*.storage.nhost.run` patterns went with D9, and **nothing replaces
-      // them**. That is a decision (D10), not an omission — see below.
-    ],
-  },
+  images: imagesConfig(),
   logging: {
     fetches: {
       fullUrl: true,

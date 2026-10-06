@@ -19,10 +19,10 @@ export type ItemImageProps = {
 /**
  * `82450ad1:src/components/item/ItemImage.tsx`, restored.
  *
- * A presigned read goes into a plain `<img>`, never `next/image` (presigned
- * URLs expire and carry their signature in the query string — see
- * `next.config.mjs`, D10); the placeholder sits behind it as a background, as
- * `ItemCard` does. A URL that has aged out falls back to the type's picture.
+ * The presigned read goes through `next/image` as the Nhost URL did — read
+ * URLs are stable per window now (`next.config.mjs`, `imagesConfig`). One
+ * addition: a URL that fails to load (aged out in a long-open tab) falls back
+ * to the type's picture.
  */
 export const ItemImage = ({
   url,
@@ -43,9 +43,9 @@ export const ItemImage = ({
     [onCaptureImage],
   );
 
-  const hasImage = url !== null && url !== undefined && !failed;
+  const imageUrl = failed ? undefined : (url ?? undefined);
+  const hasImage = imageUrl !== undefined;
   const canEdit = onCaptureImage !== undefined;
-  const background = getNextPlaceholder(placeholder);
 
   return (
     <>
@@ -58,20 +58,14 @@ export const ItemImage = ({
         onClick={canEdit ? () => setOpen(true) : undefined}
       >
         <CardCover>
-          {hasImage && (
-            <Box
-              component="img"
-              src={url}
+          {imageUrl !== undefined && (
+            <Image
+              src={imageUrl}
               alt="A picture of a glass"
-              loading="lazy"
-              decoding="async"
+              height={500}
+              width={500}
+              placeholder={getNextPlaceholder(placeholder)}
               onError={() => setFailed(true)}
-              sx={{
-                objectFit: "cover",
-                backgroundImage:
-                  background === undefined ? undefined : `url(${background})`,
-                backgroundSize: "cover",
-              }}
             />
           )}
           {!hasImage && (

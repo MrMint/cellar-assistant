@@ -697,6 +697,44 @@ services:
       - actors
     restart: unless-stopped
 
+  # The client container's `localhost:${MINIO_PORT}`, forwarded to MinIO.
+  #
+  # Item photos render through `/_next/image` (services/client/next.config.mjs,
+  # `imagesConfig`), so it is THIS container's Next server that fetches the
+  # presigned URL, not the browser. That URL is signed for the browser-facing
+  # authority, `localhost:9100` (`FILES_S3_ENDPOINT`/`FILES_S3_PORT` on
+  # `actors` above), and SigV4 covers the Host, so the server has to dial
+  # exactly that string — but inside a container `localhost` is the container
+  # itself. No single name reaches MinIO from both a host browser and a
+  # container on Docker Desktop for macOS (measured exhaustively in
+  # services/actors/src/lib/s3-presign.ts, E3).
+  #
+  # So this joins the client's network namespace and listens on its loopback
+  # at the published port, forwarding raw TCP to `minio:9000`. The request
+  # arrives at MinIO still saying `Host: localhost:9100`, which is what was
+  # signed. Plain Node from the client's own base image: nothing new to pull.
+  #
+  # Production has neither this nor the client (Vercel serves the frontend):
+  # both are profiled out in docker-compose.prod.yml.
+  client-files-loopback:
+    image: node:24-bookworm-slim
+    network_mode: "service:client"
+    command:
+      - node
+      - -e
+      - >-
+        const net = require("node:net");
+        net.createServer((c) => {
+          const s = net.connect(9000, "minio");
+          c.pipe(s).pipe(c);
+          c.on("error", () => s.destroy());
+          s.on("error", () => c.destroy());
+        }).listen(${MINIO_PORT:-9100}, "127.0.0.1");
+    depends_on:
+      - client
+      - minio
+    restart: unless-stopped
+
   # --- Observability ------------------------------------------------------
   # Traces, metrics and logs in one container; both sidecars export OTLP to it,
   # and its Prometheus scrapes the Dapr runtime's own metrics (see the

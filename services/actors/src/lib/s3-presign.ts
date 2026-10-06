@@ -439,8 +439,187 @@ export const presignedGetUrl = async (
   config: FilesS3Config,
   key: string,
   ttlSeconds: number,
+  options: PresignGetOptions = {},
 ): Promise<string> =>
-  clientFor(config).presignedGetObject(config.bucket, key, ttlSeconds);
+  clientFor(config).presignedGetObject(
+    config.bucket,
+    key,
+    ttlSeconds,
+    options.responseHeaders ?? {},
+    options.requestDate,
+  );
+
+/**
+ * What {@link presignedGetUrl} signs beyond the key and the TTL.
+ *
+ * - `requestDate` — the `X-Amz-Date` to sign with. The `minio` client
+ *   (8.0.7, `presignedUrl` in `internal/client.js`) defaults it to `new Date()`,
+ *   which is why two signatures of the same key a second apart are two
+ *   different URLs. {@link stableReadWindow} pins it to a window boundary.
+ * - `responseHeaders` — S3's `response-*` query overrides
+ *   (`response-cache-control`, `response-content-type`, …). They ride in the
+ *   query string, so they are **inside** the signature: a holder of the URL
+ *   cannot change them without invalidating it.
+ */
+export type PresignGetOptions = {
+  readonly requestDate?: Date;
+  readonly responseHeaders?: Readonly<Record<string, string>>;
+};
+
+/**
+ * ## Stable read URLs: one URL per object per window
+ *
+ * Measured in production on 2026-10-06: `presignRead` signed with the current
+ * time, so every page load handed the browser a **different** URL for the
+ * same image — `X-Amz-Date` and `X-Amz-Signature` change every second — and
+ * the HTTP cache, which keys on the URL, never hit once. MinIO's GET also
+ * carried no `Cache-Control` at all (only `ETag`/`Last-Modified`), so even a
+ * repeated URL would have been revalidated.
+ *
+ * The fix is to make the URL a pure function of `(key, window)`: sign with a
+ * `requestDate` floored to a fixed window boundary (UTC epoch multiples of
+ * `windowSeconds`), so every request inside one window signs byte-identical
+ * input and gets a byte-identical URL. Same object, same window → same URL →
+ * browser cache hit, and `/_next/image`'s optimizer cache too (its key is the
+ * source URL).
+ *
+ * ### Expiry: `window + minValidity`, so no URL is handed out nearly dead
+ *
+ * A URL signed at the window start `B` is handed out until `B + window`. If it
+ * expired at `B + window`, one handed out a second before the boundary would
+ * be dead a second later. So the signed expiry is `window + minValidity`, and
+ * for any moment `t` in `[B, B + window)` the URL has
+ * `B + window + minValidity - t` seconds left: **always more than
+ * `minValidity`**, and at most `window + minValidity`. That lower bound is the
+ * guarantee callers get — the old per-request TTL was 30 min, so the default
+ * minimum (1 h) is strictly longer than anything a page could count on before.
+ *
+ * SigV4 refuses expiries over 7 days (`PRESIGN_EXPIRY_DAYS_MAX`), so
+ * `window + minValidity` must stay ≤ 604800; {@link readUrlWindowSettings}
+ * enforces it at read time rather than letting the first signature throw.
+ *
+ * ### `Cache-Control: private, max-age=<window>, immutable`
+ *
+ * Sent by MinIO as a `response-cache-control` override, signed into the URL.
+ *
+ * - `private` — the bytes are a signed, per-viewer read; no shared cache
+ *   (Cloudflare, a corporate proxy) may keep them. Cloudflare already reports
+ *   `cf-cache-status: DYNAMIC` for these, and `private` keeps it that way.
+ * - `max-age=<window>` — the header is part of the URL, so it has to be the
+ *   same for every request in the window and cannot count down. `window` is
+ *   what "seconds until the URL expires, minus the margin" equals for a URL
+ *   at its own window start, and no page asks for this URL after
+ *   `B + window` except a page already holding it, for at most `minValidity`
+ *   more. A copy kept longer than the URL lives is never asked for again (the
+ *   next window signs a different URL) and is harmless: the browser already
+ *   has the bytes.
+ * - `immutable` — a served key is written once, by `FileActor.verify`'s
+ *   copy-away, and never rewritten (`file-actor.ts`, "The upload key is not
+ *   the served key"), so revalidating it on reload is pure waste.
+ *
+ * ### What this changes about security, stated plainly
+ *
+ * Visibility is unchanged — `FileActor` still checks it before every
+ * signature, and the URL is still private and signed. What changes is
+ * **lifetime**: a URL leaked from a page used to die within 30 min and now
+ * lives up to `window + minValidity` (25 h by default). Revoking a viewer's
+ * access no longer stops a URL they already hold for that long either. That is
+ * the price of a cacheable URL; shrink `FILES_READ_URL_WINDOW_SECONDS` to buy
+ * it back at the cost of more cache misses.
+ */
+export type ReadUrlWindowSettings = {
+  readonly windowSeconds: number;
+  readonly minValiditySeconds: number;
+};
+
+/** A day: one cache miss per image per viewer per day. */
+export const DEFAULT_READ_URL_WINDOW_SECONDS = 24 * 60 * 60;
+/** Twice the 30 min the per-request TTL used to promise. */
+export const DEFAULT_READ_URL_MIN_VALIDITY_SECONDS = 60 * 60;
+/** SigV4's own ceiling (`PRESIGN_EXPIRY_DAYS_MAX` in `minio`). */
+const SIGV4_MAX_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
+
+const positiveInteger = (
+  environment: NodeJS.ProcessEnv,
+  name: string,
+  fallback: number,
+): number => {
+  const raw = read(environment, name);
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 60) {
+    throw new Error(
+      `[files] ${name} must be a whole number of seconds, at least 60; got ${JSON.stringify(raw)}.`,
+    );
+  }
+  return value;
+};
+
+/**
+ * `FILES_READ_URL_WINDOW_SECONDS` / `FILES_READ_URL_MIN_VALIDITY_SECONDS`,
+ * defaulting to 24 h / 1 h. Throws, naming the variables, when the pair would
+ * exceed SigV4's 7-day maximum.
+ */
+export const readUrlWindowSettings = (
+  environment: NodeJS.ProcessEnv = process.env,
+): ReadUrlWindowSettings => {
+  const windowSeconds = positiveInteger(
+    environment,
+    "FILES_READ_URL_WINDOW_SECONDS",
+    DEFAULT_READ_URL_WINDOW_SECONDS,
+  );
+  const minValiditySeconds = positiveInteger(
+    environment,
+    "FILES_READ_URL_MIN_VALIDITY_SECONDS",
+    DEFAULT_READ_URL_MIN_VALIDITY_SECONDS,
+  );
+  if (windowSeconds + minValiditySeconds > SIGV4_MAX_EXPIRY_SECONDS) {
+    throw new Error(
+      "[files] FILES_READ_URL_WINDOW_SECONDS + FILES_READ_URL_MIN_VALIDITY_SECONDS " +
+        `is ${windowSeconds + minValiditySeconds}s, over SigV4's 7-day (${SIGV4_MAX_EXPIRY_SECONDS}s) presign maximum.`,
+    );
+  }
+  return { windowSeconds, minValiditySeconds };
+};
+
+/** Everything one stable read signature needs, derived from a moment. */
+export type StableReadWindow = {
+  /** The window start — the `X-Amz-Date` every signature in the window uses. */
+  readonly requestDate: Date;
+  /** `X-Amz-Expires`: window + minimum validity. */
+  readonly expirySeconds: number;
+  /** When the URL stops verifying: `requestDate + expirySeconds`. */
+  readonly expiresAt: Date;
+  /** The `response-cache-control` value signed into the URL. */
+  readonly cacheControl: string;
+};
+
+/** The window `now` falls in; see the section above for every number. */
+export const stableReadWindow = (
+  now: Date,
+  settings: ReadUrlWindowSettings,
+): StableReadWindow => {
+  const windowMs = settings.windowSeconds * 1000;
+  const startMs = Math.floor(now.getTime() / windowMs) * windowMs;
+  const expirySeconds = settings.windowSeconds + settings.minValiditySeconds;
+  return {
+    requestDate: new Date(startMs),
+    expirySeconds,
+    expiresAt: new Date(startMs + expirySeconds * 1000),
+    cacheControl: `private, max-age=${settings.windowSeconds}, immutable`,
+  };
+};
+
+/** {@link presignedGetUrl} for a browser, signed for `window`. */
+export const presignedStableGetUrl = async (
+  config: FilesS3Config,
+  key: string,
+  window: StableReadWindow,
+): Promise<string> =>
+  presignedGetUrl(config, key, window.expirySeconds, {
+    requestDate: window.requestDate,
+    responseHeaders: { "response-cache-control": window.cacheControl },
+  });
 
 /**
  * Name a URL that was signed for the wrong side of the split, or `undefined`

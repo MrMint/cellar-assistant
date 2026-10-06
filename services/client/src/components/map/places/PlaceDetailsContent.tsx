@@ -4,7 +4,7 @@
  * `82450ad1:src/components/map/places/PlaceDetailsContent.tsx`, restored —
  * the map drawer's body. Save / Mark Visited arrive as `setInteraction`
  * (`recordPlaceInteraction` via `usePlaceDetails`) instead of two Hasura
- * upserts with a client-computed visit count; photos are presigned `<img>`s;
+ * upserts with a client-computed visit count; photos are presigned reads through `next/image`;
  * Google's attribution blocks print with "Powered by Google".
  */
 
@@ -21,6 +21,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/joy";
+import Image from "next/image";
 import Link from "next/link";
 import type React from "react";
 import { useState } from "react";
@@ -472,10 +473,11 @@ export function PlaceDetailsContent({
             ratio={isDesktop ? "16/9" : "21/9"}
             sx={{ borderRadius: "md" }}
           >
-            {/* biome-ignore lint/performance/noImgElement: presigned reads must not go through /_next/image (next.config.mjs, D10). */}
-            <img
+            <Image
               src={googlePhotos[0].url}
               alt={place.name}
+              fill
+              sizes="(max-width: 600px) 100vw, 720px"
               style={{ objectFit: "cover" }}
             />
           </AspectRatio>

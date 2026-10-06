@@ -358,6 +358,9 @@ services:
   # keeps starting the client in the development lane.
   client:
     profiles: ["vercel-serves-the-frontend"]
+  # Lives in the client's network namespace (base file), so it goes with it.
+  client-files-loopback:
+    profiles: ["vercel-serves-the-frontend"]
 
   # --- Observability -------------------------------------------------------
   otel-lgtm:
