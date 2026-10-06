@@ -219,43 +219,46 @@ describe.skipIf(skip)("BarcodeActor (B2)", () => {
       ["EAN-13, then UPC-A", "0036000291452", "EAN_13", "036000291452", null],
       ["UPC-E, then its UPC-A", "04252614", "UPC_E", "042100005264", "UPC_A"],
       ["lower case, then upper", "w6-sku-1", null, "W6-SKU-1", null],
-    ] as const)("%s → one row, one item", async (_label, first, firstType, second, secondType) => {
-      await withTestDb(async (db) => {
-        const owner = await seedUser(db);
-        const wine = await seedWine(db, owner);
+    ] as const)(
+      "%s → one row, one item",
+      async (_label, first, firstType, second, secondType) => {
+        await withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const wine = await seedWine(db, owner);
 
-        // Registered and linked under the first spelling.
-        const scanned = await activate(
-          newBarcodeActor(barcodeActorId(first, firstType), db),
-        );
-        await scanned.ensure(userCtx(owner, "r"), { type: firstType });
-        const linked = await scanned.linkItem(userCtx(owner, "r"), {
-          itemType: wine.type,
-          itemId: wine.id,
-        });
-        const item = await activate(newItemActor(`wine:${wine.id}`, db));
-        await item.setBarcode(testDelivery(linked.outboxRowId ?? "x"), {
-          code: linked.code,
-        });
+          // Registered and linked under the first spelling.
+          const scanned = await activate(
+            newBarcodeActor(barcodeActorId(first, firstType), db),
+          );
+          await scanned.ensure(userCtx(owner, "r"), { type: firstType });
+          const linked = await scanned.linkItem(userCtx(owner, "r"), {
+            itemType: wine.type,
+            itemId: wine.id,
+          });
+          const item = await activate(newItemActor(`wine:${wine.id}`, db));
+          await item.setBarcode(testDelivery(linked.outboxRowId ?? "x"), {
+            code: linked.code,
+          });
 
-        // Scanned again under the second: the same actor key, the same row.
-        const key = barcodeActorId(second, secondType);
-        expect(key).toBe(linked.code);
-        const again = await activate(newBarcodeActor(key, db));
-        const ensured = await again.ensure(userCtx(owner, "r"), {
-          type: secondType,
+          // Scanned again under the second: the same actor key, the same row.
+          const key = barcodeActorId(second, secondType);
+          expect(key).toBe(linked.code);
+          const again = await activate(newBarcodeActor(key, db));
+          const ensured = await again.ensure(userCtx(owner, "r"), {
+            type: secondType,
+          });
+          expect(ensured).toEqual({
+            code: linked.code,
+            type: firstType,
+            items: [{ type: "WINE", id: wine.id }],
+          });
+          const rows = await db.execute<{ code: string }>(
+            sql`select code from public.barcodes where code in (${first}, ${second}, ${linked.code})`,
+          );
+          expect(rows.rows).toEqual([{ code: linked.code }]);
         });
-        expect(ensured).toEqual({
-          code: linked.code,
-          type: firstType,
-          items: [{ type: "WINE", id: wine.id }],
-        });
-        const rows = await db.execute<{ code: string }>(
-          sql`select code from public.barcodes where code in (${first}, ${second}, ${linked.code})`,
-        );
-        expect(rows.rows).toEqual([{ code: linked.code }]);
-      });
-    });
+      },
+    );
   });
 
   /* ------------------------------------------------------------------ */

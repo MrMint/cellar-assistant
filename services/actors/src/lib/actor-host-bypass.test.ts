@@ -280,15 +280,16 @@ describe("the assembled actor host", () => {
   });
   afterAll(() => host.close());
 
-  it.each(
-    ASSEMBLED,
-  )("%s %s → %i without the token, %i with it", async (method, path, bare, withToken) => {
-    const refused = await send(host, method, path);
-    expect(refused.status, "without the token").toBe(bare);
-    const tokened = await send(host, method, path, TOKEN);
-    expect(tokened.status, "with the token").toBe(withToken);
-    expect(reached, "a method body ran").toEqual([]);
-  });
+  it.each(ASSEMBLED)(
+    "%s %s → %i without the token, %i with it",
+    async (method, path, bare, withToken) => {
+      const refused = await send(host, method, path);
+      expect(refused.status, "without the token").toBe(bare);
+      const tokened = await send(host, method, path, TOKEN);
+      expect(tokened.status, "with the token").toBe(withToken);
+      expect(reached, "a method body ran").toEqual([]);
+    },
+  );
 
   it("says why it refused: UNAUTHENTICATED, not the opaque INTERNAL", async () => {
     const answer = await send(host, "PUT", "/actors/PingActor/x/method/ping");
@@ -375,14 +376,17 @@ describe("the same gates on Express's default routing (no routing fix)", () => {
     ["DELETE", "/actors/PingActor/x/"],
     ["GET", "/DAPR/config"],
     ["GET", "/dapr/config/"],
-  ])("%s %s is refused without the token, and by the allow-list with it", async (method, path) => {
-    expect((await send(host, method, path)).status).toBe(401);
-    const tokened = await send(host, method, path, TOKEN);
-    if (path.toLowerCase().startsWith("/actors")) {
-      expect(tokened.status).toBe(404);
-    }
-    expect(reached).toEqual([]);
-  });
+  ])(
+    "%s %s is refused without the token, and by the allow-list with it",
+    async (method, path) => {
+      expect((await send(host, method, path)).status).toBe(401);
+      const tokened = await send(host, method, path, TOKEN);
+      if (path.toLowerCase().startsWith("/actors")) {
+        expect(tokened.status).toBe(404);
+      }
+      expect(reached).toEqual([]);
+    },
+  );
 });
 
 describe("the router-derived half of the allow-list, alone", () => {

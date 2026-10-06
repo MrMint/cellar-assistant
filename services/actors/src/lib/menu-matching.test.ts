@@ -38,14 +38,15 @@ const EXPECTED_ITEM_TYPES: Record<ScannedItemType, ItemType[] | null> = {
 };
 
 describe("routeFor", () => {
-  it.each(
-    SCANNED_ITEM_TYPES.filter((type) => type !== "cocktail"),
-  )("narrows a %s line to exactly its own item type", (type) => {
-    const route = routeFor(type, "Something");
-    expect(route.kind).toBe("ITEM");
-    if (route.kind !== "ITEM") return;
-    expect(route.input.itemTypes).toEqual(EXPECTED_ITEM_TYPES[type]);
-  });
+  it.each(SCANNED_ITEM_TYPES.filter((type) => type !== "cocktail"))(
+    "narrows a %s line to exactly its own item type",
+    (type) => {
+      const route = routeFor(type, "Something");
+      expect(route.kind).toBe("ITEM");
+      if (route.kind !== "ITEM") return;
+      expect(route.input.itemTypes).toEqual(EXPECTED_ITEM_TYPES[type]);
+    },
+  );
 
   it("gives every item type a scanned type that routes to it alone", () => {
     const narrowed = SCANNED_ITEM_TYPES.flatMap((type) => {

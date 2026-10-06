@@ -14,13 +14,13 @@
   },
   "dependencies": {
     "@cellar-assistant/contracts": "workspace:*",
-    "@pothos/core": "4.13.1",
-    "@pothos/plugin-dataloader": "4.4.5",
-    "@pothos/plugin-errors": "4.9.1",
-    "@pothos/plugin-relay": "4.7.1",
+    "@pothos/core": "4.15.1",
+    "@pothos/plugin-dataloader": "4.4.6",
+    "@pothos/plugin-errors": "4.9.3",
+    "@pothos/plugin-relay": "4.8.1",
     "dataloader": "2.2.3",
     "graphql": "catalog:",
-    "graphql-yoga": "5.22.0",
+    "graphql-yoga": "5.24.1",
     "jose": "catalog:"
   },
   "devDependencies": {

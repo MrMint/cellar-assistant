@@ -82,27 +82,28 @@ describe.skipIf(skip)("ReferenceDataActor (A9)", () => {
     expect(ReferenceDataActor.category).toBe("reference");
   });
 
-  it.each(
-    REFERENCE_KINDS,
-  )("returns rows for %s, including a freshly inserted one", async (kind) => {
-    await withTestDb(async (db) => {
-      const value = fixtureValue(kind);
-      // Test-file writes to a reference table are exempt from the
-      // single-writer containment scan (`writers-scan.ts` excludes
-      // `*.test.ts`); this fixture row never leaves the rolled-back tx.
-      await insertFixture(db, kind, value);
+  it.each(REFERENCE_KINDS)(
+    "returns rows for %s, including a freshly inserted one",
+    async (kind) => {
+      await withTestDb(async (db) => {
+        const value = fixtureValue(kind);
+        // Test-file writes to a reference table are exempt from the
+        // single-writer containment scan (`writers-scan.ts` excludes
+        // `*.test.ts`); this fixture row never leaves the rolled-back tx.
+        await insertFixture(db, kind, value);
 
-      const actor = await activate(newActor(kind, db));
-      const rows = await actor.all({
-        viewerId: null,
-        kind: "user",
-        requestId: "r",
+        const actor = await activate(newActor(kind, db));
+        const rows = await actor.all({
+          viewerId: null,
+          kind: "user",
+          requestId: "r",
+        });
+
+        expect(rows.length).toBeGreaterThan(0);
+        expect(rows.some((row) => row.value === value)).toBe(true);
       });
-
-      expect(rows.length).toBeGreaterThan(0);
-      expect(rows.some((row) => row.value === value)).toBe(true);
-    });
-  });
+    },
+  );
 
   it("orders by value — Postgres's own collation, not JS's default sort", async () => {
     // Isolated to this rolled-back tx: clearing a small table is safe here

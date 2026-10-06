@@ -277,15 +277,17 @@ describe("B7 · tier-list insights", () => {
     expect(result.archetype).toBe("The Comfort Maximalist");
   });
 
-  it.each([
-    "palateProfile",
-    "archetype",
-  ])("still refuses an answer with no %s — the card is built around both", async (field) => {
-    const { provider } = fakeProvider(JSON.stringify({ ...six, [field]: "" }));
-    await expect(
-      providerInsightsGenerator(provider)(ctx, input),
-    ).rejects.toThrow(new RegExp(field));
-  });
+  it.each(["palateProfile", "archetype"])(
+    "still refuses an answer with no %s — the card is built around both",
+    async (field) => {
+      const { provider } = fakeProvider(
+        JSON.stringify({ ...six, [field]: "" }),
+      );
+      await expect(
+        providerInsightsGenerator(provider)(ctx, input),
+      ).rejects.toThrow(new RegExp(field));
+    },
+  );
 
   it("refuses a completion that is not JSON", async () => {
     const { provider } = fakeProvider("I'm sorry, I can't help with that.");
