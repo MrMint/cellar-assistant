@@ -24,18 +24,23 @@ export const UserSummaryFragment = graphql(`
 `);
 
 /**
- * `/friends`' friends list. `myFriends` returns ids through C3's
- * `FriendsCollectionActor`; `Friend.user` batches those ids through the
- * `UserProfile` DataLoader server-side (plan §1.5) — this query never fetches
- * profiles one at a time.
+ * `/friends`' friends list, a page at a time — `FriendsClient` walks it to
+ * the end, as the old unbounded subscription read it. `myFriends` returns ids
+ * through C3's `FriendsCollectionActor`; `Friend.user` batches those ids
+ * through the `UserProfile` DataLoader server-side (plan §1.5) — this query
+ * never fetches profiles one at a time.
  */
 export const MyFriendsQuery = graphql(
   `
-  query MyFriends($first: Int!) {
-    myFriends(first: $first) {
+  query MyFriends($first: Int!, $after: String) {
+    myFriends(first: $first, after: $after) {
       __typename
       ... on FriendConnection {
         totalCount
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         edges {
           node {
             since
@@ -53,31 +58,25 @@ export const MyFriendsQuery = graphql(
 );
 
 /**
- * Both directions in one round trip: `direction` is a required argument on
- * `myFriendRequests`, so incoming and outgoing are two aliased calls rather
- * than one query with an optional filter.
+ * One direction of `/friends`' requests, a page at a time: `direction` is a
+ * required argument on `myFriendRequests`, and incoming and outgoing page
+ * independently (each walks to its own end), so they are two lists rather
+ * than one aliased query.
  */
 export const MyFriendRequestsQuery = graphql(
   `
-  query MyFriendRequests($first: Int!) {
-    incoming: myFriendRequests(direction: INCOMING, first: $first) {
+  query MyFriendRequests(
+    $direction: FriendRequestDirection!
+    $first: Int!
+    $after: String
+  ) {
+    myFriendRequests(direction: $direction, first: $first, after: $after) {
       __typename
       ... on FriendRequestConnection {
-        edges {
-          node {
-            id
-            status
-            user {
-              ...UserSummary
-            }
-          }
+        pageInfo {
+          hasNextPage
+          endCursor
         }
-      }
-      ...ActorErrorFields
-    }
-    outgoing: myFriendRequests(direction: OUTGOING, first: $first) {
-      __typename
-      ... on FriendRequestConnection {
         edges {
           node {
             id

@@ -389,13 +389,21 @@ export const BulkCheckInMutation = graphql(
   [CheckInRowFragment, ActorErrorFieldsFragment],
 );
 
-/** The viewer's friends, for the bulk check-in picker. */
+/**
+ * The viewer's friends, for the bulk check-in picker and the cellar forms'
+ * co-owner picker. `after` is optional: the cellar forms walk every page
+ * (`useWholeConnection`), as the old unbounded `user.friends` read did.
+ */
 export const MyFriendsQuery = graphql(
   `
-  query MyFriendsForCheckIn($first: Int!) {
-    myFriends(first: $first) {
+  query MyFriendsForCheckIn($first: Int!, $after: String) {
+    myFriends(first: $first, after: $after) {
       __typename
       ... on FriendConnection {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         edges {
           node {
             user {

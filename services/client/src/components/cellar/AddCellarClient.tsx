@@ -1,29 +1,26 @@
 "use client";
 
+import { Stack } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
-import { useQuery } from "urql";
 import { CellarForm } from "@/components/cellar/CellarForm";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { PageLoading } from "@/components/common/PageLoading";
-import { MyFriendsQuery } from "@/lib/api/cellars";
-import { unwrapResult } from "@/lib/api/result";
 import { userFromProfile } from "./adapter";
+import { useAllFriends } from "./useAllFriends";
 
 /**
  * `82450ad1:src/components/cellar/AddCellarClient.tsx`, restored.
  *
  * `user(id).friends { friend }` → `myFriends` (the viewer is implicit, so no
- * `userId` prop). Same loading state, same form, and the same destination:
- * the new cellar's items page.
+ * `userId` prop), walked to its last page so the co-owner picker offers every
+ * friend, as the old unbounded read did. Same loading state, same form, and
+ * the same destination: the new cellar's items page.
  */
 export function AddCellarClient() {
   const router = useRouter();
 
-  const [{ data, fetching }] = useQuery({
-    query: MyFriendsQuery,
-    variables: { first: 100 },
-  });
+  const friends = useAllFriends();
 
   const handleSubmitted = useCallback(
     (id: string) => {
@@ -33,16 +30,24 @@ export function AddCellarClient() {
     [router],
   );
 
-  if (fetching && data === undefined) return <PageLoading />;
-  const friends = unwrapResult(data?.myFriends, "FriendConnection");
-  if (!friends.ok) return <ApiError error={friends.error} />;
+  if (friends.loading) return <PageLoading />;
+  // A failure partway through still leaves a usable form — the friends read
+  // so far — with the error above it rather than a silently short picker.
+  if (friends.failure !== null && friends.rows.length === 0) {
+    return <ApiError error={friends.failure} />;
+  }
 
-  return (
+  const form = (
     <CellarForm
-      friends={friends.data.edges.map((edge) =>
-        userFromProfile(edge.node.user),
-      )}
+      friends={friends.rows.map(userFromProfile)}
       onSubmitted={handleSubmitted}
     />
+  );
+  if (friends.failure === null) return form;
+  return (
+    <Stack spacing={2}>
+      <ApiError error={friends.failure} />
+      {form}
+    </Stack>
   );
 }

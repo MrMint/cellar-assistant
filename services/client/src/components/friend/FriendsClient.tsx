@@ -16,6 +16,9 @@ import { useMutation, useQuery } from "urql";
 import { DebounceInput } from "@/components/common/DebouncedInput";
 import type { ActorErrorReason } from "@/lib/api/errors";
 import type { ResultOf } from "@/lib/api/graphql";
+import { type ApiFailure, unwrapResult } from "@/lib/api/result";
+import { pageOf } from "@/lib/paging/paged-connection";
+import { useWholeConnection } from "@/lib/paging/use-whole-connection";
 import { UserAvatar } from "../common/UserAvatar";
 import {
   AcceptFriendRequestMutation,
@@ -32,15 +35,67 @@ import {
  * subscription"). A mutation also forces an immediate refresh, so this is
  * only for the other side's actions (a friend accepting, say). */
 const POLL_INTERVAL_MS = 15_000;
-const PAGE_SIZE = 50;
+/**
+ * The API's page cap. Each list is walked to its end — the old page read all
+ * three unbounded off one subscription, so a page here is a request size, not
+ * a limit on what shows.
+ */
+const PAGE_SIZE = 100;
 
-type FriendsResult = ResultOf<typeof MyFriendsQuery>["myFriends"];
-type RequestsResult = ResultOf<typeof MyFriendRequestsQuery>["incoming"];
-type FriendRequestRow = Extract<
-  RequestsResult,
-  { __typename: "FriendRequestConnection" }
->["edges"][number]["node"];
 type SearchResult = ResultOf<typeof UserSearchQuery>;
+
+/** Every friend, walked page by page to the end. */
+const useAllFriends = () =>
+  useWholeConnection({
+    query: MyFriendsQuery,
+    variables: (after) => ({ first: PAGE_SIZE, after }),
+    select: (data) =>
+      pageOf(unwrapResult(data?.myFriends, "FriendConnection"), (edge) => ({
+        since: edge.node.since,
+        user: edge.node.user,
+      })),
+    pageSize: PAGE_SIZE,
+  });
+
+/** Every request in one direction, walked page by page to the end. */
+const useAllFriendRequests = (direction: "INCOMING" | "OUTGOING") =>
+  useWholeConnection({
+    query: MyFriendRequestsQuery,
+    variables: (after) => ({ direction, first: PAGE_SIZE, after }),
+    select: (data) =>
+      pageOf(
+        unwrapResult(data?.myFriendRequests, "FriendRequestConnection"),
+        (edge) => edge.node,
+      ),
+    pageSize: PAGE_SIZE,
+  });
+
+/**
+ * A list's read failed — the first page, or one partway through the walk
+ * (the rows read so far stay above it). The next poll re-reads anyway; Retry
+ * is for not waiting.
+ */
+const ListFailure = ({
+  failure,
+  onRetry,
+}: {
+  failure: ApiFailure | null;
+  onRetry: () => void;
+}) =>
+  failure === null ? null : (
+    <Alert
+      color="danger"
+      variant="soft"
+      size="sm"
+      endDecorator={
+        <Button size="sm" variant="plain" color="danger" onClick={onRetry}>
+          Retry
+        </Button>
+      }
+    >
+      {failure.message}
+    </Alert>
+  );
 
 /**
  * `sendFriendRequest` rejects four cases (plan's D8 brief): to yourself
@@ -106,14 +161,9 @@ export const FriendsClient = () => {
     action?: { label: string; onClick: () => void };
   } | null>(null);
 
-  const [friendsResult, reexecuteFriends] = useQuery({
-    query: MyFriendsQuery,
-    variables: { first: PAGE_SIZE },
-  });
-  const [requestsResult, reexecuteRequests] = useQuery({
-    query: MyFriendRequestsQuery,
-    variables: { first: PAGE_SIZE },
-  });
+  const friendsList = useAllFriends();
+  const incomingList = useAllFriendRequests("INCOMING");
+  const outgoingList = useAllFriendRequests("OUTGOING");
   const [searchResult, reexecuteSearch] = useQuery({
     query: UserSearchQuery,
     variables: { term: searchTerm },
@@ -121,8 +171,9 @@ export const FriendsClient = () => {
   });
 
   const refreshLists = () => {
-    reexecuteFriends({ requestPolicy: "network-only" });
-    reexecuteRequests({ requestPolicy: "network-only" });
+    friendsList.refresh();
+    incomingList.refresh();
+    outgoingList.refresh();
   };
 
   usePolledRefresh(refreshLists);
@@ -145,14 +196,8 @@ export const FriendsClient = () => {
     }
   };
 
-  const incoming: FriendRequestRow[] =
-    requestsResult.data?.incoming.__typename === "FriendRequestConnection"
-      ? requestsResult.data.incoming.edges.map((edge) => edge.node)
-      : [];
-  const outgoing: FriendRequestRow[] =
-    requestsResult.data?.outgoing.__typename === "FriendRequestConnection"
-      ? requestsResult.data.outgoing.edges.map((edge) => edge.node)
-      : [];
+  const incoming = incomingList.rows;
+  const outgoing = outgoingList.rows;
 
   const handleSendRequest = (userId: string) => {
     void withPending(userId, async () => {
@@ -255,9 +300,7 @@ export const FriendsClient = () => {
     });
   };
 
-  const friends: FriendsResult | undefined = friendsResult.data?.myFriends;
-  const friendRows =
-    friends?.__typename === "FriendConnection" ? friends.edges : [];
+  const friendRows = friendsList.rows;
 
   // A7e made `userSearch` a result union; narrowed the same way `myFriends`
   // above already is, so a refusal shows an empty list rather than crashing.
@@ -267,7 +310,7 @@ export const FriendsClient = () => {
       ? searchData.userSearch.edges
       : [];
   const alreadyRequestedOrFriends = new Set([
-    ...friendRows.map((edge) => edge.node.user.id),
+    ...friendRows.map((row) => row.user.id),
     ...incoming.map((row) => row.user.id),
     ...outgoing.map((row) => row.user.id),
   ]);
@@ -299,8 +342,12 @@ export const FriendsClient = () => {
       <Grid xs={12} lg={4}>
         <Card>
           <Typography level="title-lg">Friends</Typography>
+          <ListFailure
+            failure={friendsList.failure}
+            onRetry={friendsList.retry}
+          />
           <List size="lg">
-            {friendRows.length === 0 && (
+            {friendRows.length === 0 && !friendsList.loading && (
               <ListItem>
                 <ListItemContent>
                   <Typography level="body-sm" sx={{ color: "neutral.500" }}>
@@ -309,23 +356,23 @@ export const FriendsClient = () => {
                 </ListItemContent>
               </ListItem>
             )}
-            {friendRows.map((edge) => (
-              <ListItem variant="outlined" key={edge.node.user.id}>
+            {friendRows.map((row) => (
+              <ListItem variant="outlined" key={row.user.id}>
                 <UserAvatar
-                  avatarUrl={edge.node.user.avatarUrl}
-                  displayName={edge.node.user.displayName}
+                  avatarUrl={row.user.avatarUrl}
+                  displayName={row.user.displayName}
                 />
                 <ListItemContent>
                   <Typography level="title-md">
-                    {edge.node.user.displayName}
+                    {row.user.displayName}
                   </Typography>
                 </ListItemContent>
                 <Button
                   startDecorator={<MdDelete />}
                   color="danger"
                   variant="outlined"
-                  loading={pendingIds.has(edge.node.user.id)}
-                  onClick={() => handleRemove(edge.node.user.id)}
+                  loading={pendingIds.has(row.user.id)}
+                  onClick={() => handleRemove(row.user.id)}
                 >
                   Remove
                 </Button>
@@ -379,8 +426,12 @@ export const FriendsClient = () => {
       <Grid xs={12} lg={4}>
         <Card>
           <Typography level="title-lg">Incoming Requests</Typography>
+          <ListFailure
+            failure={incomingList.failure}
+            onRetry={incomingList.retry}
+          />
           <List size="lg">
-            {incoming.length === 0 && (
+            {incoming.length === 0 && !incomingList.loading && (
               <ListItem>
                 <ListItemContent>
                   <Typography level="body-sm" sx={{ color: "neutral.500" }}>
@@ -420,8 +471,12 @@ export const FriendsClient = () => {
             ))}
           </List>
           <Typography level="title-lg">Outgoing Requests</Typography>
+          <ListFailure
+            failure={outgoingList.failure}
+            onRetry={outgoingList.retry}
+          />
           <List size="lg">
-            {outgoing.length === 0 && (
+            {outgoing.length === 0 && !outgoingList.loading && (
               <ListItem>
                 <ListItemContent>
                   <Typography level="body-sm" sx={{ color: "neutral.500" }}>
