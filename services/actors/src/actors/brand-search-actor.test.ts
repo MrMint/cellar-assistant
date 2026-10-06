@@ -3,8 +3,11 @@
  */
 import type { BrandSearchInput, Ctx } from "@cellar-assistant/contracts";
 import {
+  BRAND_SEARCH_DEFAULT_LIMIT,
+  BRAND_SEARCH_RESULT_CAP,
   brandSearchActorId,
   ForbiddenError,
+  ValidationError,
 } from "@cellar-assistant/contracts";
 import { brands } from "@cellar-assistant/db";
 import { ActorId, DaprClient } from "@dapr/dapr";
@@ -136,6 +139,47 @@ describe.skipIf(skip)("BrandSearchActor (§2.3)", () => {
       await expect(
         newActor(input, db, null).all(userCtx(null), input),
       ).rejects.toThrow(ForbiddenError);
+    });
+  });
+
+  it("holds up to 200 when asked (UI parity #16, the old PAGE_LIMIT), 50 when not, and refuses 201", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const tag = `cap${crypto.randomUUID().slice(0, 8)}`;
+      await seedBrands(
+        db,
+        Array.from(
+          { length: 205 },
+          (_, i) => `${tag} ${String(i).padStart(3, "0")}`,
+        ),
+      );
+      expect(BRAND_SEARCH_RESULT_CAP).toBe(200);
+
+      const full: BrandSearchInput = { term: tag, limit: 200 };
+      const fullActor = newActor(full, db, viewer);
+      expect(await fullActor.all(userCtx(viewer), full)).toHaveLength(200);
+      // Two pages of 100 through `after` — `first` still caps at 100.
+      const page1 = await fullActor.results(userCtx(viewer), full, {
+        first: 100,
+        after: null,
+      });
+      const page2 = await fullActor.results(userCtx(viewer), full, {
+        first: 100,
+        after: page1.entries.at(-1)?.cursor ?? null,
+      });
+      expect(page1.hasNextPage).toBe(true);
+      expect(page2.entries).toHaveLength(100);
+      expect(page2.hasNextPage).toBe(false);
+
+      const omitted: BrandSearchInput = { term: tag };
+      expect(
+        await newActor(omitted, db, viewer).all(userCtx(viewer), omitted),
+      ).toHaveLength(BRAND_SEARCH_DEFAULT_LIMIT);
+
+      const over: BrandSearchInput = { term: tag, limit: 201 };
+      await expect(
+        newActor(over, db, viewer).all(userCtx(viewer), over),
+      ).rejects.toThrow(ValidationError);
     });
   });
 });

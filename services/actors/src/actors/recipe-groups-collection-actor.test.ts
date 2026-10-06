@@ -5,7 +5,8 @@
  * projection, keyed by filter, catalog visibility per turn — plus the one thing
  * that is specific to it: `recipeCount` is an aggregate the projection carries,
  * which is why hydrating twenty `RecipeGroupActor` activations per page would
- * be the wrong answer here.
+ * be the wrong answer here. And its order: newest first by default, as the
+ * old page was (UI parity #15), or by name on request.
  */
 import {
   anonymousCtx,
@@ -52,6 +53,7 @@ const seedGroup = async (
 };
 
 const NO_FILTER = {} as const;
+const BY_NAME = { orderBy: "NAME" } as const;
 
 const walk = async (
   actor: RecipeGroupsCollectionActor,
@@ -80,7 +82,7 @@ const walk = async (
 describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
   afterAll(closeTestDb);
 
-  it("returns the projection with its recipe count, alphabetically", async () => {
+  it("returns the projection with its recipe count, alphabetically under orderBy NAME", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
       const prefix = `zzz-c3-${crypto.randomUUID().slice(0, 8)}`;
@@ -98,11 +100,11 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
       const actor = await activate(
         createActor(
           RecipeGroupsCollectionActor,
-          recipeGroupsCollectionActorId(NO_FILTER),
+          recipeGroupsCollectionActorId(BY_NAME),
           db,
         ),
       );
-      const found = await walk(actor, userCtx(viewer, "r"), NO_FILTER, (name) =>
+      const found = await walk(actor, userCtx(viewer, "r"), BY_NAME, (name) =>
         name.startsWith(prefix),
       );
       expect(found).toEqual([
@@ -131,7 +133,10 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
       `);
       await seedGroup(db, { name: `Unrelated ${tag}z` });
 
-      const filter = { term: `  boulevardier-${tag} ` };
+      const filter = {
+        term: `  boulevardier-${tag} `,
+        orderBy: "NAME",
+      } as const;
       const actor = await activate(
         createActor(
           RecipeGroupsCollectionActor,
@@ -144,7 +149,8 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
         filter,
         pageArgs({ first: 10 }),
       );
-      // Alphabetical, as without a term; the total counts the matches only.
+      // Alphabetical, as under NAME without a term; the total counts the
+      // matches only.
       expect(page.entries.map((entry) => entry.node.id)).toEqual([
         byDescription,
         byVersion,
@@ -221,6 +227,85 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
       await expect(
         actor.list(anonymousCtx("r"), filter, pageArgs({ first: 1 })),
       ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  it("orders newest first by default (UI parity #15): ties by id, no created_at last, keyset pages without skips or repeats", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const tag = `newest-${crypto.randomUUID().slice(0, 8)}`;
+      const at = async (name: string, createdAt: string | null) => {
+        const id = await seedGroup(db, { name: `${tag} ${name}` });
+        await db.execute(sql`
+          update public.recipe_groups
+          set created_at = ${createdAt}::timestamptz
+          where id = ${id}::uuid
+        `);
+        return id;
+      };
+      // One microsecond apart: a cursor cut to milliseconds (the DTO's
+      // `createdAt`) would put both on the same side of every page boundary.
+      const newest = await at("a", "2999-01-01 00:00:00.000002+00");
+      const next = await at("d", "2999-01-01 00:00:00.000001+00");
+      // Created in the same instant — a seed, or one transaction's `now()`.
+      const tiedA = await at("b", "2998-06-01 00:00:00+00");
+      const tiedB = await at("e", "2998-06-01 00:00:00+00");
+      const undated = await at("c", null);
+      const tied = [tiedA, tiedB].sort().reverse();
+
+      const filter = { term: tag };
+      const actor = await activate(
+        createActor(
+          RecipeGroupsCollectionActor,
+          recipeGroupsCollectionActorId(filter),
+          db,
+        ),
+      );
+      const ctx = userCtx(viewer, "r");
+      const ids: string[] = [];
+      let after: string | null = null;
+      for (let hop = 0; hop < 10; hop += 1) {
+        const page = await actor.list(
+          ctx,
+          filter,
+          pageArgs({ first: 1, after }),
+        );
+        expect(page.totalCount).toBe(5);
+        ids.push(...page.entries.map((entry) => entry.node.id));
+        if (!page.hasNextPage) break;
+        after = page.entries.at(-1)?.cursor ?? null;
+      }
+      expect(ids).toEqual([newest, next, ...tied, undated]);
+
+      // Omitted and NEWEST are one order and one activation.
+      expect(
+        recipeGroupsCollectionActorId({ ...filter, orderBy: "NEWEST" }),
+      ).toBe(recipeGroupsCollectionActorId(filter));
+
+      // NAME is still there, on its own activation.
+      const byName = { ...filter, orderBy: "NAME" } as const;
+      expect(recipeGroupsCollectionActorId(byName)).not.toBe(
+        recipeGroupsCollectionActorId(filter),
+      );
+      const nameActor = await activate(
+        createActor(
+          RecipeGroupsCollectionActor,
+          recipeGroupsCollectionActorId(byName),
+          db,
+        ),
+      );
+      const named = await nameActor.list(ctx, byName, pageArgs({ first: 10 }));
+      expect(named.entries.map((entry) => entry.node.name)).toEqual(
+        ["a", "b", "c", "d", "e"].map((name) => `${tag} ${name}`),
+      );
+
+      // A cursor minted under NAME is refused under NEWEST, as a validation
+      // error rather than a failed `::timestamptz` cast in Postgres.
+      const nameCursor = named.entries[0]?.cursor ?? null;
+      expect(nameCursor).not.toBeNull();
+      await expect(
+        actor.list(ctx, filter, pageArgs({ first: 1, after: nameCursor })),
+      ).rejects.toBeInstanceOf(ValidationError);
     });
   });
 

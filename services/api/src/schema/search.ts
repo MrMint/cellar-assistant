@@ -45,6 +45,7 @@ import type {
   UserSearchHit,
 } from "@cellar-assistant/contracts";
 import {
+  BRAND_SEARCH_DEFAULT_LIMIT,
   BRAND_SEARCH_RESULT_CAP,
   BrandSearchActorDescriptor,
   brandSearchActorId,
@@ -274,8 +275,9 @@ builder.queryField("brandSearch", (t) =>
         required: false,
         description:
           `How many results the actor holds — 1 to ${BRAND_SEARCH_RESULT_CAP} ` +
-          "inclusive; over the cap is a `VALIDATION` error, not a silent " +
-          "clamp (A7g). Not pagination: `first`/`after` page this set.",
+          `inclusive, ${BRAND_SEARCH_DEFAULT_LIMIT} when omitted; over the ` +
+          "cap is a `VALIDATION` error, not a silent clamp (A7g). Not " +
+          "pagination: `first`/`after` page this set.",
       }),
     },
     resolve: async (_root, args, context) => {

@@ -386,7 +386,15 @@ export const cellarItemSearchActorId = (
 /* BrandSearchActor                                                            */
 /* -------------------------------------------------------------------------- */
 
-export const BRAND_SEARCH_RESULT_CAP = 50;
+/**
+ * The most a brand search may hold — 200, the old `/brands` search's
+ * `PAGE_LIMIT` (`82450ad1:src/components/brand/BrandsListClient.tsx`; UI
+ * parity #16). Was 50, which cut that search short. Above `first`'s 100, so
+ * a caller that wants all 200 pages through them with `after`.
+ */
+export const BRAND_SEARCH_RESULT_CAP = 200;
+/** What an omitted `limit` holds — unchanged by #16's higher cap. */
+export const BRAND_SEARCH_DEFAULT_LIMIT = 50;
 
 export type BrandSearchInput = {
   /** Matched as `%term%`, case-insensitively. Empty lists brands by name. */
@@ -429,7 +437,7 @@ export const brandSearchActorId = (
   searchHash({
     kind: "brand",
     term: normaliseText(input.term),
-    limit: input.limit ?? BRAND_SEARCH_RESULT_CAP,
+    limit: input.limit ?? BRAND_SEARCH_DEFAULT_LIMIT,
   });
 
 /* -------------------------------------------------------------------------- */

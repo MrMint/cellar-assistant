@@ -176,6 +176,36 @@ test("/recipes: the old search finds the group and opens its page", async ({
   expect(noise.pageErrors, "the recipes index threw").toEqual([]);
 });
 
+test("/recipes: newest first, as the old page (UI parity #15)", async ({
+  api,
+  primary,
+}) => {
+  test.skip(group === null, "no recipe group");
+  const g = group as Group;
+
+  // The API's default order, and an explicit NAME still available.
+  const read = await api.query(
+    `{ newest: recipeGroups(first: 1) {
+         ... on RecipeGroupConnection { edges { node { id } } }
+       }
+       byName: recipeGroups(first: 1, orderBy: NAME) {
+         __typename
+       } }`,
+  );
+  expect(
+    read.newest.edges[0]?.node.id,
+    "the group this file just created is not first in recipeGroups' default order",
+  ).toBe(g.id);
+  expect(read.byName.__typename).toBe("RecipeGroupConnection");
+
+  // The grid, unsearched: the first card is the group just created.
+  await primary.goto("/recipes");
+  const firstCard = primary.locator("h3").first();
+  await expect(firstCard).toHaveText(g.recipeNames[0] ?? "", {
+    timeout: 20_000,
+  });
+});
+
 test("the group page shows the community's pick and links to the versions", async ({
   primary,
 }) => {

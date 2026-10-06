@@ -3426,7 +3426,7 @@ type Query {
     last: Int
 
     """
-    How many results the actor holds — 1 to 50 inclusive; over the cap is a `VALIDATION` error, not a silent clamp (A7g). Not pagination: `first`/`after` page this set.
+    How many results the actor holds — 1 to 200 inclusive, 50 when omitted; over the cap is a `VALIDATION` error, not a silent clamp (A7g). Not pagination: `first`/`after` page this set.
     """
     limit: Int
     term: String
@@ -3592,12 +3592,12 @@ type Query {
     How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
     """
     first: Int
-    itemTypes: [ItemType!]
 
     """
     G32: `files.id` of a photo uploaded through `createUploadTarget` and `verifyFile`. Charged to the image-search budget, with a per-user cap (`BUDGET_EXCEEDED` past it).
     """
     imageFileId: ID
+    itemTypes: [ItemType!]
 
     """
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
@@ -3903,7 +3903,7 @@ type Query {
   recipeGroup(id: ID!): QueryRecipeGroupResult!
 
   """
-  `/recipes` — the recipe-group index, alphabetical, optionally filtered by category or base spirit (C3's `RecipeGroupsCollectionActor`, §2.2). A **projection**: every field the card renders is a `recipe_groups` column or its recipe count, so a page of ids would be N cold `RecipeGroupActor` activations (§1.5). `term` narrows the list the way the old page's search box did; ranked free text over recipes is `recipeSearch`.
+  `/recipes` — the recipe-group index, newest first (or by name, `orderBy`), optionally filtered by category or base spirit (C3's `RecipeGroupsCollectionActor`, §2.2). A **projection**: every field the card renders is a `recipe_groups` column or its recipe count, so a page of ids would be N cold `RecipeGroupActor` activations (§1.5). `term` narrows the list the way the old page's search box did; ranked free text over recipes is `recipeSearch`.
   """
   recipeGroups(
     """
@@ -3925,6 +3925,11 @@ type Query {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """
+    NEWEST (the default) or NAME. Pass `after` only from a page of the same order; a cursor from the other is a `VALIDATION` error or, NAME given a NEWEST cursor, a page from the wrong place.
+    """
+    orderBy: RecipeGroupOrder = NEWEST
 
     """
     Case-insensitive substring of the group's name or description, or of any of its versions' names (UI parity G26). Trimmed; blank is no filter; at most 200 characters. Order and paging are unchanged, and `totalCount` counts the matches.
@@ -4367,6 +4372,14 @@ type RecipeGroupConnection {
 type RecipeGroupEdge {
   cursor: String!
   node: RecipeGroup!
+}
+
+"""
+How `recipeGroups` is ordered. NEWEST — newest created first, ties by id, a group with no creation time last — is the default, as the old `/recipes` page was (UI parity #15). NAME is alphabetical, ties by id. A cursor belongs to the order that minted it.
+"""
+enum RecipeGroupOrder {
+  NAME
+  NEWEST
 }
 
 """

@@ -46,7 +46,11 @@ export const RECIPE_REVIEWS_PAGE_SIZE = 20;
  */
 export const RECIPE_VERSIONS_PAGE_SIZE = 20;
 
-/** `/recipes` — the group grid. */
+/**
+ * `/recipes` — the group grid, newest first as the old page was
+ * (`order_by: { created_at: desc }`; UI parity #15). `orderBy: NEWEST` is the
+ * API's default too; it is written out so the order is this page's decision.
+ */
 export const RecipeGroupsQuery = graphql(
   `
   query RecipeGroupsGrid(
@@ -62,6 +66,7 @@ export const RecipeGroupsQuery = graphql(
       term: $term
       category: $category
       baseSpirit: $baseSpirit
+      orderBy: NEWEST
     ) {
       __typename
       ... on RecipeGroupConnection {

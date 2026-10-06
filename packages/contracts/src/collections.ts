@@ -612,6 +612,23 @@ export const MatchSuggestionsCollectionActorDescriptor: ActorDescriptor<MatchSug
  * this is a filter on the index, not a second ranking, so the two cannot
  * disagree about order.
  */
+/**
+ * How `/recipes` is ordered (UI parity #15). `NEWEST` — `created_at` desc,
+ * ties by id — is the default because it is what the old page did
+ * (`82450ad1:src/hooks/useOptimizedRecipeGroupSearch.ts`, `order_by:
+ * { created_at: desc }`); `NAME` is alphabetical, ties by id, which is the
+ * order this list had before the parity fix. A group with no `created_at`
+ * sorts as the oldest.
+ */
+export const RECIPE_GROUP_ORDERS = ["NEWEST", "NAME"] as const;
+export type RecipeGroupOrder = (typeof RECIPE_GROUP_ORDERS)[number];
+export const DEFAULT_RECIPE_GROUP_ORDER: RecipeGroupOrder = "NEWEST";
+
+/** `orderBy` as the actor applies it and as the actor id hashes it. */
+export const normalizeRecipeGroupOrder = (
+  orderBy: RecipeGroupOrder | null | undefined,
+): RecipeGroupOrder => orderBy ?? DEFAULT_RECIPE_GROUP_ORDER;
+
 export type RecipeGroupsFilter = {
   readonly category?: RecipeCategory | null;
   /** `recipe_groups.base_spirit`, matched exactly. */
@@ -622,6 +639,12 @@ export type RecipeGroupsFilter = {
    * ({@link normalizeRecipeGroupTerm}).
    */
   readonly term?: string | null;
+  /**
+   * The list's order; omitted is {@link DEFAULT_RECIPE_GROUP_ORDER}. Part of
+   * the filter because a cursor is only meaningful under the order that
+   * minted it — a page's `after` must come from a page of the same order.
+   */
+  readonly orderBy?: RecipeGroupOrder | null;
 };
 
 /** The most characters `RecipeGroupsFilter.term` may carry. */
@@ -657,7 +680,10 @@ export const normalizeRecipeGroupTerm = (
  * serialization point.
  */
 export type RecipeGroupsCollectionActorInterface = {
-  /** **projection** — `RecipeGroupDto`, by name. */
+  /**
+   * **projection** — `RecipeGroupDto`, newest first unless `filter.orderBy`
+   * says `NAME`.
+   */
   list(
     ctx: Ctx,
     filter: RecipeGroupsFilter,
@@ -720,6 +746,10 @@ export const recipeGroupsCollectionActorId = (
     ...(normalizeRecipeGroupTerm(filter.term) === null
       ? {}
       : { term: normalizeRecipeGroupTerm(filter.term) }),
+    // Likewise only when not the default, so the default order keeps it too.
+    ...(normalizeRecipeGroupOrder(filter.orderBy) === DEFAULT_RECIPE_GROUP_ORDER
+      ? {}
+      : { orderBy: normalizeRecipeGroupOrder(filter.orderBy) }),
   });
 
 /* -------------------------------------------------------------------------- */

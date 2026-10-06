@@ -35,6 +35,18 @@
  * still alphabetical, still paged with a total. A filter keeps the index's
  * order, so there is still only one ranking.
  *
+ * ## Newest first, unless asked for by name
+ *
+ * UI parity #15: the old page ordered by `created_at desc`
+ * (`82450ad1:src/hooks/useOptimizedRecipeGroupSearch.ts`), and the first cut
+ * of this actor ordered by name, which nobody decided. `filter.orderBy`
+ * (`RecipeGroupOrder`) now picks: `NEWEST` (the default) is
+ * `coalesce(created_at, 'epoch') desc, id desc` — the column is nullable, and
+ * a keyset cursor's `sort` may not be null, so a group with no timestamp
+ * sorts as the oldest — and `NAME` is the alphabetical order, `name asc, id
+ * asc`. Both are keysets with an id tie-break, so groups created in the same
+ * instant (a seed, a migration) page without skips or repeats.
+ *
  * Catalog visibility (§1.6): any signed-in viewer. `recipe_groups` has no
  * privacy column, and B6 already treats the recipe catalog that way.
  */
@@ -47,6 +59,7 @@ import type {
   PageArgs,
   RecipeCategory,
   RecipeGroupDto,
+  RecipeGroupOrder,
   RecipeGroupsCollectionActorInterface,
   RecipeGroupsFilter,
   RecipeIngredientDto,
@@ -56,6 +69,7 @@ import {
   ITEM_TYPES,
   isItemType,
   mapPage,
+  normalizeRecipeGroupOrder,
   normalizeRecipeGroupTerm,
   RECIPE_CATEGORIES,
   RECIPE_GROUP_TERM_MAX_LENGTH,
@@ -67,7 +81,7 @@ import {
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { recipeIngredients } from "@cellar-assistant/db";
-import { inArray, sql } from "@cellar-assistant/db/orm";
+import { inArray, type SQL, sql } from "@cellar-assistant/db/orm";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ScopedCollectionActorBase } from "../lib/collection-actor-base.ts";
 import {
@@ -93,13 +107,70 @@ type GroupRow = {
   readonly recipe_count: string | number;
   readonly created_at: Date | string | null;
   readonly updated_at: Date | string | null;
+  /** `NEWEST`'s ordering value as Postgres text, microseconds and all. */
+  readonly sort_key: string;
 };
 
 const isRecipeCategory = (value: string): value is RecipeCategory =>
   (RECIPE_CATEGORIES as readonly string[]).includes(value);
 
-const SORT = sql`g.name`;
 const ID = sql`g.id`;
+
+/**
+ * Each order's keyset: the ordering expression, its cast for the cursor half
+ * of the comparison, and its direction. The cursor's `sort` for `NEWEST` is
+ * `sort_key` — the expression as Postgres text — not the DTO's `createdAt`,
+ * which `toIso` cuts to milliseconds: a cursor a microsecond early would
+ * repeat a row, one a microsecond late would skip it.
+ */
+const ORDERS = {
+  NEWEST: {
+    sort: sql`coalesce(g.created_at, 'epoch'::timestamptz)`,
+    cast: "timestamptz",
+    direction: "desc",
+    cursorOf: (row: GroupRow) => ({ sort: row.sort_key, id: row.id }),
+  },
+  NAME: {
+    sort: sql`g.name`,
+    cast: "text",
+    direction: "asc",
+    cursorOf: (row: GroupRow) => ({ sort: row.name, id: row.id }),
+  },
+} as const satisfies Record<
+  RecipeGroupOrder,
+  {
+    sort: SQL;
+    cast: "timestamptz" | "text";
+    direction: "asc" | "desc";
+    cursorOf: (row: GroupRow) => KeysetCursor;
+  }
+>;
+
+/** What `sort_key` renders as: Postgres' own `timestamptz` text. */
+const TIMESTAMP_TEXT = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/;
+
+/**
+ * A `NEWEST` cursor must carry a timestamp. One minted under `NAME` (a
+ * client that switched order and kept its cursor) would otherwise reach
+ * Postgres as `'Negroni'::timestamptz` and fail there, as an opaque database
+ * error instead of a `VALIDATION`.
+ */
+const requireCursorFor = (
+  orderBy: RecipeGroupOrder,
+  after: KeysetCursor | null,
+): KeysetCursor | null => {
+  if (
+    after !== null &&
+    orderBy === "NEWEST" &&
+    !TIMESTAMP_TEXT.test(after.sort)
+  ) {
+    throw new ValidationError(
+      "this cursor is not from a newest-first recipeGroups page; " +
+        "start again without `after` after changing `orderBy`",
+    );
+  }
+  return after;
+};
 
 export class RecipeGroupsCollectionActor
   extends ScopedCollectionActorBase<RecipeGroupsFilter>
@@ -221,13 +292,14 @@ export class RecipeGroupsCollectionActor
         `term must be at most ${RECIPE_GROUP_TERM_MAX_LENGTH} characters`,
       );
     }
+    const order = ORDERS[normalizeRecipeGroupOrder(filter.orderBy)];
     return mapPage(
       await this.paged<GroupRow>(
         ctx,
         filter,
         page,
         (after, limit) => this.#read(filter, after, limit),
-        (row) => ({ sort: row.name, id: row.id }),
+        order.cursorOf,
         () => this.#scope(filter),
       ),
       (row): RecipeGroupDto => {
@@ -288,17 +360,21 @@ export class RecipeGroupsCollectionActor
     after: KeysetCursor | null,
     limit: number,
   ): Promise<readonly GroupRow[]> {
+    const orderBy = normalizeRecipeGroupOrder(filter.orderBy);
+    const { sort, cast, direction } = ORDERS[orderBy];
+    const cursor = requireCursorFor(orderBy, after);
     const { from, where } = this.#scope(filter);
     const { rows } = await this.db.execute<GroupRow>(sql`
       select g.id, g.name, g.description, g.category::text as category,
              g.base_spirit, g.tags, g.image_url, g.created_by_id,
              g.canonical_recipe_id, g.created_at, g.updated_at,
+             (${ORDERS.NEWEST.sort})::text as sort_key,
              (select count(*) from public.recipes r
                where r.recipe_group_id = g.id) as recipe_count
       from ${from}
       where ${where}
-        and ${keysetWhere(after, SORT, ID, "text", "asc")}
-      order by ${keysetOrder(SORT, ID, "asc")}
+        and ${keysetWhere(cursor, sort, ID, cast, direction)}
+      order by ${keysetOrder(sort, ID, direction)}
       limit ${limit}
     `);
     return rows;

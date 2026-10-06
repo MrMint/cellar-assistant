@@ -44,6 +44,7 @@ import type {
   PageArgs,
 } from "@cellar-assistant/contracts";
 import {
+  BRAND_SEARCH_DEFAULT_LIMIT,
   BRAND_SEARCH_RESULT_CAP,
   BrandSearchActorDescriptor,
   brandSearchActorId,
@@ -97,7 +98,7 @@ export class BrandSearchActor
     input: BrandSearchInput,
   ): Promise<readonly BrandSearchHit[]> {
     const term = (input.term ?? "").trim();
-    const limit = requireLimit(input.limit ?? BRAND_SEARCH_RESULT_CAP);
+    const limit = requireLimit(input.limit ?? BRAND_SEARCH_DEFAULT_LIMIT);
     const lowered = term.toLowerCase();
 
     const rows = await this.db

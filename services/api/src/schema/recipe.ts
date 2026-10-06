@@ -71,12 +71,15 @@ import type {
   UpdateRecipeReviewInput as UpdateRecipeReviewInputType,
 } from "@cellar-assistant/contracts";
 import {
+  DEFAULT_RECIPE_GROUP_ORDER,
   genericItemActorId,
   ItemActorDescriptor,
   ingredientItemType,
   itemActorId,
+  normalizeRecipeGroupOrder,
   normalizeRecipeGroupTerm,
   offsetPage,
+  RECIPE_GROUP_ORDERS,
   RECIPE_INGREDIENT_TYPES,
   RECIPE_TYPES,
   RECIPE_VOTE_TYPES,
@@ -113,6 +116,15 @@ const RecipeIngredientTypeEnum = builder.enumType("RecipeIngredientType", {
 const RecipeVoteTypeEnum = builder.enumType("RecipeVoteType", {
   description: "`recipe_votes_vote_type_check`.",
   values: RECIPE_VOTE_TYPES,
+});
+
+const RecipeGroupOrderEnum = builder.enumType("RecipeGroupOrder", {
+  description:
+    "How `recipeGroups` is ordered. NEWEST — newest created first, ties by " +
+    "id, a group with no creation time last — is the default, as the old " +
+    "`/recipes` page was (UI parity #15). NAME is alphabetical, ties by id. " +
+    "A cursor belongs to the order that minted it.",
+  values: RECIPE_GROUP_ORDERS,
 });
 
 /* -------------------------------------------------------------------------- */
@@ -997,8 +1009,8 @@ builder.queryField("recipeGroups", (t) =>
   t.field({
     type: RecipeGroupConnection,
     description:
-      "`/recipes` — the recipe-group index, alphabetical, optionally " +
-      "filtered by category or base spirit (C3's " +
+      "`/recipes` — the recipe-group index, newest first (or by name, " +
+      "`orderBy`), optionally filtered by category or base spirit (C3's " +
       "`RecipeGroupsCollectionActor`, §2.2). A **projection**: every field " +
       "the card renders is a `recipe_groups` column or its recipe count, so " +
       "a page of ids would be N cold `RecipeGroupActor` activations (§1.5). " +
@@ -1016,6 +1028,15 @@ builder.queryField("recipeGroups", (t) =>
           "is no filter; at most 200 characters. Order and paging are " +
           "unchanged, and `totalCount` counts the matches.",
       }),
+      orderBy: t.arg({
+        type: RecipeGroupOrderEnum,
+        required: false,
+        defaultValue: DEFAULT_RECIPE_GROUP_ORDER,
+        description:
+          "NEWEST (the default) or NAME. Pass `after` only from a page of " +
+          "the same order; a cursor from the other is a `VALIDATION` error " +
+          "or, NAME given a NEWEST cursor, a page from the wrong place.",
+      }),
     },
     errors: {},
     resolve: async (_root, args, context) => {
@@ -1024,6 +1045,7 @@ builder.queryField("recipeGroups", (t) =>
         category: args.category ?? null,
         baseSpirit: args.baseSpirit ?? null,
         term: normalizeRecipeGroupTerm(args.term),
+        orderBy: normalizeRecipeGroupOrder(args.orderBy),
       };
       return connectionFromPage(
         await context

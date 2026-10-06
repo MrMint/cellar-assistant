@@ -375,6 +375,7 @@ describe("the two catalog collections return projections (§1.5)", () => {
       category: "cocktail",
       baseSpirit: null,
       term: null,
+      orderBy: "NEWEST",
     });
   });
 
@@ -400,12 +401,14 @@ describe("the two catalog collections return projections (§1.5)", () => {
       category: null,
       baseSpirit: null,
       term: "negroni",
+      orderBy: "NEWEST",
     });
     // Blank is no filter — and the same activation as no term at all.
     expect(filters).toContainEqual({
       category: null,
       baseSpirit: null,
       term: null,
+      orderBy: "NEWEST",
     });
     const termCall = calls.find(
       (call) => (call.args[1] as { term: string | null }).term === "negroni",
@@ -414,6 +417,62 @@ describe("the two catalog collections return projections (§1.5)", () => {
       recipeGroupsCollectionActorId({ term: "negroni" }),
     );
     expect(termCall?.actorId).not.toBe(recipeGroupsCollectionActorId({}));
+  });
+
+  it("recipeGroups(orderBy) (UI parity #15): NEWEST by default, NAME on request, each on its own activation", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupsCollectionActor.list": (_actorId, _ctx, _filter, args) =>
+        page([], args),
+    });
+    const result = await run(
+      `{
+        byDefault: recipeGroups(first: 3) {
+          ... on RecipeGroupConnection { totalCount }
+        }
+        newest: recipeGroups(first: 3, orderBy: NEWEST) {
+          ... on RecipeGroupConnection { totalCount }
+        }
+        byName: recipeGroups(first: 3, orderBy: NAME) {
+          ... on RecipeGroupConnection { totalCount }
+        }
+      }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    const orders = calls.map(
+      (call) => (call.args[1] as { orderBy: string }).orderBy,
+    );
+    expect(orders.sort()).toEqual(["NAME", "NEWEST", "NEWEST"]);
+    const nameCall = calls.find(
+      (call) => (call.args[1] as { orderBy: string }).orderBy === "NAME",
+    );
+    const newestIds = calls
+      .filter(
+        (call) => (call.args[1] as { orderBy: string }).orderBy === "NEWEST",
+      )
+      .map((call) => call.actorId);
+    // Omitted and NEWEST are one activation — the one every orderBy-less
+    // filter always had; NAME is another.
+    expect(new Set(newestIds)).toEqual(
+      new Set([recipeGroupsCollectionActorId({})]),
+    );
+    expect(nameCall?.actorId).toBe(
+      recipeGroupsCollectionActorId({ orderBy: "NAME" }),
+    );
+    expect(nameCall?.actorId).not.toBe(recipeGroupsCollectionActorId({}));
+  });
+
+  it("recipeGroups(orderBy) refuses a value outside the enum", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupsCollectionActor.list": (_actorId, _ctx, _filter, args) =>
+        page([], args),
+    });
+    const result = await run(
+      `{ recipeGroups(first: 3, orderBy: CREATED_AT) { __typename } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors?.[0]?.message).toMatch(/"orderBy" has invalid value/);
+    expect(calls).toHaveLength(0);
   });
 });
 

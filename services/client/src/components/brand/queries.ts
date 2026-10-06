@@ -42,10 +42,15 @@ import { graphql } from "@/lib/api/graphql";
 export const BRANDS_PAGE_SIZE = 48;
 
 /**
- * Brands the search box shows. `brandSearch`'s `limit` (how many the actor
- * holds) caps at 50, so one page of 50 is the whole result set.
+ * Brands the search box shows: 200, the old page's `PAGE_LIMIT`
+ * (`82450ad1:src/components/brand/BrandsListClient.tsx`; UI parity #16) and
+ * `brandSearch`'s `limit` cap. `first` caps at 100, so the grid pages through
+ * them ({@link BRAND_SEARCH_PAGE_SIZE} at a time) with `after`.
  */
-export const BRAND_SEARCH_LIMIT = 50;
+export const BRAND_SEARCH_LIMIT = 200;
+
+/** One page of the search's held set; the API caps any `first` at 100. */
+export const BRAND_SEARCH_PAGE_SIZE = 100;
 
 /** Item links per page on a brand's page — the one per-row-cost edge. */
 export const BRAND_ITEMS_PAGE_SIZE = 12;
@@ -162,10 +167,20 @@ export const BrandsListQuery = graphql(
 /** The `/brands` search box: brands by name, as whole cards. */
 export const BrandsSearchQuery = graphql(
   `
-  query BrandsSearch($term: String!, $limit: Int!, $first: Int!) {
-    brandSearch(term: $term, limit: $limit, first: $first) {
+  query BrandsSearch(
+    $term: String!
+    $limit: Int!
+    $first: Int!
+    $after: String
+  ) {
+    brandSearch(term: $term, limit: $limit, first: $first, after: $after) {
       __typename
       ... on BrandSearchConnection {
+        totalCount
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         edges {
           cursor
           node {
