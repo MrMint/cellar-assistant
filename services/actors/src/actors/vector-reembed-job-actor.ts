@@ -82,7 +82,7 @@ import { requirePrivileged } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { emit } from "../lib/telemetry.ts";
-import { embeddingModel } from "../lib/vectors.ts";
+import { embeddingModel, imageEmbeddingKey } from "../lib/vectors.ts";
 import type { BatchInput, BatchOutcome } from "./job-actor/index.ts";
 import { JobActor, jobRowToDto } from "./job-actor/index.ts";
 
@@ -96,6 +96,8 @@ export type Reembedded = { readonly skipped: boolean };
 export type VectorRegenerator = {
   item(ctx: Ctx, ref: ItemRef): Promise<Reembedded>;
   recipe(ctx: Ctx, recipeId: string): Promise<Reembedded>;
+  /** G32: one stored photo's own vector (`ItemActor.embedImage`). */
+  image(ctx: Ctx, ref: ItemRef, imageId: string): Promise<Reembedded>;
 };
 
 export const daprVectorRegenerator: VectorRegenerator = {
@@ -103,6 +105,10 @@ export const daprVectorRegenerator: VectorRegenerator = {
     internal(ctx)(ItemActorDescriptor, itemActorId(ref)).regenerateVector(),
   recipe: (ctx, recipeId) =>
     internal(ctx)(RecipeActorDescriptor, recipeId).regenerateVector({}),
+  image: (ctx, ref, imageId) =>
+    internal(ctx)(ItemActorDescriptor, itemActorId(ref)).embedImage({
+      imageId,
+    }),
 };
 
 /**
@@ -112,6 +118,7 @@ export const daprVectorRegenerator: VectorRegenerator = {
 export const VECTOR_REEMBED_WORST_CASE_MS = Math.max(
   actorMethodTimeout(ItemActorDescriptor, "regenerateVector"),
   actorMethodTimeout(RecipeActorDescriptor, "regenerateVector"),
+  actorMethodTimeout(ItemActorDescriptor, "embedImage"),
 );
 
 /* -------------------------------------------------------------------------- */
@@ -157,9 +164,15 @@ const requireConfiguredModel = (): string => {
 
 type StaleRow =
   | { readonly id: number; readonly kind: "item"; readonly ref: ItemRef }
-  | { readonly id: number; readonly kind: "recipe"; readonly recipeId: string };
+  | { readonly id: number; readonly kind: "recipe"; readonly recipeId: string }
+  | {
+      readonly kind: "image";
+      readonly imageId: string;
+      readonly ref: ItemRef;
+    };
 
 const VECTORS = ARCS.itemVectors;
+const IMAGES = ARCS.itemImage;
 
 /* -------------------------------------------------------------------------- */
 /* The actor                                                                   */
@@ -265,13 +278,14 @@ export class VectorReembedJobActor
       return next === undefined
         ? { cursor: previous, processed: 0, done: true }
         : {
-            cursor: { ...previous, table: next, lastId: 0 },
+            cursor: { ...previous, table: next, lastId: 0, lastImageId: null },
             processed: 0,
             done: false,
           };
     }
 
     let { reembedded, skipped, failed, lastId } = previous;
+    let lastImageId = previous.lastImageId ?? null;
     let stopped: string | null = null;
     let handled = 0;
     // Rows this batch finished, one way or the other. The cursor stops at the
@@ -283,7 +297,9 @@ export class VectorReembedJobActor
         const result =
           row.kind === "item"
             ? await this.#regenerate.item(ctx, row.ref)
-            : await this.#regenerate.recipe(ctx, row.recipeId);
+            : row.kind === "image"
+              ? await this.#regenerate.image(ctx, row.ref, row.imageId)
+              : await this.#regenerate.recipe(ctx, row.recipeId);
         if (result.skipped) skipped += 1;
         else reembedded += 1;
       } catch (error) {
@@ -296,19 +312,21 @@ export class VectorReembedJobActor
         emit({
           name: "vector_reembed.row_failed",
           severity: "WARN",
-          message: `${previous.table} ${row.id} failed to re-embed: ${
+          message: `${previous.table} ${rowLabel(row)} failed to re-embed: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          attributes: { "job.id": this.key, "vector.id": row.id },
+          attributes: { "job.id": this.key, "vector.id": rowLabel(row) },
         });
       }
       handled += 1;
-      lastId = row.id;
+      if (row.kind === "image") lastImageId = row.imageId;
+      else lastId = row.id;
     }
 
     const next: VectorReembedCursor = {
       table: previous.table,
       lastId,
+      ...(lastImageId === null ? {} : { lastImageId }),
       model: previous.model,
       reembedded,
       skipped,
@@ -338,6 +356,9 @@ export class VectorReembedJobActor
     cursor: VectorReembedCursor,
     limit: number,
   ): Promise<readonly StaleRow[]> {
+    if (cursor.table === "item_image_vectors") {
+      return this.#staleImages(cursor, limit);
+    }
     if (cursor.table === "item_vectors") {
       const { rows } = await this.db.execute<{
         id: number;
@@ -383,7 +404,53 @@ export class VectorReembedJobActor
       recipeId: row.recipe_id,
     }));
   }
+
+  /**
+   * G32 — the image table is the backfill as well as the re-embed: its stale
+   * set is every `item_image` with **no** vector made by the configured image
+   * embedding, which includes every image that has no vector at all. So the
+   * walk is over `item_image`, in uuid order (`cursor.lastImageId`), not over
+   * the vector table's own ids. With an embedding model that cannot take an
+   * image alone there is nothing to converge on, and the table is empty.
+   */
+  async #staleImages(
+    cursor: VectorReembedCursor,
+    limit: number,
+  ): Promise<readonly StaleRow[]> {
+    const model = imageEmbeddingKey(embeddingModel());
+    if (model === null) return [];
+    const after = cursor.lastImageId ?? null;
+    const { rows } = await this.db.execute<{
+      id: string;
+      item_id: string;
+      item_type: string;
+    }>(sql`
+      select ii.id, ${IMAGES.idExpr("ii")} as item_id,
+             ${IMAGES.typeExpr("ii")} as item_type
+      from public.item_image ii
+      left join public.item_image_vectors iv on iv.item_image_id = ii.id
+      where iv.embedding_model is distinct from ${model}
+        ${after === null ? sql`` : sql`and ii.id > ${after}::uuid`}
+      order by ii.id asc
+      limit ${limit}
+    `);
+    return rows.flatMap((row): StaleRow[] => {
+      const type = ITEM_TYPES.find((candidate) => candidate === row.item_type);
+      return type === undefined
+        ? []
+        : [
+            {
+              kind: "image",
+              imageId: String(row.id),
+              ref: { type, id: row.item_id },
+            },
+          ];
+    });
+  }
 }
+
+const rowLabel = (row: StaleRow): string | number =>
+  row.kind === "image" ? row.imageId : row.id;
 
 /**
  * `BudgetActor` refused the embedding. Checked by code rather than by class:

@@ -113,6 +113,7 @@ enum ActorErrorReason {
   CANNOT_FRIEND_SELF
   FRIEND_REQUEST_ALREADY_RECEIVED
   FRIEND_REQUEST_ALREADY_SENT
+  IMAGE_SEARCH_UNAVAILABLE
   NOT_REVIEW_AUTHOR
   RECIPE_NOT_IN_GROUP
   REVIEW_ALREADY_EXISTS
@@ -3576,7 +3577,7 @@ type Query {
   itemOnboarding(id: ID!): QueryItemOnboardingResult!
 
   """
-  Semantic item search over `item_vectors` (ItemSearchActor). Replaces the `text_search` and `image_search` native queries: pass `text` for a phrase, or `vector` for an image embedding the client already has.
+  Semantic item search over `item_vectors` (ItemSearchActor). Replaces the `text_search` and `image_search` native queries: pass `text` for a phrase, `imageFileId` for a photo (G32), or `vector` for an embedding the client already has — exactly one. A photo search matches the item vectors and every stored photo you may see, ranks each item by the nearer, and defaults `maxDistance` to 0.4 and `limit` to 10. Where the deployment's embedding model cannot embed a photo it is a `ConflictError` with reason `IMAGE_SEARCH_UNAVAILABLE`.
   """
   itemSearch(
     """
@@ -3592,6 +3593,11 @@ type Query {
     """
     first: Int
     itemTypes: [ItemType!]
+
+    """
+    G32: `files.id` of a photo uploaded through `createUploadTarget` and `verifyFile`. Charged to the image-search budget, with a per-user cap (`BUDGET_EXCEEDED` past it).
+    """
+    imageFileId: ID
 
     """
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.

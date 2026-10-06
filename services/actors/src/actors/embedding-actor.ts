@@ -49,6 +49,8 @@ import type {
   EmbedDocumentInput,
   EmbedDocumentResult,
   EmbeddingActorInterface,
+  EmbedImageInput,
+  EmbedImageResult,
   EmbedResult,
   InternalEmbeddingActorInterface,
 } from "@cellar-assistant/contracts";
@@ -56,6 +58,7 @@ import {
   documentEmbeddingActorId,
   EmbeddingActorDescriptor,
   embeddingActorId,
+  imageEmbeddingActorId,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import type { ActorId, DaprClient } from "@dapr/dapr";
@@ -65,7 +68,12 @@ import { actorDb } from "../lib/db.ts";
 import type { Embedder } from "../lib/embeddings.ts";
 import { EMBEDDING_DIMENSIONS, embedder } from "../lib/embeddings.ts";
 import { requireSignedIn, requireSystem } from "../lib/guards.ts";
-import { embeddingModel } from "../lib/vectors.ts";
+import type { ImageEmbedder } from "../lib/image-embeddings.ts";
+import {
+  documentImageEmbedder,
+  queryImageEmbedder,
+} from "../lib/image-embeddings.ts";
+import { embeddingModel, imageEmbeddingKey } from "../lib/vectors.ts";
 
 export class EmbeddingActor
   extends ActorBase
@@ -74,17 +82,24 @@ export class EmbeddingActor
   static readonly category: ActorCategory = EmbeddingActorDescriptor.category;
 
   readonly #embed: Embedder;
+  readonly #embedQueryImage: ImageEmbedder;
+  readonly #embedDocumentImage: ImageEmbedder;
   #vector: readonly number[] | null = null;
   #document: EmbedDocumentResult | null = null;
+  #image: EmbedImageResult | null = null;
 
   constructor(
     daprClient: DaprClient,
     id: ActorId,
     db: DbOrTx = actorDb(),
     embed: Embedder = embedder(),
+    embedQueryImage: ImageEmbedder = queryImageEmbedder(),
+    embedDocumentImage: ImageEmbedder = documentImageEmbedder(),
   ) {
     super(daprClient, id, db);
     this.#embed = embed;
+    this.#embedQueryImage = embedQueryImage;
+    this.#embedDocumentImage = embedDocumentImage;
   }
 
   /**
@@ -190,5 +205,93 @@ export class EmbeddingActor
       model: embeddingModel()?.key ?? null,
     };
     return this.#document;
+  }
+
+  /**
+   * G32: a person's search photo, embedded alone (`purpose: "query"`, signed
+   * in), charged to `ai_model/image_search`. `ItemSearchActor` reaches it.
+   *
+   * Addressed by `imageEmbeddingActorId(input, viewerId)`, which puts the
+   * viewer in the key: the activation caches the vector, and the file's
+   * visibility was checked for *this* caller when the image was loaded
+   * (`FileActor.presignReadInternal` inside the seam). A cache shared across
+   * viewers would hand the second one a vector of a file they may not read.
+   *
+   * A process that cannot embed images throws `IMAGE_SEARCH_UNAVAILABLE` from
+   * the seam, before fetching or charging anything.
+   */
+  async embedImage(
+    ctx: Ctx,
+    input: EmbedImageInput,
+  ): Promise<EmbedImageResult> {
+    requireSignedIn(ctx, "search by photo");
+    const fileId = this.#requireImageKey(ctx, input, "query");
+    if (this.#image !== null) return { ...this.#image, computed: false };
+    return this.#keepImage(await this.#embedQueryImage(ctx, { fileId }));
+  }
+
+  /**
+   * G32: a stored `item_image`, embedded alone (`purpose: "document"`), for
+   * `item_image_vectors` — charged to `ai_model/image_embedding`. System
+   * only: `ItemActor.embedImage`, an outbox delivery or the backfill, reaches
+   * it, and it reads the file as the system.
+   *
+   * A separate method from {@link embedImage} rather than a branch inside
+   * one, because each spends a different budget seam and `services/api`'s
+   * model-backed-fields analysis attributes a method to one seam.
+   */
+  async embedStoredImage(
+    ctx: Ctx,
+    input: EmbedImageInput,
+  ): Promise<EmbedImageResult> {
+    requireSystem(
+      ctx,
+      "a stored image is embedded by ItemActor.embedImage, an outbox " +
+        "delivery; a person's photo goes through embedImage",
+    );
+    const fileId = this.#requireImageKey(ctx, input, "document");
+    if (this.#image !== null) return { ...this.#image, computed: false };
+    return this.#keepImage(await this.#embedDocumentImage(ctx, { fileId }));
+  }
+
+  /** The file id, once the input is well-formed and hashes to this activation. */
+  #requireImageKey(
+    ctx: Ctx,
+    input: EmbedImageInput,
+    purpose: EmbedImageInput["purpose"],
+  ): string {
+    if (input?.purpose !== purpose) {
+      throw new ValidationError(
+        `this method embeds a \`${purpose}\` image; got ${JSON.stringify(input?.purpose)}`,
+      );
+    }
+    const fileId = typeof input.fileId === "string" ? input.fileId.trim() : "";
+    if (fileId === "") {
+      throw new ValidationError("an image embedding needs a fileId");
+    }
+    const expected = imageEmbeddingActorId({ fileId, purpose }, ctx.viewerId);
+    if (expected !== this.key) {
+      throw new ValidationError(
+        `EmbeddingActor(${this.key}) was asked to embed an image that hashes ` +
+          `to ${expected}. Address it with imageEmbeddingActorId(input, viewerId).`,
+      );
+    }
+    return fileId;
+  }
+
+  #keepImage(vector: readonly number[]): EmbedImageResult {
+    if (vector.length !== EMBEDDING_DIMENSIONS) {
+      throw new ValidationError(
+        `the embedding provider returned ${vector.length} dimensions for an ` +
+          `image; every halfvec column in this database is ${EMBEDDING_DIMENSIONS}`,
+      );
+    }
+    this.#image = {
+      vector,
+      dimensions: vector.length,
+      computed: true,
+      model: imageEmbeddingKey(embeddingModel()),
+    };
+    return this.#image;
   }
 }

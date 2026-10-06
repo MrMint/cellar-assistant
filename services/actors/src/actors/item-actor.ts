@@ -57,6 +57,8 @@ import type {
   Ctx,
   DeletedItemReview,
   DetachedItemImage,
+  EmbedItemImagePayload,
+  EmbedItemImageResult,
   GenericItemDto,
   GenericItemKind,
   ItemActorInterface,
@@ -98,6 +100,7 @@ import {
   genericItems,
   itemBrands,
   itemImage,
+  itemImageVectors,
   itemOnboardings,
   itemReviews,
   itemVectors,
@@ -123,7 +126,9 @@ import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import {
   daprEmbedDocument,
+  daprEmbedStoredImage,
   type EmbedDocument,
+  type EmbedImage,
 } from "../lib/embedding-client.ts";
 import {
   daprVerifyFile,
@@ -148,6 +153,7 @@ import { requireUuid } from "../lib/uuid.ts";
 import {
   embeddingModel,
   halfvec,
+  imageEmbeddingKey,
   imageSetKey,
   regenerateIfStale,
   type StoredVector,
@@ -332,6 +338,7 @@ export class ItemActor
 
   readonly #verifyFile: VerifyFile;
   readonly #embed: EmbedDocument;
+  readonly #embedImage: EmbedImage;
 
   constructor(
     daprClient: DaprClient,
@@ -339,10 +346,12 @@ export class ItemActor
     db: DbOrTx = actorDb(),
     verifyFile: VerifyFile = daprVerifyFile,
     embed: EmbedDocument = daprEmbedDocument,
+    embedImage: EmbedImage = daprEmbedStoredImage,
   ) {
     super(daprClient, id, db);
     this.#verifyFile = verifyFile;
     this.#embed = embed;
+    this.#embedImage = embedImage;
   }
 
   protected async loadAggregate(id: string): Promise<ItemAggregate | null> {
@@ -807,6 +816,7 @@ export class ItemActor
         })
         .onConflictDoNothing({ target: itemImage.id });
       await this.#enqueueImageRegenerate(tx, ctx, aggregate.ref);
+      await this.#enqueueImageEmbed(tx, ctx, imageId);
     });
 
     await this.reload();
@@ -862,6 +872,96 @@ export class ItemActor
       },
       { attributeTo: ctx },
     );
+  }
+
+  /**
+   * G32: the attached image's own vector, for image search — in the same
+   * transaction as the insert, like the item-vector enqueue above. Only when
+   * the configured embedding can take an image alone (`imageEmbeddingKey`);
+   * with a text-only model there is nothing such a vector could be compared
+   * with, and the re-embed job backfills it if the model changes.
+   */
+  async #enqueueImageEmbed(
+    tx: DbOrTx,
+    ctx: Ctx,
+    imageId: string,
+  ): Promise<void> {
+    if (imageEmbeddingKey(embeddingModel()) === null) return;
+    await enqueueOutbox(
+      tx,
+      OUTBOX_TARGETS["ItemActor.embedImage"],
+      { targetId: this.key, payload: { imageId } },
+      { attributeTo: ctx },
+    );
+  }
+
+  /**
+   * G32 — `system`, via the outbox (attach) or the vector re-embed job (the
+   * backfill and model changes). Embeds one of this item's images alone into
+   * `item_image_vectors`.
+   *
+   * **Idempotent without an idempotency key**, like `regenerateVector`: a row
+   * already made by the configured image embedding skips before any model
+   * call, so a redelivery costs a `SELECT`. The upsert is on the image's own
+   * primary key, so two deliveries that both found nothing overwrite rather
+   * than collide. An image detached in between is not an error — there is
+   * nothing left to index, and the cascade has already removed any vector.
+   */
+  async embedImage(
+    ctx: Ctx,
+    payload: EmbedItemImagePayload,
+  ): Promise<EmbedItemImageResult> {
+    const aggregate = this.#requireItem();
+    requirePrivileged(
+      ctx,
+      `only a system or admin caller may embed an image of ${this.key}`,
+    );
+    const imageId = requireUuid(payload?.imageId, "imageId");
+    const image = aggregate.images.find((row) => row.id === imageId);
+    if (image === undefined) {
+      return { imageId, skipped: true, reason: "image is not on this item" };
+    }
+    const model = imageEmbeddingKey(embeddingModel());
+    if (model === null) {
+      return {
+        imageId,
+        skipped: true,
+        reason: "the configured embedding cannot take an image",
+      };
+    }
+    const [existing] = await this.db
+      .select({ embeddingModel: itemImageVectors.embeddingModel })
+      .from(itemImageVectors)
+      .where(eq(itemImageVectors.itemImageId, imageId));
+    if (existing?.embeddingModel === model) {
+      return { imageId, skipped: true, reason: "vector is fresh" };
+    }
+
+    const embedded = await this.#embedImage(ctx, {
+      fileId: image.fileId,
+      purpose: "document",
+    });
+    // What `EmbeddingActor` says made the vector — the process that ran the
+    // model — falling back to ours only if it did not say.
+    const identity = {
+      vector: halfvec(embedded.vector),
+      embeddingModel: embedded.model ?? model,
+      updatedAt: sql`now()`,
+    };
+    await this.tx(async (tx) => {
+      await tx
+        .insert(itemImageVectors)
+        .values({ itemImageId: imageId, ...identity })
+        .onConflictDoUpdate({
+          target: itemImageVectors.itemImageId,
+          set: identity,
+        });
+    });
+    return {
+      imageId,
+      skipped: false,
+      reason: existing === undefined ? "first vector" : "embedding changed",
+    };
   }
 
   /* ---------------------------------------------------------------------- */

@@ -111,7 +111,10 @@ export type GenerateContentResponse = {
 
 export type EmbeddingRequest = {
   readonly content: string;
-  /** Only `"text"` is reachable today; `"image"` is rejected per provider. */
+  /**
+   * `"image"` (G32) embeds `images[0]` alone, with no text — `gemini-embedding-2`
+   * only; every other provider and model refuses it.
+   */
   readonly type: "text" | "image";
   readonly model?: string;
   readonly dimensions?: number;

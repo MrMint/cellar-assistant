@@ -30,8 +30,10 @@ import { eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
-import type { EmbedDocument } from "../lib/embedding-client.ts";
+import type { EmbedDocument, EmbedImage } from "../lib/embedding-client.ts";
 import {
+  seedItemImage,
+  seedItemImageVector,
   seedItemVector,
   seedRecipe,
   seedRecipeVector,
@@ -58,6 +60,8 @@ import {
 
 const MODEL = "vertex-ai:gemini-embedding-2@768/RETRIEVAL_DOCUMENT";
 const OLD_MODEL = "vertex-ai:text-embedding-005@768/RETRIEVAL_DOCUMENT";
+const IMAGE_MODEL = "vertex-ai:gemini-embedding-2@768/IMAGE";
+const OLD_IMAGE_MODEL = "vertex-ai:gemini-embedding-2-preview@768/IMAGE";
 
 const daprClient = (): DaprClient =>
   new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" });
@@ -86,6 +90,7 @@ const recording = (
     regenerate: {
       item: (_ctx, ref) => reply(itemActorId(ref)),
       recipe: (_ctx, recipeId) => reply(`recipe:${recipeId}`),
+      image: (_ctx, _ref, imageId) => reply(`image:${imageId}`),
     },
   };
 };
@@ -173,6 +178,7 @@ describe.skipIf(skip)("VectorReembedJobActor", () => {
     expect(reembedTables(undefined)).toEqual([
       "item_vectors",
       "recipe_vectors",
+      "item_image_vectors",
     ]);
     expect(reembedTables(["recipe_vectors", "item_vectors"])).toEqual([
       "item_vectors",
@@ -208,7 +214,9 @@ describe.skipIf(skip)("VectorReembedJobActor", () => {
       expect(done.processed).toBe(3);
       expect(done.cursor).toMatchObject({
         value: {
-          table: "recipe_vectors",
+          // Walked out to the last table. A text-only model has no image
+          // vectors to converge on, so the image table is empty, not an error.
+          table: "item_image_vectors",
           model: MODEL,
           reembedded: 3,
           failed: 0,
@@ -259,6 +267,9 @@ describe.skipIf(skip)("VectorReembedJobActor", () => {
               ),
             )
           ).regenerateVector(ctx),
+        image: async () => {
+          throw new Error("a text-only model has no image vectors to make");
+        },
       };
 
       const firstId = randomUUID();
@@ -355,6 +366,120 @@ describe.skipIf(skip)("VectorReembedJobActor", () => {
       expect(done.cursor).toMatchObject({
         value: { reembedded: 2, failed: 1 },
       });
+    });
+  });
+
+  /* -------------------------------------------------------------------- */
+  /* G32: the image table is the backfill                                  */
+  /* -------------------------------------------------------------------- */
+
+  it("backfills item_image_vectors: every image with no vector, or another model's, and none the configured model made", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const wine = await seedWine(db, owner, "Photographed Wine");
+      const missing = await seedItemImage(db, wine, owner);
+      const stale = await seedItemImage(db, wine, owner);
+      const fresh = await seedItemImage(db, wine, owner);
+      await seedItemImageVector(db, stale.imageId, unit(1), OLD_IMAGE_MODEL);
+      await seedItemImageVector(db, fresh.imageId, unit(2), IMAGE_MODEL);
+      setEmbeddingModel({ key: MODEL, acceptsImages: true });
+
+      const { regenerate, calls } = recording();
+      const jobId = randomUUID();
+      const actor = await jobActor(db, jobId, regenerate);
+      await actor.start(adminCtx(owner, "r"), {
+        tables: ["item_image_vectors"],
+        batchSize: 1,
+      });
+      const done = await runToEnd(actor, jobId, db);
+
+      // uuid order, one per batch — the keyset cursor carries across batches.
+      expect(calls).toEqual(
+        [missing.imageId, stale.imageId].sort().map((id) => `image:${id}`),
+      );
+      expect(done.cursor).toMatchObject({
+        value: { table: "item_image_vectors", reembedded: 2, failed: 0 },
+      });
+    });
+  });
+
+  it("walks no image when the configured embedding cannot take one", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const wine = await seedWine(db, owner, "Text-only Wine");
+      await seedItemImage(db, wine, owner);
+      setEmbeddingModel({ key: MODEL, acceptsImages: false });
+      const { regenerate, calls } = recording();
+      const jobId = randomUUID();
+      const actor = await jobActor(db, jobId, regenerate);
+      await actor.start(adminCtx(owner, "r"), {
+        tables: ["item_image_vectors"],
+      });
+      expect((await runToEnd(actor, jobId, db)).status).toBe("completed");
+      expect(calls).toEqual([]);
+    });
+  });
+
+  it("end to end through ItemActor.embedImage: a backfilled image is fresh, and a second run visits nothing", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const wine = await seedWine(db, owner, "Backfilled Wine");
+      const image = await seedItemImage(db, wine, owner);
+      setEmbeddingModel({ key: MODEL, acceptsImages: true });
+      const asked: string[] = [];
+      const embedImage: EmbedImage = async (_ctx, input) => {
+        asked.push(`${input.purpose}:${input.fileId}`);
+        return { vector: unit(5), model: IMAGE_MODEL };
+      };
+      const item = async () =>
+        activate(
+          new ItemActor(
+            daprClient(),
+            new ActorId(itemActorId(wine)),
+            db,
+            async () => {
+              throw new Error("no FileActor in this test");
+            },
+            async () => {
+              throw new Error("no document embedding in this test");
+            },
+            embedImage,
+          ),
+        );
+      const inProcess: VectorRegenerator = {
+        item: async () => {
+          throw new Error("item vectors are not walked here");
+        },
+        recipe: async () => {
+          throw new Error("recipe vectors are not walked here");
+        },
+        image: async (ctx, _ref, imageId) =>
+          (await item()).embedImage(ctx, { imageId }),
+      };
+      const firstId = randomUUID();
+      const first = await jobActor(db, firstId, inProcess);
+      await first.start(adminCtx(owner, "r"), {
+        tables: ["item_image_vectors"],
+      });
+      expect((await runToEnd(first, firstId, db)).cursor).toMatchObject({
+        value: { reembedded: 1, skipped: 0, failed: 0 },
+      });
+      // A document embed of the image's own file, once.
+      expect(asked).toEqual([`document:${image.fileId}`]);
+      const { rows } = await db.execute<{ embedding_model: string }>(sql`
+        select embedding_model from public.item_image_vectors
+        where item_image_id = ${image.imageId}::uuid
+      `);
+      expect(rows).toEqual([{ embedding_model: IMAGE_MODEL }]);
+
+      const { regenerate, calls } = recording();
+      const secondId = randomUUID();
+      const second = await jobActor(db, secondId, regenerate);
+      await second.start(adminCtx(owner, "r"), {
+        tables: ["item_image_vectors"],
+      });
+      expect((await runToEnd(second, secondId, db)).status).toBe("completed");
+      expect(calls).toEqual([]);
     });
   });
 });

@@ -272,6 +272,7 @@ describe("actor errors (§8.3)", () => {
       "REVIEW_ALREADY_EXISTS",
       "NOT_REVIEW_AUTHOR",
       "RECIPE_NOT_IN_GROUP",
+      "IMAGE_SEARCH_UNAVAILABLE",
     ]);
   });
 

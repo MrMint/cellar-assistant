@@ -14,6 +14,8 @@ import type {
   Ctx,
   EmbedDocumentInput,
   EmbedDocumentResult,
+  EmbedImageInput,
+  EmbedImageResult,
   EmbedResult,
 } from "@cellar-assistant/contracts";
 import {
@@ -21,6 +23,7 @@ import {
   documentEmbeddingActorId,
   EmbeddingActorDescriptor,
   embeddingActorId,
+  imageEmbeddingActorId,
 } from "@cellar-assistant/contracts";
 import { internal } from "./internal-client.ts";
 
@@ -93,3 +96,52 @@ export const daprEmbedDocument: EmbedDocument = async (ctx, input) => {
     model: typeof result?.model === "string" ? result.model : null,
   };
 };
+
+/**
+ * G32: a photograph's vector and which embedding made it
+ * (`item_image_vectors.embedding_model`).
+ *
+ * The key carries the caller's viewer (`imageEmbeddingActorId`), so this
+ * addresses the activation that checked *this* caller's right to the file.
+ * Two adapters, one per method, because each spends its own budget seam:
+ * {@link daprEmbedQueryImage} for a search photo (`ItemSearchActor`),
+ * {@link daprEmbedStoredImage} for a stored image (`ItemActor.embedImage`).
+ */
+export type EmbedImage = (
+  ctx: Ctx,
+  input: EmbedImageInput,
+) => Promise<EmbeddedDocument>;
+
+const embeddedImage = (
+  result: Partial<EmbedImageResult> | null,
+  fileId: string,
+): EmbeddedDocument => {
+  const vector = result?.vector;
+  if (!Array.isArray(vector)) {
+    throw new ConflictError(
+      `EmbeddingActor returned no vector for image ${fileId}`,
+    );
+  }
+  return {
+    vector,
+    model: typeof result?.model === "string" ? result.model : null,
+  };
+};
+
+export const daprEmbedQueryImage: EmbedImage = async (ctx, input) =>
+  embeddedImage(
+    await internal(ctx)(
+      EmbeddingActorDescriptor,
+      imageEmbeddingActorId(input, ctx.viewerId),
+    ).embedImage(input),
+    input.fileId,
+  );
+
+export const daprEmbedStoredImage: EmbedImage = async (ctx, input) =>
+  embeddedImage(
+    await internal(ctx)(
+      EmbeddingActorDescriptor,
+      imageEmbeddingActorId(input, ctx.viewerId),
+    ).embedStoredImage(input),
+    input.fileId,
+  );

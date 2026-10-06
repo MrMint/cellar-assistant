@@ -649,8 +649,20 @@ export const VECTOR_REEMBED_JOB_ACTOR_TYPE = "VectorReembedJobActor";
 export const VECTOR_REEMBED_BATCH_SIZE = 10;
 export const VECTOR_REEMBED_MAX_BATCH_SIZE = 50;
 
-/** The two tables whose rows record which embedding made them. */
-export const VECTOR_TABLES = ["item_vectors", "recipe_vectors"] as const;
+/**
+ * The tables whose rows record which embedding made them.
+ *
+ * `item_image_vectors` (G32) is walked differently from the other two: its
+ * stale set includes images that have **no** vector yet, so the walk is over
+ * `item_image` (keyed by uuid — see `VectorReembedCursor.lastImageId`), and
+ * it is the backfill as well as the re-embed. With an embedding model that
+ * cannot take an image there is nothing to walk and the table is skipped.
+ */
+export const VECTOR_TABLES = [
+  "item_vectors",
+  "recipe_vectors",
+  "item_image_vectors",
+] as const;
 export type VectorTable = (typeof VECTOR_TABLES)[number];
 
 export type VectorReembedJobPayload = ViewerlessJobPayload & {
@@ -658,7 +670,7 @@ export type VectorReembedJobPayload = ViewerlessJobPayload & {
   readonly batchSize?: number;
   /** Stop after this many vectors. Omit for "every stale vector". */
   readonly maxVectors?: number;
-  /** Only these tables, walked in `VECTOR_TABLES` order. Omit for both. */
+  /** Only these tables, walked in `VECTOR_TABLES` order. Omit for all. */
   readonly tables?: readonly VectorTable[];
 };
 
@@ -720,7 +732,16 @@ export const VectorReembedJobActorDescriptor: ActorDescriptor<
 export type VectorReembedCursor = {
   readonly table: VectorTable;
   readonly lastId: number;
-  /** The `embedding_model` this run is converging on. */
+  /**
+   * The keyset position in `item_image` (uuid order) while `table` is
+   * `item_image_vectors`, whose rows are walked by image rather than by vector
+   * id. Absent for the other two tables and before the first image batch.
+   */
+  readonly lastImageId?: string | null;
+  /**
+   * The `embedding_model` this run is converging on — the document key. The
+   * image table converges on the same model's `/IMAGE` key.
+   */
   readonly model: string;
   readonly reembedded: number;
   /** Visited, but already fresh by the time it was reached. */

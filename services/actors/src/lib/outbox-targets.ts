@@ -542,6 +542,10 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
     },
   ),
 
+  "ItemActor.embedImage": target(ItemActorDescriptor, "embedImage", {
+    enqueuedBy: [{ module: "actors/item-actor.ts", targetId: "self" }],
+  }),
+
   "ItemActor.setBarcode": target(ItemActorDescriptor, "setBarcode", {
     enqueuedBy: [
       {

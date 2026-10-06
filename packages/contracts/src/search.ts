@@ -145,6 +145,10 @@ export type InternalEmbeddingActorInterface = {
     ctx: Ctx,
     input: EmbedDocumentInput,
   ): Promise<EmbedDocumentResult>;
+  /** G32: a person's search photo (`purpose: "query"`). */
+  embedImage(ctx: Ctx, input: EmbedImageInput): Promise<EmbedImageResult>;
+  /** G32: a stored `item_image` (`purpose: "document"`), system only. */
+  embedStoredImage(ctx: Ctx, input: EmbedImageInput): Promise<EmbedImageResult>;
 };
 
 /**
@@ -162,6 +166,46 @@ export const documentEmbeddingActorId = (input: EmbedDocumentInput): string =>
     )
     .digest("hex");
 
+/**
+ * G32 — a photograph embedded on its own, into the same space as the stored
+ * item vectors (legacy `getVectorForString`'s image branch, `82450ad1`).
+ *
+ * `purpose` decides which budget seam pays: `query` is a person's search photo
+ * (`ai_model/image_search`, with its per-user cap), `document` is a stored
+ * `item_image` being indexed (`ai_model/image_embedding`, system only). The
+ * vector is the same either way — `gemini-embedding-2` takes no task for an
+ * image-only input.
+ */
+export type EmbedImageInput = {
+  readonly fileId: string;
+  readonly purpose: "query" | "document";
+};
+
+export type EmbedImageResult = EmbedResult & {
+  /**
+   * `item_image_vectors.embedding_model` for the vector
+   * (`<provider>:<model>@<dimensions>/IMAGE`), or `null` when the process
+   * that ran the model does not know.
+   */
+  readonly model: string | null;
+};
+
+/**
+ * The viewer is in the key, unlike {@link embeddingActorId}: the activation
+ * caches the vector, and a cached vector handed to a second caller would skip
+ * the `FileActor` visibility check the first caller passed. A system caller
+ * (an outbox delivery, the backfill) keys as `system`.
+ */
+export const imageEmbeddingActorId = (
+  input: EmbedImageInput,
+  viewerId: string | null,
+): string =>
+  createHash("sha256")
+    .update(
+      `\u0000image\u0000${viewerId ?? "system"}\u0000${input.purpose}\u0000${input.fileId}`,
+    )
+    .digest("hex");
+
 export const EmbeddingActorDescriptor: ActorDescriptor<
   EmbeddingActorInterface,
   InternalEmbeddingActorInterface
@@ -176,6 +220,9 @@ export const EmbeddingActorDescriptor: ActorDescriptor<
     // Up to six image downloads (30s each at worst, `lib/ai/images.ts`) and
     // then the model call — longer than a phrase, still bounded.
     embedDocument: { timeoutMs: 90_000 },
+    // One image download and one model call.
+    embedImage: { timeoutMs: 60_000 },
+    embedStoredImage: { timeoutMs: 60_000 },
   },
 };
 
@@ -189,6 +236,25 @@ export const ITEM_SEARCH_MAX_DISTANCE = 1;
 export const ITEM_SEARCH_RESULT_CAP = 50;
 
 /**
+ * The image search's defaults, applied by the API when a search names neither.
+ *
+ * `limit: 10` is legacy's (`82450ad1:src/components/common/OnboardingWizard/
+ * actors/searchByImage.ts`). The cutoff is **0.4, not legacy's 0.3**, from a
+ * measurement against `gemini-embedding-2` on Vertex (2026-10-05, six category
+ * photographs against six one-line `title: none | text: …` documents): the
+ * right document was nearest every time, at **0.31–0.38**; the runner-up at
+ * 0.39–0.46. Legacy's 0.3 held only because every legacy item vector had its
+ * photos fused in — an item embedded from text alone (no image yet, or a
+ * text-only model at write time) sits past 0.3 from a photo of itself and
+ * would never be offered. Image-to-image distances for the same photograph
+ * were 0.02–0.04, so the `item_image_vectors` arm is unaffected by the choice.
+ * Results are ranked nearest first, so a looser cutoff adds candidates below
+ * the right one rather than ahead of it.
+ */
+export const IMAGE_SEARCH_MAX_DISTANCE = 0.4;
+export const IMAGE_SEARCH_RESULT_LIMIT = 10;
+
+/**
  * Either a phrase (embedded through `EmbeddingActor`) or a vector the caller
  * already has — which is how `image_search` works: the image is embedded by
  * `ItemOnboardingActor`'s model call, never here.
@@ -196,6 +262,14 @@ export const ITEM_SEARCH_RESULT_CAP = 50;
 export type ItemSearchInput = {
   readonly text?: string | null;
   readonly vector?: readonly number[] | null;
+  /**
+   * G32: a search photo, already uploaded through `FileActor`. Embedded as an
+   * image (`EmbeddingActor.embedImage`) and matched against both the item
+   * vectors and every visible `item_image_vectors` row; an item ranks by the
+   * nearer of the two. The viewer joins the key when this is set — which
+   * images may match depends on who is asking.
+   */
+  readonly imageFileId?: string | null;
   /** Empty means all six. */
   readonly itemTypes?: readonly ItemType[] | null;
   readonly maxDistance?: number | null;
@@ -235,12 +309,17 @@ export const ItemSearchActorDescriptor: ActorDescriptor<
 /** Viewer-insensitive: an item's embedding is the same for everyone (§2.3). */
 export const itemSearchActorId = (
   input: ItemSearchInput,
-  _viewerId: string | null,
+  viewerId: string | null,
 ): string =>
   searchHash({
     kind: "item",
     text: normaliseText(input.text),
     vector: input.vector ?? null,
+    // Absent (and so hashed exactly as before) for a text or vector search,
+    // which stay shared across viewers.
+    ...(input.imageFileId == null
+      ? {}
+      : { imageFileId: input.imageFileId, viewerId }),
     itemTypes: [...(input.itemTypes ?? [])].sort(),
     maxDistance: input.maxDistance ?? ITEM_SEARCH_MAX_DISTANCE,
     limit: input.limit ?? ITEM_SEARCH_RESULT_CAP,

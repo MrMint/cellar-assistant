@@ -343,6 +343,8 @@ export const AI_MODEL_SERVICE = "ai_model";
  */
 export const MODEL_SEAMS = [
   "embedding",
+  "image_embedding",
+  "image_search",
   "item_defaults",
   "menu_extraction",
   "menu_match",
@@ -449,6 +451,15 @@ export type ModelSpender = {
  */
 export const MODEL_SPENDERS: Readonly<Record<ModelSeam, ModelSpender>> = {
   embedding: { maxMonthlyRequests: 200_000, defaultMonthlyBudgetCents: 200 },
+  // G32. One `gemini-embedding-2` image is ~$0.00012 (`EMBEDDING_IMAGE_TEXT_TOKENS`
+  // in `../lib/ai/budget.ts`), so $5 is ~41,000 stored photos — the attach path
+  // plus a backfill of a catalogue this size several times over — and $2 is
+  // ~16,000 search photos. The request caps sit just above what the money buys.
+  image_embedding: {
+    maxMonthlyRequests: 50_000,
+    defaultMonthlyBudgetCents: 500,
+  },
+  image_search: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   item_defaults: { maxMonthlyRequests: 5_000, defaultMonthlyBudgetCents: 500 },
   menu_extraction: {
     maxMonthlyRequests: 5_000,
@@ -777,6 +788,12 @@ export type UserCap = { readonly hourly: number; readonly daily: number };
  */
 export const USER_CAPS: Readonly<Record<string, UserCap>> = {
   "ai_model/embedding": { hourly: 300, daily: 2_000 },
+  // A stored photo is embedded once per attach, so this is a person attaching
+  // a photo a minute for an hour; the backfill runs as `system`.
+  "ai_model/image_embedding": { hourly: 60, daily: 300 },
+  // One per search photo. Legacy had no cap at all; 30 an hour is a person
+  // photographing a whole shelf, and a loop stops inside two minutes.
+  "ai_model/image_search": { hourly: 30, daily: 150 },
   "ai_model/item_defaults": { hourly: 30, daily: 150 },
   "ai_model/menu_extraction": { hourly: 20, daily: 60 },
   "ai_model/menu_match": { hourly: 400, daily: 1_500 },

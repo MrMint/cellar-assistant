@@ -288,6 +288,28 @@ export const geminiEmbeddingParts = (
 ): Record<string, unknown>[] => {
   const images = request.images ?? [];
   const multimodal = isGeminiEmbedding2(model);
+  /*
+   * G32: an image embedded **alone** — a search photo, or one stored
+   * `item_image` — is legacy's `getVectorForString` image branch (`82450ad1`,
+   * `vertex-ai.ts` 437-460): the image as the only part, no text and so no
+   * task instruction. That is what put a photograph in the same space as the
+   * stored text-plus-images item vectors. Only `gemini-embedding-2` can, and
+   * it needs exactly the image: a text part would make it a document vector.
+   */
+  if (request.type === "image") {
+    if (!multimodal) {
+      throw new ConflictError(
+        `${provider} embedding model ${model} cannot embed an image; only ` +
+          "gemini-embedding-2 can",
+      );
+    }
+    if (images.length !== 1) {
+      throw new ConflictError(
+        `an image-only embedding takes exactly one image; ${images.length} ` +
+          "were sent",
+      );
+    }
+  }
   if (images.length > 0 && !multimodal) {
     throw new ConflictError(
       `${provider} embedding model ${model} takes text only; ${images.length} ` +
@@ -300,9 +322,14 @@ export const geminiEmbeddingParts = (
         `request; ${images.length} were sent`,
     );
   }
-  const parts: Record<string, unknown>[] = [
-    { text: multimodal ? geminiEmbedding2Text(request) : request.content },
-  ];
+  const parts: Record<string, unknown>[] =
+    request.type === "image"
+      ? []
+      : [
+          {
+            text: multimodal ? geminiEmbedding2Text(request) : request.content,
+          },
+        ];
   for (const [index, image] of images.entries()) {
     parts.push({
       inline_data: {

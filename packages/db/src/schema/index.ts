@@ -76,6 +76,7 @@ export const tables = {
   item_match_suggestions: t.itemMatchSuggestions,
   item_onboardings: t.itemOnboardings,
   item_reviews: t.itemReviews,
+  item_image_vectors: t.itemImageVectors,
   item_vectors: t.itemVectors,
   jobs: t.jobs,
   jwks: t.jwks,

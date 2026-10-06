@@ -130,6 +130,7 @@ export const TABLE_WRITERS = {
   teas: "ItemActor",
   generic_items: "ItemActor",
   item_image: "ItemActor",
+  item_image_vectors: "ItemActor",
   item_vectors: "ItemActor",
   item_reviews: "ItemActor",
   item_brands: "ItemActor",

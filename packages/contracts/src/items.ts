@@ -489,6 +489,22 @@ export type RegenerateItemVectorPayload = {
 };
 
 /**
+ * What an `ItemActor.embedImage` outbox row carries (G32). Enqueued by
+ * `attachImage` for the image it wrote, and by the vector re-embed job for an
+ * image whose vector is missing or was made by another model.
+ */
+export type EmbedItemImagePayload = {
+  readonly imageId: string;
+};
+
+/** What `embedImage` reports back. `skipped`: already fresh, no model call. */
+export type EmbedItemImageResult = {
+  readonly imageId: string;
+  readonly skipped: boolean;
+  readonly reason: string;
+};
+
+/**
  * What `regenerateVector` reports back. `skipped` is the case §6 B2 asks for a
  * test on: nothing embedding-relevant changed, so no model call was made.
  */
@@ -572,6 +588,15 @@ export type ItemActorInterface = {
     ctx: Ctx,
     payload?: RegenerateItemVectorPayload,
   ): Promise<RegenerateVectorResult>;
+  /**
+   * G32. `system`, via the outbox: embed one of this item's images on its own
+   * into `item_image_vectors`, so a search photo can match it. Idempotent —
+   * a row already made by the configured model skips before any model call.
+   */
+  embedImage(
+    ctx: Ctx,
+    payload: EmbedItemImagePayload,
+  ): Promise<EmbedItemImageResult>;
 
   /* The seventh key namespace. */
   getGeneric(ctx: Ctx): Promise<GenericItemDto>;
@@ -615,6 +640,9 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     // label/display image downloads and the model call), plus the turn around
     // it. The outbox waits this long for the delivery (`pairDeliveryTimeoutMs`).
     regenerateVector: { timeoutMs: 100_000 },
+    // `EmbeddingActor.embedImage` (60s: one download and the model call) and
+    // the turn around it.
+    embedImage: { timeoutMs: 70_000 },
     getGeneric: {},
     createGeneric: {},
     updateGeneric: {},

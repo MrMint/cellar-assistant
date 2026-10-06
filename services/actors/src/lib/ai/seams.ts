@@ -53,6 +53,8 @@ import type { PlaceReviewer } from "../../actors/place-creation-actor.ts";
 import { requirePlaceReviewSubject } from "../../actors/place-creation-actor.ts";
 import type { InsightsGenerator } from "../../actors/tier-list-actor.ts";
 import type { Embedder } from "../embeddings.ts";
+import { downscaleForEmbedding } from "../image-downscale.ts";
+import type { ImageEmbedder } from "../image-embeddings.ts";
 import type {
   ItemDefaultsProvider,
   ItemDefaultsResult,
@@ -68,6 +70,7 @@ import type {
 } from "../menu-ai.ts";
 import type { RecipePhotoExtractor } from "../recipe-photo-ai.ts";
 import { requireGroundedEntries } from "../tier-list-entries.ts";
+import { embeddingModel } from "../vectors.ts";
 import type { ImageLoader } from "./images.ts";
 import { presentIds } from "./images.ts";
 import {
@@ -128,13 +131,66 @@ export const providerEmbedder =
   (provider: ProviderFor, loadImages: ImageLoader): Embedder =>
   async ({ text, purpose, imageFileIds }, ctx) => {
     const ids = imageFileIds ?? [];
-    const images = ids.length === 0 ? [] : await loadImages(ctx, ids);
+    // Shrunk to 768 px first (G32) — the bytes, not the bill: see
+    // `../image-downscale.ts` for the measurement.
+    const images =
+      ids.length === 0
+        ? []
+        : await Promise.all(
+            (await loadImages(ctx, ids)).map((image) =>
+              downscaleForEmbedding(image),
+            ),
+          );
     const { embeddings } = await provider(ctx).generateEmbeddings({
       content: text,
       type: "text",
       taskType:
         purpose === "document" ? "RETRIEVAL_DOCUMENT" : "RETRIEVAL_QUERY",
       ...(images.length === 0 ? {} : { images }),
+    });
+    return embeddings;
+  };
+
+/* -------------------------------------------------------------------------- */
+/* G32 · EmbeddingActor.embedImage                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One photograph, embedded alone — legacy's `getVectorForString` image branch
+ * (`82450ad1`), which is what put a search photo into the space of the stored
+ * text-plus-images item vectors.
+ *
+ * **The capability check comes first, before the image is fetched or the
+ * budget is charged.** Only `gemini-embedding-2` on the two Google providers
+ * embeds an image (`embeddingModelIdentity`'s `acceptsImages`); asking any
+ * other model would be a provider refusal at best and, on a model that
+ * quietly accepted it, a vector in the wrong space filed as a match. So a
+ * process that cannot do this says so, with the branchable
+ * `IMAGE_SEARCH_UNAVAILABLE`, and spends nothing.
+ *
+ * Then the same `ImageLoader` the vision seams use — `FileActor` decides
+ * whether this caller may read the file — and the 768 px downscale.
+ */
+export const providerImageEmbedder =
+  (provider: ProviderFor, loadImages: ImageLoader): ImageEmbedder =>
+  async (ctx, { fileId }) => {
+    const model = embeddingModel();
+    if (model?.acceptsImages !== true) {
+      throw new ConflictError(
+        `the configured embedding (${model?.key ?? "none"}) cannot embed a ` +
+          "photograph: image search needs gemini-embedding-2 on " +
+          "AI_PROVIDER=vertex-ai or google-ai. Nothing was fetched or charged.",
+        "IMAGE_SEARCH_UNAVAILABLE",
+      );
+    }
+    const [image] = await loadImages(ctx, [fileId]);
+    if (image === undefined) {
+      throw new ConflictError(`file ${fileId} loaded no image`);
+    }
+    const { embeddings } = await provider(ctx).generateEmbeddings({
+      content: "",
+      type: "image",
+      images: [await downscaleForEmbedding(image)],
     });
     return embeddings;
   };

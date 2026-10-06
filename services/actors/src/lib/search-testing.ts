@@ -111,6 +111,43 @@ export const seedItemVector = async (
   `);
 };
 
+/**
+ * G32: a verified file and an `item_image` row pointing at it — what
+ * `ItemActor.attachImage` leaves, without the outbox enqueue.
+ */
+export const seedItemImage = async (
+  db: DbOrTx,
+  ref: ItemRef,
+  userId: string,
+  options: { readonly isPublic?: boolean } = {},
+): Promise<{ readonly imageId: string; readonly fileId: string }> => {
+  const fileId = randomUUID();
+  await db.execute(sql`
+    insert into public.files (id, key, verified_at, uploaded_by)
+    values (${fileId}::uuid, ${`item-image/${fileId}`}, now(), ${userId}::uuid)
+  `);
+  const imageId = randomUUID();
+  await db.execute(sql`
+    insert into public.item_image (id, user_id, file_id, is_public, ${ARCS.itemImage.unqualified(ref.type)})
+    values (${imageId}::uuid, ${userId}::uuid, ${fileId}::uuid,
+            ${options.isPublic ?? true}, ${ref.id}::uuid)
+  `);
+  return { imageId, fileId };
+};
+
+/** G32: one `item_image_vectors` row, as `ItemActor.embedImage` writes it. */
+export const seedItemImageVector = async (
+  db: DbOrTx,
+  imageId: string,
+  vector: readonly number[],
+  model: string,
+): Promise<void> => {
+  await db.execute(sql`
+    insert into public.item_image_vectors (item_image_id, vector, embedding_model)
+    values (${imageId}::uuid, ${vectorLiteral(vector)}::halfvec, ${model})
+  `);
+};
+
 /* -------------------------------------------------------------------------- */
 /* Friendship                                                                  */
 /* -------------------------------------------------------------------------- */

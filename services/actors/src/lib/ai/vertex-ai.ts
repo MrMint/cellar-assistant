@@ -222,13 +222,15 @@ export const createVertexAIProvider = (
     async generateEmbeddings(
       request: EmbeddingRequest,
     ): Promise<EmbeddingResponse> {
-      if (request.type === "image") {
+      const model = request.model ?? config.embeddingModel;
+      // An image alone (G32) is `gemini-embedding-2` only; `geminiEmbeddingParts`
+      // builds the image-only request, and this refuses every other model here.
+      if (request.type === "image" && !isGeminiEmbedding2(model)) {
         throw new ConflictError(
-          "the vertex-ai provider embeds text, or text with images, never an " +
-            "image alone",
+          `the vertex-ai provider embeds an image alone only with ` +
+            `gemini-embedding-2, not ${model}`,
         );
       }
-      const model = request.model ?? config.embeddingModel;
       const dimensions = request.dimensions ?? config.embeddingDimensions;
       if (isGeminiEmbedding2(model)) {
         // `:embedContent`, the Gemini request shape, with the task in the text

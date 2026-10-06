@@ -37,6 +37,10 @@ import { MODEL_SEAMS } from "../../actors/budget-actor.ts";
 import { placeReviewer } from "../../actors/place-creation-actor.ts";
 import { insightsGenerator } from "../../actors/tier-list-actor.ts";
 import { embedder } from "../embeddings.ts";
+import {
+  documentImageEmbedder,
+  queryImageEmbedder,
+} from "../image-embeddings.ts";
 import { itemDefaultsProvider } from "../item-defaults.ts";
 import { menuExtractionProvider, menuMatchVerifier } from "../menu-ai.ts";
 import { recipePhotoExtractor } from "../recipe-photo-ai.ts";
@@ -173,9 +177,27 @@ const budgetThat = (
   };
 };
 
+const asImageModel = async <T>(run: () => Promise<T>): Promise<T> => {
+  const previous = embeddingModel();
+  setEmbeddingModel(embeddingModelIdentity("vertex-ai", "gemini-embedding-2"));
+  try {
+    return await run();
+  } finally {
+    setEmbeddingModel(previous);
+  }
+};
+
 /** Each seam, with an input that gets past its own pre-model gate. */
 const drive: Readonly<Record<string, (c: Ctx) => Promise<unknown>>> = {
   embedding: (c) => embedder()({ text: "pinot noir" }, c),
+  // G32: the two image slots' pre-model gate is the embedding model's
+  // capability, which `ENV` (Ollama's text-only model) would refuse before
+  // charging — correctly, and `image-embedder.test.ts` holds that. Here the
+  // question is the charge, so each drive runs as `gemini-embedding-2`.
+  image_embedding: (c) =>
+    asImageModel(() => documentImageEmbedder()(c, { fileId: "f-1" })),
+  image_search: (c) =>
+    asImageModel(() => queryImageEmbedder()(c, { fileId: "f-1" })),
   tier_list_insights: (c) =>
     insightsGenerator()(c, {
       tierListId: "t-1",
@@ -354,8 +376,13 @@ describe("installSeams meters every model call (X1c)", () => {
 
     const configured: string[] = Object.values(config.models);
     for (const reservation of reserved) {
-      if (reservation.seam === "embedding") {
-        expect(reservation.model).toBe(config.embeddingModel);
+      if (
+        reservation.seam === "embedding" ||
+        reservation.seam === "image_embedding" ||
+        reservation.seam === "image_search"
+      ) {
+        // The three embedding seams are priced at the embedding model.
+        expect(reservation.model, reservation.seam).toBe(config.embeddingModel);
       } else {
         expect(configured, reservation.seam).toContain(reservation.model);
       }

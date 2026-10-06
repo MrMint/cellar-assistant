@@ -19,16 +19,26 @@ import {
   documentEmbeddingActorId,
   embeddingActorId,
   ForbiddenError,
+  imageEmbeddingActorId,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { describe, expect, it, vi } from "vitest";
-import { daprEmbedDocument, daprEmbedQuery } from "../lib/embedding-client.ts";
+import {
+  daprEmbedDocument,
+  daprEmbedQuery,
+  daprEmbedQueryImage,
+} from "../lib/embedding-client.ts";
 import type { Embedder } from "../lib/embeddings.ts";
 import {
   EMBEDDING_DIMENSIONS,
   unconfiguredEmbedder,
 } from "../lib/embeddings.ts";
+import type {
+  ImageEmbedder,
+  ImageEmbeddingPurpose,
+} from "../lib/image-embeddings.ts";
+import { unconfiguredImageEmbedder } from "../lib/image-embeddings.ts";
 import { invokeActorMethod } from "../lib/sidecar.ts";
 import { setEmbeddingModel } from "../lib/vectors.ts";
 import { EmbeddingActor } from "./embedding-actor.ts";
@@ -297,6 +307,142 @@ describe("EmbeddingActor (§2.3)", () => {
       await expect(
         actor.embedDocument(system(), { ...input, imageFileIds: ["front"] }),
       ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe("embedImage — G32, a photograph alone", () => {
+    const FILE = "22222222-2222-4222-8222-222222222222";
+    const query = { fileId: FILE, purpose: "query" as const };
+    const system = (): Ctx => ({
+      viewerId: null,
+      kind: "system",
+      requestId: "outbox:2",
+    });
+    const recordingImages = (): {
+      embedImage: (purpose: ImageEmbeddingPurpose) => ImageEmbedder;
+      seen: string[];
+    } => {
+      const seen: string[] = [];
+      return {
+        seen,
+        embedImage:
+          (purpose) =>
+          async (caller, { fileId }) => {
+            seen.push(`${purpose}:${caller.viewerId ?? "system"}:${fileId}`);
+            return vectorOf(7);
+          },
+      };
+    };
+    const imageActor = (
+      input: { fileId: string; purpose: "query" | "document" },
+      viewerId: string | null,
+      embedImage: (purpose: ImageEmbeddingPurpose) => ImageEmbedder,
+    ): EmbeddingActor =>
+      new EmbeddingActor(
+        daprClient(),
+        new ActorId(imageEmbeddingActorId(input, viewerId)),
+        null as never,
+        unconfiguredEmbedder,
+        embedImage("query"),
+        embedImage("document"),
+      );
+
+    it("is addressed by daprEmbedQueryImage at imageEmbeddingActorId(input, viewer), as an internal method", async () => {
+      vi.mocked(invokeActorMethod).mockClear();
+      vi.mocked(invokeActorMethod).mockResolvedValueOnce({
+        vector: [0.3],
+        dimensions: 1,
+        computed: true,
+        model: "vertex-ai:gemini-embedding-2@768/IMAGE",
+      });
+      await expect(daprEmbedQueryImage(ctx(), query)).resolves.toEqual({
+        vector: [0.3],
+        model: "vertex-ai:gemini-embedding-2@768/IMAGE",
+      });
+      expect(vi.mocked(invokeActorMethod).mock.calls).toEqual([
+        [
+          "EmbeddingActor",
+          imageEmbeddingActorId(query, VIEWER),
+          "embedImage",
+          [ctx(), query],
+          60_000,
+        ],
+      ]);
+    });
+
+    it("keys by viewer: the cached vector of one caller's file is never another caller's", () => {
+      expect(imageEmbeddingActorId(query, VIEWER)).not.toBe(
+        imageEmbeddingActorId(query, "33333333-3333-4333-8333-333333333333"),
+      );
+      expect(imageEmbeddingActorId(query, VIEWER)).not.toBe(
+        imageEmbeddingActorId({ ...query, purpose: "document" }, VIEWER),
+      );
+    });
+
+    it("embeds a query photo through the query slot, once per activation, and names the image key", async () => {
+      const { embedImage, seen } = recordingImages();
+      const actor = imageActor(query, VIEWER, embedImage);
+      setEmbeddingModel({
+        key: "vertex-ai:gemini-embedding-2@768/RETRIEVAL_DOCUMENT",
+        acceptsImages: true,
+      });
+      try {
+        await expect(actor.embedImage(ctx(), query)).resolves.toMatchObject({
+          computed: true,
+          model: "vertex-ai:gemini-embedding-2@768/IMAGE",
+        });
+        await expect(actor.embedImage(ctx(), query)).resolves.toMatchObject({
+          computed: false,
+        });
+        expect(seen).toEqual([`query:${VIEWER}:${FILE}`]);
+      } finally {
+        setEmbeddingModel(null);
+      }
+    });
+
+    it("embeds a stored image only for the system, through the document slot; a query from nobody is refused", async () => {
+      const { embedImage, seen } = recordingImages();
+      const document = { fileId: FILE, purpose: "document" as const };
+      await expect(
+        imageActor(document, VIEWER, embedImage).embedStoredImage(
+          ctx(),
+          document,
+        ),
+      ).rejects.toThrow(ForbiddenError);
+      const anonymous: Ctx = { viewerId: null, kind: "user", requestId: "r" };
+      await expect(
+        imageActor(query, null, embedImage).embedImage(anonymous, query),
+      ).rejects.toThrow(ForbiddenError);
+      // Each method takes only its own purpose.
+      await expect(
+        imageActor(document, null, embedImage).embedImage(system(), document),
+      ).rejects.toThrow(ValidationError);
+      await expect(
+        imageActor(document, null, embedImage).embedStoredImage(
+          system(),
+          document,
+        ),
+      ).resolves.toMatchObject({ computed: true });
+      expect(seen).toEqual([`document:system:${FILE}`]);
+    });
+
+    it("refuses a request that does not hash to its own id", async () => {
+      const { embedImage } = recordingImages();
+      const actor = imageActor(query, VIEWER, embedImage);
+      await expect(
+        actor.embedImage(ctx(), {
+          ...query,
+          fileId: "44444444-4444-4444-8444-444444444444",
+        }),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("with no provider wired, refuses with IMAGE_SEARCH_UNAVAILABLE", async () => {
+      const actor = imageActor(query, VIEWER, () => unconfiguredImageEmbedder);
+      await expect(actor.embedImage(ctx(), query)).rejects.toMatchObject({
+        code: "CONFLICT",
+        reason: "IMAGE_SEARCH_UNAVAILABLE",
+      });
     });
   });
 });

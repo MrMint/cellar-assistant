@@ -428,6 +428,25 @@ export const itemVectors = pgTable("item_vectors", {
 	index("item_vectors_vector_hnsw_idx").using("hnsw", table.vector.asc().nullsLast().op("halfvec_cosine_ops")).with({ "m": 16, "ef_construction": 64 }),
 check("exactly_one_item_reference", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),]);
 
+// G32 (image search): one vector per `item_image`, the photograph embedded on
+// its own. A table of its own rather than a column on `item_image`, for three
+// reasons: `item_image` is a pulled table every `ItemActor` aggregate load
+// selects whole, and a 768-wide halfvec on it would ride along on every page
+// that lists images; the HNSW index then covers only rows that have a vector;
+// and the identity column mirrors `item_vectors`/`recipe_vectors`, so
+// `VectorReembedJobActor` treats a model change here the same way. Primary-keyed
+// on the image, so a re-embed overwrites, and cascaded, so detaching an image
+// takes its vector with it. Written only by `ItemActor.embedImage`.
+export const itemImageVectors = pgTable("item_image_vectors", {
+	itemImageId: uuid("item_image_id").primaryKey().references(() => itemImage.id, { onDelete: "cascade" } ),
+	vector: halfvec({ dimensions: 768 }).notNull(),
+	embeddingModel: text("embedding_model").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`).notNull(),
+}, (table) => [
+	index("item_image_vectors_vector_hnsw_idx").using("hnsw", table.vector.asc().nullsLast().op("halfvec_cosine_ops")).with({ "m": 16, "ef_construction": 64 }),
+]);
+
 export const jobs = pgTable("jobs", {
 	id: uuid().defaultRandom().primaryKey(),
 	kind: text().notNull(),

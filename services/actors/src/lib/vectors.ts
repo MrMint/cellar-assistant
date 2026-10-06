@@ -72,6 +72,20 @@ export const setEmbeddingModel = (
 export const embeddingModel = (): EmbeddingModelIdentity | null =>
   installedModel;
 
+/**
+ * `item_image_vectors.embedding_model` (G32): the document key with its task
+ * replaced by `IMAGE`, because an image embedded alone carries no task
+ * instruction — `vertex-ai:gemini-embedding-2@768/IMAGE`. `null` when the
+ * configured embedding cannot take an image at all, which is what makes the
+ * image table "nothing to do" for the re-embed job and the attach path.
+ */
+export const imageEmbeddingKey = (
+  identity: EmbeddingModelIdentity | null,
+): string | null =>
+  identity === null || !identity.acceptsImages
+    ? null
+    : identity.key.replace(/\/[A-Z_]+$/, "/IMAGE");
+
 /** `embedding_images` for a text-only vector. */
 export const NO_IMAGES = "none";
 

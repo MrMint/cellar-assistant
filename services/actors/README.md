@@ -17,6 +17,18 @@ an injectable seam rather than an AI client of its own:
 | menu extraction, ambiguous-match verification | `MenuExtractionProvider`, `MenuMatchVerifier` | `src/lib/menu-ai.ts` |
 | recipe-photo vision | `RecipePhotoExtractor` | `src/lib/recipe-photo-ai.ts` |
 | review of a user-submitted place | `PlaceReviewer` | `src/actors/place-creation-actor.ts` |
+| image search (`itemSearch(imageFileId:)`), stored-photo vectors | `ImageEmbedder` (query and document slots) | `src/lib/image-embeddings.ts` |
+
+**Image search needs `gemini-embedding-2`** (`AI_PROVIDER=vertex-ai` or
+`google-ai`). It embeds the photo on its own into the space the item vectors
+live in, which no Ollama or OpenAI-compatible embedding model can. On any other
+configuration — including the per-worktree lane's default `ollama` — a photo
+search is a `ConflictError` with reason `IMAGE_SEARCH_UNAVAILABLE`, nothing is
+fetched or charged, and the client says photo search isn't available. Stored
+photos are embedded on attach (`ItemActor.embedImage`, via the outbox) and, for
+photos that predate that or another model's, by the vector re-embed job's
+`item_image_vectors` table: `scripts/operator.ts reembed --tables
+item_image_vectors`.
 
 `src/index.ts` calls `installAI()` at boot, which installs a real implementation
 behind all seven seams — or, with no provider configured, installs nothing and

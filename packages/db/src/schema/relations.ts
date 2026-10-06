@@ -257,6 +257,7 @@ export const relations = defineRelations(schema, (r) => ({
 	},
 	itemImage: {
 		cellarItems: r.many.cellarItems(),
+		itemImageVectors: r.many.itemImageVectors(),
 		beer: r.one.beers({
 			from: r.itemImage.beerId,
 			to: r.beers.id
@@ -288,6 +289,12 @@ export const relations = defineRelations(schema, (r) => ({
 		wine: r.one.wines({
 			from: r.itemImage.wineId,
 			to: r.wines.id
+		}),
+	},
+	itemImageVectors: {
+		itemImage: r.one.itemImage({
+			from: r.itemImageVectors.itemImageId,
+			to: r.itemImage.id
 		}),
 	},
 	sakes: {

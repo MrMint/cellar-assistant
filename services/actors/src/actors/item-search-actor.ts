@@ -73,6 +73,7 @@ import type {
   PageArgs,
 } from "@cellar-assistant/contracts";
 import {
+  ConflictError,
   ITEM_SEARCH_MAX_DISTANCE,
   ITEM_SEARCH_RESULT_CAP,
   ITEM_TYPES,
@@ -81,22 +82,29 @@ import {
   itemSearchActorId,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { itemVectors } from "@cellar-assistant/db";
+import { itemImage, itemImageVectors, itemVectors } from "@cellar-assistant/db";
 import { sql } from "@cellar-assistant/db/orm";
+import { bypassesPolicy } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
-import type { EmbedQuery } from "../lib/embedding-client.ts";
-import { daprEmbedQuery } from "../lib/embedding-client.ts";
+import type { EmbedImage, EmbedQuery } from "../lib/embedding-client.ts";
+import {
+  daprEmbedQuery,
+  daprEmbedQueryImage,
+} from "../lib/embedding-client.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { withHnswScan } from "../lib/hnsw.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { SearchActorBase } from "../lib/search-actor-base.ts";
+import { requireUuid } from "../lib/uuid.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
 
 /** `item_vectors`' item arc (`../lib/item-arcs.ts`). */
 const VECTORS = ARCS.itemVectors;
+/** `item_image`'s item arc — the same six column names, so the union lines up. */
+const IMAGES = ARCS.itemImage;
 
 type Row = {
   readonly item_type: string;
@@ -112,15 +120,18 @@ export class ItemSearchActor
   static readonly category: ActorCategory = ItemSearchActorDescriptor.category;
 
   readonly #embed: EmbedQuery;
+  readonly #embedImage: EmbedImage;
 
   constructor(
     daprClient: DaprClient,
     id: ActorId,
     db: DbOrTx = actorDb(),
     embed: EmbedQuery = daprEmbedQuery,
+    embedImage: EmbedImage = daprEmbedQueryImage,
   ) {
     super(daprClient, id, db);
     this.#embed = embed;
+    this.#embedImage = embedImage;
   }
 
   protected keyFor(input: ItemSearchInput, viewerId: string | null): string {
@@ -152,13 +163,24 @@ export class ItemSearchActor
     ctx: Ctx,
     input: ItemSearchInput,
   ): Promise<readonly ItemSearchHit[]> {
-    const vector = await this.#vectorFor(ctx, input);
-    const literal = toVectorLiteral(vector);
+    const query = await this.#queryFor(ctx, input);
+    const literal = toVectorLiteral(query.vector);
     const types = normaliseTypes(input.itemTypes);
     const maxDistance = requireDistance(
       input.maxDistance ?? ITEM_SEARCH_MAX_DISTANCE,
     );
     const limit = requireLimit(input.limit ?? ITEM_SEARCH_RESULT_CAP);
+    if (query.kind === "image") {
+      return toHits(
+        await this.#imageRows(ctx, {
+          literal,
+          model: query.model,
+          types,
+          maxDistance,
+          limit,
+        }),
+      );
+    }
 
     // Only the requested types' columns take part, so a wine-only search never
     // pays for the five other LEFT JOINs' rows. Every column is the arc's own,
@@ -219,44 +241,194 @@ export class ItemSearchActor
       `),
     );
 
-    return rows.map((row) => {
-      if (!isItemType(row.item_type)) {
-        throw new ValidationError(
-          `item_vectors produced an unknown item type ${row.item_type}`,
-        );
-      }
-      return {
-        type: row.item_type,
-        id: row.item_id,
-        name: row.name,
-        distance: Number(row.distance),
-      };
-    });
+    return toHits(rows);
   }
 
   /**
-   * A phrase is embedded through `EmbeddingActor`; a vector is taken as given.
-   * Exactly one of the two is required — accepting both would make the key
-   * ambiguous about which one produced the answer.
+   * G32 — a search photo against **both** vector sets, each item ranked by the
+   * nearer of the two:
+   *
+   *  - `item_vectors`, exactly as legacy's `image_search` did: one vector per
+   *    item, its text fused with its label and display photos;
+   *  - `item_image_vectors`, one per stored photograph, embedded alone — new
+   *    here. A photo of a bottle lands far closer to a photo of the same
+   *    bottle (0.02–0.04 for the same image, measured) than to any fused
+   *    vector, whose text pulls it toward the words.
+   *
+   * **Visibility is applied to the image arm, inside the SQL**, mirroring
+   * `canSeeItemImage` (`@cellar-assistant/policy`): a public image, or the
+   * viewer's own; everything for system/admin. Items are catalog data that
+   * every signed-in viewer may see, so the item arm needs no filter — but a
+   * private photo must not be what *surfaces* an item, or which items
+   * somebody privately photographed would leak through the ranking. That is
+   * why the viewer is in this search's key (`itemSearchActorId`).
+   *
+   * Only image vectors made by the configured image embedding take part: a
+   * row from another model is in another space, and its distance means
+   * nothing. (The item arm has no such filter, as before; the re-embed job is
+   * what converges it.)
+   *
+   * Each arm takes its own nearest-k over its own HNSW index, then the union
+   * is collapsed to one row per item with `min(distance)`. The image arm takes
+   * a wider k ({@link IMAGE_ARM_CANDIDATES}) because several photos of one
+   * item, and invisible ones, can occupy its top rows.
    */
-  async #vectorFor(
+  async #imageRows(
+    ctx: Ctx,
+    q: {
+      readonly literal: string;
+      readonly model: string;
+      readonly types: readonly ItemType[];
+      readonly maxDistance: number;
+      readonly limit: number;
+    },
+  ): Promise<readonly Row[]> {
+    const { literal, model, types, maxDistance, limit } = q;
+    const m = "m";
+    const typeFilterOn = (alias: string) =>
+      sql.join(
+        types.map((type) => VECTORS.isSet(type, alias)),
+        sql` or `,
+      );
+    const nameCoalesce = sql.join(
+      types.map((type) => sql`${sql.identifier(aliasOf(type))}.name`),
+      sql`, `,
+    );
+    const joins = sql.join(
+      types.map((type) => {
+        const alias = sql.identifier(aliasOf(type));
+        return sql`left join ${ITEM_TABLES[type]} ${alias}
+          on ${alias}.id = ${VECTORS.column(type, m)}`;
+      }),
+      sql` `,
+    );
+    const viewer = ctx.viewerId;
+    const visible = bypassesPolicy(ctx)
+      ? sql`true`
+      : viewer === null
+        ? sql`ii.is_public`
+        : sql`(ii.is_public or ii.user_id = ${viewer})`;
+
+    const { rows } = await withHnswScan(this.db, (tx) =>
+      tx.execute<Row>(sql`
+        with item_arm as materialized (
+          select ${VECTORS.columnList("v")},
+                 (v.vector <=> ${literal}::halfvec(768))::float8 as distance
+          from ${itemVectors} v
+          where v.vector is not null and (${typeFilterOn("v")})
+          order by v.vector <=> ${literal}::halfvec(768)
+          limit ${limit}
+        ),
+        image_arm as materialized (
+          select iv.item_image_id,
+                 (iv.vector <=> ${literal}::halfvec(768))::float8 as distance
+          from ${itemImageVectors} iv
+          where iv.embedding_model = ${model}
+          order by iv.vector <=> ${literal}::halfvec(768)
+          limit ${IMAGE_ARM_CANDIDATES}
+        ),
+        candidates as (
+          select ${VECTORS.columnList("a")}, a.distance from item_arm a
+          union all
+          select ${IMAGES.columnList("ii")}, i.distance
+          from image_arm i
+          join ${itemImage} ii on ii.id = i.item_image_id
+          where ${visible} and (${typeFilterOn("ii")})
+        ),
+        best as (
+          select ${VECTORS.columnList("c")}, min(c.distance) as distance
+          from candidates c
+          group by ${VECTORS.columnList("c")}
+        )
+        select
+          ${VECTORS.typeExpr(m, types)} as item_type,
+          ${VECTORS.idExpr(m, types)} as item_id,
+          coalesce(${nameCoalesce}) as name,
+          m.distance as distance
+        from best m
+        ${joins}
+        where (${typeFilterOn(m)})
+          and m.distance <= ${maxDistance}
+          and coalesce(${nameCoalesce}) is not null
+        order by m.distance asc, name asc, item_id asc
+        limit ${limit}
+      `),
+    );
+    return rows;
+  }
+
+  /**
+   * A phrase is embedded through `EmbeddingActor`; a vector is taken as
+   * given; a photo (G32) is embedded as an image through `EmbeddingActor`,
+   * as this viewer. Exactly one of the three is required — accepting more
+   * would make the key ambiguous about which one produced the answer.
+   */
+  async #queryFor(
     ctx: Ctx,
     input: ItemSearchInput,
-  ): Promise<readonly number[]> {
+  ): Promise<
+    | { readonly kind: "vector"; readonly vector: readonly number[] }
+    | {
+        readonly kind: "image";
+        readonly vector: readonly number[];
+        readonly model: string;
+      }
+  > {
     const text = input.text?.trim();
     const hasText = text !== undefined && text !== "";
     const hasVector = (input.vector?.length ?? 0) > 0;
-    if (hasText === hasVector) {
+    const imageFileId = input.imageFileId?.trim() ?? "";
+    const hasImage = imageFileId !== "";
+    if (Number(hasText) + Number(hasVector) + Number(hasImage) !== 1) {
       throw new ValidationError(
-        "an item search takes exactly one of `text` or `vector`: a phrase is " +
-          "embedded through EmbeddingActor, a vector comes from the image " +
-          "pipeline, and supplying both leaves the actor's key ambiguous",
+        "an item search takes exactly one of `text`, `vector` or " +
+          "`imageFileId`: a phrase is embedded through EmbeddingActor, a " +
+          "vector is used as given, a photo is embedded as an image, and " +
+          "supplying more than one leaves the actor's key ambiguous",
       );
     }
-    if (hasVector) return input.vector as readonly number[];
-    return this.#embed(ctx, text as string);
+    if (hasImage) {
+      const embedded = await this.#embedImage(ctx, {
+        fileId: requireUuid(imageFileId, "imageFileId"),
+        purpose: "query",
+      });
+      if (embedded.model === null) {
+        throw new ConflictError(
+          "EmbeddingActor did not say which embedding made the photo's " +
+            "vector, so it cannot be compared with stored image vectors",
+          "IMAGE_SEARCH_UNAVAILABLE",
+        );
+      }
+      return { kind: "image", vector: embedded.vector, model: embedded.model };
+    }
+    if (hasVector) {
+      return { kind: "vector", vector: input.vector as readonly number[] };
+    }
+    return { kind: "vector", vector: await this.#embed(ctx, text as string) };
   }
 }
+
+/**
+ * How many image vectors the image arm reads before visibility and the
+ * per-item collapse. Five per result at the result cap: several photos of one
+ * item, and other people's private photos, can fill the nearest rows.
+ */
+const IMAGE_ARM_CANDIDATES = 5 * ITEM_SEARCH_RESULT_CAP;
+
+const toHits = (rows: readonly Row[]): ItemSearchHit[] =>
+  rows.map((row) => {
+    if (!isItemType(row.item_type)) {
+      throw new ValidationError(
+        `item_vectors produced an unknown item type ${row.item_type}`,
+      );
+    }
+    return {
+      type: row.item_type,
+      id: row.item_id,
+      name: row.name,
+      distance: Number(row.distance),
+    };
+  });
 
 /** `it_wine`, `it_beer`, … — one alias per item table, stable and collision-free. */
 const aliasOf = (type: ItemType): string => `it_${type.toLowerCase()}`;

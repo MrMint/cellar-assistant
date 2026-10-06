@@ -38,6 +38,8 @@ const WRITER_STAMPED: Readonly<Record<string, string>> = {
   cellars: "CellarActor stamps it on every header write",
   files: "FileActor stamps it",
   api_budget_config: "BudgetActor stamps it",
+  item_image_vectors:
+    "ItemActor.embedImage, its one writer, sets updated_at = now() on every upsert",
   account: "better-auth manages its own tables' updatedAt",
   session: "better-auth manages its own tables' updatedAt",
   user: "better-auth manages its own tables' updatedAt",

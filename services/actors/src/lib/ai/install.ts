@@ -31,6 +31,10 @@ import {
 import { setPlaceReviewer } from "../../actors/place-creation-actor.ts";
 import { setInsightsGenerator } from "../../actors/tier-list-actor.ts";
 import { EMBEDDING_DIMENSIONS, setEmbedder } from "../embeddings.ts";
+import {
+  setDocumentImageEmbedder,
+  setQueryImageEmbedder,
+} from "../image-embeddings.ts";
 import { setItemDefaultsProvider } from "../item-defaults.ts";
 import { setMenuExtractionProvider, setMenuMatchVerifier } from "../menu-ai.ts";
 import { setRecipePhotoExtractor } from "../recipe-photo-ai.ts";
@@ -46,6 +50,7 @@ import type { ImageLoader } from "./images.ts";
 import { daprImageLoader } from "./images.ts";
 import {
   providerEmbedder,
+  providerImageEmbedder,
   providerInsightsGenerator,
   providerItemDefaults,
   providerMenuExtraction,
@@ -96,6 +101,17 @@ export const SEAMS = {
   embedding: {
     install: (provider, loadImages) =>
       setEmbedder(providerEmbedder(provider, loadImages)),
+  },
+  // G32: the same implementation in two slots, each charged to its own seam
+  // (`../image-embeddings.ts` says why).
+  image_embedding: {
+    entityType: "item_image",
+    install: (provider, loadImages) =>
+      setDocumentImageEmbedder(providerImageEmbedder(provider, loadImages)),
+  },
+  image_search: {
+    install: (provider, loadImages) =>
+      setQueryImageEmbedder(providerImageEmbedder(provider, loadImages)),
   },
   item_defaults: {
     entityType: "item_onboarding",

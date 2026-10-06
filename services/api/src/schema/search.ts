@@ -50,6 +50,8 @@ import {
   brandSearchActorId,
   CellarItemSearchActorDescriptor,
   cellarItemSearchActorId,
+  IMAGE_SEARCH_MAX_DISTANCE,
+  IMAGE_SEARCH_RESULT_LIMIT,
   ITEM_SEARCH_RESULT_CAP,
   ItemSearchActorDescriptor,
   itemActorId,
@@ -103,12 +105,25 @@ builder.queryField("itemSearch", (t) =>
     description:
       "Semantic item search over `item_vectors` (ItemSearchActor). Replaces " +
       "the `text_search` and `image_search` native queries: pass `text` for a " +
-      "phrase, or `vector` for an image embedding the client already has.",
+      "phrase, `imageFileId` for a photo (G32), or `vector` for an embedding " +
+      "the client already has — exactly one. A photo search matches the " +
+      "item vectors and every stored photo you may see, ranks each item by " +
+      "the nearer, and defaults `maxDistance` to " +
+      `${IMAGE_SEARCH_MAX_DISTANCE} and \`limit\` to ${IMAGE_SEARCH_RESULT_LIMIT}. ` +
+      "Where the deployment's embedding model cannot embed a photo it is a " +
+      "`ConflictError` with reason `IMAGE_SEARCH_UNAVAILABLE`.",
     // A7e — an error union, for the reason `pagination.ts` records.
     errors: {},
     args: {
       ...t.arg.connectionArgs(),
       text: t.arg.string({ required: false }),
+      imageFileId: t.arg.id({
+        required: false,
+        description:
+          "G32: `files.id` of a photo uploaded through `createUploadTarget` " +
+          "and `verifyFile`. Charged to the image-search budget, with a " +
+          "per-user cap (`BUDGET_EXCEEDED` past it).",
+      }),
       vector: t.arg.floatList({
         required: false,
         description:
@@ -127,12 +142,19 @@ builder.queryField("itemSearch", (t) =>
       }),
     },
     resolve: async (_root, args, context) => {
+      const imageFileId =
+        args.imageFileId == null ? null : String(args.imageFileId);
       const input = {
         text: args.text ?? null,
         vector: args.vector ?? null,
+        ...(imageFileId === null ? {} : { imageFileId }),
         itemTypes: args.itemTypes ?? null,
-        maxDistance: args.maxDistance ?? null,
-        limit: args.limit ?? null,
+        maxDistance:
+          args.maxDistance ??
+          (imageFileId === null ? null : IMAGE_SEARCH_MAX_DISTANCE),
+        limit:
+          args.limit ??
+          (imageFileId === null ? null : IMAGE_SEARCH_RESULT_LIMIT),
       };
       return connectionFromPage(
         await context

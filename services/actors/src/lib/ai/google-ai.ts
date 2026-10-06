@@ -87,13 +87,15 @@ export const createGoogleAIProvider = (
     async generateEmbeddings(
       request: EmbeddingRequest,
     ): Promise<EmbeddingResponse> {
-      if (request.type === "image") {
+      const model = request.model ?? config.embeddingModel;
+      // An image alone (G32) is `gemini-embedding-2` only; `geminiEmbeddingParts`
+      // builds the image-only request, and this refuses every other model here.
+      if (request.type === "image" && !isGeminiEmbedding2(model)) {
         throw new ConflictError(
-          "the google-ai provider embeds text, or text with images, never an " +
-            "image alone",
+          `the google-ai provider embeds an image alone only with ` +
+            `gemini-embedding-2, not ${model}`,
         );
       }
-      const model = request.model ?? config.embeddingModel;
       const dimensions = request.dimensions ?? config.embeddingDimensions;
       // `gemini-embedding-2` takes its task in the text, not as `taskType`
       // (`gemini.ts`), and is the one model here that takes images too.

@@ -82,6 +82,19 @@ export const ACTOR_ERROR_REASONS = [
    * recipe as missing.
    */
   "RECIPE_NOT_IN_GROUP",
+
+  /* -- image search (G32) ------------------------------------------------- */
+
+  /**
+   * An image search, or an image embedding, asked of a process whose
+   * embedding model cannot embed a photograph: `AI_PROVIDER` unset, or a
+   * provider/model other than `gemini-embedding-2` on `vertex-ai` /
+   * `google-ai` (Ollama's `nomic-embed-text`, the per-worktree lane's
+   * default, is text only). `CONFLICT` — the request is well-formed and the
+   * deployment cannot serve it. A client turns this into "photo search isn't
+   * available here", not a retry.
+   */
+  "IMAGE_SEARCH_UNAVAILABLE",
 ] as const;
 
 export type ActorErrorReason = (typeof ACTOR_ERROR_REASONS)[number];
