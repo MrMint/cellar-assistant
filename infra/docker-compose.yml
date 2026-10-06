@@ -647,7 +647,8 @@ services:
         # `actors` service signs browser-facing URLs for, i.e. FILES_S3_ENDPOINT
         # + FILES_S3_PORT above: the browser has to dial the exact authority the
         # URL was signed for, and `connect-src` has to permit it. Changing it
-        # needs a rebuild, not a restart: `bun run stack:client:build`.
+        # needs a rebuild, not a restart: `bun run stack:client:build`
+        # (which also recreates the container and its loopback sidecar).
         FILES_S3_PUBLIC_URL: ${FILES_S3_PUBLIC_URL:-http://localhost:9100}
     # NO `command:` — DELIBERATELY. The image's CMD is
     # `bun run --bun next start`, and a compose `command:` silently overrides
@@ -724,6 +725,13 @@ services:
   # at the published port, forwarding raw TCP to `minio:9000`. The request
   # arrives at MinIO still saying `Host: localhost:9100`, which is what was
   # signed. Plain Node from the client's own base image: nothing new to pull.
+  #
+  # Docker binds that namespace to the client CONTAINER'S ID, so recreating the
+  # client on its own (`up -d client`, `--force-recreate client`) orphans this:
+  # it keeps running in a namespace that is gone. Recreate the client only via
+  # `bun run stack:client:build` / `bun run stack:client:up`
+  # (scripts/stack/client.sh), which name both services in one `up`; and
+  # `bun run dev:doctor` fails on an orphaned one.
   #
   # Production has neither this nor the client (Vercel serves the frontend):
   # both are profiled out in docker-compose.prod.yml.

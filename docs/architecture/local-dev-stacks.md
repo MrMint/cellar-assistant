@@ -563,8 +563,9 @@ means restart, not save. Measured 2026-09-17: `cellar-stack-actors-1` went on
 serving a broken mid-refactor snapshot for **nine minutes** after the source on
 disk was already correct. The client container is the opposite failure mode: no
 bind mount at all, so it serves its image and an edit needs
-`bun run stack:client:build` then
-`docker compose -f infra/docker-compose.yml up -d client`. The two behave in
+`bun run stack:client:build`, which rebuilds the image and recreates the
+running client together with `client-files-loopback` (`scripts/stack/client.sh`
+— a bare `up -d client` orphans that sidecar). The two behave in
 opposite ways and neither is obvious from the outside; when a change seems not
 to have taken, check which of the two you are looking at before debugging the
 code.
@@ -774,9 +775,15 @@ for on the other two services.
 So source edits are not live here. After changing client code:
 
 ```bash
-bun run stack:client:build       # docker compose … build client
-docker compose -f infra/docker-compose.yml up -d client
+bun run stack:client:build       # build client, then recreate client + client-files-loopback
+bun run stack:client:up          # recreate both without rebuilding
 ```
+
+Never `docker compose … up -d client` on its own: `client-files-loopback`
+joins the client's network namespace by container id, so recreating the client
+alone leaves the sidecar running in a namespace that no longer exists, and
+`/_next/image` stops reaching MinIO with nothing in any log. `bun run dev:doctor`
+fails on that state.
 
 A full cold build measured ~2 min; the `next build` step inside it, 14s. The
 image is ~2.2 GB because it keeps the whole install (devDependencies included)
@@ -969,8 +976,8 @@ actually has with
 `docker inspect cellar-stack-actors-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep AUTH_TRUSTED_ORIGINS`.
 
 **The `client` container serves a stale page** — it serves its image, not your
-working tree; there is no bind mount. `bun run stack:client:build` then
-`up -d client`. For a live loop, `bun run dev` on the host.
+working tree; there is no bind mount. `bun run stack:client:build` (rebuilds
+and recreates it with its sidecar). For a live loop, `bun run dev` on the host.
 
 **`SignatureDoesNotMatch` on an image** — the browser is dialling a different
 host:port than the binding signed. Both must be `localhost:<MINIO_PORT>`; see

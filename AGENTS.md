@@ -193,7 +193,10 @@ Full detail in `docs/architecture/local-dev-stacks.md`; summary:
   **no host process** — which is what makes the e2e suite runnable by an agent at all, given the
   HARD rule above. It is on **3003, not 3000**: 3000 stays free for the user's own `bun run dev`,
   so both can be up at once. Source edits are not live in that container (no bind mount, on
-  purpose — the mount would shadow the image's `.next`); rebuild with `bun run stack:client:build`.
+  purpose — the mount would shadow the image's `.next`); rebuild with `bun run stack:client:build`,
+  which also recreates the container with its `client-files-loopback` sidecar. Never recreate the
+  client alone (`docker compose … up -d client`): the sidecar shares its network namespace by
+  container id and is orphaned — use `bun run stack:client:up` (`scripts/stack/client.sh`).
 
 Seed test data: `bun run db:seed` — creates `test@test.com` / `test2@test.com`, password
 `123456789`; `/sign-in` redirects to `/cellars` on success.
@@ -210,7 +213,7 @@ bun run check / check:fix # Biome lint + format together
 bun run test              # unit tests, via Turbo (excludes e2e)
 bun run test:e2e          # Playwright suite (packages/e2e) — defaults to the container (3003)
                           # E2E_BASE_URL=http://localhost:3000 bun run test:e2e  → a host dev server
-bun run stack:client:build # rebuild the client image after changing services/client
+bun run stack:client:build # rebuild the client image and recreate it (+ its loopback sidecar)
 bun run update:all        # bun update --latest --interactive
 ```
 

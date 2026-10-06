@@ -1983,9 +1983,32 @@ $MINIO_BUCKET
             d_cont "FILES_S3_PUBLIC_URL to now. It is a BUILD ARG, so this does not fail at boot: the"
             d_cont "browser refuses every upload with no network request at all, and nothing is logged"
             d_cont "on either side. Served: $served"
-            d_hint "bun run stack:client:build && docker compose -f infra/docker-compose.yml up -d client"
+            d_hint "bun run stack:client:build   # rebuilds, then recreates client + client-files-loopback"
             ;;
         esac
+      fi
+    fi
+
+    # --- client-files-loopback still in THIS client's network namespace? ---
+    # It joins the client's namespace by container id (`network_mode:
+    # "service:client"`), so recreating the client alone leaves it running in
+    # a namespace that is gone — nothing on the new client's loopback, and
+    # every `/_next/image` fetch of a MinIO URL fails inside the client with
+    # nothing in the sidecar's log. scripts/stack/client.sh has the measurement.
+    local loopback_c loopback_ns client_id
+    loopback_c="$(project_container cellar-stack client-files-loopback)"
+    client_id="$(docker inspect "$client_c" --format '{{.Id}}' 2>/dev/null || true)"
+    if [ -z "$loopback_c" ]; then
+      d_warn "the shared client is running without client-files-loopback: item photos through /_next/image will fail"
+      d_hint "bun run stack:client:up"
+    elif [ -n "$client_id" ]; then
+      loopback_ns="$(docker inspect "$loopback_c" --format '{{.HostConfig.NetworkMode}}' 2>/dev/null || true)"
+      if [ "$loopback_ns" = "container:$client_id" ]; then
+        d_ok "client-files-loopback shares the running client's network namespace"
+      else
+        d_fail "client-files-loopback is orphaned: it joined a client container that has since been replaced"
+        d_cont "($loopback_ns, client is ${client_id:0:12}). /_next/image cannot reach MinIO until it is recreated."
+        d_hint "bun run stack:client:up"
       fi
     fi
   fi
@@ -2332,7 +2355,7 @@ doctor_source_freshness() {
           report_staleness "$c ($svc, built image)" "$marker" \
             "image built $(date -r "$marker" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo unknown) local" \
             "This service has no bind mount: its source is baked into the image, so an edit needs a rebuild, not a restart." \
-            "bun run stack:client:build && docker compose -p $project up -d $svc" \
+            "bun run stack:client:build   # rebuilds, then recreates $svc with its loopback sidecar" \
             "$REPO_ROOT/services/$svc" "$REPO_ROOT/packages"
         fi
         continue
