@@ -32,6 +32,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 CUT="$ROOT/scripts/cutover/cutover.sh"
 CMP="$ROOT/scripts/cutover/compare-rowcounts.sh"
+# cutover.sh writes its `dump` phase to ${DUMP:-$WORK/nhost-full.dump}, and
+# stack-ci exports DUMP for the whole job (packages/db/transform/nhost-schema.sql,
+# for test-db.sh). Inherited, this harness's dump overwrote that checked-in file
+# and its archive checks read a $WORK that held nothing. Each case names its
+# own WORK, and the one that wants a DUMP passes it; none may inherit one.
+unset DUMP
 BASH_BIN="$(command -v bash)"
 
 PG="${CUT_TEST_PG_CONTAINER:-cellar-stack-postgres-1}"
