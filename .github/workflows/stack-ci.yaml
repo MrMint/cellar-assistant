@@ -261,8 +261,14 @@ jobs:
       # nothing else can change what gets fetched. The key carries the project
       # because each leg installs a different closure, and because seven legs
       # racing to reserve one shared key just logs six failures.
-      - name: Cache bun's module cache
-        uses: actions/cache@v4
+      #
+      # Restore everywhere, save only from `main` (the step after Install) —
+      # see app-ci.yaml's restore step: a PR-scoped entry is readable by that
+      # PR alone, and every Renovate PR changes bun.lock, so PR-side saves
+      # were ~1 GB per PR across the seven legs, evicting `main`'s entries.
+      - name: Restore bun's module cache
+        id: bun-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.bun/install/cache
           # `+reads` when the leg also installs another workspace's closure
@@ -290,6 +296,13 @@ jobs:
       # tests read.
       - name: Install
         run: bun install --frozen-lockfile --filter "./${{ matrix.project }}..." ${{ matrix.also_install }}
+
+      - name: Save bun's module cache
+        if: github.event_name == 'push' && steps.bun-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       # Replaces pnpm's `strictDepBuilds`, which failed the install outright
       # (ERR_PNPM_IGNORED_BUILDS) when a dependency's build script had not been
@@ -511,7 +524,15 @@ jobs:
   # same script on `main`, and Loki's pull-deploy.sh runs it on the images it
   # builds itself before migrating anything. Read-only cache: PRs reuse
   # deploy-loki.yaml's layers (same scope names) without writing their own.
+  #
+  # PRs only. On a push to `main` deploy-loki.yaml builds and smoke-tests the
+  # same two images from the same commit, in parallel with this — the second
+  # build bought nothing but two more jobs per merge. Every input these images
+  # read is in deploy-loki's `paths` filter (each Dockerfile's COPY list),
+  # so no `main` commit that changes an image goes unbuilt. The skipped check
+  # reads as `skipped`, which Loki's CI gate accepts.
   images:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

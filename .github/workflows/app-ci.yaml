@@ -39,7 +39,13 @@ on:
     paths:
       - "services/client/**"
       - "packages/e2e/**"
-      - "scripts/**"
+      # The two root scripts this workflow runs (as steps, and through the
+      # root `preinstall`). Not `scripts/**`: nothing in services/client or
+      # packages/e2e reads scripts/{ai,backup,ci,cutover,deploy,stack}, and the
+      # wildcard started the ~4 min `next build` image job on every deploy- or
+      # cutover-script edit.
+      - "scripts/check-node-version.mjs"
+      - "scripts/check-blocked-builds.mjs"
       - "package.json"
       - "bun.lock"
       - "bunfig.toml"
@@ -86,7 +92,8 @@ on:
     paths:
       - "services/client/**"
       - "packages/e2e/**"
-      - "scripts/**"
+      - "scripts/check-node-version.mjs"
+      - "scripts/check-blocked-builds.mjs"
       - "package.json"
       - "bun.lock"
       - "bunfig.toml"
@@ -192,8 +199,16 @@ jobs:
       # what the lockfile pins, so nothing else can change what gets fetched.
       # The `client` segment keeps this workflow from racing stack-ci's six legs
       # to reserve one shared key.
-      - name: Cache bun's module cache
-        uses: actions/cache@v4
+      #
+      # Restore everywhere, save only from `main` (the step after Install). A
+      # PR's cache is scoped to its own merge ref — no other PR can read it —
+      # and every Renovate PR changes bun.lock, so a PR-side save was a ~320 MB
+      # copy per PR that only that PR's re-runs could use, counted against the
+      # repo's 10 GB cache cap and evicting `main`'s entries, which are the
+      # ones every PR restores from.
+      - name: Restore bun's module cache
+        id: bun-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.bun/install/cache
           key: bun-cache-${{ runner.os }}-client-${{ hashFiles('bun.lock') }}
@@ -239,6 +254,15 @@ jobs:
           bun install --frozen-lockfile \
             --filter "@cellar-assistant/client..." \
             --filter cellar-assistant
+
+      # Right after Install rather than at job end, so a red typecheck or test
+      # on `main` still leaves the cache warm for the PR that fixes it.
+      - name: Save bun's module cache
+        if: github.event_name == 'push' && steps.bun-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       # Replaces pnpm's `strictDepBuilds`, which failed the install outright
       # (ERR_PNPM_IGNORED_BUILDS) when a dependency's build script had not been
@@ -322,6 +346,12 @@ jobs:
   # production serves the frontend from Vercel (deploy-loki.md §2.5), so this
   # image exists for the local/e2e lane, and a Dockerfile that stopped building
   # used to be found by the next person to run stack:client:build.
+  #
+  # Cache: PRs read `main`'s layers and write none, the same split as
+  # stack-ci's `images` job. `mode=max` exports every intermediate layer — the
+  # `next build` stage and the full devDependency install — and the first PR
+  # to run this wrote 2.2 GB of it into a scope only that PR could read: a
+  # handful of open PRs would fill the 10 GB cap and evict `main`'s layers.
   image:
     runs-on: ubuntu-latest
     steps:
@@ -336,7 +366,7 @@ jobs:
           file: services/client/Dockerfile
           push: false
           cache-from: type=gha,scope=client
-          cache-to: type=gha,mode=max,scope=client
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=client' || '' }}
 
 # No browser leg on purpose. E2's Playwright suite needs `bun run stack:up` (an
 # eight-container compose stack), a dev server and a seeded database, and it
