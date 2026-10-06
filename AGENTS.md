@@ -486,15 +486,15 @@ plus a checked-in dump baseline (`X4`). X4 has landed (`a2d8dcef`), so only the 
   pre-migration commit, which still has `functions/`. Do not plan a rollback around `nhost up` in
   this worktree. Local URLs, where it does run, are the Nhost CLI defaults: e.g.
   `https://local.hasura.nhost.run`, `https://local.graphql.nhost.run`.
-- **Production Nhost Cloud deploys from `main` — so merging to `main` is never inert.** The `nhost`
-  GitHub app redeploys the live backend (migrations, metadata, `functions/`) 27–40 seconds after
-  every merge to `main` (measured on the last three); nothing in this repository configures it,
-  which is why no grep finds it. Merging this branch would ship a tree with no `functions/` to what is still production *and* the rollback
-  target. Merging the release-please PR that follows is a second trigger: it fast-forwards
-  `production`, which Vercel deploys. Pushing a branch or opening a PR is inert for both. **Read
-  `e4-decisions.md` decision 15 before anything reaches `main`**: its two gates (repoint Nhost's
-  deployment branch to `nhost-legacy`; take the release app off the `production` ruleset's bypass
-  list) must be in place and confirmed first.
+- **Nhost Cloud no longer deploys from `main`.** Its GitHub app used to redeploy the live Nhost
+  backend (migrations, metadata, `functions/`) 27–40 seconds after every merge to `main`; the
+  repository was disconnected from the Nhost project on 2026-10-05, before this branch was merged,
+  so the project stays frozen at `82450ad1` as the rollback target until it is deleted
+  (`e4-decisions.md` decision 15). Nothing in this repository configured it, so nothing here
+  can show it either way: the check is that a commit on `main` carries no `nhost` check-run
+  (`gh api repos/MrMint/cellar-assistant/commits/<sha>/check-runs --jq '[.check_runs[].app.slug]'`).
+  **Merging a release-please PR is still a production deploy, deliberately:** it fast-forwards
+  `production`, which Vercel builds as Production, and that is now the frontend's deploy path.
 - Its containers are named after the worktree directory, **not** `cellar-assistant-*` — in this
   worktree that's `epic-burnell-4b4be9-postgres-1`, `epic-burnell-4b4be9-graphql-1`, etc. (a fixed
   container name is wrong in every worktree but the one it was written for — check with

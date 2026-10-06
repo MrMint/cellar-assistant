@@ -539,7 +539,15 @@ prerequisite — "the images do not exist until `main`" — no longer applies to
 
 ---
 
-## 15. A merge to `main` redeploys production Nhost, and the next release merge redeploys production Vercel — **FOUND 2026-09-27; gated in the runbook, needs two settings changes from you**
+## 15. A merge to `main` redeploys production Nhost, and the next release merge redeploys production Vercel — **CLOSED 2026-10-05: Nhost disconnected; release merges are the frontend deploy path**
+
+**Resolution, 2026-10-05.** The cutover happened first, so the two gates below closed differently than
+planned. Gate 1: the owner **disconnected the repository from the Nhost project** (not a branch
+repoint), before this branch was merged; the project stays up, frozen at `82450ad1`, as the rollback
+target until it is deleted. Confirm on the merge commit: no `nhost` check-run. Gate 2 is moot:
+Vercel Production already serves the new frontend against Loki (deployed by CLI at cutover), so the
+release app keeps its `production` bypass and merging a release-please PR is the normal production
+deploy from here on. The rest of this section is the record of how the risk was found.
 
 **Runbook step (0a) said "merge this branch to `main`", on no deadline, and the rollback paragraph
 said "production Nhost is unaffected by anything in this repository". Both were false.** Nhost
