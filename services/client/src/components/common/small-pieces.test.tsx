@@ -1,35 +1,16 @@
 /**
- * Render tests for three small shared pieces: `InteractiveCard` (still Joy,
- * against its `82450ad1` markup, until the removal step deletes it),
- * `ItemTypeIcon` (now `TypeGlyph`) and `PageLoading`.
+ * Render tests for two small shared pieces: `ItemTypeIcon` (now `TypeGlyph`)
+ * and `PageLoading`.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ITEM_TYPES } from "@/components/cellar-api/itemTypes";
-import { InteractiveCard } from "./InteractiveCard";
 import { ItemTypeIcon } from "./ItemTypeIcon";
 import { PageLoading } from "./PageLoading";
 
 const raw = (node: ReactNode) => renderToStaticMarkup(node);
-
-describe("InteractiveCard (restored)", () => {
-  test("one card element with the old hover affordance", () => {
-    const html = raw(<InteractiveCard>body</InteractiveCard>);
-    assert.match(
-      html.replace(/<style[^>]*>[^<]*<\/style>/g, ""),
-      /^<div\b[^>]*>body<\/div>$/,
-    );
-    // The styled() hover rule: pointer plus the theme's medium shadow. (The
-    // border colour comes from the app theme's palette, absent here.)
-    assert.match(
-      html,
-      /:hover\{cursor:pointer;box-shadow:[^}]*0px 6px 12px -2px/,
-    );
-    assert.match(html, />body</);
-  });
-});
 
 describe("ItemTypeIcon", () => {
   test("one distinct, decorative glyph per type", () => {

@@ -2,7 +2,7 @@
  * The app's only stylesheet with values (D20; design-direction.md §3–§4).
  *
  * - `--ca-*` on :root are the tokens. `src/lib/tokens.ts` holds the same
- *   values for code that cannot read CSS (the Joy theme, MapLibre, canvas);
+ *   values for code that cannot read CSS (MapLibre, canvas, contrast tests);
  *   `src/lib/dev-checks/tokens-parity.test.ts` fails when the two differ.
  * - `@theme inline` maps them onto shadcn's semantic names and the app's own
  *   roles, which is what makes `bg-primary`, `text-ink-3`, `bg-surface-1` …
@@ -157,7 +157,8 @@
   --ease-exit: var(--ca-ease-exit);
 }
 
-/* Breakpoints = Joy's, so CSS and the JS `useMediaQuery` helpers flip together. */
+/* Breakpoints (600/900/1200/1536), shared with the JS `useMediaQuery` helpers
+   so CSS and JS flip together. */
 @theme {
   --breakpoint-sm: 600px;
   --breakpoint-md: 900px;
@@ -243,8 +244,7 @@
 @layer base {
   /* shadcn's base: without it every `border` utility (Card, Popover, Dialog,
      DropdownMenu, Alert, Accordion, Sheet…) draws in currentColor — a bright
-     ink-1 line instead of the hairline. Joy sets its own border colours
-     (unlayered), so this only reaches Tailwind markup and raw elements. */
+     ink-1 line instead of the hairline. */
   *,
   ::after,
   ::before,
@@ -254,6 +254,14 @@
   }
   html {
     -webkit-tap-highlight-color: transparent;
+    /* Was Joy's CssBaseline: greyscale antialiasing on macOS/iOS. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  /* Was Joy's CssBaseline too (its "lg" weight); Preflight's `bolder` is 700. */
+  strong,
+  b {
+    font-weight: 600;
   }
   body {
     background-color: var(--ca-bg);
@@ -264,32 +272,6 @@
   textarea,
   select {
     font-size: max(16px, 1em);
-  }
-  /* joy-compat (deleted with Joy in the removal step): Preflight makes every
-     svg/img `display: block`, which stacks the inline react-icons glyphs inside
-     Joy components onto their own line. Roll that back inside Joy markup. */
-  [class*="Mui"] svg,
-  [class*="Mui"] img {
-    display: revert-layer;
-    vertical-align: revert-layer;
-  }
-  /* Likewise the bare elements unconverted screens put inside Joy text, which
-     Preflight strips: a plain `next/link` in a sentence ("New to Cellar
-     Assistant? Sign up!") loses its colour and underline, a plain `<ul>` its
-     bullets and indent (the onboarding Tips), a plain `<input>` (the phone
-     field) its own text colour. `:not([class])` leaves every styled element
-     alone; inside Joy markup these get exactly what they had before Tailwind. */
-  [class*="Mui"] a:not([class]) {
-    color: revert-layer;
-    text-decoration: revert-layer;
-  }
-  [class*="Mui"] :is(ul, ol):not([class]) {
-    list-style: revert-layer;
-    margin: revert-layer;
-    padding: revert-layer;
-  }
-  [class*="Mui"] input:not([class]) {
-    color: revert-layer;
   }
 }
 

@@ -41,8 +41,7 @@ const MARK: Record<DraftSource, string> = {
  * UI only through this component** (and AI progress states): it means "the AI
  * did this", never "tap here".
  *
- * Same props as `common/AIDraftField` minus `sx` (use `className`). The
- * wrapper renders whether or not the field is drafted, so the input inside
+ * The wrapper renders whether or not the field is drafted, so the input inside
  * keeps its identity — and its focus — at the keystroke that removes the mark.
  */
 export function AIDraftField({

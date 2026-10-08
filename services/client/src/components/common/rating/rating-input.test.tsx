@@ -1,6 +1,8 @@
 /**
- * The N30 rating control: what assistive tech and touch see in the markup,
- * and the keyboard and tap behaviour of its hook.
+ * The N30 rating control (`app/RatingInput`, `app/RatingDisplay`): what
+ * assistive tech and touch see in the markup, and the keyboard and tap
+ * behaviour of its hook (`useStarRatingInput`). The interactive half, in a
+ * DOM, is `app/interactive.test.tsx`.
  *
  * There is no DOM in this suite (server render only), so the hook is driven
  * by calling the handlers it returns with minimal event objects — the same
@@ -10,11 +12,10 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { StarRating, StarRatingDisplay } from "./StarRating";
+import { RatingDisplay, RatingInput } from "@/components/app/RatingInput";
 import { useStarRatingInput } from "./useStarRatingInput";
 
-const render = (node: ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+const render = (node: ReactNode) => renderToStaticMarkup(node);
 
 const radios = (html: string) =>
   [...html.matchAll(/<input[^>]*>/g)].map((m) => ({
@@ -26,9 +27,9 @@ const radios = (html: string) =>
     disabled: / disabled=""/.test(m[0]),
   }));
 
-describe("StarRating markup", () => {
+describe("RatingInput markup", () => {
   test("a named radiogroup of ten native radios, half steps 0.5–5", () => {
-    const html = render(<StarRating value={null} onChange={() => {}} />);
+    const html = render(<RatingInput value={null} onChange={() => {}} />);
     assert.match(html, /role="radiogroup"[^>]*aria-label="Your score"/);
     const r = radios(html);
     assert.equal(r.length, 10);
@@ -46,17 +47,19 @@ describe("StarRating markup", () => {
   });
 
   test("nothing hides the control from VoiceOver or swallows a scroll", () => {
-    const html = render(<StarRating value={3} onChange={() => {}} />);
+    const html = render(<RatingInput value={3} onChange={() => {}} />);
     // Only the decorative glyphs are aria-hidden — never the group or a radio.
     for (const m of html.matchAll(/<[a-z]+[^>]*aria-hidden="true"[^>]*>/g)) {
-      assert.match(m[0], /^<svg |^<span[^>]*class="ca-rating__glyph"/);
+      assert.match(m[0], /^<svg |^<span[^>]*data-slot="star"/);
     }
-    assert.doesNotMatch(html, /touch-action:\s*none/);
+    assert.match(html, /\btouch-manipulation\b/);
+    // `touch-none-select` is user-select only; `touch-none` would eat a scroll.
+    assert.doesNotMatch(html, /\btouch-none(?![-\w])/);
     assert.doesNotMatch(html, /onpointerleave|onmouseleave/i);
   });
 
   test("the checked radio is the value; stars fill to it", () => {
-    const html = render(<StarRating value={3.5} onChange={() => {}} />);
+    const html = render(<RatingInput value={3.5} onChange={() => {}} />);
     const checked = radios(html).filter((x) => x.checked);
     assert.deepEqual(
       checked.map((x) => x.value),
@@ -71,10 +74,10 @@ describe("StarRating markup", () => {
 
   test("a whole value offers the half; an off-step value is snapped", () => {
     assert.match(
-      render(<StarRating value={4} onChange={() => {}} />),
+      render(<RatingInput value={4} onChange={() => {}} />),
       /4 · Very Good — tap again for a half/,
     );
-    const html = render(<StarRating value={3.7} onChange={() => {}} />);
+    const html = render(<RatingInput value={3.7} onChange={() => {}} />);
     assert.deepEqual(
       radios(html)
         .filter((x) => x.checked)
@@ -84,22 +87,17 @@ describe("StarRating markup", () => {
   });
 
   test("each star is a 44 pt target; focus shows on the star", () => {
-    const html = renderToStaticMarkup(
-      <StarRating value={null} onChange={() => {}} />,
-    );
-    assert.equal([...html.matchAll(/class="ca-rating__star"/g)].length, 5);
-    assert.match(html, /--ca-rating-target:44px/);
-    assert.match(html, /min-width:var\(--ca-rating-target\)/);
-    assert.match(html, /min-height:var\(--ca-rating-target\)/);
-    assert.match(
-      html,
-      /\.ca-rating__star:has\(\.ca-rating__radio:focus-visible\)\{outline:2px solid/,
-    );
-    assert.match(html, /touch-action:manipulation/);
+    const html = render(<RatingInput value={null} onChange={() => {}} />);
+    const stars = [...html.matchAll(/<span[^>]*data-star="\d"[^>]*>/g)];
+    assert.equal(stars.length, 5);
+    for (const [star] of stars) {
+      assert.match(star, /\bsize-11\b/, "44 px");
+      assert.match(star, /has-\[input:focus-visible\]:ring/);
+    }
   });
 
   test("disabled disables every radio", () => {
-    const html = render(<StarRating value={2} onChange={() => {}} disabled />);
+    const html = render(<RatingInput value={2} onChange={() => {}} disabled />);
     assert.ok(radios(html).every((x) => x.disabled));
     assert.match(html, /aria-disabled="true"/);
   });
@@ -107,34 +105,34 @@ describe("StarRating markup", () => {
   test("Clear shows only when clearable and rated", () => {
     const noop = () => {};
     assert.doesNotMatch(
-      render(<StarRating value={2} onChange={noop} />),
+      render(<RatingInput value={2} onChange={noop} />),
       /Clear rating/,
     );
     assert.doesNotMatch(
-      render(<StarRating value={null} onChange={noop} onClear={noop} />),
+      render(<RatingInput value={null} onChange={noop} onClear={noop} />),
       /Clear rating/,
     );
     assert.match(
-      render(<StarRating value={2} onChange={noop} onClear={noop} />),
+      render(<RatingInput value={2} onChange={noop} onClear={noop} />),
       /Clear rating/,
     );
   });
 });
 
-describe("StarRatingDisplay", () => {
+describe("RatingDisplay", () => {
   test("one image named with the score; glyphs are decorative", () => {
-    const html = render(<StarRatingDisplay value={4.5} />);
+    const html = render(<RatingDisplay value={4.5} />);
     assert.match(
       html,
       /^<span[^>]*role="img"[^>]*aria-label="Rated 4.5 out of 5"/,
     );
     assert.doesNotMatch(html, /<input/);
-    assert.equal([...html.matchAll(/class="ca-rating__glyph"/g)].length, 5);
+    assert.equal([...html.matchAll(/data-slot="star"/g)].length, 5);
   });
 
   test("no score reads as not rated", () => {
     assert.match(
-      render(<StarRatingDisplay value={null} />),
+      render(<RatingDisplay value={null} />),
       /aria-label="Not rated"/,
     );
   });

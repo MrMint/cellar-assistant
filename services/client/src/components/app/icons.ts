@@ -3,8 +3,8 @@
  * *meaning* rather than by picture, so a converted file imports `Back` or
  * `Love` and a later glyph swap happens here once.
  *
- * Every react-icons name still in use maps to one of these; the table is in
- * `README.md` ("Icons"). Draw them at a 1.75 stroke — `IconButton`, the tab
+ * Every react-icons name the app used before the migration maps to one of
+ * these; the table is in `README.md` ("Icons"). Draw them at a 1.75 stroke — `IconButton`, the tab
  * bar and the ui/* components already do; elsewhere pass
  * `strokeWidth={ICON_STROKE}`.
  *

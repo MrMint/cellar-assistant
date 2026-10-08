@@ -1,8 +1,8 @@
 /**
  * WCAG contrast for the palette (design-direction.md §3.1, D21), measured on
  * the values the app actually ships: `lib/tokens.ts` (which `globals.css`
- * mirrors — `tokens-parity.test.ts`), the Joy theme built from it, and the
- * tint `TypeChip` puts behind a type's text.
+ * mirrors — `tokens-parity.test.ts`) and the tint `TypeChip` puts behind a
+ * type's text.
  *
  * Text needs 4.5:1 (AA, normal size): every chip, footnote and tab label in
  * this app is small. The surfaces text sits on are bg, surface-1 (sections)
@@ -12,7 +12,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { itemTypeTokens } from "@/components/app/TypeChip";
-import { theme } from "@/components/providers/ThemeRegistry";
 import { color, daylight, ITEM_TYPE_ORDER, itemTypeColor } from "../tokens";
 
 const AA = 4.5;
@@ -133,49 +132,6 @@ describe("palette contrast: dark (the default)", () => {
           `${type} chip on ${name}: ${ratio.toFixed(2)}:1 (tint ${a})`,
         );
       }
-    }
-  });
-});
-
-describe("palette contrast: the Joy theme (until the removal step)", () => {
-  const p = theme.colorSchemes.dark.palette;
-  const joySurfaces = {
-    body: String(p.background.body),
-    surface: String(p.background.surface),
-    popup: String(p.background.popup),
-    level1: String(p.background.level1),
-  };
-
-  test("text.primary / secondary / tertiary on Joy's surfaces", () => {
-    assertAA("text.primary", String(p.text.primary), joySurfaces);
-    assertAA("text.secondary", String(p.text.secondary), joySurfaces);
-    assertAA("text.tertiary", String(p.text.tertiary), joySurfaces);
-  });
-
-  test("neutral.500, which unconverted screens use as text", () => {
-    assertAA("neutral.500", String(p.neutral[500]), TEXT_SURFACES);
-  });
-
-  test("solid fills and their ink, at rest, hover and press", () => {
-    for (const key of ["primary", "danger", "success"] as const) {
-      const v = p[key];
-      for (const bg of [v.solidBg, v.solidHoverBg, v.solidActiveBg]) {
-        assert.ok(
-          contrast(String(v.solidColor), String(bg)) >= AA,
-          `${key}: ${v.solidColor} on ${bg}`,
-        );
-      }
-    }
-    // Neutral's solid ink is Joy's default white.
-    for (const bg of [
-      p.neutral.solidBg,
-      p.neutral.solidHoverBg,
-      p.neutral.solidActiveBg,
-    ]) {
-      assert.ok(
-        contrast("#FFFFFF", String(bg)) >= AA,
-        `neutral: white on ${bg}`,
-      );
     }
   });
 });

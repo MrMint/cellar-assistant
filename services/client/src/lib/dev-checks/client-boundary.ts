@@ -31,7 +31,8 @@
  * `<Typography component={NextLink}>` inside a server component throws
  * *"Functions cannot be passed directly to Client Components"* at render. The
  * fix is a `"use client"` wrapper that binds the two together on the client
- * side — `src/components/common/Link.tsx` is exactly that for `next/link`.
+ * side (the Joy-era `common/Link.tsx` was exactly that for `next/link`; its
+ * successor `app/Link` renders `next/link` itself, so nothing is passed).
  *
  * ### What rule 2 can and cannot see
  *

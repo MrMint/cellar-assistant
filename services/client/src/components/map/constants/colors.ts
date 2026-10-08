@@ -15,19 +15,6 @@ export const ITEM_TYPE_COLORS: Record<ItemType, string> = {
   tea: "#2E7D32", // Green (matcha/green tea)
 } as const;
 
-// Joy UI color schemes for item types (used in UI components)
-export const ITEM_TYPE_JOY_COLORS: Record<
-  ItemType,
-  "danger" | "warning" | "neutral" | "success"
-> = {
-  wine: "danger", // Red theme
-  beer: "warning", // Amber theme
-  spirit: "neutral", // Gray theme
-  coffee: "success", // Brown/green theme
-  sake: "neutral", // Purple/lavender theme (using neutral as closest match)
-  tea: "success", // Green theme
-} as const;
-
 // Theme-based colors for markers
 export const MARKER_COLORS = {
   light: {
@@ -67,9 +54,4 @@ export function getMarkerColors(isDarkMode: boolean) {
 // Helper function to get item type color
 export function getItemTypeColor(itemType: ItemType): string {
   return ITEM_TYPE_COLORS[itemType] || NEUTRAL_COLORS.gray;
-}
-
-// Helper function to get Joy UI color scheme for item type
-export function getItemTypeJoyColor(itemType: ItemType) {
-  return ITEM_TYPE_JOY_COLORS[itemType] || "neutral";
 }

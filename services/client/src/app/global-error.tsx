@@ -15,7 +15,7 @@ export default function GlobalError(props: {
   retry: () => void;
 }) {
   return (
-    <html lang="en" data-theme="dark" data-joy-color-scheme="dark">
+    <html lang="en" data-theme="dark">
       <body className="bg-background font-sans text-foreground">
         <title>Something went wrong · Cellar Assistant</title>
         <div className="flex min-h-dvh">

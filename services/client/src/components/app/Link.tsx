@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 export type LinkProps = ComponentProps<typeof NextLink> & {
   /**
    * Stretch the link's hit area over its nearest `relative` ancestor (a card
-   * or a row), the "stretched link" pattern Joy called `overlay`. The text
+   * or a row), the "stretched link" pattern. The text
    * stays where it is; the whole tile becomes the target, and nested buttons
    * stay clickable by sitting above it (`relative z-10`).
    */
@@ -21,8 +21,7 @@ const UNDERLINE = {
 } as const;
 
 /**
- * The app's link (replaces `common/Link.tsx`, Joy, which stays for
- * unconverted callers until the removal step). A `next/link` with the two
+ * The app's link (it replaced the Joy-era `common/Link.tsx`). A `next/link` with the two
  * props callers actually used — `overlay` and `underline` — and a
  * `className`. No `"use client"`: server components render it directly.
  *

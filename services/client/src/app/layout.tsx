@@ -11,9 +11,8 @@ import "./globals.css";
 
 /**
  * The two families (design §3.2), each loaded once and exposed as a CSS
- * variable: Tailwind's `font-sans`/`font-display` and Joy's `fontFamily`
- * both read them. Both are variable fonts, so no weight list — which is what
- * ends the faux-bold the old `@fontsource/inter` (400 only) produced.
+ * variable that Tailwind's `font-sans`/`font-display` read. Both are variable
+ * fonts, so no weight list.
  */
 const inter = Inter({
   subsets: ["latin"],
@@ -61,12 +60,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // Dark is static on <html> (D21): Joy's dark variables and the Tailwind
-    // tokens both apply at first paint, not after a client effect.
+    // Dark is static on <html> (D21): the tokens apply at first paint, not
+    // after a client effect.
     <html
       lang="en"
       data-theme="dark"
-      data-joy-color-scheme="dark"
       className={`${inter.variable} ${fraunces.variable}`}
       suppressHydrationWarning
     >

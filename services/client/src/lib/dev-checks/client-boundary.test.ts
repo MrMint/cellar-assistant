@@ -44,8 +44,8 @@ test("no server module passes a function as a prop to a component", () => {
     [],
     `Server modules passing a function across the client boundary — React
 answers "Functions cannot be passed directly to Client Components". Bind the
-two together inside a "use client" wrapper instead; @/components/common/Link
-is that wrapper for next/link.
+two together inside a "use client" wrapper instead, or render the component
+itself (@/components/app/Link for next/link).
 
 ${formatFindings(scan.functionProps)}
 `,

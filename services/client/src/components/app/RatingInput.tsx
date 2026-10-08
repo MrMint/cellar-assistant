@@ -79,9 +79,7 @@ export type RatingInputProps = {
 };
 
 /**
- * The N30 half-star rating input, on the app's tokens (same props as
- * `common/rating/StarRating`, which stays for unconverted callers until the
- * removal step). All behaviour is ux/rating's `useStarRatingInput`: ten
+ * The N30 half-star rating input, on the app's tokens. All behaviour is ux/rating's `useStarRatingInput`: ten
  * native radios named "3.5 stars, Good+", 44 pt star targets, tap a star for
  * that many and again for the half below, arrows by halves, Home/End, and no
  * commit on pointer-leave or hover — a thumb sliding across the stars to

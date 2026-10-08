@@ -6,8 +6,6 @@
  * fails when the two drift. This module exists for the code that cannot read a
  * CSS variable:
  *
- * - **the Joy theme** (`providers/ThemeRegistry.tsx`, until the removal step):
- *   Joy derives its `*Channel` variables from hex and breaks on `var(...)`;
  * - MapLibre paint and `<canvas>` drawing;
  * - contrast tests.
  *
@@ -156,67 +154,3 @@ export const cssVars: Readonly<Record<string, string>> = {
   "--ca-ease-exit": bezier(easing.exit),
   "--ca-tabbar-h": `${TAB_BAR_HEIGHT_PX}px`,
 };
-
-/**
- * Ramps for the Joy theme only (deleted with Joy in the removal step). Each is
- * built around a token: brass 500 is `color.accent`; the warm neutral ramp
- * runs through the inks (100/300/400) and surfaces (800/900); danger 400 and
- * success 400 are the danger and success hues.
- */
-export const joyRamps = {
-  brass: {
-    50: "#FBF6EC",
-    100: "#F4E9D3",
-    200: "#E9D5AE",
-    300: "#DDBF87",
-    400: "#D3AF70",
-    500: color.accent,
-    600: "#A9843F",
-    700: "#84662F",
-    800: "#5F4921",
-    900: "#3B2D14",
-  },
-  neutral: {
-    50: "#FAF7F2",
-    100: color.ink1,
-    200: "#DCD3C8",
-    300: color.ink2,
-    400: color.ink3,
-    /**
-     * Unconverted screens use `neutral.500` as a text colour (FriendsClient,
-     * RecipeVoteButtons, …), so it clears 4.5:1 on bg / surface-1 / surface-2.
-     * Joy's solid neutral (white text) is pinned to 600 in ThemeRegistry.
-     */
-    500: "#8F867C",
-    600: "#5C544E",
-    700: "#3D363C",
-    800: color.surface3,
-    900: color.surface2,
-  },
-  danger: {
-    50: "#FCEFEC",
-    100: "#F8DAD4",
-    200: "#F0B4A9",
-    300: "#E8978A",
-    400: color.danger,
-    500: "#C9604F",
-    600: "#A64A3B",
-    700: "#7F382C",
-    800: "#59271F",
-    900: "#3A1913",
-  },
-  success: {
-    50: "#EFF7F0",
-    100: "#D7EBDA",
-    200: "#B1D7B8",
-    300: "#90C49A",
-    400: color.success,
-    500: "#57955F",
-    600: "#45784C",
-    700: "#355B3A",
-    800: "#243F28",
-    900: "#172819",
-  },
-  /** One step above surface-3, for Joy's `background.level3`. */
-  surface4: "#332D35",
-} as const;

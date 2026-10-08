@@ -13,9 +13,7 @@ export type UserAvatarProps = {
 
 /**
  * A person's avatar: their photo, or the first letter of their name on a
- * surface. Same props as `common/UserAvatar` minus `sx` (which stays for
- * unconverted callers until the removal step). For a stack (Joy's
- * `AvatarGroup`), wrap several in `flex -space-x-2` and give each
+ * surface. For a stack, wrap several in `flex -space-x-2` and give each
  * `ring-2 ring-background`.
  */
 export function UserAvatar({

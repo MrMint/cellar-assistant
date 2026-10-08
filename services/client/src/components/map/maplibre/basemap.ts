@@ -19,5 +19,5 @@ export const CARTO_DARK_STYLE =
 export const basemapStyle = (isDarkMode: boolean): string =>
   isDarkMode ? CARTO_DARK_STYLE : CARTO_LIGHT_STYLE;
 
-/** Joy's surface token, as a CSS value MapLibre's container can take. */
-export const MAP_CANVAS_BACKGROUND = "var(--joy-palette-background-surface)";
+/** The surface token, as a CSS value MapLibre's container can take. */
+export const MAP_CANVAS_BACKGROUND = "var(--ca-surface-1)";
