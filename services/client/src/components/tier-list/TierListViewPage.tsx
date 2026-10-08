@@ -33,6 +33,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { ActionBar } from "@/components/app/ActionBar";
 import { EmptyState } from "@/components/app/EmptyState";
 import { IconButton } from "@/components/app/IconButton";
 import {
@@ -412,12 +413,10 @@ export function TierListViewPage({
             off the list. Undo reaches back through every change.
           </p>
           {board}
-          <div
-            data-slot="arrange-bar"
-            role="toolbar"
-            aria-label="Arrange"
-            className="surface-glass sticky bottom-3 z-30 flex items-center gap-2 rounded-lg p-2"
-          >
+          {/* The app's ActionBar: sticky 12 pt above the tab bar on glass,
+              in the thumb zone. In flow after the board, so the last row
+              scrolls clear of it. */}
+          <ActionBar role="toolbar" aria-label="Arrange">
             <IconButton
               variant="ghost"
               aria-label={historyActionLabel("undo", history.undo)}
@@ -442,7 +441,7 @@ export function TierListViewPage({
               <Check aria-hidden strokeWidth={ICON_STROKE} />
               Done
             </Button>
-          </div>
+          </ActionBar>
         </section>
       ) : (
         <Tabs

@@ -68,7 +68,7 @@ import {
   Trophy,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import { notify } from "@/components/app/notify";
+import { dismissNotification, notify } from "@/components/app/notify";
 import { formatScore, Score } from "@/components/app/Score";
 import { cn } from "@/lib/utils";
 import { useTierListActions } from "./actions";
@@ -756,6 +756,10 @@ export function TierListView({
         const result = await reorderBandAction(call, tierListId);
         if (!isMountedRef.current) return;
         if (result.success) {
+          // The move is now the top of the history: an earlier edit's toast
+          // ("Removed Barolo · Undo") would take back this move instead of
+          // what it names, so it goes. The bar's Undo names the move.
+          dismissNotification(TIER_LIST_EDIT_TOAST);
           onEditedRef.current?.();
           router.refresh();
         } else {
