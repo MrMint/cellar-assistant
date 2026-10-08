@@ -46,9 +46,13 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
   );
   const cellarId = new URL(primary.url()).pathname.split("/")[2];
   created.push(cellarId);
-  // The breadcrumb carries the cellar's name; the empty grid says so.
+  // The breadcrumb carries the cellar's name; the empty grid says so, with
+  // its one action (design §3.6).
   await expect(primary.getByText(name).first()).toBeVisible();
-  await expect(primary.getByText("No items in this cellar")).toBeVisible();
+  await expect(primary.getByText("Your cellar is waiting.")).toBeVisible();
+  await expect(
+    primary.getByRole("main").getByRole("link", { name: "Add a bottle" }),
+  ).toHaveAttribute("href", `/cellars/${cellarId}/items/add`);
 
   // The old form's default privacy is FRIENDS; read back what the server
   // recorded rather than trusting the form.

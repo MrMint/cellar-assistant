@@ -21,8 +21,9 @@ import {
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
+import type { BottleFields } from "./bottle-state";
 import type { CellarCardProps } from "./CellarCard";
-import { CellarCardFragment } from "./fragments";
+import { CellarBottleCardFragment, CellarCardFragment } from "./fragments";
 
 export type CellarCardCellar = CellarCardProps["cellar"];
 export type CellarCardUser = CellarCardCellar["createdBy"];
@@ -112,31 +113,67 @@ export const canAddToCellar = (
   userId !== null &&
   (cellar.createdById === userId || cellar.coOwnerIds.includes(userId));
 
-/** One grid cell: the old `TransformedCellarItem`, less the client sort key. */
-export type CellarGridItem = { type: ApiItemType; item: ItemCardItem };
+/**
+ * One grid cell: the old `TransformedCellarItem`, less the client sort key,
+ * plus the bottle's own state for the BottleCard (N13b).
+ */
+export type CellarGridItem = {
+  type: ApiItemType;
+  item: ItemCardItem;
+  bottle: Required<BottleFields>;
+};
+
+export type CellarGridSource = {
+  id: string;
+  item: ItemCardSource;
+  openAt?: string | null;
+  emptyAt?: string | null;
+  percentageRemaining?: number | null;
+  /** The bottle's chosen photo (G15), which beats the item's first image. */
+  displayImage?: {
+    placeholder?: string | null;
+    file?: { url: string } | null;
+  } | null;
+};
 
 /**
  * A bottle (structural) → a grid cell. `item.id` is the **bottle's** id and
  * `item.itemId` the catalog item's, as `transformCellarItems` set them
- * (decision 1).
+ * (decision 1). A bottle with its own photo shows that one.
  */
-export const cellarGridItemFromSource = (node: {
-  id: string;
-  item: ItemCardSource;
-}): CellarGridItem => ({
-  type: node.item.type,
-  item: itemCardFromCellarItem(node),
-});
+export const cellarGridItemFromSource = (
+  node: CellarGridSource,
+): CellarGridItem => {
+  const item = itemCardFromCellarItem(node);
+  const photo = node.displayImage?.file?.url;
+  return {
+    type: node.item.type,
+    item:
+      photo === undefined
+        ? item
+        : {
+            ...item,
+            displayImageUrl: photo,
+            placeholder: node.displayImage?.placeholder ?? null,
+          },
+    bottle: {
+      openAt: node.openAt ?? null,
+      emptyAt: node.emptyAt ?? null,
+      percentageRemaining: node.percentageRemaining ?? 100,
+    },
+  };
+};
 
-/** A `Cellar.items` node with `...ItemCard` on its item → a grid cell. */
-export const cellarGridItem = (node: {
-  id: string;
-  item: FragmentOf<typeof ItemCardFragment>;
-}): CellarGridItem =>
-  cellarGridItemFromSource({
-    id: node.id,
+/** A `Cellar.items` node (`...CellarBottleCard`) → a grid cell. */
+export const cellarGridItem = (
+  data: FragmentOf<typeof CellarBottleCardFragment>,
+): CellarGridItem => {
+  const node = readFragment(CellarBottleCardFragment, data);
+  return cellarGridItemFromSource({
+    ...node,
     item: readFragment(ItemCardFragment, node.item),
   });
+};
 
 /**
  * Where a bottle's card goes: the **bottle** page, by `cellar_items.id`

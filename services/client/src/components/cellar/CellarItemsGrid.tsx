@@ -3,9 +3,9 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/components/cellar-api/ApiError";
-import { ItemCard } from "@/components/item/ItemCard";
 import { Spinner } from "@/components/ui/spinner";
 import { useColumnCount } from "@/hooks/useColumnCount";
+import { useNow } from "@/hooks/useNow";
 import { unwrapResult } from "@/lib/api/result";
 import { toPage } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
@@ -14,6 +14,8 @@ import {
   cellarBottleHref,
   cellarGridItem,
 } from "./adapter";
+import { BottleCard } from "./BottleCard";
+import { CellarItemsEmpty } from "./CellarItemsEmpty";
 import {
   CellarItemSkeletonCard,
   cellarItemsGridClass,
@@ -27,7 +29,8 @@ import { GetCellarItemsQuery } from "./fragments";
 import { virtualTotal } from "./virtualTotal";
 
 const SCROLL_STORAGE_KEY = "scroll-restore";
-const ESTIMATED_ROW_HEIGHT = 340;
+/** A 171 px BottleCard on a 390 phone: a 3:4 plate, title, state, level. */
+const ESTIMATED_ROW_HEIGHT = 330;
 
 type TransformedCellarItem = CellarGridItem;
 
@@ -56,6 +59,12 @@ interface CellarItemsGridProps {
   cellarId: string;
   search: string;
   types: CellarItemsArgs["types"];
+  sort?: CellarItemsArgs["sort"];
+  status?: CellarItemsArgs["status"];
+  /** The server's request time: the first render's "now" (`useNow`). */
+  asOf: number | null;
+  /** Creator or co-owner: the empty cellar's one action is "Add a bottle". */
+  canAdd: boolean;
 }
 
 /**
@@ -77,8 +86,13 @@ export function CellarItemsGrid({
   cellarId,
   search,
   types,
+  sort,
+  status,
+  asOf,
+  canAdd,
 }: CellarItemsGridProps) {
-  const args: CellarItemsArgs = { search, types };
+  const args: CellarItemsArgs = { search, types, sort, status };
+  const now = useNow(asOf);
   const cacheKey = cellarItemsCacheKey(cellarId, args);
 
   // Prefer cached items when they're a superset of the server-provided batch
@@ -178,7 +192,7 @@ export function CellarItemsGrid({
   );
 
   // Responsive column count
-  const columnCount = useColumnCount(items.length);
+  const columnCount = useColumnCount();
 
   // Group loaded items into rows
   const loadedRows = useMemo(() => {
@@ -308,7 +322,13 @@ export function CellarItemsGrid({
   if (items.length === 0) {
     if (list.failure !== null) return <ApiError error={list.failure} />;
     return (
-      <p className="type-body py-8 text-center">No items in this cellar</p>
+      <CellarItemsEmpty
+        cellarId={cellarId}
+        canAdd={canAdd}
+        search={search}
+        types={types}
+        status={status}
+      />
     );
   }
 
@@ -333,13 +353,13 @@ export function CellarItemsGrid({
               className="absolute top-0 left-0 w-full"
               style={{ transform: `translateY(${virtualRow.start}px)` }}
             >
-              <div className={cellarItemsGridClass(items.length)}>
+              <div className={cellarItemsGridClass()}>
                 {row
                   ? row.map((x) => (
                       <div id={x.item.id} key={x.item.id} className="min-w-0">
-                        <ItemCard
-                          item={x.item}
-                          type={x.type}
+                        <BottleCard
+                          cell={x}
+                          now={now}
                           href={cellarBottleHref(cellarId, x)}
                           onClick={() =>
                             writeScrollData(scrollContainer?.scrollTop ?? 0)

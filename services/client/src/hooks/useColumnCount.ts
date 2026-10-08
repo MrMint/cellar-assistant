@@ -3,16 +3,17 @@
 import { breakpointUp, useMediaQuery } from "./useMediaQuery";
 
 /**
- * Returns the number of columns in the cellar items grid based on current
- * viewport width. Mirrors the MUI Joy Grid breakpoints:
- *   xs: 6/12 = 2 cols (or 1 if <=6 items)
- *   sm: 6/12 = 2 cols
- *   md: 4/12 = 3 cols
- *   lg: 3/12 = 4 cols
- *   xl: 2/12 = 6 cols
+ * The cellar items grid's column count at the current viewport width, for
+ * the virtualizer; `cellarItemsGridClass` is the same rule in CSS, and the
+ * two change together:
+ *
+ *   below sm: 2 · sm: 2 · md: 3 · lg: 4 · xl: 6
+ *
+ * The restored grid dropped to one column on a phone for six bottles or
+ * fewer; with the BottleCard's 3:4 plate (N13b) one column is a single
+ * bottle per screen, so a phone always shows two.
  */
-export function useColumnCount(itemCount: number): number {
-  const isSm = useMediaQuery(breakpointUp("sm"));
+export function useColumnCount(): number {
   const isMd = useMediaQuery(breakpointUp("md"));
   const isLg = useMediaQuery(breakpointUp("lg"));
   const isXl = useMediaQuery(breakpointUp("xl"));
@@ -20,6 +21,5 @@ export function useColumnCount(itemCount: number): number {
   if (isXl) return 6;
   if (isLg) return 4;
   if (isMd) return 3;
-  if (isSm) return 2;
-  return itemCount > 6 ? 2 : 1;
+  return 2;
 }

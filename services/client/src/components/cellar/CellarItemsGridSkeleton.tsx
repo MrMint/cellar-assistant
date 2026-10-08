@@ -1,29 +1,28 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 
 /**
- * The items grid's columns (the old Joy `Grid` breakpoints xs 6 · sm 6 · md 4
- * · lg 3 · xl 2 of 12): one column on a phone for a cellar of six bottles or
- * fewer, two above that, then 2 / 3 / 4 / 6. `useColumnCount` mirrors these
- * for the virtualizer, so the two must change together.
+ * The items grid's columns: two on a phone, then 3 / 4 / 6 from md / lg / xl.
+ * `useColumnCount` mirrors these for the virtualizer, so the two must change
+ * together. (The restored grid went to one column for six bottles or fewer;
+ * a 3:4 BottleCard at full phone width is one bottle per screen.)
  */
-export function cellarItemsGridClass(itemCount: number): string {
-  return cn(
-    "grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6",
-    itemCount > 6 ? "grid-cols-2" : "grid-cols-1",
-  );
+export function cellarItemsGridClass(): string {
+  return "grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6";
 }
 
-/** One placeholder tile, shaped like an `ItemCard`: art, a title line, a bar. */
+/** One placeholder tile, shaped like a `BottleCard`: plate, title, state, level. */
 export function CellarItemSkeletonCard() {
   return (
     <div
       aria-hidden
-      className="flex min-w-0 flex-col overflow-hidden rounded-lg bg-surface-1"
+      className="flex min-w-0 flex-col overflow-hidden rounded-md bg-surface-2"
     >
-      <Skeleton className="aspect-[1.2] rounded-none sm:aspect-square" />
-      <Skeleton className="m-2 h-4" />
-      <Skeleton className="h-10 rounded-none" />
+      <Skeleton className="aspect-3/4 rounded-none" />
+      <div className="flex flex-col gap-1.5 px-3 pt-2.5 pb-3">
+        <Skeleton className="h-10 w-4/5" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-1 w-full" />
+      </div>
     </div>
   );
 }
@@ -34,7 +33,7 @@ export function CellarItemSkeletonCard() {
  */
 export function CellarItemsGridSkeleton() {
   return (
-    <div className={cellarItemsGridClass(8)}>
+    <div className={cellarItemsGridClass()}>
       {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
         <CellarItemSkeletonCard key={i} />
       ))}
