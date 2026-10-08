@@ -15,6 +15,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { LocationPrePrompt } from "../core/LocationPrePrompt";
 import { MapControls } from "../core/MapControls";
+import { MapErrorBanner } from "../core/MapErrorBanner";
 import {
   LOCATION_DENIED_MESSAGE,
   locationButtonAction,
@@ -420,6 +421,19 @@ export function MapLibreRenderer({
         position: "relative",
         // N22: the theme's surface until the first tile, never a cream flash.
         backgroundColor: "background.surface",
+        // The attribution stays (a licensing obligation) but on the dark
+        // basemap it was the brightest thing on screen: the theme's surface,
+        // translucent, instead of MapLibre's white pill.
+        ...(mapCore.isDarkMode && {
+          "& .maplibregl-ctrl-attrib, & .maplibregl-ctrl-attrib.maplibregl-compact":
+            {
+              backgroundColor:
+                "color-mix(in srgb, var(--joy-palette-background-surface) 75%, transparent)",
+              color: "text.tertiary",
+            },
+          "& .maplibregl-ctrl-attrib a": { color: "text.secondary" },
+          "& .maplibregl-ctrl-attrib-button": { filter: "invert(1)" },
+        }),
       }}
     >
       <MapGL
@@ -457,22 +471,15 @@ export function MapLibreRenderer({
         {userLocation && <UserLocationLayer location={userLocation} />}
       </MapGL>
 
-      {/* Error overlay */}
-      {(mapUI.error || placesError) && (
-        <Alert
-          color="danger"
-          sx={{
-            position: "absolute",
-            top: 80,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 10,
-            maxWidth: 400,
-          }}
-        >
-          {mapUI.error || placesError}
-        </Alert>
-      )}
+      {/* Error overlay — bottom-anchored, clear of the controls panel */}
+      {mapUI.error ? (
+        <MapErrorBanner
+          message={mapUI.error}
+          onDismiss={mapActions.clearError}
+        />
+      ) : placesError ? (
+        <MapErrorBanner message={placesError} />
+      ) : null}
 
       {/* Search results overlay */}
       {mapFilters.isSemanticSearch &&

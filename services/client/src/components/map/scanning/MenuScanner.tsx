@@ -251,9 +251,9 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
           </Typography>
 
           <Typography level="body-md" sx={{ color: "text.secondary", mb: 3 }}>
-            Take a photo of the menu and we&apos;ll automatically extract the
-            items for you. Our AI will identify wines, beers, spirits, and
-            coffees and match them to your database.
+            Photograph the drinks menu and we&apos;ll read each line — wine,
+            beer, spirits, cocktails, sake, tea and coffee — and match it to the
+            catalog.
           </Typography>
 
           {showCaptureButtons && (

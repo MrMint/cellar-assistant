@@ -10,6 +10,7 @@ import {
   LOCATION_PRE_PROMPT_COPY,
   LocationPrePrompt,
 } from "./core/LocationPrePrompt";
+import { MAP_ERROR_Z_INDEX, MapErrorBanner } from "./core/MapErrorBanner";
 import { SearchEmptyState } from "./places/SearchEmptyState";
 
 const render = (node: React.ReactNode) =>
@@ -36,5 +37,28 @@ describe("LocationPrePrompt (D14)", () => {
     assert.equal(LOCATION_PRE_PROMPT_COPY.split(/[.!?]\s/).length, 1);
     assert.match(html, />Continue</);
     assert.match(html, />Not now</);
+  });
+});
+
+describe("MapErrorBanner (D14 follow-up)", () => {
+  test("is a readable alert at the bottom, not under the controls panel", () => {
+    const raw = renderToStaticMarkup(
+      <MapErrorBanner
+        message="Location is off for this site."
+        onDismiss={() => {}}
+      />,
+    );
+    assert.match(raw, /role="alert"/);
+    assert.ok(raw.includes("Location is off for this site."));
+    assert.match(raw, /aria-label="Dismiss"/);
+    // The regression: `top: 80` put it beneath the search/filter panel.
+    assert.match(raw, /bottom:40px/);
+    assert.doesNotMatch(raw, /top:80px/);
+    assert.ok(MAP_ERROR_Z_INDEX > 11, "above the location pre-prompt");
+  });
+
+  test("an error the map clears itself offers no dismiss button", () => {
+    const html = render(<MapErrorBanner message="Couldn't load places." />);
+    assert.doesNotMatch(html, /aria-label="Dismiss"/);
   });
 });
