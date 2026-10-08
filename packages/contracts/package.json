@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./ctx": "./src/ctx.ts",
     "./actors": "./src/actors.ts",
+    "./bar": "./src/bar.ts",
     "./barcodes": "./src/barcodes.ts",
     "./categories": "./src/categories.ts",
     "./errors": "./src/errors.ts",
@@ -14,7 +15,8 @@
     "./items": "./src/items.ts",
     "./page": "./src/page.ts",
     "./place-categories": "./src/place-categories.ts",
-    "./proxy": "./src/proxy.ts"
+    "./proxy": "./src/proxy.ts",
+    "./quantity": "./src/quantity.ts"
   },
   "scripts": {
     "build": "echo 'no build step: consumed as TypeScript source'",
