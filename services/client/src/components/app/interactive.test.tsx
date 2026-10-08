@@ -68,7 +68,7 @@ const { RatingInput } = await import("./RatingInput");
 const { AppBar } = await import("./AppBar");
 const { recordNavigation } = await import("./nav-history");
 const { Toaster } = await import("./Toaster");
-const { notify, UNDO_TOAST_MS } = await import("./notify");
+const { dismissNotification, notify, UNDO_TOAST_MS } = await import("./notify");
 const { AppShell } = await import("./AppShell");
 
 let container: HTMLElement;
@@ -631,5 +631,52 @@ describe("notify + Toaster", () => {
       /--offset-bottom:\s*calc\(var\(--ca-tabbar-h\)/,
     );
     assert.equal(UNDO_TOAST_MS, 5000);
+  });
+
+  test("one toast through phases: kept on its action, loading, then gone", async () => {
+    let retried = 0;
+    await render(<Toaster />);
+    await act(async () => {
+      notify("Couldn't put it back", {
+        id: "phases",
+        tone: "error",
+        undo: () => {
+          retried += 1;
+        },
+        actionLabel: "Try again",
+        keepOnAction: true,
+      });
+    });
+    await flush(50);
+    const again = [...document.querySelectorAll("button")].find(
+      (b) => b.textContent === "Try again",
+    );
+    assert.ok(again, "the action carries its own label");
+    await click(again);
+    await flush(50);
+    assert.equal(retried, 1);
+    assert.ok(byText("Couldn't put it back"), "kept up after its action");
+
+    await act(async () => {
+      notify("Putting it back…", { id: "phases", tone: "loading" });
+    });
+    await flush(50);
+    assert.ok(byText("Putting it back…"), "updated in place");
+    assert.equal(
+      [...document.querySelectorAll("button")].some(
+        (b) => b.textContent === "Try again",
+      ),
+      false,
+      "an update without undo drops the earlier action",
+    );
+
+    await act(async () => dismissNotification("phases"));
+    await flush(50);
+    const left = byText("Putting it back…")?.closest("[data-sonner-toast]");
+    // Gone, or on its way out (Sonner unmounts after its exit animation).
+    assert.ok(
+      left === undefined || left?.getAttribute("data-removed") === "true",
+      "dismissed",
+    );
   });
 });

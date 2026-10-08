@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
-import { toast } from "sonner";
-import { UNDO_TOAST_MS } from "@/components/app/notify";
+import { dismissNotification, notify } from "@/components/app/notify";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { Button } from "@/components/ui/button";
 import { finishToastCopy } from "./finish-bottle";
@@ -12,15 +11,14 @@ import type { FinishBottle } from "./useFinishBottle";
 /**
  * N13a's markup over `useFinishBottle`: the "Finished it?" question as an
  * N27 sheet (`ResponsiveDialog` — a bottom sheet on phones, a dialog from
- * `md`) and the Undo toast through the app's one Sonner `<Toaster/>`, which
- * already sits above the tab bar (obs 41).
+ * `md`) and the Undo toast through `notify()` and the app's one
+ * `<Toaster/>`, which already sits above the tab bar (obs 41).
  *
- * The toast is raised with Sonner's `toast` rather than `notify()`, because
- * the reducer must hear when it closes on its own (`onAutoClose` → DISMISS:
- * the Undo window is over) and `notify` passes no close callback; its copy,
- * duration (`UNDO_TOAST_MS`) and Undo action are `notify`'s. The same toast
- * (one id per bottle) turns into "Putting it back…" while Undo runs, into
- * the refusal with "Try again" if Undo fails, and goes away once it worked.
+ * The reducer hears when the toast closes on its own or is swiped away
+ * (`onAutoClose` / `onClose` → DISMISS: the Undo window is over). The same
+ * toast (one id per bottle) turns into "Putting it back…" while Undo runs
+ * (`tone: "loading"`), into the refusal with "Try again" if Undo fails, and
+ * goes away once it worked.
  */
 export function FinishBottleDialogs({
   finish,
@@ -52,45 +50,32 @@ export function FinishBottleDialogs({
     const closed = {
       // The window passed, or the toast was swiped away: no Undo any more.
       onAutoClose: () => latest.current.dismiss(),
-      onDismiss: () => latest.current.dismiss(),
+      onClose: () => latest.current.dismiss(),
     };
+    // Keep the toast when its action runs: it shows the Undo running, then
+    // its outcome.
+    const undo = () => latest.current.undo();
     if (state.phase === "finished" && message !== null) {
-      toast(message, {
-        id: toastId,
-        duration: UNDO_TOAST_MS,
-        ...closed,
-        action: {
-          label: "Undo",
-          onClick: (event) => {
-            // Keep the toast: it shows the Undo running, then its outcome.
-            event.preventDefault();
-            latest.current.undo();
-          },
-        },
-      });
+      notify(message, { id: toastId, undo, keepOnAction: true, ...closed });
     } else if (state.phase === "undoing" && message !== null) {
-      toast.loading(message, { id: toastId, action: undefined });
+      notify(message, { id: toastId, tone: "loading" });
     } else if (state.phase === "undoFailed" && message !== null) {
-      toast.error(message, {
+      notify(message, {
         id: toastId,
-        duration: UNDO_TOAST_MS,
+        tone: "error",
+        undo,
+        actionLabel: "Try again",
+        keepOnAction: true,
         ...closed,
-        action: {
-          label: "Try again",
-          onClick: (event) => {
-            event.preventDefault();
-            latest.current.undo();
-          },
-        },
       });
     } else if (state.phase === "idle" && was === "undoing") {
-      toast.dismiss(toastId);
+      dismissNotification(toastId);
     }
   }, [state, toastId]);
 
   // Leaving the page takes the toast with it: its Undo would act on a bottle
   // no longer on screen.
-  useEffect(() => () => void toast.dismiss(toastId), [toastId]);
+  useEffect(() => () => dismissNotification(toastId), [toastId]);
 
   return (
     <ResponsiveDialog
