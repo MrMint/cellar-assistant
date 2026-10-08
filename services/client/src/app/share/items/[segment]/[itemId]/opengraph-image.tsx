@@ -14,6 +14,12 @@ import { displayItemName } from "@/utilities/smart-title-case";
 export const alt = "On Cellar Assistant";
 export const size = OG_SIZE;
 export const contentType = "image/png";
+/**
+ * Rendered per request, never cached as a static asset: a list made private,
+ * or a photo taken down, must stop showing in previews at once — the page
+ * itself is `force-dynamic` for the same reason.
+ */
+export const dynamic = "force-dynamic";
 
 /** The preview card for a shared item: its public photo, name and score. */
 export default async function Image({

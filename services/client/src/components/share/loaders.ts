@@ -6,6 +6,7 @@ import {
   SHARED_PAGE_SIZE,
   SharedItemQuery,
   SharedRecipeQuery,
+  SharedTierListCardQuery,
   SharedTierListQuery,
 } from "./queries";
 
@@ -23,6 +24,19 @@ export const loadSharedTierList = cache(async (id: string) =>
   unwrapResult(
     (
       await anonymousApiQuery(SharedTierListQuery, {
+        id,
+        first: SHARED_PAGE_SIZE,
+      })
+    ).sharedTierList,
+    "SharedTierList",
+  ),
+);
+
+/** The preview card's read: no photos (`SharedTierListCardQuery`). */
+export const loadSharedTierListCard = cache(async (id: string) =>
+  unwrapResult(
+    (
+      await anonymousApiQuery(SharedTierListCardQuery, {
         id,
         first: SHARED_PAGE_SIZE,
       })

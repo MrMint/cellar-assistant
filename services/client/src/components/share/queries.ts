@@ -47,6 +47,40 @@ export const SharedTierListQuery = graphql(
   [ActorErrorFieldsFragment],
 );
 
+/**
+ * The tier list's preview card: the name, the author and enough of each entry
+ * to rank the top three. No `imageUrl`, which is one `FileActor` presign per
+ * entry — a crawler fetching the card would otherwise pay for a hundred
+ * photos it never draws. Entries come `band desc, position asc`, so the first
+ * page always holds the top three.
+ */
+export const SharedTierListCardQuery = graphql(
+  `
+  query SharedTierListCard($id: ID!, $first: Int!) {
+    sharedTierList(id: $id) {
+      __typename
+      ... on SharedTierList {
+        id
+        name
+        ownerDisplayName
+        entries(first: $first) {
+          edges {
+            node {
+              id
+              band
+              position
+              name
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
 export const SharedItemQuery = graphql(
   `
   query SharedItem($id: ID!, $type: ItemType!) {

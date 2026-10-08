@@ -6,6 +6,12 @@ import { recipeFacts } from "@/components/share/SharedRecipeView";
 export const alt = "A recipe on Cellar Assistant";
 export const size = OG_SIZE;
 export const contentType = "image/png";
+/**
+ * Rendered per request, never cached as a static asset: a list made private,
+ * or a photo taken down, must stop showing in previews at once — the page
+ * itself is `force-dynamic` for the same reason.
+ */
+export const dynamic = "force-dynamic";
 
 /**
  * The preview card for a shared recipe. Text only: a recipe's `imageUrl` is
