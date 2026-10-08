@@ -102,3 +102,36 @@ export const enumOptionsFor = (
     label: formatEnumValue(key, value),
   }));
 };
+
+/**
+ * The options a select renders for a field that already holds `value`.
+ *
+ * Joy's `Select` drops a selected value that is missing from its current
+ * options — its list reducer filters it out on every `itemsChange` and calls
+ * `onChange(null)` — so a stored or label-read value that arrives before its
+ * option does (the countries past the first page of 100, say) used to be
+ * erased: the edit form saved `country: null` over a stored SPAIN, and a
+ * label read of SPAIN pre-filled nothing.
+ *
+ * While the options are still `loading`, the held value is kept as an option
+ * of its own so the select has nothing to drop. Once they have loaded, a
+ * value that is still not among them is **not** kept: every reference column
+ * is a foreign key, and a value that is not a row would fail in the outbox
+ * where nobody sees it.
+ */
+export const optionsHolding = (
+  key: EnumKey,
+  options: readonly EnumOption[],
+  value: unknown,
+  loading: boolean,
+): EnumOption[] => {
+  if (
+    !loading ||
+    typeof value !== "string" ||
+    value === "" ||
+    options.some((option) => option.value === value)
+  ) {
+    return [...options];
+  }
+  return [...options, { value, label: formatEnumValue(key, value) }];
+};
