@@ -125,6 +125,7 @@ export const RecipeDetails = ({
               serving_size={recipe.serving_size}
               version={recipe.version}
               description={recipe.description}
+              isWantToTry={recipe.is_want_to_try}
             />
 
             {/* Recipe variations */}

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   favoriteRowFromNode,
   favoritesVariables,
@@ -18,6 +19,9 @@ import { parseTypesParam } from "@/utilities/types-param";
  */
 export const dynamic = "force-dynamic";
 
+/** D27: favourites read "Loved" wherever a person sees them, the tab too. */
+export const metadata: Metadata = { title: "Loved · Cellar Assistant" };
+
 export default async function FavoritesPage({
   searchParams,
 }: {
@@ -34,7 +38,7 @@ export default async function FavoritesPage({
     return (
       <p className="type-body text-ink-2">
         Your session has expired for this part of the app. Sign in again to see
-        your favorites.
+        what you love.
       </p>
     );
   }

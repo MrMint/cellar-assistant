@@ -112,6 +112,7 @@ export const tables = {
   user: t.user,
   user_place_interactions: t.userPlaceInteractions,
   verification: t.verification,
+  want_to_try: t.wantToTry,
   wine_style: t.wineStyle,
   wine_variety: t.wineVariety,
   wines: t.wines,

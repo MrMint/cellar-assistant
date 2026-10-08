@@ -1049,4 +1049,39 @@ export const relations = defineRelations(schema, (r) => ({
 			to: r.user.id
 		}),
 	},
+	// X08: hand-added with the `want_to_try` table (no `pull` ran for it).
+	wantToTry: {
+		beer: r.one.beers({
+			from: r.wantToTry.beerId,
+			to: r.beers.id
+		}),
+		coffee: r.one.coffees({
+			from: r.wantToTry.coffeeId,
+			to: r.coffees.id
+		}),
+		recipe: r.one.recipes({
+			from: r.wantToTry.recipeId,
+			to: r.recipes.id
+		}),
+		sake: r.one.sakes({
+			from: r.wantToTry.sakeId,
+			to: r.sakes.id
+		}),
+		spirit: r.one.spirits({
+			from: r.wantToTry.spiritId,
+			to: r.spirits.id
+		}),
+		tea: r.one.teas({
+			from: r.wantToTry.teaId,
+			to: r.teas.id
+		}),
+		user: r.one.user({
+			from: r.wantToTry.userId,
+			to: r.user.id
+		}),
+		wine: r.one.wines({
+			from: r.wantToTry.wineId,
+			to: r.wines.id
+		}),
+	},
 }))

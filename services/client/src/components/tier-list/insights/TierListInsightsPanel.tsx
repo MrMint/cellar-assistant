@@ -27,9 +27,11 @@ import {
   Restaurant,
   Schedule,
 } from "@/components/app/icons";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { AiStatus } from "@/components/common/AiStatus";
 import { Timestamp } from "@/components/common/Timestamp";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TryThisNext } from "@/components/want-to-try/TryThisNext";
 import { cn } from "@/lib/utils";
 import type { TierListInsightsData } from "../types";
 import { BandDistributionChart } from "./BandDistributionChart";
@@ -80,10 +82,18 @@ function Section({
 
 interface TierListInsightsPanelProps {
   insights: TierListInsightsData;
+  /**
+   * X08: for an item list, "Try This Next" can look its suggestion up in the
+   * catalog and save a bottle to Want to try. Absent for a place list (the
+   * suggestion there is a kind of venue, and there is no venue search by
+   * style), or where the page does not offer it.
+   */
+  tryNext?: { itemType: ApiItemType; onList: ReadonlySet<string> } | null;
 }
 
 export function TierListInsightsPanel({
   insights,
+  tryNext = null,
 }: TierListInsightsPanelProps) {
   const router = useRouter();
   const pollCount = useRef(0);
@@ -235,7 +245,16 @@ export function TierListInsightsPanel({
       {/* Try This Next */}
       {ai?.recommendation && (
         <Section title="Try This Next" icon={Restaurant}>
-          <p className="text-ink-1 type-callout">{ai.recommendation}</p>
+          <div className="flex flex-col">
+            <p className="text-ink-1 type-callout">{ai.recommendation}</p>
+            {tryNext !== null && (
+              <TryThisNext
+                recommendation={ai.recommendation}
+                itemType={tryNext.itemType}
+                onList={tryNext.onList}
+              />
+            )}
+          </div>
         </Section>
       )}
 

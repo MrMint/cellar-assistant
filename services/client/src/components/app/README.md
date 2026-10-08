@@ -164,6 +164,7 @@ directly in feature code. Stroke 1.75 (`ICON_STROKE`).
 | MdHelp | `Help` |
 | MdRefresh | `Refresh` |
 | MdFavorite, MdFavoriteBorder | `Love` (filled: `className="fill-brand text-brand"`) |
+| MdBookmark, MdBookmarkBorder | `WantToTry` (on: `className="fill-current text-ink-1"`; X08's Save verb) |
 | MdStar | `Star` |
 | MdThumbUp / MdThumbDown | `ThumbsUp` / `ThumbsDown` |
 | MdHome | `Home` |

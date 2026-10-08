@@ -45,6 +45,7 @@ import {
   placeMenuItems,
   recipeIngredients,
   tierListItems,
+  wantToTry,
 } from "@cellar-assistant/db";
 import type {
   Column,
@@ -120,7 +121,7 @@ export type ItemArc<TTable extends Table = Table> = {
   columnList(alias?: string): SQL;
 };
 
-/** `WINE` → `wineId` — the naming nine of the ten arc tables follow. */
+/** `WINE` → `wineId` — the naming ten of the eleven arc tables follow. */
 const defaultProperty = (type: ItemType): string => `${type.toLowerCase()}Id`;
 
 /** `WINE` → `suggestedWineId`. */
@@ -234,7 +235,8 @@ export const itemArc = <TTable extends Table>(
  *
  * Three share their check with one more column, and say so where they are
  * read: `recipe_ingredients` (`generic_item_id`), `tier_list_items`
- * (`place_id`), `item_match_suggestions` (`suggested_recipe_id`). And
+ * (`place_id`), `item_match_suggestions` (`suggested_recipe_id`), `want_to_try`
+ * (`recipe_id`). And
  * `place_menu_items`' check is `<= 1`, because a menu line may be unmatched.
  */
 export const ARCS = {
@@ -251,4 +253,5 @@ export const ARCS = {
   placeMenuItems: itemArc(placeMenuItems),
   recipeIngredients: itemArc(recipeIngredients),
   tierListItems: itemArc(tierListItems),
+  wantToTry: itemArc(wantToTry),
 } as const;

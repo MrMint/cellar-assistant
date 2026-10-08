@@ -8,6 +8,10 @@
  * lives here as plain functions so it can be tested without a server.
  */
 
+import {
+  type ApiItemType,
+  ITEM_TYPES,
+} from "@/components/cellar-api/itemTypes";
 import type { ActorErrorReason } from "@/lib/api/errors";
 import { formatVintage } from "@/utilities";
 import {
@@ -439,3 +443,14 @@ export function addEntryFailureMessage(failure: {
       return "Couldn't add that. Try again.";
   }
 }
+
+/**
+ * A list's item type, for what only an item list offers (X08's "Try This
+ * Next" catalog lookup); `null` for a place list or an unknown type.
+ */
+export const itemTypeOfList = (listType: string): ApiItemType | null => {
+  const upper = listType.toUpperCase();
+  return (ITEM_TYPES as readonly string[]).includes(upper)
+    ? (upper as ApiItemType)
+    : null;
+};

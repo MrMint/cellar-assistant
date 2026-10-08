@@ -1,12 +1,13 @@
 /**
  * `UserActor` — B4 (migration plan §2.1, §1.7, §3).
  *
- * Owns four tables, all of them scoped to *this* user:
+ * Owns five tables, all of them scoped to *this* user:
  *
  *   - `friends` — rows where `user_id = me`
  *   - `friend_requests` — rows where `user_id = me` (i.e. the ones **I** sent)
  *   - `item_favorites` — rows where `user_id = me`
  *   - `user_place_interactions` — rows where `user_id = me`
+ *   - `want_to_try` — rows where `user_id = me` (X08)
  *
  * Profile fields are not on that list: there is no `public.users` table, and
  * A6 moved identity to better-auth's `user` table in its own database
@@ -84,7 +85,7 @@
  * | `friends(*, me)` | `UserActor(other)` | **no** — read fresh |
  * | `friend_requests(me, *)` | this actor | yes — `aggregate.outgoing` |
  * | `friend_requests(*, me)` | `UserActor(other)` | **no** — read fresh |
- * | `item_favorites`, `user_place_interactions` | this actor | yes |
+ * | `item_favorites`, `user_place_interactions`, `want_to_try` | this actor | yes |
  *
  * `TABLE_WRITERS` cannot express that distinction — it is keyed by table, and
  * `UserActor` really is the sole writer *class* of both tables — which is why
@@ -131,28 +132,36 @@ import type {
   PageArgs,
   PlaceInteractionDto,
   RecordPlaceInteractionInput,
+  SetWantToTryResult,
   ToggleFavoriteResult,
   UpdateProfileInput,
   UserActorInterface,
   UserProfileDto,
+  WantToTryEntryDto,
+  WantToTryKind,
+  WantToTryTarget,
 } from "@cellar-assistant/contracts";
 import {
   ConflictError,
   ForbiddenError,
   isItemType,
+  isWantToTryKind,
   itemActorId,
   NotFoundError,
   offsetPage,
   requireReverseEdgeBatch,
   UserActorDescriptor,
   ValidationError,
+  wantToTryKey,
 } from "@cellar-assistant/contracts";
 import {
   friendRequests,
   friends,
   itemFavorites,
+  recipes,
   userPlaceInteractions,
   user as userTable,
+  wantToTry,
 } from "@cellar-assistant/db";
 import { and, eq, inArray, or, sql } from "@cellar-assistant/db/orm";
 import { type Friendship, isFriend, isOwner } from "@cellar-assistant/policy";
@@ -170,13 +179,14 @@ import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import type { ProfileFields, ProfileStore } from "../lib/profile-store.ts";
 import { betterAuthProfileStore } from "../lib/profile-store.ts";
-import { placeIsVisible } from "../lib/unshared-places.ts";
+import { placeIsVisible, placeRefVisibleSql } from "../lib/unshared-places.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 
 export type FriendRow = typeof friends.$inferSelect;
 export type FriendRequestRow = typeof friendRequests.$inferSelect;
 export type FavoriteRow = typeof itemFavorites.$inferSelect;
 export type PlaceInteractionRow = typeof userPlaceInteractions.$inferSelect;
+export type WantToTryRow = typeof wantToTry.$inferSelect;
 
 /**
  * **Only the rows this actor writes** — see the module doc's "Only the rows
@@ -190,6 +200,8 @@ export type UserAggregate = {
   readonly outgoing: readonly FriendRequestRow[];
   readonly favorites: readonly FavoriteRow[];
   readonly interactions: readonly PlaceInteractionRow[];
+  /** `want_to_try` where `user_id = me` — items and recipes (X08). */
+  readonly wishes: readonly WantToTryRow[];
 };
 
 /** The owned rows plus a *fresh* read of the ones another key writes. */
@@ -238,6 +250,47 @@ const favoriteValues = (userId: string, ref: ItemRef) => ({
 const favoriteRef = (row: FavoriteRow): ItemRef | null => {
   const ref = FAVORITES.refOf(row);
   return ref !== null && ref.type === row.type ? ref : null;
+};
+
+/** `want_to_try`'s item arc; the seventh column, `recipe_id`, is read beside it. */
+const WISHES = ARCS.wantToTry;
+
+/** What a `want_to_try` row names; `null` only for a row its check forbids. */
+const wishTarget = (row: WantToTryRow): WantToTryTarget | null => {
+  if (row.recipeId !== null) return { kind: "RECIPE", recipeId: row.recipeId };
+  const ref = WISHES.refOf(row);
+  return ref === null ? null : { kind: "ITEM", item: ref };
+};
+
+/**
+ * A target with its ids canonical (lower-case uuids) and its kind checked —
+ * the cached rows are compared with `===`, so an upper-case id would miss an
+ * existing row and fail on the unique constraint (the `toggleFavorite` bug).
+ */
+const canonicalTarget = (target: WantToTryTarget): WantToTryTarget => {
+  const kind: unknown = target?.kind;
+  if (!isWantToTryKind(kind)) {
+    throw new ValidationError(`not a want-to-try kind: ${String(kind)}`);
+  }
+  switch (target.kind) {
+    case "ITEM": {
+      const type: unknown = target.item?.type;
+      if (typeof type !== "string" || !isItemType(type)) {
+        throw new ValidationError(`not an item type: ${String(type)}`);
+      }
+      return {
+        kind: "ITEM",
+        item: { type, id: requireUuid(target.item.id, "item.id") },
+      };
+    }
+    case "RECIPE":
+      return {
+        kind: "RECIPE",
+        recipeId: requireUuid(target.recipeId, "recipeId"),
+      };
+    case "PLACE":
+      return { kind: "PLACE", placeId: requireUuid(target.placeId, "placeId") };
+  }
 };
 
 const iso = (value: Date | string | null): string | null => {
@@ -294,7 +347,7 @@ export class UserActor
     // Only `user_id = me`, in both cases: the mirrored rows are another
     // `UserActor` key's to write, so caching them here goes stale with nothing
     // to invalidate it (module doc). `#snapshot()` reads those fresh.
-    const [ownFriends, outgoing, favoriteRows, interactionRows] =
+    const [ownFriends, outgoing, favoriteRows, interactionRows, wishRows] =
       await Promise.all([
         this.db.select().from(friends).where(eq(friends.userId, id)),
         this.db
@@ -309,6 +362,7 @@ export class UserActor
           .select()
           .from(userPlaceInteractions)
           .where(eq(userPlaceInteractions.userId, id)),
+        this.db.select().from(wantToTry).where(eq(wantToTry.userId, id)),
       ]);
 
     return {
@@ -316,6 +370,7 @@ export class UserActor
       outgoing,
       favorites: favoriteRows,
       interactions: interactionRows,
+      wishes: wishRows,
     };
   }
 
@@ -1254,7 +1309,13 @@ export class UserActor
         placeId,
         isFavorite: input.isFavorite ?? current?.isFavorite ?? false,
         isVisited: willBeVisited,
-        wantToVisit: input.wantToVisit ?? current?.wantToVisit ?? false,
+        // X08/D11: "Want to try" is a list of places you have not been to
+        // yet, so the first visit takes a place off it — unless this same
+        // call says otherwise. Only on the transition, so re-saving a place
+        // you have already visited sticks.
+        wantToVisit:
+          input.wantToVisit ??
+          (visitLogged ? false : (current?.wantToVisit ?? false)),
         rating:
           input.rating === undefined ? (current?.rating ?? null) : input.rating,
         notes:
@@ -1292,6 +1353,209 @@ export class UserActor
     });
     await this.reload();
     return toInteractionDto(row);
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Want to try (X08)                                                       */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The list, newest first: `want_to_try` rows and the places marked
+   * `want_to_visit`. Owner (or admin) only.
+   *
+   * Read fresh, not from the activation's rows. This key is the only writer
+   * of those rows, but not the only thing that removes them: a recipe's
+   * author deleting it (`RecipeActor.delete`) cascades every user's wish for
+   * it away underneath their activations. A cached row would then be listed
+   * as an entry whose recipe no longer resolves — a field error, which fails
+   * the whole `/want-to-try` read (`runApiOperation` throws on any error).
+   * Two indexed reads of one user's rows; `wantToTryStates` keeps answering
+   * from the cache, where a stale key is harmless.
+   */
+  async wantToTry(
+    ctx: Ctx,
+    page: PageArgs,
+    kinds?: readonly WantToTryKind[] | null,
+  ): Promise<Page<WantToTryEntryDto>> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "view this want-to-try list");
+    if (kinds !== null && kinds !== undefined && !Array.isArray(kinds)) {
+      throw new ValidationError("kinds must be a list");
+    }
+    for (const kind of kinds ?? []) {
+      if (!isWantToTryKind(kind)) {
+        throw new ValidationError(`not a want-to-try kind: ${String(kind)}`);
+      }
+    }
+    const only = new Set<WantToTryKind>(
+      kinds === null || kinds === undefined || kinds.length === 0
+        ? ["ITEM", "RECIPE", "PLACE"]
+        : kinds,
+    );
+
+    const [wishRows, placeRows] = await Promise.all([
+      only.has("ITEM") || only.has("RECIPE")
+        ? this.db.select().from(wantToTry).where(eq(wantToTry.userId, this.key))
+        : Promise.resolve([]),
+      only.has("PLACE")
+        ? this.db
+            .select()
+            .from(userPlaceInteractions)
+            .where(
+              and(
+                eq(userPlaceInteractions.userId, this.key),
+                eq(userPlaceInteractions.wantToVisit, true),
+                // X27/D28: a place under review is its creator's alone. A
+                // row saved before review moved it out of reach must drop
+                // out silently — the list resolves each place by id, and a
+                // hidden one would fail the whole page (or name it).
+                placeRefVisibleSql(ctx, sql`${userPlaceInteractions.placeId}`),
+              ),
+            )
+        : Promise.resolve([]),
+    ]);
+
+    const entries: { entry: WantToTryEntryDto; at: number; id: string }[] = [];
+    for (const row of wishRows) {
+      const target = wishTarget(row);
+      if (target === null || !only.has(target.kind)) continue;
+      entries.push({
+        entry: { target, savedAt: requiredIso(row.createdAt) },
+        at: row.createdAt?.getTime() ?? 0,
+        id: row.id,
+      });
+    }
+    for (const row of placeRows) {
+      const at = row.updatedAt ?? row.createdAt;
+      entries.push({
+        entry: {
+          target: { kind: "PLACE", placeId: row.placeId },
+          savedAt: requiredIso(at),
+        },
+        at: at?.getTime() ?? 0,
+        id: row.id,
+      });
+    }
+    // Newest first; the row id breaks ties so paging is stable.
+    entries.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+    return offsetPage(
+      entries.map(({ entry }) => entry),
+      page,
+    );
+  }
+
+  /**
+   * Which of `targets` are on the list, as `wantToTryKey`s — the matching
+   * subset, from the cached rows (the `favoriteStates` shape and reasoning).
+   */
+  async wantToTryStates(
+    ctx: Ctx,
+    targets: readonly WantToTryTarget[],
+  ): Promise<readonly string[]> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "view this want-to-try list");
+    if (!Array.isArray(targets)) {
+      throw new ValidationError("wantToTryStates takes a list of targets");
+    }
+    const saved = this.#savedKeys(aggregate);
+    const answer: string[] = [];
+    const seen = new Set<string>();
+    for (const requested of targets) {
+      const key = wantToTryKey(canonicalTarget(requested));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (saved.has(key)) answer.push(key);
+    }
+    return answer;
+  }
+
+  /**
+   * Put a target on the list (`wantToTry: true`) or take it off. `set`, not
+   * `toggle`: asking for the state it is already in changes nothing and says
+   * so (`changed: false`), so an Undo, a double tap or a retried request can
+   * never flip it the wrong way.
+   *
+   * Items and recipes are `want_to_try` rows; read-then-write is safe for the
+   * reason `toggleFavorite` gives (one turn at a time, and every row here is
+   * this key's), and the per-column unique constraints make a duplicate fail
+   * loudly rather than stick. A place goes through `recordPlaceInteraction`,
+   * which owns `user_place_interactions`' upsert — one writer of that row.
+   */
+  async setWantToTry(
+    ctx: Ctx,
+    requested: WantToTryTarget,
+    on: boolean,
+  ): Promise<SetWantToTryResult> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "change this want-to-try list");
+    if (typeof on !== "boolean") {
+      throw new ValidationError("wantToTry must be true or false");
+    }
+    const target = canonicalTarget(requested);
+    const key = wantToTryKey(target);
+    const already = this.#savedKeys(aggregate).has(key);
+    if (already === on) return { target, wantToTry: on, changed: false };
+
+    if (target.kind === "PLACE") {
+      const row = await this.recordPlaceInteraction(ctx, {
+        placeId: target.placeId,
+        wantToVisit: on,
+      });
+      return { target, wantToTry: row.wantToVisit, changed: true };
+    }
+
+    if (!on) {
+      const existing = aggregate.wishes.find((row) => {
+        const current = wishTarget(row);
+        return current !== null && wantToTryKey(current) === key;
+      });
+      if (existing !== undefined) {
+        await this.tx(async (tx) => {
+          await tx.delete(wantToTry).where(eq(wantToTry.id, existing.id));
+        });
+        await this.reload();
+      }
+      return { target, wantToTry: false, changed: existing !== undefined };
+    }
+
+    if (target.kind === "ITEM") {
+      if (!(await this.#itemExists(target.item))) {
+        throw new NotFoundError(
+          `${target.item.type.toLowerCase()} ${target.item.id} not found`,
+        );
+      }
+      await this.tx(async (tx) => {
+        await tx
+          .insert(wantToTry)
+          .values({ userId: this.key, ...WISHES.values(target.item) });
+      });
+    } else {
+      if (!(await this.#recipeExists(target.recipeId))) {
+        throw new NotFoundError(`recipe ${target.recipeId} not found`);
+      }
+      await this.tx(async (tx) => {
+        await tx
+          .insert(wantToTry)
+          .values({ userId: this.key, recipeId: target.recipeId });
+      });
+    }
+    await this.reload();
+    return { target, wantToTry: true, changed: true };
+  }
+
+  /** Every key on the list: `want_to_try` rows plus `want_to_visit` places. */
+  #savedKeys(aggregate: UserAggregate): Set<string> {
+    const keys = new Set<string>();
+    for (const row of aggregate.wishes) {
+      const target = wishTarget(row);
+      if (target !== null) keys.add(wantToTryKey(target));
+    }
+    for (const row of aggregate.interactions) {
+      if (row.wantToVisit === true) {
+        keys.add(wantToTryKey({ kind: "PLACE", placeId: row.placeId }));
+      }
+    }
+    return keys;
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1364,6 +1628,14 @@ export class UserActor
 
   #placeVisible(ctx: Ctx, placeId: string): Promise<boolean> {
     return placeIsVisible(this.db, ctx, placeId);
+  }
+
+  async #recipeExists(recipeId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: recipes.id })
+      .from(recipes)
+      .where(eq(recipes.id, recipeId));
+    return row !== undefined;
   }
 
   /**

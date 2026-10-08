@@ -24,6 +24,7 @@ export {
   Award as Medal,
   BadgeCheck as Verified,
   Bell as Notifications,
+  Bookmark as WantToTry,
   BookOpen as Recipe,
   Building2 as Business,
   Camera,

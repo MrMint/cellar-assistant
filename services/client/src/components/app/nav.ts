@@ -60,6 +60,7 @@ export const TABS: readonly Tab[] = [
       "/tier-lists",
       "/rankings",
       "/favorites",
+      "/want-to-try",
       "/friends",
       "/users",
       "/brands",

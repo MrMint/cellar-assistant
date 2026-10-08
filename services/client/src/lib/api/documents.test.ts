@@ -75,6 +75,7 @@ import { ITEM_SEARCH_LIMIT } from "@/components/search/queries";
 import * as tierListFragments from "@/components/tier-list/fragments";
 import * as tierListQueries from "@/components/tier-list/queries";
 import * as userFragments from "@/components/user/fragments";
+import * as wantToTryQueries from "@/components/want-to-try/queries";
 import * as ai from "./ai.ts";
 import * as cellars from "./cellars.ts";
 import * as errors from "./errors.ts";
@@ -105,6 +106,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/tier-list/fragments.ts": tierListFragments,
   "components/tier-list/queries.ts": tierListQueries,
   "components/user/fragments.ts": userFragments,
+  "components/want-to-try/queries.ts": wantToTryQueries,
   "lib/api/ai.ts": ai,
   "lib/api/cellars.ts": cellars,
   "lib/api/errors.ts": errors,

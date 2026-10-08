@@ -25,3 +25,26 @@ export function getPriceLevelText(level?: number | null): string | null {
   if (!level) return null;
   return "$".repeat(level);
 }
+
+/**
+ * The toast after Love on a place (D27: the heart is Love; "Saved" now means
+ * the Want to try bookmark).
+ */
+export function loveToastText(nowLoved: boolean): string {
+  return nowLoved ? "Loved" : "Removed from Loved";
+}
+
+/**
+ * The toast after Mark visited. The first visit also takes the place off
+ * Want to try (the server does that — `UserActor.recordPlaceInteraction`),
+ * so the toast says so rather than letting the bookmark empty silently.
+ */
+export function visitToastText(
+  willBeVisited: boolean,
+  wasWantToTry: boolean,
+): { message: string; description?: string } {
+  if (!willBeVisited) return { message: "Unmarked" };
+  return wasWantToTry
+    ? { message: "Marked as visited", description: "Taken off Want to try." }
+    : { message: "Marked as visited" };
+}

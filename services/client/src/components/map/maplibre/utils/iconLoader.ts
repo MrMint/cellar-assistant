@@ -1,4 +1,5 @@
 import type { Map as MaplibreMap } from "maplibre-gl";
+import { color as tokens } from "@/lib/tokens";
 import { ITEM_TYPE_COLORS } from "../../constants/colors";
 
 // Material Design icon SVG paths (viewBox 0 0 24 24)
@@ -52,7 +53,54 @@ const PIN_RENDER_HEIGHT = PIN_HEIGHT * 2;
 const PIN_PATH =
   "M15 0C6.716 0 0 6.716 0 15c0 4.8 10 13.6 12 15.3q3 2.6 6 0C20 28.6 30 19.8 30 15 30 6.716 23.284 0 15 0z";
 
-function buildPinSVG(color: string, iconPath: string): string {
+/** Lucide's `Bookmark` (24×24), the Want to try glyph everywhere else. */
+const BOOKMARK_PATH = "M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z";
+
+/**
+ * X08's want-to-go pin: the same teardrop and category glyph, with a
+ * bookmark badge on its shoulder — dark disc, parchment bookmark, the colours
+ * of the Want to try button — so "places I want to go" read at a glance
+ * without a second colour scale competing with the item-type hues.
+ */
+/**
+ * The badge disc, in the pin's 30×37 viewBox. Its outer edge — radius plus
+ * half the 1-unit stroke — stops inside the box (`iconLoader.test.ts`): at
+ * the first cut (centre 24,6, radius 6) the stroke ran half a unit past the
+ * top and right edges and was clipped flat on every want-to-go pin.
+ */
+export const WANT_BADGE = { cx: 23.5, cy: 6.5, r: 5.5, stroke: 1 } as const;
+
+/** The pin's viewBox, for the test that keeps the badge inside it. */
+export const PIN_VIEWBOX = { width: PIN_WIDTH, height: PIN_HEIGHT } as const;
+
+export function wantBadgeSVG(): string {
+  const { cx, cy, r, stroke } = WANT_BADGE;
+  const scale = 0.38;
+  const offset = 12 * scale;
+  return [
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${tokens.bg}" stroke="${tokens.ink1}" stroke-width="${stroke}"/>`,
+    `<g transform="translate(${cx - offset}, ${cy - offset}) scale(${scale})">`,
+    `<path d="${BOOKMARK_PATH}" fill="${tokens.ink1}" stroke="${tokens.ink1}" stroke-width="2" stroke-linejoin="round"/>`,
+    `</g>`,
+  ].join("");
+}
+
+/** The sprite name for a pin: `pin-<colour>-<icon>`, or `pin-want-…`. */
+export function pinImageName(
+  colorKey: string,
+  iconName: string,
+  wantToTry = false,
+): string {
+  return wantToTry
+    ? `pin-want-${colorKey}-${iconName}`
+    : `pin-${colorKey}-${iconName}`;
+}
+
+function buildPinSVG(
+  color: string,
+  iconPath: string,
+  wantToTry = false,
+): string {
   const circleR = 12;
   const circleCX = 15;
   const circleCY = 14;
@@ -70,6 +118,7 @@ function buildPinSVG(color: string, iconPath: string): string {
     `<g transform="translate(${iconTranslateX}, ${iconTranslateY}) scale(${iconScale})">`,
     `<path d="${iconPath}" fill="white"/>`,
     `</g>`,
+    wantToTry ? wantBadgeSVG() : "",
     `</svg>`,
   ].join("");
 }
@@ -90,7 +139,8 @@ function svgToImage(
 /**
  * Generate and load all composite pin images into the map sprite.
  *
- * Produces (colors x icons) images — currently 7 x 9 = 63 combinations.
+ * Produces (colors x icons) images, twice — plain and want-to-go (X08) —
+ * currently 7 x 9 x 2 = 126 combinations.
  * Each is a data-URI SVG decoded in-memory, no network requests involved.
  */
 export async function loadPOIIcons(map: MaplibreMap): Promise<void> {
@@ -98,16 +148,22 @@ export async function loadPOIIcons(map: MaplibreMap): Promise<void> {
   const colorEntries = Object.entries(PIN_COLORS);
 
   const pinPromises = colorEntries.flatMap(([colorKey, colorHex]) =>
-    iconEntries.map(async ([iconName, iconPath]) => {
-      const pinName = `pin-${colorKey}-${iconName}`;
-      if (map.hasImage(pinName)) return;
+    iconEntries.flatMap(([iconName, iconPath]) =>
+      [false, true].map(async (wantToTry) => {
+        const pinName = pinImageName(colorKey, iconName, wantToTry);
+        if (map.hasImage(pinName)) return;
 
-      const svg = buildPinSVG(colorHex, iconPath);
-      const image = await svgToImage(svg, PIN_RENDER_WIDTH, PIN_RENDER_HEIGHT);
-      if (!map.hasImage(pinName)) {
-        map.addImage(pinName, image, { pixelRatio: 2 });
-      }
-    }),
+        const svg = buildPinSVG(colorHex, iconPath, wantToTry);
+        const image = await svgToImage(
+          svg,
+          PIN_RENDER_WIDTH,
+          PIN_RENDER_HEIGHT,
+        );
+        if (!map.hasImage(pinName)) {
+          map.addImage(pinName, image, { pixelRatio: 2 });
+        }
+      }),
+    ),
   );
 
   await Promise.all(pinPromises);

@@ -84,7 +84,13 @@ export function generateBreadcrumbs(
     } else if (segment === "add") {
       breadcrumbs.push({ label: "Add" });
     } else if (segment === "favorites") {
-      breadcrumbs.push({ label: "Favorites", href: isLast ? undefined : href });
+      // D1/D27: favourites are "Loved" everywhere a person reads them.
+      breadcrumbs.push({ label: "Loved", href: isLast ? undefined : href });
+    } else if (segment === "want-to-try") {
+      breadcrumbs.push({
+        label: "Want to try",
+        href: isLast ? undefined : href,
+      });
     } else if (segment === "friends") {
       breadcrumbs.push({ label: "Friends", href: isLast ? undefined : href });
     } else if (segment === "rankings") {

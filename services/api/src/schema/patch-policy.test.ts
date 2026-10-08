@@ -333,6 +333,9 @@ const PICKS =
   "X27: picks one of the review's suggestions; the nullable fields are the " +
   "two alternatives, exactly one of which must be given — a null is 'not " +
   "this one', never 'clear'";
+const NAMES_A_TARGET =
+  "its input only names which thing to act on (exactly one of the fields is " +
+  "set); a null there is 'not this kind', never 'clear it'";
 
 const NOT_PATCHES: Readonly<Record<string, string>> = {
   acceptPlaceSuggestion: PICKS,
@@ -355,6 +358,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   resubmitPlace: RESUBMITS,
   setRecipeIngredients: REPLACES,
   setRecipeInstructions: REPLACES,
+  setWantToTry: NAMES_A_TARGET,
   startItemOnboarding: STARTS,
   startRecipePhotoJob: STARTS,
 };

@@ -39,8 +39,10 @@ import {
   itemFavorites,
   outbox,
   places,
+  recipes,
   teas,
   userPlaceInteractions,
+  wantToTry,
 } from "@cellar-assistant/db";
 import { and, eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
@@ -186,6 +188,15 @@ const seedTea = async (db: DbOrTx, createdById: string): Promise<string> => {
     .values({ name: `Tea ${Date.now()}`, createdById })
     .returning({ id: teas.id });
   if (row === undefined) throw new Error("seedTea: no row");
+  return row.id;
+};
+
+const seedRecipe = async (db: DbOrTx, createdById: string): Promise<string> => {
+  const [row] = await db
+    .insert(recipes)
+    .values({ name: `Recipe ${Date.now()}`, type: "cocktail", createdById })
+    .returning({ id: recipes.id });
+  if (row === undefined) throw new Error("seedRecipe: no row");
   return row.id;
 };
 
@@ -1637,6 +1648,236 @@ describe.skipIf(skip)("UserActor (B4)", () => {
   /* Place interactions                                                      */
   /* ---------------------------------------------------------------------- */
 
+  /* ---------------------------------------------------------------------- */
+  /* X08 — Want to try                                                       */
+  /* ---------------------------------------------------------------------- */
+
+  describe("want to try (X08) — items, recipes and places on one list", () => {
+    it("sets and clears each kind idempotently, newest first", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const teaId = await seedTea(db, alice);
+        const recipeId = await seedRecipe(db, alice);
+        const placeId = await seedPlace(db);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        const tea = { kind: "ITEM", item: { type: "TEA", id: teaId } } as const;
+        const recipe = { kind: "RECIPE", recipeId } as const;
+        const place = { kind: "PLACE", placeId } as const;
+
+        expect(await actor.setWantToTry(ctx, tea, true)).toEqual({
+          target: tea,
+          wantToTry: true,
+          changed: true,
+        });
+        // A repeat is a no-op that says so, not a toggle and not a 23505.
+        expect(await actor.setWantToTry(ctx, tea, true)).toEqual({
+          target: tea,
+          wantToTry: true,
+          changed: false,
+        });
+        await actor.setWantToTry(ctx, recipe, true);
+        expect(await actor.setWantToTry(ctx, place, true)).toMatchObject({
+          wantToTry: true,
+          changed: true,
+        });
+
+        const all = nodes(await actor.wantToTry(ctx, firstPage));
+        expect(all.map((entry) => entry.target.kind).sort()).toEqual([
+          "ITEM",
+          "PLACE",
+          "RECIPE",
+        ]);
+        for (let i = 1; i < all.length; i += 1) {
+          expect(
+            Date.parse(all[i - 1]?.savedAt ?? "") >=
+              Date.parse(all[i]?.savedAt ?? ""),
+          ).toBe(true);
+        }
+        expect(
+          nodes(await actor.wantToTry(ctx, firstPage, ["RECIPE"])),
+        ).toEqual([{ target: recipe, savedAt: expect.any(String) }]);
+        expect(
+          nodes(await actor.wantToTry(ctx, firstPage, ["PLACE", "ITEM"])),
+        ).toHaveLength(2);
+
+        // The place half lives on the interaction row (D11), not a new table.
+        const [interaction] = await db
+          .select()
+          .from(userPlaceInteractions)
+          .where(eq(userPlaceInteractions.userId, alice));
+        expect(interaction?.wantToVisit).toBe(true);
+        expect(
+          await db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(wantToTry)
+            .where(eq(wantToTry.userId, alice)),
+        ).toEqual([{ n: 2 }]);
+
+        for (const target of [tea, recipe, place]) {
+          expect(await actor.setWantToTry(ctx, target, false)).toMatchObject({
+            wantToTry: false,
+            changed: true,
+          });
+          expect(await actor.setWantToTry(ctx, target, false)).toMatchObject({
+            wantToTry: false,
+            changed: false,
+          });
+        }
+        expect(nodes(await actor.wantToTry(ctx, firstPage))).toEqual([]);
+      });
+    });
+
+    it("the list drops a recipe its author deleted under a live activation", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const kept = await seedRecipe(db, bob);
+        const doomed = await seedRecipe(db, bob);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        await actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: kept }, true);
+        await actor.setWantToTry(
+          ctx,
+          { kind: "RECIPE", recipeId: doomed },
+          true,
+        );
+
+        // `RecipeActor.delete`'s statement: the wish goes by cascade, behind
+        // this activation's back — nothing reloads Alice's actor.
+        await db.delete(recipes).where(eq(recipes.id, doomed));
+
+        expect(nodes(await actor.wantToTry(ctx, firstPage))).toEqual([
+          {
+            target: { kind: "RECIPE", recipeId: kept },
+            savedAt: expect.any(String),
+          },
+        ]);
+        expect((await actor.wantToTry(ctx, firstPage)).totalCount).toBe(1);
+      });
+    });
+
+    it("wantToTryStates answers a page in one call, in canonical spelling", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const saved = await seedTea(db, alice);
+        const notSaved = await seedTea(db, alice);
+        const recipeId = await seedRecipe(db, alice);
+        const placeId = await seedPlace(db);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        // Saved with an upper-case id: the row must still be found below.
+        await actor.setWantToTry(
+          ctx,
+          { kind: "ITEM", item: { type: "TEA", id: saved.toUpperCase() } },
+          true,
+        );
+        await actor.setWantToTry(ctx, { kind: "PLACE", placeId }, true);
+
+        expect(
+          await actor.wantToTryStates(ctx, [
+            { kind: "ITEM", item: { type: "TEA", id: notSaved } },
+            { kind: "ITEM", item: { type: "TEA", id: saved } },
+            { kind: "RECIPE", recipeId },
+            { kind: "PLACE", placeId: placeId.toUpperCase() },
+            { kind: "ITEM", item: { type: "TEA", id: saved } },
+          ]),
+        ).toEqual([`tea:${saved}`, `place:${placeId}`]);
+        expect(await actor.wantToTryStates(ctx, [])).toEqual([]);
+        await expect(
+          actor.wantToTryStates(ctx, [
+            { kind: "ITEM", item: { type: "TEA", id: "nope" } },
+          ]),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+
+    it("is owner-only, validates its input and refuses what does not exist", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        const teaId = await seedTea(db, alice);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        const tea = { kind: "ITEM", item: { type: "TEA", id: teaId } } as const;
+        await actor.setWantToTry(ctx, tea, true);
+
+        // A wish list is not friends-visible, and nobody else may edit it.
+        for (const viewer of [userCtx(bob, "r"), anonymousCtx("r")]) {
+          await expect(actor.wantToTry(viewer, firstPage)).rejects.toThrow(
+            ForbiddenError,
+          );
+          await expect(actor.wantToTryStates(viewer, [tea])).rejects.toThrow(
+            ForbiddenError,
+          );
+          await expect(actor.setWantToTry(viewer, tea, false)).rejects.toThrow(
+            ForbiddenError,
+          );
+        }
+        expect(nodes(await actor.wantToTry(ctx, firstPage))).toHaveLength(1);
+
+        const missing = "00000000-0000-4000-8000-00000000dead";
+        await expect(
+          actor.setWantToTry(
+            ctx,
+            { kind: "ITEM", item: { type: "WINE", id: missing } },
+            true,
+          ),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: missing }, true),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          actor.setWantToTry(ctx, { kind: "PLACE", placeId: missing }, true),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          actor.setWantToTry(
+            ctx,
+            { kind: "BOTTLE" } as unknown as typeof tea,
+            true,
+          ),
+        ).rejects.toThrow(ValidationError);
+        await expect(
+          actor.setWantToTry(ctx, tea, "yes" as unknown as boolean),
+        ).rejects.toThrow(ValidationError);
+        await expect(
+          actor.wantToTry(ctx, firstPage, ["BOTTLE"] as never),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+
+    it("the first visit takes a place off the list; a later save sticks", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const placeId = await seedPlace(db);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        const place = { kind: "PLACE", placeId } as const;
+
+        await actor.setWantToTry(ctx, place, true);
+        await actor.recordPlaceInteraction(ctx, { placeId, isVisited: true });
+        expect(await actor.wantToTryStates(ctx, [place])).toEqual([]);
+
+        // Saving it again after you have been is a deliberate "go back".
+        await actor.setWantToTry(ctx, place, true);
+        await actor.recordPlaceInteraction(ctx, { placeId, isVisited: true });
+        expect(await actor.wantToTryStates(ctx, [place])).toEqual([
+          `place:${placeId}`,
+        ]);
+
+        // And a visit that says what it wants about the list is obeyed.
+        await actor.recordPlaceInteraction(ctx, { placeId, isVisited: false });
+        const visited = await actor.recordPlaceInteraction(ctx, {
+          placeId,
+          isVisited: true,
+          wantToVisit: true,
+        });
+        expect(visited.wantToVisit).toBe(true);
+      });
+    });
+  });
+
   describe("place interactions are owner-only and count visits server-side", () => {
     it("X27: a place under review can be saved by its creator; to anyone else it is the NotFound an unknown id gets", async () => {
       await withUserDb(async (db) => {
@@ -1700,8 +1941,10 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         });
         expect(visited.visitCount).toBe(1);
         expect(visited.lastVisitedAt).not.toBeNull();
-        // Fields not named in the input are preserved, not reset.
-        expect(visited.wantToVisit).toBe(true);
+        // X08/D11: the first visit takes the place off "Want to try" — the
+        // one flag the visited transition changes; the rest are preserved.
+        expect(visited.wantToVisit).toBe(false);
+        expect(visited.isFavorite).toBe(false);
 
         // Idempotent: saying "visited" again is not a second visit.
         expect(

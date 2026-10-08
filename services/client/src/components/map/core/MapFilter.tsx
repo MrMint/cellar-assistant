@@ -248,7 +248,7 @@ export const MapFilter: FC<MapFilterProps> = ({
   const getVisitStatusLabel = (status: VisitStatus) => {
     if (status === "unvisited") return "New Places";
     if (status === "visited") return "Visited";
-    if (status === "favorites") return "Favorites";
+    if (status === "favorites") return "Loved";
     return status;
   };
 

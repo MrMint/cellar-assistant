@@ -43,13 +43,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { announceWantToTry } from "@/components/want-to-try/changes";
+import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
 import { cn } from "@/lib/utils";
 import type { MenuItemView } from "../adapter";
 import type { PlaceEnrichment, PlaceGooglePhoto } from "../types/places";
 import { GoogleAttribution } from "./GoogleAttribution";
 import {
+  LoveToggleButton,
   PlaceCategoryTile,
-  SaveToggleButton,
   VisitedToggleButton,
 } from "./PlaceActionButtons";
 import { PlaceMenuItems } from "./PlaceMenuItems";
@@ -59,6 +61,8 @@ import {
   formatCategoryName,
   formatTimeString,
   getPriceLevelText,
+  loveToastText,
+  visitToastText,
 } from "./place-utils";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -91,6 +95,8 @@ export type DrawerState = "collapsed" | "half" | "full";
 interface UserInteraction {
   is_favorite?: boolean | null;
   is_visited?: boolean | null;
+  /** X08/D11: on the viewer's Want to try list. */
+  want_to_visit?: boolean | null;
   visit_count?: number | null;
 }
 
@@ -294,14 +300,14 @@ export function PlaceDetailsContent({
         isFavorite: !userInteraction?.is_favorite,
       });
       if (error) {
-        notify("Failed to update favorite", { tone: "error" });
+        notify("Couldn't update Love. Try again.", { tone: "error" });
       } else {
-        notify(userInteraction?.is_favorite ? "Removed from saved" : "Saved", {
+        notify(loveToastText(!userInteraction?.is_favorite), {
           tone: "success",
         });
       }
     } catch {
-      notify("Failed to update favorite", { tone: "error" });
+      notify("Couldn't update Love. Try again.", { tone: "error" });
     } finally {
       setIsTogglingFavorite(false);
     }
@@ -312,13 +318,20 @@ export function PlaceDetailsContent({
     if (!place.id) return;
     setIsMarkingVisited(true);
     const willBeVisited = !userInteraction?.is_visited;
+    const wasWantToTry = userInteraction?.want_to_visit === true;
     try {
       const error = await setInteraction({ isVisited: willBeVisited });
       if (error) {
         notify("Failed to update visited status", { tone: "error" });
       } else {
-        notify(willBeVisited ? "Marked as visited" : "Unmarked", {
+        const toast = visitToastText(willBeVisited, wasWantToTry);
+        // The server took it off Want to try; tell the map's pins too.
+        if (willBeVisited && wasWantToTry && place.id) {
+          announceWantToTry({ kind: "PLACE", placeId: place.id }, false);
+        }
+        notify(toast.message, {
           tone: "success",
+          description: toast.description,
         });
       }
     } catch {
@@ -728,10 +741,11 @@ function DesktopActions({
       </div>
 
       <div className="flex flex-row gap-2">
-        <SaveToggleButton
-          on={!!userInteraction?.is_favorite}
-          pending={isTogglingFavorite}
-          onClick={onToggleFavorite}
+        <WantToTryButton
+          variant="button"
+          target={{ kind: "PLACE", placeId: place.id }}
+          saved={!!userInteraction?.want_to_visit}
+          name={place.name}
           className="flex-1"
         />
         <VisitedToggleButton
@@ -740,11 +754,18 @@ function DesktopActions({
           onClick={onMarkVisited}
           className="flex-1"
         />
-        <Button variant="outline" onClick={onShare} className="flex-1">
-          <Share aria-hidden />
-          Share
-        </Button>
+        <LoveToggleButton
+          on={!!userInteraction?.is_favorite}
+          pending={isTogglingFavorite}
+          onClick={onToggleFavorite}
+          className="flex-1"
+        />
       </div>
+
+      <Button variant="outline" className="w-full" onClick={onShare}>
+        <Share aria-hidden />
+        Share
+      </Button>
 
       <Button variant="outline" className="w-full" onClick={onAddToTierList}>
         <Ranked aria-hidden />
@@ -792,7 +813,7 @@ function MobileActions({
   onMarkVisited,
   onAddToTierList,
 }: MobileActionProps) {
-  const saved = !!userInteraction?.is_favorite;
+  const loved = !!userInteraction?.is_favorite;
   const visited = !!userInteraction?.is_visited;
   return (
     <div className="flex flex-row flex-wrap gap-2">
@@ -816,9 +837,18 @@ function MobileActions({
             Web
           </Button>
 
+          {/* Save first (D27): the Want to try bookmark, then Love, then Log. */}
+          <WantToTryButton
+            framed
+            target={{ kind: "PLACE", placeId: place.id }}
+            saved={!!userInteraction?.want_to_visit}
+            name={place.name}
+          />
+
           <TipIconButton
-            label={saved ? "Remove from saved" : "Save"}
-            variant={saved ? "secondary" : "outline"}
+            label="Love"
+            aria-pressed={loved}
+            variant={loved ? "secondary" : "outline"}
             onClick={onToggleFavorite}
             disabled={isTogglingFavorite}
             aria-busy={isTogglingFavorite || undefined}
@@ -826,7 +856,7 @@ function MobileActions({
             {isTogglingFavorite ? (
               <Spinner />
             ) : (
-              <Love className={saved ? "fill-brand text-brand" : undefined} />
+              <Love className={loved ? "fill-brand text-brand" : undefined} />
             )}
           </TipIconButton>
 

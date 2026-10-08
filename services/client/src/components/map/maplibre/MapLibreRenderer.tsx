@@ -12,6 +12,7 @@ import {
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { cn } from "@/lib/utils";
+import { useWantToGoPlaceIds } from "../../want-to-try/useWantToGoPlaceIds";
 import { LocationPrePrompt } from "../core/LocationPrePrompt";
 import { MapBottomStack } from "../core/MapBottomStack";
 import { MapControls } from "../core/MapControls";
@@ -96,6 +97,9 @@ export function MapLibreRenderer({
     placesError,
     geocodeTarget,
   } = useMapDataFromXState();
+
+  // X08: the viewer's want-to-go places, drawn as badged pins.
+  const wantToGo = useWantToGoPlaceIds();
 
   // MapLibre-specific hooks
   const { bounds, handleBoundsChange } = useMapBoundsML();
@@ -456,6 +460,7 @@ export function MapLibreRenderer({
           <POISymbolLayer
             items={mapItems}
             filters={filters}
+            wantToGo={wantToGo}
             isDarkMode={mapCore.isDarkMode}
             currentZoom={mapCore.currentZoom}
           />
@@ -464,6 +469,7 @@ export function MapLibreRenderer({
         {iconsLoaded && (
           <SelectedPlaceLayer
             selectedPlace={mapUI.selectedPlace}
+            wantToGo={wantToGo}
             isDarkMode={mapCore.isDarkMode}
           />
         )}

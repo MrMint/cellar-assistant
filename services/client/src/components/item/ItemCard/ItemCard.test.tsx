@@ -119,7 +119,7 @@ describe("ItemCard", () => {
     assert.match(html, /data-slot="type-chip"[^>]*>.*?Wine<\/span>/);
     // Footer values, each named for assistive tech; the score is `Score`
     // (one decimal) and marked as reviewed by the viewer.
-    assert.match(html, />4<\/span><span[^>]*> favorites</);
+    assert.match(html, />4<\/span><span[^>]*> loves</);
     assert.match(html, />7<\/span><span[^>]*> reviews</);
     assert.match(html, /aria-label="Rated 4\.26 out of 5"/);
     assert.match(html, /data-reviewed="true"/);

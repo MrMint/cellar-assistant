@@ -71,6 +71,7 @@ export function ItemPageView({
               itemId={item.itemId}
               type={item.type}
               isFavorite={item.isFavorite}
+              isWantToTry={item.isWantToTry}
               title={item.name}
               subTitlePhrases={item.subTitlePhrases}
               description={item.description}

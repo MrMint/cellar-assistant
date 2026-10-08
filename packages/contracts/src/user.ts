@@ -2,9 +2,9 @@
  * The `User` aggregate as `services/api` sees it (migration plan §2.1 `UserActor`,
  * §1.7, B4).
  *
- * `UserActor(userId)` owns four tables — `friends` and `friend_requests` (rows
- * where `user_id` is *this* user), `item_favorites` and
- * `user_place_interactions`. Profile fields are **not** among them: there is no
+ * `UserActor(userId)` owns five tables — `friends` and `friend_requests` (rows
+ * where `user_id` is *this* user), `item_favorites`, `user_place_interactions`
+ * and `want_to_try` (X08). Profile fields are **not** among them: there is no
  * `public.users` table, and A6 moved identity to better-auth's `user` table
  * (`services/actors/src/auth/README.md`). `getProfile`/`updateProfile` therefore
  * proxy to better-auth rather than reading a table this actor owns.
@@ -42,7 +42,7 @@ import type { ActorDescriptor } from "./actors.ts";
 import type { AiCapabilities } from "./ai.ts";
 import type { Ctx } from "./ctx.ts";
 import type { FriendRequestStatus } from "./enums.ts";
-import type { ItemRef } from "./items.ts";
+import { type ItemRef, isItemType, itemActorId } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -195,6 +195,75 @@ export type RecordPlaceInteractionInput = {
 };
 
 /* -------------------------------------------------------------------------- */
+/* Want to try (X08 — the "Save" verb of D27)                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a "Want to try" can name. Items and recipes are rows in `want_to_try`;
+ * a place is `user_place_interactions.want_to_visit` (D11 revives that column
+ * rather than keeping the same fact twice), so all three answer through one
+ * `UserActor` call and one GraphQL mutation.
+ */
+export const WANT_TO_TRY_KINDS = ["ITEM", "RECIPE", "PLACE"] as const;
+export type WantToTryKind = (typeof WANT_TO_TRY_KINDS)[number];
+
+export const isWantToTryKind = (value: unknown): value is WantToTryKind =>
+  typeof value === "string" &&
+  (WANT_TO_TRY_KINDS as readonly string[]).includes(value);
+
+export type WantToTryTarget =
+  | { readonly kind: "ITEM"; readonly item: ItemRef }
+  | { readonly kind: "RECIPE"; readonly recipeId: string }
+  | { readonly kind: "PLACE"; readonly placeId: string };
+
+/**
+ * One stable string per target — `wine:<uuid>` (the `ItemActor` id),
+ * `recipe:<uuid>`, `place:<uuid>` — so a batch answer can be a set of keys,
+ * the shape `favoriteStates` already uses.
+ */
+export const wantToTryKey = (target: WantToTryTarget): string => {
+  switch (target.kind) {
+    case "ITEM":
+      return itemActorId(target.item);
+    case "RECIPE":
+      return `recipe:${target.recipeId}`;
+    case "PLACE":
+      return `place:${target.placeId}`;
+  }
+};
+
+/** The inverse of {@link wantToTryKey}; `null` for anything else. */
+export const parseWantToTryKey = (key: string): WantToTryTarget | null => {
+  const separator = key.indexOf(":");
+  if (separator < 1) return null;
+  const head = key.slice(0, separator);
+  const id = key.slice(separator + 1);
+  if (id.length === 0) return null;
+  if (head === "recipe") return { kind: "RECIPE", recipeId: id };
+  if (head === "place") return { kind: "PLACE", placeId: id };
+  const type = head.toUpperCase();
+  return isItemType(type) ? { kind: "ITEM", item: { type, id } } : null;
+};
+
+/** One row of the viewer's list, newest first. */
+export type WantToTryEntryDto = {
+  readonly target: WantToTryTarget;
+  /**
+   * ISO-8601. For a place this is the interaction row's `updatedAt`: the
+   * column carries no time of its own, so a later visit or rating moves it.
+   */
+  readonly savedAt: string;
+};
+
+export type SetWantToTryResult = {
+  readonly target: WantToTryTarget;
+  /** State *after* the call. */
+  readonly wantToTry: boolean;
+  /** False when the state already was what was asked — a repeat or a retry. */
+  readonly changed: boolean;
+};
+
+/* -------------------------------------------------------------------------- */
 /* The actor                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -298,6 +367,36 @@ export type UserActorInterface = {
     ctx: Ctx,
     input: RecordPlaceInteractionInput,
   ): Promise<PlaceInteractionDto>;
+
+  /**
+   * X08: the viewer's "Want to try" list — items, recipes and places together,
+   * newest first, optionally narrowed to `kinds` (omitted, `null` or empty:
+   * all three). Owner (or admin) only: a wish list is not friends-visible.
+   */
+  wantToTry(
+    ctx: Ctx,
+    page: PageArgs,
+    kinds?: readonly WantToTryKind[] | null,
+  ): Promise<Page<WantToTryEntryDto>>;
+  /**
+   * Which of `targets` are on the list, as {@link wantToTryKey}s — the
+   * matching subset, for the reason `favoriteStates` gives. One call per
+   * request behind `Item.isWantToTry` / `Recipe.isWantToTry`, answered from
+   * rows this actor already holds.
+   */
+  wantToTryStates(
+    ctx: Ctx,
+    targets: readonly WantToTryTarget[],
+  ): Promise<readonly string[]>;
+  /**
+   * Put a target on the list or take it off. Idempotent — `set`, not
+   * `toggle`, so an Undo or a retried request cannot flip it the wrong way.
+   */
+  setWantToTry(
+    ctx: Ctx,
+    target: WantToTryTarget,
+    wantToTry: boolean,
+  ): Promise<SetWantToTryResult>;
 };
 
 export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
@@ -324,5 +423,8 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     placeInteraction: {},
     placeInteractionsFor: {},
     recordPlaceInteraction: {},
+    wantToTry: {},
+    wantToTryStates: {},
+    setWantToTry: {},
   },
 };
