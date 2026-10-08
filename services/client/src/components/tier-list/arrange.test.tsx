@@ -14,6 +14,17 @@ GlobalRegistrator.register({ url: "http://localhost/tier-lists/tl-1" });
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+window.matchMedia = ((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+})) as unknown as typeof window.matchMedia;
+
 type Toast = {
   message: string;
   options?: { undo?: () => void; actionLabel?: string; tone?: string };
@@ -240,6 +251,20 @@ describe("Arrange (X23 / D4)", () => {
     await click(button("Arrange"));
     await press();
     assert.deepEqual(calls, ["undo tl-1", "refresh"]);
+  });
+
+  test("an empty list's Add entry opens Arrange and the picker, once", async () => {
+    await render({ ...data, items: [], itemCount: 0 });
+    await click(button("Add entry"));
+    assert.ok(document.querySelector('[role="toolbar"]'));
+    const adds = [...document.querySelectorAll("button")].filter(
+      (el) => el.textContent?.trim() === "Add entry",
+    );
+    assert.equal(adds.length, 1, "two Add entry buttons while arranging");
+    assert.ok(
+      document.querySelector('[role="dialog"]'),
+      "the picker did not open",
+    );
   });
 
   test("a friend's list: no Arrange at all", async () => {

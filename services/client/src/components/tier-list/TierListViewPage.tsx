@@ -289,7 +289,8 @@ export function TierListViewPage({
           : "When this list ranks something, it shows here."
       }
       action={
-        data.isOwner ? (
+        // Arranging, the bar below already holds Add entry.
+        data.isOwner && !isArranging ? (
           <Button
             onClick={() => {
               setArranging(true);
