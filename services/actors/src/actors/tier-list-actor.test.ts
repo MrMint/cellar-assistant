@@ -570,6 +570,11 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
         expect(forStranger.entries.map((e) => e.node.entry.id)).toEqual([
           shared,
         ]);
+
+        // …and the count agrees with the rows: "2 entries" over one row would
+        // say a hidden place is on the list.
+        expect((await actor.get(userCtx(creator, "r3"))).itemCount).toBe(2);
+        expect((await actor.get(userCtx(stranger, "r4"))).itemCount).toBe(1);
       });
     });
   });

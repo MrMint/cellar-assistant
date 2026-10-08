@@ -396,7 +396,7 @@ export class TierListActor
   async get(ctx: Ctx): Promise<TierListDto> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return this.#toDto(ctx, aggregate);
+    return await this.#dtoFor(ctx, aggregate);
   }
 
   async items(ctx: Ctx, page: PageArgs): Promise<Page<TierListItemDto>> {
@@ -405,19 +405,7 @@ export class TierListActor
     // X27: a place still under review is its creator's alone, so a public
     // list's entry for one is dropped for every other viewer — silently, as
     // if it were not on the list. Read fresh: `places` is not ours to cache.
-    const hidden = await hiddenPlaceIds(
-      this.db,
-      ctx,
-      aggregate.items.flatMap((row) =>
-        row.placeId === null ? [] : [row.placeId],
-      ),
-    );
-    const rows =
-      hidden.size === 0
-        ? aggregate.items
-        : aggregate.items.filter(
-            (row) => row.placeId === null || !hidden.has(row.placeId),
-          );
+    const rows = await this.#visibleItems(ctx, aggregate);
     return offsetPage(rows.map(toItemDto), page);
   }
 
@@ -447,7 +435,7 @@ export class TierListActor
       });
     });
     await this.reload();
-    return this.#toDto(ctx, this.requireAggregate());
+    return await this.#dtoFor(ctx, this.requireAggregate());
   }
 
   /** Creator only; header fields only. Never touches `content_updated_at`. */
@@ -467,7 +455,8 @@ export class TierListActor
     if (input.isEditingLocked !== undefined) {
       patch.isEditingLocked = input.isEditingLocked;
     }
-    if (Object.keys(patch).length === 0) return this.#toDto(ctx, aggregate);
+    if (Object.keys(patch).length === 0)
+      return await this.#dtoFor(ctx, aggregate);
 
     await this.tx(async (tx) => {
       await tx
@@ -476,7 +465,7 @@ export class TierListActor
         .where(eq(tierLists.id, this.key));
     });
     await this.reload();
-    return this.#toDto(ctx, this.requireAggregate());
+    return await this.#dtoFor(ctx, this.requireAggregate());
   }
 
   /**
@@ -1010,6 +999,37 @@ export class TierListActor
       .from(tierListItems)
       .where(eq(tierListItems.tierListId, this.key));
     return Number(row?.count ?? 0);
+  }
+
+  /**
+   * The entries `ctx` may see (X27): an entry for a place still under review
+   * is its creator's alone, so for anyone else it is not on the list — not in
+   * `items`, and not in `itemCount` either, or "5 entries" over four rows
+   * would say a hidden place is there. Read fresh: `places` is not ours to
+   * cache.
+   */
+  async #visibleItems(
+    ctx: Ctx,
+    aggregate: TierListAggregate,
+  ): Promise<TierListAggregate["items"]> {
+    const hidden = await hiddenPlaceIds(
+      this.db,
+      ctx,
+      aggregate.items.flatMap((row) =>
+        row.placeId === null ? [] : [row.placeId],
+      ),
+    );
+    return hidden.size === 0
+      ? aggregate.items
+      : aggregate.items.filter(
+          (row) => row.placeId === null || !hidden.has(row.placeId),
+        );
+  }
+
+  /** {@link #toDto}, with `itemCount` as `ctx` may read it. */
+  async #dtoFor(ctx: Ctx, aggregate: TierListAggregate): Promise<TierListDto> {
+    const visible = await this.#visibleItems(ctx, aggregate);
+    return { ...this.#toDto(ctx, aggregate), itemCount: visible.length };
   }
 
   #toDto(ctx: Ctx, aggregate: TierListAggregate): TierListDto {
