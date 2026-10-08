@@ -41,7 +41,9 @@ export const ItemHeaderServer = ({
         share={{ itemId, itemType }}
         editHref={editHref}
       />
-      <div className="flex flex-wrap items-start gap-2">
+      {/* Stretch, not items-start: the (still Joy, 36 px) tier-list button
+          takes Add to Cellar's 44 px height instead of sitting short beside it. */}
+      <div className="flex flex-wrap gap-2">
         <AddToTierListButton
           entityId={itemId}
           entityType={itemType.toLowerCase() as TierListEntityType}
