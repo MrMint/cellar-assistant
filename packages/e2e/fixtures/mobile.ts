@@ -77,60 +77,60 @@ export async function edgesOf(locator: Locator): Promise<Edges> {
  * app reads) so it can be addressed as a locator.
  */
 export async function bottomNav(page: Page): Promise<Locator> {
-  await expect(
-    page
-      .locator('nav, [role="navigation"], a[href="/map"]')
-      .filter({ visible: true })
-      .first(),
-    "no navigation is visible at all",
-  ).toBeVisible();
-  const how = await page.evaluate(() => {
-    for (const el of document.querySelectorAll("[data-e2e-bottom-nav]")) {
-      el.removeAttribute("data-e2e-bottom-nav");
-    }
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const shown = (el: Element) => {
-      const r = el.getBoundingClientRect();
-      return (
-        r.width > 0 &&
-        r.height > 0 &&
-        getComputedStyle(el).visibility !== "hidden"
-      );
-    };
-    const atBottom = (el: Element) => {
-      const r = el.getBoundingClientRect();
-      return r.bottom >= vh - 4 && r.top >= vh / 2;
-    };
-    const landmark = [
-      ...document.querySelectorAll('nav, [role="navigation"]'),
-    ].find(
-      (el) =>
-        shown(el) &&
-        atBottom(el) &&
-        el.getBoundingClientRect().width >= vw * 0.9,
-    );
-    if (landmark !== undefined) {
-      landmark.setAttribute("data-e2e-bottom-nav", "");
-      return "landmark";
-    }
-    const mapLink = [...document.querySelectorAll('a[href="/map"]')].find(
-      (a) => shown(a) && a.getBoundingClientRect().top >= vh - 160,
-    );
-    let el: Element | null = mapLink?.parentElement ?? null;
-    while (el !== null && el.getBoundingClientRect().width < vw * 0.9) {
-      el = el.parentElement;
-    }
-    if (el === null) return null;
-    el.setAttribute("data-e2e-bottom-nav", "");
-    return "fallback";
-  });
-  expect(
-    how,
-    "no tab bar at the bottom of the screen: neither a full-width navigation " +
-      "landmark on the bottom edge nor a /map tab near it",
-  ).not.toBeNull();
+  // Polled, not checked once: the first visible `nav` can be a header's, and
+  // the tab bar may hydrate a beat after it, so a single look races the shell.
+  await expect
+    .poll(() => page.evaluate(tagBottomNav), {
+      message:
+        "no tab bar at the bottom of the screen: neither a full-width " +
+        "navigation landmark on the bottom edge nor a /map tab near it",
+    })
+    .not.toBeNull();
   return page.locator("[data-e2e-bottom-nav]");
+}
+
+// Runs in the page, from source: no closures, no imports.
+function tagBottomNav(): "landmark" | "fallback" | null {
+  for (const el of document.querySelectorAll("[data-e2e-bottom-nav]")) {
+    el.removeAttribute("data-e2e-bottom-nav");
+  }
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const shown = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    return (
+      r.width > 0 &&
+      r.height > 0 &&
+      getComputedStyle(el).visibility !== "hidden"
+    );
+  };
+  const atBottom = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    return r.bottom >= vh - 4 && r.top >= vh / 2;
+  };
+  const landmark = [
+    ...document.querySelectorAll('nav, [role="navigation"]'),
+  ].find(
+    (el) =>
+      shown(el) && atBottom(el) && el.getBoundingClientRect().width >= vw * 0.9,
+  );
+  if (landmark !== undefined) {
+    landmark.setAttribute("data-e2e-bottom-nav", "");
+    return "landmark";
+  }
+  const mapLink = [...document.querySelectorAll('a[href="/map"]')].find(
+    (a) => shown(a) && a.getBoundingClientRect().top >= vh - 160,
+  );
+  let el: Element | null = mapLink?.parentElement ?? null;
+  while (el !== null && el.getBoundingClientRect().width < vw * 0.9) {
+    el = el.parentElement;
+  }
+  // The full-width ancestor has to be a bar, not the page: tagging `<body>`
+  // would exempt everything from the gutter rule and pass m05 vacuously.
+  if (el === null || !atBottom(el) || el.getBoundingClientRect().height > 160)
+    return null;
+  el.setAttribute("data-e2e-bottom-nav", "");
+  return "fallback";
 }
 
 export type CameraMode =

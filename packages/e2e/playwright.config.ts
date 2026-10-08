@@ -94,7 +94,10 @@ export default defineConfig({
     {
       name: "chromium",
       // The phone specs only mean something at phone size; see `mobile`.
-      testIgnore: /[\\/]mobile[\\/]/,
+      // Anchored on `specs/`: these patterns are matched against the absolute
+      // path, so a bare `/mobile/` would also hit a checkout that happens to
+      // live under a directory called `mobile`.
+      testIgnore: /[\\/]specs[\\/]mobile[\\/]/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
@@ -118,7 +121,7 @@ export default defineConfig({
      */
     {
       name: "mobile",
-      testMatch: /[\\/]mobile[\\/].*\.spec\.ts$/,
+      testMatch: /[\\/]specs[\\/]mobile[\\/].*\.spec\.ts$/,
       use: {
         ...devices["Pixel 7"],
         viewport: { width: 390, height: 844 },

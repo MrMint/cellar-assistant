@@ -25,14 +25,34 @@ import {
  * how it is built.
  */
 
+/**
+ * Open the wizard's first label photo step, and prove that step asked for the
+ * camera itself.
+ *
+ * The barcode step before it has its own scanner, which calls `getUserMedia`
+ * too (`useBarcodeScanner`) — so "the page asked for the camera" is already
+ * true before the label step exists, and would let a label step that never
+ * tried pass. Only calls made after Skip count. (The label step's camera
+ * mounts with its header, so the count cannot be reset once the header shows.)
+ *
+ * The header is matched loosely on purpose: N21 reorders the steps to front
+ * first and fixes the "Lets" copy, and neither is what this spec is about.
+ */
 async function openLabelCamera(page: Page): Promise<void> {
   await page.goto("/add/wines");
-  // The barcode step comes first and has its own scanner; skip past it.
-  await page.getByRole("button", { name: "Skip" }).tap();
+  const skip = page.getByRole("button", { name: "Skip" });
+  await expect(skip).toBeEnabled();
+  const beforeLabelStep = await cameraCalls(page);
+  await skip.tap();
   await expect(
-    page.getByText(/take a picture of the back label/i),
+    page.getByText(/picture of the (front|back) label/i),
     "the onboarding wizard did not reach the label photo step",
   ).toBeVisible();
+  await expect
+    .poll(() => cameraCalls(page), {
+      message: "the label step never asked for the camera",
+    })
+    .toBeGreaterThan(beforeLabelStep);
 }
 
 const library = (page: Page) =>
@@ -72,11 +92,6 @@ for (const { mode, title, within } of modes) {
   test(title, async ({ page, context, noise }) => {
     await stubCamera(context, mode);
     await openLabelCamera(page);
-    await expect
-      .poll(() => cameraCalls(page), {
-        message: "the label step never asked for the camera",
-      })
-      .toBeGreaterThan(0);
     await expectLibraryFallback(page, within);
     expect(noise.pageErrors).toEqual([]);
   });
@@ -89,11 +104,6 @@ test("a 640x480 camera still gives a live viewfinder (observation 25)", async ({
 }) => {
   await stubCamera(context, "vga");
   await openLabelCamera(page);
-  await expect
-    .poll(() => cameraCalls(page), {
-      message: "the label step never asked for the camera",
-    })
-    .toBeGreaterThan(0);
 
   const video = page.locator("video").first();
   await expect(

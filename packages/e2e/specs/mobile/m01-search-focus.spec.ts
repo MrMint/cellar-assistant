@@ -75,7 +75,7 @@ test("the search box keeps focus and every keystroke across the debounced naviga
   expect(noise.pageErrors).toEqual([]);
 });
 
-test("typing replaces the history entry instead of pushing one per pause", async ({
+test("typing adds at most one history entry, and Back skips the half-typed query", async ({
   page,
 }) => {
   await page.goto("/search");
@@ -96,10 +96,27 @@ test("typing replaces the history entry instead of pushing one per pause", async
     })
     .toBe(FIRST + REST);
 
-  const after = await page.evaluate(() => history.length);
+  // Two debounced pauses happened above. Pushing on each is the bug (+2);
+  // replacing throughout is fine (+0), and so is one push that opens the
+  // typing session and is then replaced (+1) — that keeps the empty search
+  // view's own entry, so Back returns to it rather than leaving /search.
+  const grew = (await page.evaluate(() => history.length)) - before;
   expect(
-    after - before,
+    grew,
     "every debounced pause pushed a history entry, so Back steps through " +
       "half-typed queries — N01: router.replace while typing, push only on commit",
-  ).toBe(0);
+  ).toBeLessThanOrEqual(1);
+
+  // +1 is only right if the entry kept is the view typing started from, not
+  // the first pause's query. Back must not land on `?q=lag`.
+  if (grew === 1) {
+    await page.goBack();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("q"), {
+        message:
+          "Back landed on a half-typed query: the one entry typing pushed " +
+          "was the first pause's, not the view the search started from",
+      })
+      .toBeNull();
+  }
 });
