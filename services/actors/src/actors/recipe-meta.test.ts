@@ -292,4 +292,58 @@ describe.skipIf(skip)("the X14 backfill", () => {
       expect(rows.some((row) => row.target_id === done)).toBe(false);
     });
   });
+
+  /**
+   * An ingredient nothing can place keeps a null kind for ever, so a scan of
+   * "still null" from the start would hand back the same first batch on
+   * every run. The keyset walks past it, and food is never selected.
+   */
+  it("walks recipes by cursor past ones nothing can place, cocktails only", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      // Ids at the top of the keyspace, so the walk below sees only these.
+      const floor = "fffffff0-0000-4000-8000-000000000000";
+      const high = () => `fffffff0-${randomUUID().slice(9)}`;
+      const seed = async (type: "cocktail" | "food"): Promise<string> => {
+        const id = high();
+        await db.execute(sql`
+          insert into public.recipes (id, name, type, created_by_id)
+          values (${id}::uuid, 'Unplaceable', ${type}, ${owner}::uuid)
+        `);
+        await seedLegacyLine(db, id, "Falernum", 1);
+        return id;
+      };
+      const cocktails = [await seed("cocktail"), await seed("cocktail")].sort();
+      const food = await seed("food");
+
+      const maintenance = await activate(
+        createActor(MaintenanceActor, "singleton", db),
+      );
+      const cursors: (string | null)[] = [];
+      let after: string | null = floor;
+      for (let turn = 0; turn < 5 && after !== null; turn += 1) {
+        const scheduled = await maintenance.backfillRecipeMeta(SYSTEM, {
+          limit: 1,
+          afterRecipe: after,
+          afterGroup: floor,
+        });
+        after = scheduled.nextAfterRecipe;
+        cursors.push(after);
+      }
+      // One recipe a turn, then a short page ends the walk — not the same
+      // unplaceable recipe again and again.
+      expect(cursors).toEqual([cocktails[0], cocktails[1], null]);
+
+      const { rows } = await db.execute<{ target_id: string }>(sql`
+        select target_id from public.outbox
+        where method = 'backfillIngredientMeta'
+          and target_id in (${cocktails[0]}, ${cocktails[1]}, ${food})
+      `);
+      expect(rows.map((row) => row.target_id).sort()).toEqual(cocktails);
+
+      await expect(
+        maintenance.backfillRecipeMeta(SYSTEM, { afterRecipe: "nope" }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
 });

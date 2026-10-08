@@ -122,6 +122,16 @@ describe("operator: the command line", () => {
     expect(() => parseCommand(["backfill-recipes", "--by", "me"])).toThrow(
       UsageError,
     );
+    // The previous run's cursors, passed through for the actor to check.
+    expect(
+      parseCommand([
+        "backfill-recipes",
+        "--after-recipe",
+        "r-cursor",
+        "--after-group",
+        "g-cursor",
+      ]).payload,
+    ).toEqual({ afterRecipe: "r-cursor", afterGroup: "g-cursor" });
   });
 
   it("turns ack's flags into the method's payload", () => {

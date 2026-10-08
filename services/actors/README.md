@@ -498,13 +498,18 @@ backfill to be right. To persist them (and `recipe_groups.base_spirit`):
 ```bash
 bun scripts/operator.ts backfill-recipes             # up to 500 recipes and 500 groups
 bun scripts/operator.ts backfill-recipes --limit 5000
+bun scripts/operator.ts backfill-recipes --limit 5000 \
+  --after-recipe <nextAfterRecipe> --after-group <nextAfterGroup>
 ```
 
 It enqueues `RecipeActor.backfillIngredientMeta` and
-`RecipeGroupActor.backfillBaseSpirit` through the outbox; each writes only
-null cells. Run it again until the counts it prints stop falling — an
-ingredient nothing can place keeps a null kind and is selected again, which
-costs one read. No re-embed is needed: neither `kind` nor `role` is in the
+`RecipeGroupActor.backfillBaseSpirit` through the outbox, for cocktails only
+(the vocabulary is drinks); each writes only null cells. It walks recipes and
+groups in id order and prints `nextAfterRecipe` / `nextAfterGroup`: pass them
+back as `--after-recipe` / `--after-group` until both print `null`. (A cursor,
+not "whatever is still null": an ingredient nothing can place keeps a null
+kind for ever, so re-selecting from the start would return the same first
+batch every time.) No re-embed is needed: neither `kind` nor `role` is in the
 embedding text.
 
 ## The runtime, and how to change your mind about it
