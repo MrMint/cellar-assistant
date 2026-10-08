@@ -3448,6 +3448,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "manualPlaceOverride", type: { kind: "SCALAR", name: "ID" } },
           {
+            name: "matchStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "MenuScanMatchStatus" },
+            },
+          },
+          {
             name: "menuItems",
             type: {
               kind: "NON_NULL",

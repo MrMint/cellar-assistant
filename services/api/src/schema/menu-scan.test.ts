@@ -40,6 +40,7 @@ const scanDto = {
   processedImageId: null,
   extractedText: "WINES\nChateau Test 2019",
   processingStatus: "completed" as const,
+  matchStatus: "running" as const,
   processingError: null,
   confidenceScore: 0.85,
   processingModel: "fake-vision-1",
@@ -80,7 +81,7 @@ describe("Query.menuScan", () => {
     });
     const result = await run(
       `{ menuScan(id: "${SCAN_ID}") { __typename ... on MenuScan {
-         id processingStatus itemsDetected itemsMatched place { id }
+         id processingStatus matchStatus itemsDetected itemsMatched place { id }
        } } }`,
       testContext(invoke, viewer),
     );
@@ -89,6 +90,8 @@ describe("Query.menuScan", () => {
       __typename: "MenuScan",
       id: SCAN_ID,
       processingStatus: "completed",
+      // N06a: the match run's own status, so a client polls until it settles.
+      matchStatus: "running",
       itemsDetected: 2,
       itemsMatched: 1,
       place: { id: PLACE_ID },

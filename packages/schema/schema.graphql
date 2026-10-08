@@ -2454,6 +2454,7 @@ type MenuScan {
   """
   itemsMatched: Int!
   manualPlaceOverride: ID
+  matchStatus: MenuScanMatchStatus!
 
   """
   Every line this scan extracted, matched or not — `suggestions` reaches only the lines that got a suggestion. By menu category (uncategorised last), then name, so the scan page can group them. Yours alone, as the scan is. Paged; `totalCount` exact.
@@ -2535,6 +2536,18 @@ type MenuScanConnection {
 type MenuScanEdge {
   cursor: String!
   node: MenuScan!
+}
+
+"""
+Where the match run is — the half of the pipeline `processingStatus` does not describe, since a scan is `completed` as soon as extraction finishes. `waiting` (extracting) → `queued` → `running` → `completed` | `failed`; `skipped` when there is nothing to match. Derived from the match job and the outbox on every read (N06a). Poll until it is `completed`, `failed` or `skipped`.
+"""
+enum MenuScanMatchStatus {
+  completed
+  failed
+  queued
+  running
+  skipped
+  waiting
 }
 
 """
