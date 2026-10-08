@@ -78,6 +78,7 @@ import {
   ITEM_SEARCH_RESULT_CAP,
   ITEM_TYPES,
   ItemSearchActorDescriptor,
+  isActorError,
   isItemType,
   itemSearchActorId,
   ValidationError,
@@ -232,8 +233,23 @@ export class ItemSearchActor
     input: ItemSearchInput,
   ): Promise<readonly ItemSearchHit[]> {
     const query = await this.#queryFor(ctx, input);
-    const literal = toVectorLiteral(query.vector);
     const types = normaliseTypes(input.itemTypes);
+    if (query.kind === "name") {
+      // D25 parity: no embedding, so the name is all there is to rank by.
+      // Not cached (`doNotCache`): the embedding may be back on the next
+      // turn, and a name-only query over the trigram indexes is cheap.
+      this.doNotCache();
+      const rows = await this.db.transaction((tx) =>
+        this.#lexicalRows(tx, {
+          text: query.text,
+          literal: null,
+          types,
+          limit: requireLimit(input.limit ?? ITEM_SEARCH_RESULT_CAP),
+        }),
+      );
+      return toHits(rows);
+    }
+    const literal = toVectorLiteral(query.vector);
     const maxDistance = requireDistance(
       input.maxDistance ?? ITEM_SEARCH_MAX_DISTANCE,
     );
@@ -377,11 +393,13 @@ export class ItemSearchActor
     tx: DbOrTx,
     q: {
       readonly text: string;
-      readonly literal: string;
+      /** The phrase's vector; `null` when it could not be embedded. */
+      readonly literal: string | null;
       readonly types: readonly ItemType[];
       readonly limit: number;
     },
   ): Promise<readonly LexicalRow[]> {
+    const literal = q.literal;
     await tx.execute(sql`
       select set_config('pg_trgm.strict_word_similarity_threshold',
                         ${String(LEXICAL_THRESHOLD)}, true)
@@ -394,9 +412,18 @@ export class ItemSearchActor
                  ${t}.name as name,
                  strict_word_similarity(${q.text}, ${t}.name)::float8 as lexical,
                  similarity(${q.text}, ${t}.name)::float8 as whole,
-                 (v.vector <=> ${q.literal}::halfvec(768))::float8 as distance
+                 ${
+                   literal === null
+                     ? sql`null::float8`
+                     : sql`(v.vector <=> ${literal}::halfvec(768))::float8`
+                 } as distance
           from ${ITEM_TABLES[type]} ${t}
-          left join ${itemVectors} v on ${VECTORS.column(type, "v")} = ${t}.id
+          ${
+            literal === null
+              ? sql``
+              : sql`left join ${itemVectors} v
+                      on ${VECTORS.column(type, "v")} = ${t}.id`
+          }
           where ${q.text} <<% ${t}.name`;
       }),
       sql` union all `,
@@ -540,6 +567,7 @@ export class ItemSearchActor
         readonly vector: readonly number[];
         readonly text: string;
       }
+    | { readonly kind: "name"; readonly text: string }
     | {
         readonly kind: "image";
         readonly vector: readonly number[];
@@ -577,13 +605,37 @@ export class ItemSearchActor
       return { kind: "vector", vector: input.vector as readonly number[] };
     }
     const phrase = text as string;
-    return {
-      kind: "text",
-      vector: await this.#embed(ctx, phrase),
-      text: phrase,
-    };
+    let vector: readonly number[];
+    try {
+      vector = await this.#embed(ctx, phrase);
+    } catch (error) {
+      if (!embeddingUnavailable(error)) throw error;
+      console.warn(
+        "[ItemSearchActor] the phrase could not be embedded; ranking by " +
+          `name alone: ${String(error)}`,
+      );
+      return { kind: "name", text: phrase };
+    }
+    return { kind: "text", vector, text: phrase };
   }
 }
+
+/**
+ * D25 — whether a failed phrase embedding means "no embedding here right
+ * now" rather than "this request is wrong".
+ *
+ * A text search has two arms, and only one of them needs a model: with no
+ * provider (`AI_UNCONFIGURED`), a spent embedding budget, a provider that
+ * failed or a sidecar hop that timed out, the name arm still answers, so the
+ * search returns name matches instead of failing whole — the same search on
+ * every deployment, with the ranking it can afford. A refusal that is about
+ * the request (`VALIDATION`, `FORBIDDEN`, `NOT_FOUND`) is still thrown: the
+ * name arm would not make that request right.
+ */
+export const embeddingUnavailable = (error: unknown): boolean =>
+  !isActorError(error) ||
+  error.code === "CONFLICT" ||
+  error.code === "BUDGET_EXCEEDED";
 
 /**
  * How many image vectors the image arm reads before visibility and the

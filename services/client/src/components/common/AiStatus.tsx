@@ -49,7 +49,11 @@ export function AiStatus({
     >
       <div>
         <Typography level="title-sm">{outcome.title}</Typography>
-        <Typography level="body-sm">{outcome.message}</Typography>
+        {/* The alert's own soft colour: body-sm's default tertiary text was
+            muted lavender on a dark amber in a limit notice. */}
+        <Typography level="body-sm" sx={{ color: "inherit" }}>
+          {outcome.message}
+        </Typography>
       </div>
     </Alert>
   );
