@@ -16,11 +16,15 @@
  *
  * {@link groundFlavourTags} is deterministic and runs on every answer:
  *
- * - an entry whose `evidence` is not in the note (whitespace and case aside)
- *   is dropped — the model was asked to copy it, so a miss is an invention;
- * - an entry whose tag shares no word stem with its own evidence is dropped:
- *   "lemon zest" may become "lemon", never "citrus", and "great night" may
- *   become nothing at all;
+ * - an entry whose `evidence` is not in the note as whole words (whitespace,
+ *   case and punctuation aside) is dropped — the model was asked to copy it,
+ *   so a miss is an invention; and "pear" is not in "appearance";
+ * - an entry with a tag word not drawn from its own evidence is dropped:
+ *   "lemon zest" may become "lemon", never "citrus"; "burnt toast" may not
+ *   become "burnt sugar"; "great night" may become nothing at all. "Drawn
+ *   from" is a shared four-letter stem ("cherries" → "cherry") or a short
+ *   suffix on a word of three letters or more ("oak" → "oaky") — never a
+ *   one-letter word ("a" → "apple") or a long one ("bit" → "bitter");
  * - tags already on the log are not suggested again, duplicates collapse, and
  *   at most {@link MAX_FLAVOUR_SUGGESTIONS} survive.
  *
@@ -86,22 +90,48 @@ export const noteIsWorthAsking = (note: string): boolean =>
   comparable(note).replace(/[^\p{L}\p{N}]+/gu, "").length >=
   MIN_FLAVOUR_NOTE_LENGTH;
 
-/** "cherries" and "cherry" share `cher`; "oak" and "oaky" share `oak`. */
+/** "cherries" and "cherry" share `cher`. */
 const STEM = 4;
+/** "oak" → "oaky", "smoke" → "smokey": a suffix this long, on a real word. */
+const MAX_SUFFIX = 2;
+const MIN_ROOT = 3;
 const words = (text: string): string[] =>
   comparable(text)
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 0);
 const stem = (word: string): string => word.slice(0, STEM);
 
-const sharesStem = (tag: string, evidence: string): boolean => {
+/** One tag word is drawn from one evidence word. */
+const drawnFrom = (word: string, candidate: string): boolean =>
+  candidate.startsWith(stem(word)) ||
+  (candidate.length >= MIN_ROOT &&
+    word.startsWith(candidate) &&
+    word.length - candidate.length <= MAX_SUFFIX);
+
+/** Every word of the tag comes from a word of its evidence. */
+const drawnFromEvidence = (tag: string, evidence: string): boolean => {
   const evidenceWords = words(evidence);
-  return words(tag).some((word) =>
-    evidenceWords.some(
-      (candidate) =>
-        candidate.startsWith(stem(word)) || word.startsWith(stem(candidate)),
-    ),
+  const tagWords = words(tag);
+  return (
+    tagWords.length > 0 &&
+    tagWords.every((word) =>
+      evidenceWords.some((candidate) => drawnFrom(word, candidate)),
+    )
   );
+};
+
+/** `needle`'s words appear in `haystack`, contiguous and whole. */
+const containsWords = (
+  haystack: readonly string[],
+  needle: readonly string[],
+): boolean => {
+  if (needle.length === 0) return false;
+  for (let start = 0; start + needle.length <= haystack.length; start += 1) {
+    if (needle.every((word, offset) => haystack[start + offset] === word)) {
+      return true;
+    }
+  }
+  return false;
 };
 
 /** One model entry, before grounding. */
@@ -119,7 +149,7 @@ export const groundFlavourTags = (
   candidates: readonly FlavourTagCandidate[],
   existing: readonly string[],
 ): FlavourTagSuggestionDto => {
-  const haystack = comparable(note);
+  const haystack = words(note);
   const taken = new Set(
     existing
       .map((tag) => {
@@ -135,8 +165,8 @@ export const groundFlavourTags = (
   for (const candidate of candidates) {
     if (tags.length >= MAX_FLAVOUR_SUGGESTIONS) break;
     if (candidate.tag === null || candidate.evidence === null) continue;
+    if (!containsWords(haystack, words(candidate.evidence))) continue;
     const evidence = comparable(candidate.evidence);
-    if (evidence === "" || !haystack.includes(evidence)) continue;
     let tag: string | null;
     try {
       tag = normaliseCheckInTag(candidate.tag);
@@ -144,7 +174,7 @@ export const groundFlavourTags = (
       continue; // longer than a tag may be: a sentence, not a flavour
     }
     if (tag === null || words(tag).length > 3) continue;
-    if (!sharesStem(tag, evidence)) continue;
+    if (!drawnFromEvidence(tag, evidence)) continue;
     if (taken.has(tag)) continue;
     taken.add(tag);
     tags.push({ tag, evidence: candidate.evidence.trim() });

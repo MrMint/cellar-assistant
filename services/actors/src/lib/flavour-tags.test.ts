@@ -56,6 +56,42 @@ describe("groundFlavourTags", () => {
     expect(answer.abstained).toBe(true);
   });
 
+  it("evidence must be whole words of the note: 'pear' is not in 'appearance'", () => {
+    const answer = groundFlavourTags(
+      "Hazy appearance, soft and round.",
+      [{ tag: "pear", evidence: "pear" }],
+      [],
+    );
+    expect(answer).toEqual({ abstained: true, tags: [] });
+  });
+
+  it("every word of a tag comes from its evidence: no 'burnt sugar' from 'burnt toast'", () => {
+    const note = "Burnt toast and a bit of smoke.";
+    const answer = groundFlavourTags(
+      note,
+      [
+        { tag: "burnt sugar", evidence: "Burnt toast" },
+        { tag: "burnt toast", evidence: "Burnt toast" },
+      ],
+      [],
+    );
+    expect(answer.tags.map((t) => t.tag)).toEqual(["burnt toast"]);
+  });
+
+  it("a one-letter or a short word grounds nothing longer: no 'apple' from 'a', no 'bitter' from 'bit'", () => {
+    const note = "Burnt toast and a bit of smoke.";
+    const answer = groundFlavourTags(
+      note,
+      [
+        { tag: "apple", evidence: "a" },
+        { tag: "bitter", evidence: "a bit" },
+        { tag: "smoky", evidence: "smoke" },
+      ],
+      [],
+    );
+    expect(answer.tags.map((t) => t.tag)).toEqual(["smoky"]);
+  });
+
   it("does not suggest a tag the log already has, and collapses duplicates", () => {
     const answer = groundFlavourTags(
       NOTE,
