@@ -1,27 +1,31 @@
 "use client";
 
-import {
-  Box,
-  Divider,
-  IconButton,
-  Input,
-  Sheet,
-  Stack,
-  Tooltip,
-} from "@mui/joy";
 import { useEffect, useRef, useState } from "react";
+import { IconButton } from "@/components/app/IconButton";
 import {
-  MdAddLocationAlt,
-  MdClose,
-  MdDarkMode,
-  MdLanguage,
-  MdLightMode,
-  MdLocationOn,
-  MdSearch,
-} from "react-icons/md";
-import { AnimatedPlaceholder } from "@/components/common/AnimatedPlaceholder";
+  AddPlace,
+  Close,
+  DarkMode,
+  ICON_STROKE,
+  LightMode,
+  Place,
+  Public,
+  Search,
+} from "@/components/app/icons";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { cn } from "@/lib/utils";
 import {
   useMapActions,
   useMapCore,
@@ -34,9 +38,6 @@ import { useTierListFilter } from "../hooks/useTierListFilter";
 import { MapFilter } from "./MapFilter";
 
 const SEARCH_DEBOUNCE_MS = 1500;
-
-// Toggle between "typewriter" and "fade" to compare animation styles
-const PLACEHOLDER_VARIANT: "typewriter" | "fade" = "typewriter";
 
 const MAP_SEARCH_EXAMPLES_DESKTOP = [
   "Search places...",
@@ -144,7 +145,7 @@ export function MapControls({
 
   const typewriterPlaceholder = useAnimatedPlaceholder({
     examples,
-    enabled: isPlaceholderActive && PLACEHOLDER_VARIANT === "typewriter",
+    enabled: isPlaceholderActive,
   });
 
   // Sync external → local (clear button, URL navigation, back/forward)
@@ -190,137 +191,88 @@ export function MapControls({
     useMapActions();
   const { isPlacing } = useMapPinPlacement();
 
-  // Helper function to get position styles
-  const getPositionStyles = (pos: string) => {
-    const positions = {
-      "top-left": { top: 16, left: 16 },
-      "top-right": { top: 16, right: 16 },
-      "top-center": { top: 16, left: "50%", transform: "translateX(-50%)" },
-      "bottom-left": { bottom: 16, left: 16 },
-      "bottom-right": { bottom: 16, right: 16 },
-    };
-    return positions[pos as keyof typeof positions] || positions["top-left"];
-  };
+  // Where the desktop panels sit.
+  const POSITION_CLASSES = {
+    "top-left": "top-4 left-4",
+    "top-right": "top-4 right-4",
+    "top-center": "top-4 left-1/2 -translate-x-1/2",
+    "bottom-left": "bottom-4 left-4",
+    "bottom-right": "bottom-4 right-4",
+  } as const;
+  const positionClasses = (pos: string | undefined) =>
+    POSITION_CLASSES[pos as keyof typeof POSITION_CLASSES] ??
+    POSITION_CLASSES["top-left"];
 
   // Shared search input
   const fallbackPlaceholder = "Search places...";
 
   const SearchInput = (
-    <Box sx={{ position: "relative" }}>
-      <Input
+    <InputGroup className="h-10 border-0 bg-transparent shadow-none dark:bg-transparent">
+      <InputGroupAddon>
+        <Search
+          aria-hidden
+          strokeWidth={ICON_STROKE}
+          className={cn(
+            "text-ink-2",
+            isLoading && "animate-pulse motion-reduce:animate-none",
+          )}
+        />
+      </InputGroupAddon>
+      <InputGroupInput
+        aria-label="Search places"
         placeholder={
-          PLACEHOLDER_VARIANT === "typewriter"
-            ? isPlaceholderActive
-              ? typewriterPlaceholder
-              : fallbackPlaceholder
-            : isPlaceholderActive && PLACEHOLDER_VARIANT === "fade"
-              ? ""
-              : fallbackPlaceholder
+          isPlaceholderActive ? typewriterPlaceholder : fallbackPlaceholder
         }
         value={inputValue}
         onChange={(e) => handleSearchChange(e.target.value)}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
-        startDecorator={
-          <Box
-            component="span"
-            sx={{
-              ...(isLoading && {
-                animation: "pulse 1.5s ease-in-out infinite",
-                "@keyframes pulse": {
-                  "0%, 100%": { opacity: 1 },
-                  "50%": { opacity: 0.3 },
-                },
-              }),
-            }}
-          >
-            <MdSearch />
-          </Box>
-        }
-        endDecorator={
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-            {inputValue && (
-              <IconButton
-                variant="plain"
-                color="neutral"
-                onClick={handleSearchClear}
-                size="sm"
-                sx={{
-                  minWidth: "auto",
-                  minHeight: "auto",
-                  padding: "4px",
-                }}
-              >
-                <MdClose size={18} />
-              </IconButton>
-            )}
-            <Tooltip
-              title={
-                globalSearch ? "Searching globally" : "Searching in viewport"
-              }
-              variant="soft"
-              size="sm"
-            >
-              <IconButton
-                variant={globalSearch ? "soft" : "plain"}
-                color={globalSearch ? "primary" : "neutral"}
-                onClick={() => setGlobalSearch(!globalSearch)}
-                size="sm"
-                sx={{
-                  minWidth: "auto",
-                  minHeight: "auto",
-                  padding: "4px",
-                }}
-              >
-                <MdLanguage size={18} />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        }
-        sx={{
-          border: "none",
-          boxShadow: "none",
-          backgroundColor: "transparent",
-          "&:hover": { backgroundColor: "transparent" },
-          "&:focus-within": {
-            backgroundColor: "transparent",
-            borderColor: "primary.500",
-            boxShadow: "none",
-          },
-        }}
-        size="sm"
       />
-      {PLACEHOLDER_VARIANT === "fade" && (
-        <AnimatedPlaceholder
-          examples={examples}
-          enabled={isPlaceholderActive}
-        />
-      )}
-    </Box>
+      <InputGroupAddon align="inline-end" className="gap-0.5">
+        {inputValue && (
+          <IconButton
+            aria-label="Clear search"
+            size="sm"
+            onClick={handleSearchClear}
+            className="text-ink-2"
+          >
+            <Close />
+          </IconButton>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <IconButton
+              aria-label="Search globally"
+              aria-pressed={globalSearch}
+              size="sm"
+              onClick={() => setGlobalSearch(!globalSearch)}
+              className={cn(
+                globalSearch
+                  ? "bg-ink-1 text-background hover:bg-ink-1/90 hover:text-background dark:hover:bg-ink-1/90"
+                  : "text-ink-2",
+              )}
+            >
+              <Public />
+            </IconButton>
+          </TooltipTrigger>
+          <TooltipContent>
+            {globalSearch ? "Searching globally" : "Searching in viewport"}
+          </TooltipContent>
+        </Tooltip>
+      </InputGroupAddon>
+    </InputGroup>
   );
 
   // Shared filter + action controls row
   const FilterAndActions = (showFilters || showActions) && (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "row",
-        gap: 1,
-        alignItems: "center",
-        flexWrap: isMobile ? "wrap" : "nowrap",
-      }}
+    <div
+      className={cn(
+        "flex flex-row items-center gap-2",
+        isMobile ? "flex-wrap" : "flex-nowrap",
+      )}
     >
       {showFilters && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            position: "relative",
-            zIndex: 999,
-            minWidth: 0,
-          }}
-        >
+        <div className="relative z-[999] flex min-w-0 items-center gap-2">
           <MapFilter
             selectedItemTypes={itemTypes}
             onItemTypesChange={setItemTypes}
@@ -339,140 +291,98 @@ export function MapControls({
             isMobile={isMobile}
           />
 
-          {showActions && <Divider orientation="vertical" />}
-        </Box>
+          {showActions && (
+            <Separator orientation="vertical" className="h-6 self-center" />
+          )}
+        </div>
       )}
 
       {showActions && (
-        <Stack direction="row" spacing={0.5}>
+        <div className="flex flex-row gap-1">
           <IconButton
-            variant="soft"
-            color={isPlacing ? "danger" : "primary"}
-            onClick={isPlacing ? exitPinPlacement : enterPinPlacement}
-            size="sm"
+            aria-label={isPlacing ? "Cancel adding place" : "Add a new place"}
             title={isPlacing ? "Cancel adding place" : "Add a new place"}
+            variant={isPlacing ? "destructive" : "secondary"}
+            size="sm"
+            onClick={isPlacing ? exitPinPlacement : enterPinPlacement}
+            className={cn(!isPlacing && "text-brass")}
           >
-            {isPlacing ? <MdClose /> : <MdAddLocationAlt />}
+            {isPlacing ? <Close /> : <AddPlace />}
           </IconButton>
 
           {onLocationClick && (
             <IconButton
-              variant="soft"
-              color="neutral"
-              onClick={onLocationClick}
-              size="sm"
+              aria-label="Go to my location"
               title="Go to my location"
+              variant="secondary"
+              size="sm"
+              onClick={onLocationClick}
             >
-              <MdLocationOn />
+              <Place />
             </IconButton>
           )}
 
           <IconButton
-            variant="soft"
-            color="neutral"
-            onClick={toggleDarkMode}
-            size="sm"
+            aria-label={
+              isDarkMode ? "Switch to light mode" : "Switch to dark mode"
+            }
             title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+            variant="secondary"
+            size="sm"
+            onClick={toggleDarkMode}
           >
-            {isDarkMode ? <MdLightMode /> : <MdDarkMode />}
+            {isDarkMode ? <LightMode /> : <DarkMode />}
           </IconButton>
-        </Stack>
+        </div>
       )}
-    </Box>
+    </div>
   );
 
   // Mobile: single unified container with search + filters
   if (isMobile) {
     return (
-      <Box
-        sx={{
-          position: "absolute",
-          zIndex: 1000,
-          top: 8,
-          left: 8,
-          right: 8,
-        }}
-      >
-        <Sheet
-          sx={{
-            p: 1,
-            borderRadius: "md",
-            boxShadow: "md",
-            backgroundColor: "background.surface",
-            border: "1px solid",
-            borderColor: "divider",
-            overflow: "visible",
-          }}
-        >
+      <div className="absolute inset-x-2 top-2 z-[1000]">
+        <div className="overflow-visible rounded-md bg-surface-1 p-2 shadow-md">
           {showSearch && SearchInput}
           {(showFilters || showActions) && (
             <>
-              {showSearch && <Divider sx={{ my: 0.5 }} />}
+              {showSearch && <Separator className="my-1" />}
               {FilterAndActions}
             </>
           )}
-        </Sheet>
-      </Box>
+        </div>
+      </div>
     );
   }
 
   // Desktop: separate search and filter containers
   const SearchControl = showSearch ? (
-    <Box
-      sx={{
-        position: "absolute",
-        zIndex: 1001,
-        width: "calc(50% - 24px)",
-        maxWidth: 375,
-        ...getPositionStyles(position.search || "top-left"),
-      }}
+    <div
+      className={cn(
+        "absolute z-[1001] w-[calc(50%-24px)] max-w-[375px]",
+        positionClasses(position.search),
+      )}
     >
-      <Sheet
-        sx={{
-          p: 1,
-          borderRadius: "md",
-          boxShadow: "md",
-          backgroundColor: isDrawerOpen
-            ? "rgba(255, 255, 255, 0.1)"
-            : "background.surface",
-          backdropFilter: isDrawerOpen ? "blur(8px)" : undefined,
-          border: isDrawerOpen
-            ? "1px solid rgba(255, 255, 255, 0.2)"
-            : "1px solid",
-          borderColor: isDrawerOpen ? "rgba(255, 255, 255, 0.2)" : "divider",
-          "&:hover": {
-            backgroundColor: isDrawerOpen
-              ? "rgba(255, 255, 255, 0.15)"
-              : "neutral.softBg",
-          },
-        }}
+      <div
+        className={cn(
+          "rounded-md p-2 shadow-md transition-colors duration-(--ca-dur-short) ease-standard",
+          isDrawerOpen ? "surface-glass" : "bg-surface-1 hover:bg-surface-2",
+        )}
       >
         {SearchInput}
-      </Sheet>
-    </Box>
+      </div>
+    </div>
   ) : null;
 
   const FilterAndActionControls =
     showFilters || showActions ? (
-      <Box
-        sx={{
-          position: "absolute",
-          zIndex: 1000,
-          ...getPositionStyles(position.filters || "top-right"),
-        }}
+      <div
+        className={cn("absolute z-[1000]", positionClasses(position.filters))}
       >
-        <Sheet
-          sx={{
-            p: 1,
-            borderRadius: "md",
-            boxShadow: "md",
-            backgroundColor: "background.surface",
-            overflow: "visible",
-          }}
-        >
+        <div className="overflow-visible rounded-md bg-surface-1 p-2 shadow-md">
           {FilterAndActions}
-        </Sheet>
-      </Box>
+        </div>
+      </div>
     ) : null;
 
   return (

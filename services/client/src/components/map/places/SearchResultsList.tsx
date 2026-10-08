@@ -1,21 +1,19 @@
 "use client";
 
-import {
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  IconButton,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useRef, useState } from "react";
-import { MdClose, MdPlace, MdStar } from "react-icons/md";
+import { IconButton } from "@/components/app/IconButton";
+import { Close, ICON_STROKE, Place } from "@/components/app/icons";
+import { Score } from "@/components/app/Score";
+import { itemTypeTokens } from "@/components/app/TypeChip";
+import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { ITEM_TYPE_COLORS } from "../constants/colors";
+import { spring, tween } from "@/lib/motion";
+import { cn } from "@/lib/utils";
+import type { ViewportInsets } from "../hooks/useViewportInsets";
 import type { ItemType, PlaceResult, SemanticPlaceResult } from "../types";
+import { MOBILE_NAV_HEIGHT, SIDEBAR_WIDTH } from "../utils/layout";
 import { formatCategoryName } from "./place-utils";
 
 interface SearchResultsListProps {
@@ -26,7 +24,23 @@ interface SearchResultsListProps {
   onCenterOnPlace: (place: PlaceResult) => void;
   onClose: () => void;
   isDetailOpen?: boolean;
+  /**
+   * The map's distance from the viewport's left and bottom edges (the side
+   * rail, the tab bar); measured by `MapLibreRenderer`. Until it is, the old
+   * shell's 56 px rail and 50 px bar.
+   */
+  insets?: ViewportInsets | null;
 }
+
+/** The result's leading rule, in its strongest item type's colour. */
+const TYPE_RULE: Record<ItemType, string> = {
+  wine: "border-l-type-wine",
+  beer: "border-l-type-beer",
+  spirit: "border-l-type-spirit",
+  sake: "border-l-type-sake",
+  coffee: "border-l-type-coffee",
+  tea: "border-l-type-tea",
+};
 
 function getMostRelevantItemType(
   itemTypeScores?: Record<ItemType, number>,
@@ -40,6 +54,54 @@ function getMostRelevantItemType(
   return Number(best[1]) > 0 ? (best[0] as ItemType) : null;
 }
 
+function ResultsHeader({
+  searchQuery,
+  count,
+  isLoading,
+  onClose,
+  desktop,
+}: {
+  searchQuery: string;
+  count: number;
+  isLoading: boolean;
+  onClose: () => void;
+  desktop: boolean;
+}) {
+  return (
+    <>
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2",
+          desktop ? "mb-2" : "mb-1",
+        )}
+      >
+        <h2
+          className={cn(
+            "min-w-0 flex-1 truncate",
+            desktop ? "type-title-2" : "type-headline",
+          )}
+        >
+          {searchQuery}
+        </h2>
+        <IconButton
+          aria-label="Close search results"
+          variant="secondary"
+          size="sm"
+          onClick={onClose}
+        >
+          <Close />
+        </IconButton>
+      </div>
+      <div className="flex items-center gap-2">
+        <Badge variant="secondary" className="tabular">
+          {count} result{count !== 1 ? "s" : ""}
+        </Badge>
+        {isLoading && <Spinner className="text-ink-2" />}
+      </div>
+    </>
+  );
+}
+
 export function SearchResultsList({
   results,
   searchQuery,
@@ -48,10 +110,12 @@ export function SearchResultsList({
   onCenterOnPlace,
   onClose,
   isDetailOpen = false,
+  insets,
 }: SearchResultsListProps) {
   const isDesktop = useMediaQuery("(min-width: 769px)");
   const hasSidebar = useMediaQuery("(min-width: 600px)");
-  const sidebarOffset = hasSidebar ? 56 : 0;
+  const leftInset = insets?.left ?? (hasSidebar ? SIDEBAR_WIDTH : 0);
+  const bottomInset = insets?.bottom ?? MOBILE_NAV_HEIGHT;
 
   // Swipe-down-to-dismiss state for mobile drag handle
   const dragStartYRef = useRef<number | null>(null);
@@ -82,97 +146,52 @@ export function SearchResultsList({
     onPlaceSelect(place);
   };
 
+  const transition = { ...spring.sheet, opacity: tween("short") };
+
   if (isDesktop) {
     return (
       <AnimatePresence>
-        <motion.div
+        <motion.section
           key="desktop"
+          aria-label="Search results"
           initial={{ x: -400, opacity: 0 }}
           animate={
             isDetailOpen ? { x: -20, opacity: 0.4 } : { x: 0, opacity: 1 }
           }
           exit={{ x: -400, opacity: 0 }}
-          transition={{
-            type: "spring",
-            stiffness: 400,
-            damping: 30,
-            opacity: { duration: 0.2 },
-          }}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: sidebarOffset,
-            width: 400,
-            height: "100dvh",
-            backgroundColor: "var(--joy-palette-background-body)",
-            boxShadow: "4px 0 20px rgba(0,0,0,0.08)",
-            zIndex: 949,
-            borderRight: "1px solid var(--joy-palette-divider)",
-            display: "flex",
-            flexDirection: "column",
-            pointerEvents: isDetailOpen ? "none" : "auto",
-          }}
+          transition={transition}
+          className={cn(
+            "fixed top-0 z-[949] flex h-dvh w-[400px] flex-col border-line border-r bg-background shadow-xl",
+            isDetailOpen ? "pointer-events-none" : "pointer-events-auto",
+          )}
+          style={{ left: leftInset }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <Box
-            sx={{
-              pt: 10,
-              px: 3,
-              pb: 2,
-              flexShrink: 0,
-              borderBottom: "1px solid",
-              borderColor: "divider",
-            }}
-          >
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 1 }}
-            >
-              <Typography level="h4" noWrap sx={{ flex: 1, mr: 1 }}>
-                {searchQuery}
-              </Typography>
-              <IconButton
-                variant="soft"
-                color="neutral"
-                size="sm"
-                onClick={onClose}
-              >
-                <MdClose />
-              </IconButton>
-            </Stack>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Chip size="sm" variant="soft" color="primary">
-                {results.length} result{results.length !== 1 ? "s" : ""}
-              </Chip>
-              {isLoading && <CircularProgress size="sm" />}
-            </Stack>
-          </Box>
+          <div className="shrink-0 border-line border-b px-6 pt-20 pb-4">
+            <ResultsHeader
+              searchQuery={searchQuery}
+              count={results.length}
+              isLoading={isLoading}
+              onClose={onClose}
+              desktop
+            />
+          </div>
 
           {/* Results list */}
-          <Box
-            sx={{
-              flex: 1,
-              overflowY: "auto",
-              px: 2,
-              py: 1,
-            }}
-          >
-            <Stack spacing={1}>
-              {results.map((place) => (
+          <ul className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-2">
+            {results.map((place) => (
+              <li key={place.id}>
                 <ResultCard
-                  key={place.id}
                   place={place}
                   onClick={() => handleResultClick(place)}
                 />
-              ))}
-            </Stack>
-          </Box>
-        </motion.div>
+              </li>
+            ))}
+          </ul>
+        </motion.section>
       </AnimatePresence>
     );
   }
@@ -180,120 +199,64 @@ export function SearchResultsList({
   // Mobile: bottom sheet
   return (
     <AnimatePresence>
-      <motion.div
+      <motion.section
         key="mobile"
+        aria-label="Search results"
         initial={{ y: "100%", opacity: 0 }}
-        animate={isDetailOpen ? { y: 40, opacity: 0.5 } : { y: 0, opacity: 1 }}
+        animate={
+          isDetailOpen ? { y: 40, opacity: 0.5 } : { y: dragOffset, opacity: 1 }
+        }
         exit={{ y: "100%", opacity: 0 }}
-        transition={{
-          type: "spring",
-          stiffness: 400,
-          damping: 30,
-          opacity: { duration: 0.2 },
-        }}
-        style={{
-          position: "fixed",
-          bottom: 50,
-          left: 0,
-          right: 0,
-          height: "50vh",
-          backgroundColor: "var(--joy-palette-background-body)",
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          boxShadow: "0 -8px 32px rgba(0,0,0,0.15)",
-          zIndex: 1099,
-          display: "flex",
-          flexDirection: "column",
-          pointerEvents: isDetailOpen ? "none" : "auto",
-          transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
-        }}
+        transition={transition}
+        className={cn(
+          "fixed inset-x-0 z-[1099] flex h-[50vh] flex-col rounded-t-lg bg-background shadow-[0_-8px_32px_black] shadow-black/15",
+          isDetailOpen ? "pointer-events-none" : "pointer-events-auto",
+        )}
+        style={{ bottom: bottomInset }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
       >
         {/* Drag handle */}
-        <Box
+        <div
+          aria-hidden
           onTouchStart={handleDragTouchStart}
           onTouchMove={handleDragTouchMove}
           onTouchEnd={handleDragTouchEnd}
-          sx={{
-            width: "100%",
-            display: "flex",
-            justifyContent: "center",
-            py: 1,
-            flexShrink: 0,
-            cursor: "grab",
-            touchAction: "none",
-          }}
+          className="flex w-full shrink-0 cursor-grab touch-none justify-center py-2"
         >
-          <Box
-            sx={{
-              width: 48,
-              height: 5,
-              backgroundColor: dragOffset > 0 ? "neutral.500" : "neutral.400",
-              borderRadius: 3,
-              transition: "background-color 0.15s ease",
-            }}
+          <div
+            className={cn(
+              "h-[5px] w-12 rounded-[3px] transition-colors duration-(--ca-dur-short) ease-standard",
+              dragOffset > 0 ? "bg-ink-2" : "bg-ink-3",
+            )}
           />
-        </Box>
+        </div>
 
         {/* Header */}
-        <Box
-          sx={{
-            px: 2,
-            pb: 1.5,
-            flexShrink: 0,
-            borderBottom: "1px solid",
-            borderColor: "divider",
-          }}
-        >
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ mb: 0.5 }}
-          >
-            <Typography level="title-md" noWrap sx={{ flex: 1, mr: 1 }}>
-              {searchQuery}
-            </Typography>
-            <IconButton
-              variant="soft"
-              color="neutral"
-              size="sm"
-              onClick={onClose}
-            >
-              <MdClose />
-            </IconButton>
-          </Stack>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Chip size="sm" variant="soft" color="primary">
-              {results.length} result{results.length !== 1 ? "s" : ""}
-            </Chip>
-            {isLoading && <CircularProgress size="sm" />}
-          </Stack>
-        </Box>
+        <div className="shrink-0 border-line border-b px-4 pb-3">
+          <ResultsHeader
+            searchQuery={searchQuery}
+            count={results.length}
+            isLoading={isLoading}
+            onClose={onClose}
+            desktop={false}
+          />
+        </div>
 
         {/* Results list */}
-        <Box
-          sx={{
-            flex: 1,
-            overflowY: "auto",
-            px: 1.5,
-            py: 1,
-          }}
-        >
-          <Stack spacing={0.75}>
-            {results.map((place) => (
+        <ul className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-2">
+          {results.map((place) => (
+            <li key={place.id}>
               <ResultCard
-                key={place.id}
                 place={place}
                 compact
                 onClick={() => handleResultClick(place)}
               />
-            ))}
-          </Stack>
-        </Box>
-      </motion.div>
+            </li>
+          ))}
+        </ul>
+      </motion.section>
     </AnimatePresence>
   );
 }
@@ -308,90 +271,63 @@ function ResultCard({
   onClick: () => void;
 }) {
   const itemType = getMostRelevantItemType(place.itemTypeScores);
-  const accentColor = itemType ? ITEM_TYPE_COLORS[itemType] : undefined;
+  const token = itemType
+    ? itemTypeTokens[itemType.toUpperCase() as Uppercase<ItemType>]
+    : null;
 
   return (
-    <Card
-      variant="outlined"
-      sx={{
-        cursor: "pointer",
-        transition: "all 0.15s ease",
-        borderLeft: accentColor ? `3px solid ${accentColor}` : undefined,
-        "&:hover": {
-          boxShadow: "sm",
-          backgroundColor: "background.level1",
-        },
-        ...(compact ? { p: 1.5 } : {}),
-      }}
+    <button
+      type="button"
       onClick={onClick}
+      className={cn(
+        "flex w-full items-start gap-3 rounded-md bg-surface-1 text-left outline-none transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        compact ? "p-3" : "p-4",
+        itemType && ["border-l-[3px]", TYPE_RULE[itemType]],
+      )}
     >
-      <CardContent sx={{ p: compact ? 0 : undefined }}>
-        <Stack direction="row" spacing={1.5} alignItems="flex-start">
-          <Box
-            sx={{
-              p: 0.75,
-              borderRadius: "sm",
-              backgroundColor: accentColor ? `${accentColor}20` : "neutral.100",
-              color: accentColor ?? "neutral.600",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <MdPlace size={compact ? 18 : 20} />
-          </Box>
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-sm p-1.5",
+          token
+            ? [token.tintClass, token.textClass]
+            : "bg-surface-3 text-ink-2",
+        )}
+      >
+        <Place
+          aria-hidden
+          strokeWidth={ICON_STROKE}
+          className={compact ? "size-[18px]" : "size-5"}
+        />
+      </span>
 
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography
-              level={compact ? "title-sm" : "title-md"}
-              noWrap
-              sx={{ mb: 0.25 }}
-            >
-              {place.name}
-            </Typography>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span
+          className={cn(
+            "mb-0.5 truncate text-ink-1",
+            compact ? "type-callout font-semibold" : "type-headline",
+          )}
+        >
+          {place.name}
+        </span>
 
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ mb: 0.5 }}
-            >
-              {place.rating && (
-                <Stack direction="row" spacing={0.25} alignItems="center">
-                  <MdStar
-                    size={14}
-                    style={{ color: "var(--joy-palette-warning-400)" }}
-                  />
-                  <Typography level="body-xs" sx={{ fontWeight: "md" }}>
-                    {place.rating.toFixed(1)}
-                  </Typography>
-                </Stack>
-              )}
-              <Typography
-                level="body-xs"
-                sx={{ color: "text.tertiary" }}
-                noWrap
-              >
-                {formatCategoryName(
-                  place.primary_category || place.categories?.[0] || "",
-                )}
-              </Typography>
-            </Stack>
-
-            {place.street_address && (
-              <Typography
-                level="body-xs"
-                sx={{ color: "text.secondary" }}
-                noWrap
-              >
-                {place.street_address}
-                {place.locality && `, ${place.locality}`}
-              </Typography>
+        <span className="mb-1 flex items-center gap-2">
+          {place.rating ? (
+            <Score value={place.rating} className="type-footnote" />
+          ) : null}
+          <span className="type-footnote truncate">
+            {formatCategoryName(
+              place.primary_category || place.categories?.[0] || "",
             )}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
+          </span>
+        </span>
+
+        {place.street_address && (
+          <span className="type-footnote truncate text-ink-2">
+            {place.street_address}
+            {place.locality && `, ${place.locality}`}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }

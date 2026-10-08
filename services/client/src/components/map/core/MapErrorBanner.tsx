@@ -1,7 +1,7 @@
 "use client";
 
-import { Alert, IconButton } from "@mui/joy";
-import { MdClose } from "react-icons/md";
+import { IconButton } from "@/components/app/IconButton";
+import { Close, ErrorIcon, ICON_STROKE } from "@/components/app/icons";
 
 interface MapErrorBannerProps {
   message: string;
@@ -17,29 +17,27 @@ interface MapErrorBannerProps {
  */
 export function MapErrorBanner({ message, onDismiss }: MapErrorBannerProps) {
   return (
-    <Alert
+    <div
       role="alert"
-      color="danger"
-      variant="soft"
-      endDecorator={
-        onDismiss ? (
-          <IconButton
-            size="sm"
-            variant="plain"
-            color="danger"
-            aria-label="Dismiss"
-            onClick={onDismiss}
-          >
-            <MdClose />
-          </IconButton>
-        ) : undefined
-      }
-      sx={{
-        boxShadow: "md",
-        alignItems: "flex-start",
-      }}
+      data-slot="map-error"
+      className="flex items-start gap-3 rounded-md border border-destructive/60 bg-surface-2 py-3 pr-1.5 pl-4 text-destructive shadow-md"
     >
-      {message}
-    </Alert>
+      <ErrorIcon
+        aria-hidden
+        strokeWidth={ICON_STROKE}
+        className="mt-0.5 size-4 shrink-0"
+      />
+      <p className="type-callout min-w-0 flex-1 self-center">{message}</p>
+      {onDismiss ? (
+        <IconButton
+          aria-label="Dismiss"
+          size="sm"
+          onClick={onDismiss}
+          className="-my-1.5 shrink-0 text-destructive hover:text-destructive"
+        >
+          <Close />
+        </IconButton>
+      ) : null}
+    </div>
   );
 }
