@@ -21,6 +21,7 @@ export type {
 export {
   ArrowDown as SortDescending,
   ArrowLeft as Back,
+  ArrowUpDown as Arrange,
   Award as Medal,
   BadgeCheck as Verified,
   Bell as Notifications,
@@ -35,6 +36,7 @@ export {
   CircleCheck as Success,
   CircleDashed as Unrated,
   CircleHelp as Help,
+  CircleMinus as RemoveFromList,
   Clock as Time,
   CloudOff,
   Coins as Price,
@@ -73,6 +75,7 @@ export {
   Plus as Add,
   RefreshCw as Refresh,
   RotateCcw as Undo,
+  RotateCw as Redo,
   ScanBarcode as Barcode,
   ScanLine as Scan,
   Search,

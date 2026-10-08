@@ -2,10 +2,9 @@
 
 import { type FormEvent, useCallback, useState } from "react";
 import { useClient } from "urql";
-import { ICON_STROKE, Place, Ranked, Search } from "@/components/app/icons";
-import { ListRow } from "@/components/app/Page";
+import { Add, Check, ICON_STROKE, Place, Search } from "@/components/app/icons";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
-import { Badge } from "@/components/ui/badge";
+import { formatScore } from "@/components/app/Score";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
@@ -16,6 +15,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { createLatestOnly } from "@/lib/latest-only";
+import { cn } from "@/lib/utils";
 import { displayItemName } from "@/utilities/smart-title-case";
 import { isValidListType } from "./actions";
 import {
@@ -24,7 +24,8 @@ import {
   itemEntrySubtitle,
   placeEntrySubtitle,
 } from "./adapter";
-import type { TierListEntityType } from "./constants";
+import { BAND_LABELS, BAND_TONES, type TierListEntityType } from "./constants";
+import { bandForScore } from "./history";
 import {
   PICKER_PAGE_SIZE,
   TierListItemPickerQuery,
@@ -36,6 +37,11 @@ export type AddEntryCandidate = {
   entityType: TierListEntityType;
   name: string;
   subtitle: string;
+  /**
+   * Your own rating of it (an item review, a place rating), or null — the
+   * band it lands in follows from it (`bandForScore`, X23).
+   */
+  myScore: number | null;
 };
 
 const ENTITY_LABELS: Record<TierListEntityType, string> = {
@@ -61,9 +67,12 @@ const ENTITY_LABELS: Record<TierListEntityType, string> = {
  * so the search is a submitted form, not search-as-you-type.
  *
  * The parent remounts it on every open (`key`), so a reopened picker starts
- * empty rather than showing the last query's rows as if they were fresh, and
- * `onList` marks what is already on the board instead of offering "Add" for
- * it — an add the actor would only refuse.
+ * empty rather than showing the last query's rows as if they were fresh.
+ *
+ * X23: the **whole row** is the button (the old row's name did nothing; only
+ * a small Add did), each row says where it will land — your rating's band,
+ * or Unrated — and what is already on the board reads **On this list**,
+ * disabled, instead of offering an add the actor would only refuse.
  */
 export function AddEntryModal({
   open,
@@ -138,6 +147,7 @@ export function AddEntryModal({
               entityType: "place" as const,
               name: place.displayName ?? place.name,
               subtitle: placeEntrySubtitle(place),
+              myScore: place.myInteraction?.rating ?? null,
             };
           }),
         );
@@ -174,6 +184,7 @@ export function AddEntryModal({
           entityType,
           name: displayItemName(edge.node.name),
           subtitle: itemEntrySubtitle(edge.node.item),
+          myScore: edge.node.item.myReview?.score ?? null,
         })),
       );
     },
@@ -231,7 +242,7 @@ export function AddEntryModal({
         ) : rows === null ? (
           <p className="text-center text-ink-3 type-callout">
             Search for {entityType === "place" ? "a place" : "an item"} to add.
-            It lands in Unrated.
+            It lands in the band your rating gives it, or Unrated.
           </p>
         ) : rows.length === 0 ? (
           <p className="text-center text-ink-3 type-callout">
@@ -241,31 +252,11 @@ export function AddEntryModal({
           <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1 md:max-h-[60vh] md:overflow-y-auto">
             {rows.map((row) => (
               <li key={`${row.entityType}-${row.id}`}>
-                <ListRow
-                  leading={
-                    <Ranked
-                      aria-hidden
-                      strokeWidth={ICON_STROKE}
-                      className="size-5"
-                    />
-                  }
-                  title={row.name}
-                  description={row.subtitle !== "" ? row.subtitle : undefined}
-                  trailing={
-                    onList.has(candidateHref(row)) ? (
-                      <Badge variant="secondary" className="text-ink-2">
-                        On list
-                      </Badge>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        disabled={busy}
-                        onClick={() => onPick(row)}
-                      >
-                        Add
-                      </Button>
-                    )
-                  }
+                <CandidateRow
+                  row={row}
+                  onList={onList.has(candidateHref(row))}
+                  busy={busy}
+                  onPick={onPick}
                 />
               </li>
             ))}
@@ -273,5 +264,75 @@ export function AddEntryModal({
         )}
       </div>
     </ResponsiveDialog>
+  );
+}
+
+/**
+ * One search result, the whole row a button: name and description, then
+ * where it would land — "You 4 · Very Good" — or, already on the board,
+ * "On this list" and nothing to press.
+ */
+export function CandidateRow({
+  row,
+  onList,
+  busy,
+  onPick,
+}: {
+  row: AddEntryCandidate;
+  onList: boolean;
+  busy: boolean;
+  onPick: (candidate: AddEntryCandidate) => void;
+}) {
+  const band = bandForScore(row.myScore);
+  const tone = BAND_TONES[band] ?? BAND_TONES[0];
+  return (
+    <button
+      type="button"
+      data-slot="add-entry-candidate"
+      disabled={onList || busy}
+      aria-disabled={onList || busy}
+      onClick={() => onPick(row)}
+      className={cn(
+        "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-surface-2 enabled:active:bg-surface-3",
+        busy && !onList && "opacity-60",
+      )}
+    >
+      <span className="flex size-5 shrink-0 items-center justify-center text-ink-2">
+        {onList ? (
+          <Check
+            aria-hidden
+            strokeWidth={ICON_STROKE}
+            className="size-5 text-success"
+          />
+        ) : (
+          <Add aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-semibold text-ink-1 type-callout">
+          {!onList && <span className="sr-only">Add </span>}
+          {row.name}
+        </span>
+        {row.subtitle !== "" && (
+          <span className="truncate type-footnote">{row.subtitle}</span>
+        )}
+      </span>
+      {onList ? (
+        <span className="shrink-0 text-success type-footnote">
+          On this list
+        </span>
+      ) : (
+        <span className="flex shrink-0 items-center gap-1.5 text-ink-2 type-footnote">
+          {row.myScore !== null && (
+            <span className="tabular">You {formatScore(row.myScore)} ·</span>
+          )}
+          <span
+            aria-hidden
+            className={cn("size-2 shrink-0 rounded-full", tone.swatch)}
+          />
+          <span>{BAND_LABELS[band]}</span>
+        </span>
+      )}
+    </button>
   );
 }

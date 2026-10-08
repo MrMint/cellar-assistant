@@ -11,9 +11,16 @@
  *   before.
  * - The server actions come from `useTierListActions` (`actions.ts`).
  * - On the app's primitives (D20): band colours are the `--ca-band-*` ramp
- *   (`BAND_TONES`), always beside the band word; the remove confirm is a
- *   `ConfirmSheet`; a failed save is a `notify` toast. The drag engine is
- *   untouched.
+ *   (`BAND_TONES`), always beside the band word; a failed save is a `notify`
+ *   toast. The drag engine is untouched.
+ * - X23 / D4: the board is read-only until the owner taps **Arrange**
+ *   (`arranging`), which is what puts the drag handles and the remove
+ *   buttons on the rows — the padlock and the always-on trash are gone.
+ *   Read-only, the whole row opens the entry. A removal is not confirmed
+ *   first: it lands at once and its toast offers Undo, which steps the
+ *   list's server-side history (`onUndo`), as the Arrange bar's Undo does.
+ * - X23: the row shows the **owner's** score, and on someone else's list a
+ *   "You 2.5" chip with yours.
  */
 
 import {
@@ -51,19 +58,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { IconButton } from "@/components/app/IconButton";
 import {
   Crown,
-  Delete,
   DragHandle,
   ICON_STROKE,
   People,
+  RemoveFromList,
   Trophy,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
-import { Score } from "@/components/app/Score";
+import { formatScore, Score } from "@/components/app/Score";
 import { cn } from "@/lib/utils";
 import { useTierListActions } from "./actions";
 import { reorderCallFor } from "./adapter";
@@ -78,9 +84,24 @@ interface TierListViewProps {
   tierListId: string;
   items: TierListItemDisplay[];
   isOwner: boolean;
-  isEditingLocked?: boolean;
+  /**
+   * Arrange mode (X23/D4): drag handles and remove buttons. Only ever true
+   * for the owner; read-only otherwise, whoever is looking.
+   */
+  arranging?: boolean;
   selectedItemId?: string;
+  /** An edit landed on the server (a move or a removal): Undo has work. */
+  onEdited?: () => void;
+  /** Step the list's history back once — a removal toast's Undo. */
+  onUndo?: () => void;
 }
+
+/**
+ * The one toast an edit raises, reused by id: a later edit replaces an
+ * earlier edit's toast, so an Undo on screen only ever names the newest
+ * edit — the one the server's history would take back.
+ */
+export const TIER_LIST_EDIT_TOAST = "tier-list-edit";
 
 type BandMap = Record<number, string[]>;
 
@@ -174,6 +195,8 @@ interface TierListItemContentProps {
   item: TierListItemDisplay;
   rank: number;
   canEdit: boolean;
+  /** The "You 2.5" chip shows only on someone else's list. */
+  viewerIsOwner: boolean;
   onRemove: (itemId: string, name: string) => void;
 }
 
@@ -181,25 +204,50 @@ const TierListItemContent = memo(function TierListItemContent({
   item,
   rank,
   canEdit,
+  viewerIsOwner,
   onRemove,
 }: TierListItemContentProps) {
+  const showViewerChip = !viewerIsOwner && item.viewerScore !== null;
+  const hasScores =
+    item.ownerScore !== null || showViewerChip || item.publicRating !== null;
   return (
     <>
+      <RankBadge rank={rank} />
+
       <div className="min-w-0 flex-1">
-        <Link
-          href={item.href}
-          className="block truncate font-semibold type-callout text-ink-1"
-        >
-          {item.name}
-        </Link>
+        {canEdit ? (
+          <p className="truncate font-semibold type-callout text-ink-1">
+            {item.name}
+          </p>
+        ) : (
+          // Read-only, the whole row opens the entry (X23).
+          <Link
+            href={item.href}
+            overlay
+            underline="none"
+            className="block truncate font-semibold type-callout text-ink-1"
+          >
+            {item.name}
+          </Link>
+        )}
         {item.subtitle && (
           <p className="type-footnote truncate">{item.subtitle}</p>
         )}
       </div>
 
-      {(item.reviewScore != null || item.publicRating != null) && (
-        <div className="flex shrink-0 items-center gap-2 text-xs">
-          {item.reviewScore != null && <Score value={item.reviewScore} />}
+      {hasScores && (
+        <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs">
+          {item.ownerScore !== null && <Score value={item.ownerScore} />}
+          {showViewerChip && item.viewerScore !== null && (
+            <span
+              data-slot="viewer-score"
+              className="tabular inline-flex h-5 items-center rounded-full bg-surface-3 px-2 font-medium text-ink-2"
+            >
+              <span className="sr-only">Your rating: </span>
+              <span aria-hidden>You </span>
+              {formatScore(item.viewerScore)}
+            </span>
+          )}
           {item.publicRating != null && (
             <span className="tabular inline-flex items-center gap-0.5 font-medium text-ink-3">
               <People
@@ -219,16 +267,15 @@ const TierListItemContent = memo(function TierListItemContent({
         </div>
       )}
 
-      <RankBadge rank={rank} />
-
       {canEdit && (
         <IconButton
           size="sm"
+          variant="ghost"
           onClick={() => onRemove(item.id, item.name)}
           aria-label={`Remove ${item.name}`}
-          className="shrink-0 text-ink-3"
+          className="-mr-1 shrink-0 text-destructive"
         >
-          <Delete />
+          <RemoveFromList />
         </IconButton>
       )}
     </>
@@ -242,6 +289,7 @@ interface SortableTierListItemProps {
   item: TierListItemDisplay;
   rank: number;
   canEdit: boolean;
+  viewerIsOwner: boolean;
   isSelected?: boolean;
   onRemove: (itemId: string, name: string) => void;
 }
@@ -250,6 +298,7 @@ const SortableTierListItem = memo(function SortableTierListItem({
   item,
   rank,
   canEdit,
+  viewerIsOwner,
   isSelected,
   onRemove,
 }: SortableTierListItemProps) {
@@ -288,7 +337,10 @@ const SortableTierListItem = memo(function SortableTierListItem({
       aria-current={isSelected ? "true" : undefined}
       style={dynamicStyle}
       className={cn(
-        "flex min-h-11 items-center gap-2 rounded-md bg-surface-2 px-3 py-1.5 shadow-[inset_0_1px_0_var(--ca-highlight)]",
+        "relative flex min-h-12 items-center gap-2 rounded-md bg-surface-2 px-3 py-1.5 shadow-[inset_0_1px_0_var(--ca-highlight)]",
+        // Read-only rows are links: acknowledge the press (N12).
+        !canEdit &&
+          "transition-colors duration-(--ca-dur-micro) ease-standard active:bg-surface-3",
         isSelected && "outline-2 outline-ring outline-offset-2 outline-solid",
       )}
     >
@@ -317,6 +369,7 @@ const SortableTierListItem = memo(function SortableTierListItem({
         item={item}
         rank={rank}
         canEdit={canEdit}
+        viewerIsOwner={viewerIsOwner}
         onRemove={onRemove}
       />
     </div>
@@ -381,6 +434,7 @@ interface TierBandProps {
   itemMap: Map<string, TierListItemDisplay>;
   rankOffset: number;
   canEdit: boolean;
+  viewerIsOwner: boolean;
   isLast: boolean;
   selectedItemId?: string;
   onRemove: (itemId: string, name: string) => void;
@@ -392,6 +446,7 @@ const TierBand = memo(function TierBand({
   itemMap,
   rankOffset,
   canEdit,
+  viewerIsOwner,
   isLast,
   selectedItemId,
   onRemove,
@@ -429,6 +484,7 @@ const TierBand = memo(function TierBand({
                   item={item}
                   rank={rankOffset + index + 1}
                   canEdit={canEdit}
+                  viewerIsOwner={viewerIsOwner}
                   isSelected={selectedItemId === itemId}
                   onRemove={onRemove}
                 />
@@ -449,25 +505,21 @@ export function TierListView({
   tierListId,
   items,
   isOwner,
-  isEditingLocked = false,
+  arranging = false,
   selectedItemId,
+  onEdited,
+  onUndo,
 }: TierListViewProps) {
   const dndId = useId();
   const router = useRouter();
   const { removeItemFromTierListAction, reorderBandAction } =
     useTierListActions();
-  const canEdit = isOwner && !isEditingLocked;
-
-  const [removeTarget, setRemoveTarget] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  /**
-   * Open is its own flag so the target outlives the close: the sheet animates
-   * out, and its description would otherwise read "Remove  from this tier
-   * list?" for the length of that animation.
-   */
-  const [removeOpen, setRemoveOpen] = useState(false);
+  const canEdit = isOwner && arranging;
+  // Read by the async tails below, which outlive the render they began in.
+  const onEditedRef = useRef(onEdited);
+  onEditedRef.current = onEdited;
+  const onUndoRef = useRef(onUndo);
+  onUndoRef.current = onUndo;
 
   const { initialBandMap, itemMap } = useMemo(() => {
     const map = new Map<string, TierListItemDisplay>();
@@ -704,6 +756,7 @@ export function TierListView({
         const result = await reorderBandAction(call, tierListId);
         if (!isMountedRef.current) return;
         if (result.success) {
+          onEditedRef.current?.();
           router.refresh();
         } else {
           setBandMap(rollbackMap);
@@ -732,105 +785,94 @@ export function TierListView({
     dragInitialBandMapRef.current = null;
   }, []);
 
-  const handleRemoveClick = useCallback((itemId: string, name: string) => {
-    setRemoveTarget({ id: itemId, name });
-    setRemoveOpen(true);
-  }, []);
-
-  const handleConfirmRemove = useCallback(async () => {
-    if (!canEdit || !removeOpen || !removeTarget) return;
-    const rollbackMap = cloneBandMap(bandMapRef.current);
-    // Optimistically remove from local state for instant feedback
-    setBandMap((prev) => {
-      const next = { ...prev };
-      for (const band of BANDS) {
-        const items = next[band];
-        if (items?.includes(removeTarget.id)) {
-          next[band] = items.filter((id) => id !== removeTarget.id);
-          break;
+  /**
+   * Remove without asking (design §4.7: reversible actions toast with Undo).
+   * Optimistic, rolled back on a refusal; the toast's Undo is one step of the
+   * list's history, which the removal has just become the top of.
+   */
+  const handleRemove = useCallback(
+    async (itemId: string, name: string) => {
+      if (!canEdit) return;
+      const rollbackMap = cloneBandMap(bandMapRef.current);
+      setBandMap((prev) => {
+        const next = { ...prev };
+        for (const band of BANDS) {
+          const ids = next[band];
+          if (ids?.includes(itemId)) {
+            next[band] = ids.filter((id) => id !== itemId);
+            break;
+          }
         }
+        return next;
+      });
+      const result = await removeItemFromTierListAction(itemId, tierListId);
+      if (!isMountedRef.current) return;
+      if (result.success) {
+        onEditedRef.current?.();
+        notify(`Removed ${name}`, {
+          id: TIER_LIST_EDIT_TOAST,
+          undo:
+            onUndoRef.current === undefined
+              ? undefined
+              : () => onUndoRef.current?.(),
+        });
+        router.refresh();
+      } else {
+        setBandMap(rollbackMap);
+        notify(result.error ?? "Failed to remove item", { tone: "error" });
       }
-      return next;
-    });
-    setRemoveOpen(false);
-    const result = await removeItemFromTierListAction(
-      removeTarget.id,
-      tierListId,
-    );
-    if (!isMountedRef.current) return;
-    if (result.success) {
-      router.refresh();
-    } else {
-      setBandMap(rollbackMap);
-      notify(result.error ?? "Failed to remove item", { tone: "error" });
-    }
-  }, [
-    removeOpen,
-    removeTarget,
-    tierListId,
-    router,
-    canEdit,
-    removeItemFromTierListAction,
-  ]);
+    },
+    [canEdit, tierListId, router, removeItemFromTierListAction],
+  );
+
+  const handleRemoveClick = useCallback(
+    (itemId: string, name: string) => void handleRemove(itemId, name),
+    [handleRemove],
+  );
 
   const activeItem = activeId ? itemMap.get(String(activeId)) : null;
 
   return (
-    <>
-      <DndContext
-        id={dndId}
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        modifiers={canEdit ? VERTICAL_MODIFIERS : NO_MODIFIERS}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
+    <DndContext
+      id={dndId}
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={canEdit ? VERTICAL_MODIFIERS : NO_MODIFIERS}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div
+        data-slot="tier-board"
+        className="overflow-hidden rounded-lg bg-surface-1"
       >
-        <div
-          data-slot="tier-board"
-          className="overflow-hidden rounded-lg bg-surface-1"
-        >
-          {BANDS.map((band, index) => {
-            // Compute rank offset: count of items in all higher bands
-            let rankOffset = 0;
-            for (let i = 0; i < index; i++) {
-              rankOffset += (bandMap[BANDS[i]] ?? []).length;
-            }
-            return (
-              <TierBand
-                key={band}
-                band={band}
-                itemIds={bandMap[band] ?? []}
-                itemMap={itemMap}
-                rankOffset={rankOffset}
-                canEdit={canEdit}
-                isLast={index === BANDS.length - 1}
-                selectedItemId={selectedItemId}
-                onRemove={handleRemoveClick}
-              />
-            );
-          })}
-        </div>
+        {BANDS.map((band, index) => {
+          // Compute rank offset: count of items in all higher bands
+          let rankOffset = 0;
+          for (let i = 0; i < index; i++) {
+            rankOffset += (bandMap[BANDS[i]] ?? []).length;
+          }
+          return (
+            <TierBand
+              key={band}
+              band={band}
+              itemIds={bandMap[band] ?? []}
+              itemMap={itemMap}
+              rankOffset={rankOffset}
+              canEdit={canEdit}
+              viewerIsOwner={isOwner}
+              isLast={index === BANDS.length - 1}
+              selectedItemId={selectedItemId}
+              onRemove={handleRemoveClick}
+            />
+          );
+        })}
+      </div>
 
-        <DragOverlay>
-          {activeItem ? <DragOverlayItem item={activeItem} /> : null}
-        </DragOverlay>
-      </DndContext>
-
-      <ConfirmSheet
-        open={removeOpen}
-        onOpenChange={setRemoveOpen}
-        title="Remove from tier list?"
-        description={
-          <>
-            Remove <strong>{removeTarget?.name}</strong> from this tier list?
-            This won&apos;t delete the item itself.
-          </>
-        }
-        confirmLabel="Remove"
-        onConfirm={() => void handleConfirmRemove()}
-      />
-    </>
+      <DragOverlay>
+        {activeItem ? <DragOverlayItem item={activeItem} /> : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

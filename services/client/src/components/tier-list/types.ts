@@ -5,6 +5,7 @@
  */
 
 import type { ActorErrorReason } from "@/lib/api/errors";
+import type { TierListHistoryView } from "./history";
 import type { InsightsStatus } from "./insights/insights-view";
 
 export interface TierListItemDisplay {
@@ -14,7 +15,17 @@ export interface TierListItemDisplay {
   name: string;
   subtitle: string;
   href: string;
-  reviewScore: number | null;
+  /**
+   * X23: the list owner's own score — what a ranked row shows, on your list
+   * and on a friend's. For an item, `TierListItem.ownerReview`; for a place,
+   * only on your own list (a place rating stays its giver's).
+   */
+  ownerScore: number | null;
+  /**
+   * Your own score, shown as a "You 2.5" chip beside the owner's when the
+   * list is not yours. On your own list it is the owner's score already.
+   */
+  viewerScore: number | null;
   publicRating: number | null;
   publicRatingCount: number | null;
 }
@@ -29,6 +40,8 @@ export interface TierListData {
   isEditingLocked: boolean;
   itemCount: number;
   items: TierListItemDisplay[];
+  /** D4: where Undo / Redo stand; null when the viewer is not the owner. */
+  history: TierListHistoryView | null;
 }
 
 /** Enriched item data for insights computation (resolved server-side) */

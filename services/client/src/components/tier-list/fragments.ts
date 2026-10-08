@@ -15,6 +15,8 @@
  *   `entryType` plus `item: Item` / `place: Place`, exactly one non-null.
  * - The page's separate `GetUserItemReviews` round trip (the viewer's own
  *   score per item) → `Item.myReview { score }` (G7), on the row.
+ * - X23: the **list owner's** score per item → `TierListItem.ownerReview`
+ *   (a place rating stays its giver's: null for places).
  * - `place.user_place_interactions { rating }` (the viewer's own place
  *   rating) → `place.myInteraction { rating }` (G16, one batched call).
  * - `place.google_enrichment { google_rating google_user_ratings_total }` →
@@ -82,6 +84,10 @@ export const TierListItemFragment = graphql(`
     entryType
     createdAt
     updatedAt
+    ownerReview {
+      id
+      score
+    }
     place {
       id
       name
@@ -146,3 +152,33 @@ export const TierListEditFragment = graphql(`
     itemCount
   }
 `);
+
+/** One recorded edit, as Undo and Redo name it (D4). */
+export const TierListRecordedEditFragment = graphql(`
+  fragment TierListEditFields on TierListEdit @_unmask {
+    __typename
+    seq
+    kind
+    entryName
+    fromBand
+    toBand
+  }
+`);
+
+/** Where the list's edit history stands — the owner's alone (D4). */
+export const TierListEditHistoryFragment = graphql(
+  `
+    fragment TierListEditHistoryFields on TierListEditHistory @_unmask {
+      __typename
+      canUndo
+      canRedo
+      undo {
+        ...TierListEditFields
+      }
+      redo {
+        ...TierListEditFields
+      }
+    }
+  `,
+  [TierListRecordedEditFragment],
+);

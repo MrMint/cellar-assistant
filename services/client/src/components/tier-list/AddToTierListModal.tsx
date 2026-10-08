@@ -15,6 +15,11 @@
  * On the app's primitives (D20): a `ResponsiveDialog` (a bottom sheet on a
  * phone), the lists as full-width row buttons, and a failure as a `notify`
  * error toast in place of the Snackbar.
+ *
+ * X23: the entry lands in the band **your rating** gives it (`bandForScore`
+ * — your review of the item, your rating of the place), Unrated without one,
+ * and the sheet says so before you pick. The add's toast offers Undo, one
+ * step of that list's edit history (D4).
  */
 
 import { useRouter } from "next/navigation";
@@ -30,7 +35,8 @@ import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { useTierListActions } from "./actions";
 import { entryTypeOf, tierListOptionsFor } from "./adapter";
-import { BAND_LABELS, type TierListEntityType } from "./constants";
+import { BAND_LABELS, BAND_TONES, type TierListEntityType } from "./constants";
+import { bandForScore } from "./history";
 import {
   ENTITY_ENTRIES_PAGE_SIZE,
   GetTierListsForItemQuery,
@@ -79,7 +85,8 @@ export function AddToTierListModal({
   entityName,
 }: AddToTierListModalProps) {
   const router = useRouter();
-  const { addItemToTierListAction, addTierListAction } = useTierListActions();
+  const { addItemToTierListAction, addTierListAction, undoAction } =
+    useTierListActions();
   const isPlace = entityType === "place";
   const itemType = entryTypeOf(entityType);
 
@@ -107,15 +114,28 @@ export function AddToTierListModal({
     loading: listsLoading,
   } = useAllMyTierLists({ active: open, fresh: true });
   const fetching = (isPlace ? placeFetching : itemFetching) || listsLoading;
-  const entityEntries = isPlace
+  const entity = isPlace
     ? (() => {
         const place = unwrapResult(placeData?.place, "Place");
-        return place.ok ? place.data.tierListEntries.edges : [];
+        return place.ok
+          ? {
+              entries: place.data.tierListEntries.edges,
+              myScore: place.data.myInteraction?.rating ?? null,
+            }
+          : { entries: [], myScore: null };
       })()
     : (() => {
         const item = unwrapResult(itemData?.item, "QueryItemSuccess");
-        return item.ok ? item.data.data.tierListEntries.edges : [];
+        return item.ok
+          ? {
+              entries: item.data.data.tierListEntries.edges,
+              myScore: item.data.data.myReview?.score ?? null,
+            }
+          : { entries: [], myScore: null };
       })();
+  const entityEntries = entity.entries;
+  /** X23: where a new entry lands — your verdict's band. */
+  const band = bandForScore(entity.myScore);
 
   const [addingToListId, setAddingToListId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -137,20 +157,39 @@ export function AddToTierListModal({
     setNewListName(`My ${ENTITY_TYPE_LABELS[entityType]} Tier List`);
   }, [open, entityType]);
 
+  /** The add's toast: where it went, and an Undo that takes it back. */
+  const added = useCallback(
+    (tierListId: string, listName: string) => {
+      notify(`Added to ${listName} · ${BAND_LABELS[band]}`, {
+        undo: () => {
+          void undoAction(tierListId).then((result) => {
+            if (result.success) {
+              notify(`Took ${entityName} off ${listName}`);
+              router.refresh();
+            } else {
+              fail(result.error);
+            }
+          });
+        },
+      });
+    },
+    [band, entityName, router, undoAction],
+  );
+
   const handleAddToList = useCallback(
-    async (tierListId: string) => {
+    async (tierListId: string, listName: string) => {
       setAddingToListId(tierListId);
       try {
         const result = await addItemToTierListAction(
           tierListId,
           entityId,
           entityType,
-          0,
-          0,
+          band,
         );
         if (result.success) {
           router.refresh();
           onClose();
+          added(tierListId, listName);
         } else {
           fail(result.error ?? "Failed to add item to tier list");
         }
@@ -158,7 +197,15 @@ export function AddToTierListModal({
         setAddingToListId(null);
       }
     },
-    [entityId, entityType, onClose, router, addItemToTierListAction],
+    [
+      entityId,
+      entityType,
+      band,
+      onClose,
+      router,
+      addItemToTierListAction,
+      added,
+    ],
   );
 
   const handleCreateAndAdd = useCallback(async () => {
@@ -179,18 +226,18 @@ export function AddToTierListModal({
         fail(created.error ?? "Failed to create tier list");
         return;
       }
-      const added = await addItemToTierListAction(
+      const result = await addItemToTierListAction(
         created.tierListId,
         entityId,
         entityType,
-        0,
-        0,
+        band,
       );
-      if (added.success) {
+      if (result.success) {
         router.refresh();
         onClose();
+        added(created.tierListId, name);
       } else {
-        fail(added.error ?? "Failed to add item to tier list");
+        fail(result.error ?? "Failed to add item to tier list");
       }
     } finally {
       setCreating(false);
@@ -199,10 +246,12 @@ export function AddToTierListModal({
     newListName,
     entityId,
     entityType,
+    band,
     onClose,
     router,
     addItemToTierListAction,
     addTierListAction,
+    added,
   ]);
 
   const hasLists = tierLists.length > 0;
@@ -228,6 +277,18 @@ export function AddToTierListModal({
           </div>
         ) : (
           <>
+            <p className="flex items-center gap-1.5 text-ink-2 type-footnote">
+              <span
+                aria-hidden
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  (BAND_TONES[band] ?? BAND_TONES[0]).swatch,
+                )}
+              />
+              {entity.myScore === null
+                ? "Lands in Unrated — rate it to place it."
+                : `Lands in ${BAND_LABELS[band]}, from your rating.`}
+            </p>
             {hasLists && (
               <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
                 {tierLists.map((tl) => {
@@ -237,7 +298,7 @@ export function AddToTierListModal({
                     <li key={tl.id}>
                       <button
                         type="button"
-                        onClick={() => void handleAddToList(tl.id)}
+                        onClick={() => void handleAddToList(tl.id, tl.name)}
                         disabled={alreadyIn || busy}
                         className={cn(
                           "flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-surface-2 enabled:active:bg-surface-3",

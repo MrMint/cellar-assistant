@@ -21,6 +21,7 @@ import {
 } from "@/utilities/formatters";
 import { displayItemName } from "@/utilities/smart-title-case";
 import { BANDS, type TierListEntityType } from "./constants";
+import type { TierListHistoryView } from "./history";
 import type { InsightsStatus } from "./insights/insights-view";
 import type {
   TierListAIInsights,
@@ -36,6 +37,8 @@ export type TierListItemNode = {
   band: number;
   position: number;
   entryType: string;
+  /** X23: the list owner's review of an item entry; null for places. */
+  ownerReview?: { score: number } | null;
   place: {
     id: string;
     name: string;
@@ -165,16 +168,21 @@ export function entryHref(node: TierListItemNode): string {
 }
 
 /**
- * One board row, exactly as the old page resolved it: the viewer's own score
- * (item review, or place rating) and, for places, Google's rating and count.
+ * One board row: the **owner's** score (X23 — the old board showed the
+ * viewer's own, so a friend's list carried the friend's verdicts under the
+ * owner's ranking), the viewer's own beside it, and for places Google's
+ * rating and count. A place rating is private to whoever gave it, so on
+ * someone else's place list the owner's score is absent rather than guessed.
  * The old page showed a vintage as the stored date; it is the year here.
  */
 export function itemDisplayFromNode(
   node: TierListItemNode,
+  viewerIsOwner = true,
 ): TierListItemDisplay {
   let name = "Unknown item";
   let subtitle = "";
-  let reviewScore: number | null = null;
+  let ownerScore: number | null = null;
+  let viewerScore: number | null = null;
   let publicRating: number | null = null;
   let publicRatingCount: number | null = null;
 
@@ -182,12 +190,15 @@ export function itemDisplayFromNode(
   if (place !== null) {
     name = place.displayName ?? place.name;
     subtitle = placeEntrySubtitle(place);
-    reviewScore = place.myInteraction?.rating ?? null;
+    viewerScore = place.myInteraction?.rating ?? null;
+    ownerScore = viewerIsOwner ? viewerScore : null;
     publicRating = place.enrichment?.googleRating ?? null;
     publicRatingCount = place.enrichment?.googleUserRatingsTotal ?? null;
   } else if (item !== null) {
     name = displayItemName(item.name);
-    reviewScore = item.myReview?.score ?? null;
+    viewerScore = item.myReview?.score ?? null;
+    ownerScore =
+      node.ownerReview?.score ?? (viewerIsOwner ? viewerScore : null);
     subtitle = itemEntrySubtitle(item);
   }
 
@@ -198,7 +209,8 @@ export function itemDisplayFromNode(
     name,
     subtitle,
     href: entryHref(node),
-    reviewScore,
+    ownerScore,
+    viewerScore,
     publicRating,
     publicRatingCount,
   };
@@ -265,8 +277,10 @@ export function tierListDataFrom(
   core: TierListCoreNode,
   nodes: readonly TierListItemNode[],
   viewerId: string | null,
+  history: TierListHistoryView | null = null,
 ): { data: TierListData; insightsData: TierListInsightsData } {
-  const items = nodes.map(itemDisplayFromNode);
+  const isOwner = viewerId !== null && core.createdById === viewerId;
+  const items = nodes.map((node) => itemDisplayFromNode(node, isOwner));
   return {
     data: {
       id: core.id,
@@ -274,10 +288,11 @@ export function tierListDataFrom(
       description: core.description ?? null,
       privacy: core.privacy,
       listType: core.listType,
-      isOwner: viewerId !== null && core.createdById === viewerId,
+      isOwner,
       isEditingLocked: core.isEditingLocked,
       itemCount: items.length,
       items,
+      history: isOwner ? history : null,
     },
     insightsData: {
       items: insightsItemsFromNodes(nodes),

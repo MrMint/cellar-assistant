@@ -21,7 +21,11 @@
  * - `reorderBandAction(updates)` (a per-row diff, applied non-atomically with
  *   `allSettled`) → `reorderBandAction({ band, orderedIds })`: one band's full
  *   order in one transaction (`reorderCallFor` in `adapter.ts`).
- * - `setTierListEditingLockAction` → `updateTierList({ isEditingLocked })`.
+ * - The editing lock is gone from the page (X23/D4: "Arrange" replaces the
+ *   padlock), so `setTierListEditingLockAction` went with it; the column and
+ *   `updateTierList({ isEditingLocked })` remain, unused by this client.
+ * - New (D4): `undoAction` / `redoAction`, one step of the list's server-side
+ *   edit history each, answering what they did and where the history stands.
  *
  * The old input validation is kept as-is: it is the same message the user saw.
  */
@@ -31,13 +35,16 @@ import { useMutation } from "urql";
 import { unwrapResult } from "@/lib/api/result";
 import { addEntryFailureMessage, entryTypeOf } from "./adapter";
 import type { TierListEntityType } from "./constants";
+import type { TierListEditView, TierListHistoryView } from "./history";
 import {
   AddItemToTierListMutation,
   AddTierListMutation,
   DeleteTierListMutation,
   EditTierListMutation,
+  RedoTierListEditMutation,
   RemoveItemFromTierListMutation,
   ReorderBandMutation,
+  UndoTierListEditMutation,
 } from "./queries";
 
 /** SDL `PermissionType` — the old `Permission_Type_Enum`. */
@@ -93,11 +100,14 @@ export type TierListItemResult = {
   error?: string;
 };
 
-export type TierListEditingLockResult = {
-  success: boolean;
-  isEditingLocked?: boolean;
-  error?: string;
-};
+/** One Undo or Redo: what it did, and where the history stands after it. */
+export type TierListHistoryStepResult =
+  | {
+      success: true;
+      applied: TierListEditView;
+      history: TierListHistoryView;
+    }
+  | { success: false; error: string };
 
 const transportError = (error: { message: string } | undefined) =>
   error === undefined ? null : error.message;
@@ -109,6 +119,8 @@ export function useTierListActions() {
   const [, addItem] = useMutation(AddItemToTierListMutation);
   const [, removeItem] = useMutation(RemoveItemFromTierListMutation);
   const [, reorderBand] = useMutation(ReorderBandMutation);
+  const [, undoEdit] = useMutation(UndoTierListEditMutation);
+  const [, redoEdit] = useMutation(RedoTierListEditMutation);
 
   const addTierListAction = useCallback(
     async (
@@ -191,25 +203,6 @@ export function useTierListActions() {
     [deleteTierList],
   );
 
-  const setTierListEditingLockAction = useCallback(
-    async (
-      id: string,
-      isEditingLocked: boolean,
-    ): Promise<TierListEditingLockResult> => {
-      const response = await editTierList({ id, input: { isEditingLocked } });
-      const failed = transportError(response.error);
-      if (failed !== null) return { success: false, error: failed };
-      const result = unwrapResult(
-        response.data?.updateTierList ?? undefined,
-        "TierList",
-      );
-      return result.ok
-        ? { success: true, isEditingLocked: result.data.isEditingLocked }
-        : { success: false, error: result.error.message };
-    },
-    [editTierList],
-  );
-
   const addItemToTierListAction = useCallback(
     async (
       tierListId: string,
@@ -283,24 +276,73 @@ export function useTierListActions() {
     [reorderBand],
   );
 
+  const historyStep = useCallback(
+    async (
+      direction: "undo" | "redo",
+      tierListId: string,
+    ): Promise<TierListHistoryStepResult> => {
+      const response =
+        direction === "undo"
+          ? await undoEdit({ tierListId })
+          : await redoEdit({ tierListId });
+      const failed = transportError(response.error);
+      if (failed !== null) return { success: false, error: failed };
+      const payload =
+        response.data === undefined
+          ? undefined
+          : "undoTierListEdit" in response.data
+            ? response.data.undoTierListEdit
+            : response.data.redoTierListEdit;
+      const result = unwrapResult(payload ?? undefined, "TierListHistoryStep");
+      if (!result.ok) {
+        return {
+          success: false,
+          // The one refusal a person can meet is the race of two tabs: the
+          // other one already stepped. The actor's own words are a log line.
+          error:
+            result.error.code === "CONFLICT"
+              ? `Nothing to ${direction} on this list any more.`
+              : `Couldn't ${direction} that. Try again.`,
+        };
+      }
+      return {
+        success: true,
+        applied: result.data.applied,
+        history: result.data.history,
+      };
+    },
+    [undoEdit, redoEdit],
+  );
+
+  const undoAction = useCallback(
+    (tierListId: string) => historyStep("undo", tierListId),
+    [historyStep],
+  );
+  const redoAction = useCallback(
+    (tierListId: string) => historyStep("redo", tierListId),
+    [historyStep],
+  );
+
   return useMemo(
     () => ({
       addTierListAction,
       editTierListAction,
       deleteTierListAction,
-      setTierListEditingLockAction,
       addItemToTierListAction,
       removeItemFromTierListAction,
       reorderBandAction,
+      undoAction,
+      redoAction,
     }),
     [
       addTierListAction,
       editTierListAction,
       deleteTierListAction,
-      setTierListEditingLockAction,
       addItemToTierListAction,
       removeItemFromTierListAction,
       reorderBandAction,
+      undoAction,
+      redoAction,
     ],
   );
 }

@@ -2,18 +2,25 @@
 
 /**
  * `82450ad1:src/components/tier-list/TierListViewPage.tsx`, restored: header
- * (name, description, privacy chip, count), the map / share / lock / edit
- * icon buttons, and the URL-backed Rankings / Insights tabs (`?tab=`, with
+ * (name, description, privacy chip, count), the map / share / edit icon
+ * buttons, and the URL-backed Rankings / Insights tabs (`?tab=`, with
  * `?item=` scrolling to an entry).
  *
- * Kept from the rewrite (decision 2, new-only, listed for the user): an
- * **Add entry** icon button for the owner of an unlocked list, opening
- * `AddEntryModal` — the old page had no in-page add (entries came from the
- * item and place pages' "Add to Tier List"). A new entry lands in Unrated,
- * as the old modal's did.
+ * X23 / D4 — **Arrange** replaces the padlock. The board is read-only by
+ * default, the owner's included: the whole row opens the entry. The owner's
+ * Arrange button turns the page into its editing mode — drag handles and
+ * remove buttons on the rows, the tabs put away, and a bar in the thumb zone
+ * with Undo, Redo, Add entry and Done. Undo and Redo step the list's
+ * server-side edit history (`TierList.editHistory`), so a mistake from
+ * yesterday is still one tap away, and every edit's toast offers the same
+ * Undo. The old `isEditingLocked` flag is no longer read or written here.
  *
- * On the app's primitives (D20): `IconButton`s named by their old tooltips,
- * Radix tabs, `notify` toasts in place of the Snackbar.
+ * Kept from the rewrite (decision 2): the in-page **Add entry**, now inside
+ * Arrange (and on an empty list's own empty state). A new entry lands in the
+ * band your own rating puts it in (`bandForScore`), Unrated without one.
+ *
+ * On the app's primitives (D20): `IconButton`s named by their tooltips,
+ * Radix tabs, `notify` toasts, `EmptyState`.
  */
 
 import { useRouter } from "next/navigation";
@@ -23,36 +30,49 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { EmptyState } from "@/components/app/EmptyState";
 import { IconButton } from "@/components/app/IconButton";
 import {
   Add,
   type AppIcon,
+  Arrange,
+  Check,
   Edit,
   ICON_STROKE,
   Lock,
   MapIcon,
   People,
   Public,
+  Ranked,
+  Redo,
   Share,
-  Unlock,
+  Undo,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
 import { onListHrefs } from "./adapter";
+import { BAND_LABELS } from "./constants";
+import {
+  bandForScore,
+  historyActionLabel,
+  historyStepMessage,
+  type TierListHistoryView,
+} from "./history";
 import { TierListInsightsPanel } from "./insights/TierListInsightsPanel";
-import { TierListView } from "./TierListView";
+import { TIER_LIST_EDIT_TOAST, TierListView } from "./TierListView";
 import type { TierListData, TierListInsightsData } from "./types";
 
 interface TierListViewPageProps {
@@ -79,6 +99,39 @@ function Hint({ label, children }: { label: string; children: ReactElement }) {
 const TRIGGER =
   "h-full rounded-sm font-medium text-ink-2 data-[state=active]:bg-surface-3 data-[state=active]:text-ink-1 dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-surface-3";
 
+const NO_HISTORY: TierListHistoryView = {
+  canUndo: false,
+  canRedo: false,
+  undo: null,
+  redo: null,
+};
+
+/**
+ * Where Undo / Redo stand, from the server, with an edit made on this page
+ * reflected before the refresh lands: a fresh edit can always be undone and
+ * has always cleared Redo. The server's answer replaces it when it comes.
+ */
+function useHistory(server: TierListHistoryView | null) {
+  const [history, setHistory] = useState<TierListHistoryView>(
+    server ?? NO_HISTORY,
+  );
+  useEffect(() => {
+    setHistory(server ?? NO_HISTORY);
+  }, [server]);
+  const markEdited = useCallback(() => {
+    setHistory((current) => ({
+      ...current,
+      canUndo: true,
+      canRedo: false,
+      // Which edit it is arrives with the refresh; until then the button
+      // says "Undo" without naming it.
+      undo: null,
+      redo: null,
+    }));
+  }, []);
+  return { history, setHistory, markEdited };
+}
+
 export function TierListViewPage({
   data,
   insightsData,
@@ -94,24 +147,31 @@ export function TierListViewPage({
   const PrivacyIcon = privacyInfo.icon;
 
   const router = useRouter();
-  const { setTierListEditingLockAction, addItemToTierListAction } =
+  const { addItemToTierListAction, undoAction, redoAction } =
     useTierListActions();
+  const [arranging, setArranging] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   /**
    * Bumped on every open and used as the picker's `key`, so each open starts
    * from an empty search: a reopened picker showing the last query's rows
-   * reads as fresh results, and offered "Add" on what was just added.
+   * reads as fresh results.
    */
   const [addSession, setAddSession] = useState(0);
   const onList = useMemo(() => onListHrefs(data.items), [data.items]);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  const [isEditingLocked, setIsEditingLocked] = useState(data.isEditingLocked);
-  const [isSavingEditingLock, setIsSavingEditingLock] = useState(false);
+  const { history, setHistory, markEdited } = useHistory(data.history);
+  const [stepping, setStepping] = useState(false);
+  const steppingRef = useRef(false);
 
-  useEffect(() => {
-    setIsEditingLocked(data.isEditingLocked);
-  }, [data.isEditingLocked]);
+  const canArrange = data.isOwner;
+  const isArranging = canArrange && arranging;
+
+  const openAdd = useCallback(() => {
+    setAddError(null);
+    setAddSession((session) => session + 1);
+    setAddOpen(true);
+  }, []);
 
   const handleShare = useCallback(async () => {
     const url = `${window.location.origin}/tier-lists/${data.id}`;
@@ -133,47 +193,70 @@ export function TierListViewPage({
     }
   }, [data.id, data.name]);
 
-  const handleToggleEditingLock = useCallback(async () => {
-    if (!data.isOwner || isSavingEditingLock) return;
-
-    const previousLocked = isEditingLocked;
-    const nextLocked = !previousLocked;
-
-    setIsEditingLocked(nextLocked);
-    setIsSavingEditingLock(true);
-
-    const result = await setTierListEditingLockAction(data.id, nextLocked);
-    setIsSavingEditingLock(false);
-
-    if (!result.success) {
-      setIsEditingLocked(previousLocked);
-      notify(result.error ?? "Failed to update editing lock", {
-        tone: "error",
+  /**
+   * One step of the list's history. Its toast offers the opposite step, so
+   * an Undo by mistake is itself one tap from being taken back.
+   */
+  const step = useCallback(
+    async (direction: "undo" | "redo") => {
+      if (steppingRef.current) return;
+      steppingRef.current = true;
+      setStepping(true);
+      const result =
+        direction === "undo"
+          ? await undoAction(data.id)
+          : await redoAction(data.id);
+      steppingRef.current = false;
+      setStepping(false);
+      if (!result.success) {
+        notify(result.error, { tone: "error", id: TIER_LIST_EDIT_TOAST });
+        router.refresh();
+        return;
+      }
+      setHistory(result.history);
+      const opposite = direction === "undo" ? "redo" : "undo";
+      notify(historyStepMessage(direction, result.applied), {
+        id: TIER_LIST_EDIT_TOAST,
+        actionLabel: opposite === "redo" ? "Redo" : "Undo",
+        undo: () => void step(opposite),
       });
-      return;
-    }
+      router.refresh();
+    },
+    [data.id, redoAction, router, setHistory, undoAction],
+  );
 
-    setIsEditingLocked(result.isEditingLocked ?? nextLocked);
-    notify(nextLocked ? "Editing locked" : "Editing unlocked", {
-      tone: "success",
-    });
-  }, [
-    data.id,
-    data.isOwner,
-    isEditingLocked,
-    isSavingEditingLock,
-    setTierListEditingLockAction,
-  ]);
+  // ⌘Z / ⇧⌘Z (Ctrl on other systems) while arranging, outside text fields.
+  useEffect(() => {
+    if (!isArranging) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z")
+        return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("input, textarea, [contenteditable='true']") !== null
+      ) {
+        return;
+      }
+      const direction = event.shiftKey ? "redo" : "undo";
+      if (direction === "undo" ? !history.canUndo : !history.canRedo) return;
+      event.preventDefault();
+      void step(direction);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [history.canRedo, history.canUndo, isArranging, step]);
 
   const handleAddEntry = useCallback(
     async (candidate: AddEntryCandidate) => {
       setAdding(true);
       setAddError(null);
+      const band = bandForScore(candidate.myScore);
       const result = await addItemToTierListAction(
         data.id,
         candidate.id,
         candidate.entityType,
-        0,
+        band,
       );
       setAdding(false);
       if (!result.success) {
@@ -181,112 +264,123 @@ export function TierListViewPage({
         return;
       }
       setAddOpen(false);
-      notify(`Added ${candidate.name} to Unrated`, { tone: "success" });
+      markEdited();
+      notify(`Added ${candidate.name} to ${BAND_LABELS[band]}`, {
+        id: TIER_LIST_EDIT_TOAST,
+        undo: () => void step("undo"),
+      });
       router.refresh();
     },
-    [addItemToTierListAction, data.id, router],
+    [addItemToTierListAction, data.id, markEdited, router, step],
   );
 
-  const lockLabel = isEditingLocked ? "Unlock editing" : "Lock editing";
+  const handleEdited = useCallback(() => markEdited(), [markEdited]);
+  const handleUndo = useCallback(() => void step("undo"), [step]);
+
+  const isEmpty = data.items.length === 0;
+
+  const board = isEmpty ? (
+    <EmptyState
+      illustration={<Ranked aria-hidden strokeWidth={ICON_STROKE} />}
+      title="Nothing ranked yet"
+      description={
+        data.isOwner
+          ? "Add something you've tried. Your rating picks its band."
+          : "When this list ranks something, it shows here."
+      }
+      action={
+        data.isOwner ? (
+          <Button
+            onClick={() => {
+              setArranging(true);
+              openAdd();
+            }}
+          >
+            <Add aria-hidden strokeWidth={ICON_STROKE} />
+            Add entry
+          </Button>
+        ) : undefined
+      }
+    />
+  ) : (
+    <TierListView
+      tierListId={data.id}
+      items={data.items}
+      isOwner={data.isOwner}
+      arranging={isArranging}
+      selectedItemId={selectedItemId ?? undefined}
+      onEdited={handleEdited}
+      onUndo={handleUndo}
+    />
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-[800px] flex-col gap-4 sm:px-4">
       {/* Header. Only the title shares its row with the actions: at 390 an
-          owner of a place list has five of them, and a description in the
+          owner of a place list has four of them, and a description in the
           title's column wrapped every two or three words. */}
       <div className="flex flex-col gap-1">
         <div className="flex items-start justify-between gap-4">
           <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
             {data.name}
           </h1>
-          <div className="flex shrink-0 gap-1">
-            {data.isOwner && !isEditingLocked && (
-              <Hint label="Add entry">
-                <IconButton
-                  variant="outline"
-                  size="sm"
-                  aria-label="Add entry"
-                  onClick={() => {
-                    setAddError(null);
-                    setAddSession((session) => session + 1);
-                    setAddOpen(true);
-                  }}
-                >
-                  <Add />
-                </IconButton>
-              </Hint>
-            )}
-            {data.listType === "place" && (
-              <Hint label="View on map">
-                <IconButton
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  aria-label="View on map"
-                >
-                  <Link
-                    href={`/map?tierLists=${data.id}`}
-                    underline="none"
-                    className="rounded-full"
+          {!isArranging && (
+            <div className="flex shrink-0 gap-1">
+              {data.listType === "place" && (
+                <Hint label="View on map">
+                  <IconButton
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    aria-label="View on map"
                   >
-                    <MapIcon />
-                  </Link>
-                </IconButton>
-              </Hint>
-            )}
-            {data.privacy !== "PRIVATE" && (
-              <Hint label="Share">
-                <IconButton
-                  variant="outline"
-                  size="sm"
-                  aria-label="Share"
-                  onClick={handleShare}
-                >
-                  <Share />
-                </IconButton>
-              </Hint>
-            )}
-            {data.isOwner && (
-              <Hint label={lockLabel}>
-                <IconButton
-                  variant={isEditingLocked ? "secondary" : "outline"}
-                  size="sm"
-                  // The name says what a press does ("Unlock editing"), as the
-                  // tooltip does; no aria-pressed beside it, or a screen reader
-                  // hears "Unlock editing, pressed" and the two contradict.
-                  aria-label={lockLabel}
-                  className={cn(isEditingLocked && "text-ink-1")}
-                  onClick={handleToggleEditingLock}
-                  disabled={isSavingEditingLock}
-                >
-                  {isEditingLocked ? <Lock /> : <Unlock />}
-                </IconButton>
-              </Hint>
-            )}
-            {data.isOwner && (
-              <Hint label="Edit list">
-                <IconButton
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  aria-label="Edit list"
-                >
-                  <Link
-                    href={`/tier-lists/${data.id}/edit`}
-                    underline="none"
-                    className="rounded-full"
+                    <Link
+                      href={`/map?tierLists=${data.id}`}
+                      underline="none"
+                      className="rounded-full"
+                    >
+                      <MapIcon />
+                    </Link>
+                  </IconButton>
+                </Hint>
+              )}
+              {data.privacy !== "PRIVATE" && (
+                <Hint label="Share">
+                  <IconButton
+                    variant="outline"
+                    size="sm"
+                    aria-label="Share"
+                    onClick={handleShare}
                   >
-                    <Edit />
-                  </Link>
-                </IconButton>
-              </Hint>
-            )}
-          </div>
+                    <Share />
+                  </IconButton>
+                </Hint>
+              )}
+              {data.isOwner && (
+                <Hint label="Edit list">
+                  <IconButton
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    aria-label="Edit list"
+                  >
+                    <Link
+                      href={`/tier-lists/${data.id}/edit`}
+                      underline="none"
+                      className="rounded-full"
+                    >
+                      <Edit />
+                    </Link>
+                  </IconButton>
+                </Hint>
+              )}
+            </div>
+          )}
         </div>
         {data.description && (
           <p className="type-callout text-ink-2">{data.description}</p>
         )}
-        <div className="mt-1 flex items-center gap-2">
+        <div className="mt-1 flex min-h-11 items-center gap-2">
           <Badge variant="secondary" className="text-ink-2">
             <PrivacyIcon aria-hidden strokeWidth={ICON_STROKE} />
             {privacyInfo.label}
@@ -294,36 +388,81 @@ export function TierListViewPage({
           <span className="type-footnote tabular">
             {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
           </span>
+          {canArrange && !isArranging && !isEmpty && (
+            <Button
+              variant="secondary"
+              className="ml-auto"
+              onClick={() => {
+                void setTab("rankings");
+                setArranging(true);
+              }}
+            >
+              <Arrange aria-hidden strokeWidth={ICON_STROKE} />
+              Arrange
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Tabs: Rankings + Insights */}
-      <Tabs
-        value={tab}
-        onValueChange={(v) => void setTab(v as typeof tab)}
-        className="gap-3"
-      >
-        <TabsList className="h-11 w-full rounded-md bg-surface-2 p-1">
-          <TabsTrigger value="rankings" className={TRIGGER}>
-            Rankings
-          </TabsTrigger>
-          <TabsTrigger value="insights" className={TRIGGER}>
-            Insights
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="rankings">
-          <TierListView
-            tierListId={data.id}
-            items={data.items}
-            isOwner={data.isOwner}
-            isEditingLocked={isEditingLocked}
-            selectedItemId={selectedItemId ?? undefined}
-          />
-        </TabsContent>
-        <TabsContent value="insights">
-          <TierListInsightsPanel insights={insightsData} />
-        </TabsContent>
-      </Tabs>
+      {isArranging ? (
+        <section aria-label="Arrange" className="flex flex-col gap-3 pb-2">
+          <p className="type-footnote text-ink-2">
+            Hold and drag a handle to move an entry; tap the minus to take it
+            off the list. Undo reaches back through every change.
+          </p>
+          {board}
+          <div
+            data-slot="arrange-bar"
+            role="toolbar"
+            aria-label="Arrange"
+            className="surface-glass sticky bottom-3 z-30 flex items-center gap-2 rounded-lg p-2"
+          >
+            <IconButton
+              variant="ghost"
+              aria-label={historyActionLabel("undo", history.undo)}
+              disabled={!history.canUndo || stepping}
+              onClick={() => void step("undo")}
+            >
+              <Undo />
+            </IconButton>
+            <IconButton
+              variant="ghost"
+              aria-label={historyActionLabel("redo", history.redo)}
+              disabled={!history.canRedo || stepping}
+              onClick={() => void step("redo")}
+            >
+              <Redo />
+            </IconButton>
+            <Button variant="secondary" className="flex-1" onClick={openAdd}>
+              <Add aria-hidden strokeWidth={ICON_STROKE} />
+              Add entry
+            </Button>
+            <Button className="flex-1" onClick={() => setArranging(false)}>
+              <Check aria-hidden strokeWidth={ICON_STROKE} />
+              Done
+            </Button>
+          </div>
+        </section>
+      ) : (
+        <Tabs
+          value={tab}
+          onValueChange={(v) => void setTab(v as typeof tab)}
+          className="gap-3"
+        >
+          <TabsList className="h-11 w-full rounded-md bg-surface-2 p-1">
+            <TabsTrigger value="rankings" className={TRIGGER}>
+              Rankings
+            </TabsTrigger>
+            <TabsTrigger value="insights" className={TRIGGER}>
+              Insights
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="rankings">{board}</TabsContent>
+          <TabsContent value="insights">
+            <TierListInsightsPanel insights={insightsData} />
+          </TabsContent>
+        </Tabs>
+      )}
 
       <AddEntryModal
         key={addSession}

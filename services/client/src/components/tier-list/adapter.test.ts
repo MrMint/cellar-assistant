@@ -75,7 +75,8 @@ describe("itemDisplayFromNode (the old page's per-row resolution)", () => {
       name: "Bar Nine",
       subtitle: "Wine Bar · Austin · US",
       href: "/places/place-1",
-      reviewScore: 4,
+      ownerScore: 4,
+      viewerScore: 4,
       publicRating: 4.6,
       publicRatingCount: 1234,
     });
@@ -91,7 +92,8 @@ describe("itemDisplayFromNode (the old page's per-row resolution)", () => {
         },
       }),
     );
-    assert.equal(row.reviewScore, null);
+    assert.equal(row.ownerScore, null);
+    assert.equal(row.viewerScore, null);
     assert.equal(row.publicRating, null);
     assert.equal(row.publicRatingCount, null);
   });
@@ -109,8 +111,36 @@ describe("itemDisplayFromNode (the old page's per-row resolution)", () => {
     assert.equal(row.name, "Chateau X");
     assert.equal(row.subtitle, "Merlot · 2015 · France");
     assert.equal(row.href, "/wines/item-1");
-    assert.equal(row.reviewScore, 4.5);
+    assert.equal(row.ownerScore, 4.5);
+    assert.equal(row.viewerScore, 4.5);
     assert.equal(row.publicRating, null);
+  });
+
+  test("X23: on someone else's list the owner's score leads, yours beside it", () => {
+    const row = itemDisplayFromNode(
+      itemNode(
+        { name: "Cloudy Bay", myReview: { score: 2.5 } },
+        { ownerReview: { score: 4 } },
+      ),
+      false,
+    );
+    assert.equal(row.ownerScore, 4);
+    assert.equal(row.viewerScore, 2.5);
+  });
+
+  test("X23: an owner who never rated it shows no score, not yours", () => {
+    const row = itemDisplayFromNode(
+      itemNode({ myReview: { score: 2.5 } }, { ownerReview: null }),
+      false,
+    );
+    assert.equal(row.ownerScore, null);
+    assert.equal(row.viewerScore, 2.5);
+  });
+
+  test("X23: a friend's place list never passes your place rating off as theirs", () => {
+    const row = itemDisplayFromNode(placeNode(), false);
+    assert.equal(row.ownerScore, null);
+    assert.equal(row.viewerScore, 4);
   });
 
   test("each item type's old subtitle field", () => {
@@ -243,6 +273,22 @@ describe("tierListDataFrom", () => {
       false,
     );
     assert.equal(tierListDataFrom(core, [], null).data.isOwner, false);
+    // D4: Undo / Redo are the owner's alone, whatever the server sent.
+    const history = { canUndo: true, canRedo: false, undo: null, redo: null };
+    assert.deepEqual(
+      tierListDataFrom(core, [], "me", history).data.history,
+      history,
+    );
+    assert.equal(
+      tierListDataFrom(core, [], "someone-else", history).data.history,
+      null,
+    );
+    // The owner's view: the rows' scores are the owner's own.
+    assert.equal(
+      tierListDataFrom(core, [placeNode()], "someone-else").data.items[0]
+        ?.ownerScore,
+      null,
+    );
     assert.equal(
       tierListDataFrom({ ...core, listType: "wine" }, [], "me").insightsData
         .showPlaceStats,

@@ -1,0 +1,124 @@
+/**
+ * X23 / D4 on the client: the band a new entry lands in, and the words for
+ * the edit history's Undo and Redo — plain functions, so the board, the two
+ * pickers and their tests all say the same thing.
+ */
+
+import { displayItemName } from "@/utilities/smart-title-case";
+import { BAND_LABELS, type Band } from "./constants";
+
+/**
+ * "Band defaults from your verdict on add": your rating, in half stars, to
+ * the band whose word matches it — 4.5 and 5 are Outstanding, 4 Very Good,
+ * 3 Good, 2 Mediocre, 1 Bad (each half step rounds up into the band above,
+ * as 4.5 reads "outstanding" and not "very good"). No rating is Unrated, as
+ * every add was before.
+ */
+export function bandForScore(score: number | null | undefined): Band {
+  if (score === null || score === undefined || !Number.isFinite(score)) {
+    return 0;
+  }
+  if (score >= 4.5) return 5;
+  if (score >= 3.5) return 4;
+  if (score >= 2.5) return 3;
+  if (score >= 1.5) return 2;
+  if (score > 0) return 1;
+  return 0;
+}
+
+/** One recorded edit, as the page reads `TierListEdit`. */
+export type TierListEditView = {
+  seq: number;
+  kind: "ADD" | "REMOVE" | "MOVE";
+  entryName: string | null;
+  fromBand: number | null;
+  toBand: number | null;
+};
+
+/** `TierList.editHistory`, as the page reads it. Null for a non-owner. */
+export type TierListHistoryView = {
+  canUndo: boolean;
+  canRedo: boolean;
+  undo: TierListEditView | null;
+  redo: TierListEditView | null;
+};
+
+const band = (value: number | null): string =>
+  value === null ? "the list" : (BAND_LABELS[value] ?? "the list");
+
+const nameOf = (edit: TierListEditView): string =>
+  edit.entryName === null
+    ? "an entry"
+    : (displayItemName(edit.entryName) ?? edit.entryName);
+
+const isBandChange = (edit: TierListEditView) =>
+  edit.fromBand !== null &&
+  edit.toBand !== null &&
+  edit.fromBand !== edit.toBand;
+
+/** What the edit did, in the past tense: "moved Barolo to Outstanding". */
+export function editPhrase(edit: TierListEditView): string {
+  switch (edit.kind) {
+    case "ADD":
+      return `added ${nameOf(edit)} to ${band(edit.toBand)}`;
+    case "REMOVE":
+      return `removed ${nameOf(edit)}`;
+    case "MOVE":
+      if (edit.entryName === null && edit.fromBand === null) {
+        return "reordered the list";
+      }
+      return isBandChange(edit)
+        ? `moved ${nameOf(edit)} to ${band(edit.toBand)}`
+        : `reordered ${nameOf(edit)} in ${band(edit.toBand)}`;
+  }
+}
+
+/** The Undo / Redo buttons' accessible names: "Undo: removed Barolo". */
+export function historyActionLabel(
+  direction: "undo" | "redo",
+  edit: TierListEditView | null,
+): string {
+  const verb = direction === "undo" ? "Undo" : "Redo";
+  return edit === null ? verb : `${verb}: ${editPhrase(edit)}`;
+}
+
+/**
+ * The toast after an Undo or Redo, saying what changed on the board rather
+ * than naming the mechanism: "Put Barolo back in Good", "Moved Barolo to
+ * Outstanding again".
+ */
+export function historyStepMessage(
+  direction: "undo" | "redo",
+  edit: TierListEditView,
+): string {
+  const name = nameOf(edit);
+  const capital = name.charAt(0).toUpperCase() + name.slice(1);
+  if (direction === "undo") {
+    switch (edit.kind) {
+      case "ADD":
+        return `Took ${name} off the list`;
+      case "REMOVE":
+        return `Put ${name} back in ${band(edit.fromBand)}`;
+      case "MOVE":
+        if (edit.entryName === null && edit.fromBand === null) {
+          return "Put the list back in order";
+        }
+        return isBandChange(edit)
+          ? `Moved ${name} back to ${band(edit.fromBand)}`
+          : `Put ${name} back in its place`;
+    }
+  }
+  switch (edit.kind) {
+    case "ADD":
+      return `Added ${name} to ${band(edit.toBand)} again`;
+    case "REMOVE":
+      return `Removed ${name} again`;
+    case "MOVE":
+      if (edit.entryName === null && edit.fromBand === null) {
+        return "Reordered the list again";
+      }
+      return isBandChange(edit)
+        ? `Moved ${name} to ${band(edit.toBand)} again`
+        : `${capital} is back where you dragged it`;
+  }
+}
