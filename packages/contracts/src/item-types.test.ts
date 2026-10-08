@@ -257,7 +257,7 @@ describe("ITEM_TYPE_SPECS", () => {
   it("reproduces REQUIRED_ITEM_ATTRIBUTES exactly (golden)", () => {
     expect(REQUIRED_ITEM_ATTRIBUTES).toEqual({
       // X19: `wines.vintage` (NULL is non-vintage) and `coffees.description`
-      // dropped their NOT NULL (`20261008214048_…`).
+      // dropped their NOT NULL (`20261008233536_…`).
       WINE: [{ field: "style", column: "wines.style", on: "attributes" }],
       BEER: [],
       SPIRIT: [

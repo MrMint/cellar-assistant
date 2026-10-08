@@ -1,3 +1,8 @@
+-- Regenerated at merge as 20261008233536 (was 20261008214048 on wa/catalog),
+-- so it sorts after X27's 20261008214722/214724, X02's 20261008230209 and
+-- X08's 20261008231951 that other databases already have; the snapshot now
+-- chains from 3b40eba4 (want_to_try). The SQL below is unchanged.
+--
 -- X19 (catalog correction loop): two NOT NULLs the catalogue could not honour.
 --
 -- 1. `coffees.description`. Every other item table leaves `description`

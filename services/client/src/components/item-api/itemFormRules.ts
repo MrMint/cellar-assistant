@@ -287,7 +287,7 @@ const RULES = {
         key: "vintage",
         label: "Vintage",
         kind: "date",
-        // X19: nullable since `20261008214048`; NULL is non-vintage.
+        // X19: nullable since `20261008233536`; NULL is non-vintage.
         nonVintage: true,
         help: "A year, or NV — wines.vintage NULL means non-vintage.",
       },
@@ -357,7 +357,7 @@ const RULES = {
   },
   COFFEE: {
     canCreateDirectly: false,
-    // X19: `coffees.description` is nullable since `20261008214048`.
+    // X19: `coffees.description` is nullable since `20261008233536`.
     descriptionRequired: false,
     attributes: [
       {

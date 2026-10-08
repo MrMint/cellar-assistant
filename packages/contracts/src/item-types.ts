@@ -138,7 +138,7 @@ export type ItemTypeSpec = {
   readonly onboardingRequired: boolean;
   /**
    * `description NOT NULL`. `false` for all six since X19 dropped coffee's
-   * (`20261008214048_nv_wines_optional_coffee_description`); kept as a flag so
+   * (`20261008233536_nv_wines_optional_coffee_description`); kept as a flag so
    * a future type that needs one says so here rather than in a check.
    */
   readonly descriptionRequired: boolean;
