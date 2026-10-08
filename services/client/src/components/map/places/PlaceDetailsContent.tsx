@@ -753,11 +753,7 @@ function TipIconButton({
           {children}
         </IconButton>
       </TooltipTrigger>
-      {/* z-[1200]: these buttons sit in PlaceDetailsDrawer (z-[1100] on
-          phones), which would cover a z-50 tooltip. */}
-      <TooltipContent side="top" className="z-[1200]">
-        {label}
-      </TooltipContent>
+      <TooltipContent side="top">{label}</TooltipContent>
     </Tooltip>
   );
 }

@@ -233,15 +233,15 @@ export function PlaceMenuItems({
         )}
       </div>
 
-      {/* Item details sheet (a dialog from md up). `z-[1200]`: on /map this
-          list sits in PlaceDetailsDrawer (z-[950] desktop, z-[1100] phone),
-          which would otherwise cover the z-50 sheet. ResponsiveDialog caps
-          and scrolls the dialog itself. */}
+      {/* Item details sheet (a dialog from md up). On /map this list sits in
+          PlaceDetailsDrawer, which orders itself inside the map's isolated
+          stacking context, so the z-50 sheet draws above it. ResponsiveDialog
+          caps and scrolls the dialog itself. */}
       <ResponsiveDialog
         open={detailsOpen && !!selectedItem}
         onOpenChange={setDetailsOpen}
         title={selectedItem?.menu_item_name ?? ""}
-        className="z-[1200] md:max-w-[600px]"
+        className="md:max-w-[600px]"
       >
         {selectedItem && (
           <div className="flex flex-col gap-6">
