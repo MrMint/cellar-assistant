@@ -1,8 +1,8 @@
-import { Box, CircularProgress, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { PlaceDetails } from "@/components/map/places/PlaceDetails";
 import { PlaceExistsQuery } from "@/components/map/queries";
+import { Spinner } from "@/components/ui/spinner";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
@@ -42,32 +42,17 @@ export default async function PlaceDetailsPage({
   if (!exists.ok && isNotFound(exists.error)) notFound();
 
   return (
-    <Box
-      sx={{
-        height: "100dvh",
-        overflow: "auto",
-        p: 2,
-      }}
-    >
+    <div className="h-dvh overflow-auto p-4">
       <Suspense
         fallback={
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "50vh",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            <CircularProgress />
-            <Typography>Loading place details...</Typography>
-          </Box>
+          <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
+            <Spinner className="size-10 text-ink-2" />
+            <p className="type-body text-ink-1">Loading place details...</p>
+          </div>
         }
       >
         <PlaceDetails placeId={placeId} />
       </Suspense>
-    </Box>
+    </div>
   );
 }
