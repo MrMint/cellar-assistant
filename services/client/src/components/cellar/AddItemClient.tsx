@@ -1,26 +1,26 @@
 "use client";
 
-import {
-  AspectRatio,
-  Box,
-  CardContent,
-  CardOverflow,
-  Grid,
-  Link,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import Image from "next/image";
-import NextLink from "next/link";
-import { InteractiveCard } from "@/components/common/InteractiveCard";
+import Image, { type StaticImageData } from "next/image";
+import { Link } from "@/components/app/Link";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
 import sake1 from "@/images/sake1.png";
 import spirit1 from "@/images/spirit1.png";
 import tea1 from "@/images/tea1.png";
 import wine1 from "@/images/wine1.png";
+import { cn } from "@/lib/utils";
 
 type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee" | "Sake" | "Tea";
+
+/** Each type's illustration and its alt text, as the old cards had them. */
+const ART: Readonly<Record<ItemType, { src: StaticImageData; alt: string }>> = {
+  Beer: { src: beer1, alt: "An image of a beer glass" },
+  Wine: { src: wine1, alt: "An image of a wine bottle" },
+  Spirit: { src: spirit1, alt: "An image of a liquor bottle" },
+  Coffee: { src: coffee1, alt: "A bag of coffee beans" },
+  Sake: { src: sake1, alt: "A sake bottle" },
+  Tea: { src: tea1, alt: "A tea container" },
+};
 
 type AddItemTypeCardProps = {
   type: ItemType;
@@ -29,63 +29,33 @@ type AddItemTypeCardProps = {
 };
 
 const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
-  <InteractiveCard>
-    <CardOverflow>
-      <AspectRatio ratio="1">
-        {type === "Beer" && (
-          <Image
-            src={beer1}
-            alt="An image of a beer glass"
-            fill
-            placeholder="blur"
-          />
-        )}
-        {type === "Wine" && (
-          <Image
-            src={wine1}
-            alt="An image of a wine bottle"
-            fill
-            placeholder="blur"
-          />
-        )}
-        {type === "Spirit" && (
-          <Image
-            src={spirit1}
-            alt="An image of a liquor bottle"
-            fill
-            placeholder="blur"
-          />
-        )}
-        {type === "Coffee" && (
-          <Image
-            src={coffee1}
-            alt="A bag of coffee beans"
-            fill
-            placeholder="blur"
-          />
-        )}
-        {type === "Sake" && (
-          <Image src={sake1} alt="A sake bottle" fill placeholder="blur" />
-        )}
-        {type === "Tea" && (
-          <Image src={tea1} alt="A tea container" fill placeholder="blur" />
-        )}
-      </AspectRatio>
-    </CardOverflow>
-    <CardContent>
+  <div
+    data-slot="add-item-type-card"
+    className={cn(
+      "relative flex min-w-0 flex-col overflow-hidden rounded-lg bg-surface-1",
+      href !== undefined &&
+        "transition-[background-color,transform] duration-(--ca-dur-micro) ease-standard hover:bg-surface-2 has-[a:active]:scale-97 motion-reduce:has-[a:active]:scale-100",
+    )}
+  >
+    <div className="relative aspect-square">
+      <Image
+        src={ART[type].src}
+        alt={ART[type].alt}
+        fill
+        placeholder="blur"
+        className="object-cover"
+      />
+    </div>
+    <div className="flex p-4">
       {href === undefined ? (
-        <Typography level="title-lg" flexGrow={1} textAlign="center">
-          {type}
-        </Typography>
+        <span className="type-headline grow text-center">{type}</span>
       ) : (
-        <Link component={NextLink} overlay href={href}>
-          <Typography level="title-lg" flexGrow={1} textAlign="center">
-            {type}
-          </Typography>
+        <Link overlay underline="none" href={href} className="grow">
+          <span className="type-headline block text-center">{type}</span>
         </Link>
       )}
-    </CardContent>
-  </InteractiveCard>
+    </div>
+  </div>
 );
 
 interface AddItemClientProps {
@@ -113,42 +83,39 @@ export function AddItemClient({
   const canAdd = !cellarId || canAddProp;
 
   return (
-    <Box>
-      <Stack spacing={4}>
-        <Typography level="h2">
-          {cellarId ? `Add an item to ${cellarName}` : "Add an item"}
-        </Typography>
-        {cellarId && !canAdd && (
-          <Typography level="body-md">
-            You do not have permission to add items to this cellar.
-          </Typography>
-        )}
-        <Grid container spacing={2}>
-          {(
-            [
-              "Wine",
-              "Beer",
-              "Spirit",
-              "Coffee",
-              "Sake",
-              "Tea",
-            ] satisfies ItemType[]
-          ).map((x) => (
-            <Grid key={x} xs={6} sm={6} md={4} lg={2}>
-              <AddItemTypeCard
-                type={x}
-                href={
-                  !canAdd
-                    ? undefined
-                    : cellarId
-                      ? `/cellars/${cellarId}/${x.toLowerCase()}s/add`
-                      : `/add/${x.toLowerCase()}s`
-                }
-              />
-            </Grid>
-          ))}
-        </Grid>
-      </Stack>
-    </Box>
+    <div className="flex flex-col gap-8">
+      <h2 className="type-title-1">
+        {cellarId ? `Add an item to ${cellarName}` : "Add an item"}
+      </h2>
+      {cellarId && !canAdd && (
+        <p className="type-body">
+          You do not have permission to add items to this cellar.
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+        {(
+          [
+            "Wine",
+            "Beer",
+            "Spirit",
+            "Coffee",
+            "Sake",
+            "Tea",
+          ] satisfies ItemType[]
+        ).map((x) => (
+          <AddItemTypeCard
+            key={x}
+            type={x}
+            href={
+              !canAdd
+                ? undefined
+                : cellarId
+                  ? `/cellars/${cellarId}/${x.toLowerCase()}s/add`
+                  : `/add/${x.toLowerCase()}s`
+            }
+          />
+        ))}
+      </div>
+    </div>
   );
 }

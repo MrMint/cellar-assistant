@@ -1,22 +1,14 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  FormControl,
-  FormHelperText,
-  FormLabel,
-  Input,
-  ListItemDecorator,
-  Option,
-  Select,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { isNil } from "ramda";
+import { useId } from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { useMutation } from "urql";
 import { EnumSelect } from "@/components/forms/EnumSelect";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import {
   CellarCardFragment as CellarRowFragment,
   CreateCellarMutation,
@@ -24,7 +16,7 @@ import {
 } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
-import { UserAvatar } from "../common/UserAvatar";
+import { CoOwnerPicker } from "./CoOwnerPicker";
 
 /** SDL `PermissionType` — the old `Permission_Type_Enum`. */
 export type Permission_Type_Enum = "FRIENDS" | "PRIVATE" | "PUBLIC";
@@ -61,6 +53,9 @@ export type CellarFormProps = {
  *   under Hasura and always failed for them (§7).
  * - The typed error's `message` replaces the caught exception's.
  *
+ * The Joy multi-`Select` for co-owners is `CoOwnerPicker` (a combobox over a
+ * checkable list, since `ui/select` picks one value only).
+ *
  * Two old bugs are not restored (inventory §7): the spinner stayed on after a
  * failed submit (`isSubmitted` never resets), and the button said "Add" while
  * editing. It spins only while submitting or after success, and says "Save"
@@ -82,6 +77,10 @@ export const CellarForm = ({
     setError,
     formState: { isSubmitting, errors, isSubmitSuccessful },
   } = useForm<IFormInput>({ defaultValues: defaults });
+
+  const nameId = useId();
+  const coOwnersId = useId();
+  const busy = isSubmitting || isSubmitSuccessful;
 
   const [, createCellar] = useMutation(CreateCellarMutation);
   const [, updateCellar] = useMutation(UpdateCellarMutation);
@@ -117,11 +116,7 @@ export const CellarForm = ({
   };
 
   return (
-    <Box
-      sx={(theme) => ({
-        maxWidth: theme.breakpoints.values.sm,
-      })}
-    >
+    <div className="max-w-150">
       <form
         onSubmit={(event) => {
           handleSubmit(onSubmit)(event).catch(() => {
@@ -129,18 +124,29 @@ export const CellarForm = ({
           });
         }}
       >
-        <Stack spacing={2}>
-          <FormControl required>
-            <FormLabel>Name</FormLabel>
+        <div className="flex flex-col gap-4">
+          <Field>
+            <FieldLabel htmlFor={nameId}>
+              Name
+              <span aria-hidden className="text-ink-3">
+                *
+              </span>
+            </FieldLabel>
             <Controller
               name="name"
               control={control}
               rules={{ required: true }}
               render={({ field }) => (
-                <Input type="text" disabled={isSubmitting} {...field} />
+                <Input
+                  {...field}
+                  id={nameId}
+                  type="text"
+                  required
+                  disabled={isSubmitting}
+                />
               )}
             />
-          </FormControl>
+          </Field>
           <EnumSelect
             name="privacy"
             control={control}
@@ -149,47 +155,38 @@ export const CellarForm = ({
             required
             rules={{ required: true }}
           />
-          <FormControl>
-            <FormLabel>Co-Owners</FormLabel>
+          <Field>
+            <FieldLabel htmlFor={coOwnersId}>Co-Owners</FieldLabel>
             <Controller
               name="co_owners"
               control={control}
               render={({ field }) => (
-                <Select
-                  multiple
+                <CoOwnerPicker
+                  id={coOwnersId}
+                  friends={friends}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  disabled={isSubmitting}
                   placeholder="Choose friends..."
-                  {...field}
-                  onChange={(_, value) => {
-                    field.onChange(value);
-                  }}
-                >
-                  {friends.map((x) => (
-                    <Option key={x.id} value={x.id}>
-                      <ListItemDecorator>
-                        <UserAvatar
-                          avatarUrl={x.avatarUrl}
-                          displayName={x.displayName}
-                          size="sm"
-                        />
-                      </ListItemDecorator>
-                      {x.displayName}
-                    </Option>
-                  ))}
-                </Select>
+                />
               )}
             />
-            <FormHelperText>
+            <FieldDescription>
               These users will be treated as owners of the cellar.
-            </FormHelperText>
-          </FormControl>
+            </FieldDescription>
+          </Field>
           {errors.root !== undefined && (
-            <Typography color="danger">{errors.root.message}</Typography>
+            <p role="alert" className="type-body text-destructive">
+              {errors.root.message}
+            </p>
           )}
-          <Button loading={isSubmitting || isSubmitSuccessful} type="submit">
+          <Button type="submit" disabled={busy} aria-busy={busy || undefined}>
+            {busy && <Spinner aria-hidden />}
             {isNil(id) ? "Add" : "Save"}
           </Button>
-        </Stack>
+        </div>
       </form>
-    </Box>
+    </div>
   );
 };

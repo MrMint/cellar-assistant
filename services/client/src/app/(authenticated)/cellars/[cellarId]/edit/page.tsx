@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import { EditCellarClient } from "@/components/cellar/EditCellarClient";
@@ -31,16 +30,20 @@ export default async function EditCellar({
   if (!result.ok) {
     // §1.6: "no such cellar" and "not yours to see" are the same answer.
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="type-body text-destructive">
+        {result.error.message}
+      </p>
+    );
   }
 
   const cellar = result.data;
   const me = viewer.me;
   if (!canAddToCellar(cellar, me?.id ?? null)) {
     return (
-      <Typography level="body-md">
+      <p className="type-body">
         You do not have permission to edit this cellar.
-      </Typography>
+      </p>
     );
   }
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { Stack } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { CellarForm } from "@/components/cellar/CellarForm";
@@ -45,9 +44,9 @@ export function AddCellarClient() {
   );
   if (friends.failure === null) return form;
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-4">
       <ApiError error={friends.failure} />
       {form}
-    </Stack>
+    </div>
   );
 }
