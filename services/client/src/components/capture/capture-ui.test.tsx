@@ -312,6 +312,16 @@ describe("Add to Cellar sheet (N21)", () => {
       document.querySelector('[role="alert"]')?.textContent ?? "",
       /Only owners can add/,
     );
+
+    // Try again: the same ask re-sends the same bottle id, so a refusal
+    // that was really a dropped response can never file a second bottle.
+    await click(button("Add bottle"));
+    await flush(50);
+    const ids = sent
+      .filter((s) => s.operationName === "AddItemToCellarFromItem")
+      .map((s) => (s.variables.input as { cellarItemId: string }).cellarItemId);
+    assert.equal(ids.length, 2);
+    assert.equal(ids[0], ids[1]);
   });
 
   test("nothing to add to: no button", async () => {
