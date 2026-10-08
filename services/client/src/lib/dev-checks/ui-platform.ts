@@ -1,6 +1,7 @@
 /**
- * The UI-platform guard (D20): what the client may still use while the Joy →
- * shadcn migration is in flight, and — after the removal step — not at all.
+ * The UI-platform guard (D20): the client is on shadcn/ui + Tailwind + motion,
+ * and nothing may bring the old platform (MUI Joy, Emotion, `sx`, react-icons,
+ * the star-rating widget, raw colours, literal motion) back.
  *
  * A static scan, like `client-boundary.ts`: it reads source and nothing else.
  * Unlike that scan it parses with the TypeScript compiler, because the rules
@@ -21,22 +22,17 @@
  * | `motion-literal`| a `stiffness`/`damping`/`bounce`/`mass`/`visualDuration` number, a numeric `duration`/`delay` or a numeric `ease` curve in a `transition`, or a `duration-[…]`/`ease-[…]` class |
  * | `reduced-motion-query` | a hand-rolled `prefers-reduced-motion` media query (use `useReducedMotion`) |
  *
- * ## Phase 1 (now → the removal step)
+ * ## Absolute
  *
- * Files in `ui-platform.legacy.json` — frozen when the foundation landed, the
- * files that still used the old platform then — are exempt from every rule
- * but `framer-motion`, `arbitrary-colour` and `palette-colour`, which nothing
- * may break. A
- * converted file simply stops matching; nobody edits the list (so it never
- * conflicts), and it can only go stale in the safe direction.
- * `raw-colour` also exempts `COLOUR_ALLOWLIST`: code that cannot read a CSS
- * variable (MapLibre paint, canvas, the offline page, the manifest).
- * `motion-literal` exempts `src/lib/motion.ts`, where the tokens live.
+ * Every rule applies to every file. The only exemptions are by rule, never by
+ * file history: `raw-colour` exempts `COLOUR_ALLOWLIST` (code that cannot read
+ * a CSS variable — MapLibre paint, canvas, the offline page, the manifest),
+ * and `motion-literal` exempts `src/lib/motion.ts`, where the tokens live.
  *
- * ## Final (the removal step)
- *
- * The legacy list is deleted and every rule applies everywhere, colour
- * allowlist and `lib/motion.ts` aside.
+ * (During the Joy → shadcn migration a frozen `ui-platform.legacy.json`
+ * exempted the files not yet converted; the removal step deleted it along
+ * with the last of them. Biome's `noRestrictedImports` in `biome.json` bans
+ * the same packages at the editor.)
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
@@ -65,13 +61,6 @@ export type Finding = {
   readonly rule: Rule;
   readonly detail: string;
 };
-
-/** Rules a legacy file is still held to. */
-export const ALWAYS_ENFORCED: ReadonlySet<Rule> = new Set<Rule>([
-  "framer-motion",
-  "arbitrary-colour",
-  "palette-colour",
-]);
 
 /**
  * Where a raw colour is allowed, because the code cannot read a CSS variable
@@ -279,13 +268,9 @@ export function scanUiPlatform(): Finding[] {
   );
 }
 
-/** Findings that break the phase-1 rules, given the frozen legacy list. */
-export function violations(
-  findings: readonly Finding[],
-  legacy: ReadonlySet<string>,
-): Finding[] {
+/** Findings that break the rules: all of them, less the per-rule allowlists. */
+export function violations(findings: readonly Finding[]): Finding[] {
   return findings.filter((f) => {
-    if (legacy.has(f.file) && !ALWAYS_ENFORCED.has(f.rule)) return false;
     if (f.rule === "raw-colour" && COLOUR_ALLOWLIST.some((r) => r.test(f.file)))
       return false;
     if (

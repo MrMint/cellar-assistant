@@ -1,17 +1,17 @@
 /**
- * The UI-platform ratchet (D20, migration plan §2.8). `ui-platform.ts` has
- * the rules and why; this runs them against the tree.
+ * The UI-platform guard (D20, migration plan §2.8), absolute since the Joy
+ * removal step. `ui-platform.ts` has the rules and why; this runs them
+ * against the tree, and ANY finding fails it.
  *
- * If this fails on a file you converted: the file is no longer in the
- * legacy list's shadow the moment it stops importing Joy — but it is still in
- * the list, so it is exempt. If it fails on a NEW file: that file used the old
- * platform (an `@mui/joy` import, an `sx` prop, a react-icon, a hex colour, a
- * literal spring). Use the app primitives (`src/components/app/README.md`),
- * a token from `globals.css`, or `@/lib/motion` instead. Do not add the file
- * to `ui-platform.legacy.json` — that list is frozen.
+ * If this fails: the file named used the old platform (an `@mui/joy` import,
+ * an `sx` prop, a react-icon, a hex colour, a literal spring). Use the app
+ * primitives (`src/components/app/README.md`), a token from `globals.css`, or
+ * `@/lib/motion` instead. There is no per-file exemption list any more; the
+ * only allowlists are per rule (`COLOUR_ALLOWLIST`, `MOTION_ALLOWLIST`), for
+ * code that cannot read a CSS variable or that defines the motion tokens.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { describe, test } from "node:test";
 import {
   formatFindings,
@@ -20,19 +20,15 @@ import {
   violations,
 } from "./ui-platform";
 
-const legacyJson = JSON.parse(
-  readFileSync(new URL("./ui-platform.legacy.json", import.meta.url), "utf8"),
-) as { files: string[] };
-const legacy = new Set(legacyJson.files);
 const findings = scanUiPlatform();
 
-describe("ui-platform guard (phase 1: ratchet)", () => {
-  test("no file outside the frozen legacy list uses the old platform", () => {
-    const bad = violations(findings, legacy);
+describe("ui-platform guard (absolute)", () => {
+  test("no file uses the old platform", () => {
+    const bad = violations(findings);
     assert.deepEqual(
       bad,
       [],
-      `New code on the legacy UI platform (see the header of this test):
+      `Code on the legacy UI platform (see the header of this test):
 
 ${formatFindings(bad)}
 `,
@@ -40,29 +36,43 @@ ${formatFindings(bad)}
   });
 
   test("the scan saw the tree (not an empty walk)", () => {
+    // The colour allowlist's own files always hold raw colours (MapLibre
+    // paint, tokens.ts), so a walk that reached the tree finds some.
     assert.ok(
-      findings.some((f) => f.rule === "joy-import"),
-      "a tree mid-migration still has Joy imports; zero means the walk broke",
+      findings.some(
+        (f) => f.rule === "raw-colour" && f.file === "src/lib/tokens.ts",
+      ),
+      "tokens.ts holds the hex values; zero findings there means the walk broke",
     );
   });
 
-  test("the legacy list is frozen: sorted, unique, and holds no new code", () => {
-    const files = legacyJson.files;
-    assert.deepEqual(files, [...new Set(files)].sort());
-    for (const file of files) {
-      assert.doesNotMatch(
+  test("a Joy import, an sx prop or a react-icon fails in any file", () => {
+    for (const file of [
+      "src/components/providers/AppClientProviders.tsx",
+      "src/components/common/Link.tsx",
+      "src/app/layout.tsx",
+    ]) {
+      assert.deepEqual(
+        violations(
+          scanSource(
+            file,
+            `import { Box } from "@mui/joy";
+             import { MdAdd } from "react-icons/md";
+             const a = <Box sx={{ p: 1 }} />;`,
+          ),
+        ).map((f) => f.rule),
+        ["joy-import", "legacy-dep", "sx-prop"],
         file,
-        /^src\/(components\/(app|ui)\/|lib\/(tokens|motion|utils)\.ts)/,
-        `${file} is new-platform code and can never be legacy`,
       );
     }
   });
 
-  test("the legacy list never grows past the 193 files frozen at F", () => {
-    // Entries may go stale (a converted file deleted, renamed) — the safe
-    // direction. They may never be added: that would pre-exempt new code.
-    assert.ok(legacyJson.files.length <= 193, "the list only shrinks");
-    for (const file of legacyJson.files) assert.match(file, /^src\//);
+  test("there is no legacy exemption list to grow back", () => {
+    assert.equal(
+      existsSync(new URL("./ui-platform.legacy.json", import.meta.url)),
+      false,
+      "ui-platform.legacy.json was deleted in the removal step; the guard is absolute",
+    );
   });
 });
 
@@ -120,14 +130,6 @@ describe("ui-platform rules (the scanner itself)", () => {
       rules("src/x.tsx", `const a = <div className="bg-[#fff] text-ink-1" />;`),
       ["arbitrary-colour"],
     );
-    assert.deepEqual(
-      violations(
-        scanSource("src/legacy.tsx", `const a = "text-[rgb(1,2,3)]";`),
-        new Set(["src/legacy.tsx"]),
-      ).map((f) => f.rule),
-      ["arbitrary-colour"],
-      "even in a legacy file",
-    );
   });
 
   test("motion literals: springs, transition durations, arbitrary classes", () => {
@@ -180,14 +182,6 @@ describe("ui-platform rules (the scanner itself)", () => {
       ),
       ["palette-colour"],
     );
-    assert.deepEqual(
-      violations(
-        scanSource("src/legacy.tsx", `const a = "text-emerald-400";`),
-        new Set(["src/legacy.tsx"]),
-      ).map((f) => f.rule),
-      ["palette-colour"],
-      "even in a legacy file",
-    );
   });
 
   test("motion literals are allowed where the tokens live", () => {
@@ -196,7 +190,7 @@ describe("ui-platform rules (the scanner itself)", () => {
       `export const spring = { snappy: { type: "spring", stiffness: 520, damping: 42 } };`,
     );
     assert.equal(f.length, 2);
-    assert.deepEqual(violations(f, new Set()), []);
+    assert.deepEqual(violations(f), []);
   });
 
   test("a hand-rolled reduced-motion query", () => {
@@ -228,7 +222,7 @@ describe("ui-platform rules (the scanner itself)", () => {
       "src/app/manifest.ts",
     ]) {
       assert.deepEqual(
-        violations(scanSource(file, `const a = "#123456";`), new Set()),
+        violations(scanSource(file, `const a = "#123456";`)),
         [],
         file,
       );
