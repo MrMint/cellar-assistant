@@ -1,7 +1,5 @@
 "use client";
 
-import { Typography } from "@mui/joy";
-
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
@@ -18,13 +16,9 @@ export function Greeting({ displayName }: GreetingProps) {
   const firstName = displayName?.split(" ")[0];
 
   return (
-    <Typography
-      level="h2"
-      suppressHydrationWarning
-      sx={{ fontWeight: 600, textAlign: "center" }}
-    >
+    <h2 suppressHydrationWarning className="type-title-1 text-center">
       {greeting}
       {firstName ? `, ${firstName}` : ""}
-    </Typography>
+    </h2>
   );
 }

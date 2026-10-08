@@ -1,23 +1,33 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  IconButton,
-  Input,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useActor } from "@xstate/react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { includes } from "ramda";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { MdCamera, MdClose, MdScanner, MdSearch } from "react-icons/md";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useClient } from "urql";
+import { IconButton } from "@/components/app/IconButton";
+import {
+  Camera,
+  Close,
+  ICON_STROKE,
+  Scan,
+  Search,
+} from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Spinner } from "@/components/ui/spinner";
 import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
@@ -26,8 +36,8 @@ import { BarcodeScanner } from "../common/BarcodeScanner";
 import { CameraCapture } from "../common/CameraCapture";
 import { interactiveSearchMachine } from "./actors/interactiveSearch";
 import { barcodeSearchHref, imageSearchHref } from "./adapter";
-import { modalScale } from "./motion-variants";
 import { useSearchNavigation } from "./SearchNavigation";
+import { modalScale } from "./search-motion";
 import type { SearchNavigation } from "./search-navigation";
 import { useSearchQuery } from "./useSearchQuery";
 
@@ -62,7 +72,7 @@ interface ClientSearchInterfaceProps {
  *
  * Same box: animated placeholder, no submit button, a 300 ms debounce that
  * navigates to `?q=`, the clear button, and the Scan and Photo buttons opening
- * the barcode scanner or the camera in a framer-motion card. Two changes, both
+ * the barcode scanner or the camera in a `motion` card. Two changes, both
  * data-side:
  *
  * - **A photo is uploaded, then navigates to `?image=<fileId>`** (G32). The
@@ -179,9 +189,7 @@ export const ClientSearchInterface = ({
     inputRef.current?.focus();
   };
 
-  const prefersReducedMotion = useMediaQuery(
-    "(prefers-reduced-motion: reduce)",
-  );
+  const prefersReducedMotion = useReducedMotion() ?? false;
 
   const isIdle = !includes(state.value, ["barcode", "image"]);
   const isSearching = includes(state.value, [
@@ -190,7 +198,7 @@ export const ClientSearchInterface = ({
   ]);
 
   return (
-    <Box>
+    <div>
       <AnimatePresence mode="wait">
         {isIdle && (
           <motion.div
@@ -200,172 +208,112 @@ export const ClientSearchInterface = ({
             animate="animate"
             exit="exit"
           >
-            <Stack spacing={2}>
-              <Input
-                slotProps={{
-                  input: {
-                    ref: inputRef,
-                    "aria-label": "Search your collection",
-                    enterKeyHint: "search",
-                  },
-                }}
-                placeholder={
-                  isPlaceholderActive
-                    ? animatedPlaceholder
-                    : "Search your collection..."
-                }
-                value={searchQuery}
-                onChange={(e) => onChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => {
-                  setIsFocused(false);
-                  commit();
-                }}
-                startDecorator={
-                  <MdSearch style={{ fontSize: "1.25rem", opacity: 0.5 }} />
-                }
-                endDecorator={
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    {searchQuery && (
+            <div className="flex flex-col gap-4">
+              <InputGroup className="h-12 rounded-md bg-surface-2 transition-[box-shadow] duration-(--ca-dur-short) ease-standard dark:bg-surface-2">
+                <InputGroupAddon>
+                  <Search
+                    aria-hidden
+                    className="size-5 opacity-50"
+                    strokeWidth={ICON_STROKE}
+                  />
+                </InputGroupAddon>
+                <InputGroupInput
+                  ref={inputRef}
+                  aria-label="Search your collection"
+                  enterKeyHint="search"
+                  placeholder={
+                    isPlaceholderActive
+                      ? animatedPlaceholder
+                      : "Search your collection..."
+                  }
+                  value={searchQuery}
+                  onChange={(e) => onChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => {
+                    setIsFocused(false);
+                    commit();
+                  }}
+                  className="md:text-base"
+                />
+                <InputGroupAddon align="inline-end" className="gap-1">
+                  {searchQuery && (
+                    <IconButton
+                      size="sm"
+                      aria-label="Clear search"
+                      // Keep focus in the box: a blur here would commit
+                      // the old text a moment before clear commits "".
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={handleClear}
+                    >
+                      <Close />
+                    </IconButton>
+                  )}
+                  {searchQuery ? (
+                    <>
                       <IconButton
-                        variant="plain"
-                        color="neutral"
+                        variant="secondary"
                         size="sm"
-                        aria-label="Clear search"
-                        // Keep focus in the box: a blur here would commit
-                        // the old text a moment before clear commits "".
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={handleClear}
-                        sx={{ minWidth: "auto", p: "4px" }}
+                        aria-label="Scan barcode"
+                        onClick={() => send({ type: "SEARCH_BARCODE" })}
                       >
-                        <MdClose style={{ fontSize: "1.1rem" }} />
+                        <Scan />
                       </IconButton>
-                    )}
-                    {searchQuery ? (
-                      <>
+                      {photoOffered && (
                         <IconButton
-                          variant="soft"
-                          color="neutral"
+                          variant="secondary"
                           size="sm"
-                          aria-label="Scan barcode"
-                          onClick={() => send({ type: "SEARCH_BARCODE" })}
-                          sx={{
-                            borderRadius: "50%",
-                            "--IconButton-size": "30px",
-                          }}
+                          aria-label="Search by photo"
+                          onClick={() => send({ type: "SEARCH_IMAGE" })}
                         >
-                          <MdScanner style={{ fontSize: "1.1rem" }} />
+                          <Camera />
                         </IconButton>
-                        {photoOffered && (
-                          <IconButton
-                            variant="soft"
-                            color="neutral"
-                            size="sm"
-                            aria-label="Search by photo"
-                            onClick={() => send({ type: "SEARCH_IMAGE" })}
-                            sx={{
-                              borderRadius: "50%",
-                              "--IconButton-size": "30px",
-                            }}
-                          >
-                            <MdCamera style={{ fontSize: "1.1rem" }} />
-                          </IconButton>
-                        )}
-                      </>
-                    ) : (
-                      <>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => send({ type: "SEARCH_BARCODE" })}
+                      >
+                        <Scan aria-hidden strokeWidth={ICON_STROKE} />
+                        Scan
+                      </Button>
+                      {photoOffered && (
                         <Button
-                          variant="soft"
-                          color="neutral"
+                          variant="secondary"
                           size="sm"
-                          startDecorator={
-                            <MdScanner style={{ fontSize: "1rem" }} />
-                          }
-                          onClick={() => send({ type: "SEARCH_BARCODE" })}
-                          sx={{
-                            borderRadius: "lg",
-                            fontSize: "xs",
-                            fontWeight: "md",
-                            px: 1.5,
-                            "--Button-minHeight": "30px",
-                          }}
+                          className="rounded-full"
+                          onClick={() => send({ type: "SEARCH_IMAGE" })}
                         >
-                          Scan
+                          <Camera aria-hidden strokeWidth={ICON_STROKE} />
+                          Photo
                         </Button>
-                        {photoOffered && (
-                          <Button
-                            variant="soft"
-                            color="neutral"
-                            size="sm"
-                            startDecorator={
-                              <MdCamera style={{ fontSize: "1rem" }} />
-                            }
-                            onClick={() => send({ type: "SEARCH_IMAGE" })}
-                            sx={{
-                              borderRadius: "lg",
-                              fontSize: "xs",
-                              fontWeight: "md",
-                              px: 1.5,
-                              "--Button-minHeight": "30px",
-                            }}
-                          >
-                            Photo
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </Stack>
-                }
-                sx={{
-                  "--Input-minHeight": "48px",
-                  fontSize: "md",
-                  borderRadius: "xl",
-                  "--Input-focusedThickness": "1.5px",
-                  transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-                  "&:focus-within": {
-                    boxShadow: "sm",
-                  },
-                }}
-              />
+                      )}
+                    </>
+                  )}
+                </InputGroupAddon>
+              </InputGroup>
 
               {isSearching && (
-                <Stack
-                  spacing={2}
-                  alignItems="center"
-                  sx={{
-                    "@keyframes pulse": {
-                      "0%, 100%": { opacity: 0.6 },
-                      "50%": { opacity: 1 },
-                    },
-                  }}
-                >
-                  <CircularProgress />
-                  <Typography
-                    level="body-md"
-                    sx={{
-                      "@media (prefers-reduced-motion: no-preference)": {
-                        animation: "pulse 2s ease-in-out infinite",
-                      },
-                    }}
-                  >
+                <div className="flex flex-col items-center gap-4">
+                  <Spinner className="size-8 text-ink-2" />
+                  <p className="type-body motion-safe:animate-pulse">
                     {state.value === "barcodeSearching"
                       ? "Searching by barcode..."
                       : "Analyzing image..."}
-                  </Typography>
-                </Stack>
+                  </p>
+                </div>
               )}
 
               {photoError !== null && !isSearching && (
-                <Typography
-                  level="body-sm"
-                  color="danger"
-                  sx={{ textAlign: "center" }}
-                >
+                <p className="type-callout text-center text-destructive">
                   {photoError}
-                </Typography>
+                </p>
               )}
-            </Stack>
+            </div>
           </motion.div>
         )}
 
@@ -377,33 +325,23 @@ export const ClientSearchInterface = ({
             animate="animate"
             exit="exit"
           >
-            <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.md })}>
-              <Card sx={{ padding: "1rem" }}>
-                <Typography level="title-lg" textAlign="center">
-                  Scan barcode
-                </Typography>
-                <BarcodeScanner
-                  cameraFallbackHint="Cancel to search by name instead."
-                  onChange={(barcode) => {
-                    send({ type: "FOUND", barcode });
-                    const href = barcodeSearchHref(barcode.text);
-                    if (href === null) {
-                      send({ type: "SEARCH_ERROR" });
-                      return;
-                    }
-                    startNavigation(() => router.push(href));
-                  }}
-                />
-                <CardContent
-                  orientation="horizontal"
-                  sx={{ justifyContent: "flex-end" }}
-                >
-                  <Button onClick={() => send({ type: "CANCEL" })}>
-                    Cancel
-                  </Button>
-                </CardContent>
-              </Card>
-            </Box>
+            <CaptureCard
+              title="Scan barcode"
+              onCancel={() => send({ type: "CANCEL" })}
+            >
+              <BarcodeScanner
+                cameraFallbackHint="Cancel to search by name instead."
+                onChange={(barcode) => {
+                  send({ type: "FOUND", barcode });
+                  const href = barcodeSearchHref(barcode.text);
+                  if (href === null) {
+                    send({ type: "SEARCH_ERROR" });
+                    return;
+                  }
+                  startNavigation(() => router.push(href));
+                }}
+              />
+            </CaptureCard>
           </motion.div>
         )}
 
@@ -415,28 +353,38 @@ export const ClientSearchInterface = ({
             animate="animate"
             exit="exit"
           >
-            <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.md })}>
-              <Card sx={{ padding: "1rem" }}>
-                <Typography level="title-lg" textAlign="center">
-                  Take a picture of the item
-                </Typography>
-                <CameraCapture onCapture={handlePhoto} />
-                <CardContent
-                  orientation="horizontal"
-                  sx={{ justifyContent: "space-between" }}
-                >
-                  <Button
-                    onClick={() => send({ type: "CANCEL" })}
-                    color="neutral"
-                  >
-                    Cancel
-                  </Button>
-                </CardContent>
-              </Card>
-            </Box>
+            <CaptureCard
+              title="Take a picture of the item"
+              onCancel={() => send({ type: "CANCEL" })}
+            >
+              <CameraCapture onCapture={handlePhoto} />
+            </CaptureCard>
           </motion.div>
         )}
       </AnimatePresence>
-    </Box>
+    </div>
   );
 };
+
+/** The scanner's and the camera's card: a title, the capture, Cancel. */
+function CaptureCard({
+  title,
+  onCancel,
+  children,
+}: {
+  title: string;
+  onCancel: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex max-w-(--breakpoint-md) flex-col gap-3 rounded-lg bg-surface-1 p-4">
+      <h2 className="type-headline text-center">{title}</h2>
+      {children}
+      <div className="flex justify-end">
+        <Button variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}

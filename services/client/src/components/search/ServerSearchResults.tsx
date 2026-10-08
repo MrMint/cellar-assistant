@@ -1,10 +1,8 @@
-import { Button, Stack, Typography } from "@mui/joy";
-import Link from "next/link";
-import { MdAdd } from "react-icons/md";
 import { AiFailureStatus } from "@/components/common/AiStatus";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { searchResultsFromNodes } from "./adapter";
+import { AddItemLink, NoSearchResults } from "./NoSearchResults";
 import {
   ITEM_SEARCH_LIMIT,
   ITEM_SEARCH_MAX_DISTANCE,
@@ -57,29 +55,20 @@ export async function ServerSearchResults({ query }: ServerSearchResultsProps) {
 
   if (results.length === 0) {
     return (
-      <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
-        <Typography level="body-lg" sx={{ textAlign: "center" }}>
-          No items found for &ldquo;{query}&rdquo;
-        </Typography>
-        <Link href="/add" style={{ textDecoration: "none" }}>
-          <Button variant="outlined" startDecorator={<MdAdd />}>
-            Add an item
-          </Button>
-        </Link>
-      </Stack>
+      <NoSearchResults>
+        No items found for &ldquo;{query}&rdquo;
+      </NoSearchResults>
     );
   }
 
   return (
-    <Stack spacing={3}>
+    <div className="flex flex-col gap-6">
       <SearchResultGrid items={results} />
-      <Stack alignItems="center">
-        <Link href="/add" style={{ textDecoration: "none" }}>
-          <Button variant="plain" startDecorator={<MdAdd />}>
-            Can&apos;t find what you&apos;re looking for? Add an item
-          </Button>
-        </Link>
-      </Stack>
-    </Stack>
+      <div className="flex flex-col items-center">
+        <AddItemLink variant="ghost">
+          Can&apos;t find what you&apos;re looking for? Add an item
+        </AddItemLink>
+      </div>
+    </div>
   );
 }

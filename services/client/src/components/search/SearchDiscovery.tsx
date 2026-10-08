@@ -1,4 +1,3 @@
-import { Stack } from "@mui/joy";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import type { ActivityEntry, ActivityKind, NearbyPlace } from "./adapter";
 import { NearbyPlaces } from "./NearbyPlaces";
@@ -27,7 +26,7 @@ export function SearchDiscoveryContent({
   cachedLocation,
 }: SearchDiscoveryContentProps) {
   return (
-    <Stack spacing={4}>
+    <div className="flex flex-col gap-8">
       {/* Unified activity feed: additions + reviews + tier list updates sorted by time */}
       <RecentActivity feed={feed} selectedKinds={activityKinds} />
 
@@ -36,6 +35,6 @@ export function SearchDiscoveryContent({
         initialPlaces={nearbyPlaces}
         cachedLocation={cachedLocation}
       />
-    </Stack>
+    </div>
   );
 }
