@@ -87,7 +87,7 @@ export const normaliseCheckInTags = (tags: readonly string[]): string[] => {
       `a log takes at most ${MAX_CHECK_IN_TAGS} flavour tags, got ${seen.size}`,
     );
   }
-  return [...seen];
+  return Array.from(seen);
 };
 
 /** The bottle a log was poured from — both ids, because `CellarActor` is keyed by cellar. */

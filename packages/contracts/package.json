@@ -9,6 +9,7 @@
     "./actors": "./src/actors.ts",
     "./barcodes": "./src/barcodes.ts",
     "./categories": "./src/categories.ts",
+    "./check-ins": "./src/check-ins.ts",
     "./errors": "./src/errors.ts",
     "./item-types": "./src/item-types.ts",
     "./items": "./src/items.ts",
