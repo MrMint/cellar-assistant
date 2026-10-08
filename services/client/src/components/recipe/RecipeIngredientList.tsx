@@ -1,8 +1,8 @@
 "use client";
 
-import { Box, Chip, Divider, Stack, Typography } from "@mui/joy";
 import { isNil, isNotNil } from "ramda";
-import { Link } from "@/components/common/Link";
+import { Link } from "@/components/app/Link";
+import { Badge } from "@/components/ui/badge";
 import { ingredientItemHref, type RecipeIngredient } from "./adapter";
 
 export type { RecipeIngredient };
@@ -85,8 +85,8 @@ export const RecipeIngredientList = ({
   showSubstitutions = true,
 }: RecipeIngredientListProps) => {
   return (
-    <Stack spacing={2}>
-      {ingredients.map((ingredient, index) => {
+    <div className="flex flex-col divide-y divide-line">
+      {ingredients.map((ingredient) => {
         const display = getIngredientDisplay(ingredient);
         const quantityText = formatQuantity(
           ingredient.quantity,
@@ -94,72 +94,45 @@ export const RecipeIngredientList = ({
         );
 
         return (
-          <Box key={ingredient.id}>
-            <Stack direction="row" spacing={2} alignItems="flex-start">
-              {/* Ingredient details */}
-              <Stack spacing={1} sx={{ flex: 1 }}>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  flexWrap="wrap"
-                >
-                  {/* Quantity */}
-                  {quantityText && (
-                    <Typography level="body-md" fontWeight="md">
-                      {quantityText}
-                    </Typography>
-                  )}
+          <div
+            key={ingredient.id}
+            className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0"
+          >
+            <div className="flex flex-wrap items-center gap-2 type-body">
+              {/* Quantity */}
+              {quantityText && (
+                <span className="tabular font-medium">{quantityText}</span>
+              )}
 
-                  {/* Ingredient name */}
-                  {display.isSpecific && display.href ? (
-                    <Link href={display.href}>
-                      <Typography
-                        level="body-md"
-                        sx={{ textDecoration: "underline" }}
-                      >
-                        {display.name}
-                      </Typography>
-                    </Link>
-                  ) : (
-                    <Typography level="body-md">{display.name}</Typography>
-                  )}
+              {/* Ingredient name */}
+              {display.isSpecific && display.href ? (
+                <Link href={display.href} underline="always">
+                  {display.name}
+                </Link>
+              ) : (
+                <span>{display.name}</span>
+              )}
 
-                  {/* Optional indicator */}
-                  {ingredient.is_optional && (
-                    <Chip variant="outlined" size="sm" color="neutral">
-                      Optional
-                    </Chip>
-                  )}
+              {/* Optional indicator */}
+              {ingredient.is_optional && (
+                <Badge variant="outline">Optional</Badge>
+              )}
 
-                  {/* Ingredient type for generic items */}
-                  {!display.isSpecific && display.category && (
-                    <Chip variant="soft" size="sm">
-                      {display.category}
-                    </Chip>
-                  )}
-                </Stack>
+              {/* Ingredient type for generic items */}
+              {!display.isSpecific && display.category && (
+                <Badge variant="secondary">{display.category}</Badge>
+              )}
+            </div>
 
-                {/* Substitution notes */}
-                {showSubstitutions &&
-                  isNotNil(ingredient.substitution_notes) && (
-                    <Typography
-                      level="body-sm"
-                      sx={{
-                        color: "text.secondary",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      Note: {ingredient.substitution_notes}
-                    </Typography>
-                  )}
-              </Stack>
-            </Stack>
-
-            {index < ingredients.length - 1 && <Divider sx={{ my: 2 }} />}
-          </Box>
+            {/* Substitution notes */}
+            {showSubstitutions && isNotNil(ingredient.substitution_notes) && (
+              <p className="type-callout text-ink-2 italic">
+                Note: {ingredient.substitution_notes}
+              </p>
+            )}
+          </div>
         );
       })}
-    </Stack>
+    </div>
   );
 };

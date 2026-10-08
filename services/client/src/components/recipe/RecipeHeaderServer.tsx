@@ -1,4 +1,3 @@
-import { Stack, Typography } from "@mui/joy";
 import { HeaderBar } from "@/components/common/HeaderBar";
 
 interface RecipeHeaderServerProps {
@@ -17,14 +16,7 @@ export function RecipeHeaderServer({
         recipeName,
       }}
       endComponent={
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Typography
-            level="body-sm"
-            sx={{ color: "text.secondary", textTransform: "capitalize" }}
-          >
-            {recipeType}
-          </Typography>
-        </Stack>
+        <p className="type-callout text-ink-2 capitalize">{recipeType}</p>
       }
     />
   );

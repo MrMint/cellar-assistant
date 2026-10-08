@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, Card, CardContent, Stack, Typography } from "@mui/joy";
-import { MdShare } from "react-icons/md";
+import { Share } from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
 
 interface RecipeShareProps {
   recipeId: string;
@@ -35,20 +35,12 @@ export function RecipeShare({ recipeType }: RecipeShareProps) {
   };
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Stack spacing={2}>
-          <Typography level="title-sm">Share Recipe</Typography>
-          <Button
-            startDecorator={<MdShare />}
-            variant="outlined"
-            onClick={handleShare}
-            size="sm"
-          >
-            Share
-          </Button>
-        </Stack>
-      </CardContent>
-    </Card>
+    <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
+      <p className="type-callout font-semibold">Share Recipe</p>
+      <Button variant="outline" onClick={handleShare}>
+        <Share aria-hidden />
+        Share
+      </Button>
+    </section>
   );
 }
