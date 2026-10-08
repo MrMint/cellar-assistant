@@ -93,9 +93,36 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      // The phone specs only mean something at phone size; see `mobile`.
+      testIgnore: /[\\/]mobile[\\/]/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
+      },
+    },
+    /**
+     * N20 · the mobile guardrail: a 390x844 touch phone, the viewport the
+     * product is judged at first (`docs/product/design-direction.md`).
+     *
+     * Chromium with a Pixel's mobile flags (`isMobile`, `hasTouch`, an Android
+     * Chrome user agent) at an iPhone 13's CSS size — not WebKit with an iPhone
+     * user agent, for two reasons: the rest of the suite and CI run Chromium
+     * only, and an iOS user agent opens `InstallPwaDialog`'s modal over every
+     * page, which would test the dialog instead of the page under it.
+     *
+     * Only `specs/mobile/` runs here, and those specs use `fixtures/mobile.ts`,
+     * whose contexts carry this device (the desktop fixtures' hand-built
+     * contexts would replace it with 1440x900):
+     *
+     *   bun run --filter @cellar-assistant/e2e test -- --project=mobile
+     */
+    {
+      name: "mobile",
+      testMatch: /[\\/]mobile[\\/].*\.spec\.ts$/,
+      use: {
+        ...devices["Pixel 7"],
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 3,
       },
     },
   ],

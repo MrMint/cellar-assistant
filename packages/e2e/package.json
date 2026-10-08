@@ -6,6 +6,7 @@
   "scripts": {
     "build": "echo 'no build step: consumed as TypeScript source'",
     "test": "node ../../scripts/check-node-version.mjs && playwright test",
+    "test:unit": "node ../../scripts/check-node-version.mjs && node --test fixtures/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "test:ui": "node ../../scripts/check-node-version.mjs && playwright test --ui",
