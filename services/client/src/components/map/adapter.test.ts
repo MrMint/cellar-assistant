@@ -329,6 +329,7 @@ describe("scans and suggestions", () => {
       suggestedItem: { id: "w", type: "WINE", name: "Pinot Noir" },
     });
     assert.equal(view.pending, true);
+    assert.equal(view.accepted, false);
     assert.deepEqual(view.suggested, {
       id: "w",
       name: "Pinot Noir",
@@ -343,6 +344,7 @@ describe("scans and suggestions", () => {
       suggestedRecipe: { id: "r", name: "Negroni" },
     });
     assert.equal(recipe.pending, false);
+    assert.equal(recipe.accepted, true);
     assert.equal(recipe.suggested?.href, "/recipes/r");
   });
 });

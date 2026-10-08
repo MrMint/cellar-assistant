@@ -629,6 +629,7 @@ export const CreateMenuScanMutation = graphql(
       ... on MenuScan {
         id
         processingStatus
+        matchStatus
         processingError
         itemsDetected
         itemsMatched
@@ -651,6 +652,7 @@ export const MenuScanStatusQuery = graphql(
       ... on MenuScan {
         id
         processingStatus
+        matchStatus
         processingError
         itemsDetected
         itemsMatched
@@ -737,6 +739,7 @@ export const ScanResultsQuery = graphql(
       ... on MenuScan {
         id
         processingStatus
+        matchStatus
         processingError
         itemsDetected
         confidenceScore
