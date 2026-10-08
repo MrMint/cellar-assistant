@@ -395,3 +395,47 @@ export const entryTypeOf = (
     | "SPIRIT"
     | "TEA"
     | "WINE";
+
+/**
+ * The board href a picker candidate would get once added — `entryHref`'s
+ * rule, from the candidate's side — so the picker can tell what is already
+ * on the list without a second query.
+ */
+export const candidateHref = (candidate: {
+  id: string;
+  entityType: TierListEntityType;
+}): string =>
+  candidate.entityType === "place"
+    ? `/places/${candidate.id}`
+    : `/${candidate.entityType}s/${candidate.id}`;
+
+/** The hrefs of everything on the board, for {@link candidateHref}. */
+export const onListHrefs = (
+  items: readonly Pick<TierListItemDisplay, "href">[],
+): ReadonlySet<string> => new Set(items.map((item) => item.href));
+
+/**
+ * What the in-page add says when `addTierListItem` refuses. Never the actor's
+ * `message`: that is written for a log ("WINE <uuid> is already in tier list
+ * <uuid>"), not for a person. The one `CONFLICT` `addItem` can raise for a
+ * caller is the entry already being on the list (the others are invariant
+ * breaches its own comments call unreachable).
+ */
+export function addEntryFailureMessage(failure: {
+  code: string;
+  message: string;
+}): string {
+  switch (failure.code) {
+    case "CONFLICT":
+      return "That's already on this list.";
+    case "FORBIDDEN":
+      return "Only the list's owner can add to it.";
+    case "NOT_FOUND":
+      return "That list or entry isn't available any more.";
+    case "TRANSPORT":
+      // `lib/api/result.ts`'s own words for no answer, already for a person.
+      return failure.message;
+    default:
+      return "Couldn't add that. Try again.";
+  }
+}

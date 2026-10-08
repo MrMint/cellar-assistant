@@ -1,5 +1,6 @@
 import { BASE_URL, storageStatePath } from "../fixtures/accounts.ts";
 import {
+  aiCapabilities,
   createCellar,
   deleteCellars,
   ensureFriends,
@@ -100,18 +101,27 @@ const searchBox = (page: import("@playwright/test").Page) =>
   page.getByRole("textbox").first();
 
 test("the restored landing view: greeting, collection line, Scan, Photo, five quick links", async ({
+  api,
   primary,
 }) => {
   // `82450ad1:src/app/(authenticated)/search/page.tsx`. Scan and Photo (G32,
   // restored — 14-image-search drives it); no tabs, no Brands/Recipes chips:
   // the old page had none of them.
+  //
+  // Photo is offered only where the stack can search by image (N07/D25:
+  // hide, don't refuse), so ask rather than assume. On an Ollama-only lane
+  // `imageSearch` is false and the button must be *absent*, not merely
+  // refused when tapped.
+  const { imageSearch } = await aiCapabilities(api);
   const noise = watch(primary);
   await primary.goto("/search");
   await expect(
     primary.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ }),
   ).toBeVisible();
   await expect(primary.getByRole("button", { name: "Scan" })).toBeVisible();
-  await expect(primary.getByRole("button", { name: "Photo" })).toBeVisible();
+  const photo = primary.getByRole("button", { name: "Photo" });
+  if (imageSearch) await expect(photo).toBeVisible();
+  else await expect(photo).toHaveCount(0);
   await expect(primary.getByRole("tab")).toHaveCount(0);
   const main = primary.locator("a[href] .MuiChip-root");
   await expect(main).toHaveText([

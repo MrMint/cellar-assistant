@@ -6,11 +6,14 @@ import { expect, test } from "../fixtures/test.ts";
  * Chromium's fake camera (`--use-fake-device-for-media-stream`, permission
  * granted by `--use-fake-ui-for-media-stream`) supplies a test pattern, so this
  * drives the real capture → presigned PUT → `startItemOnboarding` path with a
- * picture that is not a label. The model (or the lack of one) must say so —
- * the form shows "Nothing was read from the label" and stays empty — rather
- * than invent a wine off a colour chart, which is E2c/E2g again. The request
- * itself is checked to carry the uploaded file id, since a capture that never
- * reached the session would produce the same empty form.
+ * picture that is not a label. The model must say so — the form shows the
+ * N07 `AiStatus` alert for a `NOTHING_READ` outcome ("Nothing to read") and
+ * stays empty — rather than invent a wine off a colour chart, which is
+ * E2c/E2g again. The words are `aiOutcome`'s
+ * (`services/client/src/lib/ai/outcome.ts`); the old "Nothing was read from
+ * the label" line went with N07. The request itself is checked to carry the
+ * uploaded file id, since a capture that never reached the session would
+ * produce the same empty form.
  */
 test.use({
   launchOptions: {
@@ -61,7 +64,7 @@ test("a photographed label is uploaded and read honestly", async ({
     primary.getByRole("button", { name: "Add", exact: true }),
   ).toBeVisible({ timeout: 120_000 });
   await expect(
-    primary.getByText(/Nothing was read from the label/),
+    primary.getByRole("alert").filter({ hasText: "Nothing to read" }),
     "a test pattern was read as a label",
   ).toBeVisible();
   expect(await primary.getByLabel("Name").inputValue()).toBe("");

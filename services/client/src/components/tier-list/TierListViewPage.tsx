@@ -29,7 +29,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MdAdd,
   MdEdit,
@@ -42,6 +42,7 @@ import {
 } from "react-icons/md";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
+import { onListHrefs } from "./adapter";
 import { TierListInsightsPanel } from "./insights/TierListInsightsPanel";
 import { TierListView } from "./TierListView";
 import type { TierListData, TierListInsightsData } from "./types";
@@ -76,6 +77,13 @@ export function TierListViewPage({
     useTierListActions();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  /**
+   * Bumped on every open and used as the picker's `key`, so each open starts
+   * from an empty search: a reopened picker showing the last query's rows
+   * reads as fresh results, and offered "Add" on what was just added.
+   */
+  const [addSession, setAddSession] = useState(0);
+  const onList = useMemo(() => onListHrefs(data.items), [data.items]);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [isEditingLocked, setIsEditingLocked] = useState(data.isEditingLocked);
@@ -199,6 +207,7 @@ export function TierListViewPage({
                   aria-label="Add entry"
                   onClick={() => {
                     setAddError(null);
+                    setAddSession((session) => session + 1);
                     setAddOpen(true);
                   }}
                 >
@@ -324,12 +333,14 @@ export function TierListViewPage({
       </Stack>
 
       <AddEntryModal
+        key={addSession}
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onPick={(candidate) => void handleAddEntry(candidate)}
         busy={adding}
         error={addError}
         listType={data.listType}
+        onList={onList}
       />
 
       <Snackbar

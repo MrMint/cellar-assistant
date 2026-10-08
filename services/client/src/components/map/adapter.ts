@@ -754,3 +754,16 @@ export function pinAddressDraft(
   }
   return draft;
 }
+
+/**
+ * Whether the create-place form should say the pin's lookup found no address:
+ * the lookup has finished and drafted nothing. Without it the address fields
+ * just sit empty, which reads the same as a lookup still on its way — or one
+ * that never ran.
+ */
+export function pinAddressNotFound(
+  loading: boolean,
+  draft: Partial<Record<PinAddressField, string>>,
+): boolean {
+  return !loading && Object.keys(draft).length === 0;
+}

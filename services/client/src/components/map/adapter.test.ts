@@ -19,6 +19,7 @@ import {
   menuItemFrom,
   photosFrom,
   pinAddressDraft,
+  pinAddressNotFound,
   placeResultFromNode,
   scanSummaryFrom,
   semanticResultsFrom,
@@ -532,5 +533,19 @@ describe("pinAddressDraft (N19: the pin's draft for AIDraftField)", () => {
   test("no geocode drafts nothing — so nothing is marked From pin", () => {
     assert.deepEqual(pinAddressDraft(null), {});
     assert.deepEqual(pinAddressDraft({}), {});
+  });
+
+  test("an empty lookup says so only once it has finished", () => {
+    assert.equal(pinAddressNotFound(true, {}), false, "still loading");
+    assert.equal(pinAddressNotFound(false, pinAddressDraft(null)), true);
+    assert.equal(
+      pinAddressNotFound(false, pinAddressDraft({ locality: "  " })),
+      true,
+      "only blanks came back",
+    );
+    assert.equal(
+      pinAddressNotFound(false, pinAddressDraft({ locality: "Madison" })),
+      false,
+    );
   });
 });

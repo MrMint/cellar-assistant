@@ -22,6 +22,9 @@ import {
  */
 test.describe.configure({ mode: "serial" });
 
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 let tierListId: string;
 let listName: string;
 
@@ -75,22 +78,36 @@ test("adds entries to it", async ({ api, primary }) => {
   await primary.goto(`/tier-lists/${tierListId}`);
   for (const item of items.slice(0, 2)) {
     await primary.getByRole("button", { name: "Add entry" }).click();
-    await primary
+    const dialog = primary.getByRole("dialog");
+    // Each open starts from an empty search — no rows left over from the
+    // last one, which used to satisfy the name wait below before this
+    // search had even been sent.
+    await expect(dialog.getByRole("listitem")).toHaveCount(0);
+    await dialog
       .getByPlaceholder("Search wines by name or description")
       .fill(item.name);
-    // Not search-as-you-type: every query embeds the phrase first.
-    await primary.getByRole("button", { name: "Search", exact: true }).click();
+    // Not search-as-you-type: every query embeds the phrase first. Wait for
+    // *this* search's answer, not for text that may already be on screen.
+    const searched = primary.waitForResponse(
+      (response) =>
+        response.url().includes("/api/graphql") &&
+        /query TierListItemPicker\b/.test(response.request().postData() ?? ""),
+      { timeout: 25_000 },
+    );
+    await dialog.getByRole("button", { name: "Search", exact: true }).click();
+    await searched;
+    // Lexical retrieval (N08) brings back every "E2 Wine …" for any one of
+    // their names, so pick the row that *is* this item, not the first row.
+    const row = dialog.getByRole("listitem").filter({
+      has: primary.getByText(new RegExp(`^${escapeRegExp(item.name)}$`, "i")),
+    });
     await expect(
-      primary.getByRole("dialog").getByText(item.name).first(),
+      row.first(),
       `"${item.name}" did not come back in the picker`,
     ).toBeVisible({ timeout: 25_000 });
-    await primary
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add", exact: true })
-      .first()
-      .click();
+    await row.first().getByRole("button", { name: "Add", exact: true }).click();
     // A successful add closes the dialog and refreshes the board.
-    await expect(primary.getByRole("dialog")).toBeHidden({ timeout: 20_000 });
+    await expect(dialog).toBeHidden({ timeout: 20_000 });
   }
 
   await expect(

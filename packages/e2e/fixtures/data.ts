@@ -220,3 +220,38 @@ export async function eventually<T>(
     `timed out after ${timeoutMs}ms waiting for ${what}${last ? `; last error: ${last}` : ""}`,
   );
 }
+
+/** What `viewer.aiCapabilities` reports for the signed-in account (N07, D25). */
+export type AiCapabilities = {
+  semanticSearch: boolean;
+  imageSearch: boolean;
+  labelRead: boolean;
+  menuScan: boolean;
+  recipePhoto: boolean;
+  tierListInsights: boolean;
+};
+
+const AI_CAPABILITIES = `query { me { id aiCapabilities {
+  semanticSearch imageSearch labelRead menuScan recipePhoto tierListInsights
+} } }`;
+
+/**
+ * Ask the stack what its AI can do, rather than assume from the provider.
+ *
+ * Since N07/D25 a surface *hides* a feature its deployment cannot serve (the
+ * `/search` Photo button, the onboarding photo match) instead of offering it
+ * and refusing, so a spec that drives one has to know which page it is
+ * looking at. Throws when the answer is missing: a spec that guessed "on"
+ * would fail as a product bug, and one that guessed "off" would pass without
+ * testing anything.
+ */
+export async function aiCapabilities(api: Gql): Promise<AiCapabilities> {
+  const data = await api.query(AI_CAPABILITIES);
+  const capabilities = data?.me?.aiCapabilities as AiCapabilities | undefined;
+  if (capabilities === undefined || capabilities === null) {
+    throw new Error(
+      `me.aiCapabilities was not answered: ${JSON.stringify(data)}`,
+    );
+  }
+  return capabilities;
+}
