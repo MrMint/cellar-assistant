@@ -208,7 +208,7 @@ describe("ItemCard", () => {
     assert.match(openTag(html, 'aria-label="Barolo"'), /^<button\b/);
   });
 
-  test("every target in the clipped card rings inside it, and a pending heart keeps the tap", () => {
+  test("every target in the clipped card rings inside it, and the heart is never disabled", () => {
     // The card is overflow-hidden, so an outset focus ring on the stretched
     // link or button (exactly the card's box) would be clipped to nothing.
     const linked = render(
@@ -224,9 +224,10 @@ describe("ItemCard", () => {
     );
     const heart = openTag(linked, "aria-pressed=");
     assert.match(heart, /focus-visible:ring-inset/);
-    // Disabled while pending, but not click-through: the stretched link
-    // sits underneath it.
-    assert.match(heart, /disabled:pointer-events-auto/);
+    // Never disabled (X24: a second tap is a second toggle), and above the
+    // stretched link that sits underneath it.
+    assert.doesNotMatch(heart, /\sdisabled[=\s>]/);
+    assert.match(heart, /\bz-10\b/);
     const bare = render(
       <ItemCard type="SPIRIT" onClick={() => {}} item={base} />,
     );
