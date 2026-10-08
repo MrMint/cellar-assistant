@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation } from "urql";
 import { IconButton } from "@/components/app/IconButton";
 import { Add, Cellar, Decrease } from "@/components/app/icons";
@@ -60,6 +60,10 @@ export const AddToCellarActions = ({
   const [, removeItemFromCellar] = useMutation(RemoveItemFromCellarMutation);
   const openId = useId();
   const quantityId = useId();
+  // The ids one attempt minted, kept for a retry of the *same* ask (cellar,
+  // count, open): a "Try again" after a dropped response re-sends them, so
+  // the server files those bottles once instead of a second set.
+  const minted = useRef<{ key: string; ids: string[] } | null>(null);
 
   // The remembered cellar is this browser's, so it is read after mount.
   useEffect(() => {
@@ -68,6 +72,7 @@ export const AddToCellarActions = ({
     setQuantity(1);
     setAlreadyOpen(false);
     setError(null);
+    minted.current = null;
   }, [open, cellars]);
 
   if (cellars === undefined || cellars.length === 0) return null;
@@ -101,7 +106,14 @@ export const AddToCellarActions = ({
     const target = cellarId;
     setPending(true);
     setError(null);
-    const ids = Array.from({ length: quantity }, () => crypto.randomUUID());
+    const key = `${target}:${quantity}:${alreadyOpen}`;
+    if (minted.current?.key !== key) {
+      minted.current = {
+        key,
+        ids: Array.from({ length: quantity }, () => crypto.randomUUID()),
+      };
+    }
+    const { ids } = minted.current;
     const now = new Date().toISOString();
     const results = await Promise.all(
       ids.map((cellarItemId, index) =>
@@ -128,6 +140,7 @@ export const AddToCellarActions = ({
       setError(refusal ?? "The bottle could not be added.");
       return;
     }
+    minted.current = null;
     rememberCapturePrefs({ cellarId: target });
     setOpen(false);
     router.refresh();
