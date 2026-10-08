@@ -92,6 +92,11 @@ interface ActorError implements Error {
   Machine-readable discriminator within `code`, or null when `code` says everything there is to say. Switch on this, never on `message`.
   """
   reason: ActorErrorReason
+
+  """
+  When asking again can first succeed (a per-user window freeing a slot, or the month turning), or null when no time clears it.
+  """
+  retryAt: DateTime
 }
 
 """
@@ -109,14 +114,18 @@ enum ActorErrorCode {
 A stable sub-classification of an ActorError, for the cases where `code` alone is too coarse to act on. Additive: new values may appear, so treat an unrecognised one as if `reason` were null and fall back to `code`.
 """
 enum ActorErrorReason {
+  AI_UNCONFIGURED
   ALREADY_FRIENDS
   CANNOT_FRIEND_SELF
   FRIEND_REQUEST_ALREADY_RECEIVED
   FRIEND_REQUEST_ALREADY_SENT
   IMAGE_SEARCH_UNAVAILABLE
+  NOTHING_READ
   NOT_REVIEW_AUTHOR
   RECIPE_NOT_IN_GROUP
   REVIEW_ALREADY_EXISTS
+  SERVICE_BUDGET
+  USER_CAP
 }
 
 input AddCellarItemInput {
@@ -168,6 +177,29 @@ input AddTierListItemInput {
 }
 
 union AddTierListItemResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListItem | ValidationError
+
+"""
+Which AI-backed features this deployment can serve. False only when the configured provider genuinely cannot (no provider at all, or an embedding model that cannot embed a photo); hide those features.
+"""
+type AiCapabilities {
+  """Search by photo (`itemSearch(imageFileId:)`)."""
+  imageSearch: Boolean!
+
+  """Reading a label into the add-item form."""
+  labelRead: Boolean!
+
+  """Reading a photographed menu."""
+  menuScan: Boolean!
+
+  """Reading a photographed recipe."""
+  recipePhoto: Boolean!
+
+  """Search by meaning."""
+  semanticSearch: Boolean!
+
+  """Generated tier-list insights."""
+  tierListInsights: Boolean!
+}
 
 input AttachItemImageInput {
   """
@@ -596,6 +628,11 @@ type BudgetExceededError implements ActorError & Error {
   Machine-readable discriminator within `code`, or null when `code` says everything there is to say. Switch on this, never on `message`.
   """
   reason: ActorErrorReason
+
+  """
+  When asking again can first succeed (a per-user window freeing a slot, or the month turning), or null when no time clears it.
+  """
+  retryAt: DateTime
 }
 
 """The rows `bulkCheckIn` wrote, one per user id."""
@@ -1213,6 +1250,11 @@ type ConflictError implements ActorError & Error {
   Machine-readable discriminator within `code`, or null when `code` says everything there is to say. Switch on this, never on `message`.
   """
   reason: ActorErrorReason
+
+  """
+  When asking again can first succeed (a per-user window freeing a slot, or the month turning), or null when no time clears it.
+  """
+  retryAt: DateTime
 }
 
 input CreateCellarInput {
@@ -1567,6 +1609,11 @@ type ForbiddenError implements ActorError & Error {
   Machine-readable discriminator within `code`, or null when `code` says everything there is to say. Switch on this, never on `message`.
   """
   reason: ActorErrorReason
+
+  """
+  When asking again can first succeed (a per-user window freeing a slot, or the month turning), or null when no time clears it.
+  """
+  retryAt: DateTime
 }
 
 """Someone the user is friends with, and since when."""
@@ -2920,6 +2967,11 @@ type NotFoundError implements ActorError & Error {
   Machine-readable discriminator within `code`, or null when `code` says everything there is to say. Switch on this, never on `message`.
   """
   reason: ActorErrorReason
+
+  """
+  When asking again can first succeed (a per-user window freeing a slot, or the month turning), or null when no time clears it.
+  """
+  retryAt: DateTime
 }
 
 """
@@ -5625,7 +5677,22 @@ type TierList {
   createdById: ID!
   description: String
   id: ID!
+
+  """
+  Why the latest attempt failed, when `insightsStatus` is FAILED and the failure carried a reason.
+  """
+  insightsFailureReason: ActorErrorReason
   insightsGeneratedAt: DateTime
+
+  """
+  When the next attempt can or will happen: a budget window on FAILED, or the end of the once-a-day refresh limit on PENDING.
+  """
+  insightsRetryAt: DateTime
+
+  """
+  Where the generated insights stand (N07). Render this; do not infer "generating" from a null `aiInsights`.
+  """
+  insightsStatus: TierListInsightsStatus!
   isEditingLocked: Boolean!
   itemCount: Int!
 
@@ -5687,6 +5754,18 @@ enum TierListEntryType {
   SPIRIT
   TEA
   WINE
+}
+
+"""
+Where a tier list's generated insights stand. NOT_ENOUGH_ENTRIES: too few entries to describe. UNAVAILABLE: this deployment has no AI for insights. PENDING: asked for, not yet answered (see insightsRetryAt for a scheduled refresh). FAILED: the latest attempt failed (see insightsFailureReason). READY: aiInsights is current. IDLE: nothing generated or asked for yet; the next change asks.
+"""
+enum TierListInsightsStatus {
+  FAILED
+  IDLE
+  NOT_ENOUGH_ENTRIES
+  PENDING
+  READY
+  UNAVAILABLE
 }
 
 """
@@ -5957,6 +6036,11 @@ type ValidationError implements ActorError & Error {
   Machine-readable discriminator within `code`, or null when `code` says everything there is to say. Switch on this, never on `message`.
   """
   reason: ActorErrorReason
+
+  """
+  When asking again can first succeed (a per-user window freeing a slot, or the month turning), or null when no time clears it.
+  """
+  retryAt: DateTime
 }
 
 union VerifyMenuItemMatchResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | PlaceMenuItem | ValidationError
@@ -5965,6 +6049,11 @@ union VerifyUploadResult = BudgetExceededError | ConflictError | File | Forbidde
 
 """The signed-in user, as their token describes them."""
 type Viewer {
+  """
+  Which AI-backed features this deployment can serve (N07). Hide a feature that is false instead of offering it.
+  """
+  aiCapabilities: AiCapabilities!
+
   """
   The /search landing line. Counts only cellars you created or co-own — `myCellars` also lists other people's visible cellars, so summing it over-counts (UI parity G36).
   """

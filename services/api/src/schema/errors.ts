@@ -84,6 +84,18 @@ const ActorErrorInterface = builder
           "says everything there is to say. Switch on this, never on `message`.",
         resolve: (error) => error.reason,
       }),
+      /**
+       * N07: a budget refusal says when asking again can work, so a client
+       * can say "try again after 3:40 PM" without parsing `message`.
+       */
+      retryAt: t.field({
+        type: "DateTime",
+        nullable: true,
+        description:
+          "When asking again can first succeed (a per-user window freeing a " +
+          "slot, or the month turning), or null when no time clears it.",
+        resolve: (error) => error.retryAt,
+      }),
     }),
   });
 
