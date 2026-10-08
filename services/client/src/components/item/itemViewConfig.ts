@@ -5,7 +5,8 @@
  *
  * Read off `82450ad1:src/components/{wine,beer,spirit,coffee,sake,tea}/`:
  *
- * - `fallback`: the picture shown when the item has no image.
+ * - (`fallback`, the type's clip art for an item with no image, is gone: the
+ *   item's own LabelPlate replaced it — N28, `ItemView.plate`.)
  * - `brandTitle` / `cellarBrandTitle`: the `ItemBrands` heading on each page
  *   (they were not the same: "Wine Brands" on the item page, "Wineries" on the
  *   bottle page).
@@ -26,17 +27,9 @@
  * G29, which stays dropped (it was invisible in production anyway).
  */
 
-import type { StaticImageData } from "next/image";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import beer1 from "@/images/beer1.png";
-import coffee1 from "@/images/coffee1.png";
-import sake1 from "@/images/sake1.png";
-import spirit1 from "@/images/spirit1.png";
-import tea1 from "@/images/tea1.png";
-import wine1 from "@/images/wine1.png";
 
 export type ItemViewConfig = {
-  fallback: StaticImageData;
   brandTitle: string;
   cellarBrandTitle: string;
   brandsColumn: "left" | "right";
@@ -48,7 +41,6 @@ export type ItemViewConfig = {
 
 export const ITEM_VIEW_CONFIG = {
   WINE: {
-    fallback: wine1,
     brandTitle: "Wine Brands",
     cellarBrandTitle: "Wineries",
     brandsColumn: "right",
@@ -58,7 +50,6 @@ export const ITEM_VIEW_CONFIG = {
     characteristicsTitle: null,
   },
   BEER: {
-    fallback: beer1,
     brandTitle: "Breweries",
     cellarBrandTitle: "Beer Brands",
     brandsColumn: "left",
@@ -68,7 +59,6 @@ export const ITEM_VIEW_CONFIG = {
     characteristicsTitle: null,
   },
   SPIRIT: {
-    fallback: spirit1,
     brandTitle: "Distilleries",
     cellarBrandTitle: "Spirit Brands",
     brandsColumn: "left",
@@ -78,7 +68,6 @@ export const ITEM_VIEW_CONFIG = {
     characteristicsTitle: null,
   },
   COFFEE: {
-    fallback: coffee1,
     brandTitle: "Roasters",
     cellarBrandTitle: "Roasters",
     brandsColumn: "left",
@@ -88,7 +77,6 @@ export const ITEM_VIEW_CONFIG = {
     characteristicsTitle: null,
   },
   SAKE: {
-    fallback: sake1,
     brandTitle: "Breweries",
     cellarBrandTitle: "Breweries",
     brandsColumn: "right",
@@ -98,7 +86,6 @@ export const ITEM_VIEW_CONFIG = {
     characteristicsTitle: "Sake Characteristics",
   },
   TEA: {
-    fallback: tea1,
     brandTitle: "Tea Brands",
     cellarBrandTitle: "Brands",
     brandsColumn: "right",

@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { always, cond, equals, isNil, isNotNil } from "ramda";
+import { isNil, isNotNil } from "ramda";
 import type { MouseEvent } from "react";
 import { useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { Comment, ICON_STROKE, Love } from "@/components/app/icons";
+import { LabelPlate } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
 import { Score } from "@/components/app/Score";
 import { TypeChip } from "@/components/app/TypeChip";
@@ -13,12 +14,6 @@ import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemT
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import beer1 from "@/images/beer1.png";
-import coffee1 from "@/images/coffee1.png";
-import sake1 from "@/images/sake1.png";
-import spirit1 from "@/images/spirit1.png";
-import tea1 from "@/images/tea1.png";
-import wine1 from "@/images/wine1.png";
 import { ToggleFavoriteMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
@@ -27,18 +22,15 @@ import type { ItemCardItem } from "./types";
 
 export type { ItemCardItem } from "./types";
 
-const getFallback = (type: ItemTypeValue) =>
-  cond([
-    [equals("BEER"), always({ image: beer1, alt: "A beer glass" })],
-    [equals("WINE"), always({ image: wine1, alt: "A wine bottle" })],
-    [
-      equals("COFFEE"),
-      always({ image: coffee1, alt: "A bag of coffee beans" }),
-    ],
-    [equals("SPIRIT"), always({ image: spirit1, alt: "A bottle of spirits" })],
-    [equals("SAKE"), always({ image: sake1, alt: "A sake bottle" })],
-    [equals("TEA"), always({ image: tea1, alt: "A tea container" })],
-  ])(type);
+/** The photo's alt text, per type, as the old card had it. */
+const PHOTO_ALT: Readonly<Record<ItemTypeValue, string>> = {
+  BEER: "A beer glass",
+  WINE: "A wine bottle",
+  COFFEE: "A bag of coffee beans",
+  SPIRIT: "A bottle of spirits",
+  SAKE: "A sake bottle",
+  TEA: "A tea container",
+};
 
 export type ItemCardProps = {
   item: ItemCardItem;
@@ -116,7 +108,6 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
   const [isPending, startTransition] = useTransition();
   const [localFavorite, setLocalFavorite] = useState(item.isFavorite ?? false);
   const [, toggleFavorite] = useMutation(ToggleFavoriteMutation);
-  const fallback = getFallback(type);
 
   const handleFavoriteClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -176,20 +167,16 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
           <Image
             className="size-full object-cover"
             src={item.displayImageUrl}
-            alt={fallback.alt}
+            alt={PHOTO_ALT[type]}
             height={400}
             width={400}
             placeholder={placeholder}
           />
         )}
         {isNil(item.displayImageUrl) && (
-          <Image
-            className="object-cover"
-            src={fallback.image}
-            alt={fallback.alt}
-            fill
-            placeholder="blur"
-          />
+          // No photo: the item's own LabelPlate (N28), not the type's clip
+          // art — so two wines no longer look identical.
+          <LabelPlate type={type} plate={item.plate ?? { name: item.name }} />
         )}
       </div>
       {isNotNil(href) && (

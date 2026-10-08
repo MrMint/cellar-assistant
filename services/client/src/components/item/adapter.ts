@@ -23,6 +23,7 @@ import {
   ItemBrandFragment,
   ItemCoreFragment,
 } from "@/lib/api/items";
+import { type LabelPlateData, labelPlateFrom } from "@/lib/items/label-plate";
 import { formatAsPercentage, formatEnum, formatVintage } from "@/utilities";
 import {
   formatBeerStyle,
@@ -516,7 +517,32 @@ export type ItemView = {
   reviewsEndCursor: string | null;
   reviewsHasNextPage: boolean;
   myReview: { id: string; score: number; text: string | null } | null;
+  /** The hero's LabelPlate when there is no photo (N28). */
+  plate: LabelPlateData;
 };
+
+/**
+ * The plate an item page draws in place of a missing photo: the primary
+ * brand (else the first) as producer, and the vintage, region/country and
+ * ABV the page's own attributes already carry.
+ */
+export const itemPlate = (
+  type: ApiItemType,
+  core: ItemCoreSource,
+  attributes: ItemAttributesSource,
+  brands: readonly ItemBrand[],
+): LabelPlateData =>
+  labelPlateFrom({
+    type,
+    name: core.name,
+    producer: (brands.find((brand) => brand.is_primary === true) ?? brands[0])
+      ?.brand.name,
+    vintage: str(attributes.vintage),
+    vintageYear: num(attributes.vintageYear),
+    region: str(attributes.region),
+    country: core.country,
+    alcoholContentPercentage: num(attributes.alcoholContentPercentage),
+  });
 
 /** `...ItemPageItem` → {@link ItemView}. */
 export const itemViewFromFragment = (
@@ -531,6 +557,9 @@ export const itemViewFromFragment = (
   const type = core.type as ApiItemType;
   const image = item.images.edges[0]?.node ?? null;
   const tea = teaTextCards(type, attributes);
+  const brands = item.brands.edges.map((edge) =>
+    brandFromNode(readFragment(ItemBrandFragment, edge.node)),
+  );
   return {
     itemId: core.id,
     type,
@@ -546,15 +575,14 @@ export const itemViewFromFragment = (
       image === null
         ? null
         : { url: image.file.url, placeholder: image.placeholder ?? null },
-    brands: item.brands.edges.map((edge) =>
-      brandFromNode(readFragment(ItemBrandFragment, edge.node)),
-    ),
+    brands,
     reviews: item.reviews.edges.map((edge) =>
       reviewFromRow(readFragment(ItemPageReviewFragment, edge.node)),
     ),
     reviewsEndCursor: item.reviews.pageInfo.endCursor ?? null,
     reviewsHasNextPage: item.reviews.pageInfo.hasNextPage,
     myReview: myReviewFromRow(item.myReview),
+    plate: itemPlate(type, core, attributes, brands),
   };
 };
 

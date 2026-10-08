@@ -1,3 +1,4 @@
+import { LabelPlate } from "@/components/app/LabelPlate";
 import { AddReview } from "@/components/review/AddReview";
 import type { CheckInRow, ItemView } from "./adapter";
 import { CellarItemHeader } from "./CellarItemHeader";
@@ -85,7 +86,9 @@ export function CellarItemPageView({
           <ItemImageWithCaptureClient
             url={bottle.displayImage?.url}
             placeholder={bottle.displayImage?.placeholder}
-            fallback={config.fallback}
+            fallback={
+              <LabelPlate type={item.type} plate={item.plate} labelled />
+            }
             itemId={item.itemId}
             itemType={item.type}
             cellarId={cellar.id}

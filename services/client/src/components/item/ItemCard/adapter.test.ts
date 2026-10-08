@@ -47,7 +47,38 @@ describe("itemCardFromItem", () => {
       reviewed: undefined,
       favoriteCount: null,
       isFavorite: true,
+      myScore: null,
+      plate: { producer: "Vietti", name: "Barolo", vintage: "2016" },
     });
+  });
+
+  test("the LabelPlate gets region (else country) and ABV when selected", () => {
+    const card = itemCardFromItem({
+      ...wine,
+      region: "Piedmont",
+      country: "ITALY",
+      alcoholContentPercentage: 14.5,
+    });
+    assert.deepEqual(card.plate, {
+      producer: "Vietti",
+      name: "Barolo",
+      vintage: "2016",
+      origin: "Piedmont",
+      abv: "14.5%",
+    });
+    assert.equal(
+      itemCardFromItem({ id: "t", type: "TEA", name: "T", country: "JAPAN" })
+        .plate?.origin,
+      "Japan",
+    );
+  });
+
+  test("myScore is the viewer's own score, null when unreviewed", () => {
+    assert.equal(
+      itemCardFromItem({ ...wine, myReview: { score: 4.5 } }).myScore,
+      4.5,
+    );
+    assert.equal(itemCardFromItem({ ...wine, myReview: null }).myScore, null);
   });
 
   test("the primary brand wins over page order; else the first", () => {
