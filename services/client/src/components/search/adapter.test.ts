@@ -86,6 +86,9 @@ describe("searchStateFromParams (the old hasActiveSearch)", () => {
   test("an implausibly long code is ignored, not sent", () => {
     const long = "1".repeat(MAX_BARCODE_LENGTH + 1);
     assert.equal(searchStateFromParams({ barcode: long }).barcode, null);
+    // `%00` failed the lookup and crashed the page (UX lane, 2026-10-08).
+    assert.equal(searchStateFromParams({ barcode: "\u0000" }).barcode, null);
+    assert.equal(searchStateFromParams({ barcode: "12\u001f3" }).barcode, null);
   });
   test("?image= carries an uploaded photo's file id, not result rows (G32)", () => {
     const id = "0B5F8C2E-9D61-4C7A-8F0E-3A1B2C4D5E6F";
@@ -130,6 +133,7 @@ describe("barcodeSearchHref", () => {
   });
   test("blank and over-long codes go nowhere", () => {
     assert.equal(barcodeSearchHref("  "), null);
+    assert.equal(barcodeSearchHref("123\u0000"), null);
     assert.equal(barcodeSearchHref("9".repeat(MAX_BARCODE_LENGTH + 1)), null);
   });
   test("round-trips through searchStateFromParams", () => {

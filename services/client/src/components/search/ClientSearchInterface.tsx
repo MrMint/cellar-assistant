@@ -383,6 +383,7 @@ export const ClientSearchInterface = ({
                   Scan barcode
                 </Typography>
                 <BarcodeScanner
+                  cameraFallbackHint="Cancel to search by name instead."
                   onChange={(barcode) => {
                     send({ type: "FOUND", barcode });
                     const href = barcodeSearchHref(barcode.text);

@@ -15,8 +15,17 @@ import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
 import { schema } from "./index.ts";
 
-const run = (document: string, context: ReturnType<typeof testContext>) =>
-  execute({ schema, document: parse(document), contextValue: context });
+const run = (
+  document: string,
+  context: ReturnType<typeof testContext>,
+  variableValues?: Record<string, unknown>,
+) =>
+  execute({
+    schema,
+    document: parse(document),
+    contextValue: context,
+    variableValues,
+  });
 
 const viewer = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -84,6 +93,22 @@ describe("barcode query", () => {
       actorType: "ItemActor",
       actorId: "wine:w1",
     });
+  });
+});
+
+describe("a code no row can hold", () => {
+  it("a control character is NotFound without reaching the actor", async () => {
+    const { invoke, calls } = stubSidecar({});
+    const result = await run(
+      `query ($code: String!) { barcode(code: $code) { __typename } }`,
+      testContext(invoke, viewer),
+      { code: "\u0000" },
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.barcode).toMatchObject({
+      __typename: "NotFoundError",
+    });
+    expect(calls).toHaveLength(0);
   });
 });
 
