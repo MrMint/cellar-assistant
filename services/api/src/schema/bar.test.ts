@@ -509,3 +509,39 @@ describe("Recipe.makeability with nothing required", () => {
     });
   });
 });
+
+describe("Recipe.makeability names what it cannot place", () => {
+  it("by the generic item's own name, not 'An ingredient'", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => recipeDto,
+      "RecipeActor.ingredients": () =>
+        pageOf([
+          ingredient("i1", { kind: "rye", role: "base" }),
+          ingredient("i2", { kind: null, role: null }),
+        ]),
+      "BarActor.inventory": () => inventory,
+      "ItemActor.getGeneric": () => ({
+        id: GENERIC_ID,
+        name: "Crème de violette",
+      }),
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe {
+          makeability { status missing missingKinds }
+      } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({
+      makeability: {
+        status: "ONE_AWAY",
+        missing: ["Crème de violette"],
+        missingKinds: [],
+      },
+    });
+    // Only the unplaced line is looked up.
+    expect(calls.filter((call) => call.method === "getGeneric")).toHaveLength(
+      1,
+    );
+  });
+});

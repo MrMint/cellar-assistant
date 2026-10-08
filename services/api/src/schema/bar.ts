@@ -46,8 +46,11 @@ import {
   barKindLabel,
   EMPTY_BAR_INVENTORY,
   ForbiddenError,
+  genericItemActorId,
+  ItemActorDescriptor,
   ingredientAvailability,
   ingredientItemType,
+  isBarKind,
   MAKEABILITY_STATUSES,
   MAX_PAGE_SIZE,
   offsetPage,
@@ -371,16 +374,37 @@ builder.objectFields(RecipeType_, (t) => ({
           .ingredients({ first: MAX_PAGE_SIZE, after: null }),
         viewerInventory(context),
       ]);
-      const result = recipeMakeability(
-        page.entries.map(({ node: row }) => {
-          const type = ingredientItemType(row.ref);
-          return {
-            kind: row.kind,
-            role: row.role,
-            isOptional: row.isOptional,
-            item: type === null ? null : { type, id: row.ref.id },
-          };
+      const lines = page.entries.map(({ node: row }) => {
+        const type = ingredientItemType(row.ref);
+        return {
+          row,
+          kind: row.kind,
+          role: row.role,
+          isOptional: row.isOptional,
+          item: type === null ? null : { type, id: row.ref.id },
+        };
+      });
+      // An ingredient the vocabulary cannot place is named by what the
+      // recipe calls it ("Crème de violette"), not "An ingredient" — the
+      // same words What can I make uses. Only those lines, and only generic
+      // ones (a catalog bottle always has a kind or a type), so this is a
+      // read or two, not one per ingredient.
+      const names = await Promise.all(
+        lines.map(async ({ row, kind, isOptional, role }) => {
+          if (isBarKind(kind) || isOptional || role === "garnish") return null;
+          if (row.ref.type !== "GENERIC") return null;
+          try {
+            const generic = await context
+              .actor(ItemActorDescriptor, genericItemActorId(row.ref.id))
+              .getGeneric();
+            return generic.name;
+          } catch {
+            return null;
+          }
         }),
+      );
+      const result = recipeMakeability(
+        lines.map((line, index) => ({ ...line, name: names[index] ?? null })),
         inventory,
       );
       // Nothing required (no ingredients yet, or only garnishes and
