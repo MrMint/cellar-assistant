@@ -39,6 +39,7 @@ import { eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
+import { DeadlineExceededError, withDeadline } from "../lib/deadline.ts";
 import { geocellOf } from "../lib/geocell.ts";
 import {
   activate,
@@ -58,10 +59,8 @@ import {
   confidenceFromReview,
   PLACE_REVIEW_TIMEOUT_MS,
   PlaceCreationActor,
-  ReviewTimeoutError,
   setPlaceReviewer,
   unconfiguredPlaceReviewer,
-  withDeadline,
 } from "./place-creation-actor.ts";
 
 const daprClient = (): DaprClient =>
@@ -1050,8 +1049,8 @@ describe("withDeadline (N09)", () => {
   it("rejects with the timeout error when the deadline passes first", async () => {
     const never = new Promise<string>(() => {});
     await expect(
-      withDeadline(never, 10, () => new ReviewTimeoutError("late")),
-    ).rejects.toBeInstanceOf(ReviewTimeoutError);
+      withDeadline(never, 10, () => new DeadlineExceededError("late")),
+    ).rejects.toBeInstanceOf(DeadlineExceededError);
   });
 
   it("propagates the work's own rejection", async () => {

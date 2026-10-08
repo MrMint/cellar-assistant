@@ -132,6 +132,7 @@ import type { ActorId, DaprClient } from "@dapr/dapr";
 import { ActorBase } from "../lib/actor-base.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
+import { DeadlineExceededError, withDeadline } from "../lib/deadline.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
 import {
@@ -321,33 +322,6 @@ export const placeReviewer = (): PlaceReviewer => installedPlaceReviewer;
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
-
-/** The review did not answer in time (N09). Caught by `#reviewOrNull`. */
-export class ReviewTimeoutError extends Error {
-  override readonly name = "ReviewTimeoutError";
-}
-
-/**
- * `work`, or `onTimeout()`'s error once `ms` have passed — whichever is first.
- *
- * The losing `work` is not cancelled (the reviewer seam takes no signal), so
- * its eventual rejection is swallowed here rather than surfacing as an
- * unhandled rejection after the creation has already gone ahead. A
- * non-positive or non-finite `ms` means "no deadline".
- */
-export const withDeadline = <T>(
-  work: Promise<T>,
-  ms: number,
-  onTimeout: () => Error,
-): Promise<T> => {
-  if (!Number.isFinite(ms) || ms <= 0) return work;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(onTimeout()), ms);
-  });
-  work.catch(() => undefined);
-  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
-};
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -597,7 +571,7 @@ export class PlaceCreationActor
         this.#review(ctx, subject),
         this.#reviewTimeoutMs,
         () =>
-          new ReviewTimeoutError(
+          new DeadlineExceededError(
             `the AI review took longer than ${this.#reviewTimeoutMs}ms; ` +
               "the place is created unreviewed (review: null)",
           ),
