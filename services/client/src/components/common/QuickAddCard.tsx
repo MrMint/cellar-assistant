@@ -1,17 +1,13 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  LinearProgress,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useCallback, useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Spinner } from "@/components/ui/spinner";
 import { QUICK_ADD_AUTO_CONFIRM_DELAY } from "@/constants";
+import { cn } from "@/lib/utils";
 
 export type ItemType = "WINE" | "BEER" | "SPIRIT" | "COFFEE" | "SAKE" | "TEA";
 
@@ -54,12 +50,20 @@ type QuickAddCardProps = {
   summary?: string;
 };
 
-function getConfidenceColor(
-  confidence: number,
-): "success" | "warning" | "danger" {
-  if (confidence >= 0.9) return "success";
-  if (confidence >= 0.7) return "warning";
-  return "danger";
+/**
+ * The match chip's tone: Joy's soft success / warning / danger. The tokens
+ * have no amber, so the middle band is a neutral chip; danger is text and
+ * outline (design §3.1), never a solid slab.
+ */
+function confidenceBadge(confidence: number): {
+  variant: "secondary" | "destructive";
+  className?: string;
+} {
+  if (confidence >= 0.9)
+    return { variant: "secondary", className: "bg-success/15 text-success" };
+  if (confidence >= 0.7)
+    return { variant: "secondary", className: "bg-surface-3 text-ink-1" };
+  return { variant: "destructive" };
 }
 
 function getItemSummary(
@@ -171,139 +175,100 @@ export const QuickAddCard = ({
 
   const progress = (countdown / autoConfirmSeconds) * 100;
   const confidencePercent = Math.round(confidence * 100);
+  const badge = confidenceBadge(confidence);
 
   return (
     <Card
-      variant="outlined"
-      sx={{
-        maxWidth: 400,
-        mx: "auto",
-      }}
+      className="mx-auto w-full max-w-[400px] gap-4 border-0 bg-surface-1 p-4 shadow-none"
       onMouseEnter={handlePause}
       onTouchStart={handlePause}
     >
-      <CardContent>
-        <Stack spacing={2}>
-          {heading !== undefined && (
-            <Typography level="title-sm" color="neutral">
-              {heading}
-            </Typography>
+      {heading !== undefined && (
+        <p className="type-callout font-semibold text-ink-2">{heading}</p>
+      )}
+      {/* Header with name and confidence */}
+      <div className="flex flex-row items-start justify-between">
+        <h2 className="type-headline mr-2 flex-1">
+          {defaults.name || "Unknown Item"}
+        </h2>
+        <Badge
+          variant={badge.variant}
+          className={cn("tabular", badge.className)}
+        >
+          {confidencePercent}% match
+        </Badge>
+      </div>
+
+      {/* Brand info */}
+      {defaults.brand_name && (
+        <div className="flex flex-row items-center gap-2">
+          <p className="type-body font-semibold">{defaults.brand_name}</p>
+          {defaults.is_new_brand && (
+            <Badge variant="secondary" className="bg-success/15 text-success">
+              New
+            </Badge>
           )}
-          {/* Header with name and confidence */}
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="flex-start"
-          >
-            <Typography level="title-lg" sx={{ flex: 1, mr: 1 }}>
-              {defaults.name || "Unknown Item"}
-            </Typography>
-            <Chip
-              color={getConfidenceColor(confidence)}
-              size="sm"
-              variant="soft"
-            >
-              {confidencePercent}% match
-            </Chip>
-          </Stack>
+        </div>
+      )}
 
-          {/* Brand info */}
-          {defaults.brand_name && (
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Typography level="body-md" fontWeight="lg" color="primary">
-                {defaults.brand_name}
-              </Typography>
-              {defaults.is_new_brand && (
-                <Chip size="sm" color="success" variant="soft">
-                  New
-                </Chip>
-              )}
-            </Stack>
-          )}
+      {/* Item summary */}
+      <p className="type-callout text-ink-2">
+        {summary !== undefined && summary !== ""
+          ? summary
+          : getItemSummary(defaults, itemType)}
+      </p>
 
-          {/* Item summary */}
-          <Typography level="body-sm" color="neutral">
-            {summary !== undefined && summary !== ""
-              ? summary
-              : getItemSummary(defaults, itemType)}
-          </Typography>
+      {/* Description preview if available */}
+      {defaults.description && (
+        <p className="type-footnote line-clamp-2">{defaults.description}</p>
+      )}
 
-          {/* Description preview if available */}
-          {defaults.description && (
-            <Typography
-              level="body-xs"
-              color="neutral"
-              sx={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-              }}
-            >
-              {defaults.description}
-            </Typography>
-          )}
+      {/* Countdown progress */}
+      {!isPaused && !isConfirming && (
+        <div>
+          <Progress
+            value={progress}
+            aria-label="Time until it is added"
+            className="h-1"
+          />
+          <p className="type-footnote tabular mt-1 text-center">
+            Adding in {countdown}s...
+          </p>
+        </div>
+      )}
 
-          {/* Countdown progress */}
-          {!isPaused && !isConfirming && (
-            <Box>
-              <LinearProgress
-                determinate
-                value={progress}
-                color="primary"
-                sx={{ height: 4, borderRadius: 2 }}
-              />
-              <Typography
-                level="body-xs"
-                color="neutral"
-                textAlign="center"
-                mt={0.5}
-              >
-                Adding in {countdown}s...
-              </Typography>
-            </Box>
-          )}
+      {error !== null && (
+        <p className="type-callout text-destructive">{error}</p>
+      )}
 
-          {error !== null && (
-            <Typography level="body-sm" color="danger">
-              {error}
-            </Typography>
-          )}
+      {isPaused && !isConfirming && error === null && (
+        <p className="type-footnote text-center">Auto-add paused</p>
+      )}
 
-          {isPaused && !isConfirming && error === null && (
-            <Typography level="body-xs" color="neutral" textAlign="center">
-              Auto-add paused
-            </Typography>
-          )}
-
-          {/* Action buttons */}
-          <Stack direction="row" spacing={2}>
-            <Button
-              variant="outlined"
-              color="neutral"
-              onClick={onEdit}
-              disabled={isConfirming}
-              sx={{ flex: 1 }}
-            >
-              {editLabel}
-            </Button>
-            <Button
-              variant="solid"
-              color="primary"
-              onClick={handleConfirm}
-              loading={isConfirming}
-              sx={{ flex: 1 }}
-            >
-              {isConfirming
-                ? "Adding..."
-                : isPaused
-                  ? (confirmLabel ?? "Add to Cellar")
-                  : `${confirmLabel ?? "Add"} (${countdown}s)`}
-            </Button>
-          </Stack>
-        </Stack>
-      </CardContent>
+      {/* Action buttons */}
+      <div className="flex flex-row gap-4">
+        <Button
+          variant="outline"
+          onClick={onEdit}
+          disabled={isConfirming}
+          className="flex-1"
+        >
+          {editLabel}
+        </Button>
+        <Button
+          onClick={handleConfirm}
+          disabled={isConfirming}
+          aria-busy={isConfirming || undefined}
+          className="tabular flex-1"
+        >
+          {isConfirming && <Spinner aria-hidden />}
+          {isConfirming
+            ? "Adding..."
+            : isPaused
+              ? (confirmLabel ?? "Add to Cellar")
+              : `${confirmLabel ?? "Add"} (${countdown}s)`}
+        </Button>
+      </div>
     </Card>
   );
 };

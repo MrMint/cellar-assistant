@@ -1,15 +1,27 @@
 "use client";
 
-import { Box, Typography } from "@mui/joy";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { color } from "@/lib/tokens";
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 const NUM_PARTICLES = 400;
 const PHASE_DURATION = 6000;
 const CANVAS_W = 300;
 const CANVAS_H = 500;
-const TEAL = "112,163,169";
-const LIGHT_TEAL = "175,204,207";
+
+/** `#RRGGBB` → its three channels, for the canvas's `rgba()` strings. */
+const channels = (hex: string): number[] =>
+  [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+
+// The canvas cannot read a CSS variable, so its colours come from the tokens:
+// teal is `--ca-ai` (the AI is working, D21), and the light tint is that teal
+// halfway to parchment ink.
+const AI_RGB = channels(color.ai);
+const INK_RGB = channels(color.ink1);
+const TEAL = AI_RGB.join(",");
+const LIGHT_TEAL = AI_RGB.map((c, i) =>
+  Math.round((c + (INK_RGB[i] ?? c)) / 2),
+).join(",");
 
 type Point = { x: number; y: number };
 
@@ -792,59 +804,23 @@ export function AnimationShowcase({
   }, [shapes, scatterPoints]);
 
   return (
-    <Box
-      sx={{
-        width: "100%",
-        height: "min(calc(100dvh - 8rem), 600px)",
-        display: "flex",
-        flexDirection: "column",
-        position: "relative",
-      }}
-    >
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
+    <div className="relative flex h-[min(calc(100dvh-8rem),600px)] w-full flex-col">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
           height={CANVAS_H}
-          style={{ maxWidth: 260, maxHeight: "65vh" }}
+          className="max-h-[65vh] max-w-[260px]"
           role="img"
           aria-label={`Scanning ${currentType}`}
         />
-      </Box>
+      </div>
 
-      <Box
-        sx={{
-          p: 2,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 1,
-          bgcolor: "rgba(17,16,21,0.9)",
-          backdropFilter: "blur(10px)",
-          borderTop: "1px solid",
-          borderColor: "neutral.800",
-        }}
-      >
-        <Typography
-          level="h4"
-          sx={{
-            color: "primary.300",
-            letterSpacing: "0.15em",
-            textTransform: "uppercase",
-            fontSize: "0.85rem",
-          }}
-        >
+      <div className="flex flex-col items-center gap-2 border-line border-t bg-background/90 p-4 backdrop-blur-md">
+        <p role="status" className="type-overline text-ai">
           {statusText}
-        </Typography>
-      </Box>
-    </Box>
+        </p>
+      </div>
+    </div>
   );
 }
