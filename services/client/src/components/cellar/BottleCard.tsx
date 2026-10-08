@@ -137,7 +137,7 @@ export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
         >
           <div
             className={cn(
-              "h-full w-full origin-left rounded-full transition-transform duration-(--ca-dur-medium) ease-standard",
+              "h-full w-full origin-left rounded-full transition-transform duration-(--ca-dur-medium) ease-standard motion-reduce:transition-none",
               state.kind === "open" ? LEVEL_FILL[type] : "bg-ink-3/40",
             )}
             style={{ transform: `scaleX(${state.level / 100})` }}
