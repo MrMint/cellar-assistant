@@ -230,7 +230,9 @@ export const ItemPageRecipesFragment = graphql(`
 /**
  * `/{type}s/[itemId]` — the item, its relations, the viewer, and the cellars
  * the viewer can drop a bottle into (the old page's `cellars` prop: own and,
- * now, co-owned — `myCellars` is `canSeeCellar`, so the adapter filters).
+ * now, co-owned). `section: MINE` asks the server for exactly those (X11), so
+ * the walk no longer pages through every stranger's PUBLIC cellar to find
+ * them; the adapter's own filter stays as the second check.
  */
 export const ItemPageQuery = graphql(
   `
@@ -238,7 +240,7 @@ export const ItemPageQuery = graphql(
     me {
       id
     }
-    myCellars(first: 100) {
+    myCellars(first: 100, section: MINE) {
       __typename
       ... on CellarConnection {
         pageInfo {
@@ -541,7 +543,7 @@ export const CellarCoOwnersPageQuery = graphql(
 export const AddableCellarsPageQuery = graphql(
   `
   query AddableCellarsPage($after: String!) {
-    myCellars(first: 100, after: $after) {
+    myCellars(first: 100, after: $after, section: MINE) {
       __typename
       ... on CellarConnection {
         pageInfo {

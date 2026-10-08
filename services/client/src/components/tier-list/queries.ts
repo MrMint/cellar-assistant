@@ -13,11 +13,10 @@
  *   a band's full membership and the old page always held every entry.
  * - `GetTierListsForItem` (the viewer's own lists of one type, each with the
  *   entity's row if present) → the entity's own `tierListEntries` (G8) for
- *   "Already added (band)", plus **every** visible list
- *   (`MyTierListOptionsPageQuery`, walked to the end by `useAllMyTierLists`)
- *   narrowed to the viewer's own and the type client-side. G33 (a server
- *   filter) is not built, so the walk is what keeps a viewer who sees more
- *   than 100 lists from losing their own.
+ *   "Already added (band)", plus the viewer's own lists
+ *   (`MyTierListOptionsPageQuery`, `section: MINE` since X11 — G33's owner
+ *   half — walked to the end by `useAllMyTierLists`) narrowed to the type
+ *   client-side.
  * - `GetUserItemReviews` → `Item.myReview` on the entry (fragments.ts).
  * - Every write is a named command returning a result union.
  */
@@ -131,9 +130,10 @@ export const TierListViewerQuery = graphql(`
 `);
 
 /**
- * One page of the viewer's visible lists, with just what an "own lists of
- * this type" picker needs — the map's tier-list filter and the "Add to Tier
- * List" modal. `useAllMyTierLists` walks every page before either filters.
+ * One page of the viewer's **own** lists (`section: MINE`, X11), with just
+ * what an "own lists of this type" picker needs — the map's tier-list filter
+ * and the "Add to Tier List" modal. `useAllMyTierLists` walks every page
+ * before either narrows by type.
  */
 export const MyTierListOptionsPageQuery = graphql(
   `
@@ -141,7 +141,7 @@ export const MyTierListOptionsPageQuery = graphql(
       me {
         id
       }
-      myTierLists(first: $first, after: $after) {
+      myTierLists(first: $first, after: $after, section: MINE) {
         __typename
         ... on TierListConnection {
           pageInfo {
