@@ -34,17 +34,66 @@ describe("MeHub", () => {
     assert.ok(html.includes("pat@example.test"));
   });
 
-  test("Lists (Tier lists, Top rated, Loved), Friends, Recipes, Brands, Scans, Edit profile — in that order", () => {
+  test("Lists (Tier lists, Top rated, Loved), Friends, Scans, Edit profile — in that order", () => {
     assert.deepEqual(links, [
       "Tier lists -> /tier-lists",
       "Top rated -> /rankings",
       "Loved -> /favorites",
       "Friends -> /friends",
-      "Recipes -> /recipes",
-      "Brands -> /brands",
       "Scans -> /map/scans",
       "Edit profile -> /users/edit",
     ]);
+  });
+
+  test("D1: Recipes and Brands are not Me rows (Cellar › Bar, item pages, search)", () => {
+    assert.ok(!links.some((link) => link.endsWith("-> /recipes")));
+    assert.ok(!links.some((link) => link.endsWith("-> /brands")));
+  });
+
+  test("your tier lists are pinned first, then All tier lists", () => {
+    const pinned = renderToStaticMarkup(
+      <MeHub
+        user={user}
+        data={{
+          pinnedTierLists: [
+            { id: "t1", name: "Reds, ranked", itemCount: 9 },
+            { id: "t2", name: "Whisky wishlist", itemCount: 0 },
+          ],
+          tierListCount: 4,
+          pendingFriendRequests: 0,
+        }}
+      />,
+    );
+    const rows = [
+      ...pinned.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g),
+    ].map(([, href, inner]) => `${textOf(inner ?? "")} -> ${href}`);
+    assert.deepEqual(rows.slice(0, 4), [
+      "Reds, ranked -> /tier-lists/t1",
+      "Whisky wishlist -> /tier-lists/t2",
+      "All tier lists -> /tier-lists",
+      "Top rated -> /rankings",
+    ]);
+    assert.ok(textOf(pinned).includes("9 entries"));
+    // An empty list says nothing rather than "0 entries".
+    assert.ok(!textOf(pinned).includes("0 entries"));
+    assert.ok(textOf(pinned).includes("4 of yours"));
+  });
+
+  test("Friends carries a badge for pending requests, said in words to AT", () => {
+    const badged = renderToStaticMarkup(
+      <MeHub
+        user={user}
+        data={{
+          pinnedTierLists: [],
+          tierListCount: 0,
+          pendingFriendRequests: 2,
+        }}
+      />,
+    );
+    assert.match(badged, /data-slot="count-badge"[^>]*>2<\/span>/);
+    assert.match(textOf(badged), /Friends\s*,\s*2 friend requests/);
+    // No badge at zero.
+    assert.ok(!html.includes('data-slot="count-badge"'));
   });
 
   test("section labels, Lists first and Account last", () => {
