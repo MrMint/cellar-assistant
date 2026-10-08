@@ -5,9 +5,9 @@
  * the item and place pages. `userId` is accepted for old call sites only.
  */
 
-import { Button } from "@mui/joy";
 import { useState } from "react";
-import { MdFormatListNumbered } from "react-icons/md";
+import { ICON_STROKE, Ranked } from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
 import { AddToTierListModal } from "./AddToTierListModal";
 import type { TierListEntityType } from "./constants";
 
@@ -32,12 +32,8 @@ export const AddToTierListButton = ({
 
   return (
     <>
-      <Button
-        variant="outlined"
-        color="neutral"
-        startDecorator={<MdFormatListNumbered />}
-        onClick={() => setOpen(true)}
-      >
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <Ranked aria-hidden strokeWidth={ICON_STROKE} />
         Add to Tier List
       </Button>
       <AddToTierListModal

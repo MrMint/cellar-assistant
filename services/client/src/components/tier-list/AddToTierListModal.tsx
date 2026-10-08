@@ -11,32 +11,23 @@
  * (`tierListOptionsFor`) plus the entity's own `tierListEntries` (G8) for
  * membership. The walk is what keeps the viewer's own lists on offer when
  * they can see more than 100 (G33, a server-side filter, is not built).
+ *
+ * On the app's primitives (D20): a `ResponsiveDialog` (a bottom sheet on a
+ * phone), the lists as full-width row buttons, and a failure as a `notify`
+ * error toast in place of the Snackbar.
  */
 
-import {
-  Box,
-  Button,
-  CircularProgress,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Input,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemContent,
-  ListItemDecorator,
-  Modal,
-  ModalDialog,
-  Snackbar,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { MdAdd, MdCheck, MdFormatListNumbered } from "react-icons/md";
 import { useQuery } from "urql";
+import { Add, Check, ICON_STROKE, Ranked } from "@/components/app/icons";
+import { notify } from "@/components/app/notify";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { unwrapResult } from "@/lib/api/result";
+import { cn } from "@/lib/utils";
 import { useTierListActions } from "./actions";
 import { entryTypeOf, tierListOptionsFor } from "./adapter";
 import { BAND_LABELS, type TierListEntityType } from "./constants";
@@ -127,8 +118,6 @@ export function AddToTierListModal({
       })();
 
   const [addingToListId, setAddingToListId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
   const [showCreate, setShowCreate] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -163,7 +152,7 @@ export function AddToTierListModal({
           router.refresh();
           onClose();
         } else {
-          setError(result.error ?? "Failed to add item to tier list");
+          fail(result.error ?? "Failed to add item to tier list");
         }
       } finally {
         setAddingToListId(null);
@@ -175,7 +164,7 @@ export function AddToTierListModal({
   const handleCreateAndAdd = useCallback(async () => {
     const name = newListName.trim();
     if (name.length === 0) {
-      setError("Please enter a name for the new list");
+      fail("Please enter a name for the new list");
       return;
     }
     setCreating(true);
@@ -187,7 +176,7 @@ export function AddToTierListModal({
         entityType,
       );
       if (!created.success || !created.tierListId) {
-        setError(created.error ?? "Failed to create tier list");
+        fail(created.error ?? "Failed to create tier list");
         return;
       }
       const added = await addItemToTierListAction(
@@ -201,7 +190,7 @@ export function AddToTierListModal({
         router.refresh();
         onClose();
       } else {
-        setError(added.error ?? "Failed to add item to tier list");
+        fail(added.error ?? "Failed to add item to tier list");
       }
     } finally {
       setCreating(false);
@@ -219,163 +208,139 @@ export function AddToTierListModal({
   const hasLists = tierLists.length > 0;
 
   return (
-    <>
-      <Modal open={open} onClose={onClose}>
-        <ModalDialog variant="outlined" sx={{ maxWidth: 420, width: "100%" }}>
-          <DialogTitle>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <MdFormatListNumbered style={{ fontSize: 20 }} />
-              <span>Add to Tier List</span>
-            </Stack>
-          </DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Stack spacing={2}>
-              <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-                Add <strong>{entityName}</strong> to a tier list
-              </Typography>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title="Add to Tier List"
+      description={
+        <>
+          Add <strong>{entityName}</strong> to a tier list
+        </>
+      }
+      className="md:max-w-[420px]"
+    >
+      <div className="flex flex-col gap-4 pb-1">
+        {fetching ? (
+          <div className="flex justify-center py-4">
+            <Spinner />
+          </div>
+        ) : (
+          <>
+            {hasLists && (
+              <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
+                {tierLists.map((tl) => {
+                  const alreadyIn = tl.alreadyInBand !== null;
+                  const isAdding = addingToListId === tl.id;
+                  return (
+                    <li key={tl.id}>
+                      <button
+                        type="button"
+                        onClick={() => void handleAddToList(tl.id)}
+                        disabled={alreadyIn || busy}
+                        className={cn(
+                          "flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-surface-2 enabled:active:bg-surface-3",
+                          alreadyIn && "bg-success/10",
+                          busy && !alreadyIn && "opacity-60",
+                        )}
+                      >
+                        <span className="flex size-5 shrink-0 items-center justify-center text-ink-2">
+                          {isAdding ? (
+                            <Spinner aria-hidden />
+                          ) : alreadyIn ? (
+                            <Check
+                              aria-hidden
+                              strokeWidth={ICON_STROKE}
+                              className="size-5 text-success"
+                            />
+                          ) : (
+                            <Ranked
+                              aria-hidden
+                              strokeWidth={ICON_STROKE}
+                              className="size-5"
+                            />
+                          )}
+                        </span>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate font-semibold text-ink-1 type-callout">
+                            {tl.name}
+                          </span>
+                          {alreadyIn && (
+                            <span className="text-success type-footnote">
+                              Already added (
+                              {BAND_LABELS[tl.alreadyInBand ?? 0]})
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
-              {fetching ? (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                  <CircularProgress size="sm" />
-                </Box>
-              ) : (
-                <>
-                  {hasLists && (
-                    <List
-                      size="sm"
-                      variant="outlined"
-                      sx={{ borderRadius: "md", overflow: "hidden" }}
-                    >
-                      {tierLists.map((tl) => {
-                        const alreadyIn = tl.alreadyInBand !== null;
-                        const isAdding = addingToListId === tl.id;
-                        return (
-                          <ListItem key={tl.id}>
-                            <ListItemButton
-                              onClick={() => handleAddToList(tl.id)}
-                              disabled={alreadyIn || busy}
-                              sx={{
-                                borderRadius: "sm",
-                                ...(alreadyIn && {
-                                  bgcolor: "success.softBg",
-                                  "&.Mui-disabled": { opacity: 1 },
-                                }),
-                              }}
-                            >
-                              <ListItemDecorator>
-                                {isAdding ? (
-                                  <CircularProgress
-                                    size="sm"
-                                    sx={{ "--CircularProgress-size": "20px" }}
-                                  />
-                                ) : alreadyIn ? (
-                                  <MdCheck
-                                    style={{
-                                      color: "var(--joy-palette-success-500)",
-                                    }}
-                                  />
-                                ) : (
-                                  <MdFormatListNumbered />
-                                )}
-                              </ListItemDecorator>
-                              <ListItemContent>
-                                <Typography level="title-sm">
-                                  {tl.name}
-                                </Typography>
-                                {alreadyIn && (
-                                  <Typography
-                                    level="body-xs"
-                                    sx={{ color: "success.600" }}
-                                  >
-                                    Already added (
-                                    {BAND_LABELS[tl.alreadyInBand ?? 0]})
-                                  </Typography>
-                                )}
-                              </ListItemContent>
-                            </ListItemButton>
-                          </ListItem>
-                        );
-                      })}
-                    </List>
-                  )}
+            {!hasLists && !showCreate && (
+              <p className="text-center text-ink-3 type-callout">
+                You don't have any{" "}
+                {ENTITY_TYPE_LABELS[entityType].toLowerCase()} tier lists yet.
+              </p>
+            )}
 
-                  {!hasLists && !showCreate && (
-                    <Typography
-                      level="body-sm"
-                      sx={{ color: "text.tertiary", textAlign: "center" }}
-                    >
-                      You don't have any{" "}
-                      {ENTITY_TYPE_LABELS[entityType].toLowerCase()} tier lists
-                      yet.
-                    </Typography>
-                  )}
-
-                  {showCreate ? (
-                    <Stack spacing={1}>
-                      <Input
-                        autoFocus
-                        size="sm"
-                        placeholder="List name"
-                        value={newListName}
-                        onChange={(e) => setNewListName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !busy) {
-                            void handleCreateAndAdd();
-                          }
-                        }}
-                        disabled={busy}
-                      />
-                      <Stack direction="row" spacing={1}>
-                        <Button
-                          size="sm"
-                          startDecorator={<MdAdd />}
-                          loading={creating}
-                          disabled={busy}
-                          onClick={() => void handleCreateAndAdd()}
-                        >
-                          Create &amp; add
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="plain"
-                          color="neutral"
-                          disabled={busy}
-                          onClick={() => setShowCreate(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </Stack>
-                    </Stack>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outlined"
-                      color="neutral"
-                      startDecorator={<MdAdd />}
-                      disabled={busy}
-                      onClick={() => setShowCreate(true)}
-                    >
-                      Create new list
-                    </Button>
-                  )}
-                </>
-              )}
-            </Stack>
-          </DialogContent>
-        </ModalDialog>
-      </Modal>
-
-      <Snackbar
-        open={error !== null}
-        autoHideDuration={3000}
-        onClose={() => setError(null)}
-        color="danger"
-        variant="soft"
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        {error}
-      </Snackbar>
-    </>
+            {showCreate ? (
+              <div className="flex flex-col gap-2">
+                <Input
+                  autoFocus
+                  aria-label="List name"
+                  placeholder="List name"
+                  value={newListName}
+                  onChange={(e) => setNewListName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !busy) {
+                      void handleCreateAndAdd();
+                    }
+                  }}
+                  disabled={busy}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    disabled={busy}
+                    onClick={() => void handleCreateAndAdd()}
+                  >
+                    {creating ? (
+                      <Spinner aria-hidden />
+                    ) : (
+                      <Add aria-hidden strokeWidth={ICON_STROKE} />
+                    )}
+                    Create &amp; add
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => setShowCreate(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => setShowCreate(true)}
+              >
+                <Add aria-hidden strokeWidth={ICON_STROKE} />
+                Create new list
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    </ResponsiveDialog>
   );
+}
+
+/** A failure, said as a toast (the old Snackbar's job). */
+function fail(message: string) {
+  notify(message, { tone: "error" });
 }

@@ -1,20 +1,11 @@
 "use client";
 
-import {
-  Button,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Modal,
-  ModalDialog,
-  Typography,
-} from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { MdDeleteOutline } from "react-icons/md";
 import { useMutation } from "urql";
-import { ApiError } from "@/components/cellar-api/ApiError";
+import { ConfirmSheet } from "@/components/app/ConfirmSheet";
+import { Delete, ICON_STROKE } from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
 import { DeleteTierListMutation } from "./queries";
 
@@ -29,6 +20,9 @@ import { DeleteTierListMutation } from "./queries";
  * and makes the viewer empty it first. Two adjacent aggregates with opposite
  * delete semantics is exactly the situation where a dialog that says "are you
  * sure?" and nothing else gets someone's list of forty bars.
+ *
+ * The confirm is the app's `ConfirmSheet` (the one place solid danger lives);
+ * the API's refusal, when there is one, is said inside it, above its buttons.
  */
 export function DeleteTierListButton({
   tierListId,
@@ -62,46 +56,33 @@ export function DeleteTierListButton({
 
   return (
     <>
-      <Button
-        variant="outlined"
-        color="danger"
-        startDecorator={<MdDeleteOutline />}
-        onClick={() => setOpen(true)}
-      >
+      <Button variant="destructive" onClick={() => setOpen(true)}>
+        <Delete aria-hidden strokeWidth={ICON_STROKE} />
         Delete
       </Button>
-      <Modal open={open} onClose={() => setOpen(false)}>
-        <ModalDialog variant="outlined" role="alertdialog">
-          <DialogTitle>Delete this tier list?</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Typography level="body-sm">
-              <strong>{name}</strong> and its {itemCount}{" "}
-              {itemCount === 1 ? "entry" : "entries"} will be deleted. The items
-              and places themselves are not touched — only their place on this
-              list. This cannot be undone.
-            </Typography>
-            {error !== null && <ApiError error={error} />}
-          </DialogContent>
-          <DialogActions>
-            <Button
-              variant="solid"
-              color="danger"
-              loading={fetching}
-              onClick={confirm}
-            >
-              Delete
-            </Button>
-            <Button
-              variant="plain"
-              color="neutral"
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-          </DialogActions>
-        </ModalDialog>
-      </Modal>
+      <ConfirmSheet
+        open={open}
+        onOpenChange={(next) => {
+          if (!fetching) setOpen(next);
+        }}
+        title="Delete this tier list?"
+        description={
+          <>
+            <strong>{name}</strong> and its {itemCount}{" "}
+            {itemCount === 1 ? "entry" : "entries"} will be deleted. The items
+            and places themselves are not touched — only their place on this
+            list. This cannot be undone.
+            {error !== null && (
+              <span role="alert" className="mt-2 block text-destructive">
+                {error.message}
+              </span>
+            )}
+          </>
+        }
+        confirmLabel="Delete"
+        onConfirm={() => void confirm()}
+        pending={fetching}
+      />
     </>
   );
 }
