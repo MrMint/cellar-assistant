@@ -6,6 +6,7 @@ import {
   hasSessionCookie,
   parseCookieHeader,
 } from "./lib/api/session-cookie";
+import { REQUEST_PATH_HEADER, requestPathOf } from "./lib/auth/request-path";
 import { OFFLINE_PATH } from "./lib/pwa/offline";
 import { isPublicSharePath, publicRewriteFor } from "./lib/share/routes";
 
@@ -62,7 +63,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   const cookies = parseCookieHeader(request.headers.get("cookie"));
   if (hasSessionCookie(cookies)) {
-    const response = NextResponse.next();
+    // The path, for `getServerUser()`'s redirect if the session behind this
+    // cookie turns out to be over (`lib/auth/request-path.ts`).
+    const forwarded = new Headers(request.headers);
+    forwarded.set(REQUEST_PATH_HEADER, requestPathOf(request.nextUrl));
+    const response = NextResponse.next({ request: { headers: forwarded } });
     if (cookies.some((cookie) => cookie.name === SESSION_CHECKED_COOKIE)) {
       return response;
     }
