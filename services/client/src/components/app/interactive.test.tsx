@@ -524,6 +524,12 @@ describe("AppBar", () => {
     );
     assert.match(del?.className ?? "", /text-destructive/);
     await click(del);
+    // The action waits for the sheet to finish closing, so a ConfirmSheet it
+    // opens never overlaps the closing sheet (stuck pointer-events on body).
+    assert.equal(deleted, 0);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 700));
+    });
     assert.equal(deleted, 1);
   });
 });

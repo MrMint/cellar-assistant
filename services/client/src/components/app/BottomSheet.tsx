@@ -51,6 +51,12 @@ export type BottomSheetProps = {
   initialSnap?: SheetSnap;
   /** `false`: no drag-down or backdrop dismiss (a blocking step). */
   dismissible?: boolean;
+  /**
+   * Runs once the close animation has finished and the sheet is gone. Open
+   * another modal from here, never in the same tick as closing this one: two
+   * Radix/vaul modals overlapping can leave `pointer-events: none` on body.
+   */
+  onClosed?: () => void;
   /** `alertdialog` for a confirm (`ConfirmSheet`); a plain dialog otherwise. */
   role?: "dialog" | "alertdialog";
   /** Pinned under the content, above the home indicator. */
@@ -78,6 +84,7 @@ export function BottomSheet({
   snapPoints,
   initialSnap,
   dismissible = true,
+  onClosed,
   role = "dialog",
   footer,
   className,
@@ -110,6 +117,9 @@ export function BottomSheet({
       onOpenChange={onOpenChange}
       dismissible={dismissible}
       shouldScaleBackground={false}
+      onAnimationEnd={(nowOpen) => {
+        if (!nowOpen) onClosed?.();
+      }}
       {...snapProps}
     >
       <DrawerContent

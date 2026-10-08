@@ -1,7 +1,14 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, type ReactNode, useEffect, useState } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -64,6 +71,9 @@ export type AppBarProps = {
  *
  * The collapsing large title waits for B02; this is the compact bar.
  */
+/** Longer than vaul's close animation; only used when no animation end fires. */
+const CLOSE_FALLBACK_MS = 600;
+
 export function AppBar({
   title,
   parent,
@@ -76,6 +86,22 @@ export function AppBar({
   const desktop = useMediaQuery(breakpointUp("md"));
   const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
+  // An overflow item chosen on a phone runs only after the sheet has closed:
+  // its action often opens a ConfirmSheet, and a second modal mounting while
+  // the first is still closing can leave `pointer-events: none` stuck on body.
+  const pending = useRef<(() => void) | null>(null);
+  const runPending = useCallback(() => {
+    const action = pending.current;
+    pending.current = null;
+    action?.();
+  }, []);
+  // Fallback for when no close animation runs (reduced motion, tests): the
+  // ref makes a second call a no-op.
+  useEffect(() => {
+    if (sheetOpen || pending.current === null) return;
+    const id = window.setTimeout(runPending, CLOSE_FALLBACK_MS);
+    return () => window.clearTimeout(id);
+  }, [sheetOpen, runPending]);
   // Read after mount: sessionStorage does not exist on the server, and a
   // Back that appeared only on the client would be a hydration mismatch.
   const [hasHistory, setHasHistory] = useState(false);
@@ -143,7 +169,9 @@ export function AppBar({
         )}
         {overflow.length > 0 &&
           (desktop ? (
-            <DropdownMenu>
+            // Non-modal: an item that opens a dialog must not race the menu's
+            // own modal teardown (the same stuck pointer-events as above).
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <IconButton aria-label="More actions">
                   <More />
@@ -173,6 +201,7 @@ export function AppBar({
               <BottomSheet
                 open={sheetOpen}
                 onOpenChange={setSheetOpen}
+                onClosed={runPending}
                 title={typeof title === "string" ? title : "Actions"}
                 hideTitle
               >
@@ -182,8 +211,8 @@ export function AppBar({
                       <button
                         type="button"
                         onClick={() => {
+                          pending.current = item.onSelect;
                           setSheetOpen(false);
-                          item.onSelect();
                         }}
                         className={cn(
                           "type-body flex min-h-12 w-full items-center rounded-md px-3 text-left active:bg-surface-3",
