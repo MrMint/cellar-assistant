@@ -58,3 +58,70 @@ Recommended option taken unless the row says otherwise. Notes are the user's, li
 - **Order:** Joy-era fixes → full shadcn migration → the rest of the roadmap on shadcn.
 - **Scope:** the whole roadmap (Now, Next, Later), minus the "Don't build" list.
 - **Branch:** everything lands on `claude/app-review-improvement-plan-8072ba`, delivered as **one PR at the end**.
+
+## Implementation calls
+
+Product calls taken while building the answers above, so the user can see and
+reverse them. Each names the item it belongs to; none overrides an answer.
+
+### Shell, first run and sections (wave A "shell": X01, N15, X11, N29)
+
+- **One landing (X01, D1).** Sign-in, sign-up (password and social) and a
+  signed-in visit to `/sign-in` go to `/` when nothing else was asked for;
+  `/` still redirects to `/search` until X10. Because `/cellars` is no longer
+  the default, a signed-out visit to `/cellars` now carries
+  `?returnTo=/cellars` like any other page.
+- **Greeting (X01).** Rendered by the browser only: the server sends an empty
+  line of the heading's height and the greeting fades in after hydration. No
+  time-neutral server placeholder ("Hello, Riley"): it would swap text in
+  front of the viewer.
+- **Quick-link chips (X01).** Deleted outright, not moved: every one duplicated
+  a tab (Cellar, Map) or a Me row (Tier lists, Loved, Top rated).
+- **Recipes and Brands in search (D1, ahead of D10).** A text search ends with
+  up to three recipe groups and three brands, each section with "See all" into
+  `/recipes?q=` or `/brands?q=` (`/brands` now reads `?q=`). D10's one-page
+  layout replaces this ordering later.
+- **Cellar tab's Bar (D1, ahead of X04).** `/cellars` and `/recipes` carry a
+  two-link "Cellars · Bar" switch styled like a segmented control; Bar is
+  today's `/recipes` page. X04 grows it into the cellar switcher.
+- **Me hub (D1).** Lists opens with up to **three** of your own tier lists
+  (most recently changed), then "All tier lists" ("N of yours" when there are
+  more), then Top rated and Loved. Recipes and Brands are no longer Me rows
+  (Cellar › Bar and search; item pages for brands). **Scans stay in Me › More**
+  until X10's "Waiting on you" exists. The Friends badge counts pending
+  incoming requests (read up to 100; "99+" past that) on the Friends row only,
+  **not on the Me tab**, which would need polling from the tab bar. The badge
+  uses the brass action colour, since every request is something to act on.
+- **Sections (X11, D2).** Server-side: `myCellars` and `myTierLists` take an
+  optional `section` (`MINE`, `FRIENDS`, `DISCOVER`) that partitions what the
+  viewer may see; omitted, they return the old whole set (the item page's
+  pickers still use that). From friends means *created by* a friend, so a
+  stranger's PUBLIC cellar that a friend co-owns is in Discover. Discover shows
+  **six** at a time; Yours and From friends a screenful (24 cellars, 100 tier
+  lists); all have "Show more". Empty From friends and Discover sections are
+  not drawn; Yours always is. Your tier lists are ordered by when their
+  contents last changed (D13's activity order is for cellars).
+- **Starter cellar (N15).** "My Cellar", PRIVATE, made once, when the account
+  is created (better-auth's user-create hook, then the outbox, then
+  `CellarActor.createStarter`). Deleting it does not bring it back, and
+  accounts created before this change get the first-run state, not a cellar.
+- **Empty states (N15, design §3.6).** Your cellars: "Your cellar is waiting."
+  with New cellar (only when you have none at all, since a new account already
+  has one). An empty cellar: "Your cellar is waiting." with Snap a bottle; a
+  friend viewing it sees "Nothing in this cellar yet." and no action. Your
+  tier lists: "Nothing ranked yet." with New tier list. An empty tier list:
+  "Nothing ranked yet." with "Add from what you've tasted", which opens Add
+  entry (owner, unlocked only). No friends: "Taste is better compared." with
+  Invite a friend.
+- **Invite a friend.** The system share sheet with a link to `/sign-up` on this
+  origin, or the link copied where there is no sheet. No referral id or
+  inviter name goes in the URL.
+- **Top rated (N15).** The page title is "Top rated" (D1's name for Rankings).
+  The control is Me · Friends · Everyone, Me by default, held in `?scope=`
+  (`friends`, `everyone`; absent means Me). Old `?reviewers=` links are not
+  translated and read as Me. `ME_AND_FRIENDS` stays a server scope but is not
+  offered. Each card shows its place on the board as a numeral (Fraunces; #1
+  in claret).
+- **Install prompt (N15).** "First save" counts a bottle added to a cellar or
+  an item confirmed in the onboarding wizard, announced the moment it happens
+  rather than at the next navigation.

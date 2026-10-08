@@ -9,6 +9,22 @@
 > still holds from here is the *behavioural* parity (same data, same flows) and
 > the server-side decisions. Kept as history.
 
+> **Answered (2026-10-07).** The open questions below ("Awaiting the user")
+> were folded into the 29 product decisions of
+> [`docs/product/ux-roadmap.md`](../product/ux-roadmap.md) and answered by the
+> user; the answers are in [`docs/product/decisions.md`](../product/decisions.md),
+> which **wins** over anything here. Per item: 1 → D3 (the overview merges into
+> the cellar page, whose top becomes a dashboard); 2 and 14 → D4 (keep Add
+> entry and delete; the padlock becomes "Arrange", with an edit history);
+> 3 → D5; 4 and 5 → D6; 6 → D7 (type lists removed); 7 → D8; 8 → D9; 9 → D10
+> and X01 (the quick-link chips are deleted, not restored); 10 → D11 and D18;
+> 11 → D12; 12 and 13 → D13 (count bottles still in the cellar; order cellars
+> by recent activity); 15 → D14; 16 → D15; 17 → D16; 18 → D17; 19 → D18; 20 →
+> D19. Gating answer 2's "the Your/Shared split goes" is reversed by D2:
+> `/cellars` and `/tier-lists` are Yours · From friends · Discover again (X11),
+> as server-side sections. Calls taken while implementing the answers are in
+> `decisions.md` under "Implementation calls".
+
 **Status:** defaults chosen 2026-10-04 by the orchestrating agent under the user's
 standing instruction, so the restore can proceed without blocking. **Every row
 marked _default_ is open to the user's override**; a row marked _user_ is theirs.
@@ -58,10 +74,12 @@ wave merges.
   2026-10-05 — restore it; see item 19.
 - Anything that changes production data or URLs beyond row 1.
 
-## Awaiting the user (collected 2026-10-05)
+## Awaiting the user (collected 2026-10-05) — answered, see the note at the top
 
 Everything below shipped as described so the restore could finish; each is a
-one-line or small change to reverse. Answer per item.
+one-line or small change to reverse. **Answered 2026-10-07** through the
+roadmap's D1–D29 (`docs/product/decisions.md`); the per-item mapping is the
+"Answered" note at the top of this file.
 
 ### Kept new-only (the rewrite added it; the old UI had nothing there)
 1. `/cellars/[id]` overview page (old URL only printed the id), with a per-card
