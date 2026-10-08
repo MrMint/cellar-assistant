@@ -9,7 +9,7 @@ import { Gql, settleNetwork } from "../../fixtures/test.ts";
  * A cellar of three teas — one sealed, one open at 40% that you rated 4.5,
  * one finished — read through the items page the way a thumb would:
  *
- * - BottleCards say "Sealed" / "Open · today" + 40% / "Finished", with your
+ * - BottleCards say "Sealed" / "Open · <1h" + 40% / "Finished", with your
  *   stars on the one you rated, and none of the catalog's "0 ♥ 0 💬";
  * - a bottle with no photo shows its LabelPlate, not the type's clip art;
  * - the sort chip (Open first by default → A–Z) reorders, through a sheet;
@@ -149,7 +149,8 @@ test("BottleCards: state, level, your stars and a LabelPlate — open first", as
 
   const open = cards(page).filter({ hasText: names.open });
   await expect(open).toHaveAttribute("data-state", "open");
-  await expect(open).toContainText("Open · today");
+  // Opened seconds ago: under a day, the age is in hours ("<1h", "3h").
+  await expect(open).toContainText(/Open · (<1h|\d+h)/);
   await expect(open).toContainText("40%");
   await expect(
     open.getByRole("img", { name: "Rated 4.5 out of 5" }),

@@ -28,10 +28,13 @@ export type BottleState = {
   level: number;
 };
 
-const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
 
 /**
- * A short age and its spoken form. Under a day is "today"; then days up to
+ * A short age and its spoken form. Under a day it is hours ("<1h", "5h"),
+ * not "today": the age is measured in elapsed time, so a bottle opened at
+ * 11 pm would still read "today" at 10 pm the next evening. Then days up to
  * two weeks, weeks up to eight, months (of 30 days) up to a year, then years.
  * A future or unparseable instant has no age.
  */
@@ -45,7 +48,12 @@ export const bottleAge = (
   if (days < 0) return null;
   const plural = (n: number, unit: string) =>
     `${n} ${unit}${n === 1 ? "" : "s"}`;
-  if (days === 0) return { short: "today", long: "today" };
+  if (days === 0) {
+    const hours = Math.floor((now - at) / HOUR_MS);
+    return hours < 1
+      ? { short: "<1h", long: "less than an hour" }
+      : { short: `${hours}h`, long: plural(hours, "hour") };
+  }
   if (days < 14) return { short: `${days}d`, long: plural(days, "day") };
   if (days < 56) {
     const weeks = Math.floor(days / 7);
@@ -98,10 +106,7 @@ export const bottleState = (
   return {
     kind: "open",
     label: `Open · ${age.short}`,
-    spoken:
-      age.long === "today"
-        ? `Opened today, ${left}`
-        : `Open ${age.long}, ${left}`,
+    spoken: `Open ${age.long}, ${left}`,
     level,
   };
 };

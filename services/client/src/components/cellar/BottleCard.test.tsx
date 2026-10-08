@@ -32,8 +32,7 @@ const daysAgo = (days: number) => new Date(NOW - days * DAY).toISOString();
 
 describe("bottleAge", () => {
   const cases: [number, string, string][] = [
-    [0, "today", "today"],
-    [0.9, "today", "today"],
+    [0, "<1h", "less than an hour"],
     [1, "1d", "1 day"],
     [8, "8d", "8 days"],
     [13, "13d", "13 days"],
@@ -49,6 +48,23 @@ describe("bottleAge", () => {
       assert.deepEqual(bottleAge(daysAgo(days), NOW), { short, long });
     });
   }
+
+  test("under a day: hours, not 'today' (opened last night, read tonight)", () => {
+    const hoursAgo = (hours: number) =>
+      new Date(NOW - hours * 3_600_000).toISOString();
+    assert.deepEqual(bottleAge(hoursAgo(1), NOW), {
+      short: "1h",
+      long: "1 hour",
+    });
+    assert.deepEqual(bottleAge(hoursAgo(23), NOW), {
+      short: "23h",
+      long: "23 hours",
+    });
+    assert.deepEqual(bottleAge(hoursAgo(24), NOW), {
+      short: "1d",
+      long: "1 day",
+    });
+  });
 
   test("a future or broken instant has no age", () => {
     assert.equal(bottleAge(daysAgo(-2), NOW), null);
@@ -82,13 +98,13 @@ describe("bottleState", () => {
     );
   });
 
-  test("opened today", () => {
+  test("opened under a day ago: hours", () => {
     const state = bottleState(
-      { openAt: daysAgo(0.1), emptyAt: null, percentageRemaining: 90 },
+      { openAt: daysAgo(0.25), emptyAt: null, percentageRemaining: 90 },
       NOW,
     );
-    assert.equal(state.label, "Open · today");
-    assert.equal(state.spoken, "Opened today, 90% left");
+    assert.equal(state.label, "Open · 6h");
+    assert.equal(state.spoken, "Open 6 hours, 90% left");
   });
 
   test("no clock yet (or no openAt): Open without an age", () => {
