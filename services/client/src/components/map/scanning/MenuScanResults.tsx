@@ -16,8 +16,11 @@
  *   extraction completes, which is before any line is matched — on a
  *   backing-off schedule that gives up after a few minutes with a
  *   "Check again" (no subscriptions);
- * - the headline is "8 read · 2 matched · 6 new", and says "matching…"
- *   instead of guessing while the run is still going;
+ * - the headline is "8 read · 2 matched · 3 to confirm · 3 new" — only a
+ *   confirmed line is matched — and says "matching…" instead of guessing
+ *   while the run is still going. A menu longer than the loaded page is
+ *   counted by the server (`MenuScan.matchCounts`), re-read after each
+ *   Accept / Reject;
  * - Accept turns the line "Matched" at once, and an accepted suggestion
  *   stays the line's match: the old page waited for `place_menu_items` to
  *   learn the match through an outbox hop (and for a cocktail it never
@@ -211,9 +214,17 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     processingStatus: scanNode.processingStatus,
     matchStatus: scanNode.matchStatus,
   };
+  // Every line and suggestion is on the page, so its own count is exact. An
+  // unknown total is treated as "more than loaded": the server counts it.
+  const complete =
+    items.length >=
+      (scanNode.menuItems.totalCount ?? Number.POSITIVE_INFINITY) &&
+    suggestions.length >=
+      (scanNode.suggestions.totalCount ?? Number.POSITIVE_INFINITY);
   const headline = scanHeadline(
     { ...scanProgress, itemsDetected: scan.items_detected },
     Array.from(matchByLine.values()),
+    { server: scanNode.matchCounts, complete },
   );
   const chip = statusChip(scanProgress);
 
@@ -254,7 +265,11 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     if (!acted.ok) {
       decide(suggestion.id, null);
       setActionError(acted.message);
+      return;
     }
+    // A menu longer than one page is counted by the server, whose numbers
+    // only move on a re-read; the line itself already shows the decision.
+    if (!complete) refresh();
   };
 
   // Group items by category
@@ -302,8 +317,8 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
           {headline.toConfirm > 0 && (
             <Typography level="body-sm" sx={{ color: "text.secondary" }}>
               {headline.toConfirm === 1
-                ? "1 suggested match to confirm below."
-                : `${headline.toConfirm} suggested matches to confirm below.`}
+                ? "Accept or reject the suggested match below."
+                : "Accept or reject the suggested matches below."}
             </Typography>
           )}
           {scanNode.matchStatus === "failed" && (

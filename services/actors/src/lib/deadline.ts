@@ -14,22 +14,34 @@ export class DeadlineExceededError extends Error {
 /**
  * `work`, or `onTimeout()`'s error once `ms` have passed — whichever is first.
  *
- * The losing `work` is not cancelled (a seam like the AI reviewer takes no
- * signal), so
- * its eventual rejection is swallowed here rather than surfacing as an
- * unhandled rejection after the creation has already gone ahead. A
- * non-positive or non-finite `ms` means "no deadline".
+ * Hand `work` as a function and it is given an `AbortSignal` that fires when
+ * the deadline does (its `reason` is `onTimeout()`'s error), so the losing
+ * work is actually **cancelled** — for the AI reviewer that means the HTTP
+ * request is aborted and the metering wrapper stops booking it as a call
+ * somebody is waiting on (N09). A bare promise cannot be cancelled; it is
+ * left to finish on its own.
+ *
+ * Either way the losing work's eventual rejection is swallowed here rather
+ * than surfacing as an unhandled rejection after the caller has moved on. A
+ * non-positive or non-finite `ms` means "no deadline", and the signal then
+ * never fires.
  */
 export const withDeadline = <T>(
-  work: Promise<T>,
+  work: Promise<T> | ((signal: AbortSignal) => Promise<T>),
   ms: number,
   onTimeout: () => Error,
 ): Promise<T> => {
-  if (!Number.isFinite(ms) || ms <= 0) return work;
+  const controller = new AbortController();
+  const running = typeof work === "function" ? work(controller.signal) : work;
+  if (!Number.isFinite(ms) || ms <= 0) return running;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(onTimeout()), ms);
+    timer = setTimeout(() => {
+      const error = onTimeout();
+      controller.abort(error);
+      reject(error);
+    }, ms);
   });
-  work.catch(() => undefined);
-  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+  running.catch(() => undefined);
+  return Promise.race([running, deadline]).finally(() => clearTimeout(timer));
 };

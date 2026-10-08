@@ -61,6 +61,7 @@ import {
   BUDGET_ACTOR_ID,
   BudgetActorDescriptor,
   BudgetExceededError,
+  ConflictError,
 } from "@cellar-assistant/contracts";
 import type {
   ModelReleaseInput,
@@ -70,7 +71,11 @@ import type {
 } from "../../actors/budget-actor.ts";
 import { AI_MODEL_SERVICE } from "../../actors/budget-actor.ts";
 import { internal } from "../internal-client.ts";
-import { isNoModelResponse, mayHaveBeenBilled } from "./no-response.ts";
+import {
+  isNoModelResponse,
+  mayHaveBeenBilled,
+  noModelResponse,
+} from "./no-response.ts";
 import type {
   AIProvider,
   EmbeddingRequest,
@@ -365,6 +370,18 @@ export const meteredProviderFor = (
         estimateTextTokens(request.prompt) +
         estimateImageTokens(request.images?.length ?? 0);
       const outputTokens = OUTPUT_TOKEN_ESTIMATES[seam];
+
+      // N09: a caller that has already stopped waiting books nothing — no
+      // reservation, no call. One that gives up mid-call aborts the request,
+      // and `releaseIfUnanswered` below treats that like any transport loss.
+      if (request.signal?.aborted === true) {
+        throw noModelResponse(
+          new ConflictError(
+            `${AI_MODEL_SERVICE}/${seam}: the caller stopped waiting before ` +
+              "the model was called; nothing was reserved or sent",
+          ),
+        );
+      }
 
       const reservation = await budget.reserve(ctx, {
         seam,

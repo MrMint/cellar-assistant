@@ -111,6 +111,61 @@ describe("D17: which failures prove no model answered", () => {
     }
   });
 
+  it("N09: the caller's signal aborts the request; the cost stays booked, nothing counts as an answer", async () => {
+    let sent: AbortSignal | undefined;
+    const hanging: FetchLike = ((
+      _url: string,
+      init?: { signal?: AbortSignal },
+    ) =>
+      new Promise((_, reject) => {
+        sent = init?.signal;
+        init?.signal?.addEventListener("abort", () =>
+          reject(new Error("This operation was aborted")),
+        );
+      })) as unknown as FetchLike;
+    const controller = new AbortController();
+    const pending = caught(
+      postJson({
+        url: "http://provider.test/api/chat",
+        body: { prompt: "p" },
+        timeoutMs: 60_000,
+        provider: "ollama",
+        what: "generateContent",
+        fetchImpl: hanging,
+        signal: controller.signal,
+      }),
+    );
+    controller.abort();
+    const error = await pending;
+    expect(sent?.aborted).toBe(true);
+    expect(error).toBeInstanceOf(ConflictError);
+    expect(String((error as Error).message)).toContain("cancelled");
+    expect(isNoModelResponse(error)).toBe(true);
+    expect(mayHaveBeenBilled(error)).toBe(true);
+  });
+
+  it("N09: an already-aborted signal sends nothing, so nothing can be billed", async () => {
+    let calls = 0;
+    const counting: FetchLike = (async () => {
+      calls += 1;
+      return new Response("{}", { status: 200 });
+    }) as unknown as FetchLike;
+    const error = await caught(
+      postJson({
+        url: "http://provider.test/api/chat",
+        body: { prompt: "p" },
+        timeoutMs: 1_000,
+        provider: "ollama",
+        what: "generateContent",
+        fetchImpl: counting,
+        signal: AbortSignal.abort(),
+      }),
+    );
+    expect(calls).toBe(0);
+    expect(isNoModelResponse(error)).toBe(true);
+    expect(mayHaveBeenBilled(error)).toBe(false);
+  });
+
   it("does not mark a 200 whose body could not be read — that was an answer", async () => {
     const error = await caught(call(answering(200, "not json")));
     expect(error).toBeInstanceOf(ConflictError);

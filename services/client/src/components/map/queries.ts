@@ -769,6 +769,11 @@ export const ScanResultsQuery = graphql(
           id
           name
         }
+        matchCounts {
+          lines
+          matched
+          toConfirm
+        }
         menuItems(first: $menuItems) {
           totalCount
           edges {
@@ -778,6 +783,7 @@ export const ScanResultsQuery = graphql(
           }
         }
         suggestions(first: $suggestions) {
+          totalCount
           edges {
             node {
               ...MapSuggestion

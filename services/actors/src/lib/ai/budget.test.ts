@@ -370,6 +370,28 @@ describe("a denial is a throw, never a manufactured answer", () => {
 /* Reservation ids                                                             */
 /* -------------------------------------------------------------------------- */
 
+describe("N09: a caller that stopped waiting is not metered", () => {
+  it("reserves nothing and calls nothing when the signal has already fired", async () => {
+    const rec = recorder();
+    const p = provider();
+    const metered = meteredProviderFor(p.provider, "place_review", MODELS, {
+      budget: rec.budget,
+    });
+
+    const error = await metered(ctx)
+      .generateContent({ prompt: "x", signal: AbortSignal.abort() }, "low")
+      .then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(rec.reserved).toHaveLength(0);
+    expect(rec.settled).toHaveLength(0);
+    expect(p.calls).toBe(0);
+  });
+});
+
 describe("reservation ids", () => {
   it("are distinct per call even within one ctx", async () => {
     const { budget, reserved } = recorder();

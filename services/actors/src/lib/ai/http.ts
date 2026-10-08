@@ -70,10 +70,37 @@ export type PostJsonOptions = {
   /** For the error message: `"embeddings"`, `"generateContent"`, `"token"`. */
   readonly what: string;
   readonly fetchImpl: FetchLike;
+  /**
+   * The caller's own cancellation (N09), combined with `timeoutMs`: whichever
+   * fires first aborts the request.
+   */
+  readonly signal?: AbortSignal;
 };
 
+/** A function, so the check after the `await` is not narrowed away. */
+const isAborted = (signal: AbortSignal | undefined): boolean =>
+  signal?.aborted === true;
+
+/**
+ * The caller gave up before the request was sent: nothing left this process,
+ * so nothing can have been billed.
+ */
+const cancelledBeforeSend = (
+  provider: ProviderName,
+  what: string,
+  url: string,
+): ConflictError =>
+  noModelResponse(
+    new ConflictError(
+      `${provider} ${what} was cancelled before it was sent to ` +
+        `${redactUrl(url)}: the caller stopped waiting`,
+    ),
+  );
+
 export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
-  const { url, body, headers, timeoutMs, provider, what, fetchImpl } = options;
+  const { url, body, headers, timeoutMs, provider, what, fetchImpl, signal } =
+    options;
+  if (isAborted(signal)) throw cancelledBeforeSend(provider, what, url);
 
   let response: Awaited<ReturnType<FetchLike>>;
   try {
@@ -81,7 +108,10 @@ export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal:
+        signal === undefined
+          ? AbortSignal.timeout(timeoutMs)
+          : AbortSignal.any([AbortSignal.timeout(timeoutMs), signal]),
     });
   } catch (error) {
     // Rethrown, never swallowed. A DNS failure, a refused connection or a
@@ -92,10 +122,16 @@ export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
     // reached the provider first, and it may bill what it ran. The fetch error
     // does not say reliably which, so every transport failure keeps its cost
     // booked and gives back only the allowance (`maybeBilled`).
+    //
+    // A caller's cancellation after the send is the same fact (N09): the
+    // request may have run, so its cost stays booked like a timeout's.
     throw noModelResponse(
       new ConflictError(
-        `${provider} ${what} could not be reached at ${redactUrl(url)}: ` +
-          `${error instanceof Error ? error.message : String(error)}`,
+        isAborted(signal)
+          ? `${provider} ${what} was cancelled at ${redactUrl(url)}: ` +
+              "the caller stopped waiting"
+          : `${provider} ${what} could not be reached at ${redactUrl(url)}: ` +
+              `${error instanceof Error ? error.message : String(error)}`,
       ),
       { maybeBilled: true },
     );

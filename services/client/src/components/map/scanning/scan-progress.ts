@@ -155,6 +155,7 @@ export const lineMatch = (
 
 export type ScanHeadline = {
   readonly read: number;
+  /** Confirmed lines only — never a suggestion still awaiting a decision. */
   readonly matched: number;
   readonly fresh: number;
   /** Lines with a suggestion still waiting on Accept / Reject. */
@@ -163,24 +164,56 @@ export type ScanHeadline = {
   readonly text: string;
 };
 
+/** `MenuScan.matchCounts`: the server's count over every line of the scan. */
+export type ServerMatchCounts = {
+  readonly lines: number;
+  readonly matched: number;
+  readonly toConfirm: number;
+};
+
+export type HeadlineCounts = {
+  /**
+   * The server's count, used when the page has not loaded every line (or
+   * every suggestion) — counting the loaded rows would undercount a long menu.
+   */
+  readonly server?: ServerMatchCounts | null;
+  /**
+   * True when every line and every suggestion is on the page. The page's own
+   * count is then exact and also reflects a decision the viewer has just
+   * made, before any refetch, so it wins over `server`.
+   */
+  readonly complete?: boolean;
+};
+
 /**
- * "8 read · 2 matched · 6 new" — the honest headline (N06a).
+ * "8 read · 2 matched · 3 to confirm · 3 new" — the honest headline (N06a).
  *
  * `read` is what extraction read (`itemsDetected`), not how many rows the
- * page has loaded. A line is *matched* once it is matched or carries a
- * suggestion (it is in the catalog, pending your confirmation); *new* is the
- * rest — lines the catalog does not have. Counting before the match run has
- * settled would call every line new, so until then the headline says it is
- * still matching instead of guessing.
+ * page has loaded. *Matched* means confirmed: a verified match, or a
+ * suggestion somebody accepted. A suggestion still awaiting Accept / Reject
+ * is *to confirm* — counting it as matched read "3 matched" beside "3
+ * suggested matches to confirm". *New* is the rest. Counting before the match
+ * run has settled would call every line new, so until then the headline
+ * says it is still matching instead of guessing.
  */
 export const scanHeadline = (
   scan: ScanProgress & { readonly itemsDetected: number },
   lines: readonly LineMatch[],
+  counts: HeadlineCounts = {},
 ): ScanHeadline => {
-  const read = Math.max(scan.itemsDetected, lines.length);
-  const matched = lines.filter((line) => line.kind !== "new").length;
-  const toConfirm = lines.filter((line) => line.kind === "suggested").length;
-  const fresh = Math.max(0, read - matched);
+  const useServer = counts.server != null && counts.complete !== true;
+  const server = counts.server;
+  const lineCount = useServer && server ? server.lines : lines.length;
+  const read = Math.max(scan.itemsDetected, lineCount, lines.length);
+  const matched =
+    useServer && server
+      ? server.matched
+      : lines.filter((line) => line.kind === "matched").length;
+  const toConfirm =
+    useServer && server
+      ? server.toConfirm
+      : lines.filter((line) => line.kind === "suggested").length;
+  const fresh = Math.max(0, read - matched - toConfirm);
   const readText = `${read} read`;
   if (scan.processingStatus === "failed") {
     return { read: 0, matched: 0, fresh: 0, toConfirm: 0, text: "Not read" };
@@ -194,11 +227,8 @@ export const scanHeadline = (
   if (!isMatchSettled(scan.matchStatus)) {
     return { read, matched, fresh, toConfirm, text: `${readText} · matching…` };
   }
-  return {
-    read,
-    matched,
-    fresh,
-    toConfirm,
-    text: `${readText} · ${matched} matched · ${fresh} new`,
-  };
+  const parts = [readText, `${matched} matched`];
+  if (toConfirm > 0) parts.push(`${toConfirm} to confirm`);
+  parts.push(`${fresh} new`);
+  return { read, matched, fresh, toConfirm, text: parts.join(" · ") };
 };

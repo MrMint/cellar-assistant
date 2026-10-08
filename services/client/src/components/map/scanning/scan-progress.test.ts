@@ -187,13 +187,50 @@ describe("scanHeadline", () => {
   const fresh: LineMatch = { kind: "new" };
   const lines = [matched, suggested, ...Array(6).fill(fresh)];
 
-  test('settled: "8 read · 2 matched · 6 new"', () => {
+  test('settled: "8 read · 1 matched · 1 to confirm · 6 new" — a suggestion is not a match', () => {
     const headline = scanHeadline(
       { ...scan("completed", "completed"), itemsDetected: 8 },
       lines,
     );
-    assert.equal(headline.text, "8 read · 2 matched · 6 new");
+    assert.equal(headline.text, "8 read · 1 matched · 1 to confirm · 6 new");
+    assert.equal(headline.matched, 1);
     assert.equal(headline.toConfirm, 1);
+    assert.equal(headline.fresh, 6);
+  });
+
+  test("nothing to confirm drops that part", () => {
+    assert.equal(
+      scanHeadline({ ...scan("completed", "completed"), itemsDetected: 8 }, [
+        matched,
+        matched,
+        ...Array(6).fill(fresh),
+      ]).text,
+      "8 read · 2 matched · 6 new",
+    );
+  });
+
+  test("a menu longer than the loaded page is counted by the server", () => {
+    // 100 lines loaded, 140 read: counting the page would undercount.
+    const page = [matched, suggested, ...Array(98).fill(fresh)];
+    const headline = scanHeadline(
+      { ...scan("completed", "completed"), itemsDetected: 140 },
+      page,
+      { server: { lines: 140, matched: 12, toConfirm: 5 }, complete: false },
+    );
+    assert.equal(
+      headline.text,
+      "140 read · 12 matched · 5 to confirm · 123 new",
+    );
+  });
+
+  test("with every line loaded the page's own count wins, so a fresh Accept shows at once", () => {
+    const headline = scanHeadline(
+      { ...scan("completed", "completed"), itemsDetected: 8 },
+      [matched, matched, ...Array(6).fill(fresh)],
+      // The server has not seen the acceptance yet.
+      { server: { lines: 8, matched: 1, toConfirm: 1 }, complete: true },
+    );
+    assert.equal(headline.text, "8 read · 2 matched · 6 new");
   });
 
   test("while matching, it says so instead of calling every line new", () => {
@@ -227,7 +264,7 @@ describe("scanHeadline", () => {
     assert.equal(
       scanHeadline({ ...scan("completed", "failed"), itemsDetected: 8 }, lines)
         .text,
-      "8 read · 2 matched · 6 new",
+      "8 read · 1 matched · 1 to confirm · 6 new",
     );
   });
 });

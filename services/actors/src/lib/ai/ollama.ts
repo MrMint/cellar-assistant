@@ -62,6 +62,7 @@ export const createOllamaProvider = (
     body: unknown,
     what: string,
     model: string,
+    signal?: AbortSignal,
   ): Promise<unknown> => {
     const raw = await postJson({
       url: `${base}${path}`,
@@ -70,6 +71,7 @@ export const createOllamaProvider = (
       provider: "ollama",
       what,
       fetchImpl,
+      ...(signal === undefined ? {} : { signal }),
     });
     // Ollama answers an un-pulled model with `{"error": "model … not found"}`,
     // sometimes under a 200. Surfaced here rather than as a shape complaint,
@@ -132,6 +134,7 @@ export const createOllamaProvider = (
           },
           `generateContent(${model})`,
           model,
+          request.signal,
         ),
       );
 

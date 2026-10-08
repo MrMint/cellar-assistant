@@ -360,6 +360,34 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
     });
   });
 
+  it("N09: a timed-out review is cancelled — the reviewer's signal is aborted, so the model call stops", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const signals: (AbortSignal | undefined)[] = [];
+      const actor = await activate(
+        newCreationActor(db, viewer, {
+          review: (_ctx, _subject, signal) => {
+            signals.push(signal);
+            // What `postJson` does with it: reject once the caller aborts.
+            return new Promise<PlaceReview>((_, reject) => {
+              signal?.addEventListener("abort", () =>
+                reject(new Error("aborted")),
+              );
+            });
+          },
+          reviewTimeoutMs: 20,
+        }),
+      );
+      const result = await actor.createPlace(
+        userCtx(viewer, "r"),
+        baseInput(fixtureName()),
+      );
+      expect(result.review).toBeNull();
+      expect(signals).toHaveLength(1);
+      expect(signals[0]?.aborted).toBe(true);
+    });
+  });
+
   it("N09: a rejection that arrives after the deadline is not heard — the place is recorded unreviewed, not approved", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
@@ -1070,6 +1098,38 @@ describe("withDeadline (N09)", () => {
     await expect(withDeadline(slow, 0, () => new Error("late"))).resolves.toBe(
       "eventually",
     );
+  });
+
+  it("cancels work handed as a function: its signal aborts at the deadline, with the timeout error as reason", async () => {
+    let seen: AbortSignal | undefined;
+    const late = new DeadlineExceededError("late");
+    await expect(
+      withDeadline(
+        (signal) => {
+          seen = signal;
+          return new Promise<string>(() => {});
+        },
+        10,
+        () => late,
+      ),
+    ).rejects.toBe(late);
+    expect(seen?.aborted).toBe(true);
+    expect(seen?.reason).toBe(late);
+  });
+
+  it("leaves the signal alone when the work wins", async () => {
+    let seen: AbortSignal | undefined;
+    await expect(
+      withDeadline(
+        async (signal) => {
+          seen = signal;
+          return "done";
+        },
+        1_000,
+        () => new Error("late"),
+      ),
+    ).resolves.toBe("done");
+    expect(seen?.aborted).toBe(false);
   });
 
   it("the default deadline is about eight seconds", () => {

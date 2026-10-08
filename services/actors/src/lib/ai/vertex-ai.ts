@@ -178,7 +178,12 @@ export const createVertexAIProvider = (
     `/locations/${encodeURIComponent(location)}/publishers/google/models/` +
     `${encodeURIComponent(model)}:${verb}`;
 
-  const call = async (url: string, body: unknown, what: string) =>
+  const call = async (
+    url: string,
+    body: unknown,
+    what: string,
+    signal?: AbortSignal,
+  ) =>
     await postJson({
       url,
       body,
@@ -191,6 +196,7 @@ export const createVertexAIProvider = (
       provider: "vertex-ai",
       what,
       fetchImpl,
+      ...(signal === undefined ? {} : { signal }),
     });
 
   return {
@@ -209,6 +215,7 @@ export const createVertexAIProvider = (
           modelUrl(config.location, model, "generateContent"),
           geminiBody(request, "vertex-ai"),
           `generateContent(${model})`,
+          request.signal,
         ),
       );
       const tokens = geminiTokens(raw);

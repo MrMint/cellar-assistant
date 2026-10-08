@@ -42,7 +42,12 @@ export const createGoogleAIProvider = (
   config: GoogleAIConfig,
   fetchImpl: FetchLike,
 ): AIProvider => {
-  const call = async (path: string, body: unknown, what: string) =>
+  const call = async (
+    path: string,
+    body: unknown,
+    what: string,
+    signal?: AbortSignal,
+  ) =>
     await postJson({
       url: `${BASE}${path}`,
       body,
@@ -51,6 +56,7 @@ export const createGoogleAIProvider = (
       provider: "google-ai",
       what,
       fetchImpl,
+      ...(signal === undefined ? {} : { signal }),
     });
 
   return {
@@ -69,6 +75,7 @@ export const createGoogleAIProvider = (
           `/models/${encodeURIComponent(model)}:generateContent`,
           geminiBody(request, "google-ai"),
           `generateContent(${model})`,
+          request.signal,
         ),
       );
       const tokens = geminiTokens(raw);

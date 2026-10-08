@@ -214,6 +214,17 @@ describe("providerPlaceReviewer", () => {
     expect(asked[0]?.request.prompt).toContain("Bar Part Time");
   });
 
+  it("N09: hands the creation's signal to the model call, so a timed-out review is cancelled", async () => {
+    const { provider, asked } = fakeProvider(
+      JSON.stringify({ approved: true }),
+    );
+    const controller = new AbortController();
+
+    await providerPlaceReviewer(provider)(ctx, SUBJECT, controller.signal);
+
+    expect(asked[0]?.request.signal).toBe(controller.signal);
+  });
+
   it('treats a bare {"approved": true} as a complete answer', async () => {
     // The whole point of the one-field `required` list: "I have nothing to
     // add" has to be sayable, and has to mean something on this side.

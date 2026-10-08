@@ -531,6 +531,76 @@ describe.skipIf(skip)("MenuScanActor (B8)", () => {
     });
   });
 
+  it("matchCounts (N06a follow-up): only a confirmed line is matched; a pending suggestion is to confirm; owner only", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const stranger = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, { userId: owner, placeId });
+      const otherScan = await seedScan(db, { userId: owner, placeId });
+      const line = (menuScanId: string, name: string) =>
+        seedMenuItem(db, { placeId, menuScanId, name });
+      const wine = await seedWine(db, owner, "Chateau Count 2019");
+      const other = await seedWine(db, owner, "Chateau Other 2020");
+      const recipe = await seedRecipe(db, {
+        name: "House Negroni",
+        type: "cocktail",
+      });
+
+      const verified = await line(scanId, "Verified wine");
+      await db.execute(sql`
+        update public.place_menu_items set wine_id = ${wine.id}::uuid
+        where id = ${verified}::uuid
+      `);
+      const linked = await line(scanId, "Linked cocktail");
+      await db.execute(sql`
+        insert into public.menu_item_recipes (menu_item_id, recipe_id)
+        values (${linked}::uuid, ${recipe}::uuid)
+      `);
+      const accepted = await line(scanId, "Accepted wine");
+      const pending = await line(scanId, "Pending wine");
+      const rejected = await line(scanId, "Rejected wine");
+      await line(scanId, "Nothing at all");
+      // A line on another scan never counts here.
+      const foreign = await line(otherScan, "Other scan's line");
+
+      const suggest = async (
+        menuItemId: string,
+        state: "accepted" | "rejected" | "pending",
+        itemId = wine.id,
+      ) => {
+        await db.execute(sql`
+          insert into public.item_match_suggestions
+            (place_menu_item_id, suggested_wine_id, confidence_score,
+             accepted, rejected)
+          values (${menuItemId}::uuid, ${itemId}::uuid, 0.80,
+                  ${state === "accepted" ? true : null},
+                  ${state === "rejected" ? true : null})
+        `);
+      };
+      await suggest(accepted, "accepted");
+      // A confirmed line with a second candidate still open is matched, once.
+      await suggest(accepted, "pending", other.id);
+      await suggest(pending, "pending");
+      await suggest(rejected, "rejected");
+      await suggest(foreign, "pending");
+
+      const actor = await activate(newScanActor(scanId, db));
+      expect(await actor.matchCounts(userCtx(owner, "r1"))).toEqual({
+        lines: 6,
+        matched: 3,
+        toConfirm: 1,
+      });
+
+      await expect(
+        actor.matchCounts(userCtx(stranger, "r2")),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      await expect(
+        actor.matchCounts(anonymousCtx("r3")),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
   /* ---------------------------------------------------------------------- */
   /* create                                                                  */
   /* ---------------------------------------------------------------------- */
