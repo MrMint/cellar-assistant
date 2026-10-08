@@ -103,6 +103,31 @@ describe("Query.menuScan", () => {
     });
   });
 
+  it("matchCounts is served by MenuScanActor.matchCounts, only when selected", async () => {
+    const { invoke, calls } = stubSidecar({
+      "MenuScanActor.get": () => scanDto,
+      "MenuScanActor.matchCounts": () => ({
+        lines: 8,
+        matched: 2,
+        toConfirm: 3,
+      }),
+    });
+    const result = await run(
+      `{ menuScan(id: "${SCAN_ID}") { ... on MenuScan {
+         matchCounts { lines matched toConfirm }
+       } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.menuScan).toEqual({
+      matchCounts: { lines: 8, matched: 2, toConfirm: 3 },
+    });
+    expect(calls.map((call) => `${call.actorType}.${call.method}`)).toEqual([
+      "MenuScanActor.get",
+      "MenuScanActor.matchCounts",
+    ]);
+  });
+
   it("processingError is summarised, so the provider's endpoint never reaches a client", async () => {
     /*
      * The regression this guards: `processingError` used to be

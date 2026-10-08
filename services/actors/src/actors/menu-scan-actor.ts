@@ -82,6 +82,7 @@ import type {
   MatchSuggestionTarget,
   MenuScanActorInterface,
   MenuScanDto,
+  MenuScanMatchCounts,
   MenuScanMatchStatus,
   MenuScanStatus,
   Page,
@@ -504,6 +505,58 @@ export class MenuScanActor
     return {
       ...mapPage(paged, (entry) => menuItemRowToDto(entry.row)),
       hasPreviousPage: start > 0,
+    };
+  }
+
+  /**
+   * N06a follow-up — the headline's three numbers, counted here so a menu
+   * longer than the page the client loaded is still counted whole.
+   *
+   * A line is *matched* only once it is confirmed: a verified item on the
+   * line, a linked recipe, or an accepted suggestion (the acceptance reaches
+   * `place_menu_items` an outbox hop later, and a recipe never does). A line
+   * whose only claim is a suggestion awaiting Accept / Reject is *to
+   * confirm*, not matched. Fresh on every read, like the rest of this
+   * actor's child reads (§1.3); one statement, riding the
+   * `place_menu_items.menu_scan_id` and suggestion / recipe FK indexes.
+   */
+  async matchCounts(ctx: Ctx): Promise<MenuScanMatchCounts> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const { rows } = await this.db.execute<{
+      lines: number;
+      matched: number;
+      to_confirm: number;
+    }>(sql`
+      with line as (
+        select
+          (${ARCS.placeMenuItems.idExpr("i")} is not null
+            or exists (
+              select 1 from public.menu_item_recipes r
+              where r.menu_item_id = i.id
+            )
+            or exists (
+              select 1 from public.item_match_suggestions s
+              where s.place_menu_item_id = i.id and s.accepted is true
+            )) as matched,
+          exists (
+            select 1 from public.item_match_suggestions s
+            where s.place_menu_item_id = i.id
+              and s.accepted is null and s.rejected is null
+          ) as open
+        from public.place_menu_items i
+        where i.menu_scan_id = ${aggregate.row.id}::uuid
+      )
+      select count(*)::int as lines,
+        (count(*) filter (where matched))::int as matched,
+        (count(*) filter (where open and not matched))::int as to_confirm
+      from line
+    `);
+    const found = rows[0];
+    return {
+      lines: Number(found?.lines ?? 0),
+      matched: Number(found?.matched ?? 0),
+      toConfirm: Number(found?.to_confirm ?? 0),
     };
   }
 

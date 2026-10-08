@@ -3495,6 +3495,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "manualPlaceOverride", type: { kind: "SCALAR", name: "ID" } },
           {
+            name: "matchCounts",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "MenuScanMatchCounts" },
+            },
+          },
+          {
             name: "matchStatus",
             type: {
               kind: "NON_NULL",
@@ -3590,6 +3597,25 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "MenuScan" },
             },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "MenuScanMatchCounts",
+        fields: [
+          {
+            name: "lines",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "matched",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "toConfirm",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
         ],
         interfaces: [],

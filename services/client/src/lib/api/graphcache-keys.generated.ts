@@ -85,6 +85,7 @@ export const KEYLESS_TYPES = [
   "MatchSuggestionEdge",
   "MenuScanConnection",
   "MenuScanEdge",
+  "MenuScanMatchCounts",
   "MutationCreateItemSuccess",
   "MutationUpdateItemSuccess",
   "NearbyPlace",

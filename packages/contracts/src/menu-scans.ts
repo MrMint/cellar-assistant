@@ -250,6 +250,28 @@ export type MenuScanDto = {
 };
 
 /**
+ * How a scan's filed lines stand, counted by the server so a menu longer than
+ * one page still gets an honest headline (N06a follow-up).
+ *
+ * Every line is in exactly one bucket: `matched` (confirmed), `toConfirm`, or
+ * new (`lines - matched - toConfirm`). An AI suggestion nobody has accepted is
+ * **not** a match — the headline used to count it as one, and read
+ * "3 matched" beside "3 suggested matches to confirm".
+ */
+export type MenuScanMatchCounts = {
+  /** `place_menu_items` rows filed for this scan. */
+  readonly lines: number;
+  /**
+   * Confirmed: the line carries a verified item (`wine_id` … `tea_id`), a
+   * linked recipe (`menu_item_recipes`), or an accepted suggestion — the last
+   * because an acceptance reaches `place_menu_items` an outbox hop later.
+   */
+  readonly matched: number;
+  /** Not confirmed, with at least one suggestion awaiting Accept / Reject. */
+  readonly toConfirm: number;
+};
+
+/**
  * Exactly one of the seven `suggested_*_id` columns
  * (`check_single_suggested_item`), collapsed.
  */
@@ -384,6 +406,8 @@ export type MenuScanActorInterface = {
    * then id. Scan owner only, exactly as `get`.
    */
   menuItems(ctx: Ctx, page: PageArgs): Promise<Page<PlaceMenuItemDto>>;
+  /** Counted fresh on every read; scan owner only, exactly as `get`. */
+  matchCounts(ctx: Ctx): Promise<MenuScanMatchCounts>;
   create(ctx: Ctx, input: CreateMenuScanInput): Promise<MenuScanDto>;
   actOnSuggestion(
     ctx: Ctx,
@@ -433,6 +457,7 @@ export const MenuScanActorDescriptor: ActorDescriptor<
     get: {},
     suggestions: {},
     menuItems: {},
+    matchCounts: {},
     // Enqueues menu extraction, then match verification.
     create: { modelBacked: true },
     actOnSuggestion: {},

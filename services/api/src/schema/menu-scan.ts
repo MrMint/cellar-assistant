@@ -26,6 +26,7 @@ import type {
   ActOnSuggestionResult,
   MatchSuggestionDto,
   MenuScanDto,
+  MenuScanMatchCounts,
 } from "@cellar-assistant/contracts";
 import {
   ForbiddenError,
@@ -142,6 +143,31 @@ export const MatchSuggestionConnection = builder.connectionObject(
   { name: "MatchSuggestionEdge" },
 );
 
+const MenuScanMatchCountsType = builder
+  .objectRef<MenuScanMatchCounts>("MenuScanMatchCounts")
+  .implement({
+    description:
+      "How a scan's filed lines stand, counted by the server so a menu " +
+      "longer than one page still gets an honest headline. Every line is in " +
+      "exactly one bucket: `matched`, `toConfirm`, or new " +
+      "(`lines - matched - toConfirm`).",
+    fields: (t) => ({
+      lines: t.exposeInt("lines", {
+        description: "Menu lines filed on the place for this scan.",
+      }),
+      matched: t.exposeInt("matched", {
+        description:
+          "Confirmed lines: a verified item, a linked recipe, or an accepted " +
+          "suggestion. An AI suggestion nobody has accepted is not counted.",
+      }),
+      toConfirm: t.exposeInt("toConfirm", {
+        description:
+          "Unconfirmed lines with at least one suggestion awaiting Accept / " +
+          "Reject.",
+      }),
+    }),
+  });
+
 /**
  * One batch, N parallel `MenuScanActor.get` calls (§1.5).
  *
@@ -223,8 +249,10 @@ export const MenuScanType = builder
       itemsDetected: t.exposeInt("itemsDetected"),
       itemsMatched: t.exposeInt("itemsMatched", {
         description:
-          "Menu lines with at least one suggestion. Recomputed from rows " +
-          "each time the matcher reports, never incremented.",
+          "Menu lines with at least one suggestion, confirmed or not. " +
+          "Recomputed from rows each time the matcher reports, never " +
+          "incremented. For a headline use `matchCounts`, which counts only " +
+          "confirmed lines as matched.",
       }),
       scannedAt: t.expose("scannedAt", { type: "DateTime", nullable: true }),
       processedAt: t.expose("processedAt", {
@@ -234,6 +262,15 @@ export const MenuScanType = builder
       createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
       updatedAt: t.expose("updatedAt", { type: "DateTime", nullable: true }),
 
+      matchCounts: t.field({
+        type: MenuScanMatchCountsType,
+        description:
+          "Matched / to confirm / new, counted over every line rather than " +
+          "the page a client loaded. Read it after an accept or reject to " +
+          "get the settled numbers.",
+        resolve: (scan, _args, context) =>
+          context.actor(MenuScanActorDescriptor, scan.id).matchCounts(),
+      }),
       suggestions: t.field({
         type: MatchSuggestionConnection,
         description:
