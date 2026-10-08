@@ -32,8 +32,8 @@ type HeaderBarProps = {
  * - **From `md`:** the breadcrumb trail above the title, as before.
  * - The title is the page's h1, except on an item's or a recipe's own page,
  *   whose content already heads itself with that name.
- * - The search box and the caller's `endComponent` follow — below the bar on
- *   a phone, beside it from `sm`, as the old row did.
+ * - The search box and the caller's `endComponent` follow: stacked under the
+ *   bar on a phone, a wrapping row under it from `sm`, beside it from `lg`.
  *
  * Without `serverBreadcrumbs` there is no bar, and the end slot sits right.
  */
@@ -71,7 +71,10 @@ export const HeaderBar = ({
   return (
     <div
       data-slot="header-bar"
-      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      // Side by side only from `lg`: between `sm` and `lg` a row left the
+      // bar (Back, title, crumbs) a sliver beside a cellar's search, type
+      // counts and "Add item", and pushed "Add item" off the edge at 600.
+      className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
     >
       {header !== undefined && crumbs !== undefined && (
         <AppBar
@@ -91,7 +94,7 @@ export const HeaderBar = ({
       {hasEnd && (
         <div
           className={cn(
-            "flex flex-col gap-2 sm:flex-row sm:items-center",
+            "flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center",
             header === undefined && "sm:ml-auto",
           )}
         >
