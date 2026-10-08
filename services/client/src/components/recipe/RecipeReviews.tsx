@@ -111,7 +111,8 @@ export const RecipeReviews = ({
                     <StarRatingDisplay value={x.score} size={25} />
                   )}
                 </ListItemContent>
-                <Typography>
+                {/* One line beside the stars: "Oct 8, 2026" wrapped at 390px. */}
+                <Typography noWrap sx={{ flexShrink: 0 }}>
                   <Timestamp iso={x.created_at} precision="date" />
                 </Typography>
               </AccordionSummary>

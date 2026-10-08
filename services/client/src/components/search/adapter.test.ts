@@ -43,7 +43,7 @@ describe("collectionStatsLine (bottles still in the cellar, D13)", () => {
         cellarCount: 1,
         itemCounts: { ...zero, sake: 1 },
       }),
-      "1 bottle across 1 cellar",
+      "1 bottle in your cellar",
     );
   });
   test("the six types are summed, sake and tea included", () => {
@@ -52,7 +52,7 @@ describe("collectionStatsLine (bottles still in the cellar, D13)", () => {
         cellarCount: 3,
         itemCounts: { wine: 4, beer: 1, spirit: 2, coffee: 1, sake: 1, tea: 1 },
       }),
-      "10 bottles across 3 cellars",
+      "10 bottles in your 3 cellars",
     );
   });
 });

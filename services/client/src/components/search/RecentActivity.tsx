@@ -24,6 +24,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { formatDistance } from "@/lib/items/distance";
 import { getNextPlaceholder } from "@/utilities";
 import { RichTextDisplay } from "../common/RichTextDisplay";
+import { formatRating } from "../common/rating/rating";
 import { UserAvatar } from "../common/UserAvatar";
 import type { ActivityEntry, ActivityKind } from "./adapter";
 import { fadeInLeft, staggerContainerFast } from "./motion-variants";
@@ -348,10 +349,10 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
                               </>
                             ) : (
                               <>
-                                Rated{" "}
+                                {/* "Rated 4", as the rating control says it; no score is a text-only review. */}
                                 {isNotNil(entry.score)
-                                  ? entry.score.toFixed(1)
-                                  : ""}
+                                  ? `Rated ${formatRating(entry.score)}`
+                                  : "Reviewed"}
                                 {timeAgo !== null && ` \u00B7 ${timeAgo}`}
                               </>
                             )}

@@ -120,7 +120,8 @@ export const ItemReviews = ({
                   <Typography level="title-md">{x.user.displayName}</Typography>
                   <StarRatingDisplay value={x.score} size={25} />
                 </ListItemContent>
-                <Typography>
+                {/* One line beside the stars: "Oct 8, 2026" wrapped at 390px. */}
+                <Typography noWrap sx={{ flexShrink: 0 }}>
                   <Timestamp iso={x.createdAt} precision="date" />
                 </Typography>
               </AccordionSummary>
