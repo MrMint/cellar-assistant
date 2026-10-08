@@ -18,10 +18,14 @@ import {
   canSeeCellar,
   canSeeCheckIn,
   canSeeItemImage,
+  canSeePlace,
   canSeeTierList,
   type Friendship,
   isFriend,
   isOwner,
+  isPlaceShared,
+  PLACE_REVIEW_STATUSES,
+  type PlaceReviewStatus,
   PRIVACY_VALUES,
   type Privacy,
 } from "./index.ts";
@@ -316,5 +320,45 @@ describe("canSeeItemImage", () => {
   it("anonymous: sees a public image", () => {
     expect(canSeeItemImage(anonymous, image(true))).toBe(true);
     expect(canSeeItemImage(anonymous, image(false))).toBe(false);
+  });
+});
+
+describe("canSeePlace (X27 / D28)", () => {
+  const place = (
+    reviewStatus: PlaceReviewStatus,
+    createdById: string | null = OWNER,
+  ) => ({ createdById, reviewStatus });
+
+  it("an approved place is shared: owner, friend, stranger and anonymous", () => {
+    for (const ctx of [owner, friend, stranger, anonymous]) {
+      expect(canSeePlace(ctx, place("approved"))).toBe(true);
+    }
+    // An Overture row has no creator at all.
+    expect(canSeePlace(stranger, place("approved", null))).toBe(true);
+  });
+
+  it.each(["pending", "rejected"] as const)(
+    "a %s place is its creator's alone",
+    (status) => {
+      expect(canSeePlace(owner, place(status))).toBe(true);
+      expect(canSeePlace(friend, place(status))).toBe(false);
+      expect(canSeePlace(stranger, place(status))).toBe(false);
+      expect(canSeePlace(anonymous, place(status))).toBe(false);
+    },
+  );
+
+  it("an unshared row with no creator is nobody's (not even an anonymous null match)", () => {
+    expect(canSeePlace(anonymous, place("pending", null))).toBe(false);
+  });
+
+  it("system and admin bypass, as everywhere (the outbox delivers the review)", () => {
+    expect(canSeePlace(systemCtx("test"), place("pending"))).toBe(true);
+    expect(canSeePlace(adminCtx(STRANGER, "r"), place("rejected"))).toBe(true);
+  });
+
+  it("isPlaceShared is the approved status and nothing else", () => {
+    expect(
+      PLACE_REVIEW_STATUSES.filter((s) => isPlaceShared(place(s))),
+    ).toEqual(["approved"]);
   });
 });

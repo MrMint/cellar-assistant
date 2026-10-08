@@ -40,7 +40,7 @@ import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
 import type { ItemRef, ItemType } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
-import type { LngLat } from "./places.ts";
+import type { LngLat, PlaceReviewStatus } from "./places.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Hashing                                                                     */
@@ -631,10 +631,14 @@ export const DuplicatePlaceSearchActorDescriptor: ActorDescriptor<
   internalMethods: { all: {} },
 };
 
-/** Viewer-insensitive: `places` has no privacy column (B5's module doc). */
+/**
+ * Viewer-scoped since X27. It was viewer-insensitive while every place was
+ * public; now the answer includes the viewer's own places under review
+ * (`ownUnsharedDuplicates`), so a shared activation would leak them.
+ */
 export const duplicatePlaceSearchActorId = (
   input: DuplicatePlaceSearchInput,
-  _viewerId: string | null,
+  viewerId: string | null,
 ): string =>
   searchHash({
     kind: "duplicate-place",
@@ -644,6 +648,7 @@ export const duplicatePlaceSearchActorId = (
     radiusMeters: input.radiusMeters ?? DUPLICATE_SEARCH_RADIUS_M,
     minSimilarity: input.minSimilarity ?? DUPLICATE_SEARCH_MIN_SIMILARITY,
     limit: input.limit ?? DUPLICATE_SEARCH_RESULT_CAP,
+    viewerId,
   });
 
 /* -------------------------------------------------------------------------- */
@@ -718,6 +723,11 @@ export type PlaceSearchHit = {
   readonly trigramSimilarity: number;
   readonly categoryScore: number;
   readonly combinedScore: number;
+  /**
+   * X27: `approved` for every shared hit; a `pending` / `rejected` hit is the
+   * viewer's own place, matched on its name — nobody else's ever appears.
+   */
+  readonly reviewStatus: PlaceReviewStatus;
 };
 
 export type PlaceSearchActorInterface = {
@@ -741,13 +751,13 @@ export const PlaceSearchActorDescriptor: ActorDescriptor<
 };
 
 /**
- * True when this search's answer depends on who is asking — §1.5's second
- * identity-sensitive surface, "map browse **with tier-list or visit filters**".
+ * Viewer in the hash, always. It used to be only with a tier-list or visit
+ * filter (§1.5's "map browse **with tier-list or visit filters**"), and a plain
+ * query shared one activation — and one cached result set — across viewers.
+ * X27 made every place search identity-sensitive: the answer includes the
+ * viewer's own places under review, which nobody else may see, so a shared
+ * activation would hand A's pending place to B.
  */
-export const placeSearchIsViewerScoped = (input: PlaceSearchInput): boolean =>
-  (input.tierListIds?.length ?? 0) > 0 || input.visitStatus != null;
-
-/** Viewer in the hash **iff** `placeSearchIsViewerScoped` (module doc). */
 export const placeSearchActorId = (
   input: PlaceSearchInput,
   viewerId: string | null,
@@ -761,7 +771,7 @@ export const placeSearchActorId = (
     tierListIds: [...(input.tierListIds ?? [])].sort(),
     visitStatus: input.visitStatus ?? null,
     limit: input.limit ?? PLACE_SEARCH_RESULT_CAP,
-    viewerId: placeSearchIsViewerScoped(input) ? viewerId : null,
+    viewerId,
   });
 
 /* -------------------------------------------------------------------------- */

@@ -50,7 +50,7 @@ import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
 import type { ItemRef, ItemType } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
-import type { LngLat } from "./places.ts";
+import type { LngLat, PlaceReviewStatus } from "./places.ts";
 import type { MapBounds, VisitStatusFilter } from "./search.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -109,6 +109,12 @@ export type MapPlace = {
   readonly rating: number | null;
   readonly confidence: number | null;
   readonly isVerified: boolean | null;
+  /**
+   * X27: `approved` for every shared marker. `pending` / `rejected` appear
+   * only on their creator's own map — drawn as their own markers, never
+   * folded into a cluster — so "Under review" stays visible at any zoom.
+   */
+  readonly reviewStatus: PlaceReviewStatus;
 };
 
 /** One cluster bubble: a position and a count, and nothing else is drawn. */
