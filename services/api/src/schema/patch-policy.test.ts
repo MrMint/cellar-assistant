@@ -312,8 +312,17 @@ const REPLACES =
   "replaces a whole list; each entry is a new row, so its nulls are 'not given'";
 const STARTS =
   "starts a job or an upload; there is no stored value for null to clear";
+const RESUBMITS =
+  "X27: resubmits a whole place for review — every field is the creator's " +
+  "full new answer, so a null is 'none', exactly as on `createPlace`, and " +
+  "there is no partial update to protect";
+const PICKS =
+  "X27: picks one of the review's suggestions; the nullable fields are the " +
+  "two alternatives, exactly one of which must be given — a null is 'not " +
+  "this one', never 'clear'";
 
 const NOT_PATCHES: Readonly<Record<string, string>> = {
+  acceptPlaceSuggestion: PICKS,
   addItemReview: CREATES,
   addItemToCellar: CREATES,
   addRecipeReview: CREATES,
@@ -329,6 +338,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   createRecipeGroup: CREATES,
   createTierList: CREATES,
   createUploadTarget: STARTS,
+  resubmitPlace: RESUBMITS,
   setRecipeIngredients: REPLACES,
   setRecipeInstructions: REPLACES,
   startItemOnboarding: STARTS,

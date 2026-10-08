@@ -107,13 +107,15 @@ describe("invokeActor on a void method", () => {
 });
 
 describe("timeoutFor (§8.5)", () => {
-  it("gives the two request-driven AI calls 120s", () => {
-    // `createPlace`, not `create`: the stale spelling left the synchronous AI
-    // review on the 15s default from 4e067928 until this test existed.
-    expect(timeoutFor(PlaceCreationActorDescriptor, "createPlace")).toBe(
-      120_000,
-    );
+  it("gives the request-driven AI call 120s, and a creation that no longer waits on one 30s", () => {
     expect(timeoutFor(ItemOnboardingActorDescriptor, "start")).toBe(120_000);
+    // `createPlace`, not `create`: the stale spelling left the synchronous AI
+    // review on the 15s default from 4e067928 until this test existed. X27
+    // then took that review out of the turn — it runs from the outbox in
+    // `PlaceReviewActor` — so the creation is a short write with a 30s bound.
+    expect(timeoutFor(PlaceCreationActorDescriptor, "createPlace")).toBe(
+      30_000,
+    );
   });
 
   it("leaves everything else on the 15s default", () => {
@@ -140,7 +142,7 @@ describe("timeoutFor (§8.5)", () => {
     // @ts-expect-error — `PlaceCreationActorInterface` has no `create`.
     timeoutFor(PlaceCreationActorDescriptor, "create");
     expect(timeoutFor(PlaceCreationActorDescriptor, "createPlace")).toBe(
-      120_000,
+      30_000,
     );
   });
 });

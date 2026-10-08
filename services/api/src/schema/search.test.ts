@@ -11,7 +11,8 @@
  *  - **pagination never reaches the key** — `first`/`after` change the page and
  *    not the activation, which is the whole of §1.5's caching claim seen from
  *    the client's side;
- *  - **the viewer changes the key for exactly three surfaces** and no others.
+ *  - **the viewer changes the key for exactly the identity-sensitive
+ *    surfaces** and no others (X27 added both place searches to them).
  */
 import type { Ctx } from "@cellar-assistant/contracts";
 import {
@@ -174,7 +175,8 @@ const FIELDS: readonly {
         },
         ctx.viewerId,
       ),
-    viewerScoped: false,
+    // X27: every place search carries the viewer's own places under review.
+    viewerScoped: true,
   },
   {
     actorType: "PlaceSearchActor",
@@ -208,7 +210,8 @@ const FIELDS: readonly {
         },
         ctx.viewerId,
       ),
-    viewerScoped: false,
+    // X27: and so does every duplicate check.
+    viewerScoped: true,
   },
   {
     actorType: "GooglePlacesActor",

@@ -225,6 +225,8 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     // A vision or LLM call inside the request.
     ["Mutation.startItemOnboarding", { via: ["ItemOnboardingActor.start"] }],
     ["Mutation.createPlace", { via: ["PlaceCreationActor.createPlace"] }],
+    // X27: a resubmission queues a fresh review, which is a model call.
+    ["Mutation.resubmitPlace", { via: ["PlaceActor.editUnshared"] }],
     // A vision or LLM call it enqueues.
     ["Mutation.createMenuScan", { via: ["MenuScanActor.create"] }],
     ["Mutation.startRecipePhotoJob", { via: ["RecipePhotoJobActor.start"] }],

@@ -16,6 +16,16 @@ type AcceptFriendRequestPayload {
 
 union AcceptFriendRequestResult = AcceptFriendRequestPayload | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+"""
+Exactly one: a `category` from `Place.suggestedCategories`, or `description: true` to take `Place.suggestedDescription`.
+"""
+input AcceptPlaceSuggestionInput {
+  category: String
+  description: Boolean
+}
+
+union AcceptPlaceSuggestionResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Place | ValidationError
+
 union ActOnMenuScanSuggestionResult = BudgetExceededError | ConflictError | ForbiddenError | MatchSuggestionActionPayload | NotFoundError | ValidationError
 
 """
@@ -1345,7 +1355,7 @@ input CreatePlaceInput {
 }
 
 """
-The created place, plus what the checks found. A *blocking* duplicate is a ConflictError instead; these are the near-misses that were allowed through and are worth showing the user.
+The created place — PENDING, visible only to its creator until the review approves it — plus what the checks found. A *blocking* duplicate is a ConflictError instead; these are the near-misses that were allowed through and are worth showing the user.
 """
 type CreatePlacePayload {
   nearbyDuplicates(
@@ -1436,6 +1446,8 @@ union DeleteFileResult = BudgetExceededError | ConflictError | DeletedFile | For
 
 union DeleteItemReviewResult = BudgetExceededError | ConflictError | DeletedItemReview | ForbiddenError | NotFoundError | ValidationError
 
+union DeletePlaceResult = BudgetExceededError | ConflictError | DeletedPlace | ForbiddenError | NotFoundError | ValidationError
+
 union DeleteRecipeGroupResult = BudgetExceededError | ConflictError | DeletedRecipeGroup | ForbiddenError | NotFoundError | ValidationError
 
 union DeleteRecipeResult = BudgetExceededError | ConflictError | DeletedRecipe | ForbiddenError | NotFoundError | ValidationError
@@ -1455,6 +1467,10 @@ type DeletedFile {
 
 type DeletedItemReview {
   id: ID!
+}
+
+type DeletedPlace {
+  placeId: ID!
 }
 
 """The id of a recipe that is gone."""
@@ -1482,6 +1498,8 @@ union DetachItemImageResult = BudgetExceededError | ConflictError | DetachedItem
 type DetachedItemImage {
   id: ID!
 }
+
+union DismissPlaceSuggestionsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Place | ValidationError
 
 """
 A nearby place with a similar name. Ids only — a registry returns ids and lets the caller fetch through `Query.place` (§1.5).
@@ -2348,7 +2366,7 @@ type MapEntryEdge {
 }
 
 """
-One place marker. Nine fields, every one of them read by the marker renderer (§2.4); the address and contact block lives on `Place` and is fetched by id when the drawer opens.
+One place marker. Ten fields, every one of them read by the marker renderer (§2.4); the address and contact block lives on `Place` and is fetched by id when the drawer opens.
 """
 type MapPlace {
   """
@@ -2370,6 +2388,11 @@ type MapPlace {
   """Picks the marker glyph."""
   primaryCategory: String
   rating: Float
+
+  """
+  X27: APPROVED for every shared marker. PENDING / REJECTED markers are the viewer's own places under review — drawn as their own markers, never clustered — and appear on nobody else's map.
+  """
+  reviewStatus: PlaceReviewStatus!
 }
 
 """
@@ -2651,6 +2674,11 @@ type Mutation {
   acceptFriendRequest(requestId: ID!): AcceptFriendRequestResult!
 
   """
+  Confirm one of the review's suggestions on a place you added: a suggested category is added to `categories`; the suggested description becomes `description` (only when there is none). The suggestion is used up either way.
+  """
+  acceptPlaceSuggestion(input: AcceptPlaceSuggestionInput!, placeId: ID!): AcceptPlaceSuggestionResult!
+
+  """
   Accept or reject one AI match. Scan owner only. Accepting an item also queues `PlaceActor.verifyMenuItemMatch`, and accepting a recipe `PlaceActor.linkMenuItemRecipe`, so the place's menu learns what the line is (§1.7).
   """
   actOnMenuScanSuggestion(
@@ -2727,7 +2755,7 @@ type Mutation {
   createMenuScan(input: CreateMenuScanInput!, menuScanId: ID): CreateMenuScanResult!
 
   """
-  Rate limit, duplicate check, AI review, then PlaceActor.create — one submission at a time per user (PlaceCreationActor, keyed by the viewer), with the cross-user duplicate check re-run under database locks inside PlaceActor.create. The only place-creation path a client has; there is deliberately no mutation that reaches PlaceActor.create directly.
+  Rate limit, duplicate check, then PlaceActor.create — one submission at a time per user (PlaceCreationActor, keyed by the viewer), with the duplicate check re-run under database locks inside PlaceActor.create. The place is saved at once as PENDING — on its creator's map with 'Under review', on nobody else's — and the AI review runs afterwards, from the outbox (X27 / D28). The only place-creation path a client has; there is deliberately no mutation that reaches PlaceActor.create directly.
   """
   createPlace(input: CreatePlaceInput!): CreatePlaceResult!
 
@@ -2765,6 +2793,11 @@ type Mutation {
   deleteItemReview(itemId: ID!, reviewId: ID!, type: ItemType!): DeleteItemReviewResult!
 
   """
+  Delete a PENDING or REJECTED place you added. A shared place cannot be deleted, nor one a tier list or menu scan still points at (Conflict, naming which).
+  """
+  deletePlace(placeId: ID!): DeletePlaceResult!
+
+  """
   Creator only. Cascades its ingredients, instructions, reviews, votes and vector in one statement. If it was its group's canonical version, the group picks a new one asynchronously (an outbox row, not part of this call), so a read immediately after may still see the old `canonicalRecipeId`.
   """
   deleteRecipe(recipeId: ID!): DeleteRecipeResult!
@@ -2782,6 +2815,11 @@ type Mutation {
 
   """The uploader's alone."""
   detachItemImage(imageId: ID!, itemId: ID!, type: ItemType!): DetachItemImageResult!
+
+  """
+  Dismiss every remaining review suggestion on a place you added. Idempotent.
+  """
+  dismissPlaceSuggestions(placeId: ID!): DismissPlaceSuggestionsResult!
 
   """Idempotent, and implies open."""
   emptyCellarItem(cellarId: ID!, cellarItemId: ID!): EmptyCellarItemResult!
@@ -2864,6 +2902,11 @@ type Mutation {
   Finds the brand named `name` (case-insensitive, trimmed) or creates it (BrandRegistryActor.resolve) — the only brand-creation path a client has; there is no direct createBrand mutation (see module doc).
   """
   resolveBrand(name: String!): ResolveBrandResult!
+
+  """
+  Edit a PENDING or REJECTED place you added and send it for review again — the whole place, not a patch: it goes back to PENDING, its old verdict and suggestions are cleared, and a fresh review is queued. An APPROVED place is shared and is not editable here. To anyone but its creator the place does not exist (NotFound).
+  """
+  resubmitPlace(input: ResubmitPlaceInput!, placeId: ID!): ResubmitPlaceResult!
 
   """
   Ask another user to be friends. Rejected for yourself (Validation), an existing friend, or a request already open either way (Conflict). All four carry an `ActorError.reason` — CANNOT_FRIEND_SELF, ALREADY_FRIENDS, FRIEND_REQUEST_ALREADY_SENT or FRIEND_REQUEST_ALREADY_RECEIVED — because the three Conflicts share one `code`. Switch on `reason`; never match on `message`.
@@ -3180,13 +3223,36 @@ type Place {
   primaryCategory: String
   rating: Float
   region: String
+
+  """
+  Why the review said no, addressed to the person who added the place. Null unless REJECTED.
+  """
+  rejectionReason: String
   reviewCount: Int
+
+  """
+  X27. Only the person who added a place ever sees it PENDING or REJECTED — to anyone else such a place does not exist.
+  """
+  reviewStatus: PlaceReviewStatus!
+
+  """When the latest verdict landed; null while PENDING."""
+  reviewedAt: DateTime
 
   """
   `'overture'` for imported reference data, `'user'` for a place someone added. Server-set at creation.
   """
   source: String!
   streetAddress: String
+
+  """
+  Categories the review suggested ('also tagged as…'), for the person who added the place to confirm (`acceptPlaceSuggestion`) or dismiss. Never applied on their own. Empty for everyone else.
+  """
+  suggestedCategories: [String!]!
+
+  """
+  A description the review offered for a place that has none — the creator's to take or dismiss. Null for everyone else.
+  """
+  suggestedDescription: String
 
   """
   The tier lists ranking this, as their rows (band, position, list) — only lists you may see (`canSeeTierList`): a private list's row, and so its name, never appears. Most recently changed list first; at most 100 rows reachable, `totalCount` exact. One batched call per page of parents. Empty for an anonymous viewer.
@@ -3427,7 +3493,7 @@ type PlacePhotoEdge {
 }
 
 """
-What the AI review said. Null on `CreatePlacePayload` when no review ran — an unconfigured or failing model degrades to no review rather than to a fabricated approval.
+What the AI review said. Always null on `CreatePlacePayload` since X27: the review runs after the place is saved, and its verdict is `Place.reviewStatus`. Kept so existing documents still validate.
 """
 type PlaceReview {
   approved: Boolean!
@@ -3438,6 +3504,15 @@ type PlaceReview {
   flags: [String!]!
   rejectionReason: String
   suggestedCategories: [String!]
+}
+
+"""
+Where a place is in its review. PENDING: saved, visible to the person who added it and nobody else, waiting for the AI review (or for a review that could not run). APPROVED: shared on everyone's map. REJECTED: still only visible to the person who added it, with `rejectionReason`; they can edit it (which sends it for review again) or delete it.
+"""
+enum PlaceReviewStatus {
+  APPROVED
+  PENDING
+  REJECTED
 }
 
 type PlaceSearchConnection {
@@ -3474,6 +3549,11 @@ type PlaceSearchResult {
   primaryCategory: String
   rating: Float
   region: String
+
+  """
+  X27: APPROVED for every shared hit. A PENDING / REJECTED hit is the viewer's own place under review, matched on its name.
+  """
+  reviewStatus: PlaceReviewStatus!
   streetAddress: String
   textRank: Float!
   trigramSimilarity: Float!
@@ -4955,6 +5035,33 @@ type ReorderBandPayload {
 union ReorderTierListBandResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ReorderBandPayload | ValidationError
 
 union ResolveBrandResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
+"""
+The whole place, as the creator wants it now — the same fields and rules as `CreatePlaceInput`, without the id (the place has one). Not a patch: every field is the full new answer, so an omitted or null field is 'none', exactly as on `createPlace`.
+"""
+input ResubmitPlaceInput {
+  """At least one."""
+  categories: [String!]!
+
+  """Two letters."""
+  countryCode: String
+
+  """Under 1000."""
+  description: String
+  email: String
+  locality: String
+  location: LngLatInput!
+
+  """2–200 characters."""
+  name: String!
+  phone: String
+  postcode: String
+  region: String
+  streetAddress: String
+  website: String
+}
+
+union ResubmitPlaceResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Place | ValidationError
 
 type ReverseGeocodeResult {
   countryCode: String
