@@ -20,6 +20,9 @@ test.describe.configure({ mode: "serial" });
 let api: Gql;
 let recipeId = "";
 const name = unique("E2 Rickey");
+/** The shared account's pantry before this spec touched it, restored after. */
+const TOUCHED = ["lime", "simple_syrup", "soda_water"] as const;
+let pantryBefore: readonly string[] = [];
 
 const setPantry = async (kind: string, have: boolean) => {
   const data = await api.query(
@@ -35,6 +38,11 @@ const setPantry = async (kind: string, have: boolean) => {
 
 test.beforeAll(async () => {
   api = await Gql.forAccount("primary");
+  const pantry = await api.query(
+    `query { barPantry { __typename ... on BarPantry { have } } }`,
+  );
+  expect(pantry.barPantry.__typename).toBe("BarPantry");
+  pantryBefore = pantry.barPantry.have;
   await setPantry("lime", false);
   await setPantry("simple_syrup", true);
   await setPantry("soda_water", true);
@@ -92,6 +100,10 @@ test.afterAll(async () => {
       `mutation D($recipeId: ID!) { deleteRecipe(recipeId: $recipeId) { __typename } }`,
       { recipeId },
     );
+  }
+  // Put the shared account's pantry back the way the spec found it.
+  for (const kind of TOUCHED) {
+    await setPantry(kind, pantryBefore.includes(kind));
   }
   await api.dispose();
 });
