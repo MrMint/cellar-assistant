@@ -272,6 +272,24 @@
     display: revert-layer;
     vertical-align: revert-layer;
   }
+  /* Likewise the bare elements unconverted screens put inside Joy text, which
+     Preflight strips: a plain `next/link` in a sentence ("New to Cellar
+     Assistant? Sign up!") loses its colour and underline, a plain `<ul>` its
+     bullets and indent (the onboarding Tips), a plain `<input>` (the phone
+     field) its own text colour. `:not([class])` leaves every styled element
+     alone; inside Joy markup these get exactly what they had before Tailwind. */
+  [class*="Mui"] a:not([class]) {
+    color: revert-layer;
+    text-decoration: revert-layer;
+  }
+  [class*="Mui"] :is(ul, ol):not([class]) {
+    list-style: revert-layer;
+    margin: revert-layer;
+    padding: revert-layer;
+  }
+  [class*="Mui"] input:not([class]) {
+    color: revert-layer;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

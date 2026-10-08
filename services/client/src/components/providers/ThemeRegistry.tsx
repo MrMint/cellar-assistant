@@ -16,6 +16,20 @@ import EmotionCacheProvider from "./EmotionCacheProvider";
  * `*Channel` variables from hex and breaks on `var()`.
  */
 export const theme = extendTheme({
+  components: {
+    JoySlider: {
+      styleOverrides: {
+        // A disabled slider's filled track is `solidDisabledBg` (neutral 800)
+        // and its rail is `background.level2` — both `surface3` here, so the
+        // level vanished (a friend's "Remaining: 60%" showed an empty bar).
+        // Lift the track off the rail.
+        root: ({ ownerState }) =>
+          ownerState.disabled
+            ? { "--Slider-trackBackground": joyRamps.neutral[600] }
+            : {},
+      },
+    },
+  },
   fontFamily: {
     body: "var(--font-inter), ui-sans-serif, system-ui, sans-serif",
     display: "var(--font-fraunces), ui-serif, Georgia, serif",
