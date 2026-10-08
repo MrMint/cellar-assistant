@@ -1174,6 +1174,43 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
       );
     });
 
+    it("tells only the creator that their own allowance ran out", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const stranger = await seedUser(db);
+          const id = await seedTierList(db, {
+            createdById: owner,
+            privacy: "PUBLIC",
+          });
+          const actor = await activate(
+            newTierListActor(id, db, async () => {
+              throw new BudgetExceededError(
+                "per-user cap reached",
+                "USER_CAP",
+                new Date(Date.now() + 30 * 60_000).toISOString(),
+              );
+            }),
+          );
+          await seedThree(db, actor, owner);
+          await expect(
+            actor.generateInsights(systemCtx("deliver")),
+          ).rejects.toBeInstanceOf(BudgetExceededError);
+
+          // The creator's usage window is theirs: another viewer sees a
+          // failure, with no reason and no time read off it.
+          expect(await actor.get(userCtx(stranger, "r"))).toMatchObject({
+            insightsStatus: "FAILED",
+            insightsFailureReason: null,
+            insightsRetryAt: null,
+          });
+          expect(
+            (await actor.get(userCtx(owner, "r"))).insightsFailureReason,
+          ).toBe("USER_CAP");
+        }),
+      );
+    });
+
     it("clears the failure when a later attempt succeeds", async () => {
       await withInsightsAvailable(true, () =>
         withTestDb(async (db) => {

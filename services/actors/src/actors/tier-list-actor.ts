@@ -395,7 +395,7 @@ export class TierListActor
   async get(ctx: Ctx): Promise<TierListDto> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return this.#toDto(aggregate);
+    return this.#toDto(ctx, aggregate);
   }
 
   async items(ctx: Ctx, page: PageArgs): Promise<Page<TierListItemDto>> {
@@ -430,7 +430,7 @@ export class TierListActor
       });
     });
     await this.reload();
-    return this.#toDto(this.requireAggregate());
+    return this.#toDto(ctx, this.requireAggregate());
   }
 
   /** Creator only; header fields only. Never touches `content_updated_at`. */
@@ -450,7 +450,7 @@ export class TierListActor
     if (input.isEditingLocked !== undefined) {
       patch.isEditingLocked = input.isEditingLocked;
     }
-    if (Object.keys(patch).length === 0) return this.#toDto(aggregate);
+    if (Object.keys(patch).length === 0) return this.#toDto(ctx, aggregate);
 
     await this.tx(async (tx) => {
       await tx
@@ -459,7 +459,7 @@ export class TierListActor
         .where(eq(tierLists.id, this.key));
     });
     await this.reload();
-    return this.#toDto(this.requireAggregate());
+    return this.#toDto(ctx, this.requireAggregate());
   }
 
   /**
@@ -933,6 +933,7 @@ export class TierListActor
 
   /** N07: see `lib/tier-list-insights-status.ts` for the rule. */
   #insightsStatus(
+    ctx: Ctx,
     aggregate: TierListAggregate,
   ): Pick<
     TierListDto,
@@ -951,6 +952,18 @@ export class TierListActor
       retryAt: row.insightsRetryAt,
       now: new Date(),
     });
+    // A per-user limit is the creator's own allowance (generation is
+    // attributed to them), and its retryAt is a reading of their usage
+    // window. Anyone else who can see the list learns only that the attempt
+    // failed — and is never told "you've reached your limit" for someone
+    // else's.
+    if (status.failureReason === "USER_CAP" && !isOwner(ctx, row.createdById)) {
+      return {
+        insightsStatus: status.status,
+        insightsFailureReason: null,
+        insightsRetryAt: null,
+      };
+    }
     return {
       insightsStatus: status.status,
       insightsFailureReason: status.failureReason,
@@ -971,7 +984,7 @@ export class TierListActor
     return Number(row?.count ?? 0);
   }
 
-  #toDto(aggregate: TierListAggregate): TierListDto {
+  #toDto(ctx: Ctx, aggregate: TierListAggregate): TierListDto {
     return {
       id: aggregate.tierList.id,
       name: aggregate.tierList.name,
@@ -986,7 +999,7 @@ export class TierListActor
         null,
       insightsGeneratedAt: iso(aggregate.tierList.insightsGeneratedAt),
       contentUpdatedAt: requiredIso(aggregate.tierList.contentUpdatedAt),
-      ...this.#insightsStatus(aggregate),
+      ...this.#insightsStatus(ctx, aggregate),
       createdAt: iso(aggregate.tierList.createdAt),
       updatedAt: iso(aggregate.tierList.updatedAt),
     };
