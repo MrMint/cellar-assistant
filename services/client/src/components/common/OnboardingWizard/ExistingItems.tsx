@@ -1,5 +1,5 @@
-import { Button, Grid, Stack, Typography } from "@mui/joy";
 import { ItemCard } from "@/components/item/ItemCard";
+import { Button } from "@/components/ui/button";
 import type { ExistingItem } from "./adapter";
 
 type ExistingItemsProps = {
@@ -19,23 +19,21 @@ export const ExistingItems = ({
   onSkip,
 }: ExistingItemsProps) => {
   return (
-    <Grid container spacing={2}>
-      <Grid xs={12}>
-        <Stack spacing={2} direction="row" alignItems="center">
-          <Typography>Don&apos;t see what you are looking for?</Typography>
-          <Button onClick={onSkip}>Create New</Button>
-        </Stack>
-      </Grid>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <div className="col-span-full flex flex-row items-center gap-4">
+        <p className="type-body">Don&apos;t see what you are looking for?</p>
+        <Button onClick={onSkip}>Create New</Button>
+      </div>
       {items.map((x) => (
-        <Grid key={x.item.id} xs={12} sm={6} md={4} lg={2}>
+        <div key={x.item.id} className="min-w-0">
           <ItemCard
             key={x.item.id}
             item={x.item}
             type={x.type}
             onClick={() => onClickItem(x.item.id)}
           />
-        </Grid>
+        </div>
       ))}
-    </Grid>
+    </div>
   );
 };
