@@ -193,6 +193,9 @@ test("rejected: the reason, then Edit & resubmit sends it back for review", asyn
   await expect(page).toHaveURL(new RegExp(`/places/${placeId}$`), {
     timeout: 15_000,
   });
+  // The page may have read the place before the hold above landed (a fast
+  // model can decide a resubmission in the gap); read it again.
+  await page.reload();
   await expect(page.getByRole("heading", { name: placeName })).toBeVisible({
     timeout: 20_000,
   });
