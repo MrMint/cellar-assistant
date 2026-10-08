@@ -43,8 +43,12 @@ export function CenterPinOverlay({
       {/* Shadow dot at pin base for depth */}
       <div className="pointer-events-none absolute top-1/2 left-1/2 z-[1099] size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/20" />
 
-      {/* Bottom action bar: clear of the tab bar on phones, centred from md */}
-      <div className="absolute right-4 bottom-[calc(80px+env(safe-area-inset-bottom,0px))] left-4 z-[1250] max-w-[400px] md:right-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2">
+      {/* Bottom action bar, centred from md. The map already ends above the
+          tab bar and the home indicator (N22), so on phones this clears only
+          the attribution — 40 px, the bottom stack's own offset — instead of
+          the old 80 px + safe area that made room for a nav the map ran
+          under. */}
+      <div className="absolute right-4 bottom-10 left-4 z-[1250] max-w-[400px] md:right-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2">
         <div className="surface-glass flex flex-col items-center gap-3 rounded-lg p-4">
           <p className="type-callout text-center">
             Move the map to position the pin on the place

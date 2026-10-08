@@ -133,6 +133,7 @@ export function MapLibreRenderer({
     mapReady,
     isDesktop,
     hasSidebar,
+    insets,
     isManualSelectionRef,
   });
 
@@ -300,7 +301,7 @@ export function MapLibreRenderer({
             center: [lng, lat],
             zoom: Math.max(currentZoom, 15),
             duration: 600,
-            offset: getDrawerOffset(isDesktop, hasSidebar),
+            offset: getDrawerOffset(isDesktop, hasSidebar, insets),
           });
         }
       }
@@ -314,6 +315,7 @@ export function MapLibreRenderer({
       placeLookup,
       isDesktop,
       hasSidebar,
+      insets,
     ],
   );
 
@@ -391,11 +393,11 @@ export function MapLibreRenderer({
           center: [lng, lat],
           zoom: Math.max(currentZoom, 15),
           duration: 600,
-          offset: getDrawerOffset(isDesktop, hasSidebar),
+          offset: getDrawerOffset(isDesktop, hasSidebar, insets),
         });
       }
     },
-    [isDesktop, hasSidebar],
+    [isDesktop, hasSidebar, insets],
   );
 
   const mapStyle = basemapStyle(mapCore.isDarkMode);

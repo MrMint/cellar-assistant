@@ -13,6 +13,7 @@ import type { PlaceResult } from "../types";
 import { getDrawerOffset } from "../utils/layout";
 import { useMapActions } from "./useMapMachine";
 import { useMapSearchParams } from "./useMapSearchParams";
+import type { ViewportInsets } from "./useViewportInsets";
 
 interface UseMapDeepLinkOptions {
   mapRef: RefObject<MapRef | null>;
@@ -20,6 +21,8 @@ interface UseMapDeepLinkOptions {
   mapReady: boolean;
   isDesktop: boolean;
   hasSidebar: boolean;
+  /** The map's measured box (`useViewportInsets`), for the flyTo offset. */
+  insets?: ViewportInsets | null;
   /** Shared ref from useMapPlaceSelection — true when a place was just
    *  selected programmatically (click/search result), so the deep-link
    *  effect should skip fetching. */
@@ -39,9 +42,17 @@ export function useMapDeepLink({
   mapReady,
   isDesktop,
   hasSidebar,
+  insets,
   isManualSelectionRef,
 }: UseMapDeepLinkOptions) {
   const mapActions = useMapActions();
+  // Read at fly time, not a dependency: a first measurement landing while
+  // the place is still being fetched must not cancel the fly (the effect's
+  // cleanup would, and the handled-id guard would then skip the re-run).
+  const insetsRef = useRef(insets);
+  useEffect(() => {
+    insetsRef.current = insets;
+  }, [insets]);
   const { fetchPlaceByIdAction } = usePlaceActions();
   const { placeId } = useMapSearchParams();
   const deepLinkHandledRef = useRef<string | null>(null);
@@ -69,7 +80,7 @@ export function useMapDeepLink({
         center: [lng, lat],
         zoom: 16,
         duration: 800,
-        offset: getDrawerOffset(isDesktop, hasSidebar),
+        offset: getDrawerOffset(isDesktop, hasSidebar, insetsRef.current),
       });
     });
 
