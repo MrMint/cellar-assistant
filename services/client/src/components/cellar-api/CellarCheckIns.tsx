@@ -1,18 +1,11 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  List,
-  ListDivider,
-  ListItem,
-  ListItemContent,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { useClient } from "urql";
+import { ListRow } from "@/components/app/Page";
 import { Timestamp } from "@/components/common/Timestamp";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { CellarDetailQuery, CheckInRowFragment } from "@/lib/api/cellars";
 import type { FragmentOf } from "@/lib/api/graphql";
 import { readFragment } from "@/lib/api/graphql";
@@ -68,6 +61,7 @@ export function CellarCheckIns({
    * server page (`router.refresh()`) must retire any "more" still in flight.
    */
   const [windowGate] = useState(createLatestOnly);
+  const headingId = useId();
 
   useEffect(() => {
     windowGate.invalidate();
@@ -119,60 +113,59 @@ export function CellarCheckIns({
   }, [client, cellarId, shown, windowGate]);
 
   return (
-    <Stack spacing={1}>
-      <Stack direction="row" spacing={1} alignItems="baseline">
-        <Typography level="title-lg">Check-ins</Typography>
+    <section className="flex flex-col gap-2">
+      <div className="flex items-baseline gap-2">
+        <h2 id={headingId} className="type-headline">
+          Check-ins
+        </h2>
         {totalCount !== null && (
-          <Typography level="body-sm" textColor="text.tertiary">
-            {totalCount}
-          </Typography>
+          <span className="type-callout tabular text-ink-3">{totalCount}</span>
         )}
-      </Stack>
+      </div>
 
       {error !== null && <ApiError error={error} />}
 
       {edges.length === 0 ? (
-        <Typography level="body-sm" textColor="text.tertiary">
+        <p className="type-callout text-ink-3">
           Nobody has drunk anything out of this cellar yet.
-        </Typography>
+        </p>
       ) : (
-        <List size="sm" variant="outlined" sx={{ borderRadius: "sm" }}>
-          {edges.map((edge, index) => {
+        <ul
+          aria-labelledby={headingId}
+          className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1"
+        >
+          {edges.map((edge) => {
             const checkIn = readFragment(CheckInRowFragment, edge.node);
             return (
-              <Box key={checkIn.id}>
-                {index > 0 && <ListDivider />}
-                <ListItem>
-                  <ListItemContent>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="space-between"
-                      alignItems="center"
-                    >
-                      <UserName userId={checkIn.userId} viewerId={viewerId} />
-                      <Typography level="body-xs" textColor="text.tertiary">
-                        <Timestamp iso={checkIn.createdAt} />
-                      </Typography>
-                    </Stack>
-                  </ListItemContent>
-                </ListItem>
-              </Box>
+              <li key={checkIn.id}>
+                <ListRow
+                  title={
+                    <UserName userId={checkIn.userId} viewerId={viewerId} />
+                  }
+                  trailing={
+                    <span className="type-footnote">
+                      <Timestamp iso={checkIn.createdAt} />
+                    </span>
+                  }
+                />
+              </li>
             );
           })}
-        </List>
+        </ul>
       )}
 
       {hasNextPage && (
         <Button
-          size="sm"
-          variant="plain"
-          loading={loading}
+          variant="ghost"
+          className="self-center"
+          disabled={loading}
+          aria-busy={loading || undefined}
           onClick={() => void loadMore()}
         >
+          {loading && <Spinner aria-hidden />}
           Show more
         </Button>
       )}
-    </Stack>
+    </section>
   );
 }

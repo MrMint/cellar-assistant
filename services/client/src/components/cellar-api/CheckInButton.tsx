@@ -1,25 +1,18 @@
 "use client";
 
-import {
-  Button,
-  Checkbox,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Dropdown,
-  List,
-  ListItem,
-  Menu,
-  MenuButton,
-  MenuItem,
-  Modal,
-  ModalDialog,
-  Typography,
-} from "@mui/joy";
-import { useCallback, useState } from "react";
-import { MdLocalBar } from "react-icons/md";
+import { useCallback, useId, useState } from "react";
 import { useMutation, useQuery } from "urql";
+import { Cocktail } from "@/components/app/icons";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Spinner } from "@/components/ui/spinner";
 import {
   BulkCheckInMutation,
   CheckInMutation,
@@ -38,6 +31,11 @@ import { ApiError } from "./ApiError";
  *
  * `checkInId` is minted here rather than by the server, which makes a retry
  * after a dropped response idempotent (§8.4).
+ *
+ * The Joy `Dropdown` menu is a `ui/dropdown-menu` (still a `menu` of
+ * `menuitem`s, which e2e 04 drives), non-modal so that "Me and friends…" can
+ * open the picker without racing the menu's own teardown; the picker `Modal`
+ * is a `ResponsiveDialog` (a sheet on phones).
  */
 export function CheckInButton({
   cellarId,
@@ -45,7 +43,6 @@ export function CheckInButton({
   itemName,
   viewerId,
   onCheckedIn,
-  size = "sm",
 }: {
   cellarId: string;
   cellarItemId: string;
@@ -53,11 +50,11 @@ export function CheckInButton({
   /** Included in `bulkCheckIn`'s ids, so "me and friends" means what it says. */
   viewerId: string | null;
   onCheckedIn?: () => void;
-  size?: "sm" | "md";
 }) {
   const [error, setError] = useState<ApiFailure | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const checkboxIdPrefix = useId();
 
   const [checkInState, checkIn] = useMutation(CheckInMutation);
   const [bulkState, bulkCheckIn] = useMutation(BulkCheckInMutation);
@@ -120,77 +117,91 @@ export function CheckInButton({
 
   return (
     <>
-      <Dropdown>
-        <MenuButton
-          size={size}
-          variant="soft"
-          color="primary"
-          startDecorator={<MdLocalBar />}
-          loading={checkInState.fetching}
-        >
-          Check in
-        </MenuButton>
-        <Menu size="sm" placement="bottom-end">
-          <MenuItem onClick={() => void checkInSelf()}>Just me</MenuItem>
-          <MenuItem
-            onClick={() => {
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={checkInState.fetching}
+            aria-busy={checkInState.fetching || undefined}
+          >
+            {checkInState.fetching ? <Spinner aria-hidden /> : <Cocktail />}
+            Check in
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            className="min-h-11"
+            onSelect={() => void checkInSelf()}
+          >
+            Just me
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="min-h-11"
+            onSelect={() => {
               setError(null);
               setSelected([]);
               setBulkOpen(true);
             }}
           >
             Me and friends…
-          </MenuItem>
-        </Menu>
-      </Dropdown>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {error !== null && !bulkOpen && <ApiError error={error} />}
 
-      <Modal open={bulkOpen} onClose={() => setBulkOpen(false)}>
-        <ModalDialog variant="outlined" sx={{ minWidth: 320 }}>
-          <DialogTitle>Who is drinking?</DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Typography level="body-sm" sx={{ mb: 1 }}>
-              {itemName}
-            </Typography>
-            {friends.length === 0 ? (
-              <Typography level="body-sm" textColor="text.tertiary">
-                You have no friends to check in for yet.
-              </Typography>
-            ) : (
-              <List size="sm">
-                {friends.map((friend) => (
-                  <ListItem key={friend.id}>
-                    <Checkbox
-                      label={friend.displayName}
-                      checked={selected.includes(friend.id)}
-                      onChange={() => toggle(friend.id)}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            )}
-            {error !== null && <ApiError error={error} />}
-          </DialogContent>
-          <DialogActions>
-            <Button
-              loading={bulkState.fetching}
-              disabled={selected.length === 0}
-              onClick={() => void checkInTable()}
-            >
-              Check in {selected.length > 0 ? `(${selected.length})` : ""}
-            </Button>
-            <Button
-              variant="plain"
-              color="neutral"
-              onClick={() => setBulkOpen(false)}
-            >
+      <ResponsiveDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        title="Who is drinking?"
+        description={itemName}
+        footer={
+          <div className="flex w-full flex-col-reverse gap-2 md:flex-row md:justify-end">
+            <Button variant="ghost" onClick={() => setBulkOpen(false)}>
               Cancel
             </Button>
-          </DialogActions>
-        </ModalDialog>
-      </Modal>
+            <Button
+              disabled={selected.length === 0 || bulkState.fetching}
+              aria-busy={bulkState.fetching || undefined}
+              onClick={() => void checkInTable()}
+            >
+              {bulkState.fetching && <Spinner aria-hidden />}
+              Check in {selected.length > 0 ? `(${selected.length})` : ""}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-2">
+          {friends.length === 0 ? (
+            <p className="type-callout text-ink-3">
+              You have no friends to check in for yet.
+            </p>
+          ) : (
+            <ul className="flex flex-col">
+              {friends.map((friend) => {
+                const checkboxId = `${checkboxIdPrefix}-${friend.id}`;
+                return (
+                  <li key={friend.id}>
+                    <label
+                      htmlFor={checkboxId}
+                      className="type-body flex min-h-11 items-center gap-3"
+                    >
+                      <Checkbox
+                        id={checkboxId}
+                        checked={selected.includes(friend.id)}
+                        onCheckedChange={() => toggle(friend.id)}
+                      />
+                      {friend.displayName}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {error !== null && <ApiError error={error} />}
+        </div>
+      </ResponsiveDialog>
     </>
   );
 }
