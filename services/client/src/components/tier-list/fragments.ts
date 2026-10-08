@@ -61,6 +61,9 @@ export const TierListCoreFragment = graphql(`
     isEditingLocked
     aiInsights
     insightsGeneratedAt
+    insightsStatus
+    insightsFailureReason
+    insightsRetryAt
     contentUpdatedAt
     createdAt
     updatedAt

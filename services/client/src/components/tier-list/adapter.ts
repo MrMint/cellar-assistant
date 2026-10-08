@@ -8,8 +8,10 @@
  * lives here as plain functions so it can be tested without a server.
  */
 
+import type { ActorErrorReason } from "@/lib/api/errors";
 import { formatVintage } from "@/utilities";
 import { BANDS, type TierListEntityType } from "./constants";
+import type { InsightsStatus } from "./insights/insights-view";
 import type {
   TierListAIInsights,
   TierListData,
@@ -68,6 +70,10 @@ export type TierListCoreNode = {
   isEditingLocked: boolean;
   aiInsights: unknown;
   contentUpdatedAt: string | null;
+  /** N07; optional so a fixture written before it still adapts. */
+  insightsStatus?: InsightsStatus | null;
+  insightsFailureReason?: ActorErrorReason | null;
+  insightsRetryAt?: string | null;
 };
 
 const joinParts = (parts: ReadonlyArray<string | number | null | undefined>) =>
@@ -232,6 +238,9 @@ export function tierListDataFrom(
       items: insightsItemsFromNodes(nodes),
       aiInsights: aiInsightsFromJson(core.aiInsights),
       contentUpdatedAt: core.contentUpdatedAt ?? null,
+      status: core.insightsStatus ?? null,
+      failureReason: core.insightsFailureReason ?? null,
+      retryAt: core.insightsRetryAt ?? null,
       showPlaceStats: core.listType === "place",
     },
   };

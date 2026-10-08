@@ -5,6 +5,10 @@
  * restored. Changes: the date goes through `Timestamp` (hydration-safe, same
  * medium date); passport, heatmap and category donut show for place lists
  * only (`showPlaceStats`), and Blind Spots only when generated.
+ *
+ * N07: whether "Generating Insights" shows, whether the page polls, and what
+ * is said instead is `insightsView`'s decision, from the server's
+ * `insightsStatus` — never inferred from a missing `aiInsights` any more.
  */
 
 import {
@@ -27,6 +31,7 @@ import {
   MdUpdate,
 } from "react-icons/md";
 
+import { AiStatus } from "@/components/common/AiStatus";
 import { Timestamp } from "@/components/common/Timestamp";
 import type { TierListInsightsData } from "../types";
 import { BandDistributionChart } from "./BandDistributionChart";
@@ -38,6 +43,7 @@ import {
   computeCountryHeatmap,
   computePalatePassport,
 } from "./computeInsightsStats";
+import { insightsView } from "./insights-view";
 import { PalatePassport } from "./PalatePassport";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -54,10 +60,19 @@ export function TierListInsightsPanel({
   const pollCount = useRef(0);
   const ai = insights.aiInsights;
   const itemCount = insights.items.length;
+  const view = insightsView({
+    status: insights.status ?? null,
+    failureReason: insights.failureReason ?? null,
+    retryAt: insights.retryAt ?? null,
+    hasInsights: ai !== null,
+    itemCount,
+  });
+  const shouldPoll = view.poll;
 
-  // Poll for AI insights when expected but not yet available
+  // Poll only while the server says an answer is on its way, and never more
+  // than MAX_POLLS times however long that takes.
   useEffect(() => {
-    if (ai || itemCount < 3) {
+    if (!shouldPoll) {
       pollCount.current = 0;
       return;
     }
@@ -70,7 +85,7 @@ export function TierListInsightsPanel({
       router.refresh();
     }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [ai, itemCount, router]);
+  }, [shouldPoll, router]);
 
   const bandDistribution = useMemo(
     () => computeBandDistribution(insights.items),
@@ -100,7 +115,7 @@ export function TierListInsightsPanel({
     );
   }
 
-  const isGenerating = !ai && itemCount >= 3;
+  const isGenerating = view.generating;
 
   return (
     <Stack spacing={2} sx={{ py: 1 }}>
@@ -132,6 +147,14 @@ export function TierListInsightsPanel({
             </Stack>
           </CardContent>
         </Card>
+      )}
+
+      {/* Why there are no (new) insights, when that is the news */}
+      {view.notice !== null && <AiStatus outcome={view.notice} />}
+      {view.hint !== null && (
+        <Typography level="body-sm" sx={{ color: "text.tertiary" }}>
+          {view.hint}
+        </Typography>
       )}
 
       {/* Generating indicator */}
@@ -279,7 +302,8 @@ export function TierListInsightsPanel({
           <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
             Last analyzed: <Timestamp iso={ai.generatedAt} precision="date" />
           </Typography>
-          {insights.contentUpdatedAt &&
+          {view.hint === null &&
+            insights.contentUpdatedAt &&
             new Date(insights.contentUpdatedAt) > new Date(ai.generatedAt) && (
               <Stack
                 direction="row"
@@ -289,8 +313,7 @@ export function TierListInsightsPanel({
               >
                 <MdUpdate style={{ fontSize: 14 }} />
                 <Typography level="body-xs" sx={{ color: "inherit" }}>
-                  Your list has changed since this analysis. Updated insights
-                  will generate automatically.
+                  Your list has changed since this analysis.
                 </Typography>
               </Stack>
             )}
