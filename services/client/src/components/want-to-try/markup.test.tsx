@@ -58,6 +58,17 @@ describe("WantToTryButton", () => {
     assert.doesNotMatch(on, /fill-brand/);
   });
 
+  test("a pending tap stays on the button, never the row's stretched link", () => {
+    // Disabled while pending; the vendored button drops pointer events when
+    // disabled, so without this a second tap reaches the link underneath.
+    const tag = openTag(
+      render(<WantToTryButton target={WINE} saved={false} name="Barolo" />),
+      'aria-label="Want to try Barolo"',
+    );
+    assert.match(tag, /disabled:pointer-events-auto/);
+    assert.match(tag, /\bz-10\b/);
+  });
+
   test("the labelled variant reads 'Want to try' in both states", () => {
     const html = render(
       <WantToTryButton

@@ -39,7 +39,10 @@ export type WantToTryButtonProps = {
  * carries the state, so the name stays "Want to try" either way.
  *
  * Stops the click from reaching a card or row it sits in, so it can live
- * beside a stretched link.
+ * beside a stretched link — and keeps taking taps while a change is pending
+ * (`disabled:pointer-events-auto`): the vendored button turns pointer events
+ * off when disabled, so a quick second tap fell through to the row's
+ * stretched link and left the page (the bug `ItemCard`'s heart had).
  */
 export function WantToTryButton({
   target,
@@ -100,7 +103,7 @@ export function WantToTryButton({
       onClick={onClick}
       size={size}
       variant={framed ? (saved ? "secondary" : "outline") : "ghost"}
-      className={cn("relative z-10", className)}
+      className={cn("relative z-10 disabled:pointer-events-auto", className)}
     >
       {glyph}
     </IconButton>
