@@ -11,8 +11,9 @@
  * | `create_search_vector(image:)` + `image_search`     | nothing — G32, a chosen drop             |
  * | `cellars_aggregate` + six `*_aggregate` (own and co-owned, distinct items) | `me.collectionStats` (G36) |
  *
- * `itemSearch` is purely semantic: `text` is embedded and ranked by cosine
- * distance, exactly as the old `text_search` was. It is a shared actor keyed
+ * `itemSearch` ranks `text` by cosine distance (as the old `text_search` did)
+ * and by trigram similarity of item names, fused (N08), so a typed or
+ * misspelt name finds its item. It is a shared actor keyed
  * on its inputs, so nothing viewer-specific goes into these variables;
  * `Item.isFavorite`/`myReview` are resolved per request on the *result*.
  */

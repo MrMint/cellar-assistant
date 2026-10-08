@@ -167,8 +167,134 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
           beersOnly,
         );
         expect(hits).toEqual([
-          { type: "BEER", id: beer.id, name: "A Beer", distance: 0 },
+          {
+            type: "BEER",
+            id: beer.id,
+            name: "A Beer",
+            distance: 0,
+            // A text search: the name did not match "q", so the vector alone
+            // found it (N08).
+            lexicalSimilarity: null,
+          },
         ]);
+      });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* N08: the lexical arm, fused by rank                                 */
+  /* ------------------------------------------------------------------ */
+
+  describe("hybrid retrieval (N08)", () => {
+    /**
+     * The failure it exists for: the embedding puts some other bottle
+     * nearest, and the one whose name was typed second. Agreement between the
+     * two rankings puts the named one first.
+     */
+    it("ranks the item whose name matches above a nearer vector that does not", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const elder = await seedBeer(db, owner, "Pliny the Elder");
+        const nearer = await seedBeer(db, owner, "Some Other IPA");
+        await seedItemVector(db, nearer, unitVector(0));
+        await seedItemVector(db, elder, blendedVector(0, 1, 1 / 3));
+
+        const input: ItemSearchInput = { text: "pliny the elder" };
+        const hits = await newActor(input, db, owner).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hits.map((hit) => hit.name)).toEqual([
+          "Pliny the Elder",
+          "Some Other IPA",
+        ]);
+        // Each hit still reports its own vector distance; only the named
+        // one carries a lexical similarity.
+        expect(at(hits, 0).distance).toBeCloseTo(1 - Math.cos(Math.PI / 6), 3);
+        expect(at(hits, 0).lexicalSimilarity).toBe(1);
+        expect(at(hits, 1).distance).toBeCloseTo(0, 3);
+        expect(at(hits, 1).lexicalSimilarity).toBeNull();
+        expect(hits[0]?.id).toBe(elder.id);
+      });
+    });
+
+    it("finds a misspelt name the vector cutoff dropped, with its real distance", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const laphroaig = await seedWine(db, owner, "Laphroaig 10 Year Old");
+        await seedItemVector(db, laphroaig, unitVector(1));
+        const input: ItemSearchInput = { text: "laphroig", maxDistance: 0.5 };
+        const hits = await newActor(input, db, owner).all(
+          userCtx(owner),
+          input,
+        );
+        // Distance 1 is past the 0.5 cutoff, which bounds the vector arm only.
+        expect(hits.map((hit) => hit.id)).toEqual([laphroaig.id]);
+        expect(at(hits, 0).distance).toBeCloseTo(1, 3);
+        expect(at(hits, 0).lexicalSimilarity).toBeGreaterThan(0.5);
+      });
+    });
+
+    it("leads with the exact name when a longer name contains it as a word", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const duvel = await seedBeer(db, owner, "Duvel");
+        const tripel = await seedBeer(db, owner, "Duvel Tripel Hop Citra");
+        // The vector prefers the longer name; both names contain "duvel".
+        await seedItemVector(db, tripel, unitVector(0));
+        await seedItemVector(db, duvel, blendedVector(0, 1, 1 / 3));
+        const input: ItemSearchInput = { text: "duvel" };
+        const hits = await newActor(input, db, owner).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hits.map((hit) => hit.id)).toEqual([duvel.id, tripel.id]);
+      });
+    });
+
+    it("respects the type filter in the lexical arm too", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const wine = await seedWine(db, owner, "Pliny Wine");
+        const beer = await seedBeer(db, owner, "Pliny Beer");
+        await seedItemVector(db, wine, unitVector(1));
+        await seedItemVector(db, beer, unitVector(1));
+        const input: ItemSearchInput = { text: "pliny", itemTypes: ["BEER"] };
+        const hits = await newActor(input, db, owner).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hits.map((hit) => hit.id)).toEqual([beer.id]);
+      });
+    });
+
+    it("does not return a name match that has no vector yet", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        await seedWine(db, owner, "Unembedded Pinot");
+        const input: ItemSearchInput = { text: "unembedded pinot" };
+        expect(
+          await newActor(input, db, owner).all(userCtx(owner), input),
+        ).toEqual([]);
+      });
+    });
+
+    it("a caller-supplied vector has no phrase, so no lexical arm", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const wine = await seedWine(db, owner, "Vector Only");
+        await seedItemVector(db, wine, unitVector(0));
+        const input: ItemSearchInput = { vector: unitVector(0) };
+        const [hit] = await newActor(input, db, owner).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hit).toEqual({
+          type: "WINE",
+          id: wine.id,
+          name: "Vector Only",
+          distance: 0,
+        });
       });
     });
   });

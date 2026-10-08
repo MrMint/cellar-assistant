@@ -2172,7 +2172,9 @@ type ItemSearchEdge {
 One item-vector match. `id`, `type` and `name` come from the search itself; `item` resolves the full aggregate through the Item loader.
 """
 type ItemSearchResult {
-  """Cosine distance to the query, 0-2. Lower is closer."""
+  """
+  Cosine distance to the query, 0-2. Lower is closer. For a `text` search a result the name match brought in can lie beyond `maxDistance`, which bounds the vector ranking only.
+  """
   distance: Float!
   id: ID!
 
@@ -3577,7 +3579,7 @@ type Query {
   itemOnboarding(id: ID!): QueryItemOnboardingResult!
 
   """
-  Semantic item search over `item_vectors` (ItemSearchActor). Replaces the `text_search` and `image_search` native queries: pass `text` for a phrase, `imageFileId` for a photo (G32), or `vector` for an embedding the client already has — exactly one. A photo search matches the item vectors and every stored photo you may see, ranks each item by the nearer, and defaults `maxDistance` to 0.4 and `limit` to 10. Where the deployment's embedding model cannot embed a photo it is a `ConflictError` with reason `IMAGE_SEARCH_UNAVAILABLE`.
+  Item search (ItemSearchActor). Replaces the `text_search` and `image_search` native queries: pass `text` for a phrase, `imageFileId` for a photo (G32), or `vector` for an embedding the client already has — exactly one. A `text` search ranks by `item_vectors` distance and by trigram similarity of item names together (reciprocal rank fusion), so an exact or misspelt name finds its item even where the embedding prefers a sibling. A photo search matches the item vectors and every stored photo you may see, ranks each item by the nearer, and defaults `maxDistance` to 0.4 and `limit` to 10. Where the deployment's embedding model cannot embed a photo it is a `ConflictError` with reason `IMAGE_SEARCH_UNAVAILABLE`.
   """
   itemSearch(
     """
