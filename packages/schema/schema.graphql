@@ -1181,6 +1181,15 @@ enum CoffeeSpecies {
 }
 
 """
+Which part of the viewer's visible set a `/cellars` or `/tier-lists` section lists (decision D2). The three partition the set: `MINE` is rows the viewer created (or co-owns, for a cellar); `FRIENDS` is friends' PUBLIC or FRIENDS rows; `DISCOVER` is PUBLIC rows of people who are not friends. A stranger's PUBLIC row is never `MINE`.
+"""
+enum CollectionSection {
+  DISCOVER
+  FRIENDS
+  MINE
+}
+
+"""
 The viewer's own collection: cellars they created or co-own, and the bottles still in them. Never other people's cellars, however visible (UI parity G36).
 """
 type CollectionStats {
@@ -3759,7 +3768,7 @@ type Query {
   menuScan(id: ID!): QueryMenuScanResult!
 
   """
-  `/cellars` — every cellar the viewer may see: their own, ones they co-own, and other people's that are PUBLIC or FRIENDS-and-a-friend (C3's `CellarsCollectionActor`, §2.2). The collection returns ids; the `Cellar` DataLoader batches them into parallel `CellarActor.get` calls (§1.5). Ordered with the viewer's own and co-owned cellars first, then the rest, each by most recent activity: a bottle added or changed, or a check-in (decision D13).
+  `/cellars` — every cellar the viewer may see: their own, ones they co-own, and other people's that are PUBLIC or FRIENDS-and-a-friend (C3's `CellarsCollectionActor`, §2.2). The collection returns ids; the `Cellar` DataLoader batches them into parallel `CellarActor.get` calls (§1.5). Ordered with the viewer's own and co-owned cellars first, then the rest, each by most recent activity: a bottle added or changed, or a check-in (decision D13). `section` narrows to one part of that set — Yours, From friends or Discover (decision D2).
   """
   myCellars(
     """
@@ -3779,6 +3788,11 @@ type Query {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """
+    Omit for every visible cellar; `MINE` for the viewer's own and co-owned ones only.
+    """
+    section: CollectionSection
   ): QueryMyCellarsResult!
 
   """
@@ -3897,7 +3911,7 @@ type Query {
   ): QueryMyPlaceInteractionsResult!
 
   """
-  `/tier-lists` — every tier list the viewer may see, most recently changed first (C3's `TierListsCollectionActor`, §2.2). Ids from the collection, hydrated by the `TierList` DataLoader (§1.5). The visibility rule is `canSeeTierList`, the same one `TierListActor` and the map's tier-list filter use.
+  `/tier-lists` — every tier list the viewer may see, most recently changed first (C3's `TierListsCollectionActor`, §2.2). Ids from the collection, hydrated by the `TierList` DataLoader (§1.5). The visibility rule is `canSeeTierList`, the same one `TierListActor` and the map's tier-list filter use. `section` narrows to one part of that set — Yours, From friends or Discover (decision D2).
   """
   myTierLists(
     """
@@ -3917,6 +3931,9 @@ type Query {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """Omit for every visible tier list; `MINE` for the viewer's own only."""
+    section: CollectionSection
   ): QueryMyTierListsResult!
 
   """

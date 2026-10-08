@@ -92,6 +92,50 @@ describe.skipIf(skip)("TierListsCollectionActor", () => {
     });
   });
 
+  it("splits the visible set into Yours / From friends / Discover (D2)", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const friend = await seedUser(db);
+      const stranger = await seedUser(db);
+      await seedFriendship(db, viewer, friend);
+
+      const mine = await seedTierList(db, {
+        createdById: viewer,
+        privacy: "PUBLIC",
+      });
+      const friendsList = await seedTierList(db, {
+        createdById: friend,
+        privacy: "FRIENDS",
+      });
+      const strangersPublic = await seedTierList(db, {
+        createdById: stranger,
+        privacy: "PUBLIC",
+      });
+      const strangersFriends = await seedTierList(db, {
+        createdById: stranger,
+        privacy: "FRIENDS",
+      });
+
+      const actor = await activate(
+        createActor(TierListsCollectionActor, viewer, db),
+      );
+      const ids = async (section: "MINE" | "FRIENDS" | "DISCOVER") =>
+        (
+          await actor.list(
+            userCtx(viewer, "r"),
+            pageArgs({ first: 100 }),
+            section,
+          )
+        ).entries.map((entry) => entry.node);
+
+      expect(await ids("MINE")).toEqual([mine]);
+      expect(await ids("FRIENDS")).toEqual([friendsList]);
+      const discover = await ids("DISCOVER");
+      expect(discover).toEqual([strangersPublic]);
+      expect(discover).not.toContain(strangersFriends);
+    });
+  });
+
   it("authorizes on every turn and refuses another viewer's key", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);

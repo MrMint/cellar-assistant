@@ -250,6 +250,90 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
     });
   });
 
+  it("splits the visible set into Yours / From friends / Discover (D2)", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const friend = await seedUser(db);
+      const stranger = await seedUser(db);
+      await befriend(db, viewer, friend);
+      await befriend(db, friend, viewer);
+
+      const minePrivate = await seedCellar(db, viewer, "PRIVATE");
+      const minePublic = await seedCellar(db, viewer, "PUBLIC");
+      const coOwned = await seedCellar(db, stranger, "PRIVATE");
+      await db.execute(sql`
+        insert into public.cellar_owners (user_id, cellar_id)
+        values (${viewer}::uuid, ${coOwned}::uuid)
+      `);
+      const friendsFriends = await seedCellar(db, friend, "FRIENDS");
+      const friendsPublic = await seedCellar(db, friend, "PUBLIC");
+      const friendsPrivate = await seedCellar(db, friend, "PRIVATE");
+      const strangersPublic = await seedCellar(db, stranger, "PUBLIC");
+      const strangersFriends = await seedCellar(db, stranger, "FRIENDS");
+
+      const actor = await activate(
+        createActor(CellarsCollectionActor, viewer, db),
+      );
+      const section = async (
+        which: "MINE" | "FRIENDS" | "DISCOVER" | null,
+      ): Promise<{ ids: string[]; total: number | null }> => {
+        const page = await actor.list(
+          userCtx(viewer),
+          pageArgs({ first: 50 }),
+          which,
+        );
+        return {
+          ids: page.entries.map((entry) => entry.node),
+          total: page.totalCount,
+        };
+      };
+
+      const mine = await section("MINE");
+      const friends = await section("FRIENDS");
+      const discover = await section("DISCOVER");
+      const all = await section(null);
+
+      expect(new Set(mine.ids)).toEqual(
+        new Set([minePrivate, minePublic, coOwned]),
+      );
+      expect(new Set(friends.ids)).toEqual(
+        new Set([friendsFriends, friendsPublic]),
+      );
+      // A stranger's PUBLIC cellar is Discover, never Yours.
+      expect(discover.ids).toEqual([strangersPublic]);
+      expect(mine.ids).not.toContain(strangersPublic);
+
+      // A partition of the visible set: nothing twice, nothing lost, nothing
+      // the viewer could not already see.
+      const union = [...mine.ids, ...friends.ids, ...discover.ids];
+      expect(new Set(union).size).toBe(union.length);
+      expect(new Set(union)).toEqual(new Set(all.ids));
+      expect(union).not.toContain(friendsPrivate);
+      expect(union).not.toContain(strangersFriends);
+
+      // The count is the section's, not the whole set's.
+      expect(mine.total).toBe(3);
+      expect(friends.total).toBe(2);
+      expect(discover.total).toBe(1);
+    });
+  });
+
+  it("refuses a section it does not know", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const actor = await activate(
+        createActor(CellarsCollectionActor, viewer, db),
+      );
+      await expect(
+        actor.list(
+          userCtx(viewer),
+          pageArgs({ first: 5 }),
+          "EVERYONE" as unknown as "MINE",
+        ),
+      ).rejects.toThrow(/not a collection section/);
+    });
+  });
+
   it("authorizes on every turn of a warm activation (§1.5, C1)", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);

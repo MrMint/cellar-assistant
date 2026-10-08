@@ -58,7 +58,7 @@ import {
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { PermissionTypeEnum } from "./enums.ts";
+import { CollectionSectionEnum, PermissionTypeEnum } from "./enums.ts";
 import { ActorErrorReasonEnum } from "./errors.ts";
 import { ItemInterface } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
@@ -404,8 +404,17 @@ builder.queryField("myTierLists", (t) =>
       "changed first (C3's `TierListsCollectionActor`, §2.2). Ids from the " +
       "collection, hydrated by the `TierList` DataLoader (§1.5). The " +
       "visibility rule is `canSeeTierList`, the same one `TierListActor` and " +
-      "the map's tier-list filter use.",
-    args: t.arg.connectionArgs(),
+      "the map's tier-list filter use. `section` narrows to one part of " +
+      "that set — Yours, From friends or Discover (decision D2).",
+    args: {
+      ...t.arg.connectionArgs(),
+      section: t.arg({
+        type: CollectionSectionEnum,
+        required: false,
+        description:
+          "Omit for every visible tier list; `MINE` for the viewer's own only.",
+      }),
+    },
     errors: {},
     resolve: async (_root, args, context) => {
       const viewerId = context.ctx.viewerId;
@@ -418,7 +427,7 @@ builder.queryField("myTierLists", (t) =>
             TierListsCollectionActorDescriptor,
             viewerCollectionActorId(viewerId),
           )
-          .list(toPageArgs(args)),
+          .list(toPageArgs(args), args.section ?? null),
       );
     },
   }),

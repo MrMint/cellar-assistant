@@ -48,13 +48,19 @@
  * returns a **stranger's PUBLIC cellar**. That is what `/cellars` shows today —
  * `public_cellars.yaml` grants role `user` exactly these four branches and the
  * page renders the filter unmodified — so narrowing it would drop cellars a
- * user can see right now. Narrowing is a product decision for D2; this is the
- * migration.
+ * user can see right now.
+ *
+ * D2 took that decision as **sections** rather than a narrower set: `list`
+ * takes an optional `section` (`MINE` / `FRIENDS` / `DISCOVER`,
+ * `lib/collection-sections.ts`), a partition of the visible set, and the
+ * `/cellars` page asks for each in turn — so a stranger's PUBLIC cellar
+ * still shows, under Discover, and can never sit among the viewer's own.
  */
 import type {
   ActorCategory,
   CappedList,
   CellarsCollectionActorInterface,
+  CollectionSection,
   CollectionStatsDto,
   Ctx,
   ItemRef,
@@ -76,6 +82,10 @@ import {
 import { type SQL, sql } from "@cellar-assistant/db/orm";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
+import {
+  requireSection,
+  sectionedVisibleWhere,
+} from "../lib/collection-sections.ts";
 import { keysetOrder, keysetWhere, uuidArray } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { type VisibleRow, visibleWhere } from "../lib/visibility-sql.ts";
@@ -163,15 +173,20 @@ export class CellarsCollectionActor
   static readonly category: ActorCategory =
     CellarsCollectionActorDescriptor.category;
 
-  async list(ctx: Ctx, page: PageArgs): Promise<Page<string>> {
+  async list(
+    ctx: Ctx,
+    page: PageArgs,
+    section?: CollectionSection | null,
+  ): Promise<Page<string>> {
+    const only = requireSection(section);
     return mapPage(
       await this.paged<CellarIdRow>(
         ctx,
         null,
         page,
-        (after, limit) => this.#read(ctx, after, limit),
+        (after, limit) => this.#read(ctx, after, limit, only),
         (row) => ({ sort: row.sort_key, id: row.id }),
-        () => this.#scope(ctx),
+        () => this.#scope(ctx, only),
       ),
       (row) => row.id,
     );
@@ -299,11 +314,17 @@ export class CellarsCollectionActor
     });
   }
 
-  /** Shared by the page and its `count(*)` — see `PageScope`. */
-  async #scope(ctx: Ctx): Promise<PageScope> {
+  /**
+   * Shared by the page and its `count(*)` — see `PageScope`. A `section`
+   * narrows the visibility clause (D2); it never replaces it.
+   */
+  async #scope(
+    ctx: Ctx,
+    section: CollectionSection | null = null,
+  ): Promise<PageScope> {
     return {
       from: sql`public.cellars c`,
-      where: await this.#visibilityClause(ctx),
+      where: await sectionedVisibleWhere(this.db, ctx, CELLAR_ROW, section),
     };
   }
 
@@ -311,10 +332,11 @@ export class CellarsCollectionActor
     ctx: Ctx,
     after: KeysetCursor | null,
     limit: number,
+    section: CollectionSection | null,
   ): Promise<readonly CellarIdRow[]> {
     const viewer = ctx.viewerId;
     if (viewer === null) throw new ForbiddenError("sign in to see cellars");
-    const { from, where } = await this.#scope(ctx);
+    const { from, where } = await this.#scope(ctx, section);
     const { rows } = await this.db.execute<CellarIdRow>(sql`
       select s.id, s.sort_key from (
         select c.id, ${sortKeyOf(viewer)} as sort_key

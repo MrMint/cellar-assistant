@@ -95,6 +95,67 @@ describe("myCellars (§2.2 → ids → CellarActor.get)", () => {
   });
 });
 
+describe("section (decision D2): Yours / From friends / Discover", () => {
+  const cellar = (actorId: string) => ({
+    id: actorId,
+    name: `Cellar ${actorId}`,
+    privacy: "PRIVATE",
+    createdById: viewer.id,
+    coOwnerIds: [],
+    itemCount: 0,
+    createdAt: "2026-09-09T00:00:00.000Z",
+    updatedAt: "2026-09-09T00:00:00.000Z",
+  });
+
+  it("passes myCellars' section to the collection, and null when omitted", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarsCollectionActor.list": (_actorId, _ctx, args) => page(ids, args),
+      "CellarActor.get": cellar,
+    });
+    for (const [arg, expected] of [
+      ["section: MINE", "MINE"],
+      ["section: FRIENDS", "FRIENDS"],
+      ["section: DISCOVER", "DISCOVER"],
+      ["", null],
+    ] as const) {
+      const result = await run(
+        `{ myCellars(first: 3${arg === "" ? "" : `, ${arg}`}) {
+             ... on CellarConnection { edges { node { id } } }
+           } }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+      const list = calls.filter((c) => c.method === "list").at(-1);
+      // args: [ctx, pageArgs, section]
+      expect(list?.args[2]).toBe(expected);
+    }
+  });
+
+  it("passes myTierLists' section to the collection", async () => {
+    const { invoke, calls } = stubSidecar({
+      "TierListsCollectionActor.list": (_actorId, _ctx, args) => page([], args),
+    });
+    const result = await run(
+      `{ myTierLists(first: 3, section: DISCOVER) {
+           ... on TierListConnection { edges { node { id } } }
+         } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls.find((c) => c.method === "list")?.args[2]).toBe("DISCOVER");
+  });
+
+  it("rejects a value outside the enum before any actor call", async () => {
+    const { invoke, calls } = stubSidecar({});
+    const result = await run(
+      `{ myCellars(first: 3, section: EVERYONE) { __typename } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors?.length ?? 0).toBeGreaterThan(0);
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("myTierLists (§2.2 → ids → TierListActor.get)", () => {
   it("batches the page into parallel TierListActor.get calls", async () => {
     const { invoke, calls } = stubSidecar({
