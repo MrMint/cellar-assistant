@@ -26,7 +26,7 @@ const { ItemPageView } = await import("./ItemPageView");
 const { CellarItemPageView } = await import("./CellarItemPageView");
 const { ItemForm } = await import("./ItemForm");
 const { ItemImage } = await import("./ItemImage");
-const { isDisabled } = await import("@/test-support/markup");
+const { itemOverflow } = await import("./header-actions");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -126,9 +126,28 @@ describe("ItemPageView (restored {T}Details)", () => {
 
   test("header: Add to Cellar (one cellar = a button), Share, Edit for the creator", () => {
     assert.match(html, />Add to Cellar</);
-    assert.match(html, />Share</);
-    assert.match(html, /href="\/teas\/t1\/edit"/);
-    assert.match(html, /Edit item/);
+    // N26: Share is the bar's action; Edit lives in `⋯` (D7), whose rows a
+    // static render never mounts — `itemOverflow` is what fills it.
+    assert.match(html, /<button[^>]*aria-label="Share"/);
+    assert.match(html, /<button[^>]*aria-label="More actions"/);
+    assert.deepEqual(itemOverflow({ editHref: "/teas/t1/edit" }), [
+      { action: "edit", label: "Edit item" },
+    ]);
+  });
+
+  test("header: no `⋯` for a viewer who may not edit", () => {
+    const other = render(
+      <ItemPageView
+        item={tea}
+        cellars={[]}
+        tierLists={[]}
+        recipes={[]}
+        addableCellars={[]}
+        editHref={null}
+      />,
+    );
+    assert.match(other, /aria-label="Share"/);
+    assert.doesNotMatch(other, /aria-label="More actions"/);
   });
 
   test("the fallback picture when there is no image", () => {
@@ -174,7 +193,7 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     editHref: null,
   };
 
-  test("unopened, owner: 'Open it!', Delete enabled, Edit disabled for a non-creator", () => {
+  test("unopened, owner: 'Open it!', Delete in `⋯`, no Edit for a non-creator", () => {
     const html = render(
       <CellarItemPageView
         {...props}
@@ -189,19 +208,40 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
       />,
     );
     assert.match(html, />Open it!</);
-    assert.match(html, />Delete item</);
-    // Icon, then label, on a disabled button rather than a link.
-    const edit =
-      /<(a|button)\b([^>]*)>(?:(?!<\/\1>)[\s\S])*<svg(?:(?!<\/\1>)[\s\S])*Edit item<\/\1>/.exec(
-        html,
-      );
-    assert.ok(
-      edit?.[1] === "button" && isDisabled(`<button${edit[2]}>`),
-      edit?.[0],
+    // The Joy header drew Delete enabled for the owner and Edit disabled for
+    // a non-creator; `⋯` holds what applies, Delete last (design §2).
+    assert.match(html, /<button[^>]*aria-label="More actions"/);
+    assert.deepEqual(itemOverflow({ editHref: null, canDelete: true }), [
+      { action: "delete", label: "Delete item", destructive: true },
+    ]);
+    assert.deepEqual(
+      itemOverflow({ editHref: "/x/edit", canDelete: true }).map(
+        (entry) => entry.label,
+      ),
+      ["Edit item", "Delete item"],
     );
     assert.match(html, /Add a photo/);
     assert.match(html, />Wineries \(1\)</);
     assert.doesNotMatch(html, />Check In</);
+  });
+
+  test("not the cellar's owner, not the creator: no `⋯` at all", () => {
+    const html = render(
+      <CellarItemPageView
+        {...props}
+        isOwner={false}
+        bottle={{
+          id: "b1",
+          openAt: null,
+          emptyAt: null,
+          percentageRemaining: 100,
+          displayImage: null,
+        }}
+      />,
+    );
+    assert.match(html, /aria-label="Share"/);
+    assert.doesNotMatch(html, /aria-label="More actions"/);
+    assert.doesNotMatch(html, />Open it!</);
   });
 
   test("opened: check-ins and the slider", () => {

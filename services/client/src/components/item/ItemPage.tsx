@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
@@ -35,7 +34,11 @@ export async function ItemPage({
   const result = unwrapResult(data.item, "QueryItemSuccess");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="type-body text-destructive">
+        {result.error.message}
+      </p>
+    );
   }
 
   const viewerId = data.me?.id ?? null;

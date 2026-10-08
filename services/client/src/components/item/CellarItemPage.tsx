@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import { notFound, redirect } from "next/navigation";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
@@ -44,7 +43,11 @@ export async function CellarItemPage({
   const cellarResult = unwrapResult(data.cellar, "Cellar");
   if (!cellarResult.ok) {
     if (isNotFound(cellarResult.error)) notFound();
-    return <Typography color="danger">{cellarResult.error.message}</Typography>;
+    return (
+      <p role="alert" className="type-body text-destructive">
+        {cellarResult.error.message}
+      </p>
+    );
   }
   const cellar = cellarResult.data;
   const bottle = cellar.item ?? null;

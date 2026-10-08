@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Modal,
-  ModalClose,
-  ModalDialog,
-  Typography,
-} from "@mui/joy";
 import { useState } from "react";
 import QRCode from "react-qr-code";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { itemShareUrl } from "./adapter";
 
@@ -24,12 +17,16 @@ export type ItemShareProps = {
  * called (it is absent on desktop Firefox, where the old button threw), and
  * the QR code carries an absolute URL with its scheme — the old value was
  * `host/wines/<id>`, which a phone camera reads as text, not a link.
+ *
+ * The "Share" button moved into the page's `AppBar` (N26: Share is the bar's
+ * trailing action), so this is now the behaviour behind it — the native share
+ * sheet, else the QR code — and the dialog that shows the code.
  */
-export const ItemShare = ({ itemId, itemType }: ItemShareProps) => {
+export function useItemShare({ itemId, itemType }: ItemShareProps) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
 
-  const handleShareClick = async () => {
+  const share = async () => {
     const target = itemShareUrl(window.location.origin, itemType, itemId);
     setUrl(target);
     if (
@@ -45,20 +42,29 @@ export const ItemShare = ({ itemId, itemType }: ItemShareProps) => {
     }
     setOpen(true);
   };
+
+  return { share, open, setOpen, url };
+}
+
+/** "Link to item page": the QR code on white, so any camera can read it. */
+export function ItemShareDialog({
+  open,
+  onOpenChange,
+  url,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  url: string;
+}) {
   return (
-    <>
-      <Button onClick={handleShareClick} variant="outlined" color="neutral">
-        Share
-      </Button>
-      <Modal open={open} onClose={() => setOpen(false)}>
-        <ModalDialog>
-          <ModalClose />
-          <Typography level="title-lg">Link to item page</Typography>
-          <Box sx={{ padding: "1rem", backgroundColor: "#fff" }}>
-            <QRCode value={url} />
-          </Box>
-        </ModalDialog>
-      </Modal>
-    </>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Link to item page"
+    >
+      <div className="mx-auto w-fit rounded-md bg-white p-4">
+        <QRCode value={url} />
+      </div>
+    </ResponsiveDialog>
   );
-};
+}
