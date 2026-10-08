@@ -13,6 +13,7 @@ import { mock } from "bun:test";
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { ApiFailure } from "@/lib/api/result";
 
 GlobalRegistrator.register({ url: "http://localhost/wines/w1/edit" });
 (
@@ -50,7 +51,10 @@ const { createRoot } = await import("react-dom/client");
 const { createClient, fetchExchange, Provider } = await import("urql");
 const { ItemForm } = await import("./ItemForm");
 const { ChangeBrand } = await import("./ChangeBrand");
-const { correctionSummary } = await import("./ItemCorrectionPanel");
+const { useBrandChange } = await import("./brand-change");
+const { correctionOutcome, correctionSummary } = await import(
+  "./ItemCorrectionPanel"
+);
 
 const CAPABILITIES = {
   semanticSearch: true,
@@ -271,6 +275,118 @@ describe("Wrong brand? Change it (D8)", () => {
       </Provider>,
     );
     assert.ok(button("Add the brand"));
+  });
+});
+
+describe("the brand change and its Undo (D8)", () => {
+  const replaceAnswers = {
+    ResolveBrand: {
+      resolveBrand: { __typename: "Brand", id: "b2", name: "Lytton" },
+    },
+    ReplaceItemBrand: {
+      replaceItemBrand: { __typename: "ItemBrand", id: "l2", isPrimary: true },
+    },
+  };
+  const ridge = { brandId: "b1", name: "Ridge" };
+
+  const changerFor = async (
+    client: ReturnType<typeof createClient>,
+    linked: readonly string[],
+  ) => {
+    const box: { changer?: ReturnType<typeof useBrandChange> } = {};
+    const Probe = () => {
+      box.changer = useBrandChange("WINE", "w1", linked);
+      return null;
+    };
+    await mount(
+      <Provider value={client}>
+        <Probe />
+      </Provider>,
+    );
+    assert.ok(box.changer);
+    return box.changer;
+  };
+
+  const replaced = (sent: Sent[]) =>
+    sent
+      .filter((op) => op.operationName === "ReplaceItemBrand")
+      .map((op) => [op.variables.brandId, op.variables.replacesBrandId]);
+
+  test("Undo of a brand the item already carried demotes it — it keeps the link", async () => {
+    const { client, sent } = clientAnswering(replaceAnswers);
+    const changer = await changerFor(client, ["b1", "b2"]);
+    let change: Awaited<ReturnType<typeof changer.change>> | undefined;
+    await act(async () => {
+      change = await changer.change(ridge, "Lytton");
+    });
+    assert.ok(change?.ok && change.changed);
+    assert.equal(change.toWasLinked, true);
+    await act(async () => {
+      if (change?.ok && change.changed) await changer.undo(change);
+    });
+    // The change swaps b1 out for b2; the Undo puts b1 back as primary and
+    // names nothing to unlink, so b2 is demoted to the link it was.
+    assert.deepEqual(replaced(sent), [
+      ["b2", "b1"],
+      ["b1", null],
+    ]);
+  });
+
+  test("Undo of a brand new to the item unlinks it again", async () => {
+    const { client, sent } = clientAnswering(replaceAnswers);
+    const changer = await changerFor(client, ["b1"]);
+    let change: Awaited<ReturnType<typeof changer.change>> | undefined;
+    await act(async () => {
+      change = await changer.change(ridge, "Lytton");
+    });
+    assert.ok(change?.ok && change.changed);
+    assert.equal(change.toWasLinked, false);
+    await act(async () => {
+      if (change?.ok && change.changed) await changer.undo(change);
+    });
+    assert.deepEqual(replaced(sent), [
+      ["b2", "b1"],
+      ["b1", "b2"],
+    ]);
+  });
+});
+
+describe("correctionOutcome", () => {
+  const failure = (
+    code: ApiFailure["code"],
+    reason: ApiFailure["reason"] = null,
+  ): ApiFailure => ({
+    __typename: "ValidationError",
+    code,
+    reason,
+    message: "operator text, never shown",
+    retryAt: null,
+  });
+
+  test("never sends the person for a new photo or new search words", () => {
+    for (const kind of ["label", "suggested"] as const) {
+      for (const error of [
+        failure("VALIDATION", "NOTHING_READ"),
+        failure("CONFLICT", "NOTHING_READ"),
+        failure("VALIDATION"),
+      ]) {
+        const outcome = correctionOutcome(kind, error);
+        assert.doesNotMatch(outcome.message, /photo\b.*shot|different words/);
+      }
+    }
+    assert.match(
+      correctionOutcome("suggested", failure("VALIDATION", "NOTHING_READ"))
+        .message,
+      /product's full name/,
+    );
+  });
+
+  test("keeps aiOutcome's words for limits and an absent provider", () => {
+    assert.match(
+      correctionOutcome("suggested", failure("CONFLICT", "AI_UNCONFIGURED"))
+        .title,
+      /Not available/,
+    );
   });
 });
 

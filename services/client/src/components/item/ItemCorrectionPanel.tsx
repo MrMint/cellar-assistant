@@ -12,7 +12,7 @@ import {
   RereadItemLabelMutation,
   SuggestItemDetailsMutation,
 } from "@/lib/api/item-correction";
-import { unwrapResult } from "@/lib/api/result";
+import { type ApiFailure, unwrapResult } from "@/lib/api/result";
 import { defaultsObject } from "@/lib/items/correction";
 import type { ApiItemType } from "../cellar-api/itemTypes";
 
@@ -79,6 +79,38 @@ export const correctionSummary = ({
 };
 
 /**
+ * A helper's failure, in words that fit the edit page. `aiOutcome`'s
+ * "nothing read" and "rejected" lines are about a photo just taken or a
+ * search just typed ("Try a closer, sharper shot", "Try different words") —
+ * neither is something the person can do here. The suggestion pass refuses a
+ * name too short to go on (`NOTHING_READ`); the re-read refuses stored
+ * photographs that hold no legible label. Everything else (limits, budget, no
+ * provider, a dropped connection) keeps `aiOutcome`'s wording.
+ */
+export const correctionOutcome = (
+  kind: CorrectionKind,
+  error: ApiFailure,
+): AiOutcome => {
+  const outcome = aiOutcome(error, {
+    fallback:
+      kind === "label"
+        ? "correct the details by hand"
+        : "fill in the details yourself",
+  });
+  if (outcome.kind !== "nothing-read" && outcome.kind !== "rejected") {
+    return outcome;
+  }
+  return {
+    ...outcome,
+    title: kind === "label" ? "Nothing to read" : "Nothing to go on",
+    message:
+      kind === "label"
+        ? "The label photos this was added from couldn't be read again. You can correct the details by hand."
+        : "Give it the product's full name first, then ask again.",
+  };
+};
+
+/**
  * X19 — the edit form's two AI helpers: **Re-read label** (the vision read of
  * the photographs the item was added from) and **Suggest details** (a text
  * pass for the empty details, which may decline). Both only *propose*: the
@@ -132,9 +164,7 @@ export function ItemCorrectionPanel({
       setStatus({
         state: "failed",
         kind: "label",
-        outcome: aiOutcome(result.error, {
-          fallback: "correct the details by hand",
-        }),
+        outcome: correctionOutcome("label", result.error),
       });
       return;
     }
@@ -159,10 +189,7 @@ export function ItemCorrectionPanel({
       setStatus({
         state: "failed",
         kind: "suggested",
-        outcome: aiOutcome(result.error, {
-          fallback: "fill in the details yourself",
-          subject: "search",
-        }),
+        outcome: correctionOutcome("suggested", result.error),
       });
       return;
     }
@@ -184,9 +211,11 @@ export function ItemCorrectionPanel({
       <p className="type-callout text-ink-2">
         Something off? Nothing changes until you tap a suggestion and save.
       </p>
+      {/* Stacked on a phone: side by side, two icon-and-label buttons need
+          ~330 px and the card has ~326 at 390 — they would overflow. */}
       <div
         className={
-          canReread && canSuggest ? "grid grid-cols-2 gap-2" : "grid gap-2"
+          canReread && canSuggest ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"
         }
       >
         {canReread && (
