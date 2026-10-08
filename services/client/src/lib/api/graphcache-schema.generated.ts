@@ -63,6 +63,36 @@ export const graphcacheSchema: MinifiedIntrospection = {
     types: [
       {
         kind: "OBJECT",
+        name: "AcceptFriendInvitePayload",
+        fields: [
+          {
+            name: "becameFriends",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "friendId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "AcceptFriendInviteResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "AcceptFriendInvitePayload" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
         name: "AcceptFriendRequestPayload",
         fields: [
           {
@@ -1851,6 +1881,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "UNION",
+        name: "EnsureFriendInviteResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "FriendInvite" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "INTERFACE",
         name: "Error",
         fields: [
@@ -2020,6 +2062,56 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "Friend" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FriendInvite",
+        fields: [
+          {
+            name: "createdAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "token",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FriendInvitePreview",
+        fields: [
+          {
+            name: "inviterAvatarUrl",
+            type: { kind: "SCALAR", name: "String" },
+          },
+          {
+            name: "inviterDisplayName",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "inviterId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "status",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "FriendInviteStatus" },
             },
           },
         ],
@@ -3637,6 +3729,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "Mutation",
         fields: [
           {
+            name: "acceptFriendInvite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "AcceptFriendInviteResult" },
+            },
+          },
+          {
             name: "acceptFriendRequest",
             type: {
               kind: "NON_NULL",
@@ -3861,6 +3960,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "ensureFriendInvite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "EnsureFriendInviteResult" },
+            },
+          },
+          {
             name: "itemOnboardingDefaults",
             type: {
               kind: "NON_NULL",
@@ -3956,6 +4062,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "ReorderTierListBandResult" },
+            },
+          },
+          {
+            name: "resetFriendInvite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "ResetFriendInviteResult" },
             },
           },
           {
@@ -5302,6 +5415,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "friendInvitePreview",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryFriendInvitePreviewResult" },
+            },
+          },
+          {
             name: "genericItem",
             type: {
               kind: "NON_NULL",
@@ -5487,6 +5607,27 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "OBJECT", name: "ReverseGeocodeResult" },
           },
           {
+            name: "sharedItem",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QuerySharedItemResult" },
+            },
+          },
+          {
+            name: "sharedRecipe",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QuerySharedRecipeResult" },
+            },
+          },
+          {
+            name: "sharedTierList",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QuerySharedTierListResult" },
+            },
+          },
+          {
             name: "tierList",
             type: {
               kind: "NON_NULL",
@@ -5602,6 +5743,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "File" },
           { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryFriendInvitePreviewResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "FriendInvitePreview" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -5893,6 +6046,42 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ReferenceRowConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QuerySharedItemResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SharedItem" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QuerySharedRecipeResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SharedRecipe" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QuerySharedTierListResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SharedTierList" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -7161,6 +7350,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "ResetFriendInviteResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "FriendInvite" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "ResolveBrandResult",
         possibleTypes: [
           { kind: "OBJECT", name: "Brand" },
@@ -7374,6 +7575,367 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "RecipeInstructionsPayload" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedItem",
+        fields: [
+          {
+            name: "attributes",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "JSON" },
+            },
+          },
+          { name: "country", type: { kind: "SCALAR", name: "String" } },
+          { name: "description", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "imagePlaceholder",
+            type: { kind: "SCALAR", name: "String" },
+          },
+          { name: "imageUrl", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          { name: "scoreAverage", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "scoreCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "type",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipe",
+        fields: [
+          { name: "description", type: { kind: "SCALAR", name: "String" } },
+          { name: "difficultyLevel", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "imageUrl", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "ingredients",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "OBJECT",
+                name: "SharedRecipeIngredientConnection",
+              },
+            },
+          },
+          {
+            name: "instructions",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "OBJECT",
+                name: "SharedRecipeInstructionConnection",
+              },
+            },
+          },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          { name: "prepTimeMinutes", type: { kind: "SCALAR", name: "Int" } },
+          { name: "servingSize", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "type",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "RecipeType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeIngredient",
+        fields: [
+          {
+            name: "isOptional",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          { name: "name", type: { kind: "SCALAR", name: "String" } },
+          { name: "quantity", type: { kind: "SCALAR", name: "Float" } },
+          { name: "unit", type: { kind: "SCALAR", name: "String" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeIngredientConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: {
+                    kind: "OBJECT",
+                    name: "SharedRecipeIngredientEdge",
+                  },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeIngredientEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SharedRecipeIngredient" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeInstruction",
+        fields: [
+          {
+            name: "stepNumber",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "text",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeInstructionConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: {
+                    kind: "OBJECT",
+                    name: "SharedRecipeInstructionEdge",
+                  },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeInstructionEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SharedRecipeInstruction" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedTierList",
+        fields: [
+          { name: "description", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "entries",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SharedTierListEntryConnection" },
+            },
+          },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "listType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "ownerDisplayName",
+            type: { kind: "SCALAR", name: "String" },
+          },
+          {
+            name: "privacy",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PermissionType" },
+            },
+          },
+          { name: "updatedAt", type: { kind: "SCALAR", name: "DateTime" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedTierListEntry",
+        fields: [
+          {
+            name: "band",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "entryId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "entryType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEntryType" },
+            },
+          },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "imageUrl", type: { kind: "SCALAR", name: "String" } },
+          { name: "location", type: { kind: "SCALAR", name: "String" } },
+          { name: "name", type: { kind: "SCALAR", name: "String" } },
+          { name: "notes", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "position",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedTierListEntryConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "SharedTierListEntryEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedTierListEntryEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SharedTierListEntry" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -8334,6 +8896,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemConnection" },
             },
+          },
+          {
+            name: "friendInvite",
+            type: { kind: "OBJECT", name: "FriendInvite" },
           },
           {
             name: "id",

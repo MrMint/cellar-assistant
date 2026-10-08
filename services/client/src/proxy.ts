@@ -7,6 +7,7 @@ import {
   parseCookieHeader,
 } from "./lib/api/session-cookie";
 import { OFFLINE_PATH } from "./lib/pwa/offline";
+import { isPublicSharePath, publicRewriteFor } from "./lib/share/routes";
 
 /**
  * The signed-in gate, in front of every page.
@@ -35,6 +36,14 @@ import { OFFLINE_PATH } from "./lib/pwa/offline";
  * comes back null, and `services/api` refuses a request whose JWT does not verify.
  * The gate exists to turn a signed-out page load into one redirect instead of a
  * render that fetches, fails and redirects.
+ *
+ * **Shared links (X17).** A signed-out request for a page that can be shared —
+ * `/tier-lists/<id>`, `/recipes/<id>`, `/wines/<id>` and the other item pages
+ * (`lib/share/routes.ts`) — is *rewritten*, not redirected, to its public
+ * `/share/…` page: the browser keeps the canonical URL, the page decides what
+ * is public (PUBLIC only, through the API's anonymous `shared*` reads), and its
+ * sign-up button comes back to that same URL. `/share/…` and `/invite/…` are
+ * public outright, so a link-preview crawler can fetch the cards under them.
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const path = request.nextUrl.pathname;
@@ -45,6 +54,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     path.startsWith("/sign-in") ||
     path.startsWith("/sign-up") ||
     path === OFFLINE_PATH ||
+    isPublicSharePath(path) ||
     path.includes(".") // Static files
   ) {
     return NextResponse.next();
@@ -70,6 +80,13 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     // It may carry somebody's session cookie: no shared cache keeps it.
     response.headers.set("cache-control", "no-store");
     return response;
+  }
+
+  const publicPage = publicRewriteFor(path);
+  if (publicPage !== null) {
+    const target = new URL(publicPage, request.url);
+    target.search = request.nextUrl.search;
+    return NextResponse.rewrite(target);
   }
 
   const signInUrl = new URL("/sign-in", request.url);

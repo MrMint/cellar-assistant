@@ -19,6 +19,7 @@
  */
 
 export const KEYLESS_TYPES = [
+  "AcceptFriendInvitePayload",
   "AcceptFriendRequestPayload",
   "ActivityEntryConnection",
   "ActivityEntryEdge",
@@ -51,6 +52,8 @@ export const KEYLESS_TYPES = [
   "Friend",
   "FriendConnection",
   "FriendEdge",
+  "FriendInvite",
+  "FriendInvitePreview",
   "FriendRequestConnection",
   "FriendRequestEdge",
   "GeocodeResult",
@@ -141,6 +144,14 @@ export const KEYLESS_TYPES = [
   "RemovedRecipeVote",
   "ReorderBandPayload",
   "ReverseGeocodeResult",
+  "SharedRecipeIngredient",
+  "SharedRecipeIngredientConnection",
+  "SharedRecipeIngredientEdge",
+  "SharedRecipeInstruction",
+  "SharedRecipeInstructionConnection",
+  "SharedRecipeInstructionEdge",
+  "SharedTierListEntryConnection",
+  "SharedTierListEntryEdge",
   "TierListConnection",
   "TierListEdge",
   "TierListItemConnection",
