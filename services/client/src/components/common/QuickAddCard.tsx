@@ -46,6 +46,12 @@ type QuickAddCardProps = {
   confirmLabel?: string;
   /** The secondary button's words (default "Edit Details"). */
   editLabel?: string;
+  /**
+   * The details line, when the caller already has it in words — the
+   * catalogue item's own, for a known item — instead of one built from
+   * `defaults`.
+   */
+  summary?: string;
 };
 
 function getConfidenceColor(
@@ -110,6 +116,7 @@ export const QuickAddCard = ({
   heading,
   confirmLabel,
   editLabel = "Edit Details",
+  summary,
 }: QuickAddCardProps) => {
   const [countdown, setCountdown] = useState(autoConfirmSeconds);
   const [isPaused, setIsPaused] = useState(false);
@@ -216,7 +223,9 @@ export const QuickAddCard = ({
 
           {/* Item summary */}
           <Typography level="body-sm" color="neutral">
-            {getItemSummary(defaults, itemType)}
+            {summary !== undefined && summary !== ""
+              ? summary
+              : getItemSummary(defaults, itemType)}
           </Typography>
 
           {/* Description preview if available */}

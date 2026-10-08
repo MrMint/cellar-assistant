@@ -3,12 +3,16 @@ import { describe, test } from "node:test";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { emptyFormValues } from "./adapter";
 import {
+  brandCompatible,
   type CatalogCandidate,
+  catalogMatchSummary,
   catalogSearchText,
   findCatalogMatch,
   normalizeName,
   readVintage,
   sameVintage,
+  tellingWords,
+  wordsAgree,
 } from "./catalog-match";
 
 const candidate = (
@@ -128,8 +132,9 @@ describe("findCatalogMatch (N19)", () => {
     assert.equal(found?.exact, true);
   });
 
-  test("a same-name hit filed under another producer is offered, not exact", () => {
-    // Names repeat across producers; the countdown must not file the wrong one.
+  test("a same-name hit filed under another producer is not offered", () => {
+    // Names repeat across producers; the label named Jordan, so "+1 bottle"
+    // of Other Estate's would file the wrong one in a tap.
     const found = match(
       "WINE",
       wine("Reserve Cabernet Sauvignon", "2018"),
@@ -141,8 +146,7 @@ describe("findCatalogMatch (N19)", () => {
       [],
       "Jordan",
     );
-    assert.equal(found?.item.itemId, "other");
-    assert.equal(found?.exact, false);
+    assert.equal(found, null);
     assert.equal(
       match("WINE", wine("Reserve Cabernet Sauvignon", "2018"), [
         candidate("other", "Reserve Cabernet Sauvignon", "2018", {
@@ -150,7 +154,7 @@ describe("findCatalogMatch (N19)", () => {
         }),
       ])?.exact,
       false,
-      "nor when the label named no brand at all",
+      "offered, not exact, when the label named no brand at all",
     );
   });
 
@@ -272,6 +276,132 @@ describe("findCatalogMatch (N19)", () => {
         candidate("near", "Margaux Blanc", "2015", { distance: 0.3 }),
       ])?.item.itemId,
       "near",
+    );
+  });
+});
+
+describe("what may be offered at all (unrelated neighbours inside the cutoff)", () => {
+  const within = (
+    values: ReturnType<typeof wine>,
+    candidates: CatalogCandidate[],
+    brandName = "",
+  ) =>
+    findCatalogMatch({
+      type: "WINE",
+      values,
+      brandName,
+      candidates,
+      maxDistance: 0.5,
+    });
+
+  test("a read of Muga 2019 is not offered Catena Zapata 2019 (distance 0.479)", () => {
+    assert.equal(
+      within(wine("Muga Reserva Rioja", "2019"), [
+        candidate("catena", "Catena Zapata Malbec Argentino", "2019", {
+          distance: 0.479,
+          brandName: "Bodega Catena Zapata",
+        }),
+      ]),
+      null,
+    );
+  });
+
+  test("a wine not in the catalogue is not offered Muga (distance 0.456)", () => {
+    assert.equal(
+      within(wine("Bodega Inexistente Tinto Especial", "2018"), [
+        candidate("muga", "Muga Reserva Rioja", "2018", {
+          distance: 0.456,
+          brandName: "Bodegas Muga",
+        }),
+      ]),
+      null,
+    );
+  });
+
+  test("the same words in another order are still offered", () => {
+    const found = within(
+      wine("Muga Rioja Reserva", "2018"),
+      [
+        candidate("muga", "Muga Reserva Rioja", "2018", {
+          distance: 0.1,
+          brandName: "Bodegas Muga",
+        }),
+      ],
+      "Muga",
+    );
+    assert.equal(found?.item.itemId, "muga");
+    assert.equal(found?.exact, false);
+  });
+
+  test("a barcode hit is the product key, whatever its words", () => {
+    assert.equal(
+      within(wine("Muga Reserva Rioja", "2018"), [
+        candidate("b", "Something Else", "2018", { source: "barcode" }),
+      ])?.item.itemId,
+      "b",
+    );
+  });
+});
+
+describe("tellingWords / wordsAgree / brandCompatible", () => {
+  test("filler and years are set aside", () => {
+    assert.deepEqual(
+      Array.from(tellingWords("Château de la Tour 2015", "Bodegas Tour")),
+      ["tour"],
+    );
+  });
+
+  test("wordsAgree is at least half the telling words shared", () => {
+    const read = { name: "Château Margaux", brandName: "" };
+    assert.equal(wordsAgree({ name: "Margaux Rouge" }, read), true);
+    assert.equal(
+      wordsAgree({ name: "Pavillon Rouge du Château Margaux" }, read),
+      true,
+    );
+    assert.equal(wordsAgree({ name: "Palmer Alter Ego Rouge" }, read), false);
+    assert.equal(wordsAgree({ name: "Château" }, read), false);
+  });
+
+  test("a brand contradicts only when the label named one", () => {
+    const named = { name: "Reserva Rioja", brandName: "Muga" };
+    assert.equal(brandCompatible("Bodegas Muga", named), true);
+    assert.equal(brandCompatible("Bodega Catena Zapata", named), false);
+    assert.equal(brandCompatible(undefined, named), true);
+    assert.equal(
+      brandCompatible("Bodega Catena Zapata", {
+        name: "Reserva Rioja",
+        brandName: "",
+      }),
+      true,
+    );
+    assert.equal(
+      brandCompatible("Muga", { name: "Muga Reserva", brandName: "Bodegas" }),
+      true,
+      "a brand read as only boilerplate names nobody",
+    );
+  });
+});
+
+describe("catalogMatchSummary — the item's own details, not the read's", () => {
+  test("vintage and the card subtitle, skipping what is missing", () => {
+    const hit = {
+      ...candidate("m", "Muga Reserva Rioja", "2018"),
+      exact: true,
+    };
+    assert.equal(
+      catalogMatchSummary({
+        ...hit,
+        item: { ...hit.item, subtitle: "Tempranillo" },
+      }),
+      "2018 · Tempranillo",
+    );
+    assert.equal(catalogMatchSummary(hit), "2018");
+    assert.equal(
+      catalogMatchSummary({
+        ...hit,
+        item: { ...hit.item, vintage: undefined },
+      }),
+      "",
     );
   });
 });

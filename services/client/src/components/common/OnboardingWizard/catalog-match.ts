@@ -25,6 +25,17 @@
  * A semantic neighbour that is merely close is offered with a button the
  * person taps (D25: the AI never adds anything without a tap) — never counted
  * down.
+ *
+ * ## What may be offered at all
+ *
+ * Embedding distance alone is not enough to put an item in front of someone
+ * with a one-tap "+1 bottle": with a small catalogue, the nearest
+ * same-vintage item can be an unrelated wine well inside the cutoff (a read
+ * of "Muga Reserva Rioja" 2019 offered "Catena Zapata Malbec Argentino" at
+ * 0.479). So a near-miss is offered only when its words agree with the read
+ * ({@link wordsAgree}: at least half of them shared, producer boilerplate
+ * like "Bodega" or "Château" set aside) and, when the label named a brand,
+ * its brand is not another producer's ({@link brandCompatible}).
  */
 
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -127,6 +138,104 @@ const brandAgrees = (
   return ` ${normalizeName(read.name)} `.includes(` ${brand} `);
 };
 
+/**
+ * Words that say nothing about which bottle it is: articles and the
+ * producer boilerplate ("Bodegas", "Château", "Estate") that two unrelated
+ * producers share. A four-digit year is set aside too — the vintage is
+ * compared on its own.
+ */
+const FILLER = new Set([
+  "a",
+  "and",
+  "the",
+  "of",
+  "de",
+  "del",
+  "della",
+  "di",
+  "da",
+  "do",
+  "du",
+  "des",
+  "la",
+  "le",
+  "les",
+  "el",
+  "los",
+  "las",
+  "y",
+  "e",
+  "et",
+  "bodega",
+  "bodegas",
+  "chateau",
+  "domaine",
+  "dom",
+  "maison",
+  "tenuta",
+  "cantina",
+  "cantine",
+  "weingut",
+  "quinta",
+  "estate",
+  "estates",
+  "winery",
+  "wines",
+  "vineyard",
+  "vineyards",
+  "cellars",
+  "brewery",
+  "brewing",
+  "distillery",
+  "company",
+  "co",
+]);
+
+/** The telling words of a name (or brand), normalized. */
+export const tellingWords = (...parts: readonly string[]): Set<string> =>
+  new Set(
+    parts
+      .flatMap((part) => normalizeName(part).split(" "))
+      .filter(
+        (word) => word !== "" && !FILLER.has(word) && !/^\d{4}$/.test(word),
+      ),
+  );
+
+/**
+ * Whether a near-miss's name and brand share enough telling words with the
+ * read's to be worth offering: a Dice coefficient of at least one half. "Muga
+ * Rioja Reserva" against "Muga Reserva Rioja" agrees; "Muga Reserva Rioja"
+ * against "Catena Zapata Malbec Argentino" shares nothing.
+ */
+export const wordsAgree = (
+  candidate: { name: string; brandName?: string },
+  read: { name: string; brandName: string },
+): boolean => {
+  const theirs = tellingWords(candidate.name, candidate.brandName ?? "");
+  const ours = tellingWords(read.name, read.brandName);
+  if (theirs.size === 0 || ours.size === 0) return false;
+  const shared = Array.from(theirs).filter((word) => ours.has(word)).length;
+  return (2 * shared) / (theirs.size + ours.size) >= 0.5;
+};
+
+/**
+ * Whether a near-miss's brand can be the producer the label named. Only a
+ * named brand can contradict: when the read has none, or the item has none,
+ * nothing is ruled out. Otherwise the item's brand must share a telling word
+ * with what the label said (its brand or its name) — "Bodegas Muga" and
+ * "Muga" agree, "Other Estate" and "Jordan" do not.
+ */
+export const brandCompatible = (
+  candidateBrand: string | undefined,
+  read: { name: string; brandName: string },
+): boolean => {
+  const theirs = tellingWords(candidateBrand ?? "");
+  const named = tellingWords(read.brandName);
+  if (theirs.size === 0 || named.size === 0) return true;
+  const said = tellingWords(read.brandName, read.name);
+  return Array.from(theirs).some((word) => said.has(word));
+};
+
 /** A barcode hit, or a search hit with the very name — and brand — read. */
 const isExact = (
   candidate: CatalogCandidate,
@@ -206,10 +315,22 @@ export const findCatalogMatch = ({
   // An exact one anywhere in the list beats a nearer near-miss.
   const near = (c: CatalogCandidate): boolean =>
     c.source === "barcode" ||
-    maxDistance === undefined ||
-    (c.distance !== undefined && c.distance <= maxDistance);
+    ((maxDistance === undefined ||
+      (c.distance !== undefined && c.distance <= maxDistance)) &&
+      wordsAgree({ name: c.item.name, brandName: c.brandName }, read) &&
+      brandCompatible(c.brandName, read));
   const best =
     ranked.find((c) => isExact(c, read)) ?? ranked.find((c) => near(c));
   if (best === undefined) return null;
   return { ...best, exact: isExact(best, read) };
 };
+
+/**
+ * The catalogue item's own details line — its vintage and the card's
+ * subtitle — for the "Is it this one?" card and prompt. Never the label
+ * read's: the card names the item a tap will file.
+ */
+export const catalogMatchSummary = (match: CatalogMatch): string =>
+  [match.item.vintage, match.item.subtitle]
+    .filter((part): part is string => part !== undefined && part !== "")
+    .join(" · ");

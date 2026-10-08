@@ -1,5 +1,5 @@
 import { Button, Card, CardContent, Stack, Typography } from "@mui/joy";
-import type { CatalogMatch } from "./catalog-match";
+import { type CatalogMatch, catalogMatchSummary } from "./catalog-match";
 
 type CatalogMatchPromptProps = {
   match: CatalogMatch;
@@ -31,12 +31,9 @@ export const CatalogMatchPrompt = ({
           <Typography level="body-lg" fontWeight="lg">
             {match.item.name}
           </Typography>
-          {(match.item.vintage !== undefined ||
-            match.item.subtitle !== undefined) && (
+          {catalogMatchSummary(match) !== "" && (
             <Typography level="body-sm">
-              {[match.item.vintage, match.item.subtitle]
-                .filter((part) => part !== undefined && part !== "")
-                .join(" · ")}
+              {catalogMatchSummary(match)}
             </Typography>
           )}
         </Stack>
