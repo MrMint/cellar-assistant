@@ -1,13 +1,8 @@
-import { defaultCache } from "@serwist/turbopack/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
-import {
-  CacheFirst,
-  ExpirationPlugin,
-  NetworkFirst,
-  NetworkOnly,
-  Serwist,
-  StaleWhileRevalidate,
-} from "serwist";
+import { Serwist } from "serwist";
+// Relative, not `@/`: serwist bundles this file with its own esbuild step.
+import { OFFLINE_PATH } from "../lib/pwa/offline";
+import { runtimeCaching } from "../lib/pwa/runtime-caching";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -22,96 +17,12 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: [
-    {
-      matcher: ({ request }) => request.mode === "navigate",
-      handler: new NetworkOnly(),
-    },
-    ...defaultCache,
-    {
-      // Self-hosted zxing-wasm reader (barcode scanner fallback). Cache it so
-      // scanning works offline after the first load.
-      matcher: /\.wasm$/i,
-      handler: new CacheFirst({
-        cacheName: "static-wasm",
-        plugins: [
-          new ExpirationPlugin({
-            maxEntries: 5,
-            maxAgeSeconds: 60 * 60 * 24 * 365,
-          }),
-        ],
-      }),
-    },
-    {
-      matcher: /\.(?:woff2?|ttf|otf|eot)$/i,
-      handler: new CacheFirst({
-        cacheName: "static-fonts",
-        plugins: [
-          new ExpirationPlugin({
-            maxEntries: 20,
-            maxAgeSeconds: 60 * 60 * 24 * 365,
-          }),
-        ],
-      }),
-    },
-    {
-      matcher: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
-      handler: new CacheFirst({
-        cacheName: "static-images",
-        plugins: [
-          new ExpirationPlugin({
-            maxEntries: 100,
-            maxAgeSeconds: 60 * 60 * 24 * 30,
-          }),
-        ],
-      }),
-    },
-    {
-      matcher: /\/_next\/image\?/i,
-      handler: new CacheFirst({
-        cacheName: "next-images",
-        plugins: [
-          new ExpirationPlugin({
-            maxEntries: 200,
-            maxAgeSeconds: 60 * 60 * 24 * 30,
-          }),
-        ],
-      }),
-    },
-    {
-      matcher: /\/v1\/graphql/i,
-      handler: new NetworkFirst({
-        cacheName: "graphql-cache",
-        networkTimeoutSeconds: 10,
-        plugins: [
-          new ExpirationPlugin({
-            maxEntries: 50,
-            maxAgeSeconds: 60 * 60,
-          }),
-        ],
-      }),
-    },
-    {
-      matcher: /\/v1\/auth/i,
-      handler: new NetworkOnly(),
-    },
-    {
-      matcher: /basemaps\.cartocdn\.com/i,
-      handler: new StaleWhileRevalidate({
-        cacheName: "map-tiles",
-        plugins: [
-          new ExpirationPlugin({
-            maxEntries: 500,
-            maxAgeSeconds: 60 * 60 * 24 * 7,
-          }),
-        ],
-      }),
-    },
-  ],
+  // Order matters — see `src/lib/pwa/runtime-caching.ts`.
+  runtimeCaching,
   fallbacks: {
     entries: [
       {
-        url: "/~offline",
+        url: OFFLINE_PATH,
         matcher({ request }) {
           return request.destination === "document";
         },
