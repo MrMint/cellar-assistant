@@ -177,6 +177,44 @@ describe("ItemCard favourite toggle (X24)", () => {
     assert.equal(notes.length, 1);
   });
 
+  test("a double tap flips twice, one write at a time, and ends where it began", async () => {
+    // `toggleFavorite` flips rather than sets, so two overlapping writes
+    // could land in either order; the second is sent only after the first.
+    await mount(false);
+    await act(async () => heart().click());
+    await act(async () => heart().click());
+    assert.equal(heart().getAttribute("aria-pressed"), "false");
+    assert.equal(count(), "4");
+    assert.equal(writes.length, 1, "the second flip waits for the first");
+
+    await act(async () => {
+      writes[0]?.resolve({
+        data: {
+          toggleFavorite: {
+            __typename: "ToggleFavoritePayload",
+            favorited: true,
+          },
+        },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.equal(writes.length, 2, "then the flip back");
+    await act(async () => {
+      writes[1]?.resolve({
+        data: {
+          toggleFavorite: {
+            __typename: "ToggleFavoritePayload",
+            favorited: false,
+          },
+        },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.equal(heart().getAttribute("aria-pressed"), "false");
+    assert.equal(count(), "4");
+    assert.deepEqual(notes, []);
+  });
+
   test("the heart does not leave the page through the card's link", async () => {
     await mount(false);
     let followed = false;

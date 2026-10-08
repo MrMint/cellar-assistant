@@ -374,6 +374,9 @@ export const PlaceDetailsDrawer = forwardRef<
           >
             <div className="pointer-events-auto flex h-full cursor-default flex-col overflow-hidden px-6 pt-20 pb-4">
               <PlaceDetailsContent
+                // One place per instance: its optimistic Save / Visited (X24)
+                // and its open modal must not carry over to the next pin.
+                key={place.id}
                 {...contentProps}
                 variant="desktop"
                 drawerState="full"
@@ -452,6 +455,7 @@ export const PlaceDetailsDrawer = forwardRef<
               }}
             >
               <PlaceDetailsContent
+                key={place.id}
                 {...contentProps}
                 variant="mobile"
                 drawerState={drawerState}

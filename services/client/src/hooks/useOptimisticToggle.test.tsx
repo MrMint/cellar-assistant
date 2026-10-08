@@ -1,7 +1,8 @@
 /**
  * `useOptimisticToggle` (X24): the tapped state is drawn before the write
  * answers, the server's answer is kept without a flicker back, a refusal
- * falls back and reports, a later tap's answer is the one that counts, and a
+ * falls back and reports, writes never overlap and a later tap is never
+ * undone by an earlier answer, and a
  * new value from the page replaces the confirmed state. Driven through
  * happy-dom with a write whose answer each test releases by hand.
  */
@@ -120,6 +121,7 @@ describe("useOptimisticToggle", () => {
     await mount(false);
     await tap();
     await answer(0, { ok: true, value: false });
+    await answer(1, { ok: true, value: false });
     assert.equal(pressed(), "false");
   });
 
@@ -143,19 +145,78 @@ describe("useOptimisticToggle", () => {
     assert.deepEqual(errors, ["offline"]);
   });
 
-  test("a second tap during the write is taken, and its answer is the one kept", async () => {
+  test("a second tap during the write is taken, and written once the first answers", async () => {
     await mount(false);
     await tap();
     await tap();
     assert.equal(pressed(), "false", "the second tap flipped it back");
     assert.deepEqual(
       calls.map((c) => c.next),
-      [true, false],
+      [true],
+      "one write at a time: the second waits for the first",
     );
-    // The later write answers first; the earlier one's late answer must not
-    // undo it.
-    await answer(1, { ok: true });
     await answer(0, { ok: true });
+    assert.equal(pressed(), "false", "still the last tapped state");
+    assert.deepEqual(
+      calls.map((c) => c.next),
+      [true, false],
+      "the server holds on, the last tap said off: one more write",
+    );
+    await answer(1, { ok: true });
+    assert.equal(pressed(), "false");
+    assert.equal(busy(), false);
+  });
+
+  test("taps that end where the first write is going cost no second write", async () => {
+    await mount(false);
+    await tap();
+    await tap();
+    await tap();
+    assert.equal(pressed(), "true");
+    await answer(0, { ok: true });
+    assert.deepEqual(
+      calls.map((c) => c.next),
+      [true],
+    );
+    assert.equal(pressed(), "true");
+    assert.equal(busy(), false);
+  });
+
+  test("a later write refused falls back to what the earlier one left on the server", async () => {
+    await mount(false);
+    await tap();
+    await tap();
+    await answer(0, { ok: true });
+    await answer(1, { ok: false, message: "Forbidden" });
+    assert.equal(
+      pressed(),
+      "true",
+      "the first write landed: the server holds on, not the pre-tap off",
+    );
+    assert.deepEqual(errors, ["Forbidden"]);
+  });
+
+  test("a write that flips instead of sets converges on the tapped state", async () => {
+    // `toggleFavorite`: the server was already on (another device), so the
+    // flip turned it off. The hook writes again rather than settle wrong.
+    await mount(false);
+    await tap();
+    await answer(0, { ok: true, value: false });
+    assert.deepEqual(
+      calls.map((c) => c.next),
+      [true, true],
+    );
+    await answer(1, { ok: true, value: true });
+    assert.equal(pressed(), "true");
+    assert.equal(busy(), false);
+  });
+
+  test("a server that keeps answering the other state is believed after two tries", async () => {
+    await mount(false);
+    await tap();
+    await answer(0, { ok: true, value: false });
+    await answer(1, { ok: true, value: false });
+    assert.equal(calls.length, 2, "no third write");
     assert.equal(pressed(), "false");
   });
 

@@ -392,16 +392,23 @@ the boundary it arrives as a 200 (`places/[placeId]/layout.tsx`).
 **`useOptimisticToggle`** (`@/hooks/useOptimisticToggle`) — `{ value,
 commit, onError }` → `{ on, pending, toggle }`. `on` is the tapped state from
 the tap's own frame; `commit(next)` resolves `{ ok: true, value? }` or `{ ok:
-false, message }`; a refusal falls back and calls `onError` (toast it). Never
-disable the control while `pending` (`aria-busy` only) and never swap its
-glyph for a spinner. Used by ItemCard's heart and the place Save / Visited
+false, message }`; a refusal falls back to what the server last confirmed and
+calls `onError` (toast it). One write at a time: taps during a write flip
+what is drawn, and the hook writes again only if the last tapped state is not
+what the server then holds — safe over a mutation that flips rather than sets
+(`toggleFavorite`). The state is per subject: key a component that is reused
+for another item or place (the map drawer keys its content by place id).
+Never disable the control while `pending` (`aria-busy` only) and never swap
+its glyph for a spinner. Used by ItemCard's heart and the place Save / Visited
 toggles (`usePlaceToggles`). Additive actions (a check-in) instead draw the
 new row at once with `useOptimisticRows` (`components/item/`) and hold the
 button while the write runs, so a double tap cannot log two.
 
-**`TogglePop`** — `<TogglePop on={on}><Love … /></TogglePop>`: the glyph
-pops 1 → 1.18 → 1 on `spring.celebrate` when a toggle turns on (not off, not
-on mount); reduced motion keeps only the colour change.
+**`TogglePop`** — `<TogglePop on={on} pop={pending}><Love … /></TogglePop>`:
+the glyph pops 1 → 1.18 → 1 on `spring.celebrate` when the user turns a
+toggle on (not off, not on mount, and not when data arriving turns it on —
+`pop` is the toggle's `pending`); reduced motion keeps only the colour
+change.
 
 **Prefetch on pointerdown** (`prefetch.ts`) — `AppShell` installs one
 capture-phase `pointerdown` listener that `router.prefetch`es the nearest
