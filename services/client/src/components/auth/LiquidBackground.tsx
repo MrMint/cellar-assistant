@@ -12,6 +12,13 @@ interface Bubble {
   startBottom: number;
 }
 
+/**
+ * Stops the pour at first paint under reduced motion, before hydration can
+ * read the setting (the job the old inline `@media` block did): Tailwind's
+ * `motion-reduce:` variant, `!important` so it beats the inline animation.
+ */
+const STILL_WHEN_REDUCED = "motion-reduce:animate-none!";
+
 export function LiquidBackground() {
   const uid = useId();
   const id = uid.replace(/:/g, "");
@@ -84,6 +91,7 @@ export function LiquidBackground() {
 
         {/* Liquid body — bottom: -30px to prevent gap from wobble */}
         <div
+          className={STILL_WHEN_REDUCED}
           style={{
             position: "absolute",
             zIndex: 1,
@@ -101,6 +109,7 @@ export function LiquidBackground() {
         >
           {/* Foam head — starts with 30px, grows to 100px */}
           <div
+            className={STILL_WHEN_REDUCED}
             style={{
               position: "absolute",
               left: -4,
@@ -118,6 +127,7 @@ export function LiquidBackground() {
           {bubbles.map((b) => (
             <div
               key={b.id}
+              className={STILL_WHEN_REDUCED}
               style={{
                 position: "absolute",
                 bottom: `${b.startBottom}%`,
