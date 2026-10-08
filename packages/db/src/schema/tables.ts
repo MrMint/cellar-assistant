@@ -747,6 +747,22 @@ export const places = pgTable("places", {
 	source: text().default("overture").notNull(),
 	description: text(),
 	googlePlaceId: text("google_place_id"),
+	// X27 / D28 (async place moderation): a user-created place is inserted
+	// `pending`, visible to its creator only, and the AI review delivered by
+	// the outbox moves it to `approved` (shared) or `rejected` (still
+	// creator-only, with `rejection_reason`). Every pre-existing row — Overture
+	// and the user places the old synchronous gate already let through — is
+	// `approved`. `suggested_categories` / `suggested_description` are the
+	// review's advisory output, kept for the creator to confirm or dismiss and
+	// never applied to the shared row on their own. `review_requested_at`
+	// identifies the submission a queued review is for: a verdict computed for
+	// an older submission (the creator edited it meanwhile) is discarded.
+	reviewStatus: text("review_status").default("approved").notNull(),
+	reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
+	rejectionReason: text("rejection_reason"),
+	suggestedCategories: text("suggested_categories").array(),
+	suggestedDescription: text("suggested_description"),
+	reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
 }, (table) => [
 	index("idx_places_categories").using("gin", table.categories.asc().nullsLast()),
 	index("idx_places_created_by_created_at").using("btree", table.createdBy.asc().nullsLast(), table.createdAt.desc().nullsFirst()),
@@ -760,7 +776,8 @@ export const places = pgTable("places", {
 	index("idx_places_search_text").using("gin", table.searchText.asc().nullsLast()),
 	index("places_created_by_idx").using("btree", table.createdBy.asc().nullsLast()).where(sql`(created_by IS NOT NULL)`),
 	index("places_source_idx").using("btree", table.source.asc().nullsLast()),
-	unique("places_overture_id_key").on(table.overtureId),check("places_confidence_check", sql`((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))`),check("places_price_level_check", sql`((price_level >= 1) AND (price_level <= 4))`),check("places_rating_check", sql`((rating >= (0)::numeric) AND (rating <= (5)::numeric))`),check("places_source_check", sql`(source = ANY (ARRAY['overture'::text, 'user'::text, 'merged'::text]))`),]);
+	index("places_unshared_by_creator_idx").using("btree", table.createdBy.asc().nullsLast()).where(sql`(review_status <> 'approved'::text)`),
+	unique("places_overture_id_key").on(table.overtureId),check("places_review_status_check", sql`(review_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text]))`),check("places_confidence_check", sql`((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))`),check("places_price_level_check", sql`((price_level >= 1) AND (price_level <= 4))`),check("places_rating_check", sql`((rating >= (0)::numeric) AND (rating <= (5)::numeric))`),check("places_source_check", sql`(source = ANY (ARRAY['overture'::text, 'user'::text, 'merged'::text]))`),]);
 
 export const recipeGroups = pgTable("recipe_groups", {
 	id: uuid().defaultRandom().primaryKey(),
