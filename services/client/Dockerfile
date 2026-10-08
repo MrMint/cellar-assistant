@@ -115,6 +115,12 @@ ENV FILES_S3_PUBLIC_URL=${FILES_S3_PUBLIC_URL}
 # would hand the `next` bin's shebang to node. The Node fallback is
 # `build:node` (`next build`) and works in this image because `node` here is the
 # real Node 24 — see the base-image note at the top.
+#
+# The copy step first, because this RUN calls `next build` directly rather than
+# through the `build` script that would otherwise do it: maplibre-gl v6's worker
+# has to be served from public/ (see scripts/copy-maplibre-worker.mjs). Skip it
+# and the image builds, starts and mounts a map that never loads a tile.
+RUN node scripts/copy-maplibre-worker.mjs
 RUN bun run --bun next build
 
 # ---- runtime ----------------------------------------------------------------

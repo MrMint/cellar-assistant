@@ -10,7 +10,7 @@
  * ## The live hole this closes
  *
  * `target-stack.md` §7 lists it among the "live authorization holes on the
- * current stack", and the metadata is unambiguous — `nhost/metadata/databases/
+ * current stack", and the metadata is unambiguous — `82450ad1:nhost/metadata/databases/
  * default/tables/public_barcodes.yaml`:
  *
  * ```yaml

@@ -11,7 +11,7 @@
  * Nhost Cloud's managed storage gives a project no raw S3 credentials. What it
  * does give is its Storage HTTP API (hasura-storage). Everything below was read
  * from `nhost/nhost` at tag `storage@0.15.0` (commit `6a5f6c97`) — the version
- * `nhost/nhost.toml`'s `[storage]` pins for this project — in
+ * `82450ad1:nhost/nhost.toml`'s `[storage]` pins for this project — in
  * `services/storage/`:
  *
  * - **Route and base URL.** `GET /files/{id}` under the server

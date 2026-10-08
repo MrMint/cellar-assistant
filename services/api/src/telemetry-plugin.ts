@@ -36,9 +36,8 @@ import { requestIdFor } from "./request-id.ts";
 export const LIMIT_CODE_PATTERN = /^(QUERY|REQUEST)_TOO_[A-Z_]+$/;
 
 /**
- * graphql-js 16's whole message, anchored at both ends so resolver text that
- * merely quotes it cannot match. It says "more that" (sic); a fixed release may
- * say "than".
+ * graphql-js's whole message (16 says "more that", sic; 17 says "more than"),
+ * anchored at both ends so resolver text that merely quotes it cannot match.
  */
 const PARSE_TOKEN_MESSAGE =
   /^Syntax Error: Document contains more tha[nt] \d+ tokens\. Parsing aborted\.$/;

@@ -101,40 +101,43 @@ describe("createApiYoga: a masked error is logged redacted, once", () => {
   it.each([
     ["with the telemetry plugin (production)", true],
     ["without it", false],
-  ])("an ActorInvocationError from a resolver, %s", async (_label, withTelemetry) => {
-    const yoga = createApiYoga({
-      context: ({ request }) =>
-        makeContextFactory({
-          verify: anonymousVerify,
-          invoke: failingInvoke(),
-        })(request),
-      plugins: withTelemetry ? [useTelemetry()] : [],
-    });
+  ])(
+    "an ActorInvocationError from a resolver, %s",
+    async (_label, withTelemetry) => {
+      const yoga = createApiYoga({
+        context: ({ request }) =>
+          makeContextFactory({
+            verify: anonymousVerify,
+            invoke: failingInvoke(),
+          })(request),
+        plugins: withTelemetry ? [useTelemetry()] : [],
+      });
 
-    const response = await post(
-      yoga,
-      `{ cellar(id: "${CELLAR_ID}") { __typename } }`,
-    );
-    const body = (await response.json()) as {
-      errors?: { message: string; extensions?: Record<string, unknown> }[];
-    };
+      const response = await post(
+        yoga,
+        `{ cellar(id: "${CELLAR_ID}") { __typename } }`,
+      );
+      const body = (await response.json()) as {
+        errors?: { message: string; extensions?: Record<string, unknown> }[];
+      };
 
-    // The client side was already right; pinned so a logging change cannot
-    // quietly unmask it.
-    expect(body.errors?.[0]?.message).toBe("Unexpected error.");
-    expect(JSON.stringify(body)).not.toContain(CELLAR_ID);
+      // The client side was already right; pinned so a logging change cannot
+      // quietly unmask it.
+      expect(body.errors?.[0]?.message).toBe("Unexpected error.");
+      expect(JSON.stringify(body)).not.toContain(CELLAR_ID);
 
-    expectNothingSecret();
-    const lines = unexpectedErrorLines();
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('"error.name":"ActorInvocationError"');
-    expect(lines[0]).toContain('"graphql.field":"cellar"');
-    if (withTelemetry) {
-      // The plugin reports with the request's own id; the logger does not
-      // report a second time.
-      expect(lines[0]).toContain(`"request.id":"${REQUEST_ID}"`);
-    }
-  });
+      expectNothingSecret();
+      const lines = unexpectedErrorLines();
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('"error.name":"ActorInvocationError"');
+      expect(lines[0]).toContain('"graphql.field":"cellar"');
+      if (withTelemetry) {
+        // The plugin reports with the request's own id; the logger does not
+        // report a second time.
+        expect(lines[0]).toContain(`"request.id":"${REQUEST_ID}"`);
+      }
+    },
+  );
 
   it("an unexpected throw from the context factory, outside execution", async () => {
     const yoga = createApiYoga({

@@ -42,15 +42,14 @@ describe("normaliseToVocabulary", () => {
     );
   });
 
-  it.each([
-    ["Narnia"],
-    ["Fran"],
-    [""],
-    ["   "],
-    ["..."],
-  ])("maps %j to null rather than the nearest value", (input) => {
-    expect(normaliseToVocabulary(input, COUNTRIES, COUNTRY_ALIASES)).toBeNull();
-  });
+  it.each([["Narnia"], ["Fran"], [""], ["   "], ["..."]])(
+    "maps %j to null rather than the nearest value",
+    (input) => {
+      expect(
+        normaliseToVocabulary(input, COUNTRIES, COUNTRY_ALIASES),
+      ).toBeNull();
+    },
+  );
 
   it("returns null for anything that is not a string", () => {
     for (const value of [null, undefined, 42, true, ["FRANCE"], { a: 1 }]) {

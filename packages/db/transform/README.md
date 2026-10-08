@@ -24,9 +24,16 @@ ever run against real rows.** Every step that touches data is called out below.
 ## Running it
 
 ```bash
-packages/db/transform/run.sh              # dump from Nhost, reset, restore, transform
-packages/db/transform/run.sh --no-dump    # reuse the last dump
+packages/db/transform/run.sh                            # restore nhost-schema.sql, transform, migrate
+SRC_CONTAINER=<pg> packages/db/transform/run.sh --dump  # take a fresh dump from <pg> first
 ```
+
+The default needs no Nhost — and since 2026-10-05 there is no local Nhost stack to dump from;
+the rollback of record is a checkout of `82450ad1` (`docs/architecture/e4-decisions.md`
+decisions 11 and 15). `--no-dump` is still accepted and means the default. `--dump` has no
+default container: it used to be `epic-burnell-4b4be9-postgres-1`, a name that was right in one
+worktree on one machine. A fresh dump goes to `node_modules/.cache/cellar-test-db/` unless
+`DUMP` names a file, so it never lands on the checked-in baseline by accident.
 
 ### The checked-in baseline (X4)
 
@@ -34,25 +41,21 @@ packages/db/transform/run.sh --no-dump    # reuse the last dump
 database, taken the same way `run.sh` takes one (`--schema-only --no-owner
 --no-privileges --no-comments -N pgbouncer`) and containing no rows — only DDL,
 so it is safe to commit. CI has no Nhost container to dump from, which used to
-mean `ACTORS_TEST_DB_OPTIONAL: "1"` and 589 silently skipped tests (X4); pointing
-`DUMP` at this file and running `run.sh --no-dump` gives CI (and anyone else
-without a local Nhost stack) the exact same input `run.sh` would take from a live
-one.
+mean `ACTORS_TEST_DB_OPTIONAL: "1"` and 589 silently skipped tests (X4). It is now
+the default input of both `run.sh` and `test-db.sh`, locally and in CI.
 
-It is a snapshot, not a live reflection of `nhost/migrations` — regenerate it by
-hand (`DUMP="$PWD/packages/db/transform/nhost-schema.sql"
-packages/db/transform/run.sh` against a real local Nhost, from a worktree that is
-allowed to touch it) if those migrations ever change. They should not: `nhost/`
-is frozen legacy history since D9, kept only as the source this transform reads
-from, and is removed entirely after E4 (migration-plan §"nhost/ stays until
-after E4").
+It is a snapshot of the schema `nhost/migrations` produced, and those are frozen
+legacy history since D9, so it should never need regenerating. If it ever does:
+bring up the legacy stack from a `82450ad1` checkout, then
+`SRC_CONTAINER=<its postgres> DUMP="$PWD/packages/db/transform/nhost-schema.sql"
+packages/db/transform/run.sh --dump`, and re-pin it in
+`../src/migrate/transform-freeze.test.ts` in the same commit.
 
 **Neither build path needs the live Nhost container any more.** Measured:
 
 ```bash
 # the test database
-DUMP="$PWD/packages/db/transform/nhost-schema.sql" \
-  packages/db/transform/test-db.sh --rebuild --no-dump        # exit 0
+packages/db/transform/test-db.sh --rebuild                    # exit 0
 
 # the cutover's whole schema path, into a scratch target
 WORK=/tmp/x DUMP="$PWD/packages/db/transform/nhost-schema.sql" \
@@ -68,13 +71,12 @@ phase additionally needs the legacy MinIO when there are `storage.files` rows to
 copy — with the checked-in dump there are none, so the object path is not
 exercised.
 
-The template fingerprint hashes `$DUMP` when it is on disk, as well as
-`nhost/migrations` when that directory still exists. Before that it hashed only
-the latter, so **editing or regenerating `nhost-schema.sql` left a stale template
-reporting itself current** — verified, and verified fixed: appending one comment
-line to a copy of the dump now forces a rebuild where it previously printed
-`is current`. When `nhost/` is deleted the `find` contributes nothing, the
-fingerprint changes once, and nothing breaks.
+The template fingerprint hashes `$DUMP`. It once hashed only `nhost/migrations`,
+so **editing or regenerating `nhost-schema.sql` left a stale template reporting
+itself current** — verified, and verified fixed: appending one comment line to a
+copy of the dump forces a rebuild where it previously printed `is current`. The
+`nhost/migrations` term was dropped on 2026-10-05, once the baseline became the
+default input (it changed every fingerprint once), so nothing here reads `nhost/`.
 
 ### The test database
 
@@ -87,8 +89,8 @@ database missing them while the test database had them. X2 moved the lane into
 `run.sh`, and the ledger replaced the lane with `db:migrate`, so both build paths
 end at the same schema *and* the same ledger. The template fingerprint hashes every
 migration and the migrator, not just the lane files. `services/actors`'
-`vitest.config.ts` runs it automatically; run it by hand after an Nhost
-migration, which the fingerprint notices anyway:
+`vitest.config.ts` runs it automatically; run it by hand to force a rebuild,
+which the fingerprint makes unnecessary after any change to its inputs:
 
 ```bash
 packages/db/transform/test-db.sh --rebuild
@@ -99,8 +101,9 @@ It manages only databases named `cellar_test*` and refuses anything else, so
 it.
 
 Source and target are environment variables at the top of `run.sh`
-(`SRC_CONTAINER`, `DST_CONTAINER`, …); E1 overrides them to point at a production
-dump instead of the local Nhost container.
+(`DUMP`, `SRC_CONTAINER` for `--dump`, `DST_CONTAINER`, …). E1 does not use
+`run.sh` against production; `scripts/cutover/cutover.sh` runs the same numbered
+files in its own phases against a production dump.
 
 `run.sh` **drops and recreates the `admin`, `auth`, `cellar_meta`, `drizzle`,
 `hdb_catalog`, `public` and `storage` schemas** in the target database — `cellar_meta`

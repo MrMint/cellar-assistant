@@ -39,9 +39,11 @@
  * - **Settles every handler the SDK registers.** {@link installActorRouteGuard}
  *   runs the SDK's route registration (`server.actor.init()`) with the app's
  *   route methods wrapped, so each handler the SDK hands them is wrapped too: a
- *   rejected promise becomes `next(error)` — what Express 5 does natively —
- *   instead of a process exit. Only the Express routing API on our own `app`
- *   is touched; nothing inside `@dapr/dapr` is patched.
+ *   rejected promise becomes `next(error)` instead of a process exit. The host
+ *   is on Express 5 now, which does that natively, so this half is belt and
+ *   braces — and must hand the rejection on exactly once (see `settled`).
+ *   Only the Express routing API on our own `app` is touched; nothing inside
+ *   `@dapr/dapr` is patched.
  * - **Makes deactivation idempotent.** A `DELETE` for an actor this process
  *   does not hold answers `200`: there is nothing to deactivate, which is what
  *   daprd asked for. It is logged as `actor.deactivate_unheld` (INFO), so a
@@ -99,16 +101,25 @@ export class NonErrorRejection extends Error {
 const isThenable = (value: unknown): value is PromiseLike<unknown> =>
   typeof (value as { then?: unknown } | null)?.then === "function";
 
-/** `handler`, with a rejected promise routed to `next` instead of nowhere. */
+/**
+ * `handler`, with a rejected promise routed to `next` exactly once.
+ *
+ * It returns nothing, on purpose. Express 5's router settles a handler's
+ * returned promise itself (`next(err)` on rejection), so handing the promise
+ * back as well called `next` twice: the second error ran the handlers behind
+ * the one that answered — a spurious `http.request_failed` — and ended in
+ * Express's own final handler, which destroys the socket of a response
+ * already sent. daprd's app channel then lost a pooled connection per failed
+ * call (`./app-channel-connections.ts` for why that matters).
+ */
 const settled = (handler: Handler): Handler =>
-  function settledHandler(this: unknown, req, res, next) {
+  function settledHandler(this: unknown, req, res, next): undefined {
     const result = handler.call(this, req, res, next);
     if (isThenable(result)) {
       result.then(undefined, (reason: unknown) => {
         next(reason instanceof Error ? reason : new NonErrorRejection());
       });
     }
-    return result;
   };
 
 const guardHandlers = (handlers: readonly unknown[]): unknown[] =>
@@ -280,7 +291,7 @@ export const unhandledRequestErrorHandler: ErrorRequestHandler = (
 /**
  * The last error handler on the app, so Express's own never answers.
  *
- * Express 4's `finalhandler` writes an HTML page, and outside
+ * Express's `finalhandler` (4 and 5) writes an HTML page, and outside
  * `NODE_ENV=production` that page is `err.stack` — measured on the shared
  * lane (`NODE_ENV` unset): `POST /healthz` with a malformed JSON body answered
  * `SyntaxError: … at parse (/workspace/node_modules/.bun/body-parser@1.20.8/…)`,

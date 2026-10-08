@@ -2264,6 +2264,11 @@ fingerprints `nhost/migrations` for X3's template, `cutover.sh` uses the same co
 source, and E4's rollback *is* "point Vercel back at Nhost". Remove it after E4's 24h watch **and**
 after X4 lands a checked-in `$DUMP` baseline — together with `biome.json`'s `!nhost`,
 `.vercelignore`'s `/nhost`, `.claude/launch.json`'s Nhost entry, and the `nhost-hasura-admin` agent.
+*(2026-10-05: every reason above is now void. The local Nhost stack was deleted; `run.sh` and
+`test-db.sh` restore the checked-in baseline and no longer read `nhost/`; `cutover.sh` has no
+default source; the rollback of record is the `82450ad1` checkout (`e4-decisions.md` decisions 11
+and 15). The `launch.json` entry and the `nhost-hasura-admin` agent are gone; `nhost/` itself and
+the ignore entries remain, pending a separate deletion decision.)*
 
 **X10 — CLAUDE.md now actively misdirects.** It still instructs agents to run `nhost up --apply-seeds`,
 calls the linter ESLint/Prettier (the repo uses Biome), points Playwright at `localhost:3000` via a

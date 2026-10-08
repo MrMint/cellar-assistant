@@ -21,13 +21,13 @@
  * NOTHING`, and a sign-up for an email that already exists is treated as
  * "already seeded", not an error. Re-running this script is always safe.
  *
- * ## Why the reference data is not read from `nhost/seeds/default/*.sql`
+ * ## Why the reference data is not read from `82450ad1:nhost/seeds/default/*.sql`
  *
  * That is where the migration plan (§6 A9) says to read it from, and it is
- * wrong for this repository: `nhost/seeds/default/*.sql` holds sample
+ * wrong for this repository: `82450ad1:nhost/seeds/default/*.sql` holds sample
  * fixture data (a couple of test cellars and items) and has never held the
  * ten reference tables. Their rows were inserted by *migrations*
- * (`nhost/migrations/default/*_insert_into_public_*​/up.sql` and similar —
+ * (`82450ad1:nhost/migrations/default/*_insert_into_public_*​/up.sql` and similar —
  * `country`, `wine_variety`, `beer_style`, … each got their rows from a
  * one-off `INSERT` migration, not a seed file), which is also why
  * `packages/db/transform/run.sh`'s **schema-only** dump of local Nhost
@@ -38,7 +38,7 @@
  * (197 countries, 55 wine varieties, … — see the migration plan's own
  * "`country` (197 rows)" aside), captured once so this script — and every
  * later environment that runs it — has no runtime dependency on Nhost still
- * existing. Do not regenerate it from `nhost/seeds/`; there is nothing there
+ * existing. Do not regenerate it from `82450ad1:nhost/seeds/`; there is nothing there
  * to regenerate it from.
  */
 import { readFileSync } from "node:fs";

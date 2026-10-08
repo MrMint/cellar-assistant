@@ -76,14 +76,16 @@ export const createAppWithAuth = (
   trust: ProxyTrust = readProxyTrust(),
 ): express.Express => {
   const app = createHostApp();
-  // Express 4 wildcard. Covers /api/auth/sign-in/email, /api/auth/jwks,
-  // /api/auth/token, /api/auth/callback/<provider>, …
+  // Express 5 (path-to-regexp 8) wildcard: it must be named, and it matches
+  // one or more segments — not `/api/auth` itself. Covers
+  // /api/auth/sign-in/email, /api/auth/jwks, /api/auth/token,
+  // /api/auth/callback/<provider>, …
   //
   // `resolveClientIp` first: it decides which address better-auth's limiter
   // counts and whether this is the Next server's own exchange, and it strips
   // every header a caller could have forged for either (`./client-ip.ts`).
   app.all(
-    `${AUTH_BASE_PATH}/*`,
+    `${AUTH_BASE_PATH}/*splat`,
     resolveClientIp({ proxySecret: trust.proxySecret }),
     sessionExchangeLimiter(trust.sessionExchangeLimit, AUTH_BASE_PATH),
     noStoreForAuth,

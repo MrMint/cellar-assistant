@@ -522,7 +522,7 @@ export type PresignGetOptions = {
  * Visibility is unchanged — `FileActor` still checks it before every
  * signature, and the URL is still private and signed. What changes is
  * **lifetime**: a URL leaked from a page used to die within 30 min and now
- * lives up to `window + minValidity` (25 h by default). Revoking a viewer's
+ * lives up to `window + minValidity` (6 days 1 h by default). Revoking a viewer's
  * access no longer stops a URL they already hold for that long either. That is
  * the price of a cacheable URL; shrink `FILES_READ_URL_WINDOW_SECONDS` to buy
  * it back at the cost of more cache misses.
@@ -532,8 +532,17 @@ export type ReadUrlWindowSettings = {
   readonly minValiditySeconds: number;
 };
 
-/** A day: one cache miss per image per viewer per day. */
-export const DEFAULT_READ_URL_WINDOW_SECONDS = 24 * 60 * 60;
+/**
+ * Six days: one cache miss per image per viewer, and one `/_next/image`
+ * transformation per image per width, every six days.
+ *
+ * Was a day. Every rollover is a new `url=` for every image, and so a fresh
+ * optimizer transformation on Vercel for every image × width anyone views —
+ * daily, where the Nhost-era stable URLs re-transformed once a month. Six days
+ * is as long as SigV4 allows with the minimum validity on top
+ * ({@link SIGV4_MAX_EXPIRY_SECONDS}); the cost is the URL lifetime below.
+ */
+export const DEFAULT_READ_URL_WINDOW_SECONDS = 6 * 24 * 60 * 60;
 /** Twice the 30 min the per-request TTL used to promise. */
 export const DEFAULT_READ_URL_MIN_VALIDITY_SECONDS = 60 * 60;
 /** SigV4's own ceiling (`PRESIGN_EXPIRY_DAYS_MAX` in `minio`). */
@@ -557,7 +566,7 @@ const positiveInteger = (
 
 /**
  * `FILES_READ_URL_WINDOW_SECONDS` / `FILES_READ_URL_MIN_VALIDITY_SECONDS`,
- * defaulting to 24 h / 1 h. Throws, naming the variables, when the pair would
+ * defaulting to 6 days / 1 h. Throws, naming the variables, when the pair would
  * exceed SigV4's 7-day maximum.
  */
 export const readUrlWindowSettings = (

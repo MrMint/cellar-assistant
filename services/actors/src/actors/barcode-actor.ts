@@ -9,7 +9,7 @@
  *
  * ## The gap being closed, precisely
  *
- * `nhost/metadata/databases/default/tables/public_barcodes.yaml` grants role
+ * `82450ad1:nhost/metadata/databases/default/tables/public_barcodes.yaml` grants role
  * `user` an update permission over `[code, type]` with `filter: {}` — every
  * row, for every signed-in user. Since `barcodes.code` is the primary key that
  * six item tables reference, that permission also lets any user rename a code

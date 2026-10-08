@@ -91,14 +91,12 @@ describe("displayNameUpdateRefusal", () => {
   it("passes an ordinary name", () => {
     expect(displayNameUpdateRefusal("Jane")).toBeNull();
   });
-  it.each([
-    "",
-    "  ",
-    "jane@example.com",
-    "Jane <jane@example.com>",
-  ])("refuses %j", (name) => {
-    expect(displayNameUpdateRefusal(name)).not.toBeNull();
-  });
+  it.each(["", "  ", "jane@example.com", "Jane <jane@example.com>"])(
+    "refuses %j",
+    (name) => {
+      expect(displayNameUpdateRefusal(name)).not.toBeNull();
+    },
+  );
 });
 
 describe("the backfill migration's pattern", () => {
@@ -159,14 +157,17 @@ describe("better-auth never stores an email-shaped display name", () => {
     ["shouty@test.com", "SHOUTY@TEST.COM"],
     ["wrapped@test.com", "Wrapped <wrapped@test.com>"],
     ["other@test.com", "someone-else@example.com"],
-  ])("sign-up as %s with name %j stores a neutral handle", async (email, name) => {
-    const response = await signUp(email, name);
-    expect(response.status).toBe(200);
-    expect(await storedName(email)).toMatch(HANDLE);
-    // …and the sign-up response shows the stored name, not the submitted one.
-    const body = (await response.json()) as { user: { name: string } };
-    expect(body.user.name).toMatch(HANDLE);
-  });
+  ])(
+    "sign-up as %s with name %j stores a neutral handle",
+    async (email, name) => {
+      const response = await signUp(email, name);
+      expect(response.status).toBe(200);
+      expect(await storedName(email)).toMatch(HANDLE);
+      // …and the sign-up response shows the stored name, not the submitted one.
+      const body = (await response.json()) as { user: { name: string } };
+      expect(body.user.name).toMatch(HANDLE);
+    },
+  );
 
   it("keeps a chosen name", async () => {
     expect((await signUp("chosen@test.com", "Chosen One")).status).toBe(200);

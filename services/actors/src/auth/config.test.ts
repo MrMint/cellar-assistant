@@ -44,17 +44,17 @@ describe("public auth origins", () => {
     );
   });
 
-  it.each([
-    "http://cellar.example.com",
-    "https://localhost:3002",
-  ])("throws in production for a non-public base URL (%s)", (baseUrl) => {
-    expect(() =>
-      assertPublicAuthOrigins({
-        NODE_ENV: "production",
-        BETTER_AUTH_URL: baseUrl,
-      }),
-    ).toThrow(/must be the public https origin in production/);
-  });
+  it.each(["http://cellar.example.com", "https://localhost:3002"])(
+    "throws in production for a non-public base URL (%s)",
+    (baseUrl) => {
+      expect(() =>
+        assertPublicAuthOrigins({
+          NODE_ENV: "production",
+          BETTER_AUTH_URL: baseUrl,
+        }),
+      ).toThrow(/must be the public https origin in production/);
+    },
+  );
 
   it("rejects a base URL carrying a path, which suppresses better-auth's base path", () => {
     expect(() =>

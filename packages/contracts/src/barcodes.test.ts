@@ -171,14 +171,14 @@ describe("canonicalBarcodeCode", () => {
     expect(canonicalBarcodeCode(row.raw, row.symbology)).toBe(row.canonical);
   });
 
-  it.each(CANONICAL_CASES)("is idempotent with no hint: $raw", ({
-    raw,
-    symbology,
-  }) => {
-    const once = canonicalBarcodeCode(raw, symbology);
-    expect(canonicalBarcodeCode(once)).toBe(once);
-    expect(isCanonicalBarcodeCode(once)).toBe(true);
-  });
+  it.each(CANONICAL_CASES)(
+    "is idempotent with no hint: $raw",
+    ({ raw, symbology }) => {
+      const once = canonicalBarcodeCode(raw, symbology);
+      expect(canonicalBarcodeCode(once)).toBe(once);
+      expect(isCanonicalBarcodeCode(once)).toBe(true);
+    },
+  );
 
   it("is idempotent over every 8-digit code with a 0/1 prefix sampled, under every hint", () => {
     // The 8-digit branch is the only one a hint changes, so it is the one
@@ -243,14 +243,12 @@ describe("expandUpcE (GS1 zero suppression)", () => {
     expect(hasValidGs1CheckDigit(upcA)).toBe(upcE !== "11234565");
   });
 
-  it.each([
-    "21234565",
-    "0123456",
-    "012345678",
-    "0123456x",
-  ])("%s cannot be a UPC-E", (code) => {
-    expect(expandUpcE(code)).toBeNull();
-  });
+  it.each(["21234565", "0123456", "012345678", "0123456x"])(
+    "%s cannot be a UPC-E",
+    (code) => {
+      expect(expandUpcE(code)).toBeNull();
+    },
+  );
 });
 
 /** `body` plus the GS1 check digit that makes it valid. */
@@ -431,16 +429,16 @@ describe("displayBarcode", () => {
     expect(displayBarcode(row.code, row.type)).toBe(row.display);
   });
 
-  it.each(DISPLAY_CASES)("round-trips with no hint: $code ($type)", ({
-    code,
-    type,
-  }) => {
-    // What is shown, typed back in with no symbology (the search box, the
-    // wizard's field), reaches the same BarcodeActor.
-    expect(canonicalBarcodeCode(displayBarcode(code, type))).toBe(
-      canonicalBarcodeCode(code, type),
-    );
-  });
+  it.each(DISPLAY_CASES)(
+    "round-trips with no hint: $code ($type)",
+    ({ code, type }) => {
+      // What is shown, typed back in with no symbology (the search box, the
+      // wizard's field), reaches the same BarcodeActor.
+      expect(canonicalBarcodeCode(displayBarcode(code, type))).toBe(
+        canonicalBarcodeCode(code, type),
+      );
+    },
+  );
 
   it("round-trips every canonical code in the canonicalisation table", () => {
     for (const { canonical } of CANONICAL_CASES) {

@@ -881,42 +881,46 @@ describe.skipIf(skip)("FileActor (A8)", () => {
       ],
     ];
 
-    it.each(
-      ATTACH,
-    )("refuses to delete a file attached to %s as a Conflict, and deletes nothing", async (holder, attach) => {
-      await withTestDb(async (db) => {
-        const uploaderId = await seedUser(db);
-        const fileId = freshId();
-        const del = vi.fn(async () => undefined);
-        const actor = await activate(
-          newFileActor(
-            fileId,
-            db,
-            fakeBinding({
-              stat: vi.fn(async () => ({ size: 1, etag: "e" })),
-              delete: del,
-            }),
-          ),
-        );
-        await actor.createUploadTarget(userCtx(uploaderId, "r1"), {
-          kind: "item-image",
-        });
-        await actor.verify(userCtx(uploaderId, "r2"));
-        await attach(db, fileId, uploaderId);
-        del.mockClear();
+    it.each(ATTACH)(
+      "refuses to delete a file attached to %s as a Conflict, and deletes nothing",
+      async (holder, attach) => {
+        await withTestDb(async (db) => {
+          const uploaderId = await seedUser(db);
+          const fileId = freshId();
+          const del = vi.fn(async () => undefined);
+          const actor = await activate(
+            newFileActor(
+              fileId,
+              db,
+              fakeBinding({
+                stat: vi.fn(async () => ({ size: 1, etag: "e" })),
+                delete: del,
+              }),
+            ),
+          );
+          await actor.createUploadTarget(userCtx(uploaderId, "r1"), {
+            kind: "item-image",
+          });
+          await actor.verify(userCtx(uploaderId, "r2"));
+          await attach(db, fileId, uploaderId);
+          del.mockClear();
 
-        const refused = actor.delete(userCtx(uploaderId, "r3"));
-        await expect(refused).rejects.toBeInstanceOf(ConflictError);
-        await expect(refused).rejects.toThrow(
-          `file ${fileId} is still attached to ${holder}`,
-        );
-        expect(del).not.toHaveBeenCalled();
-        const [row] = await db.select().from(files).where(eq(files.id, fileId));
-        expect(row?.verifiedAt).not.toBeNull();
-        // The actor still holds the row, so a read after the refusal works.
-        expect((await actor.get(userCtx(uploaderId, "r4"))).id).toBe(fileId);
-      });
-    });
+          const refused = actor.delete(userCtx(uploaderId, "r3"));
+          await expect(refused).rejects.toBeInstanceOf(ConflictError);
+          await expect(refused).rejects.toThrow(
+            `file ${fileId} is still attached to ${holder}`,
+          );
+          expect(del).not.toHaveBeenCalled();
+          const [row] = await db
+            .select()
+            .from(files)
+            .where(eq(files.id, fileId));
+          expect(row?.verifiedAt).not.toBeNull();
+          // The actor still holds the row, so a read after the refusal works.
+          expect((await actor.get(userCtx(uploaderId, "r4"))).id).toBe(fileId);
+        });
+      },
+    );
   });
 
   it("delete: removes the row and best-effort deletes the object via the binding", async () => {

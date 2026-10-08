@@ -135,7 +135,7 @@ test("cache, format and sizes are production's, minimumCacheTTL is the read-URL 
   assert.deepEqual(config.imageSizes, [200, 400, 500]);
   assert.deepEqual(config.deviceSizes, [400, 500, 828, 1080]);
   // = DEFAULT_READ_URL_WINDOW_SECONDS in services/actors/src/lib/s3-presign.ts.
-  assert.equal(config.minimumCacheTTL, 86400);
+  assert.equal(config.minimumCacheTTL, 518400);
 });
 
 test("fileImagePattern: scheme, host and port of an origin, any path", () => {

@@ -86,15 +86,12 @@ describe("parsePasswordMode", () => {
       expect(parsePasswordMode(mode)).toBe(mode);
   });
 
-  it.each([
-    "false",
-    "true",
-    "Disabled",
-    "signin_only",
-    "off",
-  ])("refuses %j rather than guessing", (raw) => {
-    expect(() => parsePasswordMode(raw)).toThrow(/AUTH_PASSWORD_MODE/);
-  });
+  it.each(["false", "true", "Disabled", "signin_only", "off"])(
+    "refuses %j rather than guessing",
+    (raw) => {
+      expect(() => parsePasswordMode(raw)).toThrow(/AUTH_PASSWORD_MODE/);
+    },
+  );
 });
 
 describe("assertPasswordModeHasSocialFallback", () => {

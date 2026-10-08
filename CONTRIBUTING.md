@@ -105,9 +105,9 @@ cost real time. Read it before a first substantial change. The short version:
 - The block in `services/client/AGENTS.md` between the
   `<!-- BEGIN:nextjs-agent-rules -->` markers — `next dev` maintains it and will
   rewrite any edit, landing as an uncommitted change in whatever you were doing.
-- The `nhost/` directory and anything described as the legacy rollback path. It
-  exists so the migration has something to roll back to. Don't build features
-  against it.
+- The `nhost/` directory. It is frozen pre-migration history; nothing runs it,
+  and the rollback of record is a checkout of `82450ad1`, not this tree. Don't
+  build features against it.
 
 ## Licence
 

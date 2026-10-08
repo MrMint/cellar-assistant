@@ -135,7 +135,7 @@ export const viewerCollectionActorId = (viewerId: string): string => viewerId;
  * The set is `canSeeCellar` over `cellars`, which is the four-branch rule and
  * therefore a **superset** of §2.2's three groups: it also contains a
  * stranger's PUBLIC cellar. That is deliberate and is what the page shows
- * today — `nhost/metadata/databases/default/tables/public_cellars.yaml` grants
+ * today — `82450ad1:nhost/metadata/databases/default/tables/public_cellars.yaml` grants
  * role `user` `privacy = PUBLIC OR (privacy = FRIENDS AND friend-of-creator) OR
  * created_by_id = viewer OR co_owner = viewer`, and `/cellars` renders that
  * filter unmodified. Narrowing it is a product decision for D2, not a security

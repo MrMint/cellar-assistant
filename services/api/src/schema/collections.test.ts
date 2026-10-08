@@ -471,7 +471,11 @@ describe("the two catalog collections return projections (§1.5)", () => {
       `{ recipeGroups(first: 3, orderBy: CREATED_AT) { __typename } }`,
       testContext(invoke, viewer),
     );
-    expect(result.errors?.[0]?.message).toMatch(/"orderBy" has invalid value/);
+    // graphql 17 names the argument by its coordinate:
+    // `Argument "Query.recipeGroups(orderBy:)" has invalid value: …`.
+    expect(result.errors?.[0]?.message).toMatch(
+      /"Query\.recipeGroups\(orderBy:\)" has invalid value/,
+    );
     expect(calls).toHaveLength(0);
   });
 });

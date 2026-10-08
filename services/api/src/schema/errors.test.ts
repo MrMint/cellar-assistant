@@ -83,28 +83,29 @@ describe("ActorErrorCode", () => {
     }
   });
 
-  it.each(
-    ACTOR_ERROR_CODES,
-  )("serialises %s through a result union as its own name", async (code: ActorErrorCode) => {
-    const { invoke } = stubSidecar({
-      "PingActor.ping": () => {
-        throw actorErrorForCode(code, `refused: ${code}`);
-      },
-    });
-    const result = await execute({
-      schema,
-      document: parse(
-        `mutation { ping { __typename ... on ActorError { code reason message } } }`,
-      ),
-      contextValue: testContext(invoke, viewer),
-    });
-    expect(result.errors).toBeUndefined();
-    expect(result.data?.ping).toMatchObject({
-      code,
-      reason: null,
-      message: `refused: ${code}`,
-    });
-  });
+  it.each(ACTOR_ERROR_CODES)(
+    "serialises %s through a result union as its own name",
+    async (code: ActorErrorCode) => {
+      const { invoke } = stubSidecar({
+        "PingActor.ping": () => {
+          throw actorErrorForCode(code, `refused: ${code}`);
+        },
+      });
+      const result = await execute({
+        schema,
+        document: parse(
+          `mutation { ping { __typename ... on ActorError { code reason message } } }`,
+        ),
+        contextValue: testContext(invoke, viewer),
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.ping).toMatchObject({
+        code,
+        reason: null,
+        message: `refused: ${code}`,
+      });
+    },
+  );
 });
 
 describe("the one document shape the enum makes invalid", () => {

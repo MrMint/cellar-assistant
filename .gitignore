@@ -69,6 +69,10 @@ functions/node_modules/
 services/client/public/sw*
 services/client/public/swe-worker*
 
+# MapLibre web worker, copied from node_modules at dev/build time
+# (services/client/scripts/copy-maplibre-worker.mjs)
+services/client/public/maplibre/
+
 # new stack (infra/) local secrets
 infra/.env
 # E3 · the production deploy's real secrets. `infra/.env.prod.example` (no

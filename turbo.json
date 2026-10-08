@@ -27,7 +27,7 @@
     },
     "@cellar-assistant/client#build": {
       "dependsOn": ["^build", "@cellar-assistant/client#codegen"],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**", "public/maplibre/**"],
       "env": [
         "NEXT_PUBLIC_*",
         "PUBLIC_FILES_HOST",

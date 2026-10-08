@@ -115,7 +115,7 @@ export default defineConfig({
    *
    * `baseURL` stays `localhost`, not `host.docker.internal`. That older address
    * was an artifact of the Nhost stack's CORS allowlist
-   * (`nhost/overlays/local.json`), and it is actively wrong now: Playwright
+   * (`82450ad1:nhost/overlays/local.json`), and it is actively wrong now: Playwright
    * runs on the host, reaching a published container port, and better-auth
    * rejects a mismatched `Origin` with `MISSING_OR_NULL_ORIGIN` (403).
    *

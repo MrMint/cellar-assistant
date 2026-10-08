@@ -19,7 +19,7 @@
  * exist are both `NotFoundError` and indistinguishable.
  *
  * Writes are not one rule but two, matching the Hasura permissions they
- * replace (`nhost/metadata/databases/default/tables/public_cellars.yaml` and
+ * replace (`82450ad1:nhost/metadata/databases/default/tables/public_cellars.yaml` and
  * `public_cellar_owners.yaml`):
  *
  * - **creator or co-owner** may rename, re-privacy, and add/change/remove

@@ -263,6 +263,15 @@ export const refusalFor = (
 };
 
 /**
+ * A named route parameter's value. Express 5 types every parameter as
+ * `string | string[]` — the array is a `*wildcard`'s segments — and none of
+ * the SDK's actor routes has a wildcard, so anything but a string names
+ * nothing that could be registered or declared.
+ */
+const named = (value: string | string[] | undefined): string =>
+  typeof value === "string" ? value : "";
+
+/**
  * The same decision, on the parameters Express extracted for the route it is
  * dispatching to — `req.params` of the SDK's own routes, decoded by the
  * router. `null` when the request may go on.
@@ -275,15 +284,17 @@ export const refusalFor = (
 export const refusalForParams = (
   allowlist: MethodAllowlist,
   param: string,
-  params: Readonly<Record<string, string | undefined>>,
+  params: Readonly<Record<string, string | string[] | undefined>>,
 ): Refusal | null => {
-  const declared = allowlist.get(params.actorTypeName ?? "");
+  const declared = allowlist.get(named(params.actorTypeName));
   switch (param) {
     case "actorTypeName":
       return declared === undefined ? "unknown-actor-type" : null;
     case "methodName":
       if (declared === undefined) return "unknown-actor-type";
-      return declared.has(params.methodName ?? "") ? null : "undeclared-method";
+      return declared.has(named(params.methodName))
+        ? null
+        : "undeclared-method";
     case "timerName":
       return "timer";
     default:

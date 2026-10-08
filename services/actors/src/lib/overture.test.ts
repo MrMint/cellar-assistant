@@ -249,14 +249,12 @@ describe("requireTableId", () => {
     expect(requireTableId("p-1.ds_2.tbl$3")).toBe("p-1.ds_2.tbl$3");
   });
 
-  it.each([
-    "dataset.table",
-    "p.ds.tbl; drop table places",
-    "p.ds.`tbl`",
-    "",
-  ])("refuses %s — it is concatenated into the query text", (table) => {
-    expect(() => requireTableId(table)).toThrow(ValidationError);
-  });
+  it.each(["dataset.table", "p.ds.tbl; drop table places", "p.ds.`tbl`", ""])(
+    "refuses %s — it is concatenated into the query text",
+    (table) => {
+      expect(() => requireTableId(table)).toThrow(ValidationError);
+    },
+  );
 });
 
 /* -------------------------------------------------------------------------- */
@@ -395,11 +393,14 @@ describe("configuration — the three outcomes, and no fourth", () => {
       { OVERTURE_GCP_CREDENTIALS_JSON: '{"project_id":"p"}' },
       /missing client_email, private_key/,
     ],
-  ])("incomplete (%s): throws, so the host does not start", (_what, patch, message) => {
-    const env = { ...configuredEnv(), ...patch };
-    expect(() => installOverture({ env })).toThrow(message);
-    expect(overturePlaceSource()).toBeNull();
-  });
+  ])(
+    "incomplete (%s): throws, so the host does not start",
+    (_what, patch, message) => {
+      const env = { ...configuredEnv(), ...patch };
+      expect(() => installOverture({ env })).toThrow(message);
+      expect(overturePlaceSource()).toBeNull();
+    },
+  );
 
   it("a typo in OVERTURE_SOURCE is a misconfiguration, not 'run without one'", () => {
     expect(() =>

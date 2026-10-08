@@ -121,13 +121,15 @@ const server = new DaprServer({
   },
 });
 
-// The SDK's actor routes are `async` Express 4 handlers, and three of them —
-// deactivate, timer, reminder — have no `catch`: a throw there was an
-// unhandled rejection, and an exit. The one that bit was the idle-timeout
-// `DELETE` for an actor whose activation had failed ten minutes earlier.
-// Registering through the guard settles every handler and puts an error
-// handler behind them, so a deactivation of an actor this host does not hold
-// is a 200 and anything else is a 500. See `src/lib/actor-route-guard.ts`.
+// The SDK's actor routes are `async` handlers written for Express 4, and three
+// of them — deactivate, timer, reminder — have no `catch`: under Express 4 a
+// throw there was an unhandled rejection, and an exit. The one that bit was
+// the idle-timeout `DELETE` for an actor whose activation had failed ten
+// minutes earlier. This app is Express 5 (the SDK's own Express 4 is never
+// used: it only builds an app when `serverHttp` is absent), whose router
+// settles those promises itself; the guard still owns the answer — a
+// deactivation of an actor this host does not hold is a 200 and anything else
+// an opaque 500. See `src/lib/actor-route-guard.ts`.
 await installActorRouteGuard(app, () => server.actor.init());
 
 // Every route on the app — better-auth's and the SDK's, now all registered —

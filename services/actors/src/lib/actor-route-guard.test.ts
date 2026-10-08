@@ -11,10 +11,10 @@
  *
  * A crash would show up here as an unhandled rejection, which vitest reports
  * as a failed run, and as a request that never gets an answer, which each
- * `fetch` below bounds with a timeout. The last block shows both happening
- * with the guard left out, against the same SDK.
+ * `fetch` below bounds with a timeout. The last block shows, with the guard
+ * left out against the same SDK, what Express 5 answers on its own.
  */
-import type { Server } from "node:http";
+import http, { type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
   type ActorCategory,
@@ -611,6 +611,60 @@ describe("the pieces", () => {
       await listening.close();
     }
   });
+
+  // Express 5's router settles a returned promise itself. A guard that also
+  // returned it called `next(error)` twice: the second ran the handlers behind
+  // the one that answered and reached Express's final handler, which destroys
+  // the socket of a response already sent — one lost daprd connection per
+  // failed call. Measured before the fix: neither request reused the socket,
+  // and every failure was also reported as `http.request_failed`.
+  it("hands a rejection on once: one report, and the connection is kept", async () => {
+    const app = express();
+    await installActorRouteGuard(app, async () => {
+      app.put("/actors/T/:id/method/m", async () => {
+        throw new Error("boom");
+      });
+    });
+    const listening = await listen(app);
+    const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+    const errors: unknown[][] = [];
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args);
+    });
+    const request = () =>
+      new Promise<{ status: number; reused: boolean }>((resolve, reject) => {
+        const req = http.request(
+          `${listening.base}/actors/T/x/method/m`,
+          { method: "PUT", agent },
+          (res) => {
+            res.resume();
+            res.on("end", () =>
+              resolve({
+                status: res.statusCode ?? 0,
+                reused: req.reusedSocket,
+              }),
+            );
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      });
+    try {
+      const first = await request();
+      const second = await request();
+      expect(first.status).toBe(500);
+      expect(second).toEqual({ status: 500, reused: true });
+      expect(
+        errors.filter((args) =>
+          String(args[0]).includes("http.request_failed"),
+        ),
+      ).toEqual([]);
+    } finally {
+      agent.destroy();
+      vi.restoreAllMocks();
+      await listening.close();
+    }
+  });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -621,11 +675,18 @@ describe("control: the same SDK without the guard", () => {
    * error, this goes red — and the guard's deactivation branch is worth
    * re-reading rather than deleting blind, since daprd still sends the DELETE.
    *
-   * vitest treats any unhandled rejection as a failed run, which is exactly
-   * the crash; so its listeners step aside for the length of this one request
-   * and a local one records what arrives instead.
+   * Under Express 4 the SDK's rejection was unhandled — no answer, and a
+   * process exit. Express 5's router settles a returned promise itself, so
+   * the crash is gone without the guard; what is left is Express's default
+   * answer, a `500` (an HTML page, `err.stack` outside production), where
+   * daprd asked for a deactivation there is nothing to do for. The guard
+   * still owns the `200` and the opaque body.
+   *
+   * vitest treats any unhandled rejection as a failed run; so its listeners
+   * step aside for the length of this one request and a local one records
+   * what arrives instead, so a regression to "unhandled" is named here.
    */
-  it("leaves the DELETE unanswered and its rejection unhandled", async () => {
+  it("answers the DELETE with Express's own 500, not the 200 daprd needs", async () => {
     const host = await actorHost({ guarded: false });
     const saved = process.listeners("unhandledRejection");
     process.removeAllListeners("unhandledRejection");
@@ -643,9 +704,8 @@ describe("control: the same SDK without the guard", () => {
         (response) => `status ${response.status}`,
         () => "no answer",
       );
-      expect(outcome).toBe("no answer");
-      expect(unhandled).toHaveLength(1);
-      expect(isNotActivated(unhandled[0])).toBe(true);
+      expect(outcome).toBe("status 500");
+      expect(unhandled).toEqual([]);
     } finally {
       process.off("unhandledRejection", record);
       for (const listener of saved) {

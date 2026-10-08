@@ -22,10 +22,6 @@
     "serena": {
       "type": "sse",
       "url": "http://localhost:9121/sse"
-    },
-    "mcp-nhost": {
-      "command": "nhost",
-      "args": ["mcp", "start"]
     }
   }
 }

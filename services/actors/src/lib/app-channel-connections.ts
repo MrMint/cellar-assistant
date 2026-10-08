@@ -90,9 +90,11 @@ type Listen = (...args: unknown[]) => Server;
  * Make `app.listen` create a server that outlasts its clients' idle connections. Must run
  * before `server.start()` (inside `boot()`), which is what calls it.
  *
- * Express 4's `app.listen` is `http.createServer(this)` then
+ * Express's `app.listen` is `http.createServer(this)` then
  * `server.listen(...arguments)`; this is the same, with the policy applied
- * before the first connection can arrive.
+ * before the first connection can arrive. (Express 5 also wraps a trailing
+ * callback so a listen error reaches it; the SDK passes none —
+ * `await this.server.listen(port)` — so there is nothing to wrap.)
  */
 export const holdIdleConnections = (app: Express): void => {
   const listen: Listen = function listen(this: Express, ...args) {

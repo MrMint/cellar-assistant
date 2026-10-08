@@ -196,7 +196,9 @@ describe("Query.place", () => {
       ),
     );
     expect(errors.map((error) => error.message).join("\n")).toMatch(
-      /Field "googlePlaceId" is not defined by type "CreatePlaceInput"/,
+      // graphql 17's wording; 16 said `Field "googlePlaceId" is not defined
+      // by type "CreatePlaceInput"`.
+      /Expected value of type "CreatePlaceInput" not to include unknown field "googlePlaceId"/,
     );
 
     const input = schema.getType("CreatePlaceInput");

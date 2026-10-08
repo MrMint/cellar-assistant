@@ -371,7 +371,7 @@ services:
     # The pinned default is the base file's tag; see the UPGRADE CHECKLIST on
     # the base service before overriding it — ./grafana/otel-lgtm/prometheus.yaml
     # is a copy of that tag's file and has to move with it.
-    image: ${OTEL_LGTM_IMAGE:-grafana/otel-lgtm:0.32.1}
+    image: ${OTEL_LGTM_IMAGE:-grafana/otel-lgtm:0.35.0}
     # Changes when infra/grafana/** changes (provisioning, dashboards, alert
     # rules, the Prometheus override), so a deploy recreates this container
     # exactly then — Grafana reads alerting provisioning only at startup, and
@@ -405,8 +405,12 @@ services:
       # So infra/grafana/provisioning must carry its own copies. Dump the
       # originals to start from (same tag as `image:` above):
       #
-      #   docker run --rm --entrypoint tar grafana/otel-lgtm:0.32.1 \
-      #     -C /otel-lgtm/grafana/conf/provisioning -cf - . | tar -xf - -C infra/grafana/provisioning
+      #   id=$(docker create grafana/otel-lgtm:0.35.0)
+      #   docker cp "$id:/otel-lgtm/grafana/conf/provisioning/." infra/grafana/provisioning
+      #   docker rm "$id"
+      #
+      # (Not `docker run --entrypoint tar`: the image ships no tar — measured
+      # on both 0.32.1 and 0.35.0, 2026-10-05.)
       #
       # (Read-only, so Grafana cannot rewrite what source control owns.)
       - ./grafana/provisioning:/otel-lgtm/grafana/conf/provisioning:ro

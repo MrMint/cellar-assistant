@@ -112,34 +112,39 @@ describe.skipIf(!up)("object store CORS for the browser upload", () => {
     expect(ALLOWED).not.toContain(FOREIGN);
   });
 
-  it.each(
-    ALLOWED,
-  )("lets %s preflight and send the upload PUT", async (origin) => {
-    const url = await presignedPutUrl(
-      config,
-      `${prefix}/uploads/item-image/${randomUUID()}`,
-      300,
-    );
+  it.each(ALLOWED)(
+    "lets %s preflight and send the upload PUT",
+    async (origin) => {
+      const url = await presignedPutUrl(
+        config,
+        `${prefix}/uploads/item-image/${randomUUID()}`,
+        300,
+      );
 
-    const options = await preflight(url, origin);
-    expect(options.ok).toBe(true);
-    expect(options.headers.get("access-control-allow-origin")).toBe(origin);
-    expect(
-      (options.headers.get("access-control-allow-methods") ?? "").toUpperCase(),
-    ).toContain("PUT");
-    expect(
-      (options.headers.get("access-control-allow-headers") ?? "").toLowerCase(),
-    ).toContain("content-type");
+      const options = await preflight(url, origin);
+      expect(options.ok).toBe(true);
+      expect(options.headers.get("access-control-allow-origin")).toBe(origin);
+      expect(
+        (
+          options.headers.get("access-control-allow-methods") ?? ""
+        ).toUpperCase(),
+      ).toContain("PUT");
+      expect(
+        (
+          options.headers.get("access-control-allow-headers") ?? ""
+        ).toLowerCase(),
+      ).toContain("content-type");
 
-    // The PUT itself, with exactly the headers putToUploadTarget sends.
-    const put = await fetch(url, {
-      method: "PUT",
-      headers: { origin, "content-type": "image/jpeg" },
-      body: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]),
-    });
-    expect(put.status).toBe(200);
-    expect(put.headers.get("access-control-allow-origin")).toBe(origin);
-  });
+      // The PUT itself, with exactly the headers putToUploadTarget sends.
+      const put = await fetch(url, {
+        method: "PUT",
+        headers: { origin, "content-type": "image/jpeg" },
+        body: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]),
+      });
+      expect(put.status).toBe(200);
+      expect(put.headers.get("access-control-allow-origin")).toBe(origin);
+    },
+  );
 
   it("gives a foreign origin no CORS grant on the preflight or the PUT", async () => {
     const url = await presignedPutUrl(

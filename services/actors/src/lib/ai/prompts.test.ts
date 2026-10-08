@@ -83,14 +83,15 @@ describe("AI response schemas", () => {
     ).toHaveLength(ITEM_TYPES.length);
   });
 
-  it.each(
-    allSchemas(),
-  )(`%s carries no enum over ${MAX_SCHEMA_ENUM_VALUES} values`, (name, schema) => {
-    const tooBig = enumsIn(schema, name).filter(
-      (found) => found.size > MAX_SCHEMA_ENUM_VALUES,
-    );
-    expect(tooBig).toEqual([]);
-  });
+  it.each(allSchemas())(
+    `%s carries no enum over ${MAX_SCHEMA_ENUM_VALUES} values`,
+    (name, schema) => {
+      const tooBig = enumsIn(schema, name).filter(
+        (found) => found.size > MAX_SCHEMA_ENUM_VALUES,
+      );
+      expect(tooBig).toEqual([]);
+    },
+  );
 
   it("still lists a large vocabulary's values for the model to copy", () => {
     const schema = prompts.itemDefaultsSchema("WINE", LARGE_VOCABULARY);
