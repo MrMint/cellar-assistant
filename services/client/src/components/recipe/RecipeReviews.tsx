@@ -1,25 +1,23 @@
 "use client";
 
-import {
-  Accordion,
-  AccordionDetails,
-  AccordionGroup,
-  AccordionSummary,
-  Button,
-  Card,
-  ListItemContent,
-  Typography,
-} from "@mui/joy";
 import { isEmpty, isNotNil, not } from "ramda";
 import { useEffect } from "react";
+import { RatingDisplay } from "@/components/app/RatingInput";
+import { UserAvatar } from "@/components/app/UserAvatar";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { RichTextDisplay } from "../common/RichTextDisplay";
-import { StarRatingDisplay } from "../common/rating/StarRating";
 import { Timestamp } from "../common/Timestamp";
-import { UserAvatar } from "../common/UserAvatar";
 import { type RecipeReview, reviewFromNode } from "./adapter";
 import { RecipeReviewFragment } from "./fragments";
 import { RECIPE_REVIEWS_PAGE_SIZE, RecipeReviewsPageQuery } from "./queries";
@@ -81,65 +79,63 @@ export const RecipeReviews = ({
   const hasReviews = not(isEmpty(all));
 
   return (
-    <Card sx={{ padding: "0" }}>
-      <Typography level="title-lg" padding="1rem 0 0 1rem">
-        Reviews:
-      </Typography>
+    <section className="flex flex-col overflow-hidden rounded-lg bg-surface-1">
+      <p className="px-4 pt-4 type-headline">Reviews:</p>
       {!hasReviews && (
-        <Typography
-          level="body-lg"
-          padding="1rem"
-          justifyContent="center"
-          textAlign="center"
-        >
+        <p className="p-4 text-center type-body">
           No reviews yet! Want to add one?
-        </Typography>
+        </p>
       )}
       {hasReviews && (
-        <AccordionGroup>
+        <Accordion type="multiple" className="divide-y divide-line">
           {all.map((x) => (
-            <Accordion key={x.id}>
-              <AccordionSummary>
-                <UserAvatar
-                  avatarUrl={x.user.avatarUrl}
-                  displayName={x.user.displayName}
-                />
-                <ListItemContent>
-                  <Typography level="title-md">{x.user.displayName}</Typography>
-                  {/* A text-only review has no score: no stars, rather than five empty ones reading as zero. */}
-                  {x.score !== undefined && (
-                    <StarRatingDisplay value={x.score} size={25} />
-                  )}
-                </ListItemContent>
-                {/* One line beside the stars: "Oct 8, 2026" wrapped at 390px. */}
-                <Typography noWrap sx={{ flexShrink: 0 }}>
-                  <Timestamp iso={x.created_at} precision="date" />
-                </Typography>
-              </AccordionSummary>
+            <AccordionItem key={x.id} value={x.id} className="border-b-0">
+              <AccordionTrigger className="min-h-11 items-center px-4 py-3 hover:no-underline hover:bg-accent/50 [&>svg]:translate-y-0">
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                  <UserAvatar
+                    avatarUrl={x.user.avatarUrl}
+                    displayName={x.user.displayName}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate type-headline">
+                      {x.user.displayName}
+                    </span>
+                    {/* A text-only review has no score: no stars, rather than five empty ones reading as zero. */}
+                    {x.score !== undefined && (
+                      <RatingDisplay value={x.score} size="md" />
+                    )}
+                  </span>
+                  {/* One line beside the stars: "Oct 8, 2026" wrapped at 390px. */}
+                  <span className="shrink-0 whitespace-nowrap type-callout text-ink-2">
+                    <Timestamp iso={x.created_at} precision="date" />
+                  </span>
+                </span>
+              </AccordionTrigger>
               {isNotNil(x.text) && (
-                <AccordionDetails>
+                <AccordionContent className="px-4 type-body">
                   <RichTextDisplay text={x.text} />
-                </AccordionDetails>
+                </AccordionContent>
               )}
-            </Accordion>
+            </AccordionItem>
           ))}
-        </AccordionGroup>
+        </Accordion>
       )}
       {list.canLoadMore && recipeId !== undefined && (
         <Button
-          variant="plain"
-          color="neutral"
-          loading={list.status === "loadingMore"}
+          variant="ghost"
+          disabled={list.status === "loadingMore"}
+          aria-busy={list.status === "loadingMore" || undefined}
           onClick={() => void list.loadMore()}
         >
+          {list.status === "loadingMore" && <Spinner aria-hidden />}
           Show more reviews
         </Button>
       )}
       {list.failure !== null && (
-        <Typography level="body-sm" color="danger" padding="0 1rem 1rem">
+        <p className="px-4 pb-4 type-callout text-destructive">
           {list.failure.message}
-        </Typography>
+        </p>
       )}
-    </Card>
+    </section>
   );
 };
