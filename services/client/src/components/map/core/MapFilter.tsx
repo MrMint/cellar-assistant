@@ -7,7 +7,6 @@ import {
   Close,
   Filter,
   ICON_STROKE,
-  Place,
   Star,
 } from "@/components/app/icons";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
@@ -89,16 +88,10 @@ const RATING_OPTIONS = [
 
 const VISIT_OPTIONS = [
   { value: "any", label: "Any" },
-  {
-    value: "unvisited",
-    label: "New Places",
-    icon: <Place aria-hidden strokeWidth={ICON_STROKE} />,
-  },
-  {
-    value: "visited",
-    label: "Visited",
-    icon: <Check aria-hidden strokeWidth={ICON_STROKE} />,
-  },
+  // No glyphs: three equal segments in the 342 px phone panel leave about
+  // 113 px each, and "New Places" plus a glyph truncated to "New Pl...".
+  { value: "unvisited", label: "New Places" },
+  { value: "visited", label: "Visited" },
 ] as const;
 
 /** A removable "active filter" pill: the label and an × that clears it. */

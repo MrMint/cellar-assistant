@@ -148,7 +148,9 @@ function Notice({
         className,
       )}
     >
-      <div className="min-w-0 flex-1">{children}</div>
+      {/* A 12rem basis, not 0: with an action beside it the text claims its
+          own width first and the action wraps below, instead of squeezing it. */}
+      <div className="min-w-0 flex-[1_1_12rem]">{children}</div>
       {action}
     </div>
   );
