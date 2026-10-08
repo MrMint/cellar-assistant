@@ -182,9 +182,14 @@ export const MapFilter: FC<MapFilterProps> = ({
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      // Escape in the open tier-list picker closes the picker (Radix), not
-      // the whole panel underneath it.
-      if (event.key === "Escape" && !tierListPickerOpen) {
+      // Escape in the open tier-list picker (or a tooltip) closes that layer,
+      // not the whole panel underneath it. Radix's layer handles Escape first
+      // (a capture listener) and marks it with preventDefault. Checking the
+      // picker's open state instead does not work: Radix closes it in its
+      // capture listener, React re-renders and re-subscribes this effect in
+      // between, and the new listener (picker now closed) still gets the
+      // event in its bubble phase.
+      if (event.key === "Escape" && !event.defaultPrevented) {
         setShowAdvanced(false);
       }
     };
@@ -195,7 +200,7 @@ export const MapFilter: FC<MapFilterProps> = ({
         document.removeEventListener("keydown", handleEscape);
       };
     }
-  }, [showAdvanced, tierListPickerOpen]);
+  }, [showAdvanced]);
 
   useEffect(() => {
     if (!showAdvanced || !isMobile) return;
