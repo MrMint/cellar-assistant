@@ -187,12 +187,22 @@ export function AppBar({
                   <More />
                 </IconButton>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent
+                align="end"
+                // The chosen action runs once the menu has handed focus back
+                // to ⋯ (Radix's own handler runs after this one, hence the
+                // microtask): a dialog it opens then records ⋯ as its opener
+                // and returns focus there, not to the unmounted menuitem
+                // (which left focus on <body>, measured on the lane).
+                onCloseAutoFocus={() => queueMicrotask(runPending)}
+              >
                 {overflow.map((item) => (
                   <DropdownMenuItem
                     key={item.label}
                     variant={item.destructive ? "destructive" : "default"}
-                    onSelect={item.onSelect}
+                    onSelect={() => {
+                      pending.current = item.onSelect;
+                    }}
                   >
                     {item.label}
                   </DropdownMenuItem>
