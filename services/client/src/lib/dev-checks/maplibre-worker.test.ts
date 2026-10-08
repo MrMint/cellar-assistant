@@ -99,6 +99,28 @@ test("the client image copies the worker before `next build`", () => {
   assert.ok(copy >= 0 && copy < build, "worker copy must run before build");
 });
 
+test("turbo caches the copied worker with the build it belongs to", () => {
+  // A turbo cache hit restores the task's declared outputs and does NOT run
+  // the `build` script, so the copy above never happens. Unless the copied
+  // files are an output too, a cached build ships `.next` without them: maps
+  // that never load a tile, and a Serwist precache naming two missing files.
+  // turbo.json carries comments, so it is read as text, not JSON.parse'd.
+  const turbo = readFileSync(join(clientDir, "../../turbo.json"), "utf8");
+  const outputs =
+    /"@cellar-assistant\/client#build"\s*:\s*\{[^}]*?"outputs"\s*:\s*\[([^\]]*)\]/.exec(
+      turbo,
+    )?.[1];
+  assert.ok(
+    outputs !== undefined,
+    "client#build outputs not found in turbo.json",
+  );
+  const copiedDir = posix.dirname(MAPLIBRE_WORKER_URL).replace(/^\//, "");
+  assert.ok(
+    outputs.includes(`"public/${copiedDir}/**"`),
+    `turbo.json client#build outputs must include public/${copiedDir}/**: [${outputs}]`,
+  );
+});
+
 const walk = (dir: string, out: string[] = []): string[] => {
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry);
