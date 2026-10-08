@@ -303,8 +303,9 @@ describe("describeAuthorityMismatch", () => {
 describe("stable read URLs", () => {
   const settings = readUrlWindowSettings({});
   const HOUR = 60 * 60 * 1000;
-  /** A window start, so offsets below are unambiguous. */
-  const START = Date.UTC(2026, 9, 6);
+  const WINDOW = settings.windowSeconds * 1000;
+  /** A window start (6-day windows from the epoch), so offsets below are unambiguous. */
+  const START = Date.UTC(2026, 9, 4);
   const sign = (at: number, key = KEY) =>
     presignedStableGetUrl(
       filesS3Config(PROD_ENV),
@@ -312,12 +313,12 @@ describe("stable read URLs", () => {
       stableReadWindow(new Date(at), settings),
     );
 
-  it("defaults to a 24 h window and a 1 h minimum validity", () => {
+  it("defaults to a 6-day window and a 1 h minimum validity", () => {
     expect(settings).toEqual({
       windowSeconds: DEFAULT_READ_URL_WINDOW_SECONDS,
       minValiditySeconds: DEFAULT_READ_URL_MIN_VALIDITY_SECONDS,
     });
-    expect(DEFAULT_READ_URL_WINDOW_SECONDS).toBe(86_400);
+    expect(DEFAULT_READ_URL_WINDOW_SECONDS).toBe(518_400);
     expect(DEFAULT_READ_URL_MIN_VALIDITY_SECONDS).toBe(3_600);
   });
 
@@ -325,29 +326,24 @@ describe("stable read URLs", () => {
     const first = await sign(START + 1000);
     expect(await sign(START + 1000)).toBe(first);
     expect(await sign(START + 13 * HOUR)).toBe(first);
-    expect(await sign(START + 24 * HOUR - 1000)).toBe(first);
+    expect(await sign(START + 5 * 24 * HOUR)).toBe(first);
+    expect(await sign(START + WINDOW - 1000)).toBe(first);
   });
 
   it("signs a different URL in the next window, and for another key", async () => {
     const first = await sign(START + 1000);
-    expect(await sign(START + 24 * HOUR)).not.toBe(first);
+    expect(await sign(START + WINDOW)).not.toBe(first);
     expect(await sign(START + 1000, `${KEY}.other`)).not.toBe(first);
   });
 
   it("dates the signature at the window start and expires it window + minimum later", async () => {
     const url = new URL(await sign(START + 7 * HOUR));
-    expect(url.searchParams.get("X-Amz-Date")).toBe("20261006T000000Z");
-    expect(url.searchParams.get("X-Amz-Expires")).toBe(String(86_400 + 3_600));
+    expect(url.searchParams.get("X-Amz-Date")).toBe("20261004T000000Z");
+    expect(url.searchParams.get("X-Amz-Expires")).toBe(String(518_400 + 3_600));
   });
 
   it("always leaves at least the minimum validity, even a second before the boundary", () => {
-    for (const offset of [
-      0,
-      1000,
-      12 * HOUR,
-      24 * HOUR - 1000,
-      24 * HOUR - 1,
-    ]) {
+    for (const offset of [0, 1000, 12 * HOUR, WINDOW - 1000, WINDOW - 1]) {
       const now = START + offset;
       const window = stableReadWindow(new Date(now), settings);
       const remaining = window.expiresAt.getTime() - now;
@@ -364,7 +360,7 @@ describe("stable read URLs", () => {
   it("signs a private, immutable Cache-Control into the URL", async () => {
     const url = new URL(await sign(START));
     expect(url.searchParams.get("response-cache-control")).toBe(
-      "private, max-age=86400, immutable",
+      "private, max-age=518400, immutable",
     );
     // In the query string, so inside the signature: a holder cannot edit it.
     expect(url.searchParams.get("X-Amz-Signature")).toMatch(/^[0-9a-f]{64}$/);
