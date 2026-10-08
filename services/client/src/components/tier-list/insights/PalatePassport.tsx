@@ -14,7 +14,7 @@ import {
   MdTrendingUp,
 } from "react-icons/md";
 
-import { formatCategoryName } from "../utils";
+import { formatPlaceCategory } from "@/utilities/formatters";
 import type { PalatePassportStats } from "./computeInsightsStats";
 
 const BADGE_ICONS: Record<string, IconType> = {
@@ -88,7 +88,7 @@ export function PalatePassport({ stats }: PalatePassportProps) {
       label: "Categories",
       value: stats.uniqueCategories,
       detail: stats.topCategory
-        ? `Top: ${formatCategoryName(stats.topCategory)}`
+        ? `Top: ${formatPlaceCategory(stats.topCategory)}`
         : undefined,
       icon: <MdCategory />,
     },

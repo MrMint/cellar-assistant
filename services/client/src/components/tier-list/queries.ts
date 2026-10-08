@@ -351,7 +351,26 @@ export const TierListItemPickerQuery = graphql(
               item {
                 __typename
                 id
+                type
                 country
+                ... on Wine {
+                  wineVariety: variety
+                  wineVintage: vintage
+                }
+                ... on Beer {
+                  beerStyle: style
+                }
+                ... on Spirit {
+                  spiritKind: spiritType
+                }
+                ... on Sake {
+                  sakeCategory: category
+                  sakeRegion: region
+                }
+                ... on Tea {
+                  teaCategory: category
+                  teaRegion: region
+                }
               }
             }
           }

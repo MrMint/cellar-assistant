@@ -17,6 +17,7 @@ import {
   readFragment,
 } from "@/lib/api/graphql";
 import { formatVintage } from "@/utilities";
+import { displayItemName } from "@/utilities/smart-title-case";
 import {
   RECENT_ACTIVITY_CAP,
   type SearchNearbyPlacesQuery,
@@ -251,7 +252,8 @@ const itemDisplayName = (item: NonNullable<ActivityNode["item"]>): string => {
       : item.__typename === "Sake"
         ? formatVintage(item.vintageYear)
         : undefined;
-  return vintage === undefined ? item.name : `${vintage} ${item.name}`;
+  const name = displayItemName(item.name);
+  return vintage === undefined ? name : `${vintage} ${name}`;
 };
 
 /**

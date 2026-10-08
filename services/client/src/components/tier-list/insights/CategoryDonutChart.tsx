@@ -2,7 +2,7 @@
 
 import { Box, Stack, Typography } from "@mui/joy";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { formatCategoryName } from "../utils";
+import { formatPlaceCategory } from "@/utilities/formatters";
 import type { CategoryDistribution } from "./computeInsightsStats";
 
 // Distinct palette that works on both light and dark backgrounds
@@ -40,7 +40,7 @@ function CustomTooltip({
         fontSize: 13,
       }}
     >
-      <strong>{formatCategoryName(d.category)}</strong>: {d.count} (
+      <strong>{formatPlaceCategory(d.category)}</strong>: {d.count} (
       {d.percentage}%)
     </div>
   );
@@ -117,7 +117,7 @@ export function CategoryDonutChart({ distribution }: CategoryDonutChartProps) {
                   whiteSpace: "nowrap",
                 }}
               >
-                {formatCategoryName(d.category)}
+                {formatPlaceCategory(d.category)}
               </Typography>
               <Typography
                 level="body-xs"

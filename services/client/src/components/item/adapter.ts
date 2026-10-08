@@ -30,6 +30,7 @@ import {
   formatSpiritType,
   formatWineVariety,
 } from "@/utilities/formatters";
+import { displayItemName } from "@/utilities/smart-title-case";
 import {
   ItemPageItemFragment,
   ItemPageRecipesFragment,
@@ -533,7 +534,7 @@ export const itemViewFromFragment = (
   return {
     itemId: core.id,
     type,
-    name: core.name,
+    name: displayItemName(core.name),
     description: core.description ?? null,
     createdById: core.createdById,
     isFavorite: item.isFavorite,

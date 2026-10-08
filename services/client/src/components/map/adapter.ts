@@ -7,6 +7,7 @@
  * `queries.ts` moves nothing here.
  */
 
+import { displayItemName } from "@/utilities/smart-title-case";
 import {
   calculateItemTypeMatches,
   calculateOverallQuality,
@@ -465,7 +466,7 @@ export function menuItemFrom(node: MenuLineNode): MenuItemView {
       matched?.item != null
         ? {
             id: matched.item.id,
-            name: matched.item.name,
+            name: displayItemName(matched.item.name),
             type: matched.type.toLowerCase(),
           }
         : null,
@@ -665,7 +666,7 @@ export function suggestionFrom(node: SuggestionNode): SuggestionView {
     suggested: item
       ? {
           id: item.id,
-          name: item.name,
+          name: displayItemName(item.name),
           href: matchedItemHref({ id: item.id, type: item.type.toLowerCase() }),
         }
       : recipe

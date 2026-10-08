@@ -37,6 +37,7 @@ import {
   mergeExtractedDefaults,
   type SkippedProposal,
 } from "@/lib/items/extraction-merge";
+import { smartTitleCase } from "@/utilities/smart-title-case";
 import type { QuickAddItemDefaults } from "../QuickAddCard";
 
 /** What the analyze step hands the form and the quick-add card. */
@@ -74,7 +75,8 @@ const dateKeys = (type: ApiItemType): string[] =>
  * once the analysis was back, so there is nothing typed to protect) but keeps
  * its other half: a value a field cannot hold is reported in `skipped`, and a
  * `static` picker only takes one of its own options. A `date` proposal
- * (`2015-06-01`) becomes the year the old form asked for (`2015`).
+ * (`2015-06-01`) becomes the year the old form asked for (`2015`), and an
+ * all-caps name or brand is smart-title-cased (N17).
  */
 export const formDefaultsFromOnboarding = (
   type: ApiItemType,
@@ -97,12 +99,15 @@ export const formDefaultsFromOnboarding = (
   }
   return {
     values: {
-      name: merged.values.name,
+      // N17: a label read comes back in capitals; the form is pre-filled with
+      // it smart-title-cased, so that is what the user confirms and what is
+      // stored. A name the user types is stored as typed.
+      name: smartTitleCase(merged.values.name),
       description: merged.values.description,
       country: merged.values.country,
       attributes,
     },
-    brandName: merged.values.brandName,
+    brandName: smartTitleCase(merged.values.brandName),
     skipped: merged.skipped,
   };
 };
