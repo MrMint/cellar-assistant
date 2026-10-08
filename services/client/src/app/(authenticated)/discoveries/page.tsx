@@ -1,12 +1,15 @@
 import { Suspense } from "react";
+import { Page } from "@/components/app/Page";
 import { DiscoveryDashboard } from "@/components/map/discovery/DiscoveryDashboard";
 import { Spinner } from "@/components/ui/spinner";
 
 /** `82450ad1:src/app/(authenticated)/discoveries/page.tsx`, restored. */
 export default function DiscoveriesPage() {
   return (
-    <div className="h-dvh overflow-auto p-4">
-      <h1 className="type-title-1 mb-6 text-ink-1">Your Discoveries</h1>
+    // `Page`, not a scroller of its own: the shell's scroller is the one
+    // element that scrolls (D26) and supplies the gutter.
+    <Page>
+      <h1 className="type-title-1 text-ink-1">Your Discoveries</h1>
 
       <Suspense
         fallback={
@@ -18,6 +21,6 @@ export default function DiscoveriesPage() {
       >
         <DiscoveryDashboard />
       </Suspense>
-    </div>
+    </Page>
   );
 }

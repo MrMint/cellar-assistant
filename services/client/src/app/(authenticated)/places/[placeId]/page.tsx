@@ -41,18 +41,18 @@ export default async function PlaceDetailsPage({
   // Any other failure is `PlaceDetails`'s to report, as before.
   if (!exists.ok && isNotFound(exists.error)) notFound();
 
+  // No wrapper of its own: the shell's scroller is the one element that
+  // scrolls (D26) and supplies the gutter, and PlaceDetails is a `Page`.
   return (
-    <div className="h-dvh overflow-auto p-4">
-      <Suspense
-        fallback={
-          <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
-            <Spinner className="size-10 text-ink-2" />
-            <p className="type-body text-ink-1">Loading place details...</p>
-          </div>
-        }
-      >
-        <PlaceDetails placeId={placeId} />
-      </Suspense>
-    </div>
+    <Suspense
+      fallback={
+        <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
+          <Spinner className="size-10 text-ink-2" />
+          <p className="type-body text-ink-1">Loading place details...</p>
+        </div>
+      }
+    >
+      <PlaceDetails placeId={placeId} />
+    </Suspense>
   );
 }
