@@ -26,8 +26,9 @@ export const inviteShareRequest = (origin: string, token: string) => ({
 /**
  * "Invite friends" on `/friends` (X17): one link that makes whoever opens it
  * your friend — the way in for someone not on the app yet, who search cannot
- * find. The link is made on first use and kept; Reset replaces it, behind a
- * confirm, because every link already sent stops working.
+ * find. The link is made the first time this card shows and is kept; Reset
+ * replaces it, behind a confirm, because every link already sent stops
+ * working.
  */
 export function InviteFriendsCard() {
   const [{ data }, refetch] = useQuery({ query: MyFriendInviteQuery });
