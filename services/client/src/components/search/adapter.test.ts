@@ -371,6 +371,7 @@ describe("activityEntryFromNode (the old buildActivityFeed's extractors)", () =>
           score: 4,
           note: "dark cherry",
           tags: ["cherry"],
+          companionIds: ["u1"],
           place: {
             __typename: "Place",
             id: "p1",

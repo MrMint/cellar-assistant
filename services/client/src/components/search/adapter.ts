@@ -359,6 +359,7 @@ export const activityEntryFromNode = (
         companionNames: log.companions.edges.map(
           (edge) => edge.node.displayName,
         ),
+        companionCount: log.companionIds.length,
         placeName:
           log.place === null ? null : (log.place.displayName ?? log.place.name),
       }),

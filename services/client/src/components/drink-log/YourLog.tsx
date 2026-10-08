@@ -62,6 +62,7 @@ export const drinkLogRow = (
       companionNames: entry.companions.edges.map(
         (edge) => edge.node.displayName,
       ),
+      companionCount: entry.companionIds.length,
       placeName: place === null ? null : (place.displayName ?? place.name),
     }),
     photoUrl: entry.photo?.url ?? null,
@@ -147,7 +148,14 @@ export function YourLog({
         className={className}
         action={
           rows.length > 0 ? (
-            <Button size="sm" variant="secondary" onClick={openNew}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={openNew}
+              // 36 px on the label row, inside a 44 px target (FilterChip's
+              // recipe): `sm` alone is for dense desktop rows.
+              className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
+            >
               <Add aria-hidden />
               Log a drink
             </Button>

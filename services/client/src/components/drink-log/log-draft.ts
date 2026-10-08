@@ -244,16 +244,27 @@ export const updateInput = (
 /* How an entry reads                                                          */
 /* -------------------------------------------------------------------------- */
 
-/** "Sam", "Sam and Ana", "Sam, Ana and Lee", "Sam, Ana and 2 others". */
-export const joinNames = (names: readonly string[]): string => {
+/**
+ * "Sam", "Sam and Ana", "Sam, Ana and Lee", "Sam, Ana and 2 others".
+ *
+ * `total` is how many there are when `names` is only the first page of them
+ * (`companions(first: 5)` against `companionIds`), so "and 6 others" counts
+ * the people who were there rather than the names that were fetched.
+ */
+export const joinNames = (
+  names: readonly string[],
+  total: number = names.length,
+): string => {
   const shown = names.filter((name) => name.trim() !== "");
+  const count = Math.max(total, shown.length);
   if (shown.length === 0) return "";
-  if (shown.length === 1) return shown[0] ?? "";
-  if (shown.length <= 3) {
+  if (count === 1) return shown[0] ?? "";
+  if (count <= 3 && shown.length === count) {
     return `${shown.slice(0, -1).join(", ")} and ${shown.at(-1) ?? ""}`;
   }
-  const rest = shown.length - 2;
-  return `${shown.slice(0, 2).join(", ")} and ${rest} others`;
+  const named = shown.slice(0, 2);
+  const rest = count - named.length;
+  return `${named.join(", ")} and ${rest} ${rest === 1 ? "other" : "others"}`;
 };
 
 /**
@@ -262,11 +273,13 @@ export const joinNames = (names: readonly string[]): string => {
  */
 export const entryContext = (entry: {
   readonly companionNames: readonly string[];
+  /** Everyone else who was there, when `companionNames` is only a page. */
+  readonly companionCount?: number;
   readonly placeName: string | null;
 }): string =>
   [
     entry.companionNames.length > 0
-      ? `with ${joinNames(entry.companionNames)}`
+      ? `with ${joinNames(entry.companionNames, entry.companionCount)}`
       : null,
     entry.placeName === null ? null : `at ${entry.placeName}`,
   ]

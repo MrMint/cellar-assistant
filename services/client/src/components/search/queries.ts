@@ -278,6 +278,7 @@ export const SearchRecentActivityQuery = graphql(`
               score
               note
               tags
+              companionIds
               place {
                 __typename
                 id

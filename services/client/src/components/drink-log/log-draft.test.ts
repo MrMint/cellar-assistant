@@ -148,6 +148,16 @@ describe("updateInput", () => {
 });
 
 describe("how an entry reads", () => {
+  test("joinNames counts everyone who was there, not just the names fetched", () => {
+    assert.equal(joinNames(["Sam", "Ana"], 2), "Sam and Ana");
+    assert.equal(joinNames(["Sam", "Ana", "Lee"], 4), "Sam, Ana and 2 others");
+    assert.equal(
+      joinNames(["Sam", "Ana", "Lee", "Kim", "Bo"], 8),
+      "Sam, Ana and 6 others",
+    );
+    assert.equal(joinNames(["Sam", "Ana"], 3), "Sam, Ana and 1 other");
+  });
+
   test("joinNames", () => {
     assert.equal(joinNames([]), "");
     assert.equal(joinNames(["Sam"]), "Sam");
