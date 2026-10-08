@@ -720,8 +720,9 @@ Return the fields in the schema. Rules:
   is — and however certain you are which ${type} it names.
 - \`surfaceKind\` says what the text is printed on (\`label\`, \`menu\` or
   \`other\`). Answer it whatever \`labelIsLegible\` is.
-- **When \`labelIsLegible\` is false, leave every other field out. That is a
-  correct and useful answer, not a failure.** "We could not read a label in
+- **When \`labelIsLegible\` is false, leave every other field out (all but
+  \`imageDescription\` and \`surfaceKind\`). That is a correct and useful
+  answer, not a failure.** "We could not read a label in
   that photo" is exactly what the person needs to hear; a plausible bottle
   they never photographed is the worst thing you can give them.
 - Transcribe what is printed. Do not translate or tidy the product name.
