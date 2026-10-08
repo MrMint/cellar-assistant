@@ -68,7 +68,9 @@
     "db:migrate": "node packages/db/src/migrate/cli.ts",
     "dev:migrate": "scripts/stack/stack.sh migrate",
     "test:e2e": "bun run --filter @cellar-assistant/e2e test",
-    "test:e2e:report": "bun run --filter @cellar-assistant/e2e report"
+    "test:e2e:report": "bun run --filter @cellar-assistant/e2e report",
+    "test:visual": "bun run --filter @cellar-assistant/e2e visual",
+    "test:visual:compare": "bun run --filter @cellar-assistant/e2e visual:compare"
   },
   "packageManager": "bun@1.4.2",
   "devDependencies": {

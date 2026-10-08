@@ -11,6 +11,13 @@ import type { Page } from "@playwright/test";
  * Every route is read-only. Nothing here submits a form or creates a place
  * (the stack's 25/day place cap is shared); `states` only open a sheet or
  * dialog and close it again.
+ *
+ * Against that capture's 63 rows: every route is here except three the lane
+ * seed cannot show without writing to the stack — an empty cellar and an
+ * empty tier list (the seed's are all populated) and the bottle created by
+ * the review's AI onboarding run. Its friend-view rows are kept (a private
+ * cellar and a private tier list as the friend, the friend's search home);
+ * its m375 and light-scheme modes are not (§5.3 sweeps 390 dark).
  */
 
 export type Slice =
@@ -196,6 +203,13 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
     },
     {
       slice: "S3",
+      slug: "search-friend",
+      path: "/search",
+      as: "friend",
+      note: "search home as the friend (recent activity from the demo account)",
+    },
+    {
+      slice: "S3",
       slug: "brands",
       path: "/brands",
       as: "demo",
@@ -282,6 +296,13 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       path: `/cellars/${cellar("home")}/items`,
       as: "friend",
       note: "Home Cellar viewed by the friend",
+    },
+    {
+      slice: "S4",
+      slug: "cellar-items-bar-friend",
+      path: `/cellars/${cellar("bar")}/items`,
+      as: "friend",
+      note: "Bar Cart (PRIVATE) viewed by the friend: the denied state",
     },
 
     // S5 — item and bottle pages
@@ -629,6 +650,13 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       path: `/tier-lists/${tier("reds")}`,
       as: "friend",
       note: "the board viewed by the friend",
+    },
+    {
+      slice: "S10",
+      slug: "tier-list-agave-friend",
+      path: `/tier-lists/${tier("agave")}`,
+      as: "friend",
+      note: "a PRIVATE board viewed by the friend: the denied state",
     },
   ];
   return routes;

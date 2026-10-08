@@ -12,15 +12,19 @@ import { VISUAL } from "./visual/env.ts";
  *   VISUAL_BASE_URL=http://localhost:3303 \
  *   VISUAL_ACCOUNTS=<scratchpad>/.state/ux-lane-accounts.json \
  *   VISUAL_SEED=<scratchpad>/.state/ux-lane-seed.json \
- *   VISUAL_TREE=$(git rev-parse --short HEAD) \
+ *   VISUAL_TREE=<short sha the client under test was built from> \
  *   VISUAL_OUT=/abs/path/sweep-before \
- *     bun run --filter @cellar-assistant/e2e visual
+ *     bun run test:visual     # at the root; the same as
+ *                             # bun run --filter @cellar-assistant/e2e visual
  *
  * Narrow it with VISUAL_SLICES=S4,S5 or Playwright's own `-g` / `--project`
  * (`m390`, `d1440`). Then pair two runs:
  *
- *   node packages/e2e/visual/compare.ts --before <run A> --after <run B> \
- *     --out <dir>        # index.html, compare.json, contact-<slice>.png
+ *   bun run test:visual:compare --before <run A> --after <run B> --out <dir>
+ *                      # index.html, compare.json, contact-<slice>.png
+ *
+ * Under `bun run`, relative paths resolve against packages/e2e (env.ts says
+ * why), so pass absolute ones.
  *
  * Inputs and options are documented in `visual/env.ts`; the route table and
  * its slice tags in `visual/routes.ts`. Uses the Chromium build Playwright
