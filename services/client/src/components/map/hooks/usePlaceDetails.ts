@@ -86,6 +86,13 @@ export function usePlaceDetails(placeId: string | undefined) {
       photos: PLACE_PHOTOS_PAGE_SIZE,
       tierListEntries: PLACE_TIER_LIST_ENTRIES_PAGE_SIZE,
     },
+    // N06a — the place page's refetch race. A menu scan files its lines on
+    // the place through the outbox *after* the scan reports `completed`, and
+    // the scanner now hands off to the results page; coming back, the cached
+    // place still held the menu from before the scan. Graphcache has no way
+    // to know `Place.menuItems` grew — the scan's lines arrive under
+    // `MenuScan.menuItems` — so every mount shows the cache and revalidates.
+    requestPolicy: "cache-and-network",
     pause: !placeId,
   });
   const [, recordAccess] = useMutation(RecordPlaceAccessMutation);

@@ -148,6 +148,7 @@ describe("myMenuScans (§2.2 → ids → MenuScanActor.get)", () => {
         processedImageId: null,
         extractedText: null,
         processingStatus: "completed",
+        matchStatus: "completed",
         processingError: null,
         confidenceScore: null,
         processingModel: null,

@@ -8,10 +8,17 @@
  * Nhost and fired `processMenuScan` with the webhook secret) →
  * `usePlaceActions().uploadAndProcessMenuScan(file, placeId)`: presigned
  * upload, verify, then `createMenuScan` with this place as its `placeHint`;
- * the pipeline runs from the outbox. The status poll is the same 2.5 s
- * `getMenuScanStatus`, now a network-only `menuScan(id:)` read. The camera
+ * the pipeline runs from the outbox. The status poll is a network-only
+ * `menuScan(id:)` read on `usePollWhile`'s backing-off schedule. The camera
  * image comes back as a JPEG data URL and is turned into a `File` in
  * memory — never posted as base64 (E2d/E2f).
+ *
+ * N06a: once extraction has read lines, the scanner opens the results page
+ * itself instead of stopping on "Scan Complete!" — the results page shows the
+ * match run landing (`scan-progress.ts`). `onScanComplete` fires when the
+ * whole pipeline has settled (`matchStatus`), not when extraction finishes:
+ * a refetch at extraction time read the place's menu before its lines were
+ * filed, which was the place page's refetch race.
  */
 
 import {
@@ -31,7 +38,8 @@ import {
   Typography,
 } from "@mui/joy";
 import NextLink from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   MdCameraAlt,
   MdCheckCircle,
@@ -39,9 +47,17 @@ import {
   MdPhotoLibrary,
   MdVisibility,
 } from "react-icons/md";
-import { useInterval } from "@/utilities/hooks";
 import { CameraCapture } from "../../common/CameraCapture";
 import { type MenuScanStatus, usePlaceActions } from "../actions";
+import {
+  isExtractionDone,
+  isScanSettled,
+  type ScanPhase,
+  type ScanProgress,
+  scanPhase,
+  shouldOpenResults,
+} from "./scan-progress";
+import { usePollWhile } from "./use-poll-while";
 
 interface MenuScannerProps {
   placeId: string;
@@ -60,33 +76,31 @@ function dataUrlToFile(dataUrl: string, name: string): File {
   return new File([bytes], name, { type });
 }
 
-type ProcessingStep = "idle" | "uploading" | "analyzing" | "matching" | "done";
+const progressOf = (status: MenuScanStatus | null): ScanProgress | null =>
+  status === null
+    ? null
+    : {
+        processingStatus: status.processing_status,
+        matchStatus: status.match_status,
+      };
 
-function getProcessingStep(status: MenuScanStatus | null): ProcessingStep {
-  if (!status) return "idle";
-  switch (status.processing_status) {
-    case "pending":
-      return "uploading";
-    case "processing":
-      return status.items_detected ? "matching" : "analyzing";
-    case "completed":
-      return "done";
-    case "failed":
-      return "done";
-    default:
-      return "idle";
-  }
-}
+const PHASES = ["uploading", "reading", "matching"] as const;
 
-const STEP_LABELS: Record<ProcessingStep, string> = {
-  idle: "",
+const PHASE_CHIPS: Record<(typeof PHASES)[number], string> = {
+  uploading: "Upload",
+  reading: "Read",
+  matching: "Match",
+};
+
+const PHASE_LABELS: Record<ScanPhase, string> = {
   uploading: "Uploading image...",
-  analyzing: "Analyzing menu with AI...",
-  matching: "Matching items to database...",
+  reading: "Reading the menu...",
+  matching: "Matching lines to the catalog...",
   done: "",
 };
 
 export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
+  const router = useRouter();
   const { getMenuScanStatus, uploadAndProcessMenuScan } = usePlaceActions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanId, setScanId] = useState<string | null>(null);
@@ -95,34 +109,58 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const isPollingRef = useRef(false);
+  const settledRef = useRef<string | null>(null);
 
-  const processingStep = getProcessingStep(scanStatus);
+  const progress = progressOf(scanStatus);
+  const processingStep = scanPhase(progress);
   const isComplete = scanStatus?.processing_status === "completed";
   const isFailed = scanStatus?.processing_status === "failed";
+  const opensResults =
+    scanStatus !== null &&
+    shouldOpenResults({
+      ...(progress ?? { processingStatus: "pending", matchStatus: "waiting" }),
+      itemsDetected: scanStatus.items_detected,
+    });
 
-  // Poll for scan status every 2.5 seconds while processing
-  const pollCallback = useCallback(async () => {
-    if (!scanId || !isPollingRef.current) return;
+  // Re-read until the whole pipeline has settled, so `onScanComplete` really
+  // fires then. A scan with lines hands off to the results page as soon as
+  // extraction is done, which unmounts this and stops the loop; one with
+  // none is `skipped` at once.
+  const { gaveUp, restart } = usePollWhile(
+    scanId !== null && progress !== null && !isScanSettled(progress),
+    async () => {
+      if (!scanId) return;
+      const status = await getMenuScanStatus(scanId);
+      if (status) setScanStatus(status);
+    },
+  );
 
-    const status = await getMenuScanStatus(scanId);
-    if (!status) return;
-
-    setScanStatus(status);
-
-    if (
-      status.processing_status === "completed" ||
-      status.processing_status === "failed"
-    ) {
-      isPollingRef.current = false;
-      setIsScanning(false);
-      if (status.processing_status === "completed") {
-        onScanComplete?.();
-      }
+  // One hand-off per scan: extraction done → stop the spinner, open the
+  // results when there are lines to show, and tell the place page once the
+  // whole pipeline has settled.
+  const handledRef = useRef<{ opened: string | null }>({ opened: null });
+  const processingStatus = progress?.processingStatus ?? null;
+  const matchStatus = progress?.matchStatus ?? null;
+  useEffect(() => {
+    if (!scanId || processingStatus === null || matchStatus === null) return;
+    const now = { processingStatus, matchStatus };
+    if (isExtractionDone(now)) setIsScanning(false);
+    if (opensResults && handledRef.current.opened !== scanId) {
+      handledRef.current.opened = scanId;
+      router.push(`/map/scans/${scanId}`);
     }
-  }, [scanId, onScanComplete, getMenuScanStatus]);
-
-  useInterval(pollCallback, isPollingRef.current ? 2500 : 86400000);
+    if (isScanSettled(now) && settledRef.current !== scanId) {
+      settledRef.current = scanId;
+      onScanComplete?.();
+    }
+  }, [
+    scanId,
+    processingStatus,
+    matchStatus,
+    opensResults,
+    router,
+    onScanComplete,
+  ]);
 
   const startScan = async (file: File) => {
     setIsScanning(true);
@@ -137,13 +175,13 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
       setScanStatus({
         id: result.scanId,
         processing_status: "pending",
+        match_status: "waiting",
         items_detected: null,
         items_matched: null,
         confidence_score: null,
         processing_error: null,
         place_id: placeId,
       });
-      isPollingRef.current = true;
     } else {
       setUploadError(result.error || "Failed to start scan");
       setIsScanning(false);
@@ -196,7 +234,6 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
     setScanId(null);
     setScanStatus(null);
     setUploadError(null);
-    isPollingRef.current = false;
   };
 
   const showCaptureButtons = !selectedFile && !scanStatus && !isScanning;
@@ -319,8 +356,11 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
                 spacing={1}
                 sx={{ justifyContent: "center", alignItems: "center" }}
               >
-                {(["uploading", "analyzing", "matching"] as const).map(
-                  (step) => (
+                {PHASES.map((step, index) => {
+                  const current = PHASES.indexOf(
+                    processingStep as (typeof PHASES)[number],
+                  );
+                  return (
                     <Chip
                       key={step}
                       size="sm"
@@ -328,36 +368,38 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
                       color={
                         processingStep === step
                           ? "primary"
-                          : (
-                                ["uploading", "analyzing", "matching"] as const
-                              ).indexOf(step) <
-                              (
-                                ["uploading", "analyzing", "matching"] as const
-                              ).indexOf(
-                                processingStep as
-                                  | "uploading"
-                                  | "analyzing"
-                                  | "matching",
-                              )
+                          : index < current
                             ? "success"
                             : "neutral"
                       }
                     >
-                      {step === "uploading"
-                        ? "Upload"
-                        : step === "analyzing"
-                          ? "Analyze"
-                          : "Match"}
+                      {PHASE_CHIPS[step]}
                     </Chip>
-                  ),
-                )}
+                  );
+                })}
               </Stack>
               <Typography
                 level="body-sm"
+                aria-live="polite"
                 sx={{ textAlign: "center", color: "text.secondary" }}
               >
-                {STEP_LABELS[processingStep] || "Processing your menu image..."}
+                {PHASE_LABELS[processingStep] ||
+                  "Processing your menu image..."}
               </Typography>
+              {gaveUp && (
+                <Alert
+                  color="warning"
+                  size="sm"
+                  sx={{ flexWrap: "wrap", rowGap: 1 }}
+                  endDecorator={
+                    <Button size="sm" variant="soft" onClick={restart}>
+                      Check again
+                    </Button>
+                  }
+                >
+                  This is taking longer than usual.
+                </Alert>
+              )}
             </Stack>
           )}
 
@@ -368,19 +410,21 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
                   <Typography level="title-sm">Upload Failed</Typography>
                   <Typography level="body-sm">{uploadError}</Typography>
                 </Alert>
-              ) : isComplete ? (
+              ) : opensResults ? (
                 <Alert color="success" startDecorator={<MdCheckCircle />}>
+                  <Typography level="body-sm">
+                    Read {scanStatus?.items_detected ?? 0}{" "}
+                    {scanStatus?.items_detected === 1 ? "line" : "lines"}.
+                    Opening the results...
+                  </Typography>
+                </Alert>
+              ) : isComplete ? (
+                <Alert color="neutral" startDecorator={<MdError />}>
                   <Stack spacing={1}>
-                    <Typography level="title-sm">Scan Complete!</Typography>
+                    <Typography level="title-sm">No drinks found</Typography>
                     <Typography level="body-sm">
-                      Found {scanStatus?.items_detected ?? 0} items
-                      {scanStatus?.items_matched
-                        ? `, matched ${scanStatus.items_matched} to existing database entries`
-                        : ""}
-                      .
-                      {scanStatus?.confidence_score
-                        ? ` Overall confidence: ${(scanStatus.confidence_score * 100).toFixed(0)}%`
-                        : ""}
+                      We couldn&apos;t read any menu lines in this photo. Try a
+                      closer, well-lit shot of the drinks list.
                     </Typography>
                   </Stack>
                 </Alert>
@@ -399,7 +443,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
                 spacing={2}
                 sx={{ justifyContent: "center" }}
               >
-                {isComplete && scanId && (
+                {opensResults && scanId && (
                   <Button
                     variant="solid"
                     startDecorator={<MdVisibility />}

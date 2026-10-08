@@ -31,6 +31,7 @@ import {
   ForbiddenError,
   itemActorId,
   MatchSuggestionsCollectionActorDescriptor,
+  MENU_SCAN_MATCH_STATUSES,
   MENU_SCAN_STATUSES,
   MenuScanActorDescriptor,
   MenuScansCollectionActorDescriptor,
@@ -51,6 +52,17 @@ const MenuScanStatusEnum = builder.enumType("MenuScanStatus", {
     "`pending` → `processing` → `completed` | `failed`; the transitions are " +
     "made by `MenuScanActor.process`, never by a client.",
   values: MENU_SCAN_STATUSES,
+});
+
+const MenuScanMatchStatusEnum = builder.enumType("MenuScanMatchStatus", {
+  description:
+    "Where the match run is — the half of the pipeline `processingStatus` " +
+    "does not describe, since a scan is `completed` as soon as extraction " +
+    "finishes. `waiting` (extracting) → `queued` → `running` → `completed` | " +
+    "`failed`; `skipped` when there is nothing to match. Derived from the " +
+    "match job and the outbox on every read (N06a). Poll until it is " +
+    "`completed`, `failed` or `skipped`.",
+  values: MENU_SCAN_MATCH_STATUSES,
 });
 
 const SuggestionTargetKindEnum = builder.enumType("MatchSuggestionTargetKind", {
@@ -187,6 +199,10 @@ export const MenuScanType = builder
       processingStatus: t.field({
         type: MenuScanStatusEnum,
         resolve: (scan) => scan.processingStatus,
+      }),
+      matchStatus: t.field({
+        type: MenuScanMatchStatusEnum,
+        resolve: (scan) => scan.matchStatus,
       }),
       processingError: t.string({
         nullable: true,

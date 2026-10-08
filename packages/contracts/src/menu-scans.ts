@@ -116,6 +116,106 @@ export const bandOf = (confidence: number): MatchBand => {
 };
 
 /* -------------------------------------------------------------------------- */
+/* Match status (N06a)                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Where the *matching* half of a scan's pipeline is — the half
+ * `processing_status` never described.
+ *
+ * `processing_status` turns `completed` when extraction finishes, which is
+ * before the menu is filed against the place and before `MenuMatchJobActor`
+ * has looked at a single line. A client that took `completed` as "done" (the
+ * scanner did, and so did the place page's refetch) read the menu while it was
+ * still empty, and the results page showed every line as "not yet matched"
+ * while the job was still running. This is the signal that says when it
+ * really is done. It is derived on every read, never stored — `jobs` and
+ * `outbox` are the facts it is derived from.
+ *
+ * - `waiting`: extraction has not finished (`pending` / `processing`).
+ * - `queued`: extraction finished and the match run is on its way through the
+ *   outbox (`MenuScanActor.match` or `MenuMatchJobActor.start` still live).
+ * - `running`: the `menu-match` job exists and has not finished.
+ * - `completed`: the job finished; every line has its suggestions, or none.
+ * - `failed`: the job failed, or the outbox gave up on starting it.
+ * - `skipped`: there is nothing to match — the extraction failed, found no
+ *   lines, or the scan has no place to file its lines against.
+ */
+export const MENU_SCAN_MATCH_STATUSES = [
+  "waiting",
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "skipped",
+] as const;
+export type MenuScanMatchStatus = (typeof MENU_SCAN_MATCH_STATUSES)[number];
+
+/** The three answers nothing will change by itself: stop polling. */
+export const isMatchStatusSettled = (status: MenuScanMatchStatus): boolean =>
+  status === "completed" || status === "failed" || status === "skipped";
+
+/**
+ * Everything `deriveMatchStatus` reads. `jobStatus` and the two outbox flags
+ * are only consulted once the scan is eligible for matching, so a caller may
+ * leave them unread (`null` / `false`) for a scan that is not —
+ * `MenuScanActor.get` does, and spends no query on a scan still extracting.
+ */
+export type MatchStatusFacts = {
+  readonly processingStatus: MenuScanStatus;
+  readonly effectivePlaceId: string | null;
+  readonly itemsDetected: number;
+  /** `jobs.status` of the scan's derived `menu-match` job, if the row exists. */
+  readonly jobStatus: string | null;
+  /** A live (`pending` / `delivering`) outbox row will start the match. */
+  readonly matchQueued: boolean;
+  /** An outbox row that would have started the match is `dead`. */
+  readonly matchDeadLettered: boolean;
+};
+
+/** True when `process` will have enqueued a match run for this scan. */
+export const isMatchEligible = (
+  facts: Pick<
+    MatchStatusFacts,
+    "processingStatus" | "effectivePlaceId" | "itemsDetected"
+  >,
+): boolean =>
+  facts.processingStatus === "completed" &&
+  facts.effectivePlaceId !== null &&
+  facts.itemsDetected > 0;
+
+export const deriveMatchStatus = (
+  facts: MatchStatusFacts,
+): MenuScanMatchStatus => {
+  if (
+    facts.processingStatus === "pending" ||
+    facts.processingStatus === "processing"
+  ) {
+    return "waiting";
+  }
+  if (!isMatchEligible(facts)) return "skipped";
+  switch (facts.jobStatus) {
+    case "pending":
+    case "running":
+      return "running";
+    case "completed":
+      return "completed";
+    case "failed":
+    case "cancelled":
+      return "failed";
+    default:
+      break;
+  }
+  if (facts.matchQueued) return "queued";
+  if (facts.matchDeadLettered) return "failed";
+  // Eligible, no job, nothing in flight and nothing dead: the match ran
+  // somewhere this database cannot see (a scan matched by the pre-migration
+  // pipeline left no `jobs` row). Nothing is coming, so it is settled —
+  // answering `queued` would make a client poll forever.
+  return "completed";
+};
+
+/* -------------------------------------------------------------------------- */
 /* DTOs                                                                        */
 /* -------------------------------------------------------------------------- */
 
@@ -135,6 +235,8 @@ export type MenuScanDto = {
   readonly processedImageId: string | null;
   readonly extractedText: string | null;
   readonly processingStatus: MenuScanStatus;
+  /** N06a: the matching half of the pipeline; see `deriveMatchStatus`. */
+  readonly matchStatus: MenuScanMatchStatus;
   readonly processingError: string | null;
   readonly confidenceScore: number | null;
   readonly processingModel: string | null;

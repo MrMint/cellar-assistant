@@ -8,9 +8,21 @@
  *   each line's matched item (G18) — sake and tea matches included.
  * - Kept from D5: a line's pending AI suggestion shows under it with Accept /
  *   Reject (`actOnMenuScanSuggestion`), in the old "Suggested match" alert;
- *   a failed scan shows the API's one-sentence `processingError`; while the
- *   scan is still processing the page re-reads every 15 s (no subscriptions).
+ *   a failed scan shows the API's one-sentence `processingError`.
  * - "Not found" and "not yours" are one state (§1.6), as before.
+ *
+ * N06a ("menu-scan truth"), with the rules in `scan-progress.ts`:
+ * - the page re-reads until `matchStatus` settles — not just until
+ *   extraction completes, which is before any line is matched — on a
+ *   backing-off schedule that gives up after a few minutes with a
+ *   "Check again" (no subscriptions);
+ * - the headline is "8 read · 2 matched · 6 new", and says "matching…"
+ *   instead of guessing while the run is still going;
+ * - Accept turns the line "Matched" at once, and an accepted suggestion
+ *   stays the line's match: the old page waited for `place_menu_items` to
+ *   learn the match through an outbox hop (and for a cocktail it never
+ *   does), so the line re-rendered "not yet matched". Accept / Reject stays
+ *   the one way to confirm an AI match (decision D6).
  */
 
 import {
@@ -25,7 +37,7 @@ import {
   Typography,
 } from "@mui/joy";
 import NextLink from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   MdArrowBack,
   MdCheck,
@@ -52,8 +64,16 @@ import {
   ScanResultsQuery,
   SUGGESTIONS_PAGE_SIZE,
 } from "../queries";
-
-const POLL_INTERVAL_MS = 15_000;
+import {
+  isExtractionDone,
+  isScanSettled,
+  type LineMatch,
+  lineMatch,
+  type PendingDecision,
+  type ScanProgress,
+  scanHeadline,
+} from "./scan-progress";
+import { usePollWhile } from "./use-poll-while";
 
 interface MenuScanResultsProps {
   scanId: string;
@@ -91,19 +111,17 @@ const getItemTypeColor = (
   }
 };
 
-const getStatusColor = (
-  status: string,
-): "success" | "warning" | "danger" | "neutral" => {
-  switch (status) {
-    case "completed":
-      return "success";
-    case "processing":
-      return "warning";
-    case "failed":
-      return "danger";
-    default:
-      return "neutral";
+/** One chip for both halves of the pipeline. */
+const statusChip = (
+  progress: ScanProgress,
+): { label: string; color: "success" | "warning" | "danger" | "neutral" } => {
+  if (progress.processingStatus === "failed") {
+    return { label: "failed", color: "danger" };
   }
+  if (!isExtractionDone(progress))
+    return { label: "reading", color: "warning" };
+  if (!isScanSettled(progress)) return { label: "matching", color: "warning" };
+  return { label: "complete", color: "success" };
 };
 
 export function MenuScanResults({ scanId }: MenuScanResultsProps) {
@@ -116,7 +134,10 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     },
   });
   const [, actOnSuggestion] = useMutation(ActOnSuggestionMutation);
-  const [actingOn, setActingOn] = useState<string | null>(null);
+  // Decisions the viewer has made, shown before the server confirms them.
+  const [decisions, setDecisions] = useState<
+    ReadonlyMap<string, PendingDecision>
+  >(() => new Map());
   const [actionError, setActionError] = useState<string | null>(null);
 
   const result = useMemo(
@@ -124,17 +145,20 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     [data],
   );
   const scanNode = result.ok ? result.data : null;
-  const status = scanNode?.processingStatus;
+  const progress: ScanProgress | null = scanNode
+    ? {
+        processingStatus: scanNode.processingStatus,
+        matchStatus: scanNode.matchStatus,
+      }
+    : null;
+  const settled = progress === null || isScanSettled(progress);
 
-  // No subscriptions: re-read while the pipeline is still working.
-  useEffect(() => {
-    if (status !== "pending" && status !== "processing") return;
-    const timer = setInterval(
-      () => reexecute({ requestPolicy: "network-only" }),
-      POLL_INTERVAL_MS,
-    );
-    return () => clearInterval(timer);
-  }, [status, reexecute]);
+  // No subscriptions: re-read until the match run has settled.
+  const refresh = useCallback(
+    () => reexecute({ requestPolicy: "network-only" }),
+    [reexecute],
+  );
+  const { gaveUp, restart } = usePollWhile(!settled, refresh);
 
   if (fetching && !scanNode) {
     return (
@@ -174,24 +198,45 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
   const items: MenuItemView[] = scanNode.menuItems.edges.map((edge) =>
     menuItemFrom(edge.node),
   );
-  const pendingByLine = new Map<string, SuggestionView>();
-  for (const edge of scanNode.suggestions.edges) {
-    const suggestion = suggestionFrom(edge.node);
-    if (suggestion.pending && !pendingByLine.has(suggestion.place_menu_item_id))
-      pendingByLine.set(suggestion.place_menu_item_id, suggestion);
-  }
+  const suggestions = scanNode.suggestions.edges.map((edge) =>
+    suggestionFrom(edge.node),
+  );
+  const matchByLine = new Map<string, LineMatch>(
+    items.map((item) => [
+      item.id,
+      lineMatch(item, suggestions, decisions, matchedItemHref),
+    ]),
+  );
+  const scanProgress: ScanProgress = {
+    processingStatus: scanNode.processingStatus,
+    matchStatus: scanNode.matchStatus,
+  };
+  const headline = scanHeadline(
+    { ...scanProgress, itemsDetected: scan.items_detected },
+    Array.from(matchByLine.values()),
+  );
+  const chip = statusChip(scanProgress);
+
+  const decide = (suggestionId: string, action: PendingDecision | null) =>
+    setDecisions((current) => {
+      const next = new Map(current);
+      if (action === null) next.delete(suggestionId);
+      else next.set(suggestionId, action);
+      return next;
+    });
 
   const handleSuggestion = async (
     suggestion: SuggestionView,
-    action: "ACCEPT" | "REJECT",
+    action: PendingDecision,
   ) => {
-    setActingOn(suggestion.id);
+    // Optimistic: the line flips now, and stays flipped once the server
+    // agrees (the accepted suggestion is the line's match). Undone on failure.
+    decide(suggestion.id, action);
     setActionError(null);
     const response = await actOnSuggestion({
       menuScanId: scan.id,
       input: { suggestionId: suggestion.id, action },
     });
-    setActingOn(null);
     const acted = response.error
       ? {
           ok: false as const,
@@ -207,10 +252,9 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
             : { ok: false as const, message: r.error.message };
         })();
     if (!acted.ok) {
+      decide(suggestion.id, null);
       setActionError(acted.message);
-      return;
     }
-    reexecute({ requestPolicy: "network-only" });
   };
 
   // Group items by category
@@ -223,12 +267,6 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     },
     {} as Record<string, MenuItemView[]>,
   );
-
-  const avgConfidence =
-    items.length > 0
-      ? items.reduce((sum, i) => sum + (i.confidence_score ?? 0), 0) /
-        items.length
-      : 0;
 
   return (
     <Stack spacing={3}>
@@ -253,26 +291,40 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                 </Typography>
               )}
             </Box>
-            <Chip
-              variant="solid"
-              color={getStatusColor(scan.processing_status)}
-              size="sm"
-            >
-              {scan.processing_status}
+            <Chip variant="solid" color={chip.color} size="sm">
+              {chip.label}
             </Chip>
           </Stack>
 
-          <Stack direction="row" spacing={3} sx={{ mt: 2 }}>
-            <Typography level="body-sm">
-              <strong>{scan.items_detected ?? 0}</strong> items detected
+          <Typography level="title-md" aria-live="polite" sx={{ mt: 2 }}>
+            {headline.text}
+          </Typography>
+          {headline.toConfirm > 0 && (
+            <Typography level="body-sm" sx={{ color: "text.secondary" }}>
+              {headline.toConfirm === 1
+                ? "1 suggested match to confirm below."
+                : `${headline.toConfirm} suggested matches to confirm below.`}
             </Typography>
-            {avgConfidence > 0 && (
-              <Typography level="body-sm">
-                <strong>{(avgConfidence * 100).toFixed(0)}%</strong> avg
-                confidence
-              </Typography>
-            )}
-          </Stack>
+          )}
+          {scanNode.matchStatus === "failed" && (
+            <Alert color="warning" size="sm" sx={{ mt: 2 }}>
+              Matching didn&apos;t finish, so some lines may show as new.
+            </Alert>
+          )}
+          {gaveUp && (
+            <Alert
+              color="warning"
+              size="sm"
+              sx={{ mt: 2, flexWrap: "wrap", rowGap: 1 }}
+              endDecorator={
+                <Button size="sm" variant="soft" onClick={restart}>
+                  Check again
+                </Button>
+              }
+            >
+              This is taking longer than usual.
+            </Alert>
+          )}
           {scan.processing_error && (
             <Alert color="danger" size="sm" sx={{ mt: 2 }}>
               {scan.processing_error}
@@ -288,11 +340,24 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
       )}
 
       {/* Items by Category */}
-      {items.length === 0 ? (
+      {items.length === 0 && !settled ? (
+        <Card>
+          <CardContent sx={{ textAlign: "center", py: 4 }}>
+            <CircularProgress size="sm" />
+            <Typography level="body-md" sx={{ color: "text.secondary", mt: 1 }}>
+              Reading the menu lines...
+            </Typography>
+          </CardContent>
+        </Card>
+      ) : items.length === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: "center", py: 4 }}>
             <Typography level="body-md" sx={{ color: "text.secondary" }}>
-              No items were extracted from this scan.
+              {scan.items_detected > 0
+                ? // Read, but never filed on a place (no place was known, or
+                  // filing failed), so there are no lines to show or match.
+                  "The lines this scan read weren't saved to a place, so there's nothing to show here."
+                : "No items were extracted from this scan."}
             </Typography>
           </CardContent>
         </Card>
@@ -305,11 +370,9 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
 
             <Stack spacing={2}>
               {categoryItems.map((item) => {
-                const matchedItem = item.matched_item;
-                const matchedHref = matchedItem
-                  ? matchedItemHref(matchedItem)
-                  : null;
-                const suggestion = pendingByLine.get(item.id);
+                const match = matchByLine.get(item.id) ?? {
+                  kind: "new" as const,
+                };
 
                 return (
                   <Card key={item.id} variant="outlined">
@@ -369,19 +432,19 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                                   </Stack>
                                 )}
 
-                              {matchedItem ? (
+                              {match.kind === "matched" ? (
                                 <Alert color="success" size="sm" sx={{ mt: 1 }}>
                                   <MdCheckCircle size={16} />
                                   Matched to:{" "}
-                                  {matchedHref ? (
-                                    <NextLink href={matchedHref}>
-                                      {matchedItem.name}
+                                  {match.href ? (
+                                    <NextLink href={match.href}>
+                                      {match.name}
                                     </NextLink>
                                   ) : (
-                                    matchedItem.name
+                                    match.name
                                   )}
                                 </Alert>
-                              ) : suggestion ? (
+                              ) : match.kind === "suggested" ? (
                                 <Alert
                                   color="warning"
                                   size="sm"
@@ -393,9 +456,12 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                                         variant="outlined"
                                         color="danger"
                                         startDecorator={<MdClose />}
-                                        disabled={actingOn !== null}
+                                        aria-label={`Reject ${match.suggestion.suggested?.name ?? "suggestion"} for ${item.menu_item_name}`}
                                         onClick={() =>
-                                          handleSuggestion(suggestion, "REJECT")
+                                          handleSuggestion(
+                                            match.suggestion,
+                                            "REJECT",
+                                          )
                                         }
                                       >
                                         Reject
@@ -404,10 +470,12 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                                         size="sm"
                                         color="success"
                                         startDecorator={<MdCheck />}
-                                        loading={actingOn === suggestion.id}
-                                        disabled={actingOn !== null}
+                                        aria-label={`Accept ${match.suggestion.suggested?.name ?? "suggestion"} for ${item.menu_item_name}`}
                                         onClick={() =>
-                                          handleSuggestion(suggestion, "ACCEPT")
+                                          handleSuggestion(
+                                            match.suggestion,
+                                            "ACCEPT",
+                                          )
                                         }
                                       >
                                         Accept
@@ -417,15 +485,19 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                                 >
                                   <MdHelp size={16} />
                                   Suggested match:{" "}
-                                  {suggestion.suggested?.name ?? "Unknown"} (
-                                  {(suggestion.confidence_score * 100).toFixed(
-                                    0,
-                                  )}
+                                  {match.suggestion.suggested?.name ??
+                                    "Unknown"}{" "}
+                                  (
+                                  {(
+                                    match.suggestion.confidence_score * 100
+                                  ).toFixed(0)}
                                   % confidence)
                                 </Alert>
                               ) : (
                                 <Alert color="neutral" size="sm" sx={{ mt: 1 }}>
-                                  New item - not yet matched
+                                  {settled
+                                    ? "New item - not yet matched"
+                                    : "Matching..."}
                                 </Alert>
                               )}
 

@@ -550,10 +550,21 @@ export function duplicateFrom(node: DuplicateNode): DuplicatePlace {
 
 export type ScanStatus = "pending" | "processing" | "completed" | "failed";
 
+/** `MenuScan.matchStatus` (N06a); see `scanning/scan-progress.ts`. */
+export type ScanMatchStatus =
+  | "waiting"
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
 /** The old `MenuScanStatus`. */
 export type MenuScanStatusView = {
   id: string;
   processing_status: ScanStatus;
+  /** N06a: the match run, which `processing_status` does not describe. */
+  match_status: ScanMatchStatus;
   items_detected: number | null;
   items_matched: number | null;
   confidence_score: number | null;
@@ -564,6 +575,7 @@ export type MenuScanStatusView = {
 export function scanStatusFrom(node: {
   readonly id: string;
   readonly processingStatus: ScanStatus;
+  readonly matchStatus: ScanMatchStatus;
   readonly itemsDetected?: number | null;
   readonly itemsMatched?: number | null;
   readonly confidenceScore?: number | null;
@@ -573,6 +585,7 @@ export function scanStatusFrom(node: {
   return {
     id: node.id,
     processing_status: node.processingStatus,
+    match_status: node.matchStatus,
     items_detected: node.itemsDetected ?? null,
     items_matched: node.itemsMatched ?? null,
     confidence_score: node.confidenceScore ?? null,
@@ -646,6 +659,8 @@ export type SuggestionView = {
   match_reasoning: string | null;
   created_at: string | null;
   pending: boolean;
+  /** True once the scan's owner has accepted it (N06a: the acceptance is the match). */
+  accepted: boolean;
   /** The suggested item or recipe, with where it lives. */
   suggested: { id: string; name: string; href: string | null } | null;
 };
@@ -662,6 +677,7 @@ export function suggestionFrom(node: SuggestionNode): SuggestionView {
     match_reasoning: node.matchReasoning ?? null,
     created_at: node.createdAt ?? null,
     pending: node.accepted == null && node.rejected == null,
+    accepted: node.accepted === true,
     suggested: item
       ? {
           id: item.id,

@@ -738,7 +738,7 @@ describe.skipIf(skip)("MenuMatchJobActor (B8)", () => {
     });
   });
 
-  it("a scan whose menu items have not arrived yet completes without suggestions and without failing", async () => {
+  it("a scan that read no lines completes without suggestions and without failing", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
       const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
@@ -750,6 +750,50 @@ describe.skipIf(skip)("MenuMatchJobActor (B8)", () => {
       expect(outcome).toEqual({ ran: true, processed: 0, done: true });
       expect(search.seen.items).toEqual([]);
       expect(search.seen.recipes).toEqual([]);
+    });
+  });
+
+  it("N06a: lines read but not filed yet are retryable, not a completed match run", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, owner, placeId);
+      // `process` recorded two lines; `addMenuFromScan` has not landed them.
+      await db.execute(
+        sql`update public.menu_scans set items_detected = 2 where id = ${scanId}::uuid`,
+      );
+      const wine = await seedWine(db, owner, "Chateau Test 2019");
+      const search = recordingSearcher({
+        items: [{ type: "WINE", id: wine.id, name: "Chateau", distance: 0.1 }],
+      });
+      const jobId = crypto.randomUUID();
+      const job = await activate(newJobActor(jobId, db, search));
+      await startJob(job, scanId);
+
+      const thrown = await job.runBatch(testDelivery("b0"), { batch: 0 }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      // CONFLICT, so the outbox retries it with backoff (VALIDATION would
+      // dead-letter on the first attempt).
+      expect(thrown).toBeInstanceOf(ConflictError);
+      const { rows } = await db.execute<{ status: string }>(
+        sql`select status from public.jobs where id = ${jobId}::uuid`,
+      );
+      expect(rows[0]?.status).not.toBe("completed");
+
+      // The filing lands; the retried batch now matches it.
+      await seedMenuItem(db, {
+        placeId,
+        menuScanId: scanId,
+        name: "Chateau Test",
+        scanItemType: "wine",
+      });
+      const retried = await job.runBatch(testDelivery("b0-retry"), {
+        batch: 0,
+      });
+      expect(retried).toEqual({ ran: true, processed: 1, done: true });
+      expect(await suggestionsOf(db, scanId)).toHaveLength(1);
     });
   });
 

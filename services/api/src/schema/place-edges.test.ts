@@ -161,6 +161,7 @@ const scanDto = {
   processedImageId: null,
   extractedText: null,
   processingStatus: "completed" as const,
+  matchStatus: "completed" as const,
   processingError: null,
   confidenceScore: null,
   processingModel: null,

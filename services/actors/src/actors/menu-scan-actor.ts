@@ -32,7 +32,9 @@
  * `outbox.seq` (A7b) gives the two rows `process` writes their first-attempt
  * order, so the menu items exist before `match` looks for them; if they do not
  * — a lost race, a failed `addMenuFromScan` — the matching job's first batch
- * finds nothing and completes, and re-running `match` is free.
+ * finds nothing and throws a retryable `ConflictError` (N06a), so the outbox
+ * runs it again once the lines are filed, and fails the job if they never
+ * are. `matchStatus` reports which of those happened.
  *
  * ## `match` does not match. §8.5 is why
  *
@@ -80,6 +82,7 @@ import type {
   MatchSuggestionTarget,
   MenuScanActorInterface,
   MenuScanDto,
+  MenuScanMatchStatus,
   MenuScanStatus,
   Page,
   PageArgs,
@@ -92,8 +95,10 @@ import type {
 import {
   ConflictError,
   DEAD_DELIVERY_REASONS,
+  deriveMatchStatus,
   ForbiddenError,
   formatStoredFailure,
+  isMatchEligible,
   isMenuScanStatus,
   isScannedItemType,
   keysetPage,
@@ -187,7 +192,23 @@ const statusOf = (value: string): MenuScanStatus =>
 export const effectivePlaceId = (row: ScanRow): string | null =>
   row.manualPlaceOverride ?? row.placeId ?? row.estimatedPlaceId;
 
-export const scanRowToDto = (row: ScanRow): MenuScanDto => ({
+/**
+ * The row as a DTO. `matchStatus` is not a column — it is derived from `jobs`
+ * and `outbox` (`#matchStatus`) — so the caller hands it in; it defaults to
+ * the answer the row alone can give, which is exact for every scan that is
+ * not yet, or never will be, eligible for matching.
+ */
+export const scanRowToDto = (
+  row: ScanRow,
+  matchStatus: MenuScanMatchStatus = deriveMatchStatus({
+    processingStatus: statusOf(row.processingStatus),
+    effectivePlaceId: effectivePlaceId(row),
+    itemsDetected: row.itemsDetected ?? 0,
+    jobStatus: null,
+    matchQueued: false,
+    matchDeadLettered: false,
+  }),
+): MenuScanDto => ({
   id: row.id,
   userId: row.userId,
   placeId: row.placeId,
@@ -198,6 +219,7 @@ export const scanRowToDto = (row: ScanRow): MenuScanDto => ({
   processedImageId: row.processedImageId,
   extractedText: row.extractedText,
   processingStatus: statusOf(row.processingStatus),
+  matchStatus,
   processingError: row.processingError,
   confidenceScore: num(row.confidenceScore),
   processingModel: row.processingModel,
@@ -350,7 +372,77 @@ export class MenuScanActor
   async get(ctx: Ctx): Promise<MenuScanDto> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return scanRowToDto(aggregate.row);
+    return scanRowToDto(aggregate.row, await this.#matchStatus(aggregate.row));
+  }
+
+  /**
+   * N06a — where the match run is, derived fresh on every read.
+   *
+   * `jobs` is `JobActor`'s and `outbox` is everybody's queue; neither is
+   * cached here (§1.3), for the same reason `match` reads `jobs` fresh. A
+   * scan that is not eligible for matching costs no query at all: the row
+   * alone says `waiting` or `skipped`.
+   *
+   * The two outbox targets are the two hops between "extraction completed"
+   * and "the job row exists": `process` commits `MenuScanActor.match` in the
+   * transaction that completes the scan, and `match` commits
+   * `MenuMatchJobActor.start` before its own row is marked delivered — so an
+   * eligible scan always has a job, a live row, or a dead one, except a scan
+   * matched before the migration (see `deriveMatchStatus`). The live check
+   * rides `outbox_live_target_idx`; the dead one scans only what the hourly
+   * reaper leaves, which is live and dead rows.
+   */
+  async #matchStatus(row: ScanRow): Promise<MenuScanMatchStatus> {
+    const processingStatus = statusOf(row.processingStatus);
+    const facts = {
+      processingStatus,
+      effectivePlaceId: effectivePlaceId(row),
+      itemsDetected: row.itemsDetected ?? 0,
+    };
+    if (!isMatchEligible(facts)) return scanRowToDto(row).matchStatus;
+
+    const jobId = menuMatchJobId(row.id);
+    const match = OUTBOX_TARGETS["MenuScanActor.match"];
+    const start = OUTBOX_TARGETS["MenuMatchJobActor.start"];
+    const ours = sql`(
+      (o.target_actor = ${match.actorType} and o.method = ${match.method}
+        and o.target_id = ${row.id})
+      or (o.target_actor = ${start.actorType} and o.method = ${start.method}
+        and o.target_id = ${jobId})
+    )`;
+    // Each fact is read only when the ones ahead of it in `deriveMatchStatus`
+    // left the answer open: a scan with a job row (every settled scan) costs
+    // one primary-key lookup, and the dead-row check — the one no index
+    // covers — runs only for a scan with no job and nothing live.
+    const { rows } = await this.db.execute<{
+      job_status: string | null;
+      queued: boolean | null;
+      dead: boolean | null;
+    }>(sql`
+      with job as (
+        select (select status from public.jobs where id = ${jobId}::uuid)
+          as status
+      ), live as (
+        select job.status as job_status,
+          case when job.status is null then exists (
+            select 1 from public.outbox o
+            where o.status in ('pending', 'delivering') and ${ours}
+          ) end as queued
+        from job
+      )
+      select job_status, queued,
+        case when job_status is null and queued = false then exists (
+          select 1 from public.outbox o where o.status = 'dead' and ${ours}
+        ) end as dead
+      from live
+    `);
+    const found = rows[0];
+    return deriveMatchStatus({
+      ...facts,
+      jobStatus: found?.job_status ?? null,
+      matchQueued: found?.queued === true,
+      matchDeadLettered: found?.dead === true,
+    });
   }
 
   /**
@@ -476,7 +568,7 @@ export class MenuScanActor
     const existing = this.aggregate;
     if (existing !== null) {
       await this.requireVisible(ctx, existing);
-      return scanRowToDto(existing.row);
+      return scanRowToDto(existing.row, await this.#matchStatus(existing.row));
     }
 
     const originalImageId = requireUuid(

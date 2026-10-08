@@ -229,7 +229,8 @@ export class MenuMatchJobActor
     // `place_menu_items` belongs to `PlaceActor` (§1.2). A job actor reads any
     // table (§1.1) but caches none of it — this is a fresh query every batch,
     // which also means a scan whose menu items arrive late (the outbox row for
-    // `addMenuFromScan` still in flight) is simply matched on a later run.
+    // `addMenuFromScan` still in flight) is matched when the outbox retries
+    // the first batch (`#requireFiledMenu`).
     const after = cursor?.lastMenuItemId ?? null;
     const { rows } = await this.db.execute<MenuItemRow>(sql`
       select id, menu_item_name, menu_item_description,
@@ -242,6 +243,7 @@ export class MenuMatchJobActor
     `);
 
     if (rows.length === 0) {
+      if (after === null) await this.#requireFiledMenu(menuScanId);
       return { cursor: null, processed: 0, done: true };
     }
 
@@ -261,6 +263,34 @@ export class MenuMatchJobActor
       processed: rows.length,
       done: rows.length < MENU_MATCH_BATCH_SIZE,
     };
+  }
+
+  /**
+   * N06a — a first batch that finds no lines must not complete a scan that
+   * extracted some.
+   *
+   * `process` enqueues `PlaceActor.addMenuFromScan` and then `match`, and
+   * `outbox.seq` orders only their *first attempts*: if the filing failed and
+   * was rescheduled behind the match, this job used to find nothing, finish
+   * `completed`, and leave every line unmatched for good — with the scan's new
+   * `matchStatus` then calling that settled. `addMenuFromScan` inserts a
+   * scan's lines in one statement, so "none yet" while `items_detected > 0`
+   * means "not filed yet": a `ConflictError`, which the outbox retries with
+   * backoff. If the filing never lands, the job fails on its last attempt and
+   * the scan says `failed` rather than pretending it matched.
+   */
+  async #requireFiledMenu(menuScanId: string): Promise<void> {
+    const { rows } = await this.db.execute<{ items_detected: number | null }>(
+      sql`select items_detected from public.menu_scans
+          where id = ${menuScanId}::uuid`,
+    );
+    const detected = Number(rows[0]?.items_detected ?? 0);
+    if (detected > 0) {
+      throw new ConflictError(
+        `menu scan ${menuScanId} extracted ${detected} line(s) but none is ` +
+          "filed on its place yet; matching waits for addMenuFromScan",
+      );
+    }
   }
 
   /** One menu line: route, search, band, verify. */

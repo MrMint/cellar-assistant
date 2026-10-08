@@ -333,6 +333,97 @@ describe.skipIf(skip)("MenuScanActor (B8)", () => {
     });
   });
 
+  it("get: matchStatus (N06a) follows extraction, the outbox hops and the job", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const ctx = userCtx(owner, "r-match-status");
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const statusOf = async (scanId: string) =>
+        (await (await activate(newScanActor(scanId, db))).get(ctx)).matchStatus;
+
+      // Still extracting: nothing to say about matching yet.
+      const extracting = await seedScan(db, {
+        userId: owner,
+        placeId,
+        status: "processing",
+      });
+      expect(await statusOf(extracting)).toBe("waiting");
+
+      // Completed with nowhere to file, or with nothing read: no run is coming.
+      const placeless = await seedScan(db, {
+        userId: owner,
+        status: "completed",
+      });
+      await db.execute(
+        sql`update public.menu_scans set items_detected = 3 where id = ${placeless}::uuid`,
+      );
+      expect(await statusOf(placeless)).toBe("skipped");
+      const empty = await seedScan(db, {
+        userId: owner,
+        placeId,
+        status: "completed",
+      });
+      expect(await statusOf(empty)).toBe("skipped");
+
+      // Eligible: the match hop is live in the outbox.
+      const scanId = await seedScan(db, {
+        userId: owner,
+        placeId,
+        status: "completed",
+      });
+      await db.execute(
+        sql`update public.menu_scans set items_detected = 8 where id = ${scanId}::uuid`,
+      );
+      const matchRow = await enqueueOutbox(
+        db,
+        OUTBOX_TARGETS["MenuScanActor.match"],
+        {
+          targetId: scanId,
+          payload: { menuScanId: scanId },
+        },
+      );
+      expect(await statusOf(scanId)).toBe("queued");
+
+      // The hop died: say so, rather than "queued" forever.
+      await db.execute(
+        sql`update public.outbox set status = 'dead' where id = ${matchRow}::uuid`,
+      );
+      expect(await statusOf(scanId)).toBe("failed");
+
+      // The job exists: it wins over every outbox fact.
+      const jobId = menuMatchJobId(scanId);
+      await db.execute(sql`
+        insert into public.jobs (id, kind, status, payload)
+        values (${jobId}::uuid, 'menu-match', 'running',
+                ${JSON.stringify({ menuScanId: scanId })}::jsonb)
+      `);
+      expect(await statusOf(scanId)).toBe("running");
+      await db.execute(
+        sql`update public.jobs set status = 'completed' where id = ${jobId}::uuid`,
+      );
+      expect(await statusOf(scanId)).toBe("completed");
+      await db.execute(
+        sql`update public.jobs set status = 'failed' where id = ${jobId}::uuid`,
+      );
+      expect(await statusOf(scanId)).toBe("failed");
+
+      // The second hop: `match` delivered, `MenuMatchJobActor.start` pending.
+      const other = await seedScan(db, {
+        userId: owner,
+        placeId,
+        status: "completed",
+      });
+      await db.execute(
+        sql`update public.menu_scans set items_detected = 2 where id = ${other}::uuid`,
+      );
+      await enqueueOutbox(db, OUTBOX_TARGETS["MenuMatchJobActor.start"], {
+        targetId: menuMatchJobId(other),
+        payload: { menuScanId: other },
+      });
+      expect(await statusOf(other)).toBe("queued");
+    });
+  });
+
   it("suggestions: paged for the owner, refused for a stranger", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);

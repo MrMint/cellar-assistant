@@ -844,7 +844,10 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
               <MenuScanner
                 placeId={placeData.id}
                 userId={userId}
-                onScanComplete={() => refetch()}
+                // Fires once the scan's match run has settled, by which time
+                // its lines are filed on this place (N06a), not when extraction
+                // completes — that refetch read the menu before it existed.
+                onScanComplete={refetch}
               />
             </TabPanel>
           )}
