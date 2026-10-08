@@ -30,7 +30,14 @@ export const theme = extendTheme({
           solidHoverBg: joyRamps.brass[400],
           solidActiveBg: joyRamps.brass[600],
         },
-        neutral: { ...joyRamps.neutral },
+        neutral: {
+          ...joyRamps.neutral,
+          // Joy's default solid neutral (tooltips, solid chips) is white on
+          // 500; 500 is a text colour here, so solids sit on 600 (7.41:1).
+          solidBg: joyRamps.neutral[600],
+          solidHoverBg: joyRamps.neutral[700],
+          solidActiveBg: joyRamps.neutral[800],
+        },
         danger: {
           ...joyRamps.danger,
           solidColor: color.bg,

@@ -229,7 +229,7 @@ describe("TypeChip / itemTypeTokens", () => {
     assert.match(m, />Sake<\/span>$/);
     const cls = classOf(m, "type-chip");
     assert.match(cls, /text-type-sake-text/);
-    assert.match(cls, /bg-type-sake\/20/);
+    assert.match(cls, /bg-type-sake\/15/);
     assert.match(m, /<svg[^>]*aria-hidden="true"/);
   });
 });

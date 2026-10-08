@@ -10,7 +10,11 @@ export type ItemTypeToken = {
   glyph: AppIcon;
   /** Text-safe hue on dark (≥ 4.5:1). */
   textClass: string;
-  /** The type's tint behind a chip or plate (deep hue, ~18%). */
+  /**
+   * The type's tint behind a chip or plate: the deep hue at 15%, the most
+   * that keeps the text-safe hue at 4.5:1 on surface-2 for wine and beer
+   * (design §3.1 says ~18%; `palette-contrast.test.ts` holds the line).
+   */
   tintClass: string;
   /** The deep hue as a fill: pins, rules, dots. */
   deepClass: string;
@@ -30,42 +34,42 @@ export const itemTypeTokens: Readonly<Record<ApiItemType, ItemTypeToken>> = {
     label: "Wine",
     glyph: Wine,
     textClass: "text-type-wine-text",
-    tintClass: "bg-type-wine/20",
+    tintClass: "bg-type-wine/15",
     deepClass: "bg-type-wine",
   },
   BEER: {
     label: "Beer",
     glyph: Beer,
     textClass: "text-type-beer-text",
-    tintClass: "bg-type-beer/20",
+    tintClass: "bg-type-beer/15",
     deepClass: "bg-type-beer",
   },
   SPIRIT: {
     label: "Spirit",
     glyph: Amphora,
     textClass: "text-type-spirit-text",
-    tintClass: "bg-type-spirit/20",
+    tintClass: "bg-type-spirit/15",
     deepClass: "bg-type-spirit",
   },
   SAKE: {
     label: "Sake",
     glyph: Milk,
     textClass: "text-type-sake-text",
-    tintClass: "bg-type-sake/20",
+    tintClass: "bg-type-sake/15",
     deepClass: "bg-type-sake",
   },
   COFFEE: {
     label: "Coffee",
     glyph: Coffee,
     textClass: "text-type-coffee-text",
-    tintClass: "bg-type-coffee/20",
+    tintClass: "bg-type-coffee/15",
     deepClass: "bg-type-coffee",
   },
   TEA: {
     label: "Tea",
     glyph: Leaf,
     textClass: "text-type-tea-text",
-    tintClass: "bg-type-tea/20",
+    tintClass: "bg-type-tea/15",
     deepClass: "bg-type-tea",
   },
 };

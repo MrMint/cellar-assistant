@@ -182,7 +182,12 @@ export const joyRamps = {
     200: "#DCD3C8",
     300: color.ink2,
     400: color.ink3,
-    500: "#7A7168",
+    /**
+     * Unconverted screens use `neutral.500` as a text colour (FriendsClient,
+     * RecipeVoteButtons, …), so it clears 4.5:1 on bg / surface-1 / surface-2.
+     * Joy's solid neutral (white text) is pinned to 600 in ThemeRegistry.
+     */
+    500: "#8F867C",
     600: "#5C544E",
     700: "#3D363C",
     800: color.surface3,
