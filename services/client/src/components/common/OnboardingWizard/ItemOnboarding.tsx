@@ -259,10 +259,12 @@ const ItemOnboardingRun = ({
   useEffect(() => {
     if (state.value !== "finalPrompt") return;
     captureDrafts.release(context.itemOnboardingId);
-    if (context.cellarId !== undefined && pinnedCellarId === undefined) {
+    // From any add path: the last cellar a bottle went into is the default
+    // next time (here, on /add and on the item page's sheet).
+    if (context.cellarId !== undefined) {
       rememberCapturePrefs({ cellarId: context.cellarId });
     }
-  }, [state.value, context.itemOnboardingId, context.cellarId, pinnedCellarId]);
+  }, [state.value, context.itemOnboardingId, context.cellarId]);
 
   // Quick add files another bottle of the matched catalogue item (N02). It
   // creates nothing: the machine only reaches quickReview with a match.
