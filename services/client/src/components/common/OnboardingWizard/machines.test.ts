@@ -321,6 +321,24 @@ describe("quick add (N02: only another bottle of a known item)", () => {
     assert.ok((await settled(actor)).matches("form"));
   });
 
+  test("'No cellar' chosen on the card: CONFIRM uses the match, files no bottle", async () => {
+    const { actor, filed, photographed } = run({
+      confidence: 0.95,
+      match: exact,
+    });
+    assert.equal((await settled(actor)).value, "quickReview");
+    actor.send({ type: "SET_CELLAR", cellarId: null });
+    actor.send({ type: "CONFIRM" });
+    const state = await waitFor(actor, (s) => s.value === "finalPrompt");
+    assert.deepEqual(filed, [], "no cellar, so no bottle");
+    assert.deepEqual(
+      photographed.map((p) => p.itemId),
+      ["known"],
+      "the matched item is the result — nothing created",
+    );
+    assert.equal(state.context.existingItemId, "known");
+  });
+
   test("Not this one → the form, the item declined", async () => {
     const { actor } = run({ confidence: 1, match: exact });
     await settled(actor);

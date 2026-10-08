@@ -450,7 +450,6 @@ const ItemOnboardingRun = ({
 
       {state.value === "quickReview" && isNotNil(catalogMatch) && (
         <div className="flex w-full max-w-[600px] flex-col gap-3">
-          {cellarRow}
           <QuickAddCard
             heading="Is it this one?"
             // The card names the item it will file, in the catalogue's
@@ -463,11 +462,16 @@ const ItemOnboardingRun = ({
             summary={catalogMatchSummary(catalogMatch)}
             itemType={itemType}
             confidence={context.confidence ?? 0}
-            confirmLabel="+1 bottle"
+            // "No cellar — just the catalog" chosen mid-countdown: the
+            // match is used, with no bottle filed.
+            confirmLabel={inCellar ? "+1 bottle" : "Use this"}
             editLabel="Not this one"
             onConfirm={handleQuickAddConfirm}
             onEdit={handleQuickAddEdit}
-          />
+          >
+            {/* Inside the card: touching it pauses the countdown. */}
+            {cellarRow}
+          </QuickAddCard>
         </div>
       )}
 

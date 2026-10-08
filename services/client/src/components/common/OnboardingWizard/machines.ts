@@ -494,17 +494,23 @@ export const OnboardingMachine = createMachine(
         // The QuickAddCard counts down and sends CONFIRM. Only ever a bottle
         // of the matched catalogue item (N02): nothing here creates an item.
         on: {
-          CONFIRM: {
-            guard: ({ context }) =>
-              isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
-            actions: assign({
-              existingItemId: ({ context }) =>
-                context.catalogMatch?.item.itemId,
-              itemName: ({ context }) => context.catalogMatch?.item.name,
-              filedMatch: true,
-            }),
-            target: "addItemToCellar",
-          },
+          CONFIRM: [
+            {
+              guard: ({ context }) =>
+                isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
+              actions: "useCatalogMatch",
+              target: "addItemToCellar",
+            },
+            // The "Into" row was switched to "No cellar" while the card was
+            // up (X05: the cellar is a default, changeable here): the match
+            // is still the item — show it, file no bottle. Without this
+            // branch the CONFIRM was dropped and the card sat on "Adding…".
+            {
+              guard: ({ context }) => isNotNil(context.catalogMatch),
+              actions: "useCatalogMatch",
+              target: "uploadImage",
+            },
+          ],
           // "Not this one": the form, without the match and without offering
           // it again.
           EDIT: {

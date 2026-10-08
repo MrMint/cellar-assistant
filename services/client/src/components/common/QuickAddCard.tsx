@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -48,6 +48,12 @@ type QuickAddCardProps = {
    * `defaults`.
    */
   summary?: string;
+  /**
+   * Choices that belong to this add — X05's "Into" cellar row. Rendered
+   * inside the card, so reaching for one pauses the countdown like any other
+   * touch: the bottle is never filed under someone still choosing where.
+   */
+  children?: ReactNode;
 };
 
 /**
@@ -121,6 +127,7 @@ export const QuickAddCard = ({
   confirmLabel,
   editLabel = "Edit Details",
   summary,
+  children,
 }: QuickAddCardProps) => {
   const [countdown, setCountdown] = useState(autoConfirmSeconds);
   const [isPaused, setIsPaused] = useState(false);
@@ -225,6 +232,8 @@ export const QuickAddCard = ({
       {defaults.description && (
         <p className="type-footnote line-clamp-2">{defaults.description}</p>
       )}
+
+      {children}
 
       {/* Countdown progress */}
       {!isPaused && !isConfirming && (
