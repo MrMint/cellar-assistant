@@ -13,12 +13,24 @@ import { cn } from "@/lib/utils";
 
 export type SheetSnap = "peek" | "half" | "full";
 
-/** Snap names → vaul's fractions of the viewport height. */
+/** Snap names → how much of the viewport height the sheet shows. */
 export const SNAP_FRACTION: Readonly<Record<SheetSnap, number>> = {
   peek: 0.3,
   half: 0.55,
   full: 0.94,
 };
+
+/**
+ * The fraction vaul needs for a snap. vaul translates the drawer down by
+ * `(1 - fraction) × viewport` from where it rests fully open, so with a
+ * drawer `full` tall the visible height is `fraction - (1 - full)`: `full`
+ * is vaul's 1, and the smaller snaps are lifted by the same 6%. Passing the
+ * visible fractions straight through showed 24% for "peek".
+ */
+export function vaulSnapPoint(snap: SheetSnap): number {
+  const fraction = SNAP_FRACTION[snap] + (1 - SNAP_FRACTION.full);
+  return Math.round(fraction * 1000) / 1000;
+}
 
 export type BottomSheetProps = {
   open: boolean;
@@ -39,6 +51,8 @@ export type BottomSheetProps = {
   initialSnap?: SheetSnap;
   /** `false`: no drag-down or backdrop dismiss (a blocking step). */
   dismissible?: boolean;
+  /** `alertdialog` for a confirm (`ConfirmSheet`); a plain dialog otherwise. */
+  role?: "dialog" | "alertdialog";
   /** Pinned under the content, above the home indicator. */
   footer?: ReactNode;
   className?: string;
@@ -64,15 +78,16 @@ export function BottomSheet({
   snapPoints,
   initialSnap,
   dismissible = true,
+  role = "dialog",
   footer,
   className,
   children,
 }: BottomSheetProps) {
-  const fractions = snapPoints?.map((s) => SNAP_FRACTION[s]);
+  const fractions = snapPoints?.map(vaulSnapPoint);
   const initial =
     fractions === undefined
       ? undefined
-      : SNAP_FRACTION[initialSnap ?? snapPoints?.[0] ?? "half"];
+      : vaulSnapPoint(initialSnap ?? snapPoints?.[0] ?? "half");
   const [snap, setSnap] = useState<number | string | null | undefined>(initial);
 
   // Re-opening starts from the declared snap, not wherever it was left.
@@ -99,10 +114,17 @@ export function BottomSheet({
     >
       <DrawerContent
         data-slot="bottom-sheet"
+        role={role}
         className={cn(
           "surface-glass touch-none-select rounded-t-lg border-none text-foreground outline-none",
           "pb-[max(1rem,env(safe-area-inset-bottom))]",
-          fractions === undefined ? "max-h-[90dvh]" : "h-[96dvh] max-h-[96dvh]",
+          // Written with ui/drawer's own `data-[vaul-drawer-direction=bottom]:`
+          // variant so tailwind-merge replaces its 80vh cap; a bare `max-h-*`
+          // loses to that variant's higher specificity. A snapping sheet is
+          // exactly `full` tall (94dvh = SNAP_FRACTION.full) and only moves.
+          fractions === undefined
+            ? "data-[vaul-drawer-direction=bottom]:max-h-[90dvh]"
+            : "h-[94dvh] data-[vaul-drawer-direction=bottom]:max-h-[94dvh]",
           className,
         )}
       >

@@ -56,6 +56,7 @@ export function ResponsiveDialog({
         hideTitle={hideTitle}
         description={description}
         dismissible={dismissible}
+        role={role}
         footer={footer}
         className={className}
       >

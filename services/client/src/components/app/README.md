@@ -279,9 +279,20 @@ renders this — S1.)
 **`BottomSheet`** — vaul Drawer behind design §4.6's props:
 `open`, `onOpenChange`, `title` (required; `hideTitle` keeps it for screen
 readers only), `description?`, `snapPoints?: ("peek"|"half"|"full")[]`,
-`initialSnap?`, `dismissible?`, `footer?`. Without `snapPoints` it sizes to
-its content (action lists, confirms). Glass surface, safe-area bottom
-padding, no background scaling.
+`initialSnap?`, `dismissible?`, `role?`, `footer?`. Without `snapPoints` it
+sizes to its content (action lists, confirms; capped at 90dvh). With them the
+sheet is `full` (94dvh) tall and only moves: peek shows 30% of the screen,
+half 55%, full 94% (`vaulSnapPoint` converts these to vaul's fractions —
+never hand vaul the visible fraction). Glass surface, safe-area bottom
+padding, no background scaling; under reduced motion it fades instead of
+sliding (`globals.css`).
+
+**Joy popups do not work inside it.** vaul is a Radix modal: it sets
+`pointer-events: none` on the page, traps focus, and treats a pointer-down
+outside its content as a dismiss. A Joy `Select` / `Autocomplete` / `Menu`
+listbox portals to `<body>`, i.e. outside — so tapping an option closes the
+sheet instead. Put only converted controls (`ui/select`, `ui/command`) in a
+sheet, or give the Joy popup `disablePortal` until its slice converts it.
 
 **`ResponsiveDialog`** — the same props (+ `role="alertdialog"`): a
 `BottomSheet` below `md`, a centred `ui/dialog` from `md`. Use it for every
@@ -366,10 +377,13 @@ ancestor) + `underline` (`hover` default, `always`, `none`).
   outside Joy is block-level now — convert it to `app/icons` (they are meant
   to be block-in-flex anyway).
 - z-index: shadcn overlays use `z-50`; Joy's popups are `1000`+ (`Modal`
-  1300, `Snackbar` 1400). A Joy popup opened inside a new sheet stacks
-  correctly; a new sheet opened over a Joy element with its own large
-  `zIndex` (some map controls) may not — convert that element in the same
-  slice.
+  1300, `Snackbar` 1400). A Joy popup *draws* above a new sheet, but it is
+  not usable there: Radix modals (BottomSheet, ResponsiveDialog, ui/dialog,
+  ui/sheet) block pointer events outside their own content and dismiss on a
+  pointer-down outside it, and Joy's listboxes portal to `<body>`. Convert
+  the control, or give the Joy popup `disablePortal`. Likewise a new sheet
+  opened over a Joy element with its own large `zIndex` (some map controls)
+  may sit under it — convert that element in the same slice.
 - Old Joy-era shared components with Joy-only props (`common/Link`,
   `common/UserAvatar`, `common/InteractiveCard`, `common/AIDraftField`,
   `common/rating/StarRating`) stay until the removal step; switch your own

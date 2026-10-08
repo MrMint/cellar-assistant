@@ -58,7 +58,7 @@ const React = await import("react");
 const { act, useState } = React;
 type ReactNode = import("react").ReactNode;
 const { createRoot } = await import("react-dom/client");
-const { BottomSheet } = await import("./BottomSheet");
+const { BottomSheet, vaulSnapPoint } = await import("./BottomSheet");
 const { ResponsiveDialog } = await import("./ResponsiveDialog");
 const { ConfirmSheet } = await import("./ConfirmSheet");
 const { SegmentedControl } = await import("./SegmentedControl");
@@ -162,6 +162,48 @@ describe("BottomSheet", () => {
   });
 });
 
+describe("BottomSheet snaps", () => {
+  test("vaul's fractions put the visible heights where the names say", () => {
+    // vaul measures from the fully open drawer, which is `full` (94dvh) tall.
+    assert.equal(vaulSnapPoint("full"), 1);
+    assert.equal(vaulSnapPoint("half"), 0.61);
+    assert.equal(vaulSnapPoint("peek"), 0.36);
+  });
+
+  test("a snapping sheet is 94dvh tall, not capped at ui/drawer's 80vh", async () => {
+    await render(
+      <BottomSheet
+        open
+        onOpenChange={() => {}}
+        title="Places"
+        snapPoints={["peek", "half", "full"]}
+        initialSnap="half"
+      >
+        <p>list</p>
+      </BottomSheet>,
+    );
+    await flush(10);
+    const cls =
+      document.querySelector('[data-slot="bottom-sheet"]')?.className ?? "";
+    assert.doesNotMatch(cls, /direction=bottom\]:max-h-\[80vh\]/);
+    assert.match(cls, /h-\[94dvh\]/);
+    assert.match(cls, /direction=bottom\]:max-h-\[94dvh\]/);
+  });
+
+  test("a content-sized sheet is capped at 90dvh, through the same variant", async () => {
+    await render(
+      <BottomSheet open onOpenChange={() => {}} title="Add">
+        <p>rows</p>
+      </BottomSheet>,
+    );
+    await flush(10);
+    const cls =
+      document.querySelector('[data-slot="bottom-sheet"]')?.className ?? "";
+    assert.doesNotMatch(cls, /direction=bottom\]:max-h-\[80vh\]/);
+    assert.match(cls, /direction=bottom\]:max-h-\[90dvh\]/);
+  });
+});
+
 describe("ResponsiveDialog", () => {
   test("a bottom sheet on a phone", async () => {
     viewportWidth = 390;
@@ -204,6 +246,9 @@ describe("ConfirmSheet", () => {
       />,
     );
     await flush(10);
+    // On a phone too, where it is a sheet, not only as the desktop dialog.
+    assert.ok(document.querySelector('[role="alertdialog"]'));
+    assert.equal(document.querySelector('[role="dialog"]'), null);
     const buttons = [...document.querySelectorAll("button")];
     const del = buttons.find((b) => b.textContent === "Delete");
     const cancel = buttons.find((b) => b.textContent === "Cancel");
