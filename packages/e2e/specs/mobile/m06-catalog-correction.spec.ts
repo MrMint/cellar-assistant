@@ -23,7 +23,11 @@ test.beforeAll(async () => {
       type: "WINE",
       name: unique("E2 Mobile NV"),
       brandName: unique("E2 Mobile Brand"),
-      attributes: { style: await firstReferenceValue(api, "WINE_STYLE") },
+      // `null` is the answer "NV"; an absent vintage is refused.
+      attributes: {
+        vintage: null,
+        style: await firstReferenceValue(api, "WINE_STYLE"),
+      },
     });
   } finally {
     await api.dispose();

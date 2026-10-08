@@ -31,8 +31,12 @@ test("fixtures: a non-vintage wine with no brand", async ({ api }) => {
   wineId = await onboardItem(api, {
     type: "WINE",
     name: wineName,
-    // No `vintage` at all: NULL, which is non-vintage.
-    attributes: { style: await firstReferenceValue(api, "WINE_STYLE") },
+    // An explicit `null` is the answer "NV" (stored NULL). Leaving the key
+    // out is refused: nobody said it was non-vintage.
+    attributes: {
+      vintage: null,
+      style: await firstReferenceValue(api, "WINE_STYLE"),
+    },
   });
   const read = await api.query(
     `query I($id: ID!) { item(id: $id, type: WINE) {

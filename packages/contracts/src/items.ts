@@ -412,6 +412,23 @@ export const requireItemAttributes = (
       );
     }
   }
+
+  // X19: a non-vintage-capable attribute (`wines.vintage`) is nullable, but
+  // its NULL *means* non-vintage — so it has to be answered, not left out.
+  // An explicit `null` is the answer "NV"; an absent key is a caller that
+  // never asked, and storing it would file an undated wine as NV. Checked on
+  // presence only (the key may hold `null`), which JSON — the outbox payload,
+  // Dapr's wire — preserves where it drops `undefined`.
+  for (const [field, attribute] of itemAttributeEntries(type)) {
+    if (attribute.nonVintage !== true) continue;
+    if (bag[field] === undefined || bag[field] === "") {
+      throw new ValidationError(
+        `a ${type.toLowerCase()} needs ${bagKey}.${field}: a year, or null ` +
+          `for a non-vintage (NV) ${type.toLowerCase()} — leaving it out ` +
+          "would file it as NV without anyone having said so",
+      );
+    }
+  }
 };
 
 export type CreateGenericItemInput = {

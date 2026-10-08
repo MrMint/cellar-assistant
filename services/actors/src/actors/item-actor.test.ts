@@ -747,10 +747,19 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         const ref: ItemRef = { type: "WINE", id: randomUUID() };
         const actor = await activate(newItemActor(actorIdFor(ref), db));
         const ctx = userCtx(owner, "r");
+        // Left out, the vintage is refused: NULL means NV, so it is asked
+        // for — an explicit `null` is the answer, a missing key is not.
+        await expect(
+          actor.create(ctx, {
+            name: "Krug Grande Cuvée",
+            itemOnboardingId: onboardingId,
+            wine: { style: "RED" },
+          }),
+        ).rejects.toThrow(/wine\.vintage: a year, or null/);
         const created = await actor.create(ctx, {
           name: "Krug Grande Cuvée",
           itemOnboardingId: onboardingId,
-          wine: { style: "RED" },
+          wine: { style: "RED", vintage: null },
         });
         expect(created).toMatchObject({ type: "WINE", vintage: null });
 

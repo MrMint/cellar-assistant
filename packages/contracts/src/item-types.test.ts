@@ -30,6 +30,7 @@ import {
   type ItemDtoOf,
   type ItemType,
   REQUIRED_ITEM_ATTRIBUTES,
+  requireItemAttributes,
   type SakeAttributesInput,
   type SakeDto,
   type SpiritAttributesInput,
@@ -266,6 +267,36 @@ describe("ITEM_TYPE_SPECS", () => {
       SAKE: [],
       TEA: [],
     });
+  });
+
+  it("asks a wine for its vintage — a year or an explicit null (X19)", () => {
+    // NULL means non-vintage, so an absent key is refused rather than filed
+    // as NV; `null` is the answer and passes, as does a year.
+    expect(() =>
+      requireItemAttributes("WINE", { name: "x", wine: { style: "RED" } }),
+    ).toThrow(/wine\.vintage: a year, or null/);
+    expect(() =>
+      requireItemAttributes("WINE", {
+        name: "x",
+        wine: { style: "RED", vintage: "" },
+      }),
+    ).toThrow(/wine\.vintage/);
+    expect(() =>
+      requireItemAttributes("WINE", {
+        name: "x",
+        wine: { style: "RED", vintage: null },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      requireItemAttributes("WINE", {
+        name: "x",
+        wine: { style: "RED", vintage: "2015-01-01" },
+      }),
+    ).not.toThrow();
+    // Nobody else's vintage is non-vintage-capable: a beer may leave it out.
+    expect(() =>
+      requireItemAttributes("BEER", { name: "x", beer: {} }),
+    ).not.toThrow();
   });
 
   it("marks exactly one attribute non-vintage: wine's vintage (X19)", () => {
