@@ -433,6 +433,33 @@ describe.skipIf(skip)("PlaceReviewActor + PlaceActor.applyReview (X27)", () => {
     });
   });
 
+  it("a verdict never overwrites a row changed underneath this activation's cached copy — the write is guarded, not just the check", async () => {
+    await withTestDb(async (db) => {
+      const creator = await seedUser(db);
+      const { id, submittedAt } = await createPending(db, creator);
+      // An activation whose cache still says "pending, this submission"…
+      const cached = await placeActor(db, id);
+
+      // …while the row is held elsewhere (admin SQL, the e2e suite's
+      // `holdPlaceInReview`): re-stamped and rejected behind its back.
+      await db
+        .update(places)
+        .set({
+          reviewStatus: "rejected",
+          rejectionReason: "held",
+          reviewRequestedAt: sql`clock_timestamp()`,
+        })
+        .where(eq(places.id, id));
+
+      expect(
+        await cached.applyReview(SYSTEM, { submittedAt, review: verdict() }),
+      ).toMatchObject({ status: "skipped", reason: "stale" });
+      const row = await rowOf(db, id);
+      expect(row?.reviewStatus).toBe("rejected");
+      expect(row?.rejectionReason).toBe("held");
+    });
+  });
+
   it("approval re-checks against what is now shared: a shared twin that appeared meanwhile turns approval into a rejection naming it", async () => {
     await withTestDb(async (db) => {
       const creator = await seedUser(db);

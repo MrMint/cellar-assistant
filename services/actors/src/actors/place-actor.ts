@@ -1695,7 +1695,33 @@ export class PlaceActor
     };
     const reviewedAt = new Date();
 
+    // The write lands only on the row this verdict was reached for: still
+    // `pending`, still this submission. The checks above read this
+    // activation's cached copy, which is authoritative while every write goes
+    // through this actor — but a row changed underneath it (an admin's SQL,
+    // the e2e suite's `holdPlaceInReview`) must not be overwritten by a
+    // verdict about content it no longer holds. Zero rows is `stale`.
+    const thisSubmission = and(
+      eq(places.id, this.key),
+      eq(places.reviewStatus, "pending"),
+      eq(places.reviewRequestedAt, new Date(Date.parse(input.submittedAt))),
+    );
+
     const outcome = await this.tx(async (tx): Promise<PlaceReviewOutcome> => {
+      const land = async (
+        set: Partial<typeof places.$inferInsert>,
+        landed: PlaceReviewOutcome,
+      ): Promise<PlaceReviewOutcome> => {
+        const written = await tx
+          .update(places)
+          .set({ reviewedAt, ...suggestions, ...set })
+          .where(thisSubmission)
+          .returning({ id: places.id });
+        return written.length === 0
+          ? { placeId: this.key, status: "skipped", reason: "stale" }
+          : landed;
+      };
+
       // `=== true`, not truthiness: the seam already refuses an answer with
       // no boolean verdict, and this keeps a malformed one from ever
       // reading as consent.
@@ -1706,40 +1732,31 @@ export class PlaceActor
           this.key,
         );
         if (blocking === undefined) {
-          await tx
-            .update(places)
-            .set({
+          return land(
+            {
               reviewStatus: "approved",
               rejectionReason: null,
               confidence: confidenceFromReview(review).toFixed(2),
-              reviewedAt,
-              ...suggestions,
-            })
-            .where(eq(places.id, this.key));
-          return { placeId: this.key, status: "approved", reason: "approved" };
+            },
+            { placeId: this.key, status: "approved", reason: "approved" },
+          );
         }
-        await tx
-          .update(places)
-          .set({
+        return land(
+          {
             reviewStatus: "rejected",
             rejectionReason: alreadySharedReason(blocking),
-            reviewedAt,
-            ...suggestions,
-          })
-          .where(eq(places.id, this.key));
-        return { placeId: this.key, status: "rejected", reason: "duplicate" };
+          },
+          { placeId: this.key, status: "rejected", reason: "duplicate" },
+        );
       }
 
-      await tx
-        .update(places)
-        .set({
+      return land(
+        {
           reviewStatus: "rejected",
           rejectionReason: rejectionReasonFrom(review),
-          reviewedAt,
-          ...suggestions,
-        })
-        .where(eq(places.id, this.key));
-      return { placeId: this.key, status: "rejected", reason: "rejected" };
+        },
+        { placeId: this.key, status: "rejected", reason: "rejected" },
+      );
     });
     await this.reload();
     return outcome;
