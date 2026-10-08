@@ -356,6 +356,20 @@ leave that field out rather than inventing something to fill it.
 /* -------------------------------------------------------------------------- */
 
 /**
+ * What a `date` attribute (a vintage) is asked for: **a year** (N02).
+ *
+ * The columns are `date`, but a label prints a year, the form edits a year
+ * (the client's `yearFromDate`/`dateFromYear`), and the model answered `"2005"`
+ * when told `YYYY-MM-DD` anyway — Ollama's grammar does not enforce `format`
+ * (`vocabulary.ts`, `DATE_ITEM_ATTRIBUTES`). Asking for a month and a day the
+ * label never shows was an invitation to invent them; the client turns the
+ * year into `YYYY-01-01` on save, as it always has.
+ */
+export const VINTAGE_YEAR =
+  "The vintage year printed on the label, as four digits (e.g. 2019). " +
+  "Only a year — never a month or a day, which a label does not print.";
+
+/**
  * The label fields every type shares, plus the per-type bag. `defaults` is
  * stored verbatim in `item_onboardings.defaults`, and `confirm` feeds it to
  * `ItemActor.create`, so the bag key matches `ITEM_ATTRIBUTE_KEY`.
@@ -382,20 +396,6 @@ leave that field out rather than inventing something to fill it.
  * invent; `missingRequiredAttributes` in the form is what enforces it, against
  * a person who can actually look at the bottle.
  */
-/**
- * What a `date` attribute (a vintage) is asked for: **a year** (N02).
- *
- * The columns are `date`, but a label prints a year, the form edits a year
- * (the client's `yearFromDate`/`dateFromYear`), and the model answered `"2005"`
- * when told `YYYY-MM-DD` anyway — Ollama's grammar does not enforce `format`
- * (`vocabulary.ts`, `DATE_ITEM_ATTRIBUTES`). Asking for a month and a day the
- * label never shows was an invitation to invent them; the client turns the
- * year into `YYYY-01-01` on save, as it always has.
- */
-export const VINTAGE_YEAR =
-  "The vintage year printed on the label, as four digits (e.g. 2019). " +
-  "Only a year — never a month or a day, which a label does not print.";
-
 export const itemDefaultsSchema = (
   type: ItemType,
   vocabulary: ItemVocabulary,
