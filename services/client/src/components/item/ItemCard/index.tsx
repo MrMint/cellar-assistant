@@ -111,7 +111,9 @@ export const shownFavoriteCount = (
  *    write, so the heart held — behind a spinner — until the server answered.
  *    `useOptimisticToggle` draws the tapped state (and the count with it) in
  *    the tap's frame, pops the heart, and falls back with a toast if the
- *    write is refused.
+ *    write is refused. `toggleFavorite` flips rather than sets, which the
+ *    hook allows for: it never overlaps two writes, and writes again only if
+ *    the payload's `favorited` is not the last tapped state.
  * 3. **The link** goes to `href` as given. The old card ignored the value and
  *    rebuilt a *relative* `wines/<id>`, which resolved differently per page
  *    (§7, "Relative hrefs everywhere"); callers now pass an absolute href.
@@ -264,7 +266,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
               )}
             </span>
             <span className="sr-only"> favorites</span>
-            <TogglePop on={favorite.on}>
+            <TogglePop on={favorite.on} pop={favorite.pending}>
               <Love
                 aria-hidden
                 strokeWidth={ICON_STROKE}

@@ -783,7 +783,7 @@ function MobileActions({
             onClick={onToggleFavorite}
             aria-busy={isTogglingFavorite || undefined}
           >
-            <TogglePop on={saved}>
+            <TogglePop on={saved} pop={isTogglingFavorite}>
               <Love className={saved ? "fill-brand text-brand" : undefined} />
             </TogglePop>
           </TipIconButton>
@@ -794,7 +794,7 @@ function MobileActions({
             onClick={onMarkVisited}
             aria-busy={isMarkingVisited || undefined}
           >
-            <TogglePop on={visited}>
+            <TogglePop on={visited} pop={isMarkingVisited}>
               {visited ? <Success className="text-success" /> : <Unrated />}
             </TogglePop>
           </TipIconButton>

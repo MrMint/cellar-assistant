@@ -102,7 +102,7 @@ export function SaveToggleButton({
       aria-busy={pending || undefined}
       className={className}
     >
-      <TogglePop on={on}>
+      <TogglePop on={on} pop={pending}>
         <Love
           aria-hidden
           strokeWidth={ICON_STROKE}
@@ -129,7 +129,7 @@ export function VisitedToggleButton({
       aria-busy={pending || undefined}
       className={className}
     >
-      <TogglePop on={on}>
+      <TogglePop on={on} pop={pending}>
         {on ? (
           <Success
             aria-hidden
