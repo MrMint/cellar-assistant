@@ -203,6 +203,7 @@ export const createOpenAICompatibleProvider = (
     url: string,
     body: unknown,
     what: string,
+    signal?: AbortSignal,
   ): Promise<unknown> =>
     await postJson({
       url,
@@ -212,6 +213,7 @@ export const createOpenAICompatibleProvider = (
       provider: PROVIDER,
       what,
       fetchImpl,
+      ...(signal === undefined ? {} : { signal }),
     });
 
   const llamacpp = createLlamacppEmbedder(
@@ -284,6 +286,7 @@ export const createOpenAICompatibleProvider = (
                 }),
           },
           `generateContent(${model})`,
+          request.signal,
         ),
       );
 

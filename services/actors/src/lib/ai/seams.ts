@@ -875,13 +875,19 @@ const strings = (value: unknown): readonly string[] => {
  */
 export const providerPlaceReviewer =
   (provider: ProviderFor): PlaceReviewer =>
-  async (ctx, subject) => {
+  async (ctx, subject, signal) => {
     // Before the model, not after: a review of nothing is not a hard question,
     // it is an empty one, and an empty question is answered with an invention.
     requirePlaceReviewSubject(subject);
 
+    // N09: the creation's deadline cancels the call itself, so a review
+    // nobody is waiting for stops running — and stops being metered.
     const { content } = await provider(ctx).generateContent(
-      { prompt: buildPlaceReviewPrompt(subject), schema: PLACE_REVIEW_SCHEMA },
+      {
+        prompt: buildPlaceReviewPrompt(subject),
+        schema: PLACE_REVIEW_SCHEMA,
+        ...(signal === undefined ? {} : { signal }),
+      },
       "low",
     );
     const parsed = parseModelJson(content, "place review");

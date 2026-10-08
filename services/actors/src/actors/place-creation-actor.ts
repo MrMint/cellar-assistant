@@ -86,6 +86,9 @@
  * takes the same path: `review: null`, never an approval. The user is waiting
  * on a form, and an unbounded review was what made one measured create take
  * 48.7 s and another fail at the API's 120 s after its row had been written.
+ * The deadline also aborts the reviewer's `signal`, which `providerPlaceReviewer`
+ * hands to the model call, so a timed-out review is cancelled rather than left
+ * running and metered behind a form that has already moved on.
  *
  * B5b is the fix for the version of this that shipped: the constructor default
  * was the throwing stub itself, so *every* production activation took the
@@ -233,9 +236,16 @@ export type PlaceReviewSubject = {
   readonly description: string | null;
 };
 
+/**
+ * `signal` fires when the creation stops waiting (`PLACE_REVIEW_TIMEOUT_MS`,
+ * N09): a reviewer should hand it to the model call so the request is
+ * cancelled rather than left running and metered. An aborted review rejects,
+ * which `#reviewOrNull` records as `review: null` — never an approval.
+ */
 export type PlaceReviewer = (
   ctx: Ctx,
   subject: PlaceReviewSubject,
+  signal?: AbortSignal,
 ) => Promise<PlaceReview>;
 
 /**
@@ -568,8 +578,10 @@ export class PlaceCreationActor
     subject: PlaceReviewSubject,
   ): Promise<PlaceReview | null> {
     try {
+      // A function, not a promise: `withDeadline` aborts the signal at the
+      // deadline, so the timed-out model call is cancelled, not abandoned.
       const review = await withDeadline(
-        this.#review(ctx, subject),
+        (signal) => this.#review(ctx, subject, signal),
         this.#reviewTimeoutMs,
         () =>
           new DeadlineExceededError(
