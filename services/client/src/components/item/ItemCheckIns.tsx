@@ -1,32 +1,19 @@
 "use client";
 
-import {
-  AvatarGroup,
-  Button,
-  Card,
-  Checkbox,
-  DialogActions,
-  List,
-  ListDivider,
-  ListItem,
-  ListItemButton,
-  ListItemContent,
-  ListItemDecorator,
-  Modal,
-  ModalDialog,
-  Stack,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { useMutation } from "urql";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { UserAvatar } from "@/components/app/UserAvatar";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { BulkCheckInMutation, CheckInMutation } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 import { Timestamp } from "../common/Timestamp";
-import { UserAvatar } from "../common/UserAvatar";
 import { groupCheckInsByDay } from "./adapter";
 import { HeldBackNote } from "./HeldBackNote";
+import { ItemSection } from "./ItemSection";
+import { LoadingButton } from "./LoadingButton";
 
 type User = {
   id: string;
@@ -144,67 +131,70 @@ export const ItemCheckIns = ({
     }
   }, [open]);
 
+  const emphasis = finished ? "secondary" : "primary";
+
   return (
     <>
-      <Card>
-        <Stack direction="row" spacing={2}>
-          <Button
-            variant={finished ? "outlined" : "solid"}
-            color={finished ? "neutral" : "primary"}
+      <ItemSection>
+        <div className="flex gap-4">
+          <LoadingButton
+            variant={finished ? "outline" : "default"}
             // The page's main action until the bottle is finished — said in
-            // the markup so a test can check it without Joy's class names.
-            data-emphasis={finished ? "secondary" : "primary"}
+            // the markup so a test can check it without a library's classes.
+            data-emphasis={emphasis}
             onClick={handleClickCheckIn}
             loading={isPending}
-            fullWidth
+            className="flex-1"
           >
             Check In
-          </Button>
+          </LoadingButton>
           {friends.length > 0 && (
-            <Button
-              variant={finished ? "outlined" : "solid"}
-              color={finished ? "neutral" : "primary"}
-              data-emphasis={finished ? "secondary" : "primary"}
+            <LoadingButton
+              variant={finished ? "outline" : "default"}
+              data-emphasis={emphasis}
               onClick={handleClickBulk}
               loading={isPending}
-              fullWidth
+              className="flex-1"
             >
               Bulk Check In
-            </Button>
+            </LoadingButton>
           )}
-        </Stack>
+        </div>
         {error !== null && (
-          <Typography level="body-sm" color="danger">
+          <p role="alert" className="type-callout text-destructive">
             {error}
-          </Typography>
+          </p>
         )}
         {checkIns.length > 0 && (
-          <List aria-label="Check-ins">
-            {groupCheckInsByDay(checkIns).flatMap(([dateKey, x]) => [
-              <ListDivider key={`divider-${dateKey}`} />,
-              <ListItem key={dateKey}>
-                <ListItemContent>
-                  <AvatarGroup>
-                    {x.map((y) => (
-                      <Tooltip key={y.id} title={y.user.displayName}>
-                        <UserAvatar
-                          avatarUrl={y.user.avatarUrl}
-                          displayName={y.user.displayName}
-                        />
-                      </Tooltip>
-                    ))}
-                  </AvatarGroup>
-                </ListItemContent>
-                <Typography>
+          <ul
+            aria-label="Check-ins"
+            className="flex flex-col divide-y divide-line border-line border-y"
+          >
+            {groupCheckInsByDay(checkIns).map(([dateKey, x]) => (
+              <li
+                key={dateKey}
+                className="flex min-h-12 items-center justify-between gap-3 py-2"
+              >
+                <span className="flex -space-x-2">
+                  {x.map((y) => (
+                    <UserAvatar
+                      key={y.id}
+                      avatarUrl={y.user.avatarUrl}
+                      displayName={y.user.displayName}
+                      title={y.user.displayName}
+                      className="ring-2 ring-surface-1"
+                    />
+                  ))}
+                </span>
+                <span className="type-body tabular text-ink-2">
                   <Timestamp
                     iso={x[0]?.createdAt ?? dateKey}
                     precision="date"
                   />
-                </Typography>
-              </ListItem>,
-            ])}
-            <ListDivider />
-          </List>
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
         <HeldBackNote
           shown={checkIns.length}
@@ -212,49 +202,61 @@ export const ItemCheckIns = ({
           noun="check-ins"
           order="newest"
         />
-      </Card>
-      <Modal open={open}>
-        <ModalDialog>
-          <Typography>Select Friends</Typography>
-          <List size="lg">
-            {[user].concat(friends).map((user) => (
-              <ListItem variant="outlined" key={user.id}>
-                <ListItemButton onClick={() => handleClickBulkUser(user.id)}>
-                  <ListItemDecorator>
-                    <Checkbox readOnly checked={bulk.includes(user.id)} />
-                  </ListItemDecorator>
-                  <UserAvatar
-                    avatarUrl={user.avatarUrl}
-                    displayName={user.displayName}
-                  />
-                  <ListItemContent>
-                    <Typography level="title-md">{user.displayName}</Typography>
-                  </ListItemContent>
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-          <DialogActions>
-            <Button
-              variant="solid"
-              color="primary"
+      </ItemSection>
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!isBulkPending) setOpen(next);
+        }}
+        dismissible={!isBulkPending}
+        title="Select Friends"
+        footer={
+          <div className="flex w-full flex-col gap-2 md:flex-row-reverse md:justify-start">
+            <LoadingButton
               loading={isBulkPending}
               onClick={handleBulkCheckIn}
               disabled={bulk.length === 0}
             >
               Check In
-            </Button>
+            </LoadingButton>
             <Button
-              variant="plain"
-              color="neutral"
+              variant="ghost"
               disabled={isBulkPending}
               onClick={() => setOpen(false)}
             >
               Cancel
             </Button>
-          </DialogActions>
-        </ModalDialog>
-      </Modal>
+          </div>
+        }
+      >
+        <ul className="flex flex-col gap-2">
+          {[user].concat(friends).map((person) => {
+            const id = `bulk-check-in-${person.id}`;
+            return (
+              <li key={person.id}>
+                <label
+                  htmlFor={id}
+                  className="flex min-h-14 items-center gap-3 rounded-md bg-surface-2 px-3 active:bg-surface-3"
+                >
+                  <Checkbox
+                    id={id}
+                    checked={bulk.includes(person.id)}
+                    onCheckedChange={() => handleClickBulkUser(person.id)}
+                    className="size-5"
+                  />
+                  <UserAvatar
+                    avatarUrl={person.avatarUrl}
+                    displayName={person.displayName}
+                  />
+                  <span className="type-headline min-w-0 flex-1 truncate">
+                    {person.displayName}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      </ResponsiveDialog>
     </>
   );
 };

@@ -7,14 +7,14 @@
  *
  * 1. reaching 0% asks "Finished it?" (`confirming`) — "Not yet" puts the
  *    slider back where it was, "Finished" empties the bottle;
- * 2. once finished, a toast offers **Undo** for a few seconds (`finished`),
+ * 2. once finished, a toast offers **Undo** for five seconds (`finished`),
  *    which is `updateCellarItem(emptyAt: null)` with the remaining level (and,
  *    for a bottle that was never opened, `openAt: null`) put back;
  * 3. the delete dialog says the check-ins go too, and offers "Mark finished
  *    instead", which goes straight to step 2;
  * 4. after the toast is gone, a finished bottle's page still offers
  *    "Restore to cellar" (`restoring`) — the same `updateCellarItem(emptyAt:
- *    null)`, so Undo is not limited to six seconds.
+ *    null)`, so Undo is not limited to the toast's five seconds.
  *
  * This module is the whole behaviour — a reducer and two commands with their
  * side effects injected — so it is tested without React, and the shadcn
@@ -204,8 +204,22 @@ export async function performRestore(
   deps.refresh();
 }
 
-/** How long the Undo toast stays up. Long enough to read and reach. */
-export const UNDO_WINDOW_MS = 6000;
+/**
+ * The Undo toast's line for each phase that shows one (N13a's wording); null
+ * while there is no toast. It stays up `UNDO_TOAST_MS` (`app/notify`).
+ */
+export function finishToastCopy(state: FinishState): string | null {
+  switch (state.phase) {
+    case "finished":
+      return "Finished. Moved out of the cellar.";
+    case "undoing":
+      return "Putting it back…";
+    case "undoFailed":
+      return `Couldn't undo: ${state.error}`;
+    default:
+      return null;
+  }
+}
 
 /**
  * The delete dialog's text. Deleting a bottle deletes its check-ins
