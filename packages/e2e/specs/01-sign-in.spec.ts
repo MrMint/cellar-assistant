@@ -101,16 +101,20 @@ test("sign out ends the session", async ({ browser }) => {
   // context closed, which is where the intermittent `ENOENT` on
   // `.playwright-artifacts-N/traces/…` during `ctx.close()` came from.
   //
-  // Do **not** wait for a redirect to `/sign-in` here instead: measured, sign
-  // out clears the cookie but does not navigate — the page stays on `/search`
-  // — so that wait would hang for its full timeout and then fail. Polling the
-  // cookie both waits and asserts, so it replaces the separate expect too.
+  // Polling the cookie both waits and asserts.
   await expect
     .poll(async () => (await ctx.cookies()).map((c) => c.name), {
       message: "better-auth.session_token survived sign out",
       timeout: 15_000,
     })
     .not.toContain("better-auth.session_token");
+  // And the viewer is taken to /sign-in. This used to be documented as "does
+  // not navigate": `completeSignOut` (a server action) runs after the cookie
+  // is gone, the proxy answers its POST with a redirect, and the rejection
+  // skipped `router.replace`. It is best effort now (SignOutButton).
+  await expect(page, "sign out left the viewer on a signed-in page").toHaveURL(
+    /\/sign-in/,
+  );
 
   await page.goto("/cellars");
   await expect(
