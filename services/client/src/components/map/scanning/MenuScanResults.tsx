@@ -28,32 +28,28 @@
  *   the one way to confirm an AI match (decision D6).
  */
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import NextLink from "next/link";
-import { useCallback, useMemo, useState } from "react";
-import {
-  MdArrowBack,
-  MdCheck,
-  MdCheckCircle,
-  MdClose,
-  MdError,
-  MdHelp,
-  MdMonetizationOn,
-} from "react-icons/md";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery } from "urql";
-import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
+import {
+  Back,
+  Check,
+  Close,
+  ErrorIcon,
+  Help,
+  ICON_STROKE,
+  Price,
+  Success,
+  Warning,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
 import { Timestamp } from "@/components/common/Timestamp";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
+import { cn } from "@/lib/utils";
 import {
   type MenuItemView,
   matchedItemHref,
@@ -67,6 +63,7 @@ import {
   ScanResultsQuery,
   SUGGESTIONS_PAGE_SIZE,
 } from "../queries";
+import { ScanStatusBadge, type ScanTone } from "./ScanStatusBadge";
 import {
   isExtractionDone,
   isScanSettled,
@@ -82,50 +79,80 @@ interface MenuScanResultsProps {
   scanId: string;
 }
 
-const getItemIcon = (type?: string | null) => {
+const ITEM_TYPES = ["BEER", "WINE", "SPIRIT", "COFFEE", "SAKE", "TEA"] as const;
+type LineItemType = (typeof ITEM_TYPES)[number];
+
+const lineType = (type?: string | null): LineItemType | null => {
   const upper = type?.toUpperCase();
-  switch (upper) {
-    case "BEER":
-    case "WINE":
-    case "SPIRIT":
-    case "COFFEE":
-    case "SAKE":
-    case "TEA":
-      return <ItemTypeIcon type={upper} />;
-    default:
-      return <MdHelp />;
-  }
+  return ITEM_TYPES.find((t) => t === upper) ?? null;
 };
 
-const getItemTypeColor = (
-  type?: string | null,
-): "danger" | "warning" | "neutral" | "success" => {
-  switch (type) {
-    case "wine":
-      return "danger";
-    case "beer":
-      return "warning";
-    case "spirit":
-      return "neutral";
-    case "coffee":
-      return "success";
-    default:
-      return "neutral";
-  }
-};
+/** The line's type glyph on its type's tint; a question mark otherwise. */
+function LineTypeMark({ type }: { type?: string | null }) {
+  const known = lineType(type);
+  const token = known ? itemTypeTokens[known] : null;
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-sm p-2",
+        token ? [token.tintClass, token.textClass] : "bg-surface-3 text-ink-2",
+      )}
+    >
+      {known ? (
+        <TypeGlyph type={known} className="size-5" />
+      ) : (
+        <Help aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
+      )}
+    </span>
+  );
+}
 
 /** One chip for both halves of the pipeline. */
 const statusChip = (
   progress: ScanProgress,
-): { label: string; color: "success" | "warning" | "danger" | "neutral" } => {
+): { label: string; tone: ScanTone } => {
   if (progress.processingStatus === "failed") {
-    return { label: "failed", color: "danger" };
+    return { label: "failed", tone: "danger" };
   }
-  if (!isExtractionDone(progress))
-    return { label: "reading", color: "warning" };
-  if (!isScanSettled(progress)) return { label: "matching", color: "warning" };
-  return { label: "complete", color: "success" };
+  if (!isExtractionDone(progress)) return { label: "reading", tone: "working" };
+  if (!isScanSettled(progress)) return { label: "matching", tone: "working" };
+  return { label: "complete", tone: "success" };
 };
+
+/**
+ * A full-width notice row: Joy's soft `Alert` on the tokens. Only a danger
+ * notice is an `alert`; a line's match status is not news to announce.
+ */
+function Notice({
+  tone,
+  children,
+  action,
+  className,
+}: {
+  tone: "neutral" | "danger" | "success" | "ai";
+  children: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      role={tone === "danger" ? "alert" : undefined}
+      data-slot="notice"
+      data-tone={tone}
+      className={cn(
+        "type-callout flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-4 py-2.5",
+        tone === "neutral" && "border-transparent bg-surface-2 text-ink-1",
+        tone === "danger" && "border-destructive/60 text-destructive",
+        tone === "success" && "border-transparent bg-success/10 text-success",
+        tone === "ai" && "border-transparent bg-ai/10 text-ink-1",
+        className,
+      )}
+    >
+      <div className="min-w-0 flex-1">{children}</div>
+      {action}
+    </div>
+  );
+}
 
 export function MenuScanResults({ scanId }: MenuScanResultsProps) {
   const [{ data, fetching, error: transportError }, reexecute] = useQuery({
@@ -165,9 +192,9 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
 
   if (fetching && !scanNode) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <Spinner className="size-8 text-ink-2" />
+      </div>
     );
   }
 
@@ -179,11 +206,14 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
 
   if (error || !scanNode) {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert color="danger" startDecorator={<MdError />}>
-          {error || "Scan not found"}
+      <div className="p-4">
+        <Alert variant="destructive" className="border-destructive/60">
+          <ErrorIcon aria-hidden />
+          <AlertDescription className="text-destructive">
+            {error || "Scan not found"}
+          </AlertDescription>
         </Alert>
-      </Box>
+      </div>
     );
   }
 
@@ -284,289 +314,247 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
   );
 
   return (
-    <Stack spacing={3}>
-      {/* Summary Card */}
-      <Card>
-        <CardContent>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="flex-start"
-          >
-            <Box>
-              <Typography level="h3">Scan Results</Typography>
-              {scan.place && (
-                <Typography level="body-md" sx={{ color: "text.secondary" }}>
-                  {scan.place.name}
-                </Typography>
-              )}
-              {scan.scanned_at && (
-                <Typography level="body-xs" sx={{ color: "text.secondary" }}>
-                  Scanned <Timestamp iso={scan.scanned_at} precision="date" />
-                </Typography>
-              )}
-            </Box>
-            <Chip variant="solid" color={chip.color} size="sm">
-              {chip.label}
-            </Chip>
-          </Stack>
+    <div className="flex flex-col gap-6">
+      {/* Summary */}
+      <section className="rounded-xl bg-surface-1 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="type-title-2">Scan Results</h1>
+            {scan.place && (
+              <p className="type-body text-ink-2">{scan.place.name}</p>
+            )}
+            {scan.scanned_at && (
+              <p className="type-footnote text-ink-2">
+                Scanned <Timestamp iso={scan.scanned_at} precision="date" />
+              </p>
+            )}
+          </div>
+          <ScanStatusBadge tone={chip.tone}>{chip.label}</ScanStatusBadge>
+        </div>
 
-          <Typography level="title-md" aria-live="polite" sx={{ mt: 2 }}>
-            {headline.text}
-          </Typography>
-          {headline.toConfirm > 0 && (
-            <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-              {headline.toConfirm === 1
-                ? "Accept or reject the suggested match below."
-                : "Accept or reject the suggested matches below."}
-            </Typography>
-          )}
-          {scanNode.matchStatus === "failed" && (
-            <Alert color="warning" size="sm" sx={{ mt: 2 }}>
+        <p aria-live="polite" className="type-headline tabular mt-4">
+          {headline.text}
+        </p>
+        {headline.toConfirm > 0 && (
+          <p className="type-callout text-ink-2">
+            {headline.toConfirm === 1
+              ? "Accept or reject the suggested match below."
+              : "Accept or reject the suggested matches below."}
+          </p>
+        )}
+        {scanNode.matchStatus === "failed" && (
+          <Notice tone="neutral" className="mt-4">
+            <span className="inline-flex items-center gap-2">
+              <Warning aria-hidden className="size-4 shrink-0" />
               Matching didn&apos;t finish, so some lines may show as new.
-            </Alert>
-          )}
-          {gaveUp && (
-            <Alert
-              color="warning"
-              size="sm"
-              sx={{ mt: 2, flexWrap: "wrap", rowGap: 1 }}
-              endDecorator={
-                <Button size="sm" variant="soft" onClick={restart}>
-                  Check again
-                </Button>
-              }
-            >
+            </span>
+          </Notice>
+        )}
+        {gaveUp && (
+          <Notice
+            tone="neutral"
+            className="mt-4"
+            action={
+              <Button variant="secondary" size="sm" onClick={restart}>
+                Check again
+              </Button>
+            }
+          >
+            <span className="inline-flex items-center gap-2">
+              <Warning aria-hidden className="size-4 shrink-0" />
               This is taking longer than usual.
-            </Alert>
-          )}
-          {scan.processing_error && (
-            <Alert color="danger" size="sm" sx={{ mt: 2 }}>
-              {scan.processing_error}
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+            </span>
+          </Notice>
+        )}
+        {scan.processing_error && (
+          <Notice tone="danger" className="mt-4">
+            {scan.processing_error}
+          </Notice>
+        )}
+      </section>
 
-      {actionError && (
-        <Alert color="danger" size="sm">
-          {actionError}
-        </Alert>
-      )}
+      {actionError && <Notice tone="danger">{actionError}</Notice>}
 
       {/* Items by Category */}
       {items.length === 0 && !settled ? (
-        <Card>
-          <CardContent sx={{ textAlign: "center", py: 4 }}>
-            <CircularProgress size="sm" />
-            <Typography level="body-md" sx={{ color: "text.secondary", mt: 1 }}>
-              Reading the menu lines...
-            </Typography>
-          </CardContent>
-        </Card>
+        <section className="flex flex-col items-center gap-2 rounded-xl bg-surface-1 px-4 py-8 text-center">
+          <Spinner className="text-ink-2" />
+          <p className="type-body text-ink-2">Reading the menu lines...</p>
+        </section>
       ) : items.length === 0 ? (
-        <Card>
-          <CardContent sx={{ textAlign: "center", py: 4 }}>
-            <Typography level="body-md" sx={{ color: "text.secondary" }}>
-              {scan.items_detected > 0
-                ? // Read, but never filed on a place (no place was known, or
-                  // filing failed), so there are no lines to show or match.
-                  "The lines this scan read weren't saved to a place, so there's nothing to show here."
-                : "No items were extracted from this scan."}
-            </Typography>
-          </CardContent>
-        </Card>
+        <section className="rounded-xl bg-surface-1 px-4 py-8 text-center">
+          <p className="type-body text-ink-2">
+            {scan.items_detected > 0
+              ? // Read, but never filed on a place (no place was known, or
+                // filing failed), so there are no lines to show or match.
+                "The lines this scan read weren't saved to a place, so there's nothing to show here."
+              : "No items were extracted from this scan."}
+          </p>
+        </section>
       ) : (
         Object.entries(itemsByCategory).map(([category, categoryItems]) => (
-          <Box key={category}>
-            <Typography level="h4" sx={{ mb: 2 }}>
-              {category}
-            </Typography>
+          <section key={category}>
+            <h2 className="type-title-2 mb-4">{category}</h2>
 
-            <Stack spacing={2}>
+            <ul className="flex flex-col gap-4">
               {categoryItems.map((item) => {
                 const match = matchByLine.get(item.id) ?? {
                   kind: "new" as const,
                 };
+                const suggestedName =
+                  match.kind === "suggested"
+                    ? (match.suggestion.suggested?.name ?? "suggestion")
+                    : "";
 
                 return (
-                  <Card key={item.id} variant="outlined">
-                    <CardContent>
-                      <Stack
-                        direction="row"
-                        spacing={2}
-                        alignItems="flex-start"
-                      >
-                        <Box
-                          sx={{
-                            p: 1,
-                            borderRadius: "sm",
-                            backgroundColor: `${getItemTypeColor(item.detected_item_type)}.100`,
-                            color: `${getItemTypeColor(item.detected_item_type)}.600`,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {getItemIcon(item.detected_item_type)}
-                        </Box>
+                  <li key={item.id} className="rounded-xl bg-surface-1 p-4">
+                    <div className="flex items-start gap-4">
+                      <LineTypeMark type={item.detected_item_type} />
 
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Stack
-                            direction="row"
-                            alignItems="flex-start"
-                            justifyContent="space-between"
-                          >
-                            <Box sx={{ flex: 1 }}>
-                              <Typography level="title-md">
-                                {item.menu_item_name}
-                              </Typography>
+                      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="type-headline">
+                            {item.menu_item_name}
+                          </h3>
 
-                              {item.menu_item_description && (
-                                <Typography
-                                  level="body-sm"
-                                  sx={{ color: "text.secondary", mt: 0.5 }}
-                                >
-                                  {item.menu_item_description}
-                                </Typography>
-                              )}
+                          {item.menu_item_description && (
+                            <p className="type-callout mt-1 text-ink-2">
+                              {item.menu_item_description}
+                            </p>
+                          )}
 
-                              {item.extracted_attributes &&
-                                Object.keys(item.extracted_attributes).length >
-                                  0 && (
-                                  <Stack
-                                    direction="row"
-                                    spacing={1}
-                                    sx={{ mt: 1, flexWrap: "wrap" }}
-                                  >
-                                    {Object.entries(
-                                      item.extracted_attributes,
-                                    ).map(([key, value]) => (
-                                      <Chip key={key} size="sm" variant="soft">
-                                        {key}: {String(value)}
-                                      </Chip>
-                                    ))}
-                                  </Stack>
+                          {item.extracted_attributes &&
+                            Object.keys(item.extracted_attributes).length >
+                              0 && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {Object.entries(item.extracted_attributes).map(
+                                  ([key, value]) => (
+                                    <Badge
+                                      key={key}
+                                      variant="secondary"
+                                      className="whitespace-normal"
+                                    >
+                                      {key}: {String(value)}
+                                    </Badge>
+                                  ),
                                 )}
-
-                              {match.kind === "matched" ? (
-                                <Alert color="success" size="sm" sx={{ mt: 1 }}>
-                                  <MdCheckCircle size={16} />
-                                  Matched to:{" "}
-                                  {match.href ? (
-                                    <NextLink href={match.href}>
-                                      {match.name}
-                                    </NextLink>
-                                  ) : (
-                                    match.name
-                                  )}
-                                </Alert>
-                              ) : match.kind === "suggested" ? (
-                                <Alert
-                                  color="warning"
-                                  size="sm"
-                                  sx={{ mt: 1, flexWrap: "wrap" }}
-                                  endDecorator={
-                                    <Stack direction="row" spacing={1}>
-                                      <Button
-                                        size="sm"
-                                        variant="outlined"
-                                        color="danger"
-                                        startDecorator={<MdClose />}
-                                        aria-label={`Reject ${match.suggestion.suggested?.name ?? "suggestion"} for ${item.menu_item_name}`}
-                                        onClick={() =>
-                                          handleSuggestion(
-                                            match.suggestion,
-                                            "REJECT",
-                                          )
-                                        }
-                                      >
-                                        Reject
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        color="success"
-                                        startDecorator={<MdCheck />}
-                                        aria-label={`Accept ${match.suggestion.suggested?.name ?? "suggestion"} for ${item.menu_item_name}`}
-                                        onClick={() =>
-                                          handleSuggestion(
-                                            match.suggestion,
-                                            "ACCEPT",
-                                          )
-                                        }
-                                      >
-                                        Accept
-                                      </Button>
-                                    </Stack>
-                                  }
-                                >
-                                  <MdHelp size={16} />
-                                  Suggested match:{" "}
-                                  {match.suggestion.suggested?.name ??
-                                    "Unknown"}{" "}
-                                  (
-                                  {(
-                                    match.suggestion.confidence_score * 100
-                                  ).toFixed(0)}
-                                  % confidence)
-                                </Alert>
-                              ) : (
-                                <Alert color="neutral" size="sm" sx={{ mt: 1 }}>
-                                  {settled
-                                    ? "New item - not yet matched"
-                                    : "Matching..."}
-                                </Alert>
-                              )}
-
-                              {item.confidence_score != null && (
-                                <Typography
-                                  level="body-xs"
-                                  sx={{ mt: 0.5, color: "text.secondary" }}
-                                >
-                                  Detection confidence:{" "}
-                                  {(item.confidence_score * 100).toFixed(0)}%
-                                </Typography>
-                              )}
-                            </Box>
-
-                            {item.menu_item_price != null && (
-                              <Stack
-                                direction="row"
-                                alignItems="center"
-                                spacing={0.5}
-                              >
-                                <MdMonetizationOn
-                                  size={20}
-                                  style={{
-                                    color: "var(--joy-palette-text-secondary)",
-                                  }}
-                                />
-                                <Typography level="body-sm" fontWeight="lg">
-                                  ${item.menu_item_price}
-                                </Typography>
-                              </Stack>
+                              </div>
                             )}
-                          </Stack>
-                        </Box>
-                      </Stack>
-                    </CardContent>
-                  </Card>
+
+                          {match.kind === "matched" ? (
+                            <Notice tone="success" className="mt-2">
+                              <span className="inline-flex flex-wrap items-center gap-1">
+                                <Success
+                                  aria-hidden
+                                  className="size-4 shrink-0"
+                                />
+                                Matched to:{" "}
+                                {match.href ? (
+                                  <Link
+                                    href={match.href}
+                                    underline="always"
+                                    className="text-ink-1"
+                                  >
+                                    {match.name}
+                                  </Link>
+                                ) : (
+                                  match.name
+                                )}
+                              </span>
+                            </Notice>
+                          ) : match.kind === "suggested" ? (
+                            <Notice
+                              tone="ai"
+                              className="mt-2"
+                              action={
+                                <div className="flex flex-row gap-2">
+                                  <Button
+                                    variant="destructive"
+                                    aria-label={`Reject ${suggestedName} for ${item.menu_item_name}`}
+                                    onClick={() =>
+                                      handleSuggestion(
+                                        match.suggestion,
+                                        "REJECT",
+                                      )
+                                    }
+                                  >
+                                    <Close aria-hidden />
+                                    Reject
+                                  </Button>
+                                  <Button
+                                    aria-label={`Accept ${suggestedName} for ${item.menu_item_name}`}
+                                    onClick={() =>
+                                      handleSuggestion(
+                                        match.suggestion,
+                                        "ACCEPT",
+                                      )
+                                    }
+                                  >
+                                    <Check aria-hidden />
+                                    Accept
+                                  </Button>
+                                </div>
+                              }
+                            >
+                              <span className="inline-flex flex-wrap items-center gap-1">
+                                <Help
+                                  aria-hidden
+                                  className="size-4 shrink-0 text-ai"
+                                />
+                                Suggested match:{" "}
+                                {match.suggestion.suggested?.name ?? "Unknown"}{" "}
+                                (
+                                {(
+                                  match.suggestion.confidence_score * 100
+                                ).toFixed(0)}
+                                % confidence)
+                              </span>
+                            </Notice>
+                          ) : (
+                            <Notice tone="neutral" className="mt-2">
+                              {settled
+                                ? "New item - not yet matched"
+                                : "Matching..."}
+                            </Notice>
+                          )}
+
+                          {item.confidence_score != null && (
+                            <p className="type-footnote tabular mt-1 text-ink-2">
+                              Detection confidence:{" "}
+                              {(item.confidence_score * 100).toFixed(0)}%
+                            </p>
+                          )}
+                        </div>
+
+                        {item.menu_item_price != null && (
+                          <p className="type-callout tabular flex shrink-0 items-center gap-1 font-semibold">
+                            <Price
+                              aria-hidden
+                              strokeWidth={ICON_STROKE}
+                              className="size-5 text-ink-2"
+                            />
+                            ${item.menu_item_price}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </li>
                 );
               })}
-            </Stack>
-          </Box>
+            </ul>
+          </section>
         ))
       )}
 
       {/* Back button */}
       {scan.place && (
-        <Button
-          variant="outlined"
-          startDecorator={<MdArrowBack />}
-          component={NextLink}
-          href={`/map?placeId=${scan.place_id}`}
-        >
-          Back to {scan.place.name}
+        <Button variant="outline" asChild>
+          <Link href={`/map?placeId=${scan.place_id}`} underline="none">
+            <Back aria-hidden />
+            Back to {scan.place.name}
+          </Link>
         </Button>
       )}
-    </Stack>
+    </div>
   );
 }

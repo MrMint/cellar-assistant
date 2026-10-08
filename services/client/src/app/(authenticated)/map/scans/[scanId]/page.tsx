@@ -1,7 +1,7 @@
-import { Box, CircularProgress, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MenuScanResults } from "@/components/map/scanning/MenuScanResults";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ScanDetailsPageProps {
   params: Promise<{
@@ -19,32 +19,17 @@ export default async function ScanDetailsPage({
   }
 
   return (
-    <Box
-      sx={{
-        height: "100dvh",
-        overflow: "auto",
-        p: 2,
-      }}
-    >
+    <div className="h-dvh overflow-auto p-4">
       <Suspense
         fallback={
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "50vh",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            <CircularProgress />
-            <Typography>Loading scan results...</Typography>
-          </Box>
+          <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
+            <Spinner className="size-8 text-ink-2" />
+            <p className="type-body">Loading scan results...</p>
+          </div>
         }
       >
         <MenuScanResults scanId={scanId} />
       </Suspense>
-    </Box>
+    </div>
   );
 }
