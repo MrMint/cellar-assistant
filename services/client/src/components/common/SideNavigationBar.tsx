@@ -296,11 +296,15 @@ const SideNavigationBar = ({ user }: SideNavigationBarProps) => {
    * would have to forward that header by hand. `completeSignOut` then does the
    * two things only the server can do — see that file.
    *
-   * Last, the service worker's caches: they hold pages, RSC payloads and
+   * Then the service worker's caches: they hold pages, RSC payloads and
    * photos rendered for this viewer, and would otherwise outlive the session
    * on a shared device (`@/lib/pwa/purge-caches`). Only after the session is
    * really gone — a failed sign-out keeps the viewer signed in, and their
-   * cache with them.
+   * cache with them — but straight after it, ahead of `completeSignOut`: a
+   * server action that fails (a dropped connection, a redeploy) must not
+   * leave a signed-out device holding the last viewer's pages. `/sign-in`
+   * purges once more when it mounts (`usePurgeUserCachesOnMount`), which
+   * also catches anything an in-flight request wrote back meanwhile.
    */
   const handleSignOut = async () => {
     try {
@@ -309,8 +313,8 @@ const SideNavigationBar = ({ user }: SideNavigationBarProps) => {
         console.error("Sign out failed:", error.message);
         return;
       }
-      await completeSignOut();
       await purgeUserCaches();
+      await completeSignOut();
     } catch (error) {
       console.error("Sign out failed:", error);
       return;

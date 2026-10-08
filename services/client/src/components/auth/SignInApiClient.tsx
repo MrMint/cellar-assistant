@@ -27,6 +27,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
+import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
 import { withReturnTo } from "@/utilities/sanitize-return-to";
@@ -56,6 +57,7 @@ export function SignInApiClient({
   returnTo?: string;
   passwordMode?: PasswordMode;
 }) {
+  usePurgeUserCachesOnMount();
   const router = useRouter();
   const { run, pending, error } = useAuthAction(authClient.signIn.email);
   const [passwordOpen, setPasswordOpen] = useState(false);

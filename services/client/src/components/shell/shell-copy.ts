@@ -22,7 +22,9 @@ export const NOT_FOUND_COPY: ShellCopy = {
 
 export const OFFLINE_COPY: ShellCopy = {
   title: "You're offline",
-  body: "This page isn't saved on your device yet. It will reload by itself as soon as you're back online.",
+  // No page is kept for offline reading yet (that is roadmap L07), so the
+  // copy promises nothing about what is saved.
+  body: "Opening this page needs a connection. It will reload by itself as soon as you're back online.",
 };
 
 /**

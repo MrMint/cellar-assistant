@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { cachesToPurge, purgeUserCaches } from "./purge-caches";
 
 /** Every cache name serwist's `defaultCache` and our own rules create. */
@@ -82,5 +84,29 @@ describe("purgeUserCaches", () => {
     } finally {
       console.error = original;
     }
+  });
+});
+
+describe("where the purge runs", () => {
+  // Wiring, read from source: effects do not run in this suite's server
+  // renders, and there is no DOM to mount into.
+  const source = (path: string) =>
+    readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+
+  test("the signed-out pages purge on mount, so an expired or revoked session is covered too", () => {
+    for (const path of [
+      "../../components/auth/SignInApiClient.tsx",
+      "../../components/auth/SignUpApiClient.tsx",
+    ]) {
+      assert.match(source(path), /usePurgeUserCachesOnMount\(\);/, path);
+    }
+  });
+
+  test("an explicit sign-out purges before the server action, which may fail", () => {
+    const nav = source("../../components/common/SideNavigationBar.tsx");
+    const purge = nav.indexOf("await purgeUserCaches();");
+    const complete = nav.indexOf("await completeSignOut();");
+    assert.ok(purge > 0 && complete > 0, "both calls present");
+    assert.ok(purge < complete, "purge runs first");
   });
 });
