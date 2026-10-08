@@ -25,7 +25,7 @@ export const tierListShareBlock = (
     ? {
         message: "Only you can see this list",
         description:
-          "Make it public or friends-only from Edit, then share the link.",
+          "Make it public or friends-only with Edit list, then share the link.",
       }
     : null;
 };

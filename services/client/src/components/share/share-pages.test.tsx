@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { inviteShareRequest } from "./InviteFriendsCard";
-import { InviteHero, inviteCopy } from "./InviteHero";
+import { acceptFailureCopy, InviteHero, inviteCopy } from "./InviteHero";
 import { recipeDescription, tierListDescription } from "./metadata";
 import { SharedItemView, sharedItemSubtitle } from "./SharedItemView";
 import {
@@ -210,6 +210,22 @@ describe("invites", () => {
     assert.match(inviteCopy("Riley", "ALREADY_FRIENDS").title, /already/);
     assert.match(inviteCopy("Riley", "ACCEPTED").title, /are friends/);
     assert.match(inviteCopy("Riley", "OWN_INVITE").title, /your invite link/);
+  });
+
+  test("a failed accept says what to do, never the actor's message", () => {
+    // A link reset between opening the page and tapping Add.
+    const gone = acceptFailureCopy("Riley", { code: "NOT_FOUND" });
+    assert.match(gone, /doesn't work any more/);
+    assert.match(gone, /Ask Riley for a new one/);
+    assert.doesNotMatch(gone, /has no row|UserActor/);
+    assert.match(
+      acceptFailureCopy("Riley", { code: "TRANSPORT" }),
+      /connection/,
+    );
+    assert.equal(
+      acceptFailureCopy("Riley", { code: "CONFLICT" }),
+      "Couldn't add Riley just now. Try again.",
+    );
   });
 
   test("the hero marks a friendship with a check", () => {

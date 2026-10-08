@@ -44,6 +44,25 @@ export const inviteCopy = (
   }
 };
 
+/**
+ * What a failed "Add as a friend" says. Never the actor's own message: a link
+ * reset between opening the page and tapping reads `UserActor(<id>) has no
+ * row` there, which is for logs, not people.
+ */
+export const acceptFailureCopy = (
+  name: string,
+  error: { code: string },
+): string => {
+  switch (error.code) {
+    case "NOT_FOUND":
+      return `This invite link doesn't work any more. Ask ${name} for a new one.`;
+    case "TRANSPORT":
+      return "Couldn't reach Cellar Assistant. Check your connection and try again.";
+    default:
+      return `Couldn't add ${name} just now. Try again.`;
+  }
+};
+
 /** The inviter's face and the sentence about them — no hooks, server-safe. */
 export function InviteHero({
   name,

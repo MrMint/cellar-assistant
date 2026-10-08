@@ -7,7 +7,7 @@ import { Link } from "@/components/app/Link";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { unwrapResult } from "@/lib/api/result";
-import { InviteHero, type InviteStatus } from "./InviteHero";
+import { acceptFailureCopy, InviteHero, type InviteStatus } from "./InviteHero";
 import { AcceptFriendInviteMutation } from "./queries";
 
 export type InviteViewProps = {
@@ -43,7 +43,7 @@ export function InviteView({
       "AcceptFriendInvitePayload",
     );
     if (outcome.ok) setAccepted(true);
-    else setError(outcome.error.message);
+    else setError(acceptFailureCopy(inviterDisplayName, outcome.error));
   };
 
   return (

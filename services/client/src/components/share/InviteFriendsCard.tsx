@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { ICON_STROKE, Share } from "@/components/app/icons";
@@ -34,24 +34,42 @@ export function InviteFriendsCard() {
   const [ensuring, ensure] = useMutation(EnsureFriendInviteMutation);
   const [resetting, reset] = useMutation(ResetFriendInviteMutation);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [minted, setMinted] = useState<string | null>(null);
+  const mintRequested = useRef(false);
   const share = useShareLink();
-  const existing = data?.me?.friendInvite?.token ?? null;
+  const token = minted ?? data?.me?.friendInvite?.token ?? null;
+
+  const mint = useCallback(async (): Promise<string | null> => {
+    const result = unwrapResult(
+      (await ensure({})).data?.ensureFriendInvite,
+      "FriendInvite",
+    );
+    if (!result.ok) return null;
+    setMinted(result.data.token);
+    return result.data.token;
+  }, [ensure]);
+
+  // The link is made before the tap, not inside it: a share sheet needs the
+  // tap's user activation, and a network round trip spends it — iOS Safari
+  // then refuses the sheet and the first invite would land on the fallback.
+  // Minting is idempotent and inert: the secret reaches nobody until the
+  // viewer shares it.
+  useEffect(() => {
+    if (data?.me?.friendInvite !== null || mintRequested.current) return;
+    mintRequested.current = true;
+    void mint();
+  }, [data, mint]);
 
   const onShare = async () => {
-    let token = existing;
-    if (token === null) {
-      const result = unwrapResult(
-        (await ensure({})).data?.ensureFriendInvite,
-        "FriendInvite",
-      );
-      if (!result.ok) {
-        notify(result.error.message, { tone: "error" });
-        return;
-      }
-      token = result.data.token;
-      refetch({ requestPolicy: "network-only" });
+    const link = token ?? (await mint());
+    if (link === null) {
+      notify("Couldn't make your invite link", {
+        tone: "error",
+        description: "Try again in a moment.",
+      });
+      return;
     }
-    await share(inviteShareRequest(window.location.origin, token));
+    await share(inviteShareRequest(window.location.origin, link));
   };
 
   const onReset = async () => {
@@ -61,9 +79,13 @@ export function InviteFriendsCard() {
     );
     setConfirmOpen(false);
     if (!result.ok) {
-      notify(result.error.message, { tone: "error" });
+      notify("Couldn't reset your invite link", {
+        tone: "error",
+        description: "Your current link still works. Try again in a moment.",
+      });
       return;
     }
+    setMinted(result.data.token);
     refetch({ requestPolicy: "network-only" });
     notify("New invite link ready. Old links no longer work.", {
       tone: "success",
@@ -96,7 +118,7 @@ export function InviteFriendsCard() {
           )}
           Share invite link
         </Button>
-        {existing !== null && (
+        {token !== null && (
           <Button variant="ghost" onClick={() => setConfirmOpen(true)}>
             Reset link
           </Button>
