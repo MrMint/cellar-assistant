@@ -1,9 +1,17 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useId,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useMutation, useQuery } from "urql";
-import { Cocktail } from "@/components/app/icons";
+import { Check, Cocktail } from "@/components/app/icons";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { TogglePop } from "@/components/app/TogglePop";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -39,6 +47,12 @@ import { ApiError } from "./ApiError";
  * from `onSelect`, the picker mounted while the menu was still animating out,
  * took the doomed menu item as the place to return focus to, and dropped it
  * on `<body>` when it closed (Radix's own dropdown-to-dialog pattern).
+ *
+ * "Just me" answers in the tap's frame (X24): the glass becomes a popped
+ * check while the write runs — no spinner — and the history below catches up
+ * when `onCheckedIn` refreshes the page. The trigger stays held while it
+ * runs (a check-in is a drink: a double tap must not log two); a refusal
+ * puts the glass back and shows why.
  */
 export function CheckInButton({
   cellarId,
@@ -61,7 +75,9 @@ export function CheckInButton({
   /** "Me and friends…" was chosen; open the picker when the menu is gone. */
   const pickerPending = useRef(false);
 
-  const [checkInState, checkIn] = useMutation(CheckInMutation);
+  const [, checkIn] = useMutation(CheckInMutation);
+  const [checkingIn, startCheckIn] = useTransition();
+  const [checkedIn, setCheckedIn] = useOptimistic(false);
   const [bulkState, bulkCheckIn] = useMutation(BulkCheckInMutation);
 
   const [{ data: friendsData }] = useQuery({
@@ -77,20 +93,26 @@ export function CheckInButton({
     ? friendsResult.data.edges.map((edge) => edge.node.user)
     : [];
 
-  const checkInSelf = useCallback(async () => {
-    setError(null);
-    const response = await checkIn({
-      cellarId,
-      cellarItemId,
-      checkInId: crypto.randomUUID(),
+  const checkInSelf = useCallback(() => {
+    startCheckIn(async () => {
+      setError(null);
+      setCheckedIn(true);
+      const response = await checkIn({
+        cellarId,
+        cellarItemId,
+        checkInId: crypto.randomUUID(),
+      });
+      const result = unwrapResult(
+        response.data?.checkIn ?? undefined,
+        "CheckIn",
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      onCheckedIn?.();
     });
-    const result = unwrapResult(response.data?.checkIn ?? undefined, "CheckIn");
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    onCheckedIn?.();
-  }, [checkIn, cellarId, cellarItemId, onCheckedIn]);
+  }, [checkIn, cellarId, cellarItemId, onCheckedIn, setCheckedIn]);
 
   const checkInTable = useCallback(async () => {
     setError(null);
@@ -127,10 +149,16 @@ export function CheckInButton({
           <Button
             variant="secondary"
             className="w-full"
-            disabled={checkInState.fetching}
-            aria-busy={checkInState.fetching || undefined}
+            disabled={checkingIn}
+            aria-busy={checkingIn || undefined}
           >
-            {checkInState.fetching ? <Spinner aria-hidden /> : <Cocktail />}
+            <TogglePop on={checkedIn}>
+              {checkedIn ? (
+                <Check aria-hidden className="text-success" />
+              ) : (
+                <Cocktail aria-hidden />
+              )}
+            </TogglePop>
             Check in
           </Button>
         </DropdownMenuTrigger>
@@ -146,10 +174,7 @@ export function CheckInButton({
             setBulkOpen(true);
           }}
         >
-          <DropdownMenuItem
-            className="min-h-11"
-            onSelect={() => void checkInSelf()}
-          >
+          <DropdownMenuItem className="min-h-11" onSelect={checkInSelf}>
             Just me
           </DropdownMenuItem>
           <DropdownMenuItem
