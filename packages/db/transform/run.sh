@@ -2,17 +2,47 @@
 # Rebuild the transformed baseline database from scratch, apply every numbered
 # transform file in order, then bring it up to date with `db:migrate`.
 #
-#   packages/db/transform/run.sh              dump from Nhost, restore, transform
-#   packages/db/transform/run.sh --no-dump    reuse the last dump, restore, transform
+#   packages/db/transform/run.sh                          restore the checked-in baseline, transform
+#   SRC_CONTAINER=<pg> packages/db/transform/run.sh --dump   take a fresh dump from <pg> first
 #
-# A3 runs this against a *schema-only* dump of the local Nhost database, which is
-# migration-identical to production. E1 runs the same numbered files against a
-# real production dump *with data* — see README.md.
+# The default input is `nhost-schema.sql` beside this script: the checked-in
+# schema-only dump of the Nhost database (X4), pinned by checksum in
+# `../src/migrate/transform-freeze.test.ts`. No Nhost stack is needed, and since
+# 2026-10-05 none exists locally — the rollback of record is a checkout of
+# `82450ad1` (`docs/architecture/e4-decisions.md` decisions 11 and 15).
+# `--no-dump` is still accepted and means the default; CI and older notes pass it.
+#
+# `--dump` is for a legacy Nhost Postgres you have brought up yourself (from that
+# checkout, say). Its container name is per-worktree, so there is no default:
+# it used to be `epic-burnell-4b4be9-postgres-1`, a name that was right in one
+# worktree on one machine and is now right nowhere. E1 runs the same numbered
+# files against a real production dump *with data* — see README.md.
 set -euo pipefail
 
-SRC_CONTAINER="${SRC_CONTAINER:-epic-burnell-4b4be9-postgres-1}"
+TAKE_DUMP=0
+for arg in "$@"; do
+  case "$arg" in
+    --dump) TAKE_DUMP=1 ;;
+    --no-dump) ;;
+    *)
+      echo "usage: run.sh [--no-dump] | SRC_CONTAINER=<legacy postgres> run.sh --dump" >&2
+      exit 2
+      ;;
+  esac
+done
+
+SRC_CONTAINER="${SRC_CONTAINER:-}"
 SRC_USER="${SRC_USER:-postgres}"
 SRC_DB="${SRC_DB:-local}"
+if [[ $TAKE_DUMP -eq 1 && -z "$SRC_CONTAINER" ]]; then
+  echo "--dump needs SRC_CONTAINER=<legacy Nhost postgres container> (\`docker ps\`); there is no default." >&2
+  exit 2
+fi
+if [[ $TAKE_DUMP -eq 0 && -n "$SRC_CONTAINER" ]]; then
+  # Not an error: a shell that exported it for a cutover rehearsal still has to
+  # be able to run the test suites, which call this through `test-db.sh`.
+  echo "note: SRC_CONTAINER=$SRC_CONTAINER is set but --dump was not given; restoring, not dumping." >&2
+fi
 
 # `-` not `:-`: an explicitly empty DST_CONTAINER selects the TCP path below.
 DST_CONTAINER="${DST_CONTAINER-cellar-stack-postgres-1}"
@@ -22,19 +52,23 @@ DST_DB="${DST_DB:-cellar}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
-# Duplicated from `test-db.sh` deliberately — see the long note there under "the
-# dump" for why this is repo-relative rather than `${TMPDIR:-/tmp}`. Short
-# version: Turborepo strips `TMPDIR` in strict env mode, so that default
-# resolved to two different files depending on whether the build came from
-# `bun run test` or from a shell, and `$TMPDIR` is per-user rather than
-# per-worktree, so every worktree on the machine shared one dump of whichever
-# worktree's Nhost container happened to be dumped last.
+# Restoring: the checked-in baseline unless the caller names another file.
 #
-# Only the default's directory is created; a caller-supplied path is the
-# caller's business.
+# Dumping: never the checked-in file by default — a fresh dump landing on a
+# tracked, checksum-pinned file is a surprise nobody asked for. Regenerating the
+# baseline is a deliberate act, so it takes a deliberate
+# `DUMP="$PWD/packages/db/transform/nhost-schema.sql"`. The cache path is
+# repo-relative rather than `${TMPDIR:-/tmp}` for the reasons `test-db.sh` gives
+# under "the dump": Turborepo strips `TMPDIR`, and `$TMPDIR` is per-user rather
+# than per-worktree. Only the default's directory is created; a caller-supplied
+# path is the caller's business.
 if [[ -z "${DUMP:-}" ]]; then
-  DUMP="$REPO/node_modules/.cache/cellar-test-db/nhost-schema.sql"
-  mkdir -p "$(dirname "$DUMP")"
+  if [[ $TAKE_DUMP -eq 1 ]]; then
+    DUMP="$REPO/node_modules/.cache/cellar-test-db/nhost-schema.sql"
+    mkdir -p "$(dirname "$DUMP")"
+  else
+    DUMP="$HERE/nhost-schema.sql"
+  fi
 fi
 
 # Set `DST_CONTAINER=` (empty) to reach the target over TCP with a local psql
@@ -46,7 +80,7 @@ else
   dst() { PGPASSWORD="$DST_PASSWORD" psql -U "$DST_USER" -d "$DST_DB" -v ON_ERROR_STOP=1 "$@"; }
 fi
 
-if [[ "${1:-}" != "--no-dump" ]]; then
+if [[ $TAKE_DUMP -eq 1 ]]; then
   echo "==> schema-only dump: $SRC_CONTAINER/$SRC_DB -> $DUMP"
   # WRITTEN TO A PRIVATE TEMP AND RENAMED, never straight to $DUMP.
   #
@@ -94,6 +128,14 @@ if [[ "${1:-}" != "--no-dump" ]]; then
   mv -f "$DUMP_PARTIAL" "$DUMP"
 fi
 
+# Checked before the reset, not discovered by it: the reset drops every schema
+# the restore would recreate, so a missing input would otherwise leave the
+# target empty and the error pointing at the restore.
+if [[ ! -f "$DUMP" ]]; then
+  echo "no dump at $DUMP; nothing to restore, and $DST_DB was left as it was." >&2
+  exit 1
+fi
+
 echo "==> reset $DST_CONTAINER/$DST_DB"
 # Only the schemas the dump recreates, plus `public`, which also carries
 # better-auth's five tables since X2 (`13_better_auth_tables.sql`). Any other
@@ -110,7 +152,7 @@ dst -q -c "DROP SCHEMA IF EXISTS admin, auth, cellar_meta, drizzle, hdb_catalog,
        -c "DROP SCHEMA IF EXISTS public CASCADE;" \
        -c "CREATE SCHEMA public;" > /dev/null
 
-echo "==> restore"
+echo "==> restore $DUMP"
 dst -q < "$DUMP" > /dev/null
 
 for f in "$HERE"/[0-9][0-9]_*.sql; do

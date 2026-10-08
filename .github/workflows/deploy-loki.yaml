@@ -19,9 +19,9 @@
 #   - the `type=gha` layer cache under the `api` / `actors` scopes, which
 #     stack-ci's `images` job reads (read-only) on every PR.
 #
-# This workflow is NOT the only thing a merge to `main` triggers: the `nhost`
-# GitHub app redeploys production Nhost Cloud on every merge to `main` too.
-# See docs/architecture/e4-decisions.md, decision 15, before merging anything.
+# The `nhost` GitHub app used to redeploy production Nhost Cloud on every merge
+# to `main` as well; the repository was disconnected from it on 2026-10-05
+# (docs/architecture/e4-decisions.md, decision 15), so it no longer does.
 #
 # Hardening: never add a `pull_request` / `pull_request_target` trigger; every
 # action is pinned to a full commit SHA (the comment names the release it was
@@ -40,6 +40,9 @@ on:
       - "bunfig.toml"
       - "package.json"
       - ".dockerignore"
+      # Both Dockerfiles COPY every workspace manifest (`--frozen-lockfile`
+      # checks bun.lock against all of them); `packages/**` covers the rest.
+      - "services/client/package.json"
       # The smoke test this job runs.
       - "scripts/ci/**"
       - ".github/workflows/deploy-loki.yaml"

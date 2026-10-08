@@ -85,8 +85,8 @@ development history, which was squashed into a single commit when the branch was
 the full history is kept privately as an archive. A sha that doesn't resolve in this repository is
 one of those.
 
-A pre-migration Nhost stack still runs in this worktree, for rollback only — see "Legacy rollback
-path only" at the end of this file. Don't build new features against it.
+There is no local Nhost stack any more — not in this worktree, not on the dev machine. Rollback is a
+checkout of `82450ad1`; see "Nhost: retired, and how rollback works" at the end of this file.
 
 ## Prerequisites
 
@@ -467,58 +467,42 @@ than after.
 
 ---
 
-## Legacy rollback path only
+## Nhost: retired, and how rollback works
 
-Everything below describes the **pre-migration Nhost/Hasura stack**, which still runs, unmigrated,
-in this worktree so the cutover (`E4` in `docs/architecture/migration-plan.md`) has something to
-roll back to and a source to `pg_dump` from. It is not where new work happens — don't build
-features here, and don't let it leak into the sections above. It is removed after E4's 24h watch
-plus a checked-in dump baseline (`X4`). X4 has landed (`a2d8dcef`), so only the watch is left.
+The pre-migration Nhost/Hasura stack is **gone from the dev machine** as of 2026-10-05: its
+containers and volumes (including `epic-burnell-4b4be9-postgres-1`), the `nhost` CLI and its state,
+and the `mcp-nhost` server. Any instruction to run `nhost up`, `nhost dev hasura …`, `hasura
+metadata …` or an `mcp__mcp-nhost__*` tool is dead; the `nhost-hasura-admin` agent and the
+`.mcp.json` entry were removed with it.
 
-- **`nhost up --apply-seeds` no longer brings this stack up whole, and the rollback of record is
-  not this branch.** `functions/` was deleted at `51881a0c`; the functions container bind-mounts
-  the worktree expecting sources there, so on this branch `nhost up` starts **nine of ten**
-  containers and the tenth crash-loops — measured 2026-09-19 at **1259 restarts**. The other nine
-  are healthy, which is why the stack still serves reads for cutover comparison and why the
-  `pg_dump` source below is unaffected.
-
-  Per `e4-decisions.md` decision 11, **the rollback of record is a checkout of `82450ad1`** — the
-  pre-migration commit, which still has `functions/`. Do not plan a rollback around `nhost up` in
-  this worktree. Local URLs, where it does run, are the Nhost CLI defaults: e.g.
-  `https://local.hasura.nhost.run`, `https://local.graphql.nhost.run`.
-- **Nhost Cloud no longer deploys from `main`.** Its GitHub app used to redeploy the live Nhost
-  backend (migrations, metadata, `functions/`) 27–40 seconds after every merge to `main`; the
-  repository was disconnected from the Nhost project on 2026-10-05, before this branch was merged,
-  so the project stays frozen at `82450ad1` as the rollback target until it is deleted
-  (`e4-decisions.md` decision 15). Nothing in this repository configured it, so nothing here
-  can show it either way: the check is that a commit on `main` carries no `nhost` check-run
+- **The rollback of record is a checkout of `82450ad1`** (`docs/architecture/e4-decisions.md`
+  decision 11) — the pre-migration commit, which still has `functions/` and a complete `nhost/`.
+  Never plan a rollback around this branch: `functions/` was deleted at `51881a0c`, so `nhost up`
+  here could never start the whole stack even when the CLI existed.
+- **Nhost Cloud no longer deploys from `main`, and is not ours to touch.** The repository was
+  disconnected from the Nhost project on 2026-10-05, before the migration merged, so the project
+  stays frozen at `82450ad1` as the rollback target until it is deleted (`e4-decisions.md`
+  decision 15). Nothing in this repository configured it, so nothing here can show it either way:
+  the check is that a commit on `main` carries no `nhost` check-run
   (`gh api repos/MrMint/cellar-assistant/commits/<sha>/check-runs --jq '[.check_runs[].app.slug]'`).
   **Merging a release-please PR is still a production deploy, deliberately:** it fast-forwards
   `production`, which Vercel builds as Production, and that is now the frontend's deploy path.
-- Its containers are named after the worktree directory, **not** `cellar-assistant-*` — in this
-  worktree that's `epic-burnell-4b4be9-postgres-1`, `epic-burnell-4b4be9-graphql-1`, etc. (a fixed
-  container name is wrong in every worktree but the one it was written for — check with
-  `docker ps`).
-- Debug DB access: `docker exec <worktree-dir>-postgres-1 psql -U postgres -d local` (database
-  name is `local`, not `postgres`). Hasura and Nhost functions connect as `nhost_hasura`:
-  `docker exec <worktree-dir>-postgres-1 psql -U nhost_hasura -d local`.
-- Schema/metadata changes against *this* stack still go through the `nhost-hasura-admin` agent
-  (`.claude/agents/nhost-hasura-admin.md`) and the `mcp__mcp-nhost__*` tools (`.mcp.json`) — both
-  are still configured and still work, but only mean something here, for cutover comparison and
-  rollback. They are not how schema changes happen on the current stack — that's a migration
-  in `packages/db/migrations` (`drizzle-kit generate` output, or the hand-written lane), reviewed
-  like any other code change, and applied ONLY by `db:migrate` (`packages/db/src/migrate/cli.ts`,
-  which keeps the `cellar_meta.schema_migrations` ledger): `bun run dev:migrate` for this
-  worktree's stack, `bun run db:migrate --url <dsn> [--status]` for any other. Never
-  `drizzle-kit migrate`/`push` — `packages/db/README.md` says why. Production gets it from the
-  deploy, before the new images start (`docs/architecture/deploy-loki.md` §4.1).
-- `packages/db/transform/run.sh` still *defaults* to `pg_dump`ing this container
-  (`SRC_CONTAINER`); `scripts/cutover/cutover.sh` has **no** default any more and needs exactly
-  one of `SRC_DSN` / `SRC_CONTAINER` for its `preflight` and `dump` phases (its header). Neither is
-  the only source, though. Since X4 the
-  checked-in `packages/db/transform/nhost-schema.sql` is enough for both build paths
-  (`DUMP=… --no-dump`), and CI uses nothing else. What only a live Nhost database can still serve
-  is a rehearsal's `cutover.sh preflight` and `dump` phases (`e4-decisions.md` decision 11).
+- **Schema changes** are a migration in `packages/db/migrations` (`drizzle-kit generate` output, or
+  the hand-written lane), reviewed like any other code change, and applied ONLY by `db:migrate`
+  (`packages/db/src/migrate/cli.ts`, which keeps the `cellar_meta.schema_migrations` ledger):
+  `bun run dev:migrate` for this worktree's stack, `bun run db:migrate --url <dsn> [--status]` for
+  any other. Never `drizzle-kit migrate`/`push` — `packages/db/README.md` says why. Production gets
+  it from the deploy, before the new images start (`docs/architecture/deploy-loki.md` §4.1).
+- **Every database is built from the checked-in baseline.** `packages/db/transform/run.sh` and
+  `test-db.sh` restore `packages/db/transform/nhost-schema.sql` (X4) by default and need no Nhost;
+  `--no-dump` is still accepted and means the same thing. A fresh dump is `SRC_CONTAINER=<pg> …
+  --dump`, against a legacy Postgres you brought up yourself (from the `82450ad1` checkout) — there
+  is no default container name. `scripts/cutover/cutover.sh` likewise needs exactly one of
+  `SRC_DSN` / `SRC_CONTAINER` for its `preflight` and `dump` phases, the only two that need a live
+  Nhost database at all (`e4-decisions.md` decision 11).
+- **`nhost/` is frozen history.** Nothing executable reads it; what remains are provenance comments
+  (`nhost/metadata/…`, `nhost/migrations/…`) in actor and contract sources, which `82450ad1` also
+  resolves. Don't add to it or build against it.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

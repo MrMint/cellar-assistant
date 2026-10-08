@@ -2,13 +2,14 @@
 # Give the test suites a database they own.
 #
 #   packages/db/transform/test-db.sh              build the template if stale, hand out a clean run db
-#   packages/db/transform/test-db.sh --rebuild    force the template rebuild (re-dumps from Nhost)
+#   packages/db/transform/test-db.sh --rebuild    force the template rebuild
 #   TEST_DB=… packages/db/transform/test-db.sh --drop    drop one run database and stop
 #
-# No live Nhost container is needed for either, given the checked-in dump (X4):
-#
-#   DUMP="$PWD/packages/db/transform/nhost-schema.sql" \
-#     packages/db/transform/test-db.sh --rebuild --no-dump
+# The template is built from the checked-in schema-only baseline,
+# `nhost-schema.sql` beside this script (X4), so no Nhost container is needed —
+# and since 2026-10-05 there is none locally. `--no-dump` is still accepted and
+# means the default. `SRC_CONTAINER=<pg> … --dump` builds from a fresh dump of a
+# legacy Nhost Postgres you brought up yourself instead; see `run.sh`.
 #
 # ## Why this exists
 #
@@ -23,15 +24,15 @@
 #
 # ## Template plus clone
 #
-# `run.sh` dumps from Nhost and replays the numbered transform files: seconds,
-# and it needs the Nhost stack up. `CREATE DATABASE ... TEMPLATE` is a file copy
+# `run.sh` restores the baseline and replays the numbered transform files, then
+# every migration: seconds. `CREATE DATABASE ... TEMPLATE` is a file copy
 # — about a second — so the expensive build happens once into
 # `cellar_test_template`, and every `vitest run` recreates `cellar_test` from it.
 # That is what makes "each run starts from a known state" affordable.
 #
 # The template is rebuilt when its fingerprint (the transform files, this
-# script, the reference data, the dump, and the Nhost migrations it was taken
-# from) no longer matches the one recorded inside it.
+# script, the reference data, the dump and the migrations) no longer matches the
+# one recorded inside it.
 #
 # ## Concurrency
 #
@@ -53,7 +54,7 @@
 #
 # Three things are shared and all three are covered: the template, the run
 # database, and — less obviously — the **dump file on disk**. See "the dump" for
-# why the default path moved out of `$TMPDIR` and why the build reads a private
+# why the default is the checked-in baseline and why the build reads a private
 # copy of it.
 #
 # `drizzle-kit migrate` is deliberately not used: it cannot replay the
@@ -78,48 +79,20 @@ MIGRATIONS="$HERE/../migrations"
 
 # ------------------------------------------------------------------ the dump
 #
-# NOT UNDER `$TMPDIR`, and repo-relative on purpose. Both halves were measured
-# defects, not style:
+# The checked-in baseline unless the caller names another file. It is tracked
+# and checksum-pinned (`../src/migrate/transform-freeze.test.ts`), so nothing
+# here ever writes to it: a `--dump` build writes its fresh dump into this
+# invocation's private `DUMP_PIN`, not to `$DUMP`.
 #
-#   * `$TMPDIR` is not a constant. Turborepo 2.x runs every task in **strict**
-#     env mode, and `TMPDIR` is not on its passthrough list — measured by
-#     printing `env` from inside this script under `turbo run test` and again
-#     from a shell: `TMPDIR=[<unset>]` versus
-#     `TMPDIR=[/var/folders/…/T/]`. So `bun run test` resolved this to
-#     `/tmp/cellar-nhost-schema.sql` and a direct run resolved it to the user's
-#     private temp directory — two different files, with two different sha256s
-#     on this machine at the time of writing. The fingerprint below hashes the
-#     dump, so the two paths each saw the *other's* template as stale and
-#     rebuilt it. Every alternation between `bun run test` and
-#     `packages/db/transform/test-db.sh` paid for a full rebuild, and a rebuild
-#     is the only window in which the shared template is broken.
-#   * `$TMPDIR` is also per-user, not per-checkout, so every worktree on the
-#     machine shared one dump file — and the Nhost container it is dumped *from*
-#     is per-worktree (`run.sh`'s `SRC_CONTAINER`). One agent's dump therefore
-#     invalidated every other agent's template. `node_modules/` is already
-#     gitignored, already per-worktree, and already where build caches go.
+# This used to default to a shared cache under `node_modules/.cache` that each
+# fresh dump was published back to — repo-relative and not under `$TMPDIR`,
+# because Turborepo's strict env mode strips `TMPDIR` (so `bun run test` and a
+# direct run resolved two different files and rebuilt each other's template),
+# and `$TMPDIR` is per-user, so every worktree shared one dump. A tracked file
+# has neither problem by construction; keep it that way if this ever changes.
 #
-# Exported, with `run.sh`'s default duplicated deliberately: the child then sees
-# this value already set and computes nothing of its own, so parent and child
-# cannot disagree about which file the dump is. The fingerprint below hashes it,
-# which is only meaningful if it is the same bytes `run.sh` restores from — see
-# `DUMP_PIN` for how that is made true rather than merely likely.
-#
-# `DUMP_IS_CALLERS` records that the path came from the environment. The
-# documented `--rebuild --no-dump` recipe points `DUMP` at the *checked-in*
-# `nhost-schema.sql`, and publishing a fresh dump back over a tracked file would
-# be a rude surprise; the publish step below is skipped when this is 1.
-DUMP_IS_CALLERS=0
-if [[ -n "${DUMP:-}" ]]; then
-  DUMP_IS_CALLERS=1
-else
-  # Only the default's directory is created. A caller-supplied path is the
-  # caller's business, and creating *its* parent turns a typo into
-  # "mkdir: /nonexistent: Read-only file system" from a line that has nothing to
-  # do with what went wrong.
-  DUMP="$REPO/node_modules/.cache/cellar-test-db/nhost-schema.sql"
-  mkdir -p "$(dirname "$DUMP")"
-fi
+# Exported so `run.sh` sees the same value and computes nothing of its own.
+DUMP="${DUMP:-$HERE/nhost-schema.sql}"
 export DUMP
 
 # Every migration, and the code that applies them. `run.sh` ends with
@@ -135,25 +108,35 @@ REBUILD=0
 DROP_ONLY=0
 # `bash 3.2` (macOS) treats an empty array as unbound under `set -u`, hence the
 # `${a[@]+"${a[@]}"}` expansion at the call site.
-NO_DUMP=()
+DUMP_FLAG=()
 for arg in "$@"; do
   case "$arg" in
     --rebuild) REBUILD=1 ;;
-    # Reuse the dump at $DUMP instead of taking a new one. Handed straight to
-    # `run.sh`; the Nhost stack does not have to be up, or to exist. Point
-    # $DUMP at `nhost-schema.sql` for the committed one.
-    --no-dump) NO_DUMP=(--no-dump) ;;
+    # The default: restore $DUMP. Accepted so CI and older recipes still work.
+    --no-dump) ;;
+    # Take a fresh dump from $SRC_CONTAINER instead (`run.sh --dump`, which
+    # refuses without one). Implies --rebuild: asking for new input and then
+    # finding the template "current" against the old input would be no answer.
+    # The template it builds is a one-off — the next run without --dump
+    # fingerprints the baseline again, disagrees, and rebuilds from it.
+    --dump) DUMP_FLAG=(--dump); REBUILD=1 ;;
     # Drop $TEST_DB and stop. This is the other half of "one database per run":
     # the vitest teardown in `services/actors/src/lib/test-db-setup.ts` calls it
     # so a finished run does not leave a 24 MB database behind.
     --drop) DROP_ONLY=1 ;;
     *)
-      echo "usage: test-db.sh [--rebuild] [--no-dump] | test-db.sh --drop" >&2
+      echo "usage: test-db.sh [--rebuild] [--no-dump | --dump] | test-db.sh --drop" >&2
       exit 2
       ;;
   esac
 done
 [[ "${ACTORS_TEST_DB_REBUILD:-}" == "1" ]] && REBUILD=1
+# `run.sh --dump` refuses without a source too, but only after this script has
+# already dropped the template to rebuild it — so refuse here, first.
+if [[ ${#DUMP_FLAG[@]} -gt 0 && -z "${SRC_CONTAINER:-}" ]]; then
+  echo "--dump needs SRC_CONTAINER=<legacy Nhost postgres container> (\`docker ps\`); there is no default." >&2
+  exit 2
+fi
 
 # A typo here drops a database. `cellar` holds a frontend agent's live data and,
 # since X2, better-auth's five tables as well, so its name may never reach the
@@ -442,19 +425,13 @@ migration_files() {
 # scripts, the reference rows, every migration and the migrator that applies
 # them — and whatever `run.sh` reads its schema *from*.
 #
-# That last input has two forms, and both are hashed when present rather than
-# one being assumed:
-#
-#   * `$DUMP`, when it is already on disk. That is the exact input a
-#     `--no-dump` build restores, including the checked-in `nhost-schema.sql`
-#     (X4). It used not to be hashed at all, so editing or regenerating that
-#     file left a stale template reporting itself current.
-#   * `nhost/migrations`, when the directory still exists — the right proxy for
-#     a build that takes a *fresh* dump, since `run.sh` dumps the schema those
-#     migrations produced. It is `find`ed rather than `cat`ed directly because
-#     it is scheduled for deletion after E4 (migration-plan §"nhost/ stays
-#     until after E4"): when it goes, this contributes nothing, the fingerprint
-#     changes exactly once, and nothing here breaks.
+# That last input is the dump itself, hashed when it is on disk. It used not to
+# be hashed at all, so editing or regenerating the checked-in `nhost-schema.sql`
+# left a stale template reporting itself current. `nhost/migrations` was hashed
+# too, as a proxy for a fresh dump taken from a live Nhost container; with the
+# baseline as the default input, and a `--dump` build hashing the bytes it
+# actually dumped (below), the proxy measured nothing and was dropped — which
+# changed every fingerprint once, on 2026-10-05.
 #
 # Takes the dump's path as an argument rather than reading `$DUMP`, because the
 # file that is hashed and the file that is restored have to be the same *bytes*,
@@ -466,7 +443,6 @@ fingerprint() {
     migration_files | tr '\n' '\0' | xargs -0 cat
     cat "$MIGRATE_SRC/ledger.ts" "$MIGRATE_SRC/cli.ts"
     if [[ -f "$dump" ]]; then cat "$dump"; fi
-    find "$REPO/nhost/migrations" -type f -print0 2> /dev/null | sort -z | xargs -0 cat 2> /dev/null
   } | sha | cut -c1-64
 }
 
@@ -534,9 +510,10 @@ reap_abandoned_run_databases() {
 #
 # The fingerprint is computed **in here**, which it did not used to be. The old
 # comment said the hash only reads files so it was safe outside — but one of the
-# files it reads is `$DUMP`, and `run.sh` rewrites `$DUMP`. A `run.sh` building a
-# development database (which this lock does not cover, and should not) could
-# therefore swap the dump between the hash and the build, and the template would
+# files it reads is `$DUMP`, and `run.sh --dump` rewrites whatever `$DUMP` names.
+# One building a development database (which this lock does not cover, and
+# should not) into a caller-named `$DUMP` could therefore swap the dump between
+# the hash and the build, and the template would
 # be recorded under the fingerprint of a file it was not built from. That is the
 # "check outside the lock" bug in its subtlest form: not a missing lock, a hash
 # of the wrong bytes. Hashing 290 KB costs about 3 ms; the argument for keeping
@@ -544,18 +521,18 @@ reap_abandoned_run_databases() {
 acquire_template_lock
 reap_abandoned_run_databases
 
-# THE DUMP THIS INVOCATION USES, private to it. `$DUMP` is a shared cache — that
-# is its whole point, since `--no-dump` and the fingerprint both want the same
-# file to persist between runs — so it cannot also be the file a build reads
-# while holding the lock. Copying it into the lock directory (`mktemp -d`, so
+# THE DUMP THIS INVOCATION USES, private to it. `$DUMP` persists between runs —
+# by default it is the checked-in baseline, and a caller may name any other
+# file — so it cannot also be the file a build reads, or a `--dump` build
+# writes, while holding the lock. Copying it into the lock directory (`mktemp -d`, so
 # per-invocation) pins the bytes: whatever else rewrites `$DUMP` from here on,
 # this build restores, hashes and records one consistent snapshot.
 DUMP_PIN="$LOCK_DIR/nhost-schema.sql"
 if [[ -f "$DUMP" ]]; then cp "$DUMP" "$DUMP_PIN"; fi
-if [[ ${#NO_DUMP[@]} -gt 0 && ! -f "$DUMP_PIN" ]]; then
-  echo "--no-dump needs a dump at $DUMP, and there is none." >&2
-  echo "Drop --no-dump to take a fresh one, or point DUMP at" >&2
-  echo "  $HERE/nhost-schema.sql" >&2
+if [[ ${#DUMP_FLAG[@]} -eq 0 && ! -f "$DUMP_PIN" ]]; then
+  echo "no dump at $DUMP to build the template from." >&2
+  echo "The default is the checked-in $HERE/nhost-schema.sql;" >&2
+  echo "unset DUMP to use it." >&2
   exit 1
 fi
 
@@ -576,12 +553,12 @@ else
   # carries citext, pg_trgm, pgcrypto, postgis and vector with it, so a database
   # created from `template1` ends up with the extensions too.
   #
-  # `DUMP` is overridden to the pin for the child: without `--no-dump` the child
-  # takes a fresh dump, and it writes it here, into this invocation's private
-  # directory, rather than over the shared cache another process may be reading.
+  # `DUMP` is overridden to the pin for the child: with `--dump` the child takes
+  # a fresh dump, and it writes it here, into this invocation's private
+  # directory, never over `$DUMP` — which by default is a tracked file.
   DST_CONTAINER="$DST_CONTAINER" DST_USER="$DST_USER" \
     DST_PASSWORD="$DST_PASSWORD" DST_DB="$TEMPLATE_DB" DUMP="$DUMP_PIN" \
-    "$HERE/run.sh" ${NO_DUMP[@]+"${NO_DUMP[@]}"}
+    "$HERE/run.sh" ${DUMP_FLAG[@]+"${DUMP_FLAG[@]}"}
 
   # …and the reference rows, from the same file and the same code path as
   # `bun run db:seed`. A schema-only dump carries none of them, and the ten
@@ -616,7 +593,7 @@ else
     node "$SEED" --reference-only
 
   # Recorded from a fingerprint taken AFTER the build, not the one taken before
-  # it. Without `--no-dump` the child just replaced the pin with a fresh dump,
+  # it. With `--dump` the child just replaced the pin with a fresh dump,
   # so `$WANT` describes the inputs as they were on the way in and this one
   # describes what the template was actually built from. Recording `$WANT` made
   # the very next run compute a hash of the new dump, disagree, and rebuild —
@@ -627,16 +604,6 @@ else
     -c "CREATE SCHEMA cellar_test_meta" \
     -c "CREATE TABLE cellar_test_meta.build (fingerprint text primary key, built_at timestamptz not null default now())" \
     -c "INSERT INTO cellar_test_meta.build (fingerprint) VALUES ('$WANT')" > /dev/null
-
-  # Publish the pin to the shared cache, so the next run finds it current
-  # instead of re-dumping, and `--no-dump` has something to reuse. `mv` within
-  # one filesystem is atomic, so a concurrent reader sees the whole old file or
-  # the whole new one. Skipped when the caller named the path: the documented
-  # `--rebuild --no-dump` recipe points DUMP at the checked-in
-  # `nhost-schema.sql`, and that file is not ours to overwrite.
-  if [[ $DUMP_IS_CALLERS -eq 0 && -f "$DUMP_PIN" ]]; then
-    cp "$DUMP_PIN" "$DUMP.$$.partial" && mv -f "$DUMP.$$.partial" "$DUMP"
-  fi
 fi
 
 # The lock can be lost without this shell noticing: `TEST_DB_LOCK_MAX_HOLD`

@@ -7,7 +7,7 @@
  * ## What it replaces, exactly
  *
  * Two Hasura *native queries* with identical bodies, differing only in the name
- * of their one argument (`nhost/metadata/databases/databases.yaml`):
+ * of their one argument (`82450ad1:nhost/metadata/databases/databases.yaml`):
  *
  * ```sql
  * SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) *,

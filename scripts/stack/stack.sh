@@ -2256,15 +2256,16 @@ print("images" if vision and p.get("media_marker") else ("novision" if not visio
 #
 # The actors suite's vitest `globalSetup` builds `cellar_test` through
 # `packages/db/transform/test-db.sh`, whose DST_CONTAINER default is
-# `cellar-stack-postgres-1` — the SHARED lane, not this worktree's Postgres —
-# and whose template build re-dumps the legacy Nhost database. So "run the
-# tests" has two prerequisites that live outside this stack entirely, and both
-# fail in ways that name neither.
+# `cellar-stack-postgres-1` — the SHARED lane, not this worktree's Postgres.
+# So "run the tests" has a prerequisite that lives outside this stack entirely,
+# and it fails in a way that does not name it. (The template build used to
+# re-dump a legacy Nhost container too; it restores the checked-in
+# `nhost-schema.sql` baseline now, so that second prerequisite is gone.)
 # ---------------------------------------------------------------------------
 doctor_test_suite() {
   d_section "test suite prerequisites"
   docker_up || return 0
-  local dst tmpl src_nhost
+  local dst tmpl
   dst="${DST_CONTAINER-cellar-stack-postgres-1}"
   if [ -z "$dst" ]; then
     d_info "DST_CONTAINER is explicitly empty — test-db.sh will reach Postgres over TCP"
@@ -2281,8 +2282,8 @@ doctor_test_suite() {
       d_cont "files differ each rebuild it (3s) when they alternate. \`dev:bootstrap --tests\`"
       d_cont "builds in this worktree's own Postgres when it can, which avoids even that."
     else
-      d_warn "no cellar_test_template in $dst — the first \`bun run test\` BUILDS it, which re-dumps the"
-      d_cont "legacy Nhost database (packages/db/transform/run.sh) and needs that stack up"
+      d_info "no cellar_test_template in $dst — the first \`bun run test\` BUILDS it (seconds), from the"
+      d_cont "checked-in baseline packages/db/transform/nhost-schema.sql; nothing else needs to be up"
     fi
   else
     d_warn "test-database host \"$dst\" is NOT running — the actors suite's globalSetup fails before"
@@ -2292,16 +2293,6 @@ doctor_test_suite() {
     mine_pg="$(project_container "$COMPOSE_PROJECT_NAME" postgres)"
     [ -n "$mine_pg" ] || mine_pg="<this stack-s postgres>"
     d_hint "DST_CONTAINER=$mine_pg bun run test    (build it in THIS worktree instead)"
-  fi
-  src_nhost="$(sed -n 's/^SRC_CONTAINER="\${SRC_CONTAINER:-\([^}]*\)}"/\1/p' \
-    "$REPO_ROOT/packages/db/transform/run.sh" | head -1)"
-  if [ -n "$src_nhost" ]; then
-    if docker ps --format '{{.Names}}' | grep -qx "$src_nhost"; then
-      d_ok "legacy Nhost source \"$src_nhost\" is running (only needed for a template REBUILD)"
-    else
-      d_info "legacy Nhost source \"$src_nhost\" is not running. Only a template rebuild needs it"
-      d_cont "(\`nhost up --apply-seeds\`), and its name is hardcoded to one worktree — see AGENTS.md"
-    fi
   fi
   # The client's document tests validate every GraphQL document against a live
   # API and *skip themselves* when it is down. A green suite that skipped them
@@ -2712,16 +2703,16 @@ cmd_bootstrap() {
       cmd_db_clone --from "$src"
     else
       # No donor. The schema's source of truth is the cutover transform of an
-      # Nhost dump (there is no replayable migration chain), so this is the
-      # only other way to get one — and it needs the legacy stack up.
+      # Nhost dump (there is no replayable migration chain), so build it: run.sh
+      # restores the checked-in baseline (nhost-schema.sql) and needs no Nhost.
       say "empty database and no running cellar-* Postgres to clone from;"
-      say "building the schema with packages/db/transform/run.sh (legacy Nhost dump)"
+      say "building the schema with packages/db/transform/run.sh (checked-in Nhost baseline)"
       DST_CONTAINER="$pg" DST_USER="$PG_USER" DST_PASSWORD="$PG_PASSWORD" DST_DB="$PG_DB" \
         PATH="$(node_path_prefix)" \
         "$REPO_ROOT/packages/db/transform/run.sh" \
-        || die "transform/run.sh failed. It pg_dumps the legacy Nhost Postgres, so that stack has to
-  be up (\`nhost up --apply-seeds\`; AGENTS.md \"Legacy rollback path only\"). Or start any
-  other worktree's stack and re-run with --from <its compose project>."
+        || die "transform/run.sh failed (above). It restores packages/db/transform/nhost-schema.sql
+  into $pg and needs nothing else up. Or start any other worktree's stack and re-run with
+  --from <its compose project>."
     fi
   fi
 
@@ -2782,27 +2773,27 @@ cmd_bootstrap() {
       dst="$DST_CONTAINER"
       say "test database: DST_CONTAINER is set by you (${dst:-<TCP>})"
     else
-      local mine tmpl nhost
+      local mine tmpl
       mine="$(project_container "$COMPOSE_PROJECT_NAME" postgres)"
-      tmpl="$(psql_in "$mine" postgres "select 1 from pg_database where datname='cellar_test_template'")"
-      nhost="$(sed -n 's/^SRC_CONTAINER="\${SRC_CONTAINER:-\([^}]*\)}"/\1/p' \
-        "$REPO_ROOT/packages/db/transform/run.sh" | head -1)"
-      if [ "$tmpl" = "1" ]; then
+      # Any Postgres can build the template now: test-db.sh restores the
+      # checked-in baseline (packages/db/transform/nhost-schema.sql) rather than
+      # dumping a legacy Nhost container, so the shared lane is only a fallback
+      # for a stack with no Postgres of its own.
+      if [ -n "$mine" ]; then
         dst="$mine"
-        say "test database: this stack's own Postgres ($dst) — its template is already built"
-      elif [ -n "$nhost" ] && docker ps --format '{{.Names}}' | grep -qx "$nhost"; then
-        dst="$mine"
-        say "test database: this stack's own Postgres ($dst) — building the template from $nhost"
+        tmpl="$(psql_in "$mine" postgres "select 1 from pg_database where datname='cellar_test_template'")"
+        if [ "$tmpl" = "1" ]; then
+          say "test database: this stack's own Postgres ($dst) — its template is already built"
+        else
+          say "test database: this stack's own Postgres ($dst) — building the template from the checked-in baseline"
+        fi
       elif docker ps --format '{{.Names}}' | grep -qx cellar-stack-postgres-1; then
         dst="cellar-stack-postgres-1"
-        warn "test database: the SHARED $dst, because this stack cannot build a template
-  (no cellar_test_template here and the legacy Nhost source is down). Concurrent runs are
-  safe there — own run database each, advisory-locked build — but every worktree shares
-  that one template, so alternating worktrees rebuild it. Bring up
-  \`nhost up --apply-seeds\` to keep it local."
+        warn "test database: the SHARED $dst, because this stack has no Postgres container.
+  Concurrent runs are safe there — own run database each, advisory-locked build — but every
+  worktree shares that one template, so alternating worktrees rebuild it."
       else
-        die "nowhere to build the test database: this stack has no cellar_test_template, the
-  legacy Nhost source is down (so packages/db/transform/run.sh cannot dump), and
+        die "nowhere to build the test database: this stack has no Postgres container and
   cellar-stack-postgres-1 is not running. Start one of those, or set DST_CONTAINER."
       fi
     fi

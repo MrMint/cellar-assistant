@@ -31,8 +31,10 @@ scripts/cutover/cutover.sh all --from files   # resume a part-finished run (no S
 # Recommended: copy the objects BEFORE the freeze, so the in-window `files` is
 # mostly local skips — "Files: two modes, and the two-step cutover" below.
 
-# A local rehearsal names the legacy container instead (`docker ps`):
-SRC_CONTAINER=epic-burnell-4b4be9-postgres-1 scripts/cutover/cutover.sh all
+# A local rehearsal names a legacy Nhost Postgres you brought up yourself
+# (`docker ps`). None exists on the dev machine since 2026-10-05; the schema
+# path needs none (`DUMP=…/nhost-schema.sql`, packages/db/transform/README.md).
+SRC_CONTAINER=<worktree>-postgres-1 scripts/cutover/cutover.sh all
 ```
 
 **Six things that used to go wrong silently, and now stop the run before phase 1:**
