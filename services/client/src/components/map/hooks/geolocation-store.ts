@@ -150,11 +150,15 @@ export function createGeolocationStore(
 
   const handleError = (error: GeolocationPositionError) => {
     if (error.code === error.PERMISSION_DENIED) {
+      // A refusal ends the browser's watch, so this request is over: clearing
+      // `requested` lets a later grant (site settings, then `onchange`) start
+      // a fresh watch instead of being ignored as already asked.
       set({
         location: null,
         loading: false,
         error: "Location access denied by user",
         permission: "denied",
+        requested: false,
       });
       return;
     }
@@ -189,7 +193,13 @@ export function createGeolocationStore(
       return;
     }
     // Waiting on the person (or refused): the map must not wait with them.
-    set({ permission, loading: state.requested && state.location === null });
+    // A refusal is never loading, whichever of `onchange` and the position
+    // error the browser delivers first.
+    set({
+      permission,
+      loading:
+        permission !== "denied" && state.requested && state.location === null,
+    });
   };
 
   const start = () => {

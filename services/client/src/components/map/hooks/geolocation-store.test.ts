@@ -152,6 +152,45 @@ describe("geolocation store (D14)", () => {
     assert.equal(locationButtonAction(state), "explain-denied");
   });
 
+  test("a no reported through onchange after the position error still stops the wait", async () => {
+    const browser = fakeBrowser("prompt");
+    const store = createGeolocationStore(browser.deps);
+    store.subscribe(() => {});
+    await flush();
+    store.request();
+    browser.deny();
+    const status = browser.status;
+    assert.ok(status);
+    (status as { state: string }).state = "denied";
+    status.onchange?.call(status, new Event("change"));
+    assert.equal(store.getSnapshot().loading, false);
+    assert.equal(store.getSnapshot().permission, "denied");
+  });
+
+  test("a no at the OS prompt, then allowed in site settings, starts a fresh watch", async () => {
+    const browser = fakeBrowser("prompt");
+    const store = createGeolocationStore(browser.deps);
+    store.subscribe(() => {});
+    await flush();
+    store.request();
+    browser.deny();
+    const status = browser.status;
+    assert.ok(status);
+    (status as { state: string }).state = "granted";
+    status.onchange?.call(status, new Event("change"));
+    assert.deepEqual(browser.calls, [
+      "getCurrentPosition",
+      "watchPosition",
+      "getCurrentPosition",
+      "watchPosition",
+    ]);
+    browser.fix(1, 2);
+    assert.deepEqual(store.getSnapshot().location, {
+      latitude: 1,
+      longitude: 2,
+    });
+  });
+
   test("a permission granted elsewhere (site settings) starts the watch", async () => {
     const browser = fakeBrowser("prompt");
     const store = createGeolocationStore(browser.deps);

@@ -11,7 +11,11 @@ export const dynamic = "force-dynamic";
 
 interface CreatePlacePageProps {
   /** `name`: N22's "Add it here" carries the searched name in. */
-  searchParams: Promise<{ lat?: string; lng?: string; name?: string }>;
+  searchParams: Promise<{
+    lat?: string;
+    lng?: string;
+    name?: string | string[];
+  }>;
 }
 
 export default async function CreatePlacePage({
@@ -41,7 +45,12 @@ export default async function CreatePlacePage({
       <CreatePlaceForm
         latitude={lat}
         longitude={lng}
-        initialName={params.name?.trim().slice(0, 200) ?? ""}
+        initialName={
+          // A repeated `?name=` arrives as an array; take none rather than throw.
+          typeof params.name === "string"
+            ? params.name.trim().slice(0, 200)
+            : ""
+        }
       />
     </Box>
   );

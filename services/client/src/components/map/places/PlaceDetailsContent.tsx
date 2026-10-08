@@ -579,6 +579,7 @@ export function PlaceDetailsContent({
       {/* Google details: a skeleton for at most 8 s, then a calm line (N22) */}
       {isEnriching && (
         <Box
+          role="status"
           aria-busy="true"
           aria-label="Loading details"
           sx={{ px: isDesktop ? 0 : 2, pb: 1 }}
