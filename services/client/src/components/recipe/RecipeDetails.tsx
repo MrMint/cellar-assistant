@@ -14,7 +14,7 @@ import { RecipeDetailsCard } from "./RecipeDetailsCard";
 import { RecipeHeaderServer } from "./RecipeHeaderServer";
 import { RecipeIngredientList } from "./RecipeIngredientList";
 import { RecipeReviews } from "./RecipeReviews";
-import { RecipeShare } from "./RecipeShare";
+import { useRecipeShareItem } from "./RecipeShare";
 
 export type {
   RecipeDetailsItem,
@@ -79,6 +79,10 @@ export const RecipeDetails = ({
       ? null
       : (reviews.find((review) => review.userId === viewerId) ?? null);
   const variations = recipe.recipe_variations ?? [];
+  const shareItem = useRecipeShareItem({
+    recipeId: recipe.id,
+    recipeName: recipe.name,
+  });
   const changed = () => {
     if (onChanged === undefined) router.refresh();
     else onChanged();
@@ -90,6 +94,7 @@ export const RecipeDetails = ({
         recipeId={recipe.id}
         recipeName={recipe.name}
         recipeType={recipe.type}
+        overflow={[shareItem]}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -111,7 +116,6 @@ export const RecipeDetails = ({
               />
             )}
           </div>
-          <RecipeShare recipeId={recipe.id} recipeType={recipe.type} />
         </div>
 
         <div className="grid gap-4 sm:col-span-2 lg:grid-cols-2">

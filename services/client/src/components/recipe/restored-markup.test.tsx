@@ -122,10 +122,12 @@ describe("RecipeDetails (restored)", () => {
     assert.match(html, />Negroni</);
   });
 
-  test("the fallback picture and Share Recipe", () => {
+  test("the fallback picture; Share lives in the bar's ⋯ (X17)", () => {
     assert.match(html, /data-alt="A cocktail"/);
-    assert.match(html, />Share Recipe</);
-    assert.match(html, />Share</);
+    // The old "Share Recipe" card under the photo is gone: Share is a row in
+    // the AppBar's overflow, whose rows a static render never mounts.
+    assert.doesNotMatch(html, />Share Recipe</);
+    assert.match(html, /<button[^>]*aria-label="More actions"/);
   });
 
   test("variations card: 'Variation of' and linked chips", () => {

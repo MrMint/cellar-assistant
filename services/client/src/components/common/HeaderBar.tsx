@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { AppBar } from "@/components/app/AppBar";
+import { AppBar, type AppBarOverflowItem } from "@/components/app/AppBar";
 import { SearchField } from "@/components/shell/SearchField";
 import { cn } from "@/lib/utils";
 import { generateBreadcrumbs, pageHeader } from "./breadcrumbs";
@@ -16,6 +16,8 @@ type HeaderBarProps = {
   };
   // End component (buttons, actions, etc.)
   endComponent?: ReactNode;
+  /** The bar's `⋯` (Share, Edit…), when there is a bar. */
+  overflow?: readonly AppBarOverflowItem[];
   // Search functionality
   onSearchChange?: (value: string) => void;
   isSearching?: boolean;
@@ -45,6 +47,7 @@ type HeaderBarProps = {
 export const HeaderBar = ({
   serverBreadcrumbs,
   endComponent,
+  overflow,
   isSearching = false,
   onSearchChange,
   defaultSearchValue = "",
@@ -94,6 +97,7 @@ export const HeaderBar = ({
           parent={header.parent}
           root={header.tabRoot}
           breadcrumbs={crumbs}
+          overflow={overflow}
           className="min-w-0 flex-1"
         />
       )}

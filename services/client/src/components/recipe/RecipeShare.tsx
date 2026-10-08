@@ -1,46 +1,35 @@
 "use client";
 
-import { Share } from "@/components/app/icons";
-import { Button } from "@/components/ui/button";
-
-interface RecipeShareProps {
-  recipeId: string;
-  recipeType: "food" | "cocktail";
-}
+import { useCallback } from "react";
+import type { AppBarOverflowItem } from "@/components/app/AppBar";
+import { absoluteUrl, canonicalPath } from "@/lib/share/routes";
+import { useShareLink } from "@/lib/share/use-share-link";
 
 /**
- * `82450ad1:src/components/recipe/RecipeShare.tsx`, restored. Its two
- * `console.log`s on a dismissed share sheet are gone; nothing else changed.
+ * A recipe's Share (X17): a row in the page's `⋯`, the app's one share
+ * behaviour (`lib/share/share-link.ts` — the share sheet, else the link
+ * copied), and the share text names the drink. It replaces the "Share Recipe"
+ * card that sat under the photo and said only "Check out this cocktail
+ * recipe!". The link is the recipe's own page, public to someone signed out
+ * (`src/proxy.ts`).
  */
-export function RecipeShare({ recipeType }: RecipeShareProps) {
-  const handleShare = async () => {
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({
-          title: `Recipe from Cellar Assistant`,
-          text: `Check out this ${recipeType} recipe!`,
-          url: window.location.href,
-        });
-      } catch {
-        // User canceled sharing or sharing failed
-      }
-    } else {
-      // Fallback: copy to clipboard
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-      } catch {
-        // Clipboard refused (insecure context, or permission denied)
-      }
-    }
-  };
-
-  return (
-    <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
-      <p className="type-callout font-semibold">Share Recipe</p>
-      <Button variant="outline" onClick={handleShare}>
-        <Share aria-hidden />
-        Share
-      </Button>
-    </section>
-  );
+export function useRecipeShareItem({
+  recipeId,
+  recipeName,
+}: {
+  recipeId: string;
+  recipeName: string;
+}): AppBarOverflowItem {
+  const share = useShareLink();
+  const onSelect = useCallback(() => {
+    void share({
+      url: absoluteUrl(
+        window.location.origin,
+        canonicalPath({ kind: "recipe", id: recipeId }),
+      ),
+      title: recipeName,
+      text: `${recipeName}: the recipe, on Cellar Assistant`,
+    });
+  }, [share, recipeId, recipeName]);
+  return { label: "Share recipe", onSelect };
 }
