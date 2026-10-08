@@ -59,7 +59,7 @@ test.describe("onboard → cellar → check in", () => {
     await expect(primary.getByText(/^Lets /)).toHaveCount(0);
     await primary.getByRole("button", { name: "Type it in instead" }).click();
 
-    // "Analyzing..." while `startItemOnboarding` runs; with no photograph the
+    // "Opening the form…" while `startItemOnboarding` runs; with no photograph the
     // server refuses to invent (E2c), the session stays open, and the form
     // comes up empty. No alert for that: nothing was sent to be read.
     const add = primary

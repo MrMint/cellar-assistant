@@ -12,15 +12,15 @@ import { cn } from "@/lib/utils";
 type BarcodeScannerProps = {
   onChange: (result: Barcode) => void;
   /**
-   * What to do instead when the camera can't be used, after the reason. The
-   * default is the add-item flow's (N04), which has a label-photo step to skip
-   * to; search has none, so it says its own.
+   * What to do instead when the camera can't be used, after the reason (N04).
+   * Search says its own; the default is generic.
    */
   cameraFallbackHint?: string;
 };
 
-const ADD_ITEM_FALLBACK_HINT =
-  "Skip this step to photograph the label instead.";
+// The add flow reads barcodes off its one camera now (X05), so search is the
+// one host left, and it passes its own words.
+const FALLBACK_HINT = "Type the code in instead.";
 
 // N04: `ideal`-only constraints (`BARCODE_SCAN_CONSTRAINTS`); the old
 // `min: 640 × 480` could make getUserMedia refuse outright.
@@ -28,7 +28,7 @@ const videoConstraints: MediaStreamConstraints = BARCODE_SCAN_CONSTRAINTS;
 
 export const BarcodeScanner = ({
   onChange,
-  cameraFallbackHint = ADD_ITEM_FALLBACK_HINT,
+  cameraFallbackHint = FALLBACK_HINT,
 }: BarcodeScannerProps) => {
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const camera = useCameraStatus();
