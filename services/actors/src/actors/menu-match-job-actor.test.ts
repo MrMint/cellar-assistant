@@ -70,6 +70,7 @@ const recordingSearcher = (
       id: string;
       name: string;
       distance: number;
+      lexicalSimilarity?: number;
     }[];
     readonly recipes?: {
       recipeId: string;
@@ -88,6 +89,9 @@ const recordingSearcher = (
         id: hit.id,
         name: hit.name,
         distance: hit.distance,
+        ...(hit.lexicalSimilarity === undefined
+          ? {}
+          : { lexicalSimilarity: hit.lexicalSimilarity }),
       }));
     },
     searchRecipes: async (_ctx, input) => {
@@ -515,6 +519,65 @@ describe.skipIf(skip)("MenuMatchJobActor (B8)", () => {
       expect(suggestion?.matchReasoning).toBe("same producer and vintage");
       expect(suggestion?.similarityMetrics).toMatchObject({
         verifiedBy: "fake-verifier-1",
+      });
+    });
+  });
+
+  /**
+   * N08: `ItemSearchActor` ranks by vector and name together, and the job
+   * must not undo that by re-sorting on the vector half — the named sibling
+   * is offered first even though the embedding put the other a hair nearer.
+   */
+  it("offers the verifier the search's own order, and records the name match", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, owner, placeId);
+      const named = await seedWine(db, owner, "Dassai 23");
+      const nearer = await seedWine(db, owner, "Dassai 45");
+      await seedMenuItem(db, {
+        placeId,
+        menuScanId: scanId,
+        name: "Dassai 23",
+        scanItemType: "wine",
+      });
+      const search = recordingSearcher({
+        items: [
+          {
+            type: "WINE",
+            id: named.id,
+            name: "Dassai 23",
+            distance: 0.4,
+            lexicalSimilarity: 1,
+          },
+          { type: "WINE", id: nearer.id, name: "Dassai 45", distance: 0.38 },
+        ],
+      });
+      const offered: string[][] = [];
+      const verify: MenuMatchVerifier = async (_ctx, request) => {
+        offered.push(request.candidates.map((c) => c.key));
+        return {
+          acceptedKey: request.candidates[0]?.key ?? null,
+          confidence: 0.8,
+          reasoning: "first offered",
+          model: "fake-verifier-1",
+        };
+      };
+      const job = await activate(
+        newJobActor(crypto.randomUUID(), db, search, verify),
+      );
+      await startJob(job, scanId);
+      await job.runBatch(testDelivery("b0"), { batch: 0 });
+
+      expect(offered).toEqual([[`WINE:${named.id}`, `WINE:${nearer.id}`]]);
+      const [suggestion] = await suggestionsOf(db, scanId);
+      expect(suggestion?.target).toEqual({
+        kind: "ITEM",
+        item: { type: "WINE", id: named.id },
+      });
+      expect(suggestion?.similarityMetrics).toMatchObject({
+        vectorSimilarity: 0.8,
+        lexicalSimilarity: 1,
       });
     });
   });

@@ -95,6 +95,7 @@ import {
 } from "../lib/embedding-client.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { withHnswScan } from "../lib/hnsw.ts";
+import { reciprocalRankFusion, tiedRanks } from "../lib/hybrid-rank.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { SearchActorBase } from "../lib/search-actor-base.ts";
@@ -114,8 +115,18 @@ type Row = {
   readonly item_type: string;
   readonly item_id: string;
   readonly name: string;
-  readonly distance: string | number;
+  /** `null` only from the lexical arm, for an item with no vector. */
+  readonly distance: string | number | null;
+  /**
+   * N08, a text search only: `strict_word_similarity` of phrase to name —
+   * on both arms' rows, so a vector hit carries it too. `null` for a vector
+   * or photo search, which have no phrase.
+   */
+  readonly lexical?: string | number | null;
 };
+
+/** A lexical-arm row: its rank score is the mean of word and whole similarity. */
+type LexicalRow = Row & { readonly score: string | number };
 
 export class ItemSearchActor
   extends SearchActorBase<ItemSearchInput, ItemSearchHit>
@@ -273,8 +284,10 @@ export class ItemSearchActor
     // the name join and the total order are applied to those k rows after.
     // `materialized` keeps the planner from pushing the cutoff into the scan,
     // which would turn the ordered index scan back into a filtered seq scan.
-    const { rows } = await withHnswScan(this.db, (tx) =>
-      tx.execute<Row>(sql`
+    const { vectorRows, lexicalRows } = await withHnswScan(
+      this.db,
+      async (tx) => {
+        const { rows: vectorRows } = await tx.execute<Row>(sql`
         with nearest as materialized (
           select ${vectorColumns},
                  (v.vector <=> ${literal}::halfvec(768))::float8 as distance
@@ -287,7 +300,17 @@ export class ItemSearchActor
           ${VECTORS.typeExpr(m, types)} as item_type,
           ${VECTORS.idExpr(m, types)} as item_id,
           coalesce(${nameCoalesce}) as name,
-          m.distance as distance
+          m.distance as distance,
+          ${
+            // A text search scores every vector hit's name as well, so a hit
+            // the lexical arm did not list (under its threshold, or crowded
+            // out of its `limit`) still says how well its name matched: the
+            // name margin `planCandidates` applies must not read "not listed"
+            // as "no match at all".
+            query.kind === "text"
+              ? sql`strict_word_similarity(${query.text}, coalesce(${nameCoalesce}))::float8`
+              : sql`null::float8`
+          } as lexical
         from nearest m
         ${joins}
         where (${typeFilter})
@@ -295,10 +318,97 @@ export class ItemSearchActor
           and coalesce(${nameCoalesce}) is not null
         order by m.distance asc, name asc, item_id asc
         limit ${limit}
-      `),
+      `);
+        const lexicalRows: readonly LexicalRow[] =
+          query.kind === "text"
+            ? await this.#lexicalRows(tx, {
+                text: query.text,
+                literal,
+                types,
+                limit,
+              })
+            : [];
+        return { vectorRows, lexicalRows };
+      },
     );
 
-    return toHits(rows);
+    if (query.kind !== "text") return toHits(vectorRows);
+    return fuseHybrid(
+      toHits(vectorRows),
+      toHits(lexicalRows),
+      tiedRanks(
+        lexicalRows.map((row) => Number(row.score)),
+        LEXICAL_TIE,
+      ),
+      limit,
+    );
+  }
+
+  /**
+   * N08 — the lexical arm: the items whose **name** best matches the phrase
+   * by pg_trgm, each with its own vector distance so the fused hit reports a
+   * real one.
+   *
+   * `strict_word_similarity(phrase, name)` — the similarity of the phrase to
+   * the best run of whole words in the name — rather than plain `similarity`,
+   * so "lagavulin 16" scores 1.0 against "Lagavulin 16 Year Old" instead of
+   * being diluted by the words the phrase left out. `<<%` is that comparison
+   * against `pg_trgm.strict_word_similarity_threshold`, which is what the
+   * `idx_<table>_name_trgm` GIN indexes serve
+   * (`20261008030851_item_names_trigram`); the threshold is set for this
+   * transaction only.
+   *
+   * The arm is ordered by the mean of that and whole-string `similarity`, so
+   * of two names that both contain the phrase as words — "Duvel" and "Duvel
+   * Tripel Hop Citra" — the one that *is* the phrase leads. Scores within
+   * {@link LEXICAL_TIE} of each other share a rank when fused (`tiedRanks`):
+   * "Jameson Irish Whiskey" and "Jameson Black Barrel" are equally good
+   * answers to "jameson" by name, and the vector should decide.
+   *
+   * An item with **no vector** is returned too, with `distance: null` — the
+   * one way a text search can find it at all. That is not only the window
+   * before `create`'s outbox delivery embeds it: measured 2026-10-07 on the
+   * shared development database, 70 of 77 teas, 36 of 138 wines and 2 of 6
+   * sakes had no vector (`item_vectors` coverage, the roadmap's "check it
+   * first"). The re-embed job does not create a missing vector; whatever
+   * left them unembedded, the name still finds them.
+   */
+  async #lexicalRows(
+    tx: DbOrTx,
+    q: {
+      readonly text: string;
+      readonly literal: string;
+      readonly types: readonly ItemType[];
+      readonly limit: number;
+    },
+  ): Promise<readonly LexicalRow[]> {
+    await tx.execute(sql`
+      select set_config('pg_trgm.strict_word_similarity_threshold',
+                        ${String(LEXICAL_THRESHOLD)}, true)
+    `);
+    const arms = sql.join(
+      q.types.map((type) => {
+        const t = sql.identifier(aliasOf(type));
+        return sql`
+          select ${type}::text as item_type, ${t}.id::text as item_id,
+                 ${t}.name as name,
+                 strict_word_similarity(${q.text}, ${t}.name)::float8 as lexical,
+                 similarity(${q.text}, ${t}.name)::float8 as whole,
+                 (v.vector <=> ${q.literal}::halfvec(768))::float8 as distance
+          from ${ITEM_TABLES[type]} ${t}
+          left join ${itemVectors} v on ${VECTORS.column(type, "v")} = ${t}.id
+          where ${q.text} <<% ${t}.name`;
+      }),
+      sql` union all `,
+    );
+    const { rows } = await tx.execute<LexicalRow>(sql`
+      select item_type, item_id, name, distance, lexical,
+             ((lexical + whole) / 2)::float8 as score
+      from (${arms}) lexical_arm
+      order by score desc, name asc, item_id asc
+      limit ${q.limit}
+    `);
+    return rows;
   }
 
   /**
@@ -426,6 +536,11 @@ export class ItemSearchActor
   ): Promise<
     | { readonly kind: "vector"; readonly vector: readonly number[] }
     | {
+        readonly kind: "text";
+        readonly vector: readonly number[];
+        readonly text: string;
+      }
+    | {
         readonly kind: "image";
         readonly vector: readonly number[];
         readonly model: string;
@@ -461,7 +576,12 @@ export class ItemSearchActor
     if (hasVector) {
       return { kind: "vector", vector: input.vector as readonly number[] };
     }
-    return { kind: "vector", vector: await this.#embed(ctx, text as string) };
+    const phrase = text as string;
+    return {
+      kind: "text",
+      vector: await this.#embed(ctx, phrase),
+      text: phrase,
+    };
   }
 }
 
@@ -483,9 +603,90 @@ const toHits = (rows: readonly Row[]): ItemSearchHit[] =>
       type: row.item_type,
       id: row.item_id,
       name: row.name,
-      distance: Number(row.distance),
+      distance: row.distance === null ? null : Number(row.distance),
+      ...(row.lexical === undefined || row.lexical === null
+        ? {}
+        : { lexicalSimilarity: Number(row.lexical) }),
     };
   });
+
+/**
+ * `pg_trgm.strict_word_similarity_threshold` for the lexical arm. pg_trgm's
+ * own default (0.5): high enough that "smoky islay scotch" matches no name
+ * and the arm stays out of a descriptive search, low enough that a typo of a
+ * one-word name ("laphroig", 0.58) still matches.
+ */
+export const LEXICAL_THRESHOLD = 0.5;
+
+/**
+ * Lexical scores closer than this share a rank in the fusion (`tiedRanks`):
+ * smaller differences are the length of the rest of the name, not evidence.
+ */
+export const LEXICAL_TIE = 0.05;
+
+/**
+ * N08 — the two arms of a text search as one ranking: reciprocal rank fusion
+ * (`../lib/hybrid-rank.ts`), then the actor's total order — score, lexical
+ * rank, distance, name, id — so an offset page means the same thing on every
+ * turn.
+ *
+ * The lexical rank breaks a tie in score because a tie is what a *symmetric*
+ * disagreement produces: "duvel" ranks Duvel first by name and Duvel Tripel
+ * Hop first by vector, each second in the other list. The name is the more
+ * specific evidence of what was typed.
+ *
+ * A hit carries its vector distance either way, and the strict word
+ * similarity of the phrase to its name whichever arm found it (the vector
+ * arm scores names too, it just does not rank by them). With no lexical
+ * match at all the order is exactly the vector order: RRF over one list is
+ * that list.
+ */
+export const fuseHybrid = (
+  vector: readonly ItemSearchHit[],
+  lexical: readonly ItemSearchHit[],
+  lexicalRanks: readonly number[],
+  limit: number,
+): ItemSearchHit[] =>
+  reciprocalRankFusion<ItemSearchHit>(
+    [{ items: vector }, { items: lexical, ranks: lexicalRanks }],
+    (hit) => `${hit.type}:${hit.id}`,
+  )
+    .map((fused) => {
+      const [fromVector, fromLexical] = fused.entries;
+      const hit = (fromVector ?? fromLexical) as ItemSearchHit;
+      return {
+        score: fused.score,
+        lexicalRank: fused.ranks[1] ?? Number.POSITIVE_INFINITY,
+        hit: {
+          type: hit.type,
+          id: hit.id,
+          name: hit.name,
+          distance: hit.distance,
+          lexicalSimilarity:
+            fromLexical?.lexicalSimilarity ??
+            fromVector?.lexicalSimilarity ??
+            null,
+        },
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.lexicalRank - b.lexicalRank ||
+        orderedDistance(a.hit) - orderedDistance(b.hit) ||
+        compareText(a.hit.name, b.hit.name) ||
+        compareText(a.hit.id, b.hit.id),
+    )
+    .slice(0, limit)
+    .map(({ hit }) => hit);
+
+/** A hit with no vector sorts after every hit that has one. */
+const orderedDistance = (hit: ItemSearchHit): number =>
+  hit.distance ?? Number.POSITIVE_INFINITY;
+
+/** Code-unit order, like the SQL's `name asc` under the C collation tests use. */
+const compareText = (a: string, b: string): number =>
+  a < b ? -1 : a > b ? 1 : 0;
 
 /** `it_wine`, `it_beer`, … — one alias per item table, stable and collision-free. */
 const aliasOf = (type: ItemType): string => `it_${type.toLowerCase()}`;

@@ -278,8 +278,23 @@ export type ItemSearchInput = {
 
 export type ItemSearchHit = ItemRef & {
   readonly name: string;
-  /** Cosine distance, 0–2. Lower is closer. */
-  readonly distance: number;
+  /**
+   * Cosine distance, 0–2. Lower is closer. Always the item's own vector
+   * distance, also for a hit the name match brought in (N08) — which is why
+   * such a hit can lie beyond `maxDistance`: the cutoff bounds the vector
+   * arm, not the lexical one. `null` only for an item the name match found
+   * that has **no vector yet** (never embedded): it has no distance to
+   * report, as `CellarItemSearchHit` and `RecipeSearchHit` say the same way.
+   */
+  readonly distance: number | null;
+  /**
+   * N08: pg_trgm `strict_word_similarity` of the phrase to the item's name,
+   * 0–1, on every hit of a `text` search — also one only the vector found,
+   * whose name scored under the lexical ranking's threshold — so two hits'
+   * name matches can be compared. `null` (or absent) for a vector or photo
+   * search, which have no phrase.
+   */
+  readonly lexicalSimilarity?: number | null;
 };
 
 export type ItemSearchActorInterface = {

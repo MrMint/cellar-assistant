@@ -46,6 +46,7 @@ import type {
   ScannedItemType,
 } from "@cellar-assistant/contracts";
 import {
+  bandOf,
   distanceFromSimilarity,
   ItemSearchActorDescriptor,
   itemSearchActorId,
@@ -119,6 +120,15 @@ export type MenuMatchCandidate = {
   readonly name: string;
   /** 0–1. `1 - distance / 2`, the scale `confidence_score` stores. */
   readonly similarity: number;
+  /**
+   * N08: how well the line's search text matched the candidate's **name**
+   * (`ItemSearchHit.lexicalSimilarity`, on every item candidate; `null` for
+   * a recipe). Evidence for the order, for the record and for telling an
+   * auto-band winner from its siblings (`AUTO_LEXICAL_MARGIN`), never for the
+   * band itself: `similarity` alone decides auto versus verify, so a name
+   * match can bring a candidate to the verifier but never past it.
+   */
+  readonly lexicalSimilarity?: number | null;
   readonly target: MatchSuggestionTarget;
 };
 
@@ -135,10 +145,102 @@ export const itemHitToCandidate = (hit: ItemSearchHit): MenuMatchCandidate => {
   return {
     key: candidateKey(target),
     name: hit.name,
-    similarity: similarityFromDistance(hit.distance),
+    // An item the name found that has no vector yet: "the name matched and
+    // there is no vector opinion" is the bottom of the verification band, as
+    // for a lexical-only recipe hit below — offered to the verifier, never
+    // auto-suggested.
+    similarity:
+      hit.distance === null
+        ? MATCH_MIN_CONFIDENCE
+        : similarityFromDistance(hit.distance),
+    lexicalSimilarity: hit.lexicalSimilarity ?? null,
     target,
   };
 };
+
+/**
+ * What a line's candidates are for: suggesting as-is, or asking the verifier
+ * about. `auto` is non-empty exactly when some candidate's vector similarity
+ * is in the auto band, and then `verify` is empty.
+ */
+export type CandidatePlan = {
+  /** The one clear auto-band winner, or nothing. */
+  readonly auto: readonly MenuMatchCandidate[];
+  /** Otherwise the first few in the search's order, for the verifier. */
+  readonly verify: readonly MenuMatchCandidate[];
+};
+
+/**
+ * Splits a line's search hits by band.
+ *
+ * **Auto** is decided by the vector similarity alone, wherever the candidate
+ * sits in the list: a 0.95 match is confident even when the search ranked a
+ * name match above it, and it is never sent to the verifier as if it were
+ * ambiguous (the order of the hits must not matter to that). It must also be
+ * a clear winner ({@link AUTO_MARGIN}) and then it is the one suggestion;
+ * two candidates neither the vector nor the name can separate are siblings,
+ * which is the verifier's job.
+ *
+ * **Verify** keeps the search's own order rather than re-sorting by vector
+ * similarity — `ItemSearchActor` ranked a phrase by vector and name together
+ * (N08), and sorting by the vector half alone would undo exactly the cases
+ * the name fixes: a sibling bottle the embedding puts a hair nearer than the
+ * one the menu names. Which three are kept is all the verifier can choose
+ * from, and the first is what it sees first. (`RecipeSearchActor`'s semantic
+ * order is distance order, so a cocktail line is unchanged.)
+ *
+ * Drop-band candidates (`< 0.4`) take part in neither.
+ */
+export const planCandidates = (
+  candidates: readonly MenuMatchCandidate[],
+): CandidatePlan => {
+  const kept = candidates.filter(
+    (candidate) => bandOf(candidate.similarity) !== "drop",
+  );
+  const [best, ...rest] = [...kept].sort((a, b) => b.similarity - a.similarity);
+  const clear =
+    best !== undefined &&
+    bandOf(best.similarity) === "auto" &&
+    rest.every((other) => separated(best, other));
+  return clear
+    ? { auto: [best], verify: [] }
+    : { auto: [], verify: kept.slice(0, MENU_MATCH_MAX_CANDIDATES) };
+};
+
+/**
+ * Whether `best` is told apart from `other` by the vector — at least
+ * {@link AUTO_MARGIN} more similar — or, failing that, by the name — at
+ * least {@link AUTO_LEXICAL_MARGIN} better a match for the line's text.
+ */
+const separated = (
+  best: MenuMatchCandidate,
+  other: MenuMatchCandidate,
+): boolean =>
+  best.similarity - other.similarity >= AUTO_MARGIN ||
+  (best.lexicalSimilarity ?? 0) - (other.lexicalSimilarity ?? 0) >=
+    AUTO_LEXICAL_MARGIN;
+
+/**
+ * How a line is suggested without the verifier (N08): the best candidate's
+ * vector similarity is in the auto band, **and** every other candidate is
+ * separated from it — by at least `AUTO_MARGIN` of vector similarity, or by
+ * at least `AUTO_LEXICAL_MARGIN` of name match.
+ *
+ * Auto means *unambiguous*. The verifier exists to tell a bottle from its
+ * siblings ("A different vintage, expression, or size … is not a match"), and
+ * siblings are exactly what an embedding puts within a few hundredths of each
+ * other — on the N05 eval with `nomic-embed-text`, 0.004 to 0.04. Before N08
+ * the bare 0.9 band rarely fired; N08's richer embedded text raised
+ * similarities, and a 2019 Caymus Special Selection then cleared it (0.902)
+ * for a menu's "Caymus Cabernet Sauvignon 2021", the right bottle 0.012
+ * behind and all three names matching the line equally. The vector cannot
+ * separate those, nor the name, so it goes to the verifier. "Tanqueray London
+ * Dry Gin" over Tanqueray No. Ten is as close by vector (0.021), but the name
+ * matches one exactly and the other not at all, so it is still suggested
+ * as-is. 0.05 of similarity is 0.1 of cosine distance.
+ */
+export const AUTO_MARGIN = 0.05;
+export const AUTO_LEXICAL_MARGIN = 0.1;
 
 export const recipeHitToCandidate = (
   hit: RecipeSearchHit,

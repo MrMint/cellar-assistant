@@ -39,6 +39,7 @@ import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
 import type { EmbedDocument } from "../lib/embedding-client.ts";
+import { embeddingTextKey } from "../lib/item-bindings.ts";
 import {
   activate,
   closeTestDb,
@@ -909,6 +910,114 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
           where wine_id = ${ref.id}::uuid
         `);
         expect(rows).toEqual([{ same: true }]);
+      });
+    });
+
+    describe("which text made the vector (N08)", () => {
+      const recording = () => {
+        const texts: string[] = [];
+        const embed: EmbedDocument = async (_ctx, input) => {
+          texts.push(input.text);
+          return {
+            vector: Array.from({ length: 768 }, (_, i) => (i === 7 ? 1 : 0)),
+            model: null,
+          };
+        };
+        return { texts, embed };
+      };
+      const storedText = async (db: DbOrTx, ref: ItemRef) =>
+        (
+          await db
+            .select({ text: itemVectors.embeddingText })
+            .from(itemVectors)
+            .where(eq(itemVectors.wineId, ref.id))
+        ).map((row) => row.text);
+
+      it("links, re-ranks and unlinks of a brand each enqueue a re-embed, in the same transaction", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const { ref, actor } = await createItem(db, "WINE", user);
+          const key = actorIdFor(ref);
+          const brandId = await seedBrand(db, `Maison ${randomUUID()}`);
+          const brandReasons = async () =>
+            (await pendingOutbox(db, key)).filter(
+              (row) =>
+                row.method === "regenerateVector" &&
+                (row.payload as { reason?: string }).reason === "brand",
+            ).length;
+
+          await actor.linkBrand(userCtx(user, "r"), { brandId });
+          expect(await brandReasons()).toBe(1);
+          // Idempotent re-link: nothing changed, nothing enqueued.
+          await actor.linkBrand(userCtx(user, "r"), { brandId });
+          expect(await brandReasons()).toBe(1);
+          await actor.linkBrand(userCtx(user, "r"), {
+            brandId,
+            isPrimary: true,
+          });
+          expect(await brandReasons()).toBe(2);
+          await actor.unlinkBrand(userCtx(user, "r"), brandId);
+          expect(await brandReasons()).toBe(3);
+        });
+      });
+
+      /**
+       * Linking a brand touches no item column, so by timestamp the vector
+       * stayed fresh and the brand never reached it. The text key is what
+       * notices.
+       */
+      it("embeds the brand, records the text key, and re-embeds when a brand is linked", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const { ref } = await createItem(db, "WINE", user);
+          const { texts, embed } = recording();
+          const fresh = () =>
+            activate(newItemActor(actorIdFor(ref), db, noVerify, embed));
+
+          await (await fresh()).regenerateVector(deliveryCtx(randomUUID()));
+          expect(texts[0]).not.toContain("brand:");
+          const [firstKey] = await storedText(db, ref);
+          expect(firstKey).toBe(embeddingTextKey(texts[0] ?? ""));
+
+          await expect(
+            (await fresh()).regenerateVector(deliveryCtx(randomUUID())),
+          ).resolves.toMatchObject({ skipped: true });
+          expect(texts).toHaveLength(1);
+
+          const brandId = await seedBrand(db, "Domaine Exemple");
+          await (await fresh()).linkBrand(userCtx(user, "r"), { brandId });
+          await expect(
+            (await fresh()).regenerateVector(deliveryCtx(randomUUID())),
+          ).resolves.toMatchObject({ skipped: false });
+          expect(texts).toHaveLength(2);
+          expect(texts[1]).toContain("brand: Domaine Exemple");
+          expect(await storedText(db, ref)).toEqual([
+            embeddingTextKey(texts[1] ?? ""),
+          ]);
+        });
+      });
+
+      it("re-embeds a vector made before the text key existed, then leaves it alone", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const { ref } = await createItem(db, "WINE", user);
+          const { texts, embed } = recording();
+          const fresh = () =>
+            activate(newItemActor(actorIdFor(ref), db, noVerify, embed));
+          await (await fresh()).regenerateVector(deliveryCtx(randomUUID()));
+          // What every row written before N08 looks like.
+          await db.execute(sql`
+            update public.item_vectors set embedding_text = null
+            where wine_id = ${ref.id}::uuid
+          `);
+          await expect(
+            (await fresh()).regenerateVector(deliveryCtx(randomUUID())),
+          ).resolves.toMatchObject({ skipped: false });
+          await expect(
+            (await fresh()).regenerateVector(deliveryCtx(randomUUID())),
+          ).resolves.toMatchObject({ skipped: true });
+          expect(texts).toHaveLength(2);
+        });
       });
     });
 

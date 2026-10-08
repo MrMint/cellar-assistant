@@ -35,7 +35,11 @@ import {
   attributeColumns,
   boundProperty,
   EMBEDDING_PROPERTIES,
+  EMBEDDING_TEXT_PREFIX,
+  EMBEDDING_TEXT_VERSION,
   embeddingTextFor,
+  embeddingTextKey,
+  humanizeCode,
   ITEM_TABLES,
   type ItemRowOf,
   itemInsertValues,
@@ -451,17 +455,101 @@ describe("the write half (golden against #insertValues / #updateValues)", () => 
 });
 
 describe("embeddingTextFor (golden)", () => {
-  it("labels each part with its row property, in the embedding order", () => {
-    const row = {
-      ...core,
-      type: "BOURBON",
-      vintage: null,
-      alcoholContentPercentage: "45",
-      style: "",
-    } satisfies ItemRowOf<"SPIRIT">;
-    expect(embeddingTextFor({ type: "SPIRIT", id: core.id }, row)).toBe(
-      "spirit; name: N; description: D; type: BOURBON; country: FRANCE; " +
-        "alcoholContentPercentage: 45",
+  const spiritRow = {
+    ...core,
+    type: "BOURBON",
+    vintage: null,
+    alcoholContentPercentage: "45",
+    style: "",
+  } satisfies ItemRowOf<"SPIRIT">;
+
+  it("leads with the type word and the name, then labels each field as a person would", () => {
+    expect(embeddingTextFor({ type: "SPIRIT", id: core.id }, spiritRow)).toBe(
+      "spirit: N; description: D; type: bourbon; country: france; ABV: 45%",
     );
+  });
+
+  it("puts the brands after the name, primary first as given", () => {
+    expect(
+      embeddingTextFor({ type: "SPIRIT", id: core.id }, spiritRow, [
+        "Buffalo Trace",
+        "Sazerac",
+      ]),
+    ).toBe(
+      "spirit: N; brand: Buffalo Trace, Sazerac; description: D; type: " +
+        "bourbon; country: france; ABV: 45%",
+    );
+  });
+
+  /**
+   * Repeating the house name in every sibling's text made them look more
+   * alike and cost two menu lines their match on the N05 eval.
+   */
+  it("leaves out a brand the name already says, ignoring case, accents and apostrophes", () => {
+    const named = (name: string, brands: string[]) =>
+      embeddingTextFor(
+        { type: "SPIRIT", id: core.id },
+        { ...spiritRow, name },
+        brands,
+      );
+    expect(named("Jameson Irish Whiskey", ["Jameson"])).not.toContain("brand:");
+    expect(named("Hendrick's Gin", ["Hendricks"])).not.toContain("brand:");
+    expect(named("The Glenlivet 12", ["the glenlivet"])).not.toContain(
+      "brand:",
+    );
+    expect(named("Rémy Martin VSOP", ["Remy Martin"])).not.toContain("brand:");
+    // A word inside another word is not the brand.
+    expect(named("Eagle Rare 10", ["Buffalo Trace"])).toContain(
+      "brand: Buffalo Trace",
+    );
+    expect(named("Modelo Especial", ["Mode"])).toContain("brand: Mode");
+  });
+
+  it("spells a vintage date as its year and a vocabulary code as words", () => {
+    const text = embeddingTextFor({ type: "WINE", id: core.id }, {
+      ...core,
+      vintage: "2015-01-01",
+      variety: "PINOT_GRIGIO_PINOT_GRIS",
+      region: "Alto Adige",
+      wineryId: null,
+      specialDesignation: null,
+      vineyardDesignation: null,
+      alcoholContentPercentage: "13.50",
+      style: "WHITE",
+      country: "UNITED_STATES",
+    } satisfies ItemRowOf<"WINE">);
+    expect(text).toBe(
+      "wine: N; description: D; vintage: 2015; grape: pinot grigio pinot " +
+        "gris; region: Alto Adige; style: white; country: united states; " +
+        "ABV: 13.5%",
+    );
+  });
+
+  it("keeps free text as written and drops empty fields", () => {
+    expect(
+      embeddingTextFor(
+        { type: "SPIRIT", id: core.id },
+        { ...spiritRow, description: null, style: "Small Batch" },
+      ),
+    ).toBe(
+      "spirit: N; type: bourbon; style: Small Batch; country: france; ABV: 45%",
+    );
+  });
+
+  it("is deterministic, and its key names the format version", () => {
+    const text = embeddingTextFor({ type: "SPIRIT", id: core.id }, spiritRow);
+    const key = embeddingTextKey(text);
+    expect(key).toBe(embeddingTextKey(text));
+    expect(key).toMatch(/^v\d+:[0-9a-f]{16}$/);
+    expect(key.startsWith(EMBEDDING_TEXT_PREFIX)).toBe(true);
+    expect(EMBEDDING_TEXT_PREFIX).toBe(`v${EMBEDDING_TEXT_VERSION}:`);
+    expect(embeddingTextKey(`${text} `)).not.toBe(key);
+  });
+
+  it("humanizes codes whatever their case", () => {
+    expect(humanizeCode("AMARO_APERITIF_VERMOUTH")).toBe(
+      "amaro aperitif vermouth",
+    );
+    expect(humanizeCode("junmai_daiginjo")).toBe("junmai daiginjo");
   });
 });

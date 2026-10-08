@@ -84,8 +84,14 @@ const ItemSearchResult = builder
       id: t.exposeID("id"),
       type: t.field({ type: ItemTypeEnum, resolve: (hit) => hit.type }),
       name: t.exposeString("name"),
-      distance: t.exposeFloat("distance", {
-        description: "Cosine distance to the query, 0-2. Lower is closer.",
+      distance: t.float({
+        nullable: true,
+        description:
+          "Cosine distance to the query, 0-2. Lower is closer. For a `text` " +
+          "search a result the name match brought in can lie beyond " +
+          "`maxDistance`, which bounds the vector ranking only, and is null " +
+          "when that item has no embedding yet.",
+        resolve: (hit) => hit.distance,
       }),
       item: t.field({
         type: ItemInterface,
@@ -104,10 +110,14 @@ builder.queryField("itemSearch", (t) =>
   t.field({
     type: ItemSearchConnection,
     description:
-      "Semantic item search over `item_vectors` (ItemSearchActor). Replaces " +
-      "the `text_search` and `image_search` native queries: pass `text` for a " +
-      "phrase, `imageFileId` for a photo (G32), or `vector` for an embedding " +
-      "the client already has — exactly one. A photo search matches the " +
+      "Item search (ItemSearchActor). Replaces the `text_search` and " +
+      "`image_search` native queries: pass `text` for a phrase, " +
+      "`imageFileId` for a photo (G32), or `vector` for an embedding the " +
+      "client already has — exactly one. A `text` search ranks by " +
+      "`item_vectors` distance and by trigram similarity of item names " +
+      "together (reciprocal rank fusion), so an exact or misspelt name " +
+      "finds its item even where the embedding prefers a sibling. A photo " +
+      "search matches the " +
       "item vectors and every stored photo you may see, ranks each item by " +
       "the nearer, and defaults `maxDistance` to " +
       `${IMAGE_SEARCH_MAX_DISTANCE} and \`limit\` to ${IMAGE_SEARCH_RESULT_LIMIT}. ` +

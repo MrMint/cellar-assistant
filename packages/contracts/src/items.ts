@@ -482,8 +482,10 @@ export type RegenerateItemVectorPayload = {
   /**
    * `image`: an image was attached or detached while the configured embedding
    * takes images, so the vector's image set changed (`embedding_images`).
+   * `brand` (N08): a brand was linked, unlinked or made primary, and the
+   * brands are part of the embedded text (`embedding_text`).
    */
-  readonly reason: "create" | "update" | "image";
+  readonly reason: "create" | "update" | "image" | "brand";
   readonly itemType: ItemType;
   readonly itemId: string;
 };
@@ -633,8 +635,10 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     reviews: {},
     score: {},
     myReview: {},
-    linkBrand: {},
-    unlinkBrand: {},
+    // Each enqueues `regenerateVector` (N08): the item's brands are part of
+    // its embedded text.
+    linkBrand: { modelBacked: true },
+    unlinkBrand: { modelBacked: true },
     brands: {},
     // An embedding through `EmbeddingActor.embedDocument` (90s: up to three
     // label/display image downloads and the model call), plus the turn around

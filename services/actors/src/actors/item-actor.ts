@@ -96,6 +96,7 @@ import {
 } from "@cellar-assistant/contracts";
 import {
   beers,
+  brands as brandsTable,
   coffees,
   genericItems,
   itemBrands,
@@ -109,7 +110,7 @@ import {
   teas,
   wines,
 } from "@cellar-assistant/db";
-import { and, eq, sql } from "@cellar-assistant/db/orm";
+import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import {
   bypassesPolicy,
   canSeeItemImage,
@@ -142,6 +143,7 @@ import {
   attributeColumns,
   EMBEDDING_PROPERTIES,
   embeddingTextFor,
+  embeddingTextKey,
   ITEM_TABLES,
   type ItemInsertOf,
   type ItemRow,
@@ -401,6 +403,7 @@ export class ItemActor
           updatedAt: itemVectors.updatedAt,
           embeddingModel: itemVectors.embeddingModel,
           embeddingImages: itemVectors.embeddingImages,
+          embeddingText: itemVectors.embeddingText,
         })
         .from(itemVectors)
         .where(VECTORS.where(ref))
@@ -908,6 +911,34 @@ export class ItemActor
     return vectorDisplayFileId(images);
   }
 
+  /**
+   * N08: the item's brands are part of its embedded text, so linking,
+   * unlinking or re-ranking one re-embeds it — in the same transaction as the
+   * link, like `update`'s enqueue. Nothing else would: no item column
+   * changed. `regenerateVector` compares the text key, so a redelivery, or a
+   * link that leaves the text as it was, costs a `SELECT` and no model call.
+   *
+   * It also covers onboarding: `ItemOnboardingActor.confirm` enqueues
+   * `create` (whose own `regenerateVector` runs before any brand exists) and
+   * then `linkBrand`, so the item's vector is embedded a second time, with
+   * its brand.
+   */
+  async #enqueueBrandRegenerate(
+    tx: DbOrTx,
+    ctx: Ctx,
+    ref: ItemRef,
+  ): Promise<void> {
+    await enqueueOutbox(
+      tx,
+      OUTBOX_TARGETS["ItemActor.regenerateVector"],
+      {
+        targetId: this.key,
+        payload: { reason: "brand", itemType: ref.type, itemId: ref.id },
+      },
+      { attributeTo: ctx },
+    );
+  }
+
   async #enqueueImageRegenerate(
     tx: DbOrTx,
     ctx: Ctx,
@@ -1142,6 +1173,8 @@ export class ItemActor
           .update(itemBrands)
           .set({ isPrimary })
           .where(eq(itemBrands.id, existing.id));
+        // Primary first is the embedded order (`#brandNames`).
+        await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
       });
       await this.reload();
       const reloaded = this.#requireItem();
@@ -1160,6 +1193,7 @@ export class ItemActor
         isPrimary,
         ...BRANDS.values(aggregate.ref),
       });
+      await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
     });
     await this.reload();
     const reloaded = this.#requireItem();
@@ -1185,6 +1219,7 @@ export class ItemActor
 
     await this.tx(async (tx) => {
       await tx.delete(itemBrands).where(eq(itemBrands.id, row.id));
+      await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
     });
     await this.reload();
     return { brandId };
@@ -1222,12 +1257,20 @@ export class ItemActor
         ? await this.#embeddingImageIds(aggregate)
         : [];
     const images = imageSetKey(imageFileIds);
+    // N08: the text names the item's brands, and its key is part of the
+    // vector's identity — so a brand linked since, or an older text format,
+    // reads as stale even though no item column changed.
+    const text = embeddingTextFor(
+      ref,
+      row,
+      await this.#brandNames(aggregate.brands),
+    );
+    const textKey = embeddingTextKey(text);
     const outcome = await regenerateIfStale(
       vector,
       [row.updatedAt],
       {
-        embed: () =>
-          this.#embed(ctx, { text: embeddingTextFor(ref, row), imageFileIds }),
+        embed: () => this.#embed(ctx, { text, imageFileIds }),
         // One upsert on the item's own unique column, whether or not a row
         // was seen (`item_vectors_one_per_item`). Two activations of one item
         // that both found no vector — a placement split-brain — used to race
@@ -1242,6 +1285,7 @@ export class ItemActor
               updatedAt: sql`now()`,
               embeddingModel: embedded.model,
               embeddingImages: images,
+              embeddingText: textKey,
             };
             await tx
               .insert(itemVectors)
@@ -1252,7 +1296,9 @@ export class ItemActor
               });
           }),
       },
-      model === null ? null : { model: model.key, images },
+      model === null
+        ? { text: textKey }
+        : { model: model.key, images, text: textKey },
     );
     if (outcome === "fresh") {
       return {
@@ -1275,6 +1321,46 @@ export class ItemActor
             ? "embedding changed"
             : "item changed",
     };
+  }
+
+  /**
+   * The names of the brands linked to this item, primary first and then by
+   * name — the order `embeddingTextFor` writes them in, so the text (and its
+   * key) does not change with the order the links happen to load in.
+   *
+   * `brands` is `BrandActor`'s table; this reads it fresh, inside
+   * `regenerateVector`, and caches nothing (§1.3).
+   */
+  async #brandNames(links: readonly ItemBrandRow[]): Promise<string[]> {
+    if (links.length === 0) return [];
+    const rows = await this.db
+      .select({ id: brandsTable.id, name: brandsTable.name })
+      .from(brandsTable)
+      .where(
+        inArray(
+          brandsTable.id,
+          links.map((link) => link.brandId),
+        ),
+      );
+    const nameOf = new Map(rows.map((row) => [row.id, row.name]));
+    // Code-unit order, not `localeCompare`: the text is hashed into
+    // `embedding_text`, and an ICU or locale difference between processes
+    // must not make an unchanged item read as stale.
+    return links
+      .map((link) => ({
+        primary: link.isPrimary === true,
+        name: nameOf.get(link.brandId),
+      }))
+      .filter(
+        (link): link is { primary: boolean; name: string } =>
+          link.name !== undefined,
+      )
+      .sort(
+        (a, b) =>
+          Number(b.primary) - Number(a.primary) ||
+          (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+      )
+      .map((link) => link.name);
   }
 
   /**

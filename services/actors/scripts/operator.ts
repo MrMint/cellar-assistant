@@ -13,7 +13,7 @@
  * | `drain`  | `OutboxActor.drain`                        | one drain turn now, rather than on the next 2s tick; prints its `DrainResult` |
  * | `report` | `MaintenanceActor.reportDeadLetters`       | the dead-letter report now, rather than within the hour; prints it |
  * | `ack`    | `MaintenanceActor.acknowledgeDeadLetters`  | record a triage decision so the dead-letter alarm stops paging for those rows (only rows already `dead`; `--by` is required and stored) |
- * | `reembed`| `VectorReembedJobActor(<id>).start`, then `progress` until terminal | re-embed every vector another embedding model made — the cutover step after `gemini-embedding-2` |
+ * | `reembed`| `VectorReembedJobActor(<id>).start`, then `progress` until terminal | re-embed every vector another embedding model made — the cutover step after `gemini-embedding-2` — and every item vector made from an older `embeddingTextFor` format (N08's backfill: `--tables item_vectors`) |
  *
  *   bun scripts/operator.ts reembed [--batch-size N] [--max-vectors N]
  *                                   [--tables item_vectors,recipe_vectors]

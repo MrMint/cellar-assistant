@@ -3064,13 +3064,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "ItemSearchResult",
         fields: [
-          {
-            name: "distance",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "SCALAR", name: "Float" },
-            },
-          },
+          { name: "distance", type: { kind: "SCALAR", name: "Float" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },

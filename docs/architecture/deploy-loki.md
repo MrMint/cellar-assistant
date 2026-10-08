@@ -473,6 +473,14 @@ Two properties of the deployed embedding path worth knowing before something fai
   and `VectorReembedJobActor` re-embeds every row another model made:
   `bun scripts/operator.ts reembed` (§4.2). **The cutover is such a switch** — every migrated
   vector has `embedding_model` NULL — so §4.2 is a step of the first deploy, not an option.
+- **Changing the embedded text invalidates item vectors too.** Every `item_vectors` row also
+  records which `embeddingTextFor` format and text made it (`embedding_text`, `v<format>:<digest>`;
+  N08, `20261008030906_item_vectors_embedding_text`), and the same job re-embeds every item row
+  whose `embedding_text` is NULL or of an older format, whatever model made it. So the deploy that
+  first carries that migration — and any later one that bumps `EMBEDDING_TEXT_VERSION` — is
+  followed by `bun scripts/operator.ts reembed --tables item_vectors` (§4.2). Until it has run,
+  search keeps ranking the old vectors: nothing breaks, they are just embedded from the old text
+  (no brand, codes instead of words).
 
 Unset `AI_PROVIDER` entirely to deploy with no model — every AI feature then fails with an error
 naming itself, which is a supported state. A provider that is *set but incomplete* makes the actor
@@ -852,7 +860,9 @@ refused the embed).
 ```bash
 $C exec -T postgres psql -U cellar -d cellar -c "
   select (select count(*) from item_vectors
-            where embedding_model is distinct from 'vertex-ai:gemini-embedding-2@768/RETRIEVAL_DOCUMENT') as items_stale,
+            where embedding_model is distinct from 'vertex-ai:gemini-embedding-2@768/RETRIEVAL_DOCUMENT'
+               or embedding_text is null
+               or embedding_text not like 'v2:%') as items_stale,  -- v2: EMBEDDING_TEXT_VERSION
          (select count(*) from recipe_vectors
             where embedding_model is distinct from 'vertex-ai:gemini-embedding-2@768/RETRIEVAL_DOCUMENT') as recipes_stale;"
 ```

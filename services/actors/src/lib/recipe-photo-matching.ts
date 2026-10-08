@@ -172,8 +172,12 @@ export const pickIngredientMatch = (
 ): ItemSearchHit | null => {
   let best: ItemSearchHit | null = null;
   for (const hit of hits) {
+    // No vector, no distance (N08: found by name only) — not close enough to
+    // claim an ingredient without one.
+    if (hit.distance === null) continue;
     if (hit.distance > INGREDIENT_MATCH_MAX_DISTANCE) continue;
-    if (best === null || hit.distance < best.distance) best = hit;
+    if (best === null || best.distance === null || hit.distance < best.distance)
+      best = hit;
   }
   return best;
 };
