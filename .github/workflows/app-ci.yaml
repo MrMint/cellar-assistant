@@ -300,6 +300,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: bunx @biomejs/biome@${{ env.BIOME_VERSION }} check services/client packages/e2e
 
+      # N20's mobile-spec rules (`packages/e2e/fixtures/mobile-rules.ts`: the
+      # 16px gutter, "above the tab bar", the 640x480 camera's constraint
+      # check) are pure functions with their own `node --test` suite. It
+      # imports nothing but `node:test` and the rules file, so it needs no
+      # install and runs here even though this job does not install
+      # packages/e2e — and the Playwright suite that applies the rules is not
+      # run by CI at all, so this is the only thing keeping them honest.
+      - name: e2e rule unit tests
+        if: ${{ !cancelled() }}
+        run: node --test packages/e2e/fixtures/*.test.ts
+
       # `test:unit` widened E2's `test:api` from `src/lib/api/*.test.ts` to all
       # of `src/lib`, which is what brings X7's client-boundary scan into CI.
       # The runner is `bun test --isolate --timeout=30000 src/lib/` — that is
