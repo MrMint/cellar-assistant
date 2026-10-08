@@ -89,7 +89,12 @@ export function AddItemClient({
       </h2>
       {cellarId && !canAdd && (
         <p className="type-body">
-          You do not have permission to add items to this cellar.
+          You do not have permission to add items to this cellar.{" "}
+          {/* The cards are inert here, so this is the page's one control —
+              and axe's scrollable-region-focusable needs one in <main>. */}
+          <Link href={`/cellars/${cellarId}`} underline="always">
+            Back to {cellarName ?? "the cellar"}
+          </Link>
         </p>
       )}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
