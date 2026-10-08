@@ -219,7 +219,10 @@ export function AddToTierListModal({
           Add <strong>{entityName}</strong> to a tier list
         </>
       }
-      className="md:max-w-[420px]"
+      // Above the map's place drawer, which renders this modal from inside a
+      // fixed Joy-era container at z-index 1100 (950 on desktop): at z-50 the
+      // sheet opened underneath it. Drop this once that drawer is converted.
+      className="z-[1300] md:max-w-[420px]"
     >
       <div className="flex flex-col gap-4 pb-1">
         {fetching ? (
