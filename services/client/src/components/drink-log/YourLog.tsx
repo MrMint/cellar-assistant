@@ -154,12 +154,12 @@ export function YourLog({
           ) : undefined
         }
       >
-        {fetching && data === undefined ? (
+        {data === undefined && fetching ? (
           <div className="flex flex-col gap-2 p-4" aria-busy="true">
             <Skeleton className="h-5 w-2/3" />
             <Skeleton className="h-4 w-1/2" />
           </div>
-        ) : !result.ok && error !== undefined ? (
+        ) : !result.ok && (data !== undefined || error !== undefined) ? (
           <div className="p-4">
             <ApiError error={result.error} />
           </div>

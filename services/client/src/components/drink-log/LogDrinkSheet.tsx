@@ -321,7 +321,11 @@ function NoteAndTags({
   const [suggestions, setSuggestions] = useState<FlavourSuggestion[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [aiNote, setAiNote] = useState<string | null>(null);
-  const lastAsked = useRef<string | null>(null);
+  // An edit opens with a note already written: that note was the drinker's,
+  // and asking about it again on every open would spend a call for nothing.
+  const lastAsked = useRef<string | null>(
+    draft.note.trim() === "" ? null : noteKey(draft.note),
+  );
   const [suggestState, suggest] = useMutation(SuggestFlavourTagsMutation);
 
   const ask = async (note: string) => {
@@ -530,7 +534,7 @@ function PlacePicker({
     return () => clearTimeout(timer);
   }, [text]);
 
-  const [{ data, fetching }] = useQuery({
+  const [{ data, fetching, error }] = useQuery({
     query: DrinkLogPlacePickerQuery,
     variables: { query, first: 5 },
     pause: place !== null || query.length < 2,
@@ -582,6 +586,17 @@ function PlacePicker({
             <p className="type-footnote" role="status">
               Searching places…
             </p>
+          )}
+          {!fetching &&
+            query.length >= 2 &&
+            (error !== undefined || (data !== undefined && !result.ok)) && (
+              <p className="type-footnote">
+                Place search isn't available right now. You can log without a
+                place.
+              </p>
+            )}
+          {!fetching && query.length >= 2 && result.ok && hits.length === 0 && (
+            <p className="type-footnote">No places match “{query}”.</p>
           )}
           {hits.length > 0 && (
             <ul
