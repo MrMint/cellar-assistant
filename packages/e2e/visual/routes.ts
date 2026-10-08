@@ -322,11 +322,41 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
             ),
         },
         {
+          // Delete lives behind the AppBar's ⋯ since S5: a menuitem at md+,
+          // a sheet button on a phone (the sheet closes before the confirm).
           name: "delete-confirm",
-          open: (page) =>
-            clickThenWait(page, () =>
-              page.getByRole("button", { name: "Delete item" }).click(),
-            ),
+          open: async (page) => {
+            await page.getByRole("button", { name: "More actions" }).click();
+            await page
+              .getByRole("menuitem", { name: "Delete item" })
+              .or(
+                page
+                  .getByRole("dialog")
+                  .getByRole("button", { name: "Delete item" }),
+              )
+              .click();
+            await page
+              .getByRole("dialog", { name: "Delete this bottle?" })
+              .or(
+                page.getByRole("alertdialog", { name: "Delete this bottle?" }),
+              )
+              .first()
+              .waitFor({ state: "visible", timeout: 10_000 });
+            await page.waitForTimeout(600);
+          },
+        },
+        {
+          // The ⋯ itself: a BottomSheet on a phone, a dropdown menu at md+.
+          name: "overflow",
+          open: async (page) => {
+            await page.getByRole("button", { name: "More actions" }).click();
+            await page
+              .getByRole("menu")
+              .or(page.getByRole("dialog"))
+              .first()
+              .waitFor({ state: "visible", timeout: 10_000 });
+            await page.waitForTimeout(600);
+          },
         },
       ],
     },
