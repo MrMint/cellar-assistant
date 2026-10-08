@@ -132,6 +132,9 @@ describe("TierListView (restored board)", () => {
     assert.match(html, />4.6/);
     assert.match(html, />\(1\.2k\)</);
     assert.match(html, /aria-label="Remove Entry 1"/);
+    // #1's crown says its rank in words, and each drag handle is named.
+    assert.match(html, />Rank 1</);
+    assert.match(html, /<button[^>]*aria-label="Reorder Entry 1"/);
   });
 
   test("locked or not the owner: no remove buttons, no drag handles", () => {

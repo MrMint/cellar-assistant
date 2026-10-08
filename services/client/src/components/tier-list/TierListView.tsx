@@ -293,18 +293,24 @@ const SortableTierListItem = memo(function SortableTierListItem({
       )}
     >
       {canEdit && (
-        <div
+        <button
+          type="button"
           ref={setActivatorNodeRef}
           {...attributes}
           {...listeners}
-          className="-my-1.5 -ml-1 flex shrink-0 cursor-grab touch-none items-center self-stretch rounded-sm px-1 text-ink-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          // dnd-kit's attributes give the handle a role and instructions but
+          // no name; a screen reader otherwise hears only "sortable".
+          aria-label={`Reorder ${item.name}`}
+          // 28 px drawn, 44 px to a finger: the pseudo-element widens the
+          // target into the row's padding and the gap, not over the name.
+          className="relative -my-1.5 -ml-1 flex shrink-0 cursor-grab touch-none items-center self-stretch rounded-sm px-1 text-ink-3 outline-none after:absolute after:inset-y-0 after:-inset-x-2 after:content-[''] focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <DragHandle
             aria-hidden
             strokeWidth={ICON_STROKE}
             className="size-5"
           />
-        </div>
+        </button>
       )}
 
       <TierListItemContent
@@ -456,6 +462,12 @@ export function TierListView({
     id: string;
     name: string;
   } | null>(null);
+  /**
+   * Open is its own flag so the target outlives the close: the sheet animates
+   * out, and its description would otherwise read "Remove  from this tier
+   * list?" for the length of that animation.
+   */
+  const [removeOpen, setRemoveOpen] = useState(false);
 
   const { initialBandMap, itemMap } = useMemo(() => {
     const map = new Map<string, TierListItemDisplay>();
@@ -722,10 +734,11 @@ export function TierListView({
 
   const handleRemoveClick = useCallback((itemId: string, name: string) => {
     setRemoveTarget({ id: itemId, name });
+    setRemoveOpen(true);
   }, []);
 
   const handleConfirmRemove = useCallback(async () => {
-    if (!canEdit || !removeTarget) return;
+    if (!canEdit || !removeOpen || !removeTarget) return;
     const rollbackMap = cloneBandMap(bandMapRef.current);
     // Optimistically remove from local state for instant feedback
     setBandMap((prev) => {
@@ -739,7 +752,7 @@ export function TierListView({
       }
       return next;
     });
-    setRemoveTarget(null);
+    setRemoveOpen(false);
     const result = await removeItemFromTierListAction(
       removeTarget.id,
       tierListId,
@@ -751,7 +764,14 @@ export function TierListView({
       setBandMap(rollbackMap);
       notify(result.error ?? "Failed to remove item", { tone: "error" });
     }
-  }, [removeTarget, tierListId, router, canEdit, removeItemFromTierListAction]);
+  }, [
+    removeOpen,
+    removeTarget,
+    tierListId,
+    router,
+    canEdit,
+    removeItemFromTierListAction,
+  ]);
 
   const activeItem = activeId ? itemMap.get(String(activeId)) : null;
 
@@ -799,10 +819,8 @@ export function TierListView({
       </DndContext>
 
       <ConfirmSheet
-        open={removeTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setRemoveTarget(null);
-        }}
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
         title="Remove from tier list?"
         description={
           <>
