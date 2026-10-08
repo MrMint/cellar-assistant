@@ -40,6 +40,12 @@ export type ApiFailure = {
    */
   code: ActorErrorCode | "TRANSPORT" | "UNKNOWN";
   reason: ActorErrorReason | null;
+  /**
+   * N07: when asking again can first work (ISO-8601) — set on a budget
+   * refusal, `null` on everything else. Render it through `lib/ai/outcome.ts`,
+   * which also decides the words; never show `message` for an AI failure.
+   */
+  retryAt: string | null;
   message: string;
 };
 
@@ -51,6 +57,7 @@ const UNREACHABLE: ApiFailure = {
   __typename: "TransportError",
   code: "TRANSPORT",
   reason: null,
+  retryAt: null,
   message: "The server did not answer. Check your connection and try again.",
 };
 
@@ -88,6 +95,7 @@ export const unwrapResult = <
       __typename: value.__typename,
       code: failure.code ?? "UNKNOWN",
       reason: failure.reason ?? null,
+      retryAt: failure.retryAt ?? null,
       message: failure.message ?? "Something went wrong.",
     },
   };
@@ -109,6 +117,7 @@ export const failureFromTransport = (error: {
   __typename: "TransportError",
   code: "TRANSPORT",
   reason: null,
+  retryAt: null,
   message: error.graphQLErrors?.[0]?.message ?? error.message,
 });
 

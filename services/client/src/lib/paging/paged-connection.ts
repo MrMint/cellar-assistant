@@ -131,6 +131,7 @@ const TRANSPORT_FAILURE = (thrown: unknown): ApiFailure => ({
   __typename: "TransportError",
   code: "TRANSPORT",
   reason: null,
+  retryAt: null,
   message:
     thrown instanceof Error
       ? thrown.message

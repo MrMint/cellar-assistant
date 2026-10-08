@@ -31,6 +31,7 @@ export const ActorErrorFieldsFragment = graphql(`
     __typename
     code
     reason
+    retryAt
     message
   }
 `);

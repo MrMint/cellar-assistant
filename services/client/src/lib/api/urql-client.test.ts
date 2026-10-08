@@ -55,6 +55,9 @@ const REFUSAL = {
   __typename: "NotFoundError",
   code: "NOT_FOUND",
   reason: "RECIPE_NOT_IN_GROUP",
+  // N07: not a field a NOT_FOUND carries in practice; set here so the test
+  // proves the cache keeps it, not merely that it defaults to null.
+  retryAt: "2026-10-07T15:40:00.000Z",
   message: "that recipe is not a version in this group",
 };
 
@@ -78,7 +81,7 @@ const vote = () =>
     })
     .toPromise();
 
-test("a typed error on a mutation keeps its code, reason and message through the cache", async () => {
+test("a typed error on a mutation keeps its code, reason, retryAt and message through the cache", async () => {
   // graphcache's own "Heuristic Fragment Matching" warning is a second witness
   // for the same wiring. Two caveats keep it in this one test rather than its
   // own: it is compiled out when NODE_ENV is "production" (`bun test` is not),
@@ -108,6 +111,7 @@ test("a typed error on a mutation keeps its code, reason and message through the
         __typename: "NotFoundError",
         code: REFUSAL.code,
         reason: REFUSAL.reason,
+        retryAt: REFUSAL.retryAt,
         message: REFUSAL.message,
       },
     },
