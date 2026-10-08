@@ -68,6 +68,25 @@ describe("HeaderBar", () => {
     assert.doesNotMatch(html, /aria-label="Back"/);
   });
 
+  test("an item's own page: its name in the bar is text, not a second heading", () => {
+    // ItemDetails prints the name as the content's heading; two headings with
+    // one name make e2e's getByRole("heading", { name }) ambiguous.
+    pathname = "/teas/4f7e2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6";
+    const html = render(
+      <HeaderBar serverBreadcrumbs={{ itemName: "Sencha" }} />,
+    );
+    assert.doesNotMatch(html, /<h[1-6]\b[^>]*>Sencha</);
+    assert.match(html, /<p\b[^>]*>Sencha<\/p>/);
+  });
+
+  test("an edit page keeps its title as the h1 (the content has no heading of its own)", () => {
+    pathname = "/teas/4f7e2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6/edit";
+    const html = render(
+      <HeaderBar serverBreadcrumbs={{ itemName: "Sencha" }} />,
+    );
+    assert.match(html, /<h1\b[^>]*>Edit Sencha<\/h1>/);
+  });
+
   test("no breadcrumbs prop: no bar, just the end slot", () => {
     pathname = "/cellars";
     const html = render(

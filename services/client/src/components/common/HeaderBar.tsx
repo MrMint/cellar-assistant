@@ -30,6 +30,8 @@ type HeaderBarProps = {
  *   (`pageHeader`): Back is in-app history, or the parent crumb on a cold
  *   deep link. A tab root (`/cellars`) draws no Back at all.
  * - **From `md`:** the breadcrumb trail above the title, as before.
+ * - The title is the page's h1, except on an item's or a recipe's own page,
+ *   whose content already heads itself with that name.
  * - The search box and the caller's `endComponent` follow — below the bar on
  *   a phone, beside it from `sm`, as the old row did.
  *
@@ -55,6 +57,16 @@ export const HeaderBar = ({
   const header =
     crumbs === undefined ? undefined : pageHeader(pathname, crumbs);
   const hasEnd = onSearchChange !== undefined || endComponent !== undefined;
+  // An item's or a recipe's own page prints its name as the content's
+  // heading (ItemDetails, RecipeDetailsCard). A second heading with the same
+  // name in the bar would be read twice and makes `getByRole("heading",
+  // { name })` ambiguous (e2e 11-items), so there the bar's title is plain
+  // text. Everywhere else — lists, a cellar's items, edit pages — the bar's
+  // title is the page's only heading and stays the h1.
+  const titleIsContentHeading =
+    header !== undefined &&
+    (header.title === serverBreadcrumbs?.itemName ||
+      header.title === serverBreadcrumbs?.recipeName);
 
   return (
     <div
@@ -63,7 +75,13 @@ export const HeaderBar = ({
     >
       {header !== undefined && crumbs !== undefined && (
         <AppBar
-          title={header.title}
+          title={
+            titleIsContentHeading ? (
+              <p className="type-headline truncate">{header.title}</p>
+            ) : (
+              header.title
+            )
+          }
           parent={header.parent}
           breadcrumbs={crumbs}
           className={cn(
