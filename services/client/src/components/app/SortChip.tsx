@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type KeyboardEvent, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,6 +76,30 @@ export function SortChip<V extends string>({
     </button>
   );
 
+  // The sheet's rows are a radio group: one tab stop (the current order),
+  // and the arrows, Home and End move between rows (WAI-ARIA radio group).
+  // Arrows move focus only — a row closes the sheet when picked, so picking
+  // stays on Enter, Space or a tap.
+  const onRowsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const rows = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
+    );
+    const at = rows.indexOf(event.target as HTMLButtonElement);
+    if (at === -1) return;
+    const step: Record<string, number> = {
+      ArrowDown: at + 1,
+      ArrowRight: at + 1,
+      ArrowUp: at - 1,
+      ArrowLeft: at - 1,
+      Home: 0,
+      End: rows.length - 1,
+    };
+    const to = step[event.key];
+    if (to === undefined) return;
+    event.preventDefault();
+    rows[(to + rows.length) % rows.length]?.focus();
+  };
+
   if (desktop) {
     return (
       <DropdownMenu modal={false}>
@@ -106,6 +130,7 @@ export function SortChip<V extends string>({
         <div
           role="radiogroup"
           aria-label={label}
+          onKeyDown={onRowsKeyDown}
           className="flex flex-col pb-2"
         >
           {options.map((option) => {
@@ -117,6 +142,7 @@ export function SortChip<V extends string>({
                 type="button"
                 role="radio"
                 aria-checked={checked}
+                tabIndex={checked ? 0 : -1}
                 // Applied at once — the list starts loading while the sheet
                 // slides away — and nothing else opens from here, so there
                 // is no second modal to wait for.

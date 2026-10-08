@@ -108,6 +108,49 @@ describe("SortChip", () => {
     assert.deepEqual(picked, ["a-z"]);
   });
 
+  test("phone: the rows are one tab stop, and the arrows move between them", async () => {
+    const picked: Sort[] = [];
+    await act(async () =>
+      root.render(
+        <SortChip
+          options={OPTIONS}
+          value="recent"
+          onValueChange={(next) => picked.push(next)}
+        />,
+      ),
+    );
+    await act(async () => chip()?.click());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const rows = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[role="radiogroup"] [role="radio"]',
+      ),
+    );
+    assert.deepEqual(
+      rows.map((row) => row.tabIndex),
+      [-1, 0, -1],
+      "only the current order is in the tab order",
+    );
+    const press = async (target: HTMLElement, key: string) =>
+      act(async () => {
+        target.dispatchEvent(
+          new KeyboardEvent("keydown", { key, bubbles: true }),
+        );
+      });
+    rows[1]?.focus();
+    await press(rows[1] as HTMLElement, "ArrowDown");
+    assert.equal(document.activeElement, rows[2]);
+    await press(rows[2] as HTMLElement, "ArrowDown");
+    assert.equal(document.activeElement, rows[0], "wraps around");
+    await press(rows[0] as HTMLElement, "End");
+    assert.equal(document.activeElement, rows[2]);
+    await press(rows[2] as HTMLElement, "ArrowUp");
+    assert.equal(document.activeElement, rows[1]);
+    assert.deepEqual(picked, [], "arrows move focus, they do not pick");
+  });
+
   test("a search overrides the order: the chip says so and is disabled", async () => {
     await act(async () =>
       root.render(

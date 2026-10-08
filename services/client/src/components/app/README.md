@@ -336,7 +336,8 @@ via `className` — in a centred 44 target) / `lg`; `asChild` to wrap an
 
 **`SortChip`** — `<SortChip options={[{ value: "open", label: "Open first" }, …]} value={sort} onValueChange={setSort} />`.
 "Sort by: Open first ▾", shaped like a `FilterChip`: a sheet of `radio`
-rows on a phone (a tap picks and closes), a radio menu from `md`.
+rows on a phone (a tap picks and closes; one tab stop, arrows move between
+rows), a radio menu from `md`.
 `overriddenBy="Best match"` shows that and disables it while something else
 orders the list (a search). `label` (default "Sort by") heads the sheet.
 
