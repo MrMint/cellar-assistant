@@ -131,6 +131,7 @@ export const createHostApp = (): Express => {
  */
 type RouteLayer = {
   readonly route?: { readonly path?: unknown };
+  readonly handle?: { readonly stack?: unknown };
   match?: (path: string) => boolean;
   params?: unknown;
   path?: unknown;
@@ -178,8 +179,25 @@ export const unhardenedRoutes = (app: Express): string[] => {
   if (router.caseSensitive !== true) problems.push("(router) case-insensitive");
   if (router.strict !== true) problems.push("(router) not strict");
   for (const layer of stack) {
-    const path = layer.route?.path;
-    if (typeof path !== "string") continue;
+    if (layer.route === undefined) {
+      // Plain middleware (`app.use(fn)`) routes nothing and is fine. A nested
+      // router mounted with `app.use` is not: it is built with its own
+      // settings (case-insensitive by default) and its routes are not on
+      // this stack, so nothing here has checked them.
+      if (Array.isArray(layer.handle?.stack)) {
+        problems.push("(nested router) its routes cannot be checked");
+      }
+      continue;
+    }
+    const path = layer.route.path;
+    // A RegExp or array path has no sample this can build — and a RegExp
+    // carries its own flags whatever the router says — so it fails closed.
+    if (typeof path !== "string") {
+      problems.push(
+        `${String(path)} is not a string path and cannot be probed`,
+      );
+      continue;
+    }
     const sample = samplePath(path);
     // Fail closed on a route this cannot turn into a path it matches: a
     // syntax the sample does not understand is a route nobody has checked.
@@ -187,8 +205,10 @@ export const unhardenedRoutes = (app: Express): string[] => {
       problems.push(`${path} could not be probed`);
       continue;
     }
-    const upper = sample.toUpperCase();
-    if (upper !== sample && probe(layer, upper)) {
+    // Both directions: an all-caps literal (`/ADMIN`) has no upper-case
+    // variant to try, only a lower-case one.
+    const variants = [sample.toUpperCase(), sample.toLowerCase()];
+    if (variants.some((v) => v !== sample && probe(layer, v))) {
       problems.push(`${path} case-insensitive`);
     }
     // A wildcard takes a trailing `/` into its value whether or not the

@@ -104,4 +104,40 @@ describe("assertHardenedRouting", () => {
     app.get("/dapr/config", () => {});
     expect(unhardenedRoutes(app)).toContain("/dapr/config case-insensitive");
   });
+
+  it("catches an all-caps literal, which has no upper-case variant to probe", () => {
+    const app = express();
+    app.get("/ADMIN", () => {});
+    expect(unhardenedRoutes(app)).toContain("/ADMIN case-insensitive");
+  });
+
+  // Each of these served `/ADMIN` 200 on a hardened app while the boot check
+  // passed, because it only looked at string-path routes.
+  it("refuses a RegExp route: it carries its own flags and has no sample", () => {
+    const app = createHostApp();
+    app.get(/^\/admin$/i, () => {});
+    expect(unhardenedRoutes(app)).toContain(
+      "/^\\/admin$/i is not a string path and cannot be probed",
+    );
+    expect(() => assertHardenedRouting(app)).toThrow(/not hardened/);
+  });
+
+  it("refuses an array path", () => {
+    const app = createHostApp();
+    app.get(["/a", "/b"], () => {});
+    expect(unhardenedRoutes(app)).toContain(
+      "/a,/b is not a string path and cannot be probed",
+    );
+  });
+
+  it("refuses a nested router, whose routes are not on the app's stack", () => {
+    const app = createHostApp();
+    const nested = express.Router();
+    nested.get("/admin", () => {});
+    app.use("/x", nested);
+    expect(unhardenedRoutes(app)).toContain(
+      "(nested router) its routes cannot be checked",
+    );
+    expect(() => assertHardenedRouting(app)).toThrow(/not hardened/);
+  });
 });
