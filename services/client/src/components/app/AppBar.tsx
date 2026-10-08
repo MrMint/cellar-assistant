@@ -54,6 +54,11 @@ export type AppBarProps = {
    * a parent or in-app history.
    */
   parent?: string;
+  /**
+   * A tab root (`/cellars`, `/me`): never draws Back, even with in-app
+   * history behind it (iOS convention — the tab bar is the way out).
+   */
+  root?: boolean;
   /** Up to two trailing icon actions; anything more goes in `overflow`. */
   actions?: readonly [AppBarAction?, AppBarAction?];
   /** The `⋯` menu: an action sheet on phones, a dropdown from `md` up. */
@@ -77,6 +82,7 @@ const CLOSE_FALLBACK_MS = 600;
 export function AppBar({
   title,
   parent,
+  root = false,
   actions = [],
   overflow = [],
   breadcrumbs,
@@ -107,7 +113,7 @@ export function AppBar({
   const [hasHistory, setHasHistory] = useState(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-read on every route change.
   useEffect(() => setHasHistory(canGoBack()), [pathname]);
-  const showBack = parent !== undefined || hasHistory;
+  const showBack = !root && (parent !== undefined || hasHistory);
 
   const goBack = () => {
     if (canGoBack()) router.back();

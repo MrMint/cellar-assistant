@@ -83,14 +83,9 @@ export const HeaderBar = ({
             )
           }
           parent={header.parent}
+          root={header.tabRoot}
           breadcrumbs={crumbs}
-          className={cn(
-            "min-w-0 flex-1",
-            // A tab root never shows Back (iOS convention), even with in-app
-            // history behind it: AppBar draws one whenever history exists,
-            // so it is hidden here until AppBar takes a `root` prop.
-            header.tabRoot && "[&_button[aria-label=Back]]:hidden",
-          )}
+          className="min-w-0 flex-1"
         />
       )}
       {hasEnd && (

@@ -495,6 +495,13 @@ describe("AppBar", () => {
     }
   });
 
+  test("a tab root draws no Back even with in-app history", async () => {
+    recordNavigation("/search");
+    recordNavigation("/cellars");
+    await render(<AppBar title="Cellars" root />);
+    assert.equal(container.querySelector('button[aria-label="Back"]'), null);
+  });
+
   test("a tab root with no history draws no Back", async () => {
     await render(<AppBar title="Cellars" />);
     assert.equal(container.querySelector('button[aria-label="Back"]'), null);
