@@ -3,143 +3,71 @@
 import { useSyncExternalStore } from "react";
 import { setGeolocationCookie } from "@/lib/geo-cookie/client";
 import { MAP_CONFIG } from "../config/constants";
-
-interface GeolocationState {
-  location: { latitude: number; longitude: number } | null;
-  loading: boolean;
-  error: string | null;
-}
-
-// Minimum coordinate change to trigger a state update (~11 meters)
-const COORDINATE_EPSILON = 0.0001;
-
-const SERVER_SNAPSHOT: GeolocationState = {
-  location: null,
-  loading: true,
-  error: null,
-};
+import {
+  createGeolocationStore,
+  type GeolocationState,
+  type GeolocationStore,
+  INITIAL_GEOLOCATION_STATE,
+  type PermissionLike,
+} from "./geolocation-store";
 
 /**
- * Module-level geolocation store.
- * Lazily subscribes to the Geolocation API on first consumer and
- * persists across component remounts — a React 18 useSyncExternalStore
- * pattern that naturally survives Suspense re-suspensions and
- * component tree remounts without losing position data.
+ * The map's geolocation (D14): React's view of `geolocation-store.ts`, which
+ * holds the rules. Module-level, so it survives remounts and Suspense
+ * re-suspensions without asking twice.
  */
-function createGeolocationStore() {
-  let state: GeolocationState = {
-    location: null,
-    loading: true,
-    error: null,
-  };
-  let lastCoords: { latitude: number; longitude: number } | null = null;
-  const listeners = new Set<() => void>();
-  let initialized = false;
 
-  function emit() {
-    listeners.forEach((listener) => {
-      listener();
-    });
-  }
+const DISMISS_KEY = "cellar.map.location-preprompt-dismissed";
 
-  function start() {
-    if (initialized) return;
-    initialized = true;
-
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      state = {
-        location: null,
-        loading: false,
-        error: "Geolocation is not supported by this browser",
-      };
-      emit();
-      return;
-    }
-
-    const handleSuccess = (position: GeolocationPosition) => {
-      const { latitude, longitude } = position.coords;
-
-      // Skip update if coordinates haven't changed meaningfully
-      if (
-        lastCoords &&
-        Math.abs(lastCoords.latitude - latitude) < COORDINATE_EPSILON &&
-        Math.abs(lastCoords.longitude - longitude) < COORDINATE_EPSILON
-      ) {
-        return;
+const browserStore = (): GeolocationStore =>
+  createGeolocationStore({
+    geolocation:
+      typeof navigator !== "undefined" && navigator.geolocation
+        ? navigator.geolocation
+        : null,
+    queryPermission: async () => {
+      if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+        return null;
       }
-
-      lastCoords = { latitude, longitude };
-      state = {
-        location: { latitude, longitude },
-        loading: false,
-        error: null,
-      };
-      setGeolocationCookie(latitude, longitude);
-      emit();
-    };
-
-    const handleError = (error: GeolocationPositionError) => {
-      let errorMessage = "Unable to retrieve location";
-
-      switch (error.code) {
-        case error.PERMISSION_DENIED:
-          errorMessage = "Location access denied by user";
-          break;
-        case error.POSITION_UNAVAILABLE:
-          errorMessage = "Location information unavailable";
-          break;
-        case error.TIMEOUT:
-          errorMessage = "Location request timed out";
-          break;
+      return (await navigator.permissions.query({
+        name: "geolocation",
+      })) as unknown as PermissionLike;
+    },
+    readDismissed: () => {
+      try {
+        return globalThis.sessionStorage?.getItem(DISMISS_KEY) === "1";
+      } catch {
+        return false;
       }
-
-      state = {
-        location: null,
-        loading: false,
-        error: errorMessage,
-      };
-      emit();
-    };
-
-    const options = {
-      enableHighAccuracy: true,
-      timeout: MAP_CONFIG.TIMING.GEOLOCATION_TIMEOUT,
-      maximumAge: 300000, // 5 minutes
-    };
-
-    navigator.geolocation.getCurrentPosition(
-      handleSuccess,
-      handleError,
-      options,
-    );
-
-    // Watch position changes
-    navigator.geolocation.watchPosition(handleSuccess, handleError, options);
-  }
-
-  return {
-    subscribe(listener: () => void) {
-      listeners.add(listener);
-      start(); // Lazily initialize on first subscription
-      return () => {
-        listeners.delete(listener);
-      };
     },
-    getSnapshot() {
-      return state;
+    writeDismissed: () => {
+      try {
+        globalThis.sessionStorage?.setItem(DISMISS_KEY, "1");
+      } catch {
+        // Private mode or blocked storage: "Not now" lasts this page only.
+      }
     },
-    getServerSnapshot() {
-      return SERVER_SNAPSHOT;
-    },
-  };
-}
+    onFix: setGeolocationCookie,
+    timeoutMs: MAP_CONFIG.TIMING.GEOLOCATION_TIMEOUT,
+  });
 
-const geolocationStore = createGeolocationStore();
+let store: GeolocationStore | null = null;
+const getStore = (): GeolocationStore => {
+  store ??= browserStore();
+  return store;
+};
 
-export function useGeolocation() {
-  return useSyncExternalStore(
-    geolocationStore.subscribe,
-    geolocationStore.getSnapshot,
-    geolocationStore.getServerSnapshot,
+const SERVER_SNAPSHOT: GeolocationState = INITIAL_GEOLOCATION_STATE;
+
+export function useGeolocation(): GeolocationState & {
+  request: () => void;
+  dismiss: () => void;
+} {
+  const current = getStore();
+  const state = useSyncExternalStore(
+    current.subscribe,
+    current.getSnapshot,
+    () => SERVER_SNAPSHOT,
   );
+  return { ...state, request: current.request, dismiss: current.dismiss };
 }

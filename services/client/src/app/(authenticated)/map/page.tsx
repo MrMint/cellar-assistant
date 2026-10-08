@@ -21,8 +21,12 @@ export default async function MapPage() {
   return (
     <Box
       sx={{
-        height: "100dvh",
+        // N22: fill the content area (map/layout.tsx), not the viewport.
+        flex: "1 1 auto",
+        minHeight: 0,
+        height: "100%",
         width: "100%",
+        backgroundColor: "background.surface",
         position: "relative",
         overflow: "hidden",
         // Ensure map takes full available space

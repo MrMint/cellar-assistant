@@ -140,13 +140,19 @@ interface FormFields {
 interface CreatePlaceFormProps {
   latitude: number;
   longitude: number;
+  /** N22: the name searched for when "Add it here" started this. */
+  initialName?: string;
 }
 
 // =============================================================================
 // Component
 // =============================================================================
 
-export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
+export function CreatePlaceForm({
+  latitude,
+  longitude,
+  initialName = "",
+}: CreatePlaceFormProps) {
   const router = useRouter();
   const {
     checkDuplicatePlacesAction,
@@ -188,7 +194,7 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
     formState: { isSubmitting, errors },
   } = useForm<FormFields>({
     defaultValues: {
-      name: "",
+      name: initialName,
       categories: [],
       street_address: "",
       locality: "",

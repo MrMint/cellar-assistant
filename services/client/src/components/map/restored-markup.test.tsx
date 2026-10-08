@@ -216,6 +216,17 @@ describe("create place (restored)", () => {
     assert.match(html, /Loading address\.\.\./);
     assert.match(html, />Add Place</);
   });
+
+  test("N22: 'Add it here' arrives with the searched name already in the form", () => {
+    const html = render(
+      <CreatePlaceForm
+        latitude={43.07}
+        longitude={-89.4}
+        initialName="Copper Lantern"
+      />,
+    );
+    assert.match(html, /value="Copper Lantern"/);
+  });
 });
 
 describe("drawer content (restored)", () => {

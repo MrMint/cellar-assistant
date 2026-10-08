@@ -90,6 +90,7 @@ export function useMapData() {
       places: state.context.places,
       mapItems: state.context.mapItems,
       semanticResults: state.context.semanticResults,
+      semanticResultsQuery: state.context.semanticResultsQuery,
       isLoading: state.matches({ idle: { data: "loading" } }),
       placesError: state.context.placesError,
       geocodeTarget: state.context.geocodeTarget,
