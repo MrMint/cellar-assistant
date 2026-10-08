@@ -13,6 +13,15 @@ import { formatBrandType } from "../brand/brand-type-display";
 /** How many rows each section shows before "See all". */
 export const CATALOG_SECTION_SIZE = 3;
 
+/**
+ * How many brand hits the search actor is asked to hold. `brandSearch`'s
+ * `totalCount` is the size of that held set, not of every match (`limit` is
+ * "how many results the actor holds"), so holding exactly three would report
+ * at most three and "See all" could never appear. One more than the section
+ * shows is enough to know whether there is more.
+ */
+export const BRAND_SECTION_LIMIT = CATALOG_SECTION_SIZE + 1;
+
 export const SearchRecipeGroupsQuery = graphql(
   `
   query SearchRecipeGroups($term: String!, $first: Int!) {
@@ -39,8 +48,8 @@ export const SearchRecipeGroupsQuery = graphql(
 
 export const SearchBrandsQuery = graphql(
   `
-  query SearchBrands($term: String!, $first: Int!) {
-    brandSearch(term: $term, limit: $first, first: $first) {
+  query SearchBrands($term: String!, $first: Int!, $limit: Int!) {
+    brandSearch(term: $term, limit: $limit, first: $first) {
       __typename
       ... on BrandSearchConnection {
         totalCount

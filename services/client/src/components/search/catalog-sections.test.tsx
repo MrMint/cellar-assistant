@@ -5,6 +5,7 @@
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { print } from "graphql";
 import { renderToStaticMarkup } from "react-dom/server";
 
 mock.module("next/navigation", () => ({
@@ -12,9 +13,14 @@ mock.module("next/navigation", () => ({
   usePathname: () => "/search",
 }));
 
-const { brandRows, recipeRows, seeAllHref } = await import(
-  "./catalog-sections"
-);
+const {
+  BRAND_SECTION_LIMIT,
+  brandRows,
+  CATALOG_SECTION_SIZE,
+  recipeRows,
+  SearchBrandsQuery,
+  seeAllHref,
+} = await import("./catalog-sections");
 const { CatalogSection } = await import("./CatalogSections");
 const { Recipe } = await import("@/components/app/icons");
 const { textOf } = await import("@/test-support/markup");
@@ -99,6 +105,18 @@ describe("recipeRows / brandRows", () => {
       "/recipes?q=gin%20%26%20tonic",
     );
     assert.equal(seeAllHref("brands", "ridge"), "/brands?q=ridge");
+  });
+});
+
+describe("SearchBrands", () => {
+  // `brandSearch`'s totalCount is the size of the set the actor holds
+  // (`limit`), so holding only what the section shows would report "three"
+  // for every popular term and See all would never appear.
+  test("holds one more hit than the section shows, so See all can appear", () => {
+    assert.ok(BRAND_SECTION_LIMIT > CATALOG_SECTION_SIZE);
+    const source = print(SearchBrandsQuery as never);
+    assert.match(source, /limit:\s*\$limit/);
+    assert.doesNotMatch(source, /limit:\s*\$first/);
   });
 });
 

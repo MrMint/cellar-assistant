@@ -4,6 +4,7 @@ import { Link } from "@/components/app/Link";
 import { InsetSection, ListRow } from "@/components/app/Page";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import {
+  BRAND_SECTION_LIMIT,
   brandRows,
   CATALOG_SECTION_SIZE,
   type CatalogRow,
@@ -82,7 +83,10 @@ export async function ServerCatalogSections({ query }: { query: string }) {
   const variables = { term: query, first: CATALOG_SECTION_SIZE };
   const [recipes, brands] = await Promise.all([
     apiServerQuery(SearchRecipeGroupsQuery, variables).catch(() => undefined),
-    apiServerQuery(SearchBrandsQuery, variables).catch(() => undefined),
+    apiServerQuery(SearchBrandsQuery, {
+      ...variables,
+      limit: BRAND_SECTION_LIMIT,
+    }).catch(() => undefined),
   ]);
   const recipeTotal =
     recipes?.recipeGroups.__typename === "RecipeGroupConnection"
