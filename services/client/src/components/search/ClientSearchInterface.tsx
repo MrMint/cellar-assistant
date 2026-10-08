@@ -15,7 +15,7 @@ import { useActor } from "@xstate/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { includes } from "ramda";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { MdCamera, MdClose, MdScanner, MdSearch } from "react-icons/md";
 import { useClient } from "urql";
 import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
@@ -27,6 +27,9 @@ import { CameraCapture } from "../common/CameraCapture";
 import { interactiveSearchMachine } from "./actors/interactiveSearch";
 import { barcodeSearchHref, imageSearchHref } from "./adapter";
 import { modalScale } from "./motion-variants";
+import { useSearchNavigation } from "./SearchNavigation";
+import type { SearchNavigation } from "./search-navigation";
+import { useSearchQuery } from "./useSearchQuery";
 
 const SEARCH_EXAMPLES_DESKTOP = [
   "Search your collection...",
@@ -46,10 +49,12 @@ const SEARCH_EXAMPLES_MOBILE = [
   "date night pick...",
 ];
 
-const SEARCH_DEBOUNCE_MS = 300;
-
 interface ClientSearchInterfaceProps {
-  initialQuery?: string;
+  /**
+   * The `?q=` the page was rendered for. Not just the initial value: the box
+   * follows it when the URL changes under it (Back, Forward, a link).
+   */
+  urlQuery?: string | null;
 }
 
 /**
@@ -72,17 +77,44 @@ interface ClientSearchInterfaceProps {
  *   forgeable and unbounded, §7) — and its search was a stub that returned
  *   nothing. Now the URL carries the code and the server page looks it up.
  *   The machine stays in `barcodeSearching` while the navigation is pending.
+ *
+ * And the box never remounts while you type (N01): the page renders it in one
+ * slot for both the landing and the results view, typing `replace`s the URL
+ * (a typing session opens with one `push`; `search-navigation.ts` has the
+ * rules), and every navigation runs in the page's shared transition, so the
+ * results below show a skeleton while the next page streams.
  */
 export const ClientSearchInterface = ({
-  initialQuery,
+  urlQuery,
 }: ClientSearchInterfaceProps) => {
-  const [searchQuery, setSearchQuery] = useState(initialQuery || "");
   const [isFocused, setIsFocused] = useState(false);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // The page's shared transition when there is one (the results skeleton
+  // reads it); a local one otherwise.
+  const [localPending, localStartTransition] = useTransition();
+  const shared = useSearchNavigation();
+  const isNavigating = shared?.isPending ?? localPending;
+  const startNavigation = shared?.startTransition ?? localStartTransition;
+
+  const navigate = useCallback(
+    ({ method, href }: SearchNavigation) =>
+      startNavigation(() => {
+        if (method === "push") router.push(href);
+        else router.replace(href);
+      }),
+    [router, startNavigation],
+  );
+  const {
+    value: searchQuery,
+    onChange,
+    commit,
+    clear,
+  } = useSearchQuery({ urlQuery, navigate, isNavigating });
 
   const isMobile = useMediaQuery("(max-width: 600px)");
+  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
   const examples = isMobile ? SEARCH_EXAMPLES_MOBILE : SEARCH_EXAMPLES_DESKTOP;
   const isPlaceholderActive = !isFocused && !searchQuery;
 
@@ -94,7 +126,6 @@ export const ClientSearchInterface = ({
   const [state, send] = useActor(interactiveSearchMachine, {
     input: {},
   });
-  const [isNavigating, startNavigation] = useTransition();
   const urqlClient = useClient();
   // N07/D25: photo search is hidden, not refused, where the deployment's
   // embedding model cannot embed a photo.
@@ -135,30 +166,16 @@ export const ClientSearchInterface = ({
       });
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      if (value.trim()) {
-        router.push(`/search?q=${encodeURIComponent(value.trim())}`);
-      } else {
-        router.push("/search");
-      }
-    }, SEARCH_DEBOUNCE_MS);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    commit();
+    // On a phone, Search on the keyboard should reveal the results.
+    if (isCoarsePointer) inputRef.current?.blur();
   };
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
   const handleClear = () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    setSearchQuery("");
-    router.push("/search");
+    clear();
     inputRef.current?.focus();
   };
 
@@ -185,16 +202,26 @@ export const ClientSearchInterface = ({
           >
             <Stack spacing={2}>
               <Input
-                slotProps={{ input: { ref: inputRef } }}
+                slotProps={{
+                  input: {
+                    ref: inputRef,
+                    "aria-label": "Search your collection",
+                    enterKeyHint: "search",
+                  },
+                }}
                 placeholder={
                   isPlaceholderActive
                     ? animatedPlaceholder
                     : "Search your collection..."
                 }
                 value={searchQuery}
-                onChange={handleChange}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={handleKeyDown}
                 onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
+                onBlur={() => {
+                  setIsFocused(false);
+                  commit();
+                }}
                 startDecorator={
                   <MdSearch style={{ fontSize: "1.25rem", opacity: 0.5 }} />
                 }
@@ -206,6 +233,9 @@ export const ClientSearchInterface = ({
                         color="neutral"
                         size="sm"
                         aria-label="Clear search"
+                        // Keep focus in the box: a blur here would commit
+                        // the old text a moment before clear commits "".
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={handleClear}
                         sx={{ minWidth: "auto", p: "4px" }}
                       >

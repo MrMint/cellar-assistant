@@ -21,7 +21,6 @@ import {
   type SearchParams,
   searchStateFromParams,
 } from "@/components/search/adapter";
-import { ClientSearchInterface } from "@/components/search/ClientSearchInterface";
 import { Greeting } from "@/components/search/Greeting";
 import {
   NEARBY_PLACES_LIMIT,
@@ -32,6 +31,8 @@ import {
   SearchRecentActivityQuery,
 } from "@/components/search/queries";
 import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
+import { SearchPageLayout } from "@/components/search/SearchPageLayout";
+import { SearchResultsSkeleton } from "@/components/search/SearchResultsSkeleton";
 import { ServerBarcodeResults } from "@/components/search/ServerBarcodeResults";
 import {
   ExpiredImageSearch,
@@ -75,132 +76,130 @@ export default async function Search({ searchParams }: SearchPageProps) {
 
   const user = await getServerUser();
 
+  // One frame for both views, so the search box never remounts (N01).
   return (
-    <Box>
-      <Stack spacing={3}>
-        {/* Discovery: hero renders instantly from SSR, async content streams in */}
-        {!hasActiveSearch && (
-          <Stack spacing={4}>
-            <Stack
-              spacing={3}
-              alignItems="center"
-              sx={{ pt: { xs: 2, sm: 4 } }}
-            >
-              <FadeIn>
-                <Greeting displayName={user.displayName} />
-              </FadeIn>
-              <Box
+    <SearchPageLayout
+      urlQuery={query}
+      landing={
+        hasActiveSearch
+          ? null
+          : {
+              hero: <LandingHero displayName={user.displayName} />,
+              quickLinks: <QuickLinks />,
+            }
+      }
+    >
+      {/* Discovery: the hero renders instantly from SSR, this streams in */}
+      {!hasActiveSearch && (
+        <Suspense fallback={null}>
+          <DiscoveryContent activityKinds={activityKinds} />
+        </Suspense>
+      )}
+
+      {hasActiveSearch && (
+        <Stack spacing={3}>
+          {imageFileId !== null && (
+            <Stack spacing={2}>
+              <Typography level="title-lg">Image search results</Typography>
+              <Suspense fallback={<SearchResultsSkeleton />}>
+                <ServerImageResults imageFileId={imageFileId} />
+              </Suspense>
+            </Stack>
+          )}
+
+          {imageFileId === null && legacyImageLink && (
+            <Stack spacing={2}>
+              <Typography level="title-lg">Image search results</Typography>
+              <ExpiredImageSearch />
+            </Stack>
+          )}
+
+          {barcode !== null && (
+            <Stack spacing={2}>
+              <Typography level="title-lg">Barcode search results</Typography>
+              <Suspense fallback={<SearchResultsSkeleton />}>
+                <ServerBarcodeResults code={barcode} />
+              </Suspense>
+            </Stack>
+          )}
+
+          {query !== null && (
+            <Stack spacing={2}>
+              <Typography level="title-lg">
+                Search results for &ldquo;{query}&rdquo;
+              </Typography>
+              <Suspense fallback={<SearchResultsSkeleton />}>
+                <ServerSearchResults query={query} />
+              </Suspense>
+            </Stack>
+          )}
+        </Stack>
+      )}
+    </SearchPageLayout>
+  );
+}
+
+/** Greeting and the collection line, above the box on the landing view. */
+function LandingHero({ displayName }: { displayName?: string }) {
+  return (
+    <Stack spacing={3} alignItems="center">
+      <FadeIn>
+        <Greeting displayName={displayName} />
+      </FadeIn>
+      <Box
+        sx={{
+          minHeight: "1.5rem",
+          mt: -1.5,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <Suspense fallback={null}>
+          <CollectionStats />
+        </Suspense>
+      </Box>
+    </Stack>
+  );
+}
+
+const QUICK_LINKS = [
+  { href: "/cellars", label: "Cellars", icon: <MdHome /> },
+  { href: "/map", label: "Map", icon: <MdMap /> },
+  { href: "/tier-lists", label: "Tier Lists", icon: <MdViewList /> },
+  { href: "/favorites", label: "Favorites", icon: <MdFavorite /> },
+  { href: "/rankings", label: "Rankings", icon: <MdLeaderboard /> },
+];
+
+/** The five quick links under the box on the landing view. */
+function QuickLinks() {
+  return (
+    <StaggerIn>
+      <Stack
+        direction="row"
+        spacing={1}
+        flexWrap="wrap"
+        justifyContent="center"
+        useFlexGap
+      >
+        {QUICK_LINKS.map(({ href, label, icon }) => (
+          <StaggerItem key={href}>
+            <Link href={href} style={{ textDecoration: "none" }}>
+              <Chip
+                variant="outlined"
+                startDecorator={icon}
                 sx={{
-                  minHeight: "1.5rem",
-                  mt: -1.5,
-                  display: "flex",
-                  justifyContent: "center",
+                  cursor: "pointer",
+                  "--Chip-minHeight": "32px",
+                  fontSize: "sm",
                 }}
               >
-                <Suspense fallback={null}>
-                  <CollectionStats />
-                </Suspense>
-              </Box>
-              <Box sx={{ width: "100%", maxWidth: 600 }}>
-                <ClientSearchInterface initialQuery={query ?? undefined} />
-              </Box>
-              <StaggerIn>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  flexWrap="wrap"
-                  justifyContent="center"
-                  useFlexGap
-                >
-                  {[
-                    { href: "/cellars", label: "Cellars", icon: <MdHome /> },
-                    { href: "/map", label: "Map", icon: <MdMap /> },
-                    {
-                      href: "/tier-lists",
-                      label: "Tier Lists",
-                      icon: <MdViewList />,
-                    },
-                    {
-                      href: "/favorites",
-                      label: "Favorites",
-                      icon: <MdFavorite />,
-                    },
-                    {
-                      href: "/rankings",
-                      label: "Rankings",
-                      icon: <MdLeaderboard />,
-                    },
-                  ].map(({ href, label, icon }) => (
-                    <StaggerItem key={href}>
-                      <Link href={href} style={{ textDecoration: "none" }}>
-                        <Chip
-                          variant="outlined"
-                          startDecorator={icon}
-                          sx={{
-                            cursor: "pointer",
-                            "--Chip-minHeight": "32px",
-                            fontSize: "sm",
-                          }}
-                        >
-                          {label}
-                        </Chip>
-                      </Link>
-                    </StaggerItem>
-                  ))}
-                </Stack>
-              </StaggerIn>
-            </Stack>
-
-            <Suspense fallback={null}>
-              <DiscoveryContent activityKinds={activityKinds} />
-            </Suspense>
-          </Stack>
-        )}
-
-        {/* Active search: just search bar + results */}
-        {hasActiveSearch && (
-          <>
-            <ClientSearchInterface initialQuery={query ?? undefined} />
-
-            {imageFileId !== null && (
-              <Stack spacing={2}>
-                <Typography level="title-lg">Image search results</Typography>
-                <Suspense fallback={null}>
-                  <ServerImageResults imageFileId={imageFileId} />
-                </Suspense>
-              </Stack>
-            )}
-
-            {imageFileId === null && legacyImageLink && (
-              <Stack spacing={2}>
-                <Typography level="title-lg">Image search results</Typography>
-                <ExpiredImageSearch />
-              </Stack>
-            )}
-
-            {barcode !== null && (
-              <Stack spacing={2}>
-                <Typography level="title-lg">Barcode search results</Typography>
-                <Suspense fallback={null}>
-                  <ServerBarcodeResults code={barcode} />
-                </Suspense>
-              </Stack>
-            )}
-
-            {query !== null && (
-              <Stack spacing={2}>
-                <Typography level="title-lg">
-                  Search results for &ldquo;{query}&rdquo;
-                </Typography>
-                <Suspense fallback={null}>
-                  <ServerSearchResults query={query} />
-                </Suspense>
-              </Stack>
-            )}
-          </>
-        )}
+                {label}
+              </Chip>
+            </Link>
+          </StaggerItem>
+        ))}
       </Stack>
-    </Box>
+    </StaggerIn>
   );
 }
 

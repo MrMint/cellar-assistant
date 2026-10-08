@@ -63,6 +63,7 @@
     "xstate": "5.33.2"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "20.14.5",
     "@serwist/turbopack": "^9.5.13",
     "@types/geojson": "7946.0.16",
     "@types/node": "catalog:",

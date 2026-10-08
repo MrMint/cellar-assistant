@@ -68,7 +68,7 @@ describe("ClientSearchInterface (restored)", () => {
   });
 
   test("a query swaps both buttons for the round scan and camera icons and adds clear", () => {
-    const html = render(<ClientSearchInterface initialQuery="barolo" />);
+    const html = render(<ClientSearchInterface urlQuery="barolo" />);
     assert.match(html, /value="barolo"/);
     assert.match(html, /aria-label="Scan barcode"/);
     assert.match(html, /aria-label="Search by photo"/);
