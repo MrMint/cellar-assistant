@@ -119,6 +119,11 @@ export function AppBar({
     if (canGoBack()) router.back();
     else if (parent !== undefined) router.push(parent);
   };
+  // A cold deep link's Back is a push to `parent`: start its prefetch at the
+  // pointerdown, as every in-app link does (X24). History Back needs none.
+  const warmBack = () => {
+    if (!canGoBack() && parent !== undefined) router.prefetch(parent);
+  };
 
   const trailing = actions.filter((a): a is AppBarAction => a !== undefined);
 
@@ -153,7 +158,12 @@ export function AppBar({
       )}
       <div className="flex min-h-11 items-center gap-1">
         {showBack && (
-          <IconButton aria-label="Back" onClick={goBack} className="-ml-3">
+          <IconButton
+            aria-label="Back"
+            onClick={goBack}
+            onPointerDown={warmBack}
+            className="-ml-3"
+          >
             <Back />
           </IconButton>
         )}

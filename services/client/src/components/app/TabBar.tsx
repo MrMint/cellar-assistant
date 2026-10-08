@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { CaptureChooser } from "./CaptureChooser";
 import { Link } from "./Link";
 import { activeTab, CaptureIcon, TABS, type Tab, type TabKey } from "./nav";
+import { prefetchCaptureDestinations } from "./prefetch";
 
 /** The shell's inner scroller (`AppShell`), which re-tap scrolls to the top. */
 export const SCROLLER_SELECTOR = "[data-app-scroller]";
@@ -135,6 +136,10 @@ export function TabBar({ className }: { className?: string }) {
             aria-haspopup="dialog"
             aria-expanded={choosing}
             onClick={() => setChoosing(true)}
+            // The chooser's destinations, warmed while the finger is still
+            // down (X24); the tabs themselves are links, which the shell's
+            // pointerdown prefetch already covers.
+            onPointerDown={() => prefetchCaptureDestinations(router)}
             className="absolute -top-2 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/40 outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100"
           >
             <CaptureIcon aria-hidden className="size-7" strokeWidth={2} />
