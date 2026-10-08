@@ -924,7 +924,7 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
         // stale edit now fails loudly rather than corrupting the board.
         await expect(
           stale2.reorderBand(userCtx(owner, "r2"), 0, [b.id, a.id, c.id]),
-        ).rejects.toThrow();
+        ).rejects.toBeInstanceOf(ConflictError);
 
         const rows = await db
           .select({ id: tierListItems.id, position: tierListItems.position })
@@ -935,6 +935,20 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
           { id: c.id, position: 0 },
           { id: b.id, position: 1 },
           { id: a.id, position: 2 },
+        ]);
+
+        // The refusal also rebuilt stale2's cache, so it is not wedged: the
+        // retry computes from the list as it now is, and lands cleanly.
+        await stale2.reorderBand(userCtx(owner, "r3"), 0, [b.id, a.id, c.id]);
+        const retried = await db
+          .select({ id: tierListItems.id, position: tierListItems.position })
+          .from(tierListItems)
+          .where(eq(tierListItems.tierListId, id))
+          .orderBy(tierListItems.position);
+        expect(retried).toEqual([
+          { id: b.id, position: 0 },
+          { id: a.id, position: 1 },
+          { id: c.id, position: 2 },
         ]);
       });
     });

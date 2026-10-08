@@ -56,8 +56,9 @@
  * already correct, producing two rows sharing one position — the exact
  * invariant this method exists to guarantee. (Since D4 every recorded edit
  * also takes the next `tier_list_history.seq`, unique per list, so such a
- * stale second write is now refused whole rather than merged; that is a
- * backstop, not a reason to drop the guarantee — `update` records nothing.)
+ * stale second write is now refused whole rather than merged, as a retryable
+ * `ConflictError` after a cache rebuild (`#recordedTx`); that is a backstop,
+ * not a reason to drop the guarantee — `update` records nothing.)
  *
  * ## Content-change signal, replacing a trigger with an outbox row
  *
@@ -423,6 +424,24 @@ const subjectOf = (
   return row === undefined ? null : { ...moved, entry: entryRefOf(row) };
 };
 
+/**
+ * The history's `(tier_list_id, seq)` key refusing a write: this activation's
+ * cache named a `seq` another writer had already taken, so its picture of the
+ * list is stale (see the class doc on stale activations).
+ */
+const isStaleHistoryWrite = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const cause = (error as { cause?: unknown }).cause;
+  const pg = (cause instanceof Error ? cause : error) as {
+    code?: unknown;
+    constraint?: unknown;
+  };
+  return (
+    pg.code === "23505" &&
+    pg.constraint === "tier_list_history_tier_list_id_seq_key"
+  );
+};
+
 /** Throws instead of a non-null assertion (repo style) when a lookup "can't" miss. */
 const mustGet = <K, V>(map: ReadonlyMap<K, V>, key: K, what: string): V => {
   const value = map.get(key);
@@ -617,7 +636,7 @@ export class TierListActor
     const createdAt = new Date();
     const notes = input.notes ?? null;
 
-    await this.tx(async (tx) => {
+    await this.#recordedTx(async (tx) => {
       const inserted = await tx
         .insert(tierListItems)
         .values({
@@ -673,7 +692,7 @@ export class TierListActor
       .sort((a, b) => a.position - b.position)
       .map((row) => row.id);
 
-    await this.tx(async (tx) => {
+    await this.#recordedTx(async (tx) => {
       await tx
         .delete(tierListItems)
         .where(eq(tierListItems.id, tierListItemId));
@@ -745,7 +764,7 @@ export class TierListActor
     };
     const after: Record<string, string[]> = { [String(targetBand)]: [...ids] };
 
-    await this.tx(async (tx) => {
+    await this.#recordedTx(async (tx) => {
       let moved = await this.#writePositions(tx, targetBand, ids, byId);
       for (const sourceBand of sourceBands) {
         const remaining = aggregate.items
@@ -846,7 +865,7 @@ export class TierListActor
     };
     const change = parseChange(target.kind, target.change);
 
-    await this.tx(async (tx) => {
+    await this.#recordedTx(async (tx) => {
       if (change !== null) {
         await this.#apply(tx, change, direction === "UNDO" ? "back" : "forth");
       }
@@ -979,6 +998,23 @@ export class TierListActor
             ),
           );
       }
+    }
+  }
+
+  /**
+   * `tx` for every write that appends to the history. A stale cache's write
+   * is refused whole by the `seq` key; without a reload it would stay stale
+   * and refuse every later edit until the activation went idle, so the cache
+   * is rebuilt and the caller gets a retryable conflict — the next attempt
+   * runs against the list as it is.
+   */
+  async #recordedTx(fn: (tx: DbOrTx) => Promise<void>): Promise<void> {
+    try {
+      await this.tx(fn);
+    } catch (error) {
+      if (!isStaleHistoryWrite(error)) throw error;
+      await this.reload();
+      throw new ConflictError("This list changed somewhere else. Try again.");
     }
   }
 
