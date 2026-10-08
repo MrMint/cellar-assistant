@@ -1757,6 +1757,32 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       });
     });
 
+    it("X27: the list drops a saved place that went under review — for everyone but its creator", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const placeId = await seedPlace(db);
+        const place = { kind: "PLACE", placeId } as const;
+        const alices = await userActor(alice, db);
+        const bobs = await userActor(bob, db);
+        await alices.setWantToTry(userCtx(alice, "r"), place, true);
+        await bobs.setWantToTry(userCtx(bob, "r"), place, true);
+
+        // Out of reach for Bob from here on; the interaction row stays.
+        await db
+          .update(places)
+          .set({ reviewStatus: "pending", createdBy: alice })
+          .where(eq(places.id, placeId));
+
+        const bobsList = await bobs.wantToTry(userCtx(bob, "r"), firstPage);
+        expect(nodes(bobsList)).toEqual([]);
+        expect(bobsList.totalCount).toBe(0);
+        expect(
+          nodes(await alices.wantToTry(userCtx(alice, "r"), firstPage)),
+        ).toEqual([{ target: place, savedAt: expect.any(String) }]);
+      });
+    });
+
     it("wantToTryStates answers a page in one call, in canonical spelling", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
