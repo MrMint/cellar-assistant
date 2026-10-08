@@ -1161,7 +1161,8 @@ export const RECIPE_PHOTO_SCHEMA: JsonSchema = {
             description:
               "What this line does in the drink: the 'base' spirit, a " +
               "'modifier', a 'sweetener', an 'acid', 'bitters', a 'mixer', a " +
-              "'garnish', or 'other'.",
+              "'garnish', or 'other'. Leave it out when the card does not " +
+              "make it clear.",
           },
         },
         required: ["name"],
