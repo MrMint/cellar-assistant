@@ -286,8 +286,13 @@ test("a text-only review from the old form lands in the old list", async ({
     primary.getByPlaceholder("Edit your review of this recipe..."),
   ).toBeVisible({ timeout: 20_000 });
   await expect(primary.getByText("Reviews:")).toBeVisible();
-  // Newest first, so the viewer's review is the first accordion row.
-  await primary.locator(".MuiAccordionSummary-button").first().click();
+  // Newest first, so the viewer's review is the first accordion row: the
+  // collapsed disclosure button that carries the review's date.
+  await primary
+    .getByRole("button", { expanded: false })
+    .filter({ has: primary.locator("time") })
+    .first()
+    .click();
   await expect(primary.getByText(words)).toBeVisible({ timeout: 20_000 });
   expect(noise.pageErrors, "the recipe page threw").toEqual([]);
 });

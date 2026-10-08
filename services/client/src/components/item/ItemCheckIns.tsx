@@ -169,7 +169,7 @@ export const ItemCheckIns = ({
           </Typography>
         )}
         {checkIns.length > 0 && (
-          <List>
+          <List aria-label="Check-ins">
             {groupCheckInsByDay(checkIns).flatMap(([dateKey, x]) => [
               <ListDivider key={`divider-${dateKey}`} />,
               <ListItem key={dateKey}>

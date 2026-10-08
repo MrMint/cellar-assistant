@@ -196,7 +196,7 @@ export function NearbyPlaces({
   const userLng = geo.location?.longitude ?? cachedLocation?.longitude ?? 0;
 
   return (
-    <Stack spacing={1.5}>
+    <Stack component="section" aria-label="Nearby Places" spacing={1.5}>
       <Stack
         direction="row"
         spacing={1}

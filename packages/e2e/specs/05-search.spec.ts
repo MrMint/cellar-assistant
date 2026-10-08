@@ -113,7 +113,9 @@ test("the restored landing view: greeting, collection line, Scan, Photo, five qu
   await expect(primary.getByRole("button", { name: "Scan" })).toBeVisible();
   await expect(primary.getByRole("button", { name: "Photo" })).toBeVisible();
   await expect(primary.getByRole("tab")).toHaveCount(0);
-  const main = primary.locator("a[href] .MuiChip-root");
+  const main = primary
+    .getByRole("navigation", { name: "Quick links" })
+    .getByRole("link");
   await expect(main).toHaveText([
     "Cellars",
     "Map",
@@ -382,7 +384,7 @@ test("Recent Activity shows a friend's review and their FRIENDS list — never t
     await expect(
       primary.getByText("Recent Activity", { exact: true }),
     ).toBeVisible();
-    const reviewCard = primary.locator("a.MuiCard-root", { hasText: teaName });
+    const reviewCard = primary.getByRole("link").filter({ hasText: teaName });
     await expect(reviewCard.first()).toBeVisible();
     await expect(reviewCard.first()).toContainText("Rated 4.5");
     await expect(reviewCard.first()).toHaveAttribute("href", `/teas/${teaId}`);
@@ -426,7 +428,9 @@ test("Nearby Places renders from the geolocation cookie, nearest first", async (
     await expect(
       primary.getByText("Nearby Places", { exact: true }),
     ).toBeVisible();
-    const cards = primary.locator('a.MuiCard-root[href^="/map?placeId="]');
+    const cards = primary
+      .getByRole("region", { name: "Nearby Places" })
+      .locator('a[href^="/map?placeId="]');
     await expect(cards).toHaveCount(2);
     await expect(cards.nth(0)).toContainText(near.name);
     await expect(cards.nth(0)).toContainText("Wine Bar");
@@ -456,7 +460,9 @@ test("the landing view is visible before any script runs", async ({
   try {
     const page = await ctx.newPage();
     await page.goto("/search");
-    const chip = page.locator("a[href] .MuiChip-root", { hasText: "Cellars" });
+    const chip = page
+      .getByRole("navigation", { name: "Quick links" })
+      .getByRole("link", { name: "Cellars" });
     await expect(chip).toBeVisible();
     // The CSS entrance takes ~0.5s; what matters is where it comes to rest
     // with no script at all — the old markup rested at opacity 0.
