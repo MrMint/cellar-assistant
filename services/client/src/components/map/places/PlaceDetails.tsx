@@ -255,6 +255,7 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     fetching,
     failure,
     isEnriching,
+    detailsPending,
     refetch,
     setInteraction,
   } = usePlaceDetails(placeId);
@@ -501,11 +502,18 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
                     {openNow ? "Open" : "Closed"}
                   </Typography>
                 )}
+                {/* N22: capped at 8 s, then a calm line rather than a spinner */}
                 {isEnriching && (
                   <CircularProgress
                     size="sm"
+                    aria-label="Loading details"
                     sx={{ "--CircularProgress-size": "16px" }}
                   />
+                )}
+                {!isEnriching && detailsPending && (
+                  <Typography level="body-xs" color="neutral">
+                    Details pending
+                  </Typography>
                 )}
                 {placeData.is_verified && (
                   <Chip size="sm" variant="soft" color="success">

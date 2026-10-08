@@ -190,7 +190,7 @@ export function usePlaceDetails(placeId: string | undefined) {
     };
   }, [raw, menuRows, menuIsCurrent, menu.totalCount]);
 
-  const { isEnriching } = usePlaceEnrichment({
+  const { isEnriching, detailsPending } = usePlaceEnrichment({
     placeId,
     loaded: raw !== null,
     hasEnrichment: raw?.enrichment != null,
@@ -245,6 +245,7 @@ export function usePlaceDetails(placeId: string | undefined) {
     fetching: fetching && raw === null,
     failure,
     isEnriching,
+    detailsPending,
     refetch,
     setInteraction,
   };
