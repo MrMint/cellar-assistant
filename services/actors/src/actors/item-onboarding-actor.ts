@@ -411,6 +411,19 @@ export class ItemOnboardingActor
       ) {
         return onboardingRowToDto(existing.row);
       }
+      // A closed session (it created its item, or filed a catalogue match)
+      // is answered as it stands, never re-read. X05's `?draft=<id>` resume
+      // can call `start` again on a session the person already finished —
+      // from history, or a late "Review" toast — and a re-run here would
+      // spend a model call and then write `COMPLETED` (or `FAILED`) over
+      // `CONFIRMED`, reopening the session `confirm` short-circuits on.
+      // `closeAsMatched` and `reprocess` keep a closed status the same way.
+      if (
+        existing.row.status === "CONFIRMED" ||
+        existing.row.status === "MATCHED"
+      ) {
+        return onboardingRowToDto(existing.row);
+      }
     }
 
     // E2f: the fourth instance of "never trust the client's done" (§4). Both
