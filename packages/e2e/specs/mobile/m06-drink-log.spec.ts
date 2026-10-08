@@ -97,16 +97,27 @@ test("log a drink from the item page, undo it, log again, delete it", async ({
   await expect(sheet).toBeVisible();
   await expect(sheet.getByText(teaName).first()).toBeVisible();
 
-  // The primary action is reachable without scrolling the sheet.
+  // The primary action is reachable without scrolling the sheet — once the
+  // sheet has finished sliding up (measured mid-animation it sits ~1400px
+  // down, which says nothing about where it lands).
   const logIt = sheet.getByRole("button", { name: "Log it" });
   await expect(logIt).toBeVisible();
   const viewport = page.viewportSize();
-  const edges = await edgesOf(logIt);
-  expect(edges.bottom).toBeLessThanOrEqual(viewport?.height ?? 844);
+  await expect
+    .poll(async () => (await edgesOf(logIt)).bottom, { timeout: 5_000 })
+    .toBeLessThanOrEqual(viewport?.height ?? 844);
 
-  await sheet.getByRole("radio", { name: /^4 stars/ }).check({ force: true });
+  // The stars are visually-hidden radios (RatingInput); `check({ force })`
+  // refuses an sr-only input inside the sheet as "outside of the viewport",
+  // so pick one the way a keyboard user does.
+  const fourStars = sheet.getByRole("radio", { name: /^4 stars/ });
+  await fourStars.focus();
+  await page.keyboard.press("Space");
+  await expect(fourStars).toBeChecked();
   await sheet
-    .getByLabel("Tasting note")
+    // The note's <section> is labelled by the same <label>, so name the
+    // textbox rather than the label.
+    .getByRole("textbox", { name: "Tasting note" })
     .fill("Grassy, a little smoky, long finish");
   await sheet.getByPlaceholder("Add a flavour").fill("Grassy");
   await sheet.getByRole("button", { name: "Add", exact: true }).click();
