@@ -12,7 +12,7 @@ import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { richTextFromReviewText } from "@/components/common/rich-text";
 import type { ResultOf } from "@/lib/api/graphql";
 import { RECIPE_PHOTO_STAGES } from "@/lib/api/recipe-photos";
-import { formatVintage } from "@/utilities";
+import { formatItemVintage } from "@/utilities";
 import type {
   RecipeDetailsFragment,
   RecipeGroupCardFragment,
@@ -249,7 +249,9 @@ const ingredientFromNode = (
             name: item.name,
             type: item.type,
             vintage:
-              "vintage" in item ? (formatVintage(item.vintage) ?? null) : null,
+              "vintage" in item
+                ? (formatItemVintage(item.type, item.vintage) ?? null)
+                : null,
           },
     generic_item:
       generic === null

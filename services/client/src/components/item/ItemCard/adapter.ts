@@ -14,7 +14,11 @@
 
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
-import { buildItemSubtitle, formatVintage } from "@/utilities";
+import {
+  buildItemSubtitle,
+  formatItemVintage,
+  formatVintage,
+} from "@/utilities";
 import { displayItemName } from "@/utilities/smart-title-case";
 import { ItemCardFragment } from "./fragments";
 import type { ItemCardItem } from "./types";
@@ -105,7 +109,9 @@ export const itemCardFromItem = (item: ItemCardSource): ItemCardItem => {
     itemId: item.id,
     name: displayItemName(item.name),
     vintage: hasVintage
-      ? formatVintage(item.vintage ?? item.vintageYear)
+      ? item.type === "WINE"
+        ? formatItemVintage("WINE", item.vintage)
+        : formatVintage(item.vintage ?? item.vintageYear)
       : undefined,
     subtitle: buildItemSubtitle({
       brandName: primaryBrandName(item),

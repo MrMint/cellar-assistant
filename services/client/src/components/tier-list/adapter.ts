@@ -9,7 +9,7 @@
  */
 
 import type { ActorErrorReason } from "@/lib/api/errors";
-import { formatVintage } from "@/utilities";
+import { formatItemVintage } from "@/utilities";
 import {
   formatBeerStyle,
   formatCountry,
@@ -135,7 +135,7 @@ export function itemEntrySubtitle(item: EntryItemFields): string {
     case "WINE":
       return joinParts([
         formatWineVariety(item.wineVariety),
-        item.wineVintage ? formatVintage(item.wineVintage) : null,
+        formatItemVintage("WINE", item.wineVintage) ?? null,
         formatCountry(item.country),
       ]);
     case "BEER":

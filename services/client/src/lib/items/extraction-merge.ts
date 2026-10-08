@@ -79,7 +79,17 @@ export type ExtractionField = {
    * module never reads the table itself.
    */
   readonly options?: string;
+  /**
+   * X19: the field also holds "NV" — a non-vintage wine, stored as `NULL`
+   * (`ITEM_FORM_RULES`' `nonVintage`). The label read answers "NV" when the
+   * label says so; for such a field that is a value, not an unusable one.
+   * (The caller's `coerce` turns "N.V." or "Non-Vintage" into "NV" first.)
+   */
+  readonly nonVintage?: boolean;
 };
+
+/** What a `nonVintage` field holds for a non-vintage wine. */
+export const NON_VINTAGE_VALUE = "NV";
 
 /** The shape `ItemFields` edits. Structurally `ItemFieldValues`. */
 export type ExtractionValues = {
@@ -129,7 +139,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const unusableBecause = (
   kind: ExtractionField["kind"],
   value: string,
+  nonVintage = false,
 ): string | null => {
+  if (nonVintage && value === NON_VINTAGE_VALUE) return null;
   if (kind === "date") {
     if (DATE.test(value)) return null;
     return (
@@ -220,6 +232,7 @@ export const mergeExtractedDefaults = (input: MergeInput): MergeResult => {
     existing: string,
     kind: ExtractionField["kind"],
     allowed: readonly string[] | null,
+    nonVintage = false,
   ): string | null => {
     const value = asText(proposed);
     if (value === null) return null;
@@ -237,7 +250,7 @@ export const mergeExtractedDefaults = (input: MergeInput): MergeResult => {
       allowed !== null && !allowed.includes(value)
         ? `the field is a picker over ${allowed.length} values and that is ` +
           "not one of them, so choosing it back would be impossible"
-        : unusableBecause(kind, value);
+        : unusableBecause(kind, value, nonVintage);
     if (unusable !== null) {
       skipped.push({
         path,
@@ -276,6 +289,7 @@ export const mergeExtractedDefaults = (input: MergeInput): MergeResult => {
       attributes[field.key] ?? "",
       field.kind,
       allowedValues?.(field) ?? null,
+      field.nonVintage === true,
     );
     if (next !== null) attributes[field.key] = next;
   }

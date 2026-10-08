@@ -11,10 +11,15 @@
  * A candidate is a match only if it is the type being added and its vintage
  * **equals** the vintage read off the label — compared explicitly, because a
  * text embedding puts "Château Margaux 2015" right next to "Château Margaux
- * 2016" and the bottle in hand is one of them. A wine read without a vintage
- * matches only an item without one; a type with no vintage (coffee, tea)
- * compares as equal on both sides, which is why the unattended path also
- * needs the name (below).
+ * 2016" and the bottle in hand is one of them. A type with no vintage
+ * (coffee, tea) compares as equal on both sides, which is why the unattended
+ * path also needs the name (below).
+ *
+ * **A wine's vintage is never "absent" (X19).** Its NULL means non-vintage, so
+ * "NV" is a vintage like 2015: an NV read matches an NV item and nothing
+ * else, and an NV item never matches a dated read. A wine read with *no*
+ * vintage at all (nothing legible, no NV either) matches nothing — it is not
+ * evidence the bottle is the NV one. Beers and spirits keep "both absent".
  *
  * `exact` is the stronger claim the 15 s quick-add needs (`canQuickAdd`): a
  * barcode hit (the code names the product) or a search hit whose name is the
@@ -41,6 +46,10 @@
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
 import type { ItemFormValues } from "@/components/item/ItemForm";
+import {
+  isNonVintageText,
+  NON_VINTAGE,
+} from "@/components/item-api/itemFormRules";
 import type { ExistingItem } from "./adapter";
 
 export type CatalogCandidate = ExistingItem & {
@@ -68,28 +77,39 @@ const VINTAGE_KEY: Readonly<Record<ApiItemType, string | null>> = {
   TEA: null,
 };
 
-const yearOf = (value: string | undefined): string | undefined => {
+/** A year (`2015`, `2015-01-01`), or "NV" — `undefined` for anything else. */
+const vintageOf = (value: string | undefined): string | undefined => {
+  if (value !== undefined && isNonVintageText(value)) return NON_VINTAGE;
   const year = value?.trim().slice(0, 4);
   return year !== undefined && /^\d{4}$/.test(year) ? year : undefined;
 };
 
-/** The vintage the label gave, as a year — `undefined` when it gave none. */
+/**
+ * The vintage the label gave, as a year or "NV" — `undefined` when it gave
+ * none.
+ */
 export const readVintage = (
   type: ApiItemType,
   values: ItemFormValues,
 ): string | undefined => {
   const key = VINTAGE_KEY[type];
-  return key === null ? undefined : yearOf(values.attributes[key]);
+  return key === null ? undefined : vintageOf(values.attributes[key]);
 };
 
-/** Explicit vintage compare: both absent, or the same year. */
+/**
+ * Explicit vintage compare: the same year, or both NV — and, for a beer,
+ * spirit or sake, both absent. A wine with no vintage read matches nothing
+ * (see the module doc).
+ */
 export const sameVintage = (
   type: ApiItemType,
   read: string | undefined,
   item: Pick<ItemCardItem, "vintage">,
 ): boolean => {
   if (VINTAGE_KEY[type] === null) return true;
-  return yearOf(read) === yearOf(item.vintage);
+  const ours = vintageOf(read);
+  if (type === "WINE" && ours === undefined) return false;
+  return ours === vintageOf(item.vintage);
 };
 
 // Built with `new RegExp` because the client's tsconfig target predates the

@@ -41,6 +41,24 @@ export function formatVintage(
   return /^\d{4}$/.test(year) ? year : undefined;
 }
 
+/** What a non-vintage wine shows where a year would be (X19). */
+export const NON_VINTAGE_LABEL = "NV";
+
+/**
+ * An item's vintage for display (X19): a wine's `null` vintage is an answer —
+ * non-vintage — and reads "NV"; every other type's `null` is simply absent.
+ * `undefined` (the field was not fetched) is never NV. An already-formatted
+ * "NV" passes through, so a card can format what an adapter formatted.
+ */
+export function formatItemVintage(
+  type: string,
+  vintage: string | number | null | undefined,
+): string | undefined {
+  if (vintage === NON_VINTAGE_LABEL) return NON_VINTAGE_LABEL;
+  if (type === "WINE" && vintage === null) return NON_VINTAGE_LABEL;
+  return formatVintage(vintage);
+}
+
 /**
  * The old placeholders were bare base64 bodies (`png;base64,…`) that
  * `next/image` wanted prefixed. A value that already carries its scheme is

@@ -16,6 +16,7 @@ export const AiCapabilitiesQuery = graphql(`
         menuScan
         recipePhoto
         tierListInsights
+        detailSuggestions
       }
     }
   }

@@ -22,6 +22,7 @@ const caps = (over: Partial<AiCapabilities> = {}): AiCapabilities => ({
   menuScan: true,
   recipePhoto: true,
   tierListInsights: true,
+  detailSuggestions: true,
   ...over,
 });
 

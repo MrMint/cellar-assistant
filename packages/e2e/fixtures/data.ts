@@ -229,10 +229,12 @@ export type AiCapabilities = {
   menuScan: boolean;
   recipePhoto: boolean;
   tierListInsights: boolean;
+  detailSuggestions: boolean;
 };
 
 const AI_CAPABILITIES = `query { me { id aiCapabilities {
   semanticSearch imageSearch labelRead menuScan recipePhoto tierListInsights
+  detailSuggestions
 } } }`;
 
 /**

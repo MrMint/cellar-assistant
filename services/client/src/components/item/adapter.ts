@@ -23,7 +23,12 @@ import {
   ItemBrandFragment,
   ItemCoreFragment,
 } from "@/lib/api/items";
-import { formatAsPercentage, formatEnum, formatVintage } from "@/utilities";
+import {
+  formatAsPercentage,
+  formatEnum,
+  formatItemVintage,
+  formatVintage,
+} from "@/utilities";
 import {
   formatBeerStyle,
   formatCountry,
@@ -147,7 +152,11 @@ export const itemSubtitlePhrases = (
   switch (type) {
     case "WINE":
       return [
-        formatVintage(str(attributes.vintage)),
+        // X19: a NULL wine vintage is non-vintage, and says so.
+        formatItemVintage(
+          "WINE",
+          attributes.vintage === null ? null : str(attributes.vintage),
+        ),
         formatWineVariety(str(attributes.variety)),
         country,
         str(attributes.region),

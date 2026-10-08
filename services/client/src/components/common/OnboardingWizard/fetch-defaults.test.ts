@@ -43,6 +43,7 @@ const stub = (answer: Record<string, unknown>) => {
               menuScan: false,
               recipePhoto: false,
               tierListInsights: false,
+              detailSuggestions: false,
             },
           },
         },

@@ -33,7 +33,9 @@ import {
   ATTRIBUTE_INPUT_KEY,
   attributesToSave,
   ITEM_FORM_RULES,
+  isNonVintageText,
   missingRequiredAttributes,
+  NON_VINTAGE,
   staticOptionValues,
 } from "@/components/item-api/itemFormRules";
 import { ITEM_TYPE_SEGMENTS } from "@/components/item-api/itemTypes";
@@ -87,8 +89,9 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
  * A `date` column is a **year** here, because that is what this form edits
  * (N02): the merge judges it as `kind: "year"`, so the bare `2015` the model
  * is asked for — and usually answered even when told `YYYY-MM-DD` — fills
- * the field, and a full `2015-06-01` is read as `2015`. Anything else
- * ("June 2015", "NV") is still reported, not guessed at.
+ * the field, and a full `2015-06-01` is read as `2015`. A wine's "NV" (or
+ * "N.V.", "Non-Vintage") is a value since X19 and turns the NV chip on.
+ * Anything else ("June 2015", a beer's "NV") is still reported, not guessed at.
  *
  * An all-caps name or brand is smart-title-cased (N17).
  */
@@ -107,9 +110,11 @@ export const formDefaultsFromOnboarding = (
     allowedValues: (field) =>
       field.kind === "static" ? staticOptionValues(field.options) : null,
     coerce: (field, value) =>
-      field.kind === "year" && ISO_DAY.test(value.trim())
-        ? yearFromDate(value.trim())
-        : value,
+      field.nonVintage === true && isNonVintageText(value)
+        ? NON_VINTAGE
+        : field.kind === "year" && ISO_DAY.test(value.trim())
+          ? yearFromDate(value.trim())
+          : value,
   });
   return {
     values: {
@@ -159,8 +164,9 @@ export const confirmInputFrom = (
 
 /**
  * Why a save would fail in the outbox rather than here — `null` when it
- * would not. `wines.style`/`vintage`, `spirits.type` and `coffees.description`
- * are NOT NULL behind nullable GraphQL inputs (`itemFormRules.ts`).
+ * would not. `wines.style` and `spirits.type` are NOT NULL behind nullable
+ * GraphQL inputs (`itemFormRules.ts`); a wine's vintage is checked by the
+ * form's star (a year or NV), not here, since NULL is a legal answer (X19).
  *
  * Names **every** missing column at once (N03), so it never makes the person
  * fix one field to be told about the next. The form shows it beside Add when
