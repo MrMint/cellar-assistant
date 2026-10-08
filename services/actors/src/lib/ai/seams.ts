@@ -724,6 +724,7 @@ export const providerRecipePhotoExtractor =
           ". Nothing has been created: a plausible recipe nobody " +
           "photographed is worse than no recipe at all. Retake the photo so " +
           "the written ingredients and method are legible, and start again.",
+        "NOTHING_READ",
       );
     }
 
@@ -789,6 +790,7 @@ export const providerRecipePhotoExtractor =
           "ingredients, so an answer with none did not read one off this " +
           "image. Failing rather than writing an empty recipe — see " +
           "services/actors/src/lib/recipe-photo-ai.ts.",
+        "NOTHING_READ",
       );
     }
 

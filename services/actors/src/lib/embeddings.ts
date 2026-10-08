@@ -129,6 +129,7 @@ export const unconfiguredEmbedder: Embedder = async () => {
       "in this database. This throws rather than returning a zero vector " +
       "because a zero vector is distance 1.0 from everything, so search would " +
       `silently return an arbitrary ordering instead of failing. See services/actors/README.md · Local AI.`,
+    "AI_UNCONFIGURED",
   );
 };
 

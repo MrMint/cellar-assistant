@@ -173,6 +173,7 @@ const budgetThat = (
         };
       },
       settle: async () => {},
+      release: async () => {},
     },
   };
 };
@@ -505,7 +506,9 @@ describe("a refusal is a refusal, on every seam", () => {
     installAI({ env: ENV, provider, loadImages, budget });
 
     const error = await drive.menu_extraction?.(ctx).catch((e: unknown) => e);
-    expect(formatStoredFailure(error)).toMatch(/^BUDGET_EXCEEDED: /);
+    expect(formatStoredFailure(error)).toMatch(
+      /^BUDGET_EXCEEDED\[SERVICE_BUDGET\]: /,
+    );
     // Not CONFLICT ("being retried automatically") and not VALIDATION ("the
     // photo was rejected"): both would describe a refusal as a defect in the
     // photograph the person took.

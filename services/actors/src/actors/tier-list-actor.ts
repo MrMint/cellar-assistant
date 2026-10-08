@@ -240,6 +240,7 @@ export const noInsightsGenerator: InsightsGenerator = async () => {
     "TierListActor.generateInsights has no AI provider wired: AI_PROVIDER is " +
       "unset, so `installAI()` installed nothing at boot. Set AI_PROVIDER=ollama " +
       `for a local model that needs no credentials. See services/actors/README.md · Local AI.`,
+    "AI_UNCONFIGURED",
   );
 };
 
