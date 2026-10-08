@@ -468,3 +468,44 @@ describe("Recipe.makeability on a food recipe", () => {
     expect(calls.some((call) => call.actorType === "BarActor")).toBe(false);
   });
 });
+
+describe("Recipe.makeability with nothing required", () => {
+  it("is null — a garnish alone is no verdict, never 'You can make this'", async () => {
+    const { invoke } = stubSidecar({
+      "RecipeActor.get": () => recipeDto,
+      "RecipeActor.ingredients": () =>
+        pageOf([
+          ingredient("g1", { kind: "lemon", role: "garnish" }),
+          ingredient("o1", { kind: "egg", role: "other", isOptional: true }),
+        ]),
+      "BarActor.inventory": () => inventory,
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { makeability { status } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ makeability: null });
+  });
+
+  it("names the missing kinds beside the missing names", async () => {
+    const { invoke } = stubSidecar({
+      "RecipeActor.get": () => recipeDto,
+      "RecipeActor.ingredients": () => pageOf(manhattan),
+      "BarActor.inventory": () => inventory,
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe {
+          makeability { missing missingKinds }
+      } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({
+      makeability: {
+        missing: ["Sweet vermouth"],
+        missingKinds: ["sweet_vermouth"],
+      },
+    });
+  });
+});

@@ -1,5 +1,6 @@
 "use client";
 
+import { barKindLabel } from "@cellar-assistant/contracts/bar";
 import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
 import { Cocktail, Pantry } from "@/components/app/icons";
@@ -26,19 +27,30 @@ type Section = "now" | "away";
  * The bottles that would unlock the most One-bottle-away cocktails: each
  * row's single missing ingredient, counted. "Campari · 4 more cocktails" is
  * the most useful sentence this screen can say about a shopping trip.
+ *
+ * Counted by **kind** where the vocabulary places the ingredient — one
+ * recipe prints "Campari", another "Red bitter aperitivo", and both are the
+ * same bottle to buy — and by the printed name, case-folded, where it does
+ * not.
  */
 export const nextBottles = (
-  oneAway: readonly BarRecipeMatch[],
+  oneAway: readonly Pick<BarRecipeMatch, "makeability">[],
   limit = 3,
 ): { name: string; unlocks: number }[] => {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { name: string; unlocks: number }>();
   for (const match of oneAway) {
     const missing = match.makeability.missing[0];
     if (missing === undefined) continue;
-    counts.set(missing, (counts.get(missing) ?? 0) + 1);
+    const kind = match.makeability.missingKinds?.[0] ?? null;
+    const key = kind === null ? `name:${missing.toLowerCase()}` : kind;
+    const name = barKindLabel(kind) ?? missing;
+    const entry = counts.get(key);
+    counts.set(key, {
+      name: entry?.name ?? name,
+      unlocks: (entry?.unlocks ?? 0) + 1,
+    });
   }
-  return Array.from(counts.entries())
-    .map(([name, unlocks]) => ({ name, unlocks }))
+  return Array.from(counts.values())
     .filter((entry) => entry.unlocks > 1)
     .sort((a, b) => b.unlocks - a.unlocks || a.name.localeCompare(b.name))
     .slice(0, limit);

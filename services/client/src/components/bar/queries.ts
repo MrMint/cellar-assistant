@@ -18,6 +18,7 @@ export const BarRecipeMatchFragment = graphql(`
     makeability {
       status
       missing
+      missingKinds
       substituteCount
       requiredCount
       haveCount

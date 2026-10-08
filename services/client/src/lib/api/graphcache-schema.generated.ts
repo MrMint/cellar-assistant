@@ -6826,6 +6826,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "missingKinds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "IngredientKind" },
+                },
+              },
+            },
+          },
+          {
             name: "requiredCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },

@@ -481,10 +481,14 @@ export class BarActor extends ActorBase implements BarActorInterface {
     recipes: readonly ScannedRecipe[],
     inventory: BarInventory,
   ): BarRecipeMatch[] {
-    const judged = recipes.map((recipe) => ({
-      recipe,
-      makeability: recipeMakeability(recipe.ingredients, inventory),
-    }));
+    // A recipe with no required ingredient (only garnishes and optional
+    // lines) has nothing to judge; it must not read as "Make now".
+    const judged = recipes
+      .map((recipe) => ({
+        recipe,
+        makeability: recipeMakeability(recipe.ingredients, inventory),
+      }))
+      .filter(({ makeability }) => makeability.requiredCount > 0);
     const winners = new Map<string, (typeof judged)[number]>();
     for (const candidate of judged) {
       const key = candidate.recipe.groupId ?? `recipe:${candidate.recipe.id}`;

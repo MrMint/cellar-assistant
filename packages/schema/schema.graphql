@@ -4602,7 +4602,7 @@ type Recipe {
   isLoved: Boolean!
 
   """
-  G29: can the viewer make this now, or is it one bottle away? Null for an anonymous viewer, and for a food recipe — the bar vocabulary is drinks, so a dish would only ever read as missing everything.
+  G29: can the viewer make this now, or is it one bottle away? Null for an anonymous viewer, for a food recipe — the bar vocabulary is drinks, so a dish would only ever read as missing everything — and for a cocktail with no required ingredient, where there is nothing to judge.
   """
   makeability: RecipeMakeability
 
@@ -4951,6 +4951,11 @@ type RecipeMakeability {
 
   """What is missing, by name — what to buy."""
   missing: [String!]!
+
+  """
+  The kinds behind `missing`, where the bar vocabulary places them (an unplaced ingredient has none, so this can be shorter). Two recipes that print "Campari" and "red bitter aperitivo" miss the same kind — what to count when asking which bottle unlocks most.
+  """
+  missingKinds: [IngredientKind!]!
   requiredCount: Int!
   status: MakeabilityStatus!
   substituteCount: Int!

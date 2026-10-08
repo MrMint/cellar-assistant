@@ -247,6 +247,12 @@ describe.skipIf(skip)("BarActor (X14)", () => {
         { generic: "Lemon juice", quantity: 1, unit: "oz" },
       ]);
 
+      // Nothing required — only a garnish — is nothing to vouch for, so it
+      // is in neither section rather than a vacuous "Make now".
+      const garnishOnly = await seedCocktail(db, "Garnish only", [
+        { generic: "Lemon twist" },
+      ]);
+
       const answer = await (await barOf(me, db)).whatCanIMake(userCtx(me), {
         limit: 50,
       });
@@ -261,6 +267,8 @@ describe.skipIf(skip)("BarActor (X14)", () => {
       expect(oneAway).toContain(stored);
       expect(makeNow).not.toContain(negroni);
       expect(oneAway).not.toContain(negroni);
+      expect(makeNow).not.toContain(garnishOnly);
+      expect(oneAway).not.toContain(garnishOnly);
 
       const sour = answer.makeNow.find((m) => m.recipeId === whiskeySour);
       expect(sour?.makeability).toMatchObject({

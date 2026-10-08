@@ -48,6 +48,7 @@ const match = (
   makeability: {
     status,
     missing,
+    missingKinds: [] as string[],
     substituteCount,
     requiredCount: 3,
     haveCount: 3 - missing.length,
@@ -305,6 +306,28 @@ describe("What can I make", () => {
     assert.deepEqual(nextBottles(data.oneBottleAway), [
       { name: "Campari", unlocks: 2 },
     ]);
+  });
+
+  test("Worth picking up counts one bottle once, however recipes spell it", () => {
+    const missingOne = (name: string, kind: string | null) => ({
+      makeability: {
+        ...match("x", "x", "ONE_AWAY", [name]).makeability,
+        missingKinds: kind === null ? [] : [kind],
+      },
+    });
+    assert.deepEqual(
+      nextBottles([
+        missingOne("Campari", "red_bitter"),
+        missingOne("Red bitter aperitivo", "red_bitter"),
+        missingOne("falernum", null),
+        missingOne("Falernum", null),
+        missingOne("Gin", "gin"),
+      ] as Parameters<typeof nextBottles>[0]),
+      [
+        { name: "Campari / red bitter", unlocks: 2 },
+        { name: "falernum", unlocks: 2 },
+      ],
+    );
   });
 });
 

@@ -189,6 +189,15 @@ const RecipeMakeabilityType = builder
         description: "What is missing, by name — what to buy.",
         resolve: (result) => [...result.missing],
       }),
+      missingKinds: t.field({
+        type: [IngredientKindEnum],
+        description:
+          "The kinds behind `missing`, where the bar vocabulary places them " +
+          "(an unplaced ingredient has none, so this can be shorter). Two " +
+          'recipes that print "Campari" and "red bitter aperitivo" miss the ' +
+          "same kind — what to count when asking which bottle unlocks most.",
+        resolve: (result) => [...result.missingKinds],
+      }),
       substituteCount: t.exposeInt("substituteCount"),
       requiredCount: t.exposeInt("requiredCount"),
       haveCount: t.exposeInt("haveCount", {
@@ -349,8 +358,10 @@ builder.objectFields(RecipeType_, (t) => ({
     nullable: true,
     description:
       "G29: can the viewer make this now, or is it one bottle away? Null for " +
-      "an anonymous viewer, and for a food recipe — the bar vocabulary is " +
-      "drinks, so a dish would only ever read as missing everything.",
+      "an anonymous viewer, for a food recipe — the bar vocabulary is " +
+      "drinks, so a dish would only ever read as missing everything — and " +
+      "for a cocktail with no required ingredient, where there is nothing " +
+      "to judge.",
     resolve: async (recipe: RecipeDto, _args, context) => {
       if (context.ctx.viewerId === null) return null;
       if (recipe.type !== "cocktail") return null;
@@ -360,7 +371,7 @@ builder.objectFields(RecipeType_, (t) => ({
           .ingredients({ first: MAX_PAGE_SIZE, after: null }),
         viewerInventory(context),
       ]);
-      return recipeMakeability(
+      const result = recipeMakeability(
         page.entries.map(({ node: row }) => {
           const type = ingredientItemType(row.ref);
           return {
@@ -372,6 +383,10 @@ builder.objectFields(RecipeType_, (t) => ({
         }),
         inventory,
       );
+      // Nothing required (no ingredients yet, or only garnishes and
+      // optional lines) is not "You can make this": there is nothing to
+      // vouch for, so there is no verdict.
+      return result.requiredCount === 0 ? null : result;
     },
   }),
   isLoved: t.loadable({
