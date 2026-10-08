@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "941cb5d8-7032-4078-b6a1-f1389f9aece6",
+  "id": "3b40eba4-bbc7-4c7e-bb6a-f391b037d781",
   "prevIds": [
-    "edab7ff9-b4bb-4b44-8e0a-a005ed890ca8"
+    "e7136070-78ea-41f4-a35d-00f025684cb7"
   ],
   "ddl": [
     {
@@ -1750,7 +1750,7 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -1782,6 +1782,175 @@
       "generated": null,
       "identity": null,
       "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wine_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "beer_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "spirit_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "coffee_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sake_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "tea_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_by_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "group_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "real",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "score",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "note",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 1,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "tags",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "place_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "photo_file_id",
       "entityType": "columns",
       "schema": "public",
       "table": "check_ins"
@@ -5966,6 +6135,84 @@
       "table": "places"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'approved'",
+      "generated": null,
+      "identity": null,
+      "name": "review_status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "review_requested_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "rejection_reason",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 1,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "suggested_categories",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "suggested_description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "reviewed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -9471,6 +9718,202 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_user_id_created_at",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "group_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_group_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "wine_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_wine_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "beer_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_beer_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "spirit_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_spirit_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "coffee_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_coffee_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "sake_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_sake_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "tea_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_tea_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "photo_file_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_ins_photo_file_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "name",
           "isExpression": false,
           "asc": true,
@@ -11091,6 +11534,27 @@
       "method": "btree",
       "concurrently": false,
       "name": "places_source_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "created_by",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "(review_status <> 'approved'::text)",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "places_unshared_by_creator_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "places"
@@ -12978,9 +13442,162 @@
       "columnsTo": [
         "id"
       ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "check_ins_cellar_item_id_cellar_items_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wine_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wines",
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "RESTRICT",
       "onDelete": "RESTRICT",
-      "name": "check_ins_cellar_item_id_cellar_items_id_fkey",
+      "name": "check_ins_wine_id_wines_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "beer_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "beers",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "RESTRICT",
+      "onDelete": "RESTRICT",
+      "name": "check_ins_beer_id_beers_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "spirit_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "spirits",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "RESTRICT",
+      "onDelete": "RESTRICT",
+      "name": "check_ins_spirit_id_spirits_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "coffee_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "coffees",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "RESTRICT",
+      "onDelete": "RESTRICT",
+      "name": "check_ins_coffee_id_coffees_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "sake_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "sakes",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "RESTRICT",
+      "onDelete": "RESTRICT",
+      "name": "check_ins_sake_id_sakes_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tea_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "teas",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "RESTRICT",
+      "onDelete": "RESTRICT",
+      "name": "check_ins_tea_id_teas_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "created_by_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "RESTRICT",
+      "onDelete": "RESTRICT",
+      "name": "check_ins_created_by_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "place_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "places",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "check_ins_place_id_places_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "photo_file_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "files",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "RESTRICT",
+      "onDelete": "RESTRICT",
+      "name": "check_ins_photo_file_id_files_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "check_ins"
@@ -16538,6 +17155,34 @@
       "table": "cellar_items"
     },
     {
+      "value": "(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id) = 1)",
+      "name": "check_ins_one_item",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "value": "((score IS NULL) OR (score = ANY (ARRAY[(0.5)::double precision, (1)::double precision, (1.5)::double precision, (2)::double precision, (2.5)::double precision, (3)::double precision, (3.5)::double precision, (4)::double precision, (4.5)::double precision, (5)::double precision])))",
+      "name": "check_ins_score_half_stars",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "value": "((note IS NULL) OR (char_length(note) <= 2000))",
+      "name": "check_ins_note_length",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
+      "value": "(cardinality(tags) <= 12)",
+      "name": "check_ins_tags_count",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "check_ins"
+    },
+    {
       "value": "(item_type = ANY (ARRAY['spirit'::text, 'wine'::text, 'beer'::text, 'coffee'::text, 'sake'::text, 'tea'::text, 'ingredient'::text]))",
       "name": "generic_items_item_type_check",
       "entityType": "checks",
@@ -16662,6 +17307,13 @@
       "entityType": "checks",
       "schema": "public",
       "table": "place_menus"
+    },
+    {
+      "value": "(review_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text]))",
+      "name": "places_review_status_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "places"
     },
     {
       "value": "((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))",

@@ -1,3 +1,8 @@
+-- Regenerated at merge as 20261008231951 (was 20261008213947 on wa/wanttotry),
+-- so it sorts after X27's 20261008214722/214724 and X02's 20261008230209 that
+-- other databases already have; the snapshot now chains from e7136070. The SQL
+-- below is unchanged.
+--
 -- X08 (D11, D27): "Want to try" — the Save verb — for items and recipes.
 --
 -- One row per thing a user wants to try: the six-column item arc plus
