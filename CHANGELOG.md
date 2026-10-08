@@ -2,6 +2,55 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.59.0](https://github.com/MrMint/cellar-assistant/compare/v0.58.5...v0.59.0) (2026-10-08)
+
+
+### Features
+
+* **ai:** local text+image embeddings via llama-server (Qwen3-VL-Embedding-2B) ([22a68dd](https://github.com/MrMint/cellar-assistant/commit/22a68dda012d19674556e1fa7383342d9145263e))
+* **auth:** AUTH_PASSWORD_MODE — social-first sign-in, signin-only in production ([64013f1](https://github.com/MrMint/cellar-assistant/commit/64013f1028b71645de1050fa84f4015c947b6da3))
+* **client:** restore the /search Photo button and the onboarding photo match (G32) ([4b474cb](https://github.com/MrMint/cellar-assistant/commit/4b474cb3124e897a7821d086ad5a9360c567eccb))
+* **deploy:** pull-based deploy on Loki; delete the self-hosted-runner deploy job ([efb24ad](https://github.com/MrMint/cellar-assistant/commit/efb24ad81b86b214ee829a76a3fabfe7bd5ca1ef))
+* migrate off Nhost to the self-hosted Dapr-actor stack ([b2c5f54](https://github.com/MrMint/cellar-assistant/commit/b2c5f5411781ac308847f50d01def6074c9450cf))
+* migrate off Nhost/Hasura onto Dapr actors on a self-hosted stack ([bb52163](https://github.com/MrMint/cellar-assistant/commit/bb52163fb17c650943b12956a596a694ac77d2e5))
+* **places:** Google pre-fill on create-place (G21), photo resume for migrated places, map list paging ([c6e7d66](https://github.com/MrMint/cellar-assistant/commit/c6e7d66c5e45a8d1598ab36edd908f696aeac101))
+* **search:** image search (G32) - photo embedded alone, matched against item and per-photo vectors ([cc37ccf](https://github.com/MrMint/cellar-assistant/commit/cc37ccfbb9e61d2041304ab0dfc30374d13e293b))
+* **search:** restore the discovery section — Recent Activity and Nearby Places (UI parity G31) ([45a7b0f](https://github.com/MrMint/cellar-assistant/commit/45a7b0f60ccd26ec7851baba4f0a7951457a411e))
+
+
+### Bug Fixes
+
+* **actors:** the routing boot check fails closed on every route shape ([b12523e](https://github.com/MrMint/cellar-assistant/commit/b12523e2a492674ec2db23e2e6ae12aca917a563))
+* **analysis:** repo-only programs resolve workspace packages without node_modules ([17e6f40](https://github.com/MrMint/cellar-assistant/commit/17e6f40ce15b0f040e551d2b1c3e88460861b658))
+* **client:** /friends and the cellar co-owner picker read every friend ([7eb1765](https://github.com/MrMint/cellar-assistant/commit/7eb1765c4c0c9667d48855d2bb76c73896e92fa1))
+* **client:** ai-generator ingredient count and read-back error; breadcrumb comment ([9088dd7](https://github.com/MrMint/cellar-assistant/commit/9088dd7f951f7e9488c31f7bffb3415650087063))
+* **client:** bottle-page "Add photo" mounts the live camera again ([52a58f5](https://github.com/MrMint/cellar-assistant/commit/52a58f5fc3e965e99edb650534e32124fcc48141))
+* **client:** cache the copied maplibre worker with the build; survive no WebGL2 ([cf41e91](https://github.com/MrMint/cellar-assistant/commit/cf41e9184a0c05f1140aeab02ad15abf477a7cd9))
+* **client:** former-password-user note offers Google or Discord, not Facebook ([46a6b04](https://github.com/MrMint/cellar-assistant/commit/46a6b04558fc53a7534256bc12f4af9501e4e45b))
+* **client:** item, bottle and brand pages read their lists to the end ([8ee559a](https://github.com/MrMint/cellar-assistant/commit/8ee559a8ffab196db15bc2cd780571eca1fdf21c))
+* **contracts:** canonicalBarcodeCode trims in linear time (CodeQL js/polynomial-redos) ([2cdb344](https://github.com/MrMint/cellar-assistant/commit/2cdb344f39adc7ce092afbb508be6252fccd89fc))
+* **db:** build every database from the checked-in baseline by default ([6434dd5](https://github.com/MrMint/cellar-assistant/commit/6434dd508f4829ef6294dda04ec417daa92b234d))
+* **deps:** bump Dapr runtime to 1.18.4 and otel-lgtm to 0.35.0 ([e895ce9](https://github.com/MrMint/cellar-assistant/commit/e895ce9e0ae27941ad3fed89e12359c1afa13b1a))
+* **deps:** bump every npm dependency to its newest non-major release ([ab7209c](https://github.com/MrMint/cellar-assistant/commit/ab7209cd6911e83872bd7b57de1556b52a8ae717))
+* **deps:** bump graphql 16.14.2 -&gt; 17.0.2 ([880d36d](https://github.com/MrMint/cellar-assistant/commit/880d36d3ca8884debc2202cd7057ee163b80938e))
+* **deps:** bump maplibre-gl 5.24.0 -&gt; 6.12.0 and self-host its worker ([57b646d](https://github.com/MrMint/cellar-assistant/commit/57b646da050feb6bd258671820e533679d21e163))
+* **deps:** full dependency bump — npm, graphql 17, express 5, Actions, Dapr 1.18.4, otel-lgtm 0.35.0 ([526dab7](https://github.com/MrMint/cellar-assistant/commit/526dab70861e3721e2751e161d7d90ceaf041c58))
+* **deps:** maplibre-gl 6.12.0 with a self-hosted worker (stacked on [#640](https://github.com/MrMint/cellar-assistant/issues/640)) ([32dde21](https://github.com/MrMint/cellar-assistant/commit/32dde211e19058658bfdfc3984d9d7ffc880558b))
+* **deps:** move the actor host to express 5.2.1 ([3e9abcb](https://github.com/MrMint/cellar-assistant/commit/3e9abcb5534c3aea1826a49dcbfc8f71090cd4d5))
+* **infra:** pass GOOGLE_PLACES_API_KEY to the actor host ([b95411e](https://github.com/MrMint/cellar-assistant/commit/b95411e56741909ed541af905d9a32f730217a8b))
+* **items:** only public photos go into an item's shared vector (G32 follow-up) ([53e5dad](https://github.com/MrMint/cellar-assistant/commit/53e5dade48b695d08eca3deeb66be212c5249801))
+* **places:** put fefdd1fe's G21 contract and SDL hunks where they belong ([69c0bb8](https://github.com/MrMint/cellar-assistant/commit/69c0bb8b7cf896d26386eba7a176f60992b72ab2))
+* **recipes,brands:** /recipes newest first again; /brands search holds 200 ([af2656f](https://github.com/MrMint/cellar-assistant/commit/af2656f3b22ab666dcfc6fb0035fd92eb229b431))
+* **search:** search photos are discarded after use and reaped at 24h (G32 follow-up) ([657063e](https://github.com/MrMint/cellar-assistant/commit/657063e4218814eaf9e22b56aab8a7091e13ab62))
+* **stack:** recreating the shared client no longer orphans its loopback sidecar ([2265516](https://github.com/MrMint/cellar-assistant/commit/2265516371c17c290f7f449ee2b5786f2cd4bf68))
+
+
+### Performance Improvements
+
+* **files:** six-day read-URL window so Vercel's image cache stops thrashing daily ([b552936](https://github.com/MrMint/cellar-assistant/commit/b5529367f2f3737ce482d3ac65276e9e63177e51))
+* **files:** six-day read-URL window so Vercel's image cache stops thrashing daily ([67aa97b](https://github.com/MrMint/cellar-assistant/commit/67aa97bd88a01c33e572d4abc6a4a71fe6971d82))
+* **files:** stable per-window read URLs with Cache-Control; item photos back on next/image ([624bc83](https://github.com/MrMint/cellar-assistant/commit/624bc830be0c190aeed6a2fd23f30c5aa38fb20e))
+
 ## [0.58.5](https://github.com/MrMint/cellar-assistant/compare/v0.58.4...v0.58.5) (2026-07-17)
 
 
