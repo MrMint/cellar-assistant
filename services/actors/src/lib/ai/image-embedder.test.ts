@@ -93,6 +93,7 @@ const fakeBudget = (
         } satisfies ReserveResult;
       },
       settle: async () => {},
+      release: async () => {},
     },
   };
 };

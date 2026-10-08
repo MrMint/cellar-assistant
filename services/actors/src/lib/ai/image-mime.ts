@@ -31,6 +31,7 @@
  * outcome for input that will never become acceptable.
  */
 import { ValidationError } from "@cellar-assistant/contracts";
+import { noModelResponse } from "./no-response.ts";
 
 export type ImageMime =
   | "image/jpeg"
@@ -218,23 +219,29 @@ export const requireImageMime = (
   where: string,
 ): ImageMime => {
   const detected = detectImageMime(bytes);
+  // Both refusals happen before the request is sent, so no model answered
+  // and the reservation is given back (D17, `noModelResponse`).
   if (detected === null) {
-    throw new ValidationError(
-      `${where}: the image's format could not be identified from its bytes ` +
-        `(starts with ${signature(bytes)}). ${accepted.join(", ")} are ` +
-        "accepted. It is refused rather than labelled with a guess, because " +
-        "the model decodes according to the media type it is told and a wrong " +
-        "one either fails upstream with an opaque error or decodes to " +
-        "something that is not the picture. Note `files.mime_type` is " +
-        "client-supplied and unvalidated, so it is not consulted here.",
+    throw noModelResponse(
+      new ValidationError(
+        `${where}: the image's format could not be identified from its bytes ` +
+          `(starts with ${signature(bytes)}). ${accepted.join(", ")} are ` +
+          "accepted. It is refused rather than labelled with a guess, because " +
+          "the model decodes according to the media type it is told and a wrong " +
+          "one either fails upstream with an opaque error or decodes to " +
+          "something that is not the picture. Note `files.mime_type` is " +
+          "client-supplied and unvalidated, so it is not consulted here.",
+      ),
     );
   }
   if (!accepted.includes(detected)) {
-    throw new ValidationError(
-      `${where}: the image is ${detected}, which this provider does not ` +
-        `accept. ${accepted.join(", ")} are accepted. Convert it before ` +
-        "upload, or extend the provider's accepted set only if the server " +
-        "genuinely decodes the format — mislabelling it is not a workaround.",
+    throw noModelResponse(
+      new ValidationError(
+        `${where}: the image is ${detected}, which this provider does not ` +
+          `accept. ${accepted.join(", ")} are accepted. Convert it before ` +
+          "upload, or extend the provider's accepted set only if the server " +
+          "genuinely decodes the format — mislabelling it is not a workaround.",
+      ),
     );
   }
   return detected;

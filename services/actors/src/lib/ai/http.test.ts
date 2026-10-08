@@ -14,7 +14,9 @@
  */
 import { ConflictError, ValidationError } from "@cellar-assistant/contracts";
 import { describe, expect, it } from "vitest";
-import { isTransientStatus, postJson } from "./http.ts";
+import { isTransientStatus, postJson, withImageContext } from "./http.ts";
+import { requireImageMime } from "./image-mime.ts";
+import { isNoModelResponse } from "./no-response.ts";
 import type { FetchLike } from "./types.ts";
 
 /** A `fetch` that answers one canned status, with a body worth reporting. */
@@ -81,5 +83,59 @@ describe("postJson picks the class from the status", () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as FetchLike;
     await expect(call(refused)).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("D17: which failures prove no model answered", () => {
+  const caught = (promise: Promise<unknown>) =>
+    promise.then(
+      () => {
+        throw new Error("expected a rejection");
+      },
+      (error: unknown) => error,
+    );
+
+  it("marks an unreachable provider and every HTTP error status", async () => {
+    const refused: FetchLike = (async () => {
+      throw new Error("ECONNREFUSED");
+    }) as unknown as FetchLike;
+    expect(isNoModelResponse(await caught(call(refused)))).toBe(true);
+    for (const status of [400, 401, 404, 429, 500, 503]) {
+      expect(isNoModelResponse(await caught(call(answering(status))))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("does not mark a 200 whose body could not be read — that was an answer", async () => {
+    const error = await caught(call(answering(200, "not json")));
+    expect(error).toBeInstanceOf(ConflictError);
+    expect(isNoModelResponse(error)).toBe(false);
+  });
+
+  it("keeps the mark, the class and the reason through withImageContext", async () => {
+    const image = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]);
+    const error = await caught(
+      withImageContext([image], () => call(answering(400))),
+    );
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(isNoModelResponse(error)).toBe(true);
+  });
+
+  it("marks an image refused before the request was sent", () => {
+    let error: unknown;
+    try {
+      requireImageMime(new Uint8Array([1, 2, 3]), ["image/png"], "test");
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(isNoModelResponse(error)).toBe(true);
+  });
+
+  it("does not mark an ordinary error", () => {
+    expect(isNoModelResponse(new ConflictError("x"))).toBe(false);
+    expect(isNoModelResponse("a string")).toBe(false);
+    expect(isNoModelResponse(null)).toBe(false);
   });
 });

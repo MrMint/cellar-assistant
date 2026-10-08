@@ -45,6 +45,7 @@
  */
 import { ConflictError, ValidationError } from "@cellar-assistant/contracts";
 import { describeImages } from "./image-mime.ts";
+import { isNoModelResponse, noModelResponse } from "./no-response.ts";
 import type { FetchLike, ProviderName } from "./types.ts";
 
 /**
@@ -86,9 +87,11 @@ export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
     // Rethrown, never swallowed. A DNS failure, a refused connection or a
     // timeout is exactly the case where returning something plausible would
     // be worst — see `config.ts`'s note on the Wisconsin mock.
-    throw new ConflictError(
-      `${provider} ${what} could not be reached at ${redactUrl(url)}: ` +
-        `${error instanceof Error ? error.message : String(error)}`,
+    throw noModelResponse(
+      new ConflictError(
+        `${provider} ${what} could not be reached at ${redactUrl(url)}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      ),
     );
   }
 
@@ -100,9 +103,13 @@ export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
     // The class is the retry schedule (see this file's header). Same message
     // either way — an operator reading a dead-lettered row needs the status and
     // the body regardless of which of the two it turned out to be.
-    throw isTransientStatus(response.status)
-      ? new ConflictError(detail)
-      : new ValidationError(detail);
+    // An HTTP error status is the provider refusing before it generated
+    // anything — not a model response (D17), so the reservation is released.
+    throw noModelResponse(
+      isTransientStatus(response.status)
+        ? new ConflictError(detail)
+        : new ValidationError(detail),
+    );
   }
   try {
     return JSON.parse(text);
@@ -153,8 +160,16 @@ export const withImageContext = async <T>(
       "usually refusing the pixel data: a truncated or otherwise malformed " +
       "raster still has a valid signature, and still renders in a browser, " +
       "so looking at the file proves nothing.";
-    if (error instanceof ValidationError) throw new ValidationError(detail);
-    if (error instanceof ConflictError) throw new ConflictError(detail);
+    // The rewrap keeps the class (the retry schedule) and whether a model
+    // answered (D17) — both are facts about the original failure.
+    const keep = <E>(next: E): E =>
+      isNoModelResponse(error) ? noModelResponse(next) : next;
+    if (error instanceof ValidationError) {
+      throw keep(new ValidationError(detail, error.reason, error.retryAt));
+    }
+    if (error instanceof ConflictError) {
+      throw keep(new ConflictError(detail, error.reason, error.retryAt));
+    }
     throw error;
   }
 };

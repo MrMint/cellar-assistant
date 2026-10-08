@@ -571,9 +571,17 @@ describe("the source itself cannot express a silent fallback", () => {
    * member. Adding one means editing this list, which means writing down why —
    * which is the whole of what the allowance costs.
    */
-  it("exactly one catch in this directory swallows, and it is the settlement", () => {
+  /*
+   * N07 added the second, `releaseIfUnanswered` (D17): after a call that got
+   * no model response, the reservation is handed back. Like the settlement it
+   * is `Promise<void>` and runs beside a failure that is rethrown anyway, so
+   * swallowing a failed *release* only leaves the conservative over-count —
+   * propagating it would replace the transport error the outbox retries on.
+   */
+  it("exactly two catches in this directory swallow: the settlement and the release", () => {
     const swallowing = allCatches.filter((c) => !c.throws).map((c) => c.at);
     expect(swallowing.map((entry) => entry.split(":")[0])).toEqual([
+      "budget.ts",
       "budget.ts",
     ]);
   });
