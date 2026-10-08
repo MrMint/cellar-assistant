@@ -151,6 +151,9 @@ export const ItemCheckIns = ({
           <Button
             variant={finished ? "outlined" : "solid"}
             color={finished ? "neutral" : "primary"}
+            // The page's main action until the bottle is finished — said in
+            // the markup so a test can check it without Joy's class names.
+            data-emphasis={finished ? "secondary" : "primary"}
             onClick={handleClickCheckIn}
             loading={isPending}
             fullWidth
@@ -161,6 +164,7 @@ export const ItemCheckIns = ({
             <Button
               variant={finished ? "outlined" : "solid"}
               color={finished ? "neutral" : "primary"}
+              data-emphasis={finished ? "secondary" : "primary"}
               onClick={handleClickBulk}
               loading={isPending}
               fullWidth

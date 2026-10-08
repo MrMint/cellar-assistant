@@ -226,7 +226,7 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
       />,
     );
     assert.match(html, />Check In</);
-    assert.match(html, /MuiButton-variantSolid[^"]*"[^>]*>Check In</);
+    assert.match(html, /data-emphasis="primary"[^>]*>Check In</);
     assert.match(html, /Remaining: 40%/);
     assert.match(html, /Opened/);
     assert.match(html, /2026-01-02/);
@@ -271,7 +271,7 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     // Check In stays (logs survive the bottle) but is no longer the solid
     // primary action.
     assert.match(html, />Check In</);
-    assert.doesNotMatch(html, /MuiButton-variantSolid[^"]*"[^>]*>Check In</);
+    assert.match(html, /data-emphasis="secondary"[^>]*>Check In</);
   });
 });
 
