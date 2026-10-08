@@ -45,7 +45,17 @@ export function SignOutButton({ className }: { className?: string }) {
         return;
       }
       await purgeUserCaches();
-      await completeSignOut();
+      // Best effort, and it must not keep the viewer here: the session
+      // cookie is already gone, so the proxy answers this server action's
+      // POST with a redirect to /sign-in and the action rejects ("An
+      // unexpected response was received from the server") whenever it runs
+      // from a gated page — which /me is. `router.refresh()` below drops the
+      // signed-in router cache either way.
+      try {
+        await completeSignOut();
+      } catch (error) {
+        console.warn("completeSignOut failed after sign-out:", error);
+      }
     } catch (error) {
       console.error("Sign out failed:", error);
       notify("Couldn't sign out. Try again.", { tone: "error" });
