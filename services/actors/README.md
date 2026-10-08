@@ -483,6 +483,30 @@ The reload is **non-destructive**. It deletes nothing (the old one began with
 `is_active` is set on insert only. Re-running a finished reload writes zero
 rows, which is also what makes an interrupted one free to resume.
 
+## Recipes meet the cellar (X14)
+
+`BarActor(viewerId)` judges cocktails against the viewer's bar — bottles in
+the cellars they created or co-own, plus the Bar pantry toggles
+(`bar_pantry_items`, `UserActor`) — with the pure functions in
+`@cellar-assistant/contracts` `bar.ts` (`ingredientAvailability`,
+`recipeMakeability`). Every ingredient has a `kind` from that file's closed
+vocabulary and a `role`; a row written before migration
+`20261008214822_recipe_ingredient_meta_bar_pantry_recipe_love` has neither,
+and reads infer both from the referenced item's name, so nothing waits on a
+backfill to be right. To persist them (and `recipe_groups.base_spirit`):
+
+```bash
+bun scripts/operator.ts backfill-recipes             # up to 500 recipes and 500 groups
+bun scripts/operator.ts backfill-recipes --limit 5000
+```
+
+It enqueues `RecipeActor.backfillIngredientMeta` and
+`RecipeGroupActor.backfillBaseSpirit` through the outbox; each writes only
+null cells. Run it again until the counts it prints stop falling — an
+ingredient nothing can place keeps a null kind and is selected again, which
+costs one read. No re-embed is needed: neither `kind` nor `role` is in the
+embedding text.
+
 ## The runtime, and how to change your mind about it
 
 The host runs on **bun** (`start`), and there is a first-class way back to Node

@@ -378,3 +378,78 @@ describe("What can I make (G29)", () => {
     expect(result.data?.whatCanIMake).toEqual({ __typename: "ForbiddenError" });
   });
 });
+
+describe("Item.cocktails (X14)", () => {
+  const spirit = {
+    id: SPIRIT_ID,
+    name: "Buffalo Trace",
+    description: null,
+    createdAt: "2026-09-09T00:00:00.000Z",
+    updatedAt: "2026-09-09T00:00:00.000Z",
+    createdById: viewer.id,
+    barcodeCode: null,
+    country: null,
+    type: "SPIRIT" as const,
+    spiritType: "BOURBON",
+    style: null,
+    vintage: null,
+    alcoholContentPercentage: 45,
+  };
+
+  it("asks the viewer's BarActor for this item, and pages the recipes", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.get": () => spirit,
+      "BarActor.cocktailsFor": () => ({
+        kind: "bourbon",
+        useItUp: true,
+        total: 1,
+        recipes: [
+          {
+            recipeId: RECIPE_ID,
+            recipeGroupId: null,
+            name: "Old Fashioned",
+            makeability: {
+              status: "MAKE_NOW",
+              missing: [],
+              missingKinds: [],
+              substituteCount: 0,
+              requiredCount: 3,
+              haveCount: 3,
+            },
+          },
+        ],
+      }),
+    });
+    const result = await run(
+      `{ item(id: "${SPIRIT_ID}", type: SPIRIT) { __typename ... on QueryItemSuccess {
+          data { cocktails { kind kindLabel useItUp total
+            recipes(first: 5) { edges { node { name makeability { status } } } } } }
+      } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.item).toMatchObject({
+      data: {
+        cocktails: {
+          kind: "bourbon",
+          kindLabel: "Bourbon",
+          useItUp: true,
+          total: 1,
+          recipes: {
+            edges: [
+              {
+                node: {
+                  name: "Old Fashioned",
+                  makeability: { status: "MAKE_NOW" },
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const call = calls.find((entry) => entry.method === "cocktailsFor");
+    expect(call?.actorId).toBe(viewer.id);
+    expect(call?.args[1]).toEqual({ type: "SPIRIT", id: SPIRIT_ID });
+  });
+});
