@@ -99,10 +99,16 @@ export const NO_IMAGES = "none";
 export const imageSetKey = (fileIds: readonly string[]): string =>
   fileIds.length === 0 ? NO_IMAGES : `${fileIds.length}:${fileIds.join(",")}`;
 
-/** What a fresh vector's two identity columns must hold. */
+/**
+ * What a fresh vector's identity columns must hold. `model` and `images` are
+ * absent when no embedding is configured in this process (nothing to compare
+ * them with); `text` (`item_vectors.embedding_text`, N08) only for an item,
+ * since `recipe_vectors` records no text key.
+ */
 export type ExpectedEmbedding = {
-  readonly model: string;
-  readonly images: string;
+  readonly model?: string;
+  readonly images?: string;
+  readonly text?: string;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -121,6 +127,8 @@ export type StoredVector = {
   readonly updatedAt: Date;
   readonly model: string | null;
   readonly images: string | null;
+  /** `item_vectors.embedding_text`; `null` for a row with none (and recipes). */
+  readonly text: string | null;
 };
 
 /**
@@ -134,6 +142,7 @@ export const storedVector = (
     readonly updatedAt: Date | null;
     readonly embeddingModel?: string | null;
     readonly embeddingImages?: string | null;
+    readonly embeddingText?: string | null;
   }[],
 ): StoredVector | null => {
   const row = rows[0];
@@ -144,6 +153,7 @@ export const storedVector = (
         updatedAt: row.updatedAt ?? new Date(0),
         model: row.embeddingModel ?? null,
         images: row.embeddingImages ?? null,
+        text: row.embeddingText ?? null,
       };
 };
 
@@ -155,28 +165,38 @@ export const storedVector = (
  *     missing input timestamp counts as the epoch), **and**
  *  2. it was made by the embedding `expected` names — the configured model, over
  *     the images the actor would send now. A row with no recorded model
- *     (`null`, every legacy vector) is never that.
+ *     (`null`, every legacy vector) is never that; **and**
+ *  3. (N08, items only) it was made from the text the item would embed now:
+ *     `expected.text` is `embeddingTextKey` of that text, and a row whose
+ *     `embedding_text` differs — another format version, an edit the
+ *     timestamp could not see such as a brand linked, or `null` on every row
+ *     from before the column — is stale.
  *
- * `expected` is `null` only when no model is configured in this process; then
- * there is nothing to compare against and (1) alone decides, which is what a
- * process with `AI_PROVIDER` unset has always done. A missing vector is never
- * fresh.
+ * Each part of `expected` is compared only when present: `model`/`images` are
+ * absent when no model is configured in this process, and then (1) and (3)
+ * decide, which for (1) is what a process with `AI_PROVIDER` unset has always
+ * done. A missing vector is never fresh.
  *
  * (2) is what the timestamp could not see: a model change touches no input
  * row, so without it a re-embed after switching models was a no-op for every
  * vector — "fresh" by clock, and in the wrong space.
  */
 export const vectorIsFresh = (
-  vector: Pick<StoredVector, "updatedAt" | "model" | "images"> | null,
+  vector: Pick<StoredVector, "updatedAt" | "model" | "images" | "text"> | null,
   inputsUpdatedAt: readonly (Date | null | undefined)[],
   expected: ExpectedEmbedding | null = null,
 ): boolean => {
   if (vector === null) return false;
-  if (
-    expected !== null &&
-    (vector.model !== expected.model || vector.images !== expected.images)
-  ) {
-    return false;
+  if (expected !== null) {
+    if (expected.model !== undefined && vector.model !== expected.model) {
+      return false;
+    }
+    if (expected.images !== undefined && vector.images !== expected.images) {
+      return false;
+    }
+    if (expected.text !== undefined && vector.text !== expected.text) {
+      return false;
+    }
   }
   const freshest = Math.max(
     0,

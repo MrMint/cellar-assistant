@@ -44,6 +44,7 @@ describe("vectorIsFresh", () => {
     updatedAt: at("2026-01-02T00:00:00Z"),
     model: null,
     images: null,
+    text: null,
   };
 
   it("a missing vector is never fresh", () => {
@@ -80,6 +81,7 @@ describe("vectorIsFresh — which embedding made it", () => {
     updatedAt: at("2026-01-02T00:00:00Z"),
     model: MODEL,
     images: "2:front,back",
+    text: null,
   };
   const older = [at("2026-01-01T00:00:00Z")];
 
@@ -119,6 +121,55 @@ describe("vectorIsFresh — which embedding made it", () => {
 
   it("with no model configured, leaves it to the timestamp", () => {
     expect(vectorIsFresh({ ...made, model: null }, older, null)).toBe(true);
+    expect(vectorIsFresh({ ...made, model: null }, older, {})).toBe(true);
+  });
+});
+
+describe("vectorIsFresh — which text made it (N08)", () => {
+  const made = {
+    updatedAt: at("2026-01-02T00:00:00Z"),
+    model: "m",
+    images: NO_IMAGES,
+    text: "v2:aaaa",
+  };
+  const older = [at("2026-01-01T00:00:00Z")];
+
+  it("is fresh when the item would embed the same text", () => {
+    expect(
+      vectorIsFresh(made, older, {
+        model: "m",
+        images: NO_IMAGES,
+        text: "v2:aaaa",
+      }),
+    ).toBe(true);
+  });
+
+  /**
+   * A brand linked to an item changes its text and touches no item column,
+   * so by timestamp its vector is fresh; and after a format bump nothing
+   * changed at all.
+   */
+  it("is stale when the text differs, however new the vector is", () => {
+    expect(
+      vectorIsFresh(made, older, {
+        model: "m",
+        images: NO_IMAGES,
+        text: "v2:bbbb",
+      }),
+    ).toBe(false);
+    expect(vectorIsFresh(made, older, { text: "v3:aaaa" })).toBe(false);
+  });
+
+  it("is stale when no text was recorded — every row from before N08", () => {
+    expect(
+      vectorIsFresh({ ...made, text: null }, older, { text: "v2:aaaa" }),
+    ).toBe(false);
+  });
+
+  it("compares the text even with no model configured", () => {
+    expect(
+      vectorIsFresh({ ...made, model: null }, older, { text: "v2:bbbb" }),
+    ).toBe(false);
   });
 });
 
@@ -148,7 +199,13 @@ describe("storedVector", () => {
         { id: 3, updatedAt: null },
         { id: 4, updatedAt: at("2026-01-01T00:00:00Z") },
       ]),
-    ).toEqual({ id: 3, updatedAt: new Date(0), model: null, images: null });
+    ).toEqual({
+      id: 3,
+      updatedAt: new Date(0),
+      model: null,
+      images: null,
+      text: null,
+    });
   });
 });
 
@@ -158,6 +215,7 @@ describe("regenerateIfStale", () => {
     updatedAt: at("2026-01-02T00:00:00Z"),
     model: "m",
     images: NO_IMAGES,
+    text: null,
   };
   const newer = [at("2026-01-03T00:00:00Z")];
 

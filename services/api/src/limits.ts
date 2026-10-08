@@ -238,6 +238,9 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     // newest image is one of its vector's inputs.
     ["Mutation.attachItemImage", { via: ["ItemActor.attachImage"] }],
     ["Mutation.detachItemImage", { via: ["ItemActor.detachImage"] }],
+    // N08: an item's brands are in its embedded text, so a link re-embeds it.
+    ["Mutation.linkItemBrand", { via: ["ItemActor.linkBrand"] }],
+    ["Mutation.unlinkItemBrand", { via: ["ItemActor.unlinkBrand"] }],
     [
       "Mutation.confirmItemOnboarding",
       { via: ["ItemOnboardingActor.confirm"] },

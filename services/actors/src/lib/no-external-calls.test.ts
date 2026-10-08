@@ -168,6 +168,9 @@ const GUARDED: readonly Guarded[] = [
     // helper that every item-shaped actor imports cannot grow an edge.
     file: "../lib/item-bindings.ts",
     imports: [
+      // `createHash` for `embeddingTextKey` (N08): a SHA-256 of a string in
+      // memory, no I/O.
+      "node:crypto",
       "@cellar-assistant/contracts",
       "@cellar-assistant/db",
       // `requireUuid` for `itemOnboardingId` — pure, and guarded itself.
