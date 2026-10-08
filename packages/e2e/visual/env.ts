@@ -22,9 +22,15 @@ import { fileURLToPath } from "node:url";
  *                    avatars, AI text) — for pixel-diff baselines; off by
  *                    default so a contact sheet shows the real page
  *   VISUAL_GATE=1    the acceptance gate for a converted slice (§5.3/§5.4):
- *                    fail a route with a serious/critical axe violation or a
- *                    page wider than its viewport (default: record only —
- *                    the Joy-era baseline has hundreds of axe violations)
+ *                    fail a route with a serious/critical axe violation (on
+ *                    the page or an open state), an open state that does not
+ *                    open, or a page wider than its viewport (default: record
+ *                    only — the Joy-era baseline has hundreds of axe
+ *                    violations)
+ *
+ * Relative paths are resolved against `packages/e2e`, not the directory the
+ * command was typed in: `bun run --filter` runs the script there and passes
+ * no record of where it started. Pass absolute paths from anywhere else.
  */
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const E2E_ROOT = resolve(HERE, "..");
@@ -41,8 +47,14 @@ export const VISUAL = {
     E2E_ROOT,
     process.env.VISUAL_OUT ?? join("artifacts", "visual", tree),
   ),
-  accountsPath: process.env.VISUAL_ACCOUNTS ?? "",
-  seedPath: process.env.VISUAL_SEED ?? "",
+  accountsPath:
+    process.env.VISUAL_ACCOUNTS === undefined
+      ? ""
+      : resolve(E2E_ROOT, process.env.VISUAL_ACCOUNTS),
+  seedPath:
+    process.env.VISUAL_SEED === undefined
+      ? ""
+      : resolve(E2E_ROOT, process.env.VISUAL_SEED),
   slices: (process.env.VISUAL_SLICES ?? "")
     .split(",")
     .map((s) => s.trim())

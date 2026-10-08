@@ -15,13 +15,15 @@ type RouteRecord = {
   };
   states: { name: string; error?: string }[];
   errors: string[];
+  tree: string;
 };
 
 /**
  * Global teardown: folds the per-route `data/*.json` into `summary.json` —
- * the run's tree label and base URL, every route record, and totals per slice
- * and per axe rule. Records already in the directory from an earlier run into
- * the same `VISUAL_OUT` are kept, so a re-run of one slice updates its rows.
+ * the run's tree label (and every tree the records carry), base URL, every
+ * route record, and totals per slice and per axe rule. Records already in
+ * the directory from an earlier run into the same `VISUAL_OUT` are kept, so a
+ * re-run of one slice updates its rows.
  */
 export default function aggregate(): void {
   const dir = dataDir();
@@ -65,8 +67,17 @@ export default function aggregate(): void {
     }
   }
 
+  // Records from an earlier run into the same VISUAL_OUT are kept, so name
+  // every tree the summary actually covers: one label is a claim about all.
+  const trees = [...new Set(records.map((r) => r.tree))].sort();
+  if (trees.length > 1) {
+    console.warn(
+      `visual: ${dir} mixes captures from trees ${trees.join(", ")} — summary.json lists each`,
+    );
+  }
   const summary = {
     tree: VISUAL.tree,
+    trees,
     baseURL: VISUAL.baseURL,
     writtenAt: new Date().toISOString(),
     totals: {

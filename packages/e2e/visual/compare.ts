@@ -240,6 +240,13 @@ try {
       r.diff === undefined
         ? ""
         : `<b>${(r.diff.ratio * 100).toFixed(1)}%</b> of the first screen changed${r.diff.sizeChanged ? " (size changed)" : ""}`,
+      r.before !== undefined &&
+      r.after !== undefined &&
+      r.before.status !== r.after.status
+        ? `<span class="bad">HTTP ${r.before.status ?? "—"} → ${r.after.status ?? "—"}</span>`
+        : (r.after?.status ?? 0) >= 400
+          ? `<span class="bad">HTTP ${r.after?.status}</span>`
+          : "",
       `axe serious+critical: ${sb ?? "—"} → ${sa ?? "—"}`,
       r.axeNew.length > 0
         ? `<span class="bad">new: ${r.axeNew.map(esc).join(", ")}</span>`
@@ -356,6 +363,8 @@ ${slices
       viewport: r.viewport,
       firstScreenChanged: r.diff?.ratio ?? null,
       sizeChanged: r.diff?.sizeChanged ?? null,
+      statusBefore: r.before?.status ?? null,
+      statusAfter: r.after?.status ?? null,
       axeSeriousBefore: serious(r.before),
       axeSeriousAfter: serious(r.after),
       axeNew: r.axeNew,

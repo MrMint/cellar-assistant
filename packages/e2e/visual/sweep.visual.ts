@@ -24,9 +24,11 @@ import {
  *   data/<slice>__<slug>__<vp>.json      status, axe, layout, console errors
  *
  * and `aggregate.ts` folds the JSON into `summary.json`. Capture only: a route
- * fails when it cannot be captured, not for what it shows — unless
- * VISUAL_GATE=1, which fails serious/critical axe violations and horizontal
- * overflow (run it with VISUAL_SLICES set to the converted slices).
+ * fails when it cannot be captured (including a signed-in route that lands
+ * on /sign-in), not for what it shows — unless VISUAL_GATE=1, which fails
+ * serious/critical axe violations on the page and on each open state, an open
+ * state that no longer opens, and horizontal overflow (run it with
+ * VISUAL_SLICES set to the converted slices).
  */
 
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
@@ -322,12 +324,19 @@ async function capture(page: Page, route: VisualRoute, viewport: string) {
   mkdirSync(dataDir(), { recursive: true });
   const errors: string[] = [];
   page.on("console", (m) => {
-    // Vercel's analytics script 404s off Vercel: noise, not the page.
-    if (
-      m.type() === "error" &&
-      !/_vercel|Failed to load resource/.test(m.text())
-    )
-      errors.push(m.text().slice(0, 300));
+    // Vercel's analytics script 404s off Vercel: noise, not the page. Any
+    // other failed load (an image, a chunk, an API call) is kept, with its URL.
+    if (m.type() !== "error") return;
+    const where = m.location().url;
+    if (/\/_vercel\//.test(where) || /_vercel/.test(m.text())) return;
+    // The document's own status is recorded as `status`; not twice.
+    if (where === new URL(path, VISUAL.baseURL).href) return;
+    errors.push(
+      (/Failed to load resource/.test(m.text())
+        ? `${m.text()} ${where}`
+        : m.text()
+      ).slice(0, 300),
+    );
   });
   page.on("pageerror", (e) =>
     errors.push(`pageerror: ${e.message.slice(0, 300)}`),
@@ -337,6 +346,13 @@ async function capture(page: Page, route: VisualRoute, viewport: string) {
   const response = await page.goto(path, { waitUntil: "domcontentloaded" });
   await settle(page, route.settleMs ?? 1200);
   const loadMs = Date.now() - startedAt;
+  // A signed-in route that lands on /sign-in captured the sign-in page, not
+  // the route: an expired or missing session, never a result.
+  const landed = new URL(page.url()).pathname;
+  expect(
+    route.as === "anon" || !landed.startsWith("/sign-in"),
+    `${path} as ${route.as} landed on ${landed}: the session is gone`,
+  ).toBe(true);
   const mask = VISUAL.mask ? MASKS.map((s) => page.locator(s)) : [];
 
   const fold = `${name}.png`;
@@ -414,12 +430,27 @@ async function capture(page: Page, route: VisualRoute, viewport: string) {
       layout.scrollWidth,
       `${path} is wider than the viewport`,
     ).toBeLessThanOrEqual(layout.viewportWidth);
-    expect(
-      axe.counts.critical + axe.counts.serious,
-      axe.violations
-        .filter((v) => v.impact === "critical" || v.impact === "serious")
-        .map((v) => `${v.id} (${v.nodes})`)
-        .join(", "),
-    ).toBe(0);
+    expect(seriousOf(axe), describeSerious(axe)).toBe(0);
+    // Every sheet or dialog is held to the same bar as the page (§5.4), and
+    // one that no longer opens is a regression, not a skipped row.
+    for (const state of states) {
+      expect(state.error, `${path}: ${state.name} did not open`).toBe(
+        undefined,
+      );
+      if (state.axe !== undefined) {
+        expect(
+          seriousOf(state.axe),
+          `${path}: ${state.name}: ${describeSerious(state.axe)}`,
+        ).toBe(0);
+      }
+    }
   }
 }
+
+const seriousOf = (axe: AxeSummary): number =>
+  axe.counts.critical + axe.counts.serious;
+const describeSerious = (axe: AxeSummary): string =>
+  axe.violations
+    .filter((v) => v.impact === "critical" || v.impact === "serious")
+    .map((v) => `${v.id} (${v.nodes})`)
+    .join(", ");
