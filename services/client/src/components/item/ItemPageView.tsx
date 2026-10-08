@@ -59,6 +59,7 @@ export function ItemPageView({
             itemId={item.itemId}
             itemName={item.name}
             shown={shownItemBrand(item.brands)}
+            linkedBrandIds={item.brands.map((link) => link.brand.id)}
           />
         )
       }

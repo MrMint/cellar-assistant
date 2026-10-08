@@ -31,14 +31,17 @@ export function ChangeBrand({
   itemId,
   itemName,
   shown,
+  linkedBrandIds = [],
 }: {
   type: ApiItemType;
   itemId: string;
   itemName: string;
   /** The brand the page shows, or `null` when it shows none. */
   shown: ShownBrand | null;
+  /** Every brand the item is linked to, so Undo keeps a link it already had. */
+  linkedBrandIds?: readonly string[];
 }) {
-  const brands = useBrandChange(type, itemId);
+  const brands = useBrandChange(type, itemId, linkedBrandIds);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -67,7 +70,7 @@ export function ChangeBrand({
     notify(to === null ? "Brand removed" : `Brand changed to ${to.name}`, {
       undo: () => {
         void (async () => {
-          const undone = await brands.undo(from, to);
+          const undone = await brands.undo(result);
           if (!undone.ok) {
             notify(brandChangeMessage(undone.error), { tone: "error" });
             return;
