@@ -273,12 +273,17 @@ export const BrandDetails = ({
                   <h3 className="type-callout mb-2 font-medium capitalize">
                     {type}s ({items.length})
                   </h3>
-                  <ul className="flex flex-col gap-2">
+                  <ul className="flex flex-col">
                     {items.map((item) => (
-                      <li key={item.itemId} className="flex items-center gap-2">
+                      // The row is the target (44 px), not just the name.
+                      <li
+                        key={item.itemId}
+                        className="relative flex min-h-11 items-center gap-2"
+                      >
                         <Link
                           href={item.href}
                           underline="always"
+                          overlay
                           className="type-callout text-ink-1"
                         >
                           {item.name}
@@ -311,12 +316,14 @@ export const BrandDetails = ({
               {brand.place_brands.map((placeRelation) => (
                 <li
                   key={placeRelation.id}
-                  className="flex items-center gap-4 py-2 first:pt-0 last:pb-0"
+                  className="relative flex items-center gap-4 py-2 first:pt-0 last:pb-0"
                 >
                   <div className="min-w-0 flex-1">
+                    {/* The row is the target, not just the name. */}
                     <Link
                       href={`/places/${placeRelation.place.id}`}
                       underline="always"
+                      overlay
                       className="type-body text-ink-1"
                     >
                       {placeRelation.place.name}
