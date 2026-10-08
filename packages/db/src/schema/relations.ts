@@ -57,7 +57,12 @@ export const relations = defineRelations(schema, (r) => ({
 		}),
 		wines: r.many.wines(),
 		cellarOwners: r.many.cellarOwners(),
-		checkIns: r.many.checkIns(),
+		checkInsUserId: r.many.checkIns({
+			alias: "checkIns_userId_user_id"
+		}),
+		checkInsCreatedById: r.many.checkIns({
+			alias: "checkIns_createdById_user_id"
+		}),
 		friendRequestsFriendId: r.many.friendRequests({
 			alias: "friendRequests_friendId_user_id"
 		}),
@@ -919,7 +924,45 @@ export const relations = defineRelations(schema, (r) => ({
 		}),
 		user: r.one.user({
 			from: r.checkIns.userId,
-			to: r.user.id
+			to: r.user.id,
+			alias: "checkIns_userId_user_id"
+		}),
+		createdBy: r.one.user({
+			from: r.checkIns.createdById,
+			to: r.user.id,
+			alias: "checkIns_createdById_user_id"
+		}),
+		wine: r.one.wines({
+			from: r.checkIns.wineId,
+			to: r.wines.id
+		}),
+		beer: r.one.beers({
+			from: r.checkIns.beerId,
+			to: r.beers.id
+		}),
+		spirit: r.one.spirits({
+			from: r.checkIns.spiritId,
+			to: r.spirits.id
+		}),
+		coffee: r.one.coffees({
+			from: r.checkIns.coffeeId,
+			to: r.coffees.id
+		}),
+		sake: r.one.sakes({
+			from: r.checkIns.sakeId,
+			to: r.sakes.id
+		}),
+		tea: r.one.teas({
+			from: r.checkIns.teaId,
+			to: r.teas.id
+		}),
+		place: r.one.places({
+			from: r.checkIns.placeId,
+			to: r.places.id
+		}),
+		photo: r.one.files({
+			from: r.checkIns.photoFileId,
+			to: r.files.id
 		}),
 	},
 	friendRequests: {
