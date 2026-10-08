@@ -38,10 +38,10 @@ describe("generateBreadcrumbs — the old ServerBreadcrumbs rule", () => {
     );
   });
 
-  test("a standalone item path keeps the type crumb", () => {
+  test("a standalone item path keeps the type crumb, as a label (D7: no index page)", () => {
     assert.deepEqual(generateBreadcrumbs(`/beers/${I}`, undefined, "Pils"), [
       { label: "Home", href: "/" },
-      { label: "Beers", href: "/beers" },
+      { label: "Beers" },
       { label: "Pils", href: undefined },
     ]);
   });
@@ -49,12 +49,12 @@ describe("generateBreadcrumbs — the old ServerBreadcrumbs rule", () => {
   test("sake and tea get the item crumb the old four-type list dropped", () => {
     assert.deepEqual(generateBreadcrumbs(`/sakes/${I}`, undefined, "Dassai"), [
       { label: "Home", href: "/" },
-      { label: "Sakes", href: "/sakes" },
+      { label: "Sakes" },
       { label: "Dassai", href: undefined },
     ]);
     assert.deepEqual(generateBreadcrumbs(`/teas/${I}/edit`), [
       { label: "Home", href: "/" },
-      { label: "Teas", href: "/teas" },
+      { label: "Teas" },
       { label: "Item", href: `/teas/${I}` },
       { label: "Edit" },
     ]);
