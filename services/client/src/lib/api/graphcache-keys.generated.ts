@@ -141,6 +141,7 @@ export const KEYLESS_TYPES = [
   "RemovedRecipeVote",
   "ReorderBandPayload",
   "ReverseGeocodeResult",
+  "SetWantToTryPayload",
   "TierListConnection",
   "TierListEdge",
   "TierListItemConnection",
@@ -154,6 +155,9 @@ export const KEYLESS_TYPES = [
   "UserSearchEdge",
   "UserSearchResult",
   "ValidationError",
+  "WantToTryConnection",
+  "WantToTryEdge",
+  "WantToTryEntry",
 ] as const;
 
 /**

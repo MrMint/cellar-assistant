@@ -59,5 +59,8 @@ import "./place-edges.ts";
 // link `UserProfile`, `Item`, `ItemReview`, `TierListItem` and `Cellar`,
 // nearby places link `Place`, so it comes after every module declaring them.
 import "./discovery.ts";
+// X08: `Viewer.wantToTry` and the `isWantToTry` edges on `Item` and `Recipe`
+// reference `Viewer`, `Item`, `Recipe` and the `Place` stub, so it comes last.
+import "./want-to-try.ts";
 
 export const schema = builder.toSchema();

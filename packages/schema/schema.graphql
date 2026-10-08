@@ -361,6 +361,11 @@ type Beer implements Item {
   isFavorite: Boolean!
 
   """
+  Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
+  """
+  isWantToTry: Boolean!
+
+  """
   Your own newest review of this item, or null — including for an anonymous viewer.
   """
   myReview: ItemReview
@@ -1059,6 +1064,11 @@ type Coffee implements Item {
   Whether the viewer has favourited this item. `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isFavorite: Boolean!
+
+  """
+  Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
+  """
+  isWantToTry: Boolean!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -1939,6 +1949,11 @@ interface Item {
   Whether the viewer has favourited this item. `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isFavorite: Boolean!
+
+  """
+  Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
+  """
+  isWantToTry: Boolean!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -2887,6 +2902,11 @@ type Mutation {
   Replaces the recipe's complete instruction list in one transaction. Steps are numbered 1..n from the order you send.
   """
   setRecipeInstructions(instructions: [RecipeInstructionInput!]!, recipeId: ID!): SetRecipeInstructionsResult!
+
+  """
+  Put an item, recipe or place on the viewer's Want to try list, or take it off. Idempotent: asking for the current state changes nothing.
+  """
+  setWantToTry(target: WantToTryTargetInput!, wantToTry: Boolean!): SetWantToTryResult!
 
   """
   Creates the onboarding and runs the label extraction. **Slow by design** — the model call happens inside this actor's turn (§8.5), which is why onboarding has an actor of its own. Idempotent: a retry after a completed extraction returns the stored defaults without calling the model again.
@@ -4325,6 +4345,11 @@ type Recipe {
   ): RecipeInstructionConnection!
 
   """
+  Whether this recipe is on the viewer's Want to try list (X08). One batched `UserActor` call per request, shared with `Item.isWantToTry`.
+  """
+  isWantToTry: Boolean!
+
+  """
   The viewer's own vote on this version, or null — including for an anonymous viewer, and for a recipe in no group.
   """
   myVote: RecipeVoteType
@@ -5079,6 +5104,11 @@ type Sake implements Item {
   isFavorite: Boolean!
 
   """
+  Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
+  """
+  isWantToTry: Boolean!
+
+  """
   Your own newest review of this item, or null — including for an anonymous viewer.
   """
   myReview: ItemReview
@@ -5219,6 +5249,22 @@ union SetRecipeIngredientsResult = BudgetExceededError | ConflictError | Forbidd
 
 union SetRecipeInstructionsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeInstructionsPayload | ValidationError
 
+"""
+The state after the call. Select the target's own field (`item { isWantToTry }`, `recipe { isWantToTry }`, `place { myInteraction { wantToVisit } }`) and a normalised cache updates itself.
+"""
+type SetWantToTryPayload {
+  """False when it already was in that state."""
+  changed: Boolean!
+  item: Item
+  key: String!
+  kind: WantToTryKind!
+  place: Place
+  recipe: Recipe
+  wantToTry: Boolean!
+}
+
+union SetWantToTryResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SetWantToTryPayload | ValidationError
+
 type Spirit implements Item {
   alcoholContentPercentage: Float
   barcode: String
@@ -5329,6 +5375,11 @@ type Spirit implements Item {
   Whether the viewer has favourited this item. `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isFavorite: Boolean!
+
+  """
+  Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
+  """
+  isWantToTry: Boolean!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -5582,6 +5633,11 @@ type Tea implements Item {
 
   """Null when not recorded — not the same as false."""
   isOrganic: Boolean
+
+  """
+  Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
+  """
+  isWantToTry: Boolean!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -6200,6 +6256,34 @@ type Viewer {
     limit: Int
   ): ActivityEntryConnection!
   role: ViewerRole!
+
+  """
+  The viewer's Want to try list (X08): items, recipes and places, newest first. Owner-only, like Loved.
+  """
+  wantToTry(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    Only these kinds; omitted or empty means all three. Filters before paging, so `totalCount` follows it.
+    """
+    kinds: [WantToTryKind!]
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): WantToTryConnection!
 }
 
 """
@@ -6219,6 +6303,59 @@ enum VisitStatusFilter {
 }
 
 union VoteOnRecipeResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeVotePayload | ValidationError
+
+type WantToTryConnection {
+  edges: [WantToTryEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type WantToTryEdge {
+  cursor: String!
+  node: WantToTryEntry!
+}
+
+"""
+One thing on the viewer's Want to try list. Exactly one of `item`, `recipe` and `place` is set, as `kind` says.
+"""
+type WantToTryEntry {
+  """Through the item DataLoader (§1.5)."""
+  item: Item
+
+  """
+  A stable id for the entry: `wine:<uuid>`, `recipe:<uuid>`, `place:<uuid>`.
+  """
+  key: String!
+  kind: WantToTryKind!
+  place: Place
+  recipe: Recipe
+
+  """
+  When it was saved. For a place, when its interaction row last changed — the column carries no time of its own.
+  """
+  savedAt: DateTime!
+}
+
+"""
+What a Want to try names. ITEM and RECIPE are `want_to_try` rows; PLACE is `PlaceInteraction.wantToVisit`.
+"""
+enum WantToTryKind {
+  ITEM
+  PLACE
+  RECIPE
+}
+
+"""
+Exactly one target: `itemType` + `itemId`, or `recipeId`, or `placeId`. Anything else is a VALIDATION error.
+"""
+input WantToTryTargetInput {
+  itemId: ID
+  itemType: ItemType
+  placeId: ID
+  recipeId: ID
+}
 
 type Wine implements Item {
   alcoholContentPercentage: Float
@@ -6330,6 +6467,11 @@ type Wine implements Item {
   Whether the viewer has favourited this item. `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isFavorite: Boolean!
+
+  """
+  Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
+  """
+  isWantToTry: Boolean!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.

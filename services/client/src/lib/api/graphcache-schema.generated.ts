@@ -419,6 +419,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -1222,6 +1229,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           {
             name: "isFavorite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "isWantToTry",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
@@ -2451,6 +2465,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           {
             name: "isFavorite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "isWantToTry",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
@@ -3998,6 +4019,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SetRecipeInstructionsResult" },
+            },
+          },
+          {
+            name: "setWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetWantToTryResult" },
             },
           },
           {
@@ -6058,6 +6086,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "RecipeInstructionConnection" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
           { name: "myVote", type: { kind: "ENUM", name: "RecipeVoteType" } },
           {
             name: "name",
@@ -7251,6 +7286,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -7377,6 +7419,56 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "SetWantToTryPayload",
+        fields: [
+          {
+            name: "changed",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          {
+            name: "key",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "WantToTryKind" },
+            },
+          },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          { name: "recipe", type: { kind: "OBJECT", name: "Recipe" } },
+          {
+            name: "wantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "SetWantToTryResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SetWantToTryPayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
         name: "Spirit",
         fields: [
           {
@@ -7435,6 +7527,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           {
             name: "isFavorite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "isWantToTry",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
@@ -7596,6 +7695,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "isOrganic", type: { kind: "SCALAR", name: "Boolean" } },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -8367,6 +8473,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "ENUM", name: "ViewerRole" },
             },
           },
+          {
+            name: "wantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "WantToTryConnection" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -8381,6 +8494,86 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "RecipeVotePayload" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "WantToTryConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "WantToTryEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "WantToTryEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "WantToTryEntry" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "WantToTryEntry",
+        fields: [
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          {
+            name: "key",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "WantToTryKind" },
+            },
+          },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          { name: "recipe", type: { kind: "OBJECT", name: "Recipe" } },
+          {
+            name: "savedAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -8442,6 +8635,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           {
             name: "isFavorite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "isWantToTry",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },

@@ -312,6 +312,9 @@ const REPLACES =
   "replaces a whole list; each entry is a new row, so its nulls are 'not given'";
 const STARTS =
   "starts a job or an upload; there is no stored value for null to clear";
+const NAMES_A_TARGET =
+  "its input only names which thing to act on (exactly one of the fields is " +
+  "set); a null there is 'not this kind', never 'clear it'";
 
 const NOT_PATCHES: Readonly<Record<string, string>> = {
   addItemReview: CREATES,
@@ -331,6 +334,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   createUploadTarget: STARTS,
   setRecipeIngredients: REPLACES,
   setRecipeInstructions: REPLACES,
+  setWantToTry: NAMES_A_TARGET,
   startItemOnboarding: STARTS,
   startRecipePhotoJob: STARTS,
 };
