@@ -13,7 +13,7 @@ import {
   type FieldPath,
   type FieldValues,
 } from "react-hook-form";
-import type { EnumKey } from "@/hooks/enum-options";
+import { type EnumKey, withCurrentValue } from "@/hooks/enum-options";
 import { useEnum } from "@/hooks/useEnum";
 
 interface EnumSelectProps<
@@ -53,6 +53,10 @@ export function EnumSelect<
 
   // N03: the error is drawn here, under the select — a required pick that is
   // missing says so instead of only scrolling to it.
+  //
+  // The stored value is always one of the options (`withCurrentValue`): Joy's
+  // Select clears a value its options lack whenever they change, which wiped
+  // the country of every item past the first page of countries on Save.
   return (
     <Controller
       name={name}
@@ -73,7 +77,7 @@ export function EnumSelect<
               field.onChange(value);
             }}
           >
-            {options.map((option) => (
+            {withCurrentValue(enumKey, options, field.value).map((option) => (
               <Option key={option.value} value={option.value}>
                 {option.label}
               </Option>

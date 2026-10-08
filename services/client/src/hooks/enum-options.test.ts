@@ -5,6 +5,7 @@ import {
   enumOptionsFor,
   formatEnumValue,
   PERMISSION_VALUES,
+  withCurrentValue,
 } from "./enum-options";
 
 describe("enumOptionsFor — old EnumSelect options from new sources", () => {
@@ -56,5 +57,40 @@ describe("enumOptionsFor — old EnumSelect options from new sources", () => {
       "Brandy & Cognac",
     );
     assert.equal(formatEnumValue("teaCategory", "pu_erh"), "Pu-erh");
+  });
+});
+
+describe("withCurrentValue — a stored value the list does not have yet", () => {
+  const firstPage = enumOptionsFor("country", ["FRANCE", "ITALY"]);
+
+  test("keeps a stored value the options lack, labelled by the formatter", () => {
+    assert.deepEqual(withCurrentValue("country", firstPage, "UNITED_STATES"), [
+      ...firstPage,
+      {
+        value: "UNITED_STATES",
+        label: formatEnumValue("country", "UNITED_STATES"),
+      },
+    ]);
+  });
+
+  test("adds nothing once the options contain it", () => {
+    const both = enumOptionsFor("country", ["FRANCE", "UNITED_STATES"]);
+    assert.deepEqual(withCurrentValue("country", both, "UNITED_STATES"), both);
+  });
+
+  test("keeps the value while the list is still loading (no options yet)", () => {
+    assert.deepEqual(
+      withCurrentValue("country", [], "UNITED_STATES").map((o) => o.value),
+      ["UNITED_STATES"],
+    );
+  });
+
+  test("blank values add nothing", () => {
+    for (const blank of ["", null, undefined]) {
+      assert.deepEqual(
+        withCurrentValue("country", firstPage, blank),
+        firstPage,
+      );
+    }
   });
 });

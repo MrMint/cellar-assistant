@@ -102,3 +102,30 @@ export const enumOptionsFor = (
     label: formatEnumValue(key, value),
   }));
 };
+
+/**
+ * `options` with the field's current `value` guaranteed among them.
+ *
+ * Joy's `Select` (MUI Base `useList`) drops a selected value that is not one
+ * of its options whenever the options change, and reports the drop through
+ * `onChange(null)` — so a form bound to it *clears the field by itself*. The
+ * country list arrives in two pages (`useReferenceOptions`: the API caps
+ * `first` at 100), so an edit form for a United States or United Kingdom item
+ * mounted with options A–L, Joy dropped the stored value, and Save sent
+ * `country: null` (measured on the UX lane, 2026-10-08). The same happens to
+ * any stored value that is not, or not yet, in a list: while the list loads,
+ * or a value the reference table no longer has.
+ *
+ * Keeping the value as an option until the list contains it means the select
+ * never sees its value disappear. Blank (`""`, `null`, `undefined`) adds
+ * nothing: there is no selection to keep.
+ */
+export const withCurrentValue = (
+  key: EnumKey,
+  options: readonly EnumOption[],
+  value: unknown,
+): EnumOption[] => {
+  if (typeof value !== "string" || value === "") return [...options];
+  if (options.some((option) => option.value === value)) return [...options];
+  return [...options, { value, label: formatEnumValue(key, value) }];
+};
