@@ -92,9 +92,7 @@ export function FavoritesClient({
           <CellarItemsFilter types={types} onTypesChange={setTypes} />
         </div>
       </div>
-      {list.failure !== null && (
-        <ApiError error={list.failure} title="Loved" />
-      )}
+      {list.failure !== null && <ApiError error={list.failure} title="Loved" />}
       <VirtualGrid
         items={items}
         totalCount={virtualTotal(list)}
