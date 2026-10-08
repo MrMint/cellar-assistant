@@ -1,4 +1,3 @@
-import { Stack, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { DeleteTierListButton } from "@/components/tier-list/DeleteTierListButton";
@@ -41,25 +40,25 @@ export default async function EditTierListPage({
 
   if (viewer.me?.id !== tierList.createdById) {
     return (
-      <Stack spacing={1}>
-        <Typography level="h3">{tierList.name}</Typography>
-        <Typography level="body-sm" sx={{ color: "text.secondary" }}>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-ink-1 type-title-2">{tierList.name}</h3>
+        <p className="text-ink-2 type-callout">
           Only the person who made a tier list can change it.
-        </Typography>
-      </Stack>
+        </p>
+      </div>
     );
   }
 
   return (
-    <Stack spacing={4}>
+    <div className="flex flex-col gap-8">
       <EditTierListClient tierList={tierList} />
-      <Stack direction="row">
+      <div className="flex">
         <DeleteTierListButton
           tierListId={tierList.id}
           name={tierList.name}
           itemCount={tierList.itemCount}
         />
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }

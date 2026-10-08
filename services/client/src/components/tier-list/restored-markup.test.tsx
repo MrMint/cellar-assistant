@@ -8,6 +8,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
@@ -29,11 +30,13 @@ const client = new Client({
   url: "http://test.invalid/graphql",
   exchanges: [],
 });
+// `TooltipProvider` stands in for the app's own (`AppClientProviders`).
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
-  );
+  renderToStaticMarkup(
+    <Provider value={client}>
+      <TooltipProvider>{node}</TooltipProvider>
+    </Provider>,
+  ).replace(/<style[^>]*>[^<]*<\/style>/g, "");
 
 const items = Array.from({ length: 12 }, (_, i) => ({
   id: `row-${i}`,
@@ -129,6 +132,9 @@ describe("TierListView (restored board)", () => {
     assert.match(html, />4.6/);
     assert.match(html, />\(1\.2k\)</);
     assert.match(html, /aria-label="Remove Entry 1"/);
+    // #1's crown says its rank in words, and each drag handle is named.
+    assert.match(html, />Rank 1</);
+    assert.match(html, /<button[^>]*aria-label="Reorder Entry 1"/);
   });
 
   test("locked or not the owner: no remove buttons, no drag handles", () => {
@@ -191,7 +197,7 @@ describe("TierListForm (restored)", () => {
       assert.match(html, new RegExp(`>${label}<`));
     }
     assert.match(html, /placeholder="e.g. Best Wine Bars"/);
-    // Joy's Select renders its options in a portal, so the default (place)
+    // The Select renders its options in a portal, so the default (place)
     // is not in static markup; the field itself is.
     assert.match(html, /name="list_type"/);
     assert.match(html, />Create</);

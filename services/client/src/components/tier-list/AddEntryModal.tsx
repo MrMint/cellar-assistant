@@ -1,27 +1,18 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Input,
-  List,
-  ListItem,
-  ListItemContent,
-  ListItemDecorator,
-  Modal,
-  ModalClose,
-  ModalDialog,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { type FormEvent, useCallback, useState } from "react";
-import { MdFormatListNumbered, MdPlace, MdSearch } from "react-icons/md";
 import { useClient } from "urql";
+import { ICON_STROKE, Place, Ranked, Search } from "@/components/app/icons";
+import { ListRow } from "@/components/app/Page";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Spinner } from "@/components/ui/spinner";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { createLatestOnly } from "@/lib/latest-only";
@@ -59,8 +50,9 @@ const ENTITY_LABELS: Record<TierListEntityType, string> = {
 
 /**
  * In-page add — **new-only, kept** (decision 2) and restyled in the old
- * `AddToTierListModal`'s idiom (outlined `ModalDialog`, the numbered-list
- * title, an outlined `List`, the danger line for errors).
+ * `AddToTierListModal`'s idiom (the numbered-list rows, the danger line for
+ * errors), on the app's `ResponsiveDialog`: a bottom sheet on a phone, a
+ * centred dialog from `md` up.
  *
  * The rewrite's picker offered items *and* places on every list; the old app
  * only ever added an entity to a list of its own type (`list_type`), so this
@@ -190,125 +182,96 @@ export function AddEntryModal({
 
   const message = searchError ?? error;
 
+  const placeholder =
+    entityType === "place"
+      ? "Search places by name or what they are"
+      : `Search ${ENTITY_LABELS[entityType]} by name or description`;
+  const SearchGlyph = entityType === "place" ? Place : Search;
+
   return (
-    <Modal open={open} onClose={onClose}>
-      <ModalDialog
-        variant="outlined"
-        sx={{ maxWidth: 480, width: "100%", maxHeight: "86vh" }}
-      >
-        <ModalClose />
-        <DialogTitle>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <MdFormatListNumbered style={{ fontSize: 20 }} />
-            <span>Add entry</span>
-          </Stack>
-        </DialogTitle>
-        <Divider />
-        <DialogContent sx={{ overflow: "auto" }}>
-          <Stack spacing={2}>
-            <form onSubmit={search}>
-              <Stack direction="row" spacing={1}>
-                <Input
-                  autoFocus
-                  size="sm"
-                  sx={{ flex: 1 }}
-                  value={text}
-                  onChange={(event) => setText(event.target.value)}
-                  placeholder={
-                    entityType === "place"
-                      ? "Search places by name or what they are"
-                      : `Search ${ENTITY_LABELS[entityType]} by name or description`
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title="Add entry"
+      className="md:max-w-[480px]"
+    >
+      <div className="flex flex-col gap-4 pb-1">
+        <form onSubmit={search} className="flex gap-2">
+          <InputGroup className="flex-1">
+            <InputGroupAddon>
+              <SearchGlyph aria-hidden strokeWidth={ICON_STROKE} />
+            </InputGroupAddon>
+            <InputGroupInput
+              autoFocus
+              type="search"
+              aria-label={placeholder}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder={placeholder}
+            />
+          </InputGroup>
+          <Button type="submit" disabled={loading || text.trim() === ""}>
+            {loading && <Spinner aria-hidden />}
+            Search
+          </Button>
+        </form>
+
+        {message !== null && (
+          <p role="alert" className="text-destructive type-callout">
+            {message}
+          </p>
+        )}
+
+        {loading && rows === null ? (
+          <div className="flex justify-center py-4">
+            <Spinner />
+          </div>
+        ) : rows === null ? (
+          <p className="text-center text-ink-3 type-callout">
+            Search for {entityType === "place" ? "a place" : "an item"} to add.
+            It lands in Unrated.
+          </p>
+        ) : rows.length === 0 ? (
+          <p className="text-center text-ink-3 type-callout">
+            Nothing matched that phrase.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1 md:max-h-[60vh] md:overflow-y-auto">
+            {rows.map((row) => (
+              <li key={`${row.entityType}-${row.id}`}>
+                <ListRow
+                  leading={
+                    <Ranked
+                      aria-hidden
+                      strokeWidth={ICON_STROKE}
+                      className="size-5"
+                    />
                   }
-                  startDecorator={
-                    entityType === "place" ? <MdPlace /> : <MdSearch />
+                  title={row.name}
+                  description={row.subtitle !== "" ? row.subtitle : undefined}
+                  trailing={
+                    onList.has(candidateHref(row)) ? (
+                      <Badge variant="secondary" className="text-ink-2">
+                        On list
+                      </Badge>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        disabled={busy}
+                        onClick={() => onPick(row)}
+                      >
+                        Add
+                      </Button>
+                    )
                   }
                 />
-                <Button
-                  size="sm"
-                  type="submit"
-                  loading={loading}
-                  disabled={text.trim() === ""}
-                >
-                  Search
-                </Button>
-              </Stack>
-            </form>
-
-            {message !== null && (
-              <Typography level="body-sm" color="danger">
-                {message}
-              </Typography>
-            )}
-
-            {loading && rows === null ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                <CircularProgress size="sm" />
-              </Box>
-            ) : rows === null ? (
-              <Typography
-                level="body-sm"
-                sx={{ color: "text.tertiary", textAlign: "center" }}
-              >
-                Search for {entityType === "place" ? "a place" : "an item"} to
-                add. It lands in Unrated.
-              </Typography>
-            ) : rows.length === 0 ? (
-              <Typography
-                level="body-sm"
-                sx={{ color: "text.tertiary", textAlign: "center" }}
-              >
-                Nothing matched that phrase.
-              </Typography>
-            ) : (
-              <List
-                size="sm"
-                variant="outlined"
-                sx={{ borderRadius: "md", overflow: "hidden" }}
-              >
-                {rows.map((row) => (
-                  <ListItem
-                    key={`${row.entityType}-${row.id}`}
-                    endAction={
-                      onList.has(candidateHref(row)) ? (
-                        <Chip size="sm" variant="soft" color="neutral">
-                          On list
-                        </Chip>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="soft"
-                          disabled={busy}
-                          onClick={() => onPick(row)}
-                        >
-                          Add
-                        </Button>
-                      )
-                    }
-                  >
-                    <ListItemDecorator>
-                      <MdFormatListNumbered />
-                    </ListItemDecorator>
-                    <ListItemContent sx={{ minWidth: 0, pr: 6 }}>
-                      <Typography level="title-sm" noWrap>
-                        {row.name}
-                      </Typography>
-                      {row.subtitle !== "" && (
-                        <Typography
-                          level="body-xs"
-                          sx={{ color: "text.tertiary" }}
-                          noWrap
-                        >
-                          {row.subtitle}
-                        </Typography>
-                      )}
-                    </ListItemContent>
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </Stack>
-        </DialogContent>
-      </ModalDialog>
-    </Modal>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </ResponsiveDialog>
   );
 }

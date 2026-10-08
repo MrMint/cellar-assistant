@@ -1,17 +1,24 @@
-"use client";
-
 /**
  * `82450ad1:src/components/tier-list/TierListCard.tsx`, restored. Only the
  * field names change: `items_aggregate.count` → `itemCount`, `list_type` →
  * `listType`; `createdBy` is G4's `UserProfile` (null when signed out, which
  * reads "Unknown user" as before).
+ *
+ * On the app's primitives (D20): a tonal tile (no border) whose name is an
+ * overlay `app/Link`, so the whole tile is the target.
  */
 
-import { Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
-import Link from "next/link";
-import { MdGroup, MdLock, MdPublic } from "react-icons/md";
+import {
+  type AppIcon,
+  ICON_STROKE,
+  Lock,
+  People,
+  Public,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { UserAvatar } from "@/components/app/UserAvatar";
+import { Badge } from "@/components/ui/badge";
 import type { ResultOf } from "@/lib/api/graphql";
-import { UserAvatar } from "../common/UserAvatar";
 import type { TierListCardFragment } from "./fragments";
 
 /** The unmasked `TierListCard` fragment. */
@@ -19,12 +26,14 @@ export type TierListCardData = ResultOf<typeof TierListCardFragment>;
 
 type TierListCardProps = {
   tierList: TierListCardData;
+  /** Runs before the link navigates (`VirtualGrid` saves its scroll here). */
+  onNavigate?: () => void;
 };
 
-const privacyIcons: Record<string, typeof MdLock> = {
-  PRIVATE: MdLock,
-  FRIENDS: MdGroup,
-  PUBLIC: MdPublic,
+const privacyIcons: Record<string, { icon: AppIcon; label: string }> = {
+  PRIVATE: { icon: Lock, label: "Private" },
+  FRIENDS: { icon: People, label: "Friends" },
+  PUBLIC: { icon: Public, label: "Public" },
 };
 
 const listTypeLabels: Record<string, string> = {
@@ -37,83 +46,61 @@ const listTypeLabels: Record<string, string> = {
   tea: "Teas",
 };
 
-export function TierListCard({ tierList }: TierListCardProps) {
-  const PrivacyIcon = privacyIcons[tierList.privacy] ?? MdLock;
+export function TierListCard({ tierList, onNavigate }: TierListCardProps) {
+  const privacy = privacyIcons[tierList.privacy] ?? privacyIcons.PRIVATE;
+  const PrivacyIcon = privacy.icon;
   const itemCount = tierList.itemCount;
   const typeLabel = listTypeLabels[tierList.listType] ?? tierList.listType;
   const creatorName = tierList.createdBy?.displayName ?? "Unknown user";
 
   return (
-    <Link
-      href={`/tier-lists/${tierList.id}`}
-      style={{ textDecoration: "none" }}
+    <article
+      data-slot="tier-list-card"
+      className="relative flex h-full flex-col gap-2 rounded-lg bg-surface-1 p-4 transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2"
     >
-      <Card
-        variant="outlined"
-        sx={{
-          cursor: "pointer",
-          transition: "border-color 0.2s",
-          "&:hover": { borderColor: "primary.300" },
-          height: "100%",
-        }}
-      >
-        <CardContent>
-          <Stack spacing={1}>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="flex-start"
-            >
-              <Typography level="title-lg" sx={{ flex: 1, minWidth: 0 }}>
-                {tierList.name}
-              </Typography>
-              <PrivacyIcon
-                style={{
-                  fontSize: 18,
-                  color: "var(--joy-palette-neutral-500)",
-                }}
-              />
-            </Stack>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="min-w-0 flex-1 text-ink-1 type-headline">
+          <Link
+            href={`/tier-lists/${tierList.id}`}
+            overlay
+            underline="none"
+            onClick={onNavigate}
+          >
+            {tierList.name}
+          </Link>
+        </h3>
+        <PrivacyIcon
+          aria-hidden
+          strokeWidth={ICON_STROKE}
+          className="size-[18px] shrink-0 text-ink-3"
+        />
+        <span className="sr-only">{privacy.label}</span>
+      </div>
 
-            {tierList.description && (
-              <Typography
-                level="body-sm"
-                sx={{
-                  color: "text.secondary",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                }}
-              >
-                {tierList.description}
-              </Typography>
-            )}
+      {tierList.description && (
+        <p className="line-clamp-2 text-ink-2 type-callout">
+          {tierList.description}
+        </p>
+      )}
 
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Chip variant="soft" color="neutral" size="sm">
-                {typeLabel}
-              </Chip>
-              <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
-                {itemCount} {itemCount === 1 ? "item" : "items"}
-              </Typography>
-            </Stack>
+      <div className="flex items-center gap-2">
+        <Badge variant="secondary" className="text-ink-2">
+          {typeLabel}
+        </Badge>
+        <span className="tabular type-footnote">
+          {itemCount} {itemCount === 1 ? "item" : "items"}
+        </span>
+      </div>
 
-            <Stack direction="row" spacing={1} alignItems="center">
-              <UserAvatar
-                avatarUrl={tierList.createdBy?.avatarUrl}
-                displayName={creatorName}
-                size="sm"
-                sx={{ width: 20, height: 20 }}
-              />
-              <Typography level="body-xs" sx={{ color: "text.secondary" }}>
-                {creatorName}
-              </Typography>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-    </Link>
+      <div className="flex items-center gap-2">
+        <UserAvatar
+          avatarUrl={tierList.createdBy?.avatarUrl}
+          displayName={creatorName}
+          size="sm"
+          className="size-5 text-[10px]"
+        />
+        <span className="text-ink-2 type-footnote">{creatorName}</span>
+      </div>
+    </article>
   );
 }

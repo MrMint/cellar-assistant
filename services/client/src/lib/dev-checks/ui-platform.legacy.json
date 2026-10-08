@@ -11,8 +11,6 @@
     "src/app/(authenticated)/recipes/groups/[groupId]/versions/page.tsx",
     "src/app/(authenticated)/recipes/loading.tsx",
     "src/app/(authenticated)/recipes/page.tsx",
-    "src/app/(authenticated)/tier-lists/[tierListId]/edit/page.tsx",
-    "src/app/(authenticated)/tier-lists/[tierListId]/page.tsx",
     "src/components/common/AIDraftField.tsx",
     "src/components/common/InteractiveCard.tsx",
     "src/components/common/Link.tsx",
@@ -60,22 +58,6 @@
     "src/components/recipe/RecipeVersionsTab.tsx",
     "src/components/recipe/RecipeVoteButtons.tsx",
     "src/components/recipe/VirtualizedRecipeGroupGrid.tsx",
-    "src/components/search/RecipeGroupSearch.tsx",
-    "src/components/tier-list/AddEntryModal.tsx",
-    "src/components/tier-list/AddToTierListButton.tsx",
-    "src/components/tier-list/AddToTierListModal.tsx",
-    "src/components/tier-list/DeleteTierListButton.tsx",
-    "src/components/tier-list/TierListCard.tsx",
-    "src/components/tier-list/TierListForm.tsx",
-    "src/components/tier-list/TierListView.tsx",
-    "src/components/tier-list/TierListViewPage.tsx",
-    "src/components/tier-list/TierListsPage.tsx",
-    "src/components/tier-list/constants.ts",
-    "src/components/tier-list/insights/BandDistributionChart.tsx",
-    "src/components/tier-list/insights/CategoryDonutChart.tsx",
-    "src/components/tier-list/insights/CountryHeatmap.tsx",
-    "src/components/tier-list/insights/PalatePassport.tsx",
-    "src/components/tier-list/insights/TierListInsightsPanel.tsx",
-    "src/components/tier-list/insights/computeInsightsStats.ts"
+    "src/components/search/RecipeGroupSearch.tsx"
   ]
 }

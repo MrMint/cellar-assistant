@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import {
   type TierListItemNode,
@@ -48,7 +47,11 @@ export default async function TierListPage({
   const result = unwrapResult(first.tierList, "TierList");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="text-destructive type-body">
+        {result.error.message}
+      </p>
+    );
   }
   const tierList = result.data;
 
