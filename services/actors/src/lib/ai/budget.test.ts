@@ -529,6 +529,23 @@ describe("D17: a call that got no model response gives its reservation back", ()
     expect(settled).toEqual([]);
   });
 
+  it("keeps the cost of a request that left and got no answer", async () => {
+    // A timeout: no answer, so the allowance comes back (D17); the provider
+    // may still have run it, so the money stays booked.
+    const { budget, released } = recorder({ usageId: "u-7" });
+    const timedOut = noModelResponse(new ConflictError("timed out"), {
+      maybeBilled: true,
+    });
+    await expect(
+      meteredProviderFor(failing(timedOut), "item_defaults", MODELS, {
+        budget,
+      })(ctx).generateContent({ prompt: "x" }),
+    ).rejects.toBe(timedOut);
+    expect(released).toEqual([
+      { usageId: "u-7", seam: "item_defaults", keepCost: true },
+    ]);
+  });
+
   it("releases an embedding's row too", async () => {
     const { budget, released } = recorder({ usageId: "u-3" });
     const refused = noModelResponse(new ValidationError("400 bad request"));

@@ -1651,6 +1651,10 @@ export class BudgetActor
    * measurement of zero, clamped at zero. It also keeps the trail: an
    * operator can still see that a call was attempted and released.
    *
+   * `keepCost` (a timeout or reset connection, which the provider may have
+   * run and billed) marks the row released for the allowance and leaves its
+   * nanocents and cents exactly as booked.
+   *
    * Idempotent: releasing a released row is a no-op, and so is releasing a
    * settled one — a settlement means a response arrived, and that call counts.
    */
@@ -1694,6 +1698,16 @@ export class BudgetActor
           ? (row.metadata as Record<string, unknown>)
           : {};
       if (metadata.released === true || metadata.settled === true) return;
+
+      // A call that may have been billed keeps its money booked; only the
+      // allowance is given back (`ModelReleaseInput.keepCost`).
+      if (input.keepCost === true) {
+        await tx
+          .update(apiUsageLog)
+          .set({ metadata: { ...metadata, released: true, costKept: true } })
+          .where(eq(apiUsageLog.id, usageId));
+        return;
+      }
 
       const ownNano = int(metadata.nanoCents);
       let cost = row.cost;
@@ -1767,34 +1781,54 @@ export class BudgetActor
       );
     const hour = int(row?.hour);
     const day = int(row?.day);
-    const window =
-      hour >= cap.hourly
-        ? { count: hour, cap: cap.hourly, span: "1 hour", label: "hour" }
-        : day >= cap.daily
-          ? { count: day, cap: cap.daily, span: "1 day", label: "24 hours" }
-          : null;
-    if (window === null) return null;
+    const full = [
+      ...(hour >= cap.hourly
+        ? [{ count: hour, cap: cap.hourly, span: "1 hour", label: "hour" }]
+        : []),
+      ...(day >= cap.daily
+        ? [{ count: day, cap: cap.daily, span: "1 day", label: "24 hours" }]
+        : []),
+    ];
+    const window = full[0];
+    if (window === undefined) return null;
 
-    // The (count - cap + 1)th oldest row in the window is the one whose
-    // expiry brings the count back under the cap. `offset count - cap`
-    // because the cap may have been lowered below a count already reached.
-    const span = sql.raw(`interval '${window.span}'`);
-    const [freed] = await tx
-      .select({
-        at: sql<string>`to_char((${apiUsageLog.createdAt} + ${span}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
-      })
-      .from(apiUsageLog)
-      .where(and(mine, sql`${apiUsageLog.createdAt} > now() - ${span}`))
-      .orderBy(sql`${apiUsageLog.createdAt} asc`)
-      .offset(window.count - window.cap)
-      .limit(1);
+    // For each full window, the (count - cap + 1)th oldest row in it is the
+    // one whose expiry brings that count back under its cap; `offset count -
+    // cap` because the cap may have been lowered below a count already
+    // reached. When both windows are full the call fits only once *both* have
+    // a slot, so the later of the two times is the answer — the hour freeing
+    // up first would otherwise promise a retry the day still refuses.
+    const freedAt = async (w: (typeof full)[number]): Promise<string | null> => {
+      const span = sql.raw(`interval '${w.span}'`);
+      const [freed] = await tx
+        .select({
+          at: sql<string>`to_char((${apiUsageLog.createdAt} + ${span}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+        })
+        .from(apiUsageLog)
+        .where(and(mine, sql`${apiUsageLog.createdAt} > now() - ${span}`))
+        .orderBy(sql`${apiUsageLog.createdAt} asc`)
+        .offset(w.count - w.cap)
+        .limit(1);
+      return freed?.at ?? null;
+    };
+    // One statement at a time: they share this transaction's connection.
+    let retryAt: string | null = null;
+    for (const w of full) {
+      const at = await freedAt(w);
+      if (at === null) {
+        retryAt = null;
+        break;
+      }
+      // Same fixed-width UTC format, so the string order is the time order.
+      if (retryAt === null || at > retryAt) retryAt = at;
+    }
 
     return {
       reason:
         `${USER_CAP_REASON}: this account has made ${window.count} of its ` +
         `${window.cap} calls in the last ${window.label} to ${budgetKind(kind)}. ` +
         "It frees up as the window rolls; the caps are BUDGET_USER_CAPS.",
-      retryAt: freed?.at ?? null,
+      retryAt,
     };
   }
 

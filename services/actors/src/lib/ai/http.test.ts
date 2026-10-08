@@ -16,7 +16,7 @@ import { ConflictError, ValidationError } from "@cellar-assistant/contracts";
 import { describe, expect, it } from "vitest";
 import { isTransientStatus, postJson, withImageContext } from "./http.ts";
 import { requireImageMime } from "./image-mime.ts";
-import { isNoModelResponse } from "./no-response.ts";
+import { isNoModelResponse, mayHaveBeenBilled } from "./no-response.ts";
 import type { FetchLike } from "./types.ts";
 
 /** A `fetch` that answers one canned status, with a body worth reporting. */
@@ -99,11 +99,15 @@ describe("D17: which failures prove no model answered", () => {
     const refused: FetchLike = (async () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as FetchLike;
-    expect(isNoModelResponse(await caught(call(refused)))).toBe(true);
+    const unreachable = await caught(call(refused));
+    expect(isNoModelResponse(unreachable)).toBe(true);
+    // The request may have reached the provider before the transport failed.
+    expect(mayHaveBeenBilled(unreachable)).toBe(true);
     for (const status of [400, 401, 404, 429, 500, 503]) {
-      expect(isNoModelResponse(await caught(call(answering(status))))).toBe(
-        true,
-      );
+      const error = await caught(call(answering(status)));
+      expect(isNoModelResponse(error)).toBe(true);
+      // An error status is a refusal: nothing ran, nothing to bill.
+      expect(mayHaveBeenBilled(error)).toBe(false);
     }
   });
 

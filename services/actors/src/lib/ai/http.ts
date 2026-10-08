@@ -45,7 +45,7 @@
  */
 import { ConflictError, ValidationError } from "@cellar-assistant/contracts";
 import { describeImages } from "./image-mime.ts";
-import { isNoModelResponse, noModelResponse } from "./no-response.ts";
+import { keepNoModelResponse, noModelResponse } from "./no-response.ts";
 import type { FetchLike, ProviderName } from "./types.ts";
 
 /**
@@ -87,11 +87,17 @@ export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
     // Rethrown, never swallowed. A DNS failure, a refused connection or a
     // timeout is exactly the case where returning something plausible would
     // be worst — see `config.ts`'s note on the Wisconsin mock.
+    //
+    // No answer arrived (D17), but a timeout or a reset connection may have
+    // reached the provider first, and it may bill what it ran. The fetch error
+    // does not say reliably which, so every transport failure keeps its cost
+    // booked and gives back only the allowance (`maybeBilled`).
     throw noModelResponse(
       new ConflictError(
         `${provider} ${what} could not be reached at ${redactUrl(url)}: ` +
           `${error instanceof Error ? error.message : String(error)}`,
       ),
+      { maybeBilled: true },
     );
   }
 
@@ -162,8 +168,7 @@ export const withImageContext = async <T>(
       "so looking at the file proves nothing.";
     // The rewrap keeps the class (the retry schedule) and whether a model
     // answered (D17) — both are facts about the original failure.
-    const keep = <E>(next: E): E =>
-      isNoModelResponse(error) ? noModelResponse(next) : next;
+    const keep = <E>(next: E): E => keepNoModelResponse(error, next);
     if (error instanceof ValidationError) {
       throw keep(new ValidationError(detail, error.reason, error.retryAt));
     }

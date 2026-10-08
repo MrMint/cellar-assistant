@@ -22,7 +22,7 @@
  * exchange, llama-server's marker read, and `requireImageMime`'s refusal —
  * and read back with {@link isNoModelResponse}.
  *
- * A `WeakSet` and not a property: the error objects are the providers' own
+ * A `WeakMap` and not a property: the error objects are the providers' own
  * `ConflictError`s and `ValidationError`s, and an extra enumerable field
  * would ride into every log line and every wire envelope. Membership is
  * in-process only, which is all it needs to be — the metering wrapper calls
@@ -34,11 +34,28 @@
  * user one retry's worth of allowance; an under-count is an invoice nobody
  * capped.
  */
-const unanswered = new WeakSet<object>();
+const unanswered = new WeakMap<object, "unbilled" | "maybe-billed">();
 
-/** Record that `error` was raised before any model answered. Returns it. */
-export const noModelResponse = <E>(error: E): E => {
-  if (typeof error === "object" && error !== null) unanswered.add(error);
+/**
+ * Record that `error` was raised before any model answered. Returns it.
+ *
+ * `maybeBilled` is for a request that left this process and then produced no
+ * answer — a timeout, a reset connection. No model answered, so per D17 it
+ * does not use up anyone's *allowance*; but the provider may still have run
+ * it and may still bill it, so its *cost* stays booked (`releaseForModel`'s
+ * `keepCost`). An HTTP error status, or a refusal before anything was sent, is
+ * neither, and gives back both.
+ */
+export const noModelResponse = <E>(
+  error: E,
+  options: { readonly maybeBilled?: boolean } = {},
+): E => {
+  if (typeof error === "object" && error !== null) {
+    unanswered.set(
+      error,
+      options.maybeBilled === true ? "maybe-billed" : "unbilled",
+    );
+  }
   return error;
 };
 
@@ -47,9 +64,25 @@ export const isNoModelResponse = (error: unknown): boolean =>
   typeof error === "object" && error !== null && unanswered.has(error);
 
 /**
+ * An unanswered call the provider may nonetheless have run and billed — see
+ * {@link noModelResponse}'s `maybeBilled`.
+ */
+export const mayHaveBeenBilled = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  unanswered.get(error) === "maybe-billed";
+
+/** Carry `from`'s mark (if any) onto `to`, for an error that is rewrapped. */
+export const keepNoModelResponse = <E>(from: unknown, to: E): E =>
+  isNoModelResponse(from)
+    ? noModelResponse(to, { maybeBilled: mayHaveBeenBilled(from) })
+    : to;
+
+/**
  * Run `call`, marking whatever it throws as {@link noModelResponse}. For a
  * step that always precedes the model call — a token exchange, a capability
- * probe — so every way it can fail is, by construction, before any answer.
+ * probe — so every way it can fail is, by construction, before any answer
+ * and before anything was sent to a model.
  */
 export const beforeModelCall = async <T>(
   call: () => Promise<T>,

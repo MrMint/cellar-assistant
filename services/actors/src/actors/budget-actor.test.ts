@@ -1997,6 +1997,25 @@ describe.skipIf(skip)(
       });
     });
 
+    it("when the hour and the day are both full, retryAt waits for the day", async () => {
+      await withTestDb(async (db) => {
+        const actor = await withEnv(
+          { BUDGET_USER_CAPS: "ai_model/menu_match=2/2" },
+          () => reactivate(db),
+        );
+        const first = await actor.reserveForModel(user, call());
+        await actor.reserveForModel(user, call());
+        const refused = await actor.reserveForModel(user, call());
+        expect(refused.refusal).toBe("USER_CAP");
+        // The hour frees a slot an hour after the oldest row, but the day is
+        // still full then: the call fits only a day after it.
+        const oldest = await rowOf(db, first.usageId);
+        expect(Date.parse(refused.retryAt ?? "")).toBe(
+          (oldest?.createdAt?.getTime() ?? 0) + 86_400_000,
+        );
+      });
+    });
+
     it("a monthly request cap is SERVICE_BUDGET, clearing when the month turns", async () => {
       await withEnv({ AI_BUDGET_MAX_REQUESTS: "menu_match=1" }, async () => {
         await withTestDb(async (db) => {
@@ -2129,6 +2148,37 @@ describe.skipIf(skip)(
           Math.floor(Number(totals?.nano) / NANOCENTS_PER_CENT),
         );
         expect(Number(totals?.nano)).toBe(3 * 280_000_000);
+      });
+    });
+
+    it("keepCost gives back the allowance but leaves the money booked", async () => {
+      await withEnv({ AI_BUDGET_MAX_REQUESTS: "menu_match=4" }, async () => {
+        await withTestDb(async (db) => {
+          const actor = await activate(newBudgetActor(db));
+          const reserved = [];
+          for (let i = 0; i < 4; i += 1) {
+            reserved.push(await actor.reserveForModel(system, call()));
+          }
+          // A timeout: the provider may have run (and billed) it.
+          await actor.releaseForModel(system, {
+            usageId: reserved[3]?.usageId ?? "",
+            seam: "menu_match",
+            keepCost: true,
+          });
+          const row = await rowOf(db, reserved[3]?.usageId ?? null);
+          expect(row?.metadata).toMatchObject({
+            released: true,
+            nanoCents: 280_000_000,
+          });
+          expect(row?.estimatedCostCents).toBe(1);
+          // The request cap of four has a slot again.
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            true,
+          );
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            false,
+          );
+        });
       });
     });
 

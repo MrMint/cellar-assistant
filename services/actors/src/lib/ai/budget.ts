@@ -70,7 +70,7 @@ import type {
 } from "../../actors/budget-actor.ts";
 import { AI_MODEL_SERVICE } from "../../actors/budget-actor.ts";
 import { internal } from "../internal-client.ts";
-import { isNoModelResponse } from "./no-response.ts";
+import { isNoModelResponse, mayHaveBeenBilled } from "./no-response.ts";
 import type {
   AIProvider,
   EmbeddingRequest,
@@ -290,7 +290,11 @@ const releaseIfUnanswered = async (
 ): Promise<void> => {
   if (usageId === null || !isNoModelResponse(error)) return;
   try {
-    await budget.release(ctx, { usageId, seam });
+    await budget.release(ctx, {
+      usageId,
+      seam,
+      ...(mayHaveBeenBilled(error) ? { keepCost: true } : {}),
+    });
   } catch (releaseError) {
     console.warn(
       `[ai-budget] ${seam}: could not release usage row ${usageId} after ` +

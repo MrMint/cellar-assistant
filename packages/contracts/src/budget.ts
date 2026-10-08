@@ -278,6 +278,15 @@ export type ModelSettleInput = {
 export type ModelReleaseInput = {
   readonly usageId: string;
   readonly seam: string;
+  /**
+   * The request left this process and no answer came back (a timeout, a reset
+   * connection): the provider may still have run and billed it. The row stops
+   * counting against the allowance — request cap, free tier, per-user window —
+   * but keeps its cost, so the month's money never under-counts. Absent or
+   * `false` gives back both, for a call refused before anything was generated
+   * (an HTTP error status, an image refused before sending).
+   */
+  readonly keepCost?: boolean;
 };
 
 /**
