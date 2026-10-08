@@ -25,9 +25,9 @@ import { Gql, settleNetwork } from "../../fixtures/test.ts";
  *    reads as a gutter bug from the outside, so it is reported as one).
  * 2. Every control and text block in the content area — inputs, buttons,
  *    links, headings, paragraphs, labels — sits at least 16 px from both
- *    edges. The tab bar is exempt (it is edge to edge by design), and so is
- *    anything inside a horizontally scrolling row, whose children are meant
- *    to bleed.
+ *    edges (an icon-only button by its glyph). The tab bar is exempt (it is
+ *    edge to edge by design), and so is anything inside a horizontally
+ *    scrolling row, whose children are meant to bleed.
  *
  * The cellar is created empty through the API (the controls render whether or
  * not it holds bottles) and deleted afterwards. No places are created.
@@ -155,7 +155,16 @@ function measure(page: Page) {
       // A native input Joy stretches invisibly over its own control has the
       // control's edges; one hidden by opacity alone is not content.
       if (getComputedStyle(el).opacity === "0") continue;
-      const r = el.getBoundingClientRect();
+      // An icon-only button is measured by its glyph, not its hit area: the
+      // app bar's Back is a 44 pt target pulled 12 pt into the gutter so that
+      // its 20 pt arrow sits on the 16 pt line, as a toolbar's leading icon
+      // does. Its glyph is what reads as content against the edge.
+      const glyph =
+        (el.tagName === "BUTTON" || el.tagName === "A") &&
+        (el.textContent ?? "").trim() === ""
+          ? el.querySelector("svg")
+          : null;
+      const r = (glyph ?? el).getBoundingClientRect();
       const name =
         el.getAttribute("aria-label") ??
         el.getAttribute("placeholder") ??
