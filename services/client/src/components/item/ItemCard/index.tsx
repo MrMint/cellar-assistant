@@ -240,7 +240,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             aria-pressed={localFavorite}
           >
             <span className="type-headline tabular">{item.favoriteCount}</span>
-            <span className="sr-only"> favorites</span>
+            <span className="sr-only"> loves</span>
             {isPending ? (
               <Spinner className="size-6 text-ink-3" />
             ) : (

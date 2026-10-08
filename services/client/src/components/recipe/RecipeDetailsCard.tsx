@@ -3,6 +3,7 @@
 import { isNotNil, without } from "ramda";
 import { People, Restaurant, Time } from "@/components/app/icons";
 import { Badge } from "@/components/ui/badge";
+import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,6 +37,8 @@ export type RecipeDetailsCardProps = {
   serving_size?: number | null;
   version?: number | null;
   description?: string | null;
+  /** X08's Save target; omitted, no bookmark is drawn. */
+  isWantToTry?: boolean;
 };
 
 /**
@@ -44,9 +47,11 @@ export type RecipeDetailsCardProps = {
  * Dropped: the favourite heart beside the title. Its click handler was a
  * `TODO` that logged "not implemented yet", and there is still no recipe
  * favourite anywhere in the API — so it was a control that did nothing, and
- * the inventory lists it as a deliberate drop (§4, X).
+ * the inventory lists it as a deliberate drop (§4, X). Its place is taken
+ * by Save (X08, D27): the Want to try bookmark, which does something.
  */
 export function RecipeDetailsCard({
+  recipeId,
   title,
   type,
   difficulty_level,
@@ -54,6 +59,7 @@ export function RecipeDetailsCard({
   serving_size,
   version,
   description,
+  isWantToTry,
 }: RecipeDetailsCardProps) {
   const subTitlePhrases = [
     type,
@@ -65,7 +71,17 @@ export function RecipeDetailsCard({
 
   return (
     <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
-      <h3 className="type-title-2">{title}</h3>
+      <div className="flex items-start gap-2">
+        <h3 className="type-title-2 min-w-0 flex-1">{title}</h3>
+        {isWantToTry !== undefined && (
+          <WantToTryButton
+            target={{ kind: "RECIPE", recipeId }}
+            saved={isWantToTry}
+            name={title}
+            className="-my-2 -mr-2 shrink-0"
+          />
+        )}
+      </div>
 
       {/* Each phrase is one unbreakable run, so a wrap falls between phrases
           ("… • 3 Minutes •" / "Serves 1"), never inside one ("Serves" / "1"). */}

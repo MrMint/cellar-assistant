@@ -506,6 +506,8 @@ export type ItemView = {
   description: string | null;
   createdById: string;
   isFavorite: boolean;
+  /** X08: on the viewer's Want to try list. */
+  isWantToTry: boolean;
   subTitlePhrases: Array<string | undefined>;
   characteristics: Characteristic[];
   flavorProfile: string | null;
@@ -538,6 +540,7 @@ export const itemViewFromFragment = (
     description: core.description ?? null,
     createdById: core.createdById,
     isFavorite: item.isFavorite,
+    isWantToTry: item.isWantToTry,
     subTitlePhrases: itemSubtitlePhrases(type, core, attributes),
     characteristics: itemCharacteristics(type, attributes),
     flavorProfile: tea.flavorProfile,

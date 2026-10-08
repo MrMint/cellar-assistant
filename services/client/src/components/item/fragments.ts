@@ -87,6 +87,7 @@ export const ItemPageItemFragment = graphql(
     ...ItemCore
     ...ItemAttributes
     isFavorite
+    isWantToTry
     images(first: 1) {
       edges {
         node {

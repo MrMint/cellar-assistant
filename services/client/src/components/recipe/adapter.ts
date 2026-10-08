@@ -92,6 +92,8 @@ export type RecipeDetailsItem = {
   image_url?: string | null;
   version?: number | null;
   canonical_recipe_id?: string | null;
+  /** X08: on the viewer's Want to try list; absent where nobody asked. */
+  is_want_to_try?: boolean;
   instructions: RecipeInstruction[];
   ingredients: RecipeIngredient[];
   recipe_reviews?: RecipeReview[];
@@ -340,6 +342,7 @@ export const recipeDetailsFromNode = (
   image_url: node.imageUrl ?? null,
   version: node.version,
   canonical_recipe_id: node.canonicalRecipeId ?? null,
+  is_want_to_try: node.isWantToTry,
   instructions: node.instructions.edges.map((edge) =>
     instructionFromNode(edge.node),
   ),
