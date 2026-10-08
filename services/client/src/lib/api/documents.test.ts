@@ -59,6 +59,7 @@ import {
 } from "graphql";
 import ts from "typescript";
 import * as brandQueries from "@/components/brand/queries";
+import * as captureQueries from "@/components/capture/queries";
 import * as cellarFragments from "@/components/cellar/fragments";
 import * as onboardingQueries from "@/components/common/OnboardingWizard/queries";
 import * as favoritesFragments from "@/components/favorites/fragments";
@@ -89,6 +90,7 @@ const SCHEMA_PATH = fileURLToPath(
 /** Every module that defines documents, by its path under `src/`. */
 const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/brand/queries.ts": brandQueries,
+  "components/capture/queries.ts": captureQueries,
   "components/cellar/fragments.ts": cellarFragments,
   "components/common/OnboardingWizard/queries.ts": onboardingQueries,
   "components/favorites/fragments.ts": favoritesFragments,

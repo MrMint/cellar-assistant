@@ -35,6 +35,8 @@ export type AiOutcomeKind =
   | "service-budget"
   /** The model found nothing to read in what it was given. */
   | "nothing-read"
+  /** X05: no label read — the photo is a menu; offer to scan it as one. */
+  | "looks-like-menu"
   /** No answer arrived; asking again can work. */
   | "retryable"
   /** The input was refused; a different input may work. */
@@ -166,6 +168,16 @@ export const aiOutcome = (
         kind: "nothing-read",
         title: "Nothing to read",
         message: `We couldn't read anything in that photo. Try a closer, sharper shot.${instead}`,
+        retryAt: null,
+        canRetry: false,
+        tone: "neutral",
+      };
+    case "LOOKS_LIKE_MENU":
+      return {
+        kind: "looks-like-menu",
+        title: "Looks like a menu",
+        message:
+          "That photo looks like a menu, not a bottle's label. Scan it as a menu, or retake it on the label.",
         retryAt: null,
         canRetry: false,
         tone: "neutral",

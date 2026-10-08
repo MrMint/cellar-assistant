@@ -1,9 +1,17 @@
 "use client";
 
-import { Fragment, useId, useState } from "react";
-import { type SubmitHandler, useForm, useWatch } from "react-hook-form";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
+import {
+  type FieldPath,
+  type SubmitHandler,
+  useForm,
+  useWatch,
+} from "react-hook-form";
 import { useClient } from "urql";
-import { AIDraftField } from "@/components/app/AIDraftField";
+import {
+  AIDraftField,
+  type DraftConfidence,
+} from "@/components/app/AIDraftField";
 import { Info } from "@/components/app/icons";
 import { BrandPicker } from "@/components/brand/BrandPicker";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -16,7 +24,11 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { draftedPaths, isDrafted } from "@/lib/forms/ai-draft";
+import {
+  draftedPaths,
+  flattenFormValues,
+  isDrafted,
+} from "@/lib/forms/ai-draft";
 import { createOnboardedItem } from "./actors/createItem";
 import { type OnboardingDefaults, saveBlocker, skippedNotes } from "./adapter";
 
@@ -24,9 +36,36 @@ type OnboardingItemFormProps = {
   type: ApiItemType;
   itemOnboardingId: string;
   defaultValues: OnboardingDefaults;
+  /**
+   * X05: a later read (the optional back label) to fill in. Applied once per
+   * `id`, and only to fields the person has not made their own: an empty
+   * field, or one still holding the earlier read's value. What they typed is
+   * never overwritten (E2c).
+   */
+  refill?: { id: string; defaults: OnboardingDefaults };
   /** The code the session was opened with — the scanner's, if it saw one. */
   sessionBarcode?: string;
-  onCreated: (createdId: string) => void;
+  onCreated: (createdId: string, name: string) => void;
+};
+
+/**
+ * Which of `next`'s values a refill writes: those whose field is empty or
+ * still holds the earlier draft. Pure, so the rule is tested on its own.
+ */
+export const refillWrites = (
+  baseline: Readonly<Record<string, string>>,
+  current: Readonly<Record<string, string>>,
+  next: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> => {
+  const writes: Record<string, string> = {};
+  for (const [path, value] of Object.entries(next)) {
+    if (value.trim() === "") continue;
+    const now = current[path] ?? "";
+    const untouched =
+      now.trim() === "" || isDrafted(baseline[path] ?? null, now);
+    if (untouched && now.trim() !== value.trim()) writes[path] = value;
+  }
+  return writes;
 };
 
 /**
@@ -45,6 +84,7 @@ export const OnboardingItemForm = ({
   type,
   itemOnboardingId,
   defaultValues,
+  refill,
   sessionBarcode,
   onCreated,
 }: OnboardingItemFormProps) => {
@@ -58,14 +98,56 @@ export const OnboardingItemForm = ({
     control,
     handleSubmit,
     getValues,
+    setValue,
     setError,
     formState: { isSubmitting, errors },
   } = useForm<ItemFormValues>({ defaultValues: defaultValues.values });
 
+  // What the reads drafted so far — the first read, plus whatever a refill
+  // wrote — and how sure each was (X05). The marks diff against this.
+  const [baseline, setBaseline] = useState<Record<string, string>>(() => ({
+    ...flattenFormValues(defaultValues.values),
+    brandName: defaultValues.brandName,
+  }));
+  const [confidences, setConfidences] = useState<
+    Readonly<Record<string, DraftConfidence>>
+  >(defaultValues.confidences);
+  const [notFilledFrom, setNotFilledFrom] = useState(defaultValues.skipped);
+
+  const appliedRefill = useRef<string | null>(null);
+  useEffect(() => {
+    if (refill === undefined || appliedRefill.current === refill.id) return;
+    appliedRefill.current = refill.id;
+    const next = {
+      ...flattenFormValues(refill.defaults.values),
+      brandName: refill.defaults.brandName,
+    };
+    const now = {
+      ...flattenFormValues(getValues()),
+      brandName,
+    };
+    const writes = refillWrites(baseline, now, next);
+    for (const [path, value] of Object.entries(writes)) {
+      if (path === "brandName") setBrandName(value);
+      else setValue(path as FieldPath<ItemFormValues>, value);
+    }
+    setBaseline((before) => ({ ...before, ...writes }));
+    setConfidences((before) => {
+      const merged: Record<string, DraftConfidence> = { ...before };
+      for (const path of Object.keys(writes)) {
+        const level = refill.defaults.confidences[path];
+        if (level === undefined) delete merged[path];
+        else merged[path] = level;
+      }
+      return merged;
+    });
+    setNotFilledFrom(refill.defaults.skipped);
+  }, [refill, baseline, brandName, getValues, setValue]);
+
   // N19: a field is marked "From label" while it still holds what was read.
   const current = useWatch({ control });
-  const drafted = draftedPaths(defaultValues.values, current);
-  const notFilled = skippedNotes(type, defaultValues.skipped);
+  const drafted = draftedPaths(baseline, flattenFormValues(current));
+  const notFilled = skippedNotes(type, notFilledFrom);
 
   const onSubmit: SubmitHandler<ItemFormValues> = async (values) => {
     const blocker = saveBlocker(type, values);
@@ -83,7 +165,7 @@ export const OnboardingItemForm = ({
         barcode,
         sessionBarcode,
       });
-      onCreated(itemId);
+      onCreated(itemId, values.name.trim());
     } catch (cause) {
       setError("root", {
         type: "custom",
@@ -140,6 +222,7 @@ export const OnboardingItemForm = ({
                 <AIDraftField
                   source="label"
                   drafted={drafted.has(entryPath(entry))}
+                  confidence={confidences[entryPath(entry)]}
                 >
                   <ItemFormField
                     entry={entry}
@@ -150,7 +233,8 @@ export const OnboardingItemForm = ({
                 {entry.kind === "description" && (
                   <AIDraftField
                     source="label"
-                    drafted={isDrafted(defaultValues.brandName, brandName)}
+                    drafted={isDrafted(baseline.brandName, brandName)}
+                    confidence={confidences.brandName}
                   >
                     <BrandPicker
                       value={brandName}

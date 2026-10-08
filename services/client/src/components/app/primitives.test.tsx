@@ -68,10 +68,12 @@ describe("nav: which tab is lit", () => {
     const app = fileURLToPath(
       new URL("../../app/(authenticated)", import.meta.url),
     );
+    // A query (`/add?mode=bottle`) asks the page something; the route is
+    // the path before it.
     const hrefs = [
       ...TABS.map((t) => t.href),
       ...CAPTURE_OPTIONS.map((o) => o.href),
-    ];
+    ].map((href) => href.split("?")[0] ?? href);
     const missing = hrefs.filter(
       (href) =>
         href !== "/" &&

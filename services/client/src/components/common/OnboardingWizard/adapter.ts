@@ -20,6 +20,11 @@
  *   session's (scanned) or `ensureBarcode` + `linkBarcodeItem` (typed, X11).
  */
 
+import {
+  FIELD_CONFIDENCE_KEY,
+  sanitiseFieldConfidence,
+} from "@cellar-assistant/contracts/onboarding";
+import type { DraftConfidence } from "@/components/app/AIDraftField";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
 import type { ItemFormValues } from "@/components/item/ItemForm";
@@ -53,6 +58,12 @@ export type OnboardingDefaults = {
   brandName: string;
   /** Proposals the form could not take, with the reason — shown, not dropped. */
   skipped: readonly SkippedProposal[];
+  /**
+   * X05: how sure the read was of each field it filled, by form path
+   * (`name`, `brandName`, `attributes.vintage`) — "Sure · Likely · Check
+   * this" on the field's `AIDraftField`. Empty when the model judged none.
+   */
+  confidences: Readonly<Record<string, DraftConfidence>>;
 };
 
 export const emptyFormValues = (): ItemFormValues => ({
@@ -66,7 +77,41 @@ export const emptyDefaults = (): OnboardingDefaults => ({
   values: emptyFormValues(),
   brandName: "",
   skipped: [],
+  confidences: {},
 });
+
+const TOP_LEVEL_PATHS = new Set([
+  "name",
+  "description",
+  "country",
+  "brandName",
+]);
+
+/**
+ * `defaults.fieldConfidence` (X05) → form paths. A top-level field keeps its
+ * name; a per-type attribute key (`vintage`, `region`) becomes
+ * `attributes.<key>` when this type's form has it. Anything else — a field
+ * the form does not show, a value that is not one of the three words — is
+ * dropped (`sanitiseFieldConfidence`), never guessed at.
+ */
+export const draftConfidences = (
+  type: ApiItemType,
+  defaults: unknown,
+): Readonly<Record<string, DraftConfidence>> => {
+  if (typeof defaults !== "object" || defaults === null) return {};
+  const judged = sanitiseFieldConfidence(
+    (defaults as Record<string, unknown>)[FIELD_CONFIDENCE_KEY],
+  );
+  const attributeKeys = new Set(
+    ITEM_FORM_RULES[type].attributes.map((field) => field.key),
+  );
+  const out: Record<string, DraftConfidence> = {};
+  for (const [key, level] of Object.entries(judged)) {
+    if (attributeKeys.has(key)) out[`attributes.${key}`] = level;
+    else if (TOP_LEVEL_PATHS.has(key)) out[key] = level;
+  }
+  return out;
+};
 
 /** The keys whose column is a `date` — the restored form edits them as a year. */
 const dateKeys = (type: ApiItemType): string[] =>
@@ -123,6 +168,7 @@ export const formDefaultsFromOnboarding = (
     },
     brandName: smartTitleCase(merged.values.brandName),
     skipped: merged.skipped,
+    confidences: draftConfidences(type, defaults),
   };
 };
 

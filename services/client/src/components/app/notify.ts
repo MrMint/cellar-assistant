@@ -22,6 +22,12 @@ export type NotifyOptions = {
   onAutoClose?: () => void;
   /** The toast was closed by the person (swiped away, or dismissed). */
   onClose?: () => void;
+  /**
+   * How long it stays, when the default (`UNDO_TOAST_MS` with an action) is
+   * too short for what it offers — a finished background read (X05) is
+   * news worth more than five seconds.
+   */
+  durationMs?: number;
 };
 
 /**
@@ -48,6 +54,7 @@ export function notify(
     id,
     onAutoClose,
     onClose,
+    durationMs,
   }: NotifyOptions = {},
 ): string | number {
   const options: ExternalToast = {
@@ -68,6 +75,9 @@ export function notify(
     ...(undo === undefined || tone === "loading"
       ? {}
       : { duration: UNDO_TOAST_MS }),
+    ...(durationMs === undefined || tone === "loading"
+      ? {}
+      : { duration: durationMs }),
     ...(onAutoClose === undefined ? {} : { onAutoClose: () => onAutoClose() }),
     ...(onClose === undefined ? {} : { onDismiss: () => onClose() }),
   };
