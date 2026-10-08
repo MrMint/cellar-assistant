@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { Add, ChevronDown } from "@/components/app/icons";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { announceSave } from "@/components/pwa/install-prompt";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +62,8 @@ export const AddToCellarActions = ({
         setError(result.error.message);
         return;
       }
+      // A bottle saved: the install prompt waits for the first (N15).
+      announceSave();
       router.refresh();
     });
   };

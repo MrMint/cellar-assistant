@@ -1,6 +1,7 @@
 import type { Client } from "urql";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemFormValues } from "@/components/item/ItemForm";
+import { announceSave } from "@/components/pwa/install-prompt";
 import {
   ConfirmItemOnboardingMutation,
   EnsureBarcodeMutation,
@@ -141,5 +142,7 @@ export const createOnboardedItem = async ({
     }
   }
 
+  // The first save is what the install prompt waits for (N15).
+  announceSave();
   return itemId;
 };

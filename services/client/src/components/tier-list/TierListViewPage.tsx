@@ -25,6 +25,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { EmptyState } from "@/components/app/EmptyState";
 import { IconButton } from "@/components/app/IconButton";
 import {
   Add,
@@ -35,12 +36,14 @@ import {
   MapIcon,
   People,
   Public,
+  Ranked,
   Share,
   Unlock,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -106,6 +109,11 @@ export function TierListViewPage({
   const onList = useMemo(() => onListHrefs(data.items), [data.items]);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const openAddEntry = useCallback(() => {
+    setAddError(null);
+    setAddSession((session) => session + 1);
+    setAddOpen(true);
+  }, []);
   const [isEditingLocked, setIsEditingLocked] = useState(data.isEditingLocked);
   const [isSavingEditingLock, setIsSavingEditingLock] = useState(false);
 
@@ -206,11 +214,7 @@ export function TierListViewPage({
                   variant="outline"
                   size="sm"
                   aria-label="Add entry"
-                  onClick={() => {
-                    setAddError(null);
-                    setAddSession((session) => session + 1);
-                    setAddOpen(true);
-                  }}
+                  onClick={openAddEntry}
                 >
                   <Add />
                 </IconButton>
@@ -312,13 +316,36 @@ export function TierListViewPage({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="rankings">
-          <TierListView
-            tierListId={data.id}
-            items={data.items}
-            isOwner={data.isOwner}
-            isEditingLocked={isEditingLocked}
-            selectedItemId={selectedItemId ?? undefined}
-          />
+          {data.items.length === 0 ? (
+            // N15 (design §3.6): an empty list is one line and one action,
+            // not six empty bands.
+            <EmptyState
+              illustration={<Ranked aria-hidden strokeWidth={1.5} />}
+              title="Nothing ranked yet."
+              description={
+                data.isOwner
+                  ? "Add what you've tasted, then drag it into its band."
+                  : undefined
+              }
+              action={
+                data.isOwner && !isEditingLocked ? (
+                  <Button onClick={openAddEntry}>
+                    <Add aria-hidden />
+                    Add from what you&apos;ve tasted
+                  </Button>
+                ) : undefined
+              }
+              className="rounded-lg bg-surface-1"
+            />
+          ) : (
+            <TierListView
+              tierListId={data.id}
+              items={data.items}
+              isOwner={data.isOwner}
+              isEditingLocked={isEditingLocked}
+              selectedItemId={selectedItemId ?? undefined}
+            />
+          )}
         </TabsContent>
         <TabsContent value="insights">
           <TierListInsightsPanel insights={insightsData} />

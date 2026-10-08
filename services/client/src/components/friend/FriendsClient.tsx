@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
+import { EmptyState } from "@/components/app/EmptyState";
 import {
   Delete,
   ErrorIcon,
   ICON_STROKE,
+  People,
   Warning,
 } from "@/components/app/icons";
 import { UserAvatar } from "@/components/app/UserAvatar";
@@ -27,6 +29,7 @@ import {
   SendFriendRequestMutation,
   UserSearchQuery,
 } from "./fragments";
+import { InviteFriendButton } from "./InviteFriendButton";
 
 /** How often the friends and requests lists refresh in the background — there
  * is no subscription in the new stack (plan §6 D8: "polling replaces the
@@ -417,11 +420,21 @@ export const FriendsClient = () => {
           onRetry={friendsList.retry}
         />
         <ul className="flex flex-col gap-2">
-          {friendRows.length === 0 && !friendsList.loading && (
-            <EmptyRow>
-              No friends yet. Search for users to add friends.
-            </EmptyRow>
-          )}
+          {friendRows.length === 0 &&
+            !friendsList.loading &&
+            friendsList.failure === null && (
+              // N15 (design §3.6): one line and one action. The search
+              // beside it is the other way in, for someone already here.
+              <li className="list-none">
+                <EmptyState
+                  illustration={<People aria-hidden strokeWidth={1.5} />}
+                  title="Taste is better compared."
+                  description="Friends see what you rate and rank, and you see theirs. Find someone below, or invite them."
+                  action={<InviteFriendButton />}
+                  className="px-2 py-6"
+                />
+              </li>
+            )}
           {friendRows.map((row) => (
             <PersonRow
               key={row.user.id}

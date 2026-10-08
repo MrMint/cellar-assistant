@@ -104,4 +104,8 @@ describe("first save (N15)", () => {
     announceSave(target);
     assert.equal(heard, 1);
   });
+  test("with no window (a server render, Node) announcing is a no-op", () => {
+    assert.equal(typeof window, "undefined");
+    assert.doesNotThrow(() => announceSave());
+  });
 });

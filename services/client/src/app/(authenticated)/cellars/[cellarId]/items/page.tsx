@@ -1,5 +1,8 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { EmptyState } from "@/components/app/EmptyState";
+import { Camera, Cellar } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import { CellarItemsControls } from "@/components/cellar/CellarItemsControls";
 import { CellarItemsGridServer } from "@/components/cellar/CellarItemsGridServer";
@@ -9,6 +12,7 @@ import {
   CellarInfoFragment,
   GetCellarInfoQuery,
 } from "@/components/cellar/fragments";
+import { Button } from "@/components/ui/button";
 import { ViewerQuery } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
@@ -58,6 +62,10 @@ export default async function CellarItemsPage({
   const cellar = readFragment(CellarInfoFragment, result.data);
   const canAdd = canAddToCellar(cellar, viewer.me?.id ?? null);
   const counts = filterCountsFromItemCounts(cellar.itemCounts);
+  // Nothing in it at all, and no search or filter that could explain that:
+  // the first-run state (N15) instead of an empty grid.
+  const empty =
+    cellar.itemCounts.total === 0 && search === "" && validTypes.length === 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,17 +79,55 @@ export default async function CellarItemsPage({
         initialTypes={validTypes}
       />
 
-      {/* Items grid streams in with Suspense */}
-      <Suspense
-        key={`${search}-${JSON.stringify(types)}`}
-        fallback={<CellarItemsGridSkeleton />}
-      >
-        <CellarItemsGridServer
-          cellarId={cellarId}
-          search={search}
-          types={validTypes}
-        />
-      </Suspense>
+      {empty ? (
+        <EmptyCellar cellarId={cellarId} canAdd={canAdd} />
+      ) : (
+        /* Items grid streams in with Suspense */
+        <Suspense
+          key={`${search}-${JSON.stringify(types)}`}
+          fallback={<CellarItemsGridSkeleton />}
+        >
+          <CellarItemsGridServer
+            cellarId={cellarId}
+            search={search}
+            types={validTypes}
+          />
+        </Suspense>
+      )}
     </div>
+  );
+}
+
+/**
+ * An empty cellar (N15, design §3.6): one line and one action — snap the
+ * first bottle in. A viewer who may not add to it (a friend) gets the line
+ * alone.
+ */
+function EmptyCellar({
+  cellarId,
+  canAdd,
+}: {
+  cellarId: string;
+  canAdd: boolean;
+}) {
+  return canAdd ? (
+    <EmptyState
+      illustration={<Cellar aria-hidden strokeWidth={1.5} />}
+      title="Your cellar is waiting."
+      description="Snap a label and the bottle is in."
+      action={
+        <Button asChild>
+          <Link href={`/cellars/${cellarId}/items/add`} underline="none">
+            <Camera aria-hidden />
+            Snap a bottle
+          </Link>
+        </Button>
+      }
+    />
+  ) : (
+    <EmptyState
+      illustration={<Cellar aria-hidden strokeWidth={1.5} />}
+      title="Nothing in this cellar yet."
+    />
   );
 }

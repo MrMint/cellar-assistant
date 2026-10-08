@@ -90,7 +90,15 @@ export function hasSeenFirstSave(store: KeyValueStore): boolean {
  */
 export const SAVED_EVENT = "ca:saved";
 
-/** Announce a save (a bottle added, a cellar item created). */
-export function announceSave(target: EventTarget = window): void {
-  target.dispatchEvent(new Event(SAVED_EVENT));
+/**
+ * Announce a save (a bottle added, an item onboarded). Called from the add
+ * flows (`AddToCellarActions`, the onboarding wizard's `createItem`); a no-op
+ * where there is no window (a server render, a unit test under Node).
+ */
+export function announceSave(
+  target: EventTarget | undefined = typeof window === "undefined"
+    ? undefined
+    : window,
+): void {
+  target?.dispatchEvent(new Event(SAVED_EVENT));
 }
