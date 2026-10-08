@@ -66,6 +66,7 @@ export {
   MapPinPlus as AddPlace,
   Martini as Cocktail,
   MessageSquare as Comment,
+  Minus as Decrease,
   Moon as DarkMode,
   Navigation as Directions,
   Pencil as Edit,
