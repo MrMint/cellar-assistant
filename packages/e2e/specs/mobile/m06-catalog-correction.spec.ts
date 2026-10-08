@@ -50,8 +50,12 @@ test("Wrong brand? Change it opens a sheet with the picker and Save in reach", a
   const save = sheet.getByRole("button", { name: "Save brand" });
   await expect(picker).toBeVisible();
   await expect(save).toBeVisible();
+  // Measured once the sheet has finished sliding up: mid-animation Save sits
+  // ~970px down, which says nothing about where it lands.
+  await expect
+    .poll(async () => (await edgesOf(save)).bottom, { timeout: 5_000 })
+    .toBeLessThanOrEqual(844);
   const saveEdges = await edgesOf(save);
-  expect(saveEdges.bottom).toBeLessThanOrEqual(844);
   expect(saveEdges.left).toBeGreaterThanOrEqual(16);
   expect(saveEdges.right).toBeLessThanOrEqual(390 - 16);
   const overflow = await page.evaluate(
