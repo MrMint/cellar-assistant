@@ -163,6 +163,12 @@ export const catalogSearchText = ({
  * Barcode hits lead (a code is a product key), then search hits nearest
  * first. `excludeItemIds` are items the person already said no to — the
  * barcode chooser's "Create New" — and are never offered back.
+ *
+ * `maxDistance` bounds the near-misses only. Since N08, a text `itemSearch`
+ * also returns what the name match brought in, which can lie beyond the
+ * vector cutoff or have no distance at all (no embedding yet): such a hit is
+ * offered when it is exact — the very name and brand read — and never as a
+ * "nearest" guess.
  */
 export const findCatalogMatch = ({
   type,
@@ -170,12 +176,14 @@ export const findCatalogMatch = ({
   brandName,
   candidates,
   excludeItemIds = [],
+  maxDistance,
 }: {
   type: ApiItemType;
   values: ItemFormValues;
   brandName: string;
   candidates: readonly CatalogCandidate[];
   excludeItemIds?: readonly string[];
+  maxDistance?: number;
 }): CatalogMatch | null => {
   const vintage = readVintage(type, values);
   const eligible = candidates.filter(
@@ -196,7 +204,12 @@ export const findCatalogMatch = ({
   ];
   const read = { name: values.name, brandName };
   // An exact one anywhere in the list beats a nearer near-miss.
-  const best = ranked.find((c) => isExact(c, read)) ?? ranked[0];
+  const near = (c: CatalogCandidate): boolean =>
+    c.source === "barcode" ||
+    maxDistance === undefined ||
+    (c.distance !== undefined && c.distance <= maxDistance);
+  const best =
+    ranked.find((c) => isExact(c, read)) ?? ranked.find((c) => near(c));
   if (best === undefined) return null;
   return { ...best, exact: isExact(best, read) };
 };

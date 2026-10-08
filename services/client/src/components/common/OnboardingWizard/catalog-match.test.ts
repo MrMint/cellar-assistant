@@ -232,4 +232,46 @@ describe("findCatalogMatch (N19)", () => {
   test("nothing to compare against is no match", () => {
     assert.equal(match("WINE", read, []), null);
   });
+
+  test("maxDistance bounds near-misses, not exact name hits (N08 hybrid search)", () => {
+    const within = (candidates: CatalogCandidate[]) =>
+      findCatalogMatch({
+        type: "WINE",
+        values: read,
+        brandName: "",
+        candidates,
+        maxDistance: 0.5,
+      });
+    // The name match can bring in an item beyond the vector cutoff, or one
+    // with no embedding at all: offered only when it is the very name read.
+    assert.equal(
+      within([candidate("far", "Château Margaux", "2015", { distance: 0.9 })])
+        ?.exact,
+      true,
+    );
+    assert.equal(
+      within([
+        candidate("none", "Château Margaux", "2015", { distance: undefined }),
+      ])?.item.itemId,
+      "none",
+    );
+    // A near-miss beyond the cutoff, or with no distance, is never a guess.
+    assert.equal(
+      within([candidate("far", "Margaux Rouge", "2015", { distance: 0.9 })]),
+      null,
+    );
+    assert.equal(
+      within([
+        candidate("none", "Margaux Rouge", "2015", { distance: undefined }),
+      ]),
+      null,
+    );
+    assert.equal(
+      within([
+        candidate("far", "Margaux Rouge", "2015", { distance: 0.9 }),
+        candidate("near", "Margaux Blanc", "2015", { distance: 0.3 }),
+      ])?.item.itemId,
+      "near",
+    );
+  });
 });

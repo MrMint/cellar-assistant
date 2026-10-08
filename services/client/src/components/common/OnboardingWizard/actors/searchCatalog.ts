@@ -62,13 +62,16 @@ export const searchCatalog = fromPromise(
       values: defaults.values,
       brandName: defaults.brandName,
       excludeItemIds,
+      maxDistance: CATALOG_MATCH_MAX_DISTANCE,
       candidates: result.data.edges.map(({ node }) => {
         const card = readFragment(ItemCardFragment, node.item);
         return {
           item: itemCardFromFragment(node.item),
           type: card.type,
           source: "search" as const,
-          distance: node.distance,
+          // Null when the name match brought in an item with no embedding
+          // yet (N08); `findCatalogMatch` offers such a hit only when exact.
+          distance: node.distance ?? undefined,
           brandName: primaryBrandName(card),
         };
       }),
