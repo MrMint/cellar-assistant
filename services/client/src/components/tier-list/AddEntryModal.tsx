@@ -21,6 +21,7 @@ import {
 import { type FormEvent, useCallback, useState } from "react";
 import { MdFormatListNumbered, MdPlace, MdSearch } from "react-icons/md";
 import { useClient } from "urql";
+import { aiOutcome } from "@/lib/ai/outcome";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { createLatestOnly } from "@/lib/latest-only";
 import { isValidListType } from "./actions";
@@ -116,7 +117,9 @@ export function AddEntryModal({
         );
         if (!result.ok) {
           setRows(null);
-          setSearchError(result.error.message);
+          // N07: a semantic search refused for an AI reason (no provider, a
+          // spent allowance) says so in words, never the server's message.
+          setSearchError(aiOutcome(result.error).message);
           return;
         }
         setRows(
@@ -162,7 +165,7 @@ export function AddEntryModal({
       );
       if (!result.ok) {
         setRows(null);
-        setSearchError(result.error.message);
+        setSearchError(aiOutcome(result.error).message);
         return;
       }
       setRows(
