@@ -1,20 +1,35 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  CircularProgress,
-  IconButton,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useEffect, useRef, useState } from "react";
-import { MdThumbDown, MdThumbUp } from "react-icons/md";
 import { useMutation } from "urql";
+import { IconButton } from "@/components/app/IconButton";
+import { ThumbsDown, ThumbsUp } from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { breakpointDown, useMediaQuery } from "@/hooks/useMediaQuery";
 import { unwrapResult } from "@/lib/api/result";
+import { cn } from "@/lib/utils";
 import { nextVoteState, type RecipeVoteType } from "./adapter";
 import { RemoveRecipeVoteMutation, VoteOnRecipeMutation } from "./queries";
+
+/**
+ * A cast vote is a tint plus text in its colour — success for up, danger for
+ * down — never a solid green or red slab (design §3.1). `aria-pressed` says
+ * which one is yours.
+ */
+const CAST = {
+  upvote:
+    "border-success/60 bg-success/10 text-success hover:bg-success/15 hover:text-success",
+  downvote:
+    "border-destructive/60 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive",
+} as const;
+
+const scoreClass = (netScore: number) =>
+  netScore > 0
+    ? "text-success"
+    : netScore < 0
+      ? "text-destructive"
+      : "text-ink-3";
 
 export type RecipeVoteButtonsProps = {
   recipeId: string;
@@ -64,8 +79,8 @@ export const RecipeVoteButtons = ({
   onVoted,
   onError,
 }: RecipeVoteButtonsProps) => {
+  // Logic only: the compact layout and the smaller size below `sm`.
   const isMobile = useMediaQuery(breakpointDown("sm"));
-  const isTablet = useMediaQuery(breakpointDown("md"));
   const [, voteOnRecipe] = useMutation(VoteOnRecipeMutation);
   const [, removeRecipeVote] = useMutation(RemoveRecipeVoteMutation);
 
@@ -151,241 +166,195 @@ export const RecipeVoteButtons = ({
 
   const netScore = optimisticUpvotes - optimisticDownvotes;
 
+  const iconButtonSize =
+    actualSize === "sm" ? "sm" : actualSize === "lg" ? "lg" : "default";
   const buttonSize =
-    actualSize === "sm" ? "sm" : actualSize === "lg" ? "lg" : "md";
-  const iconSize = actualSize === "sm" ? 16 : actualSize === "lg" ? 24 : 20;
+    actualSize === "sm" ? "sm" : actualSize === "lg" ? "lg" : "default";
+  const iconClass =
+    actualSize === "sm" ? "size-4" : actualSize === "lg" ? "size-6" : "size-5";
+  const formattedNet = netScore > 0 ? `+${netScore}` : netScore;
+
+  const glyph = (voteType: RecipeVoteType, className: string) =>
+    isVoting && optimisticVote === voteType ? (
+      <Spinner aria-hidden className={className} />
+    ) : voteType === "upvote" ? (
+      <ThumbsUp aria-hidden className={className} />
+    ) : (
+      <ThumbsDown aria-hidden className={className} />
+    );
 
   if (actualOrientation === "vertical") {
     return (
-      <Stack spacing={isCompact ? 0.5 : 1} alignItems="center">
+      <div
+        className={cn(
+          "flex flex-col items-center",
+          isCompact ? "gap-1" : "gap-2",
+        )}
+      >
         {/* Upvote */}
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: isCompact ? 0.25 : 0.5,
-          }}
+        <div
+          className={cn(
+            "flex flex-col items-center",
+            isCompact ? "gap-0.5" : "gap-1",
+          )}
         >
           <IconButton
-            variant={optimisticVote === "upvote" ? "solid" : "outlined"}
-            color={optimisticVote === "upvote" ? "success" : "neutral"}
-            size={buttonSize}
+            variant="outline"
+            size={iconButtonSize}
+            className={cn(optimisticVote === "upvote" && CAST.upvote)}
             onClick={() => handleVote("upvote")}
             aria-label={`Upvote ${recipeName}`}
+            aria-pressed={optimisticVote === "upvote"}
             disabled={isVoting}
           >
-            {isVoting && optimisticVote === "upvote" ? (
-              <CircularProgress size="sm" />
-            ) : (
-              <MdThumbUp size={iconSize} />
-            )}
+            {glyph("upvote", iconClass)}
           </IconButton>
           {showCounts && !isCompact && (
-            <Typography level="body-xs" sx={{ color: "success.500" }}>
+            <span className="tabular type-footnote text-success">
               {optimisticUpvotes}
-            </Typography>
+            </span>
           )}
-        </Box>
+        </div>
 
         {/* Net Score */}
         {showCounts && (
-          <Typography
-            level={isCompact ? "body-xs" : "title-sm"}
-            sx={{
-              color:
-                netScore > 0
-                  ? "success.500"
-                  : netScore < 0
-                    ? "danger.500"
-                    : "neutral.500",
-              fontWeight: "bold",
-              fontSize: isCompact ? "0.75rem" : undefined,
-            }}
+          <span
+            className={cn(
+              "tabular font-bold",
+              isCompact ? "text-xs" : "type-callout font-bold",
+              scoreClass(netScore),
+            )}
           >
-            {netScore > 0 ? `+${netScore}` : netScore}
-          </Typography>
+            {formattedNet}
+          </span>
         )}
 
         {/* Downvote */}
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: isCompact ? 0.25 : 0.5,
-          }}
+        <div
+          className={cn(
+            "flex flex-col items-center",
+            isCompact ? "gap-0.5" : "gap-1",
+          )}
         >
           <IconButton
-            variant={optimisticVote === "downvote" ? "solid" : "outlined"}
-            color={optimisticVote === "downvote" ? "danger" : "neutral"}
-            size={buttonSize}
+            variant="outline"
+            size={iconButtonSize}
+            className={cn(optimisticVote === "downvote" && CAST.downvote)}
             onClick={() => handleVote("downvote")}
             aria-label={`Downvote ${recipeName}`}
+            aria-pressed={optimisticVote === "downvote"}
             disabled={isVoting}
           >
-            {isVoting && optimisticVote === "downvote" ? (
-              <CircularProgress size="sm" />
-            ) : (
-              <MdThumbDown size={iconSize} />
-            )}
+            {glyph("downvote", iconClass)}
           </IconButton>
           {showCounts && !isCompact && (
-            <Typography level="body-xs" sx={{ color: "danger.500" }}>
+            <span className="tabular type-footnote text-destructive">
               {optimisticDownvotes}
-            </Typography>
+            </span>
           )}
-        </Box>
-      </Stack>
+        </div>
+      </div>
     );
   }
 
   // Compact horizontal layout for mobile
   if (isCompact) {
     return (
-      <Stack
-        direction="row"
-        spacing={0.5}
-        alignItems="center"
-        sx={{
-          backgroundColor: "background.level1",
-          borderRadius: "sm",
-          p: 0.5,
-          minWidth: "fit-content",
-        }}
-      >
+      <div className="flex w-fit items-center gap-1 self-center rounded-md bg-surface-2 p-1">
         {/* Upvote */}
         <IconButton
-          variant={optimisticVote === "upvote" ? "solid" : "plain"}
-          color={optimisticVote === "upvote" ? "success" : "neutral"}
+          variant="ghost"
           size="sm"
+          className={cn(
+            "border border-transparent",
+            optimisticVote === "upvote" && CAST.upvote,
+          )}
           onClick={() => handleVote("upvote")}
           aria-label={`Upvote ${recipeName}`}
+          aria-pressed={optimisticVote === "upvote"}
           disabled={isVoting}
-          sx={{ minHeight: 32, minWidth: 32 }}
         >
-          {isVoting && optimisticVote === "upvote" ? (
-            <CircularProgress size="sm" />
-          ) : (
-            <MdThumbUp size={14} />
-          )}
+          {glyph("upvote", "size-3.5")}
         </IconButton>
 
         {/* Net Score */}
         {showCounts && (
-          <Typography
-            level="body-xs"
-            sx={{
-              color:
-                netScore > 0
-                  ? "success.500"
-                  : netScore < 0
-                    ? "danger.500"
-                    : "neutral.500",
-              fontWeight: "bold",
-              minWidth: "2ch",
-              textAlign: "center",
-              fontSize: "0.75rem",
-            }}
+          <span
+            className={cn(
+              "tabular min-w-[2ch] text-center font-bold text-xs",
+              scoreClass(netScore),
+            )}
           >
-            {netScore > 0 ? `+${netScore}` : netScore}
-          </Typography>
+            {formattedNet}
+          </span>
         )}
 
         {/* Downvote */}
         <IconButton
-          variant={optimisticVote === "downvote" ? "solid" : "plain"}
-          color={optimisticVote === "downvote" ? "danger" : "neutral"}
+          variant="ghost"
           size="sm"
+          className={cn(
+            "border border-transparent",
+            optimisticVote === "downvote" && CAST.downvote,
+          )}
           onClick={() => handleVote("downvote")}
           aria-label={`Downvote ${recipeName}`}
+          aria-pressed={optimisticVote === "downvote"}
           disabled={isVoting}
-          sx={{ minHeight: 32, minWidth: 32 }}
         >
-          {isVoting && optimisticVote === "downvote" ? (
-            <CircularProgress size="sm" />
-          ) : (
-            <MdThumbDown size={14} />
-          )}
+          {glyph("downvote", "size-3.5")}
         </IconButton>
-      </Stack>
+      </div>
     );
   }
 
   return (
-    <Stack
-      direction="row"
-      spacing={isTablet ? 0.5 : 1}
-      alignItems="center"
-      justifyContent="center"
-      sx={{ flexWrap: isTablet ? "wrap" : "nowrap" }}
-    >
+    <div className="flex flex-wrap items-center justify-center gap-1 md:flex-nowrap md:gap-2">
       {/* Upvote */}
       <Button
-        variant={optimisticVote === "upvote" ? "solid" : "outlined"}
-        color={optimisticVote === "upvote" ? "success" : "neutral"}
+        variant="outline"
         size={buttonSize}
-        startDecorator={
-          isVoting && optimisticVote === "upvote" ? (
-            <CircularProgress size="sm" />
-          ) : (
-            <MdThumbUp size={iconSize} />
-          )
-        }
+        className={cn(
+          "tabular min-w-fit px-2 md:px-4",
+          optimisticVote === "upvote" && CAST.upvote,
+        )}
         onClick={() => handleVote("upvote")}
         aria-label={`Upvote ${recipeName}`}
+        aria-pressed={optimisticVote === "upvote"}
         disabled={isVoting}
-        sx={{
-          minWidth: isTablet ? "fit-content" : undefined,
-          px: isTablet ? 1 : undefined,
-        }}
       >
+        {glyph("upvote", iconClass)}
         {showCounts && optimisticUpvotes}
       </Button>
 
       {/* Net Score */}
       {showCounts && (
-        <Typography
-          level={isTablet ? "body-sm" : "title-sm"}
-          sx={{
-            color:
-              netScore > 0
-                ? "success.500"
-                : netScore < 0
-                  ? "danger.500"
-                  : "neutral.500",
-            fontWeight: "bold",
-            minWidth: isTablet ? "2ch" : "3ch",
-            textAlign: "center",
-            flexShrink: 0,
-          }}
+        <span
+          className={cn(
+            "tabular min-w-[2ch] shrink-0 text-center font-bold type-callout md:min-w-[3ch]",
+            scoreClass(netScore),
+          )}
         >
-          {netScore > 0 ? `+${netScore}` : netScore}
-        </Typography>
+          {formattedNet}
+        </span>
       )}
 
       {/* Downvote */}
       <Button
-        variant={optimisticVote === "downvote" ? "solid" : "outlined"}
-        color={optimisticVote === "downvote" ? "danger" : "neutral"}
+        variant="outline"
         size={buttonSize}
-        startDecorator={
-          isVoting && optimisticVote === "downvote" ? (
-            <CircularProgress size="sm" />
-          ) : (
-            <MdThumbDown size={iconSize} />
-          )
-        }
+        className={cn(
+          "tabular min-w-fit px-2 md:px-4",
+          optimisticVote === "downvote" && CAST.downvote,
+        )}
         onClick={() => handleVote("downvote")}
         aria-label={`Downvote ${recipeName}`}
+        aria-pressed={optimisticVote === "downvote"}
         disabled={isVoting}
-        sx={{
-          minWidth: isTablet ? "fit-content" : undefined,
-          px: isTablet ? 1 : undefined,
-        }}
       >
+        {glyph("downvote", iconClass)}
         {showCounts && optimisticDownvotes}
       </Button>
-    </Stack>
+    </div>
   );
 };
