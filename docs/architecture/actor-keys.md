@@ -340,7 +340,8 @@ Verdicts:
 
 | Actor | Key | Serialises | Turn | Contention | Verdict |
 |---|---|---|---|---|---|
-| `PlaceCreationActor` | **viewer id** (was `"singleton"`) | one user's submissions | AI review, up to 120s, in-turn (§8.5) | `createPlace` | **re-keyed in this wave.** See Decision 1. |
+| `PlaceCreationActor` | **viewer id** (was `"singleton"`) | one user's submissions | rate limit, duplicate check, insert — 30s budget. The AI review left the turn in X27: the place is inserted `pending` and `PlaceReviewActor(placeId)` reviews it from the outbox | `createPlace` | **re-keyed in this wave.** See Decision 1. |
+| `PlaceReviewActor` | place uuid (X27) | one place's review | one model call, then a short sync hop to `PlaceActor.applyReview`; bounded by the outbox delivery timeout | outbox only | **fine.** Holds no reader's turn: the model call is outside `PlaceActor(placeId)`. |
 | `PlaceActor` | place uuid | writes to one place | system `enrichFromGoogle` / `refreshFromSource`: up to 8 Google requests plus a `FileActor` upload and verify per photo, 90s. `create`: milliseconds, including the geocell locks. | per-place reads from field resolvers; outbox; `PlaceRefreshJobActor` | **accepted.** Reads of a place queue behind its own enrichment, up to 90s. Post-cutover: move the photo loop out of the turn. |
 | `BrandRegistryActor` | `normalizeBrandName` = `trim().toLowerCase()` (`textKey`) | find-or-create of one normalised name | sync hop to `BrandActor(newId).create` | `resolveBrand`; `ItemOnboardingActor.confirm` | **fine.** Dedupe is exact, below. |
 | `BrandActor` | brand uuid | one brand's writes | none | registry, and brand edits | **fine** |
