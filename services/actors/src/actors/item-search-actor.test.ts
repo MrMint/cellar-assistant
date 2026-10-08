@@ -106,8 +106,9 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
         expect(hits[1]?.distance).toBeCloseTo(1 - Math.cos(Math.PI / 6), 3);
         expect(hits[2]?.distance).toBeCloseTo(1, 3);
         // Strictly increasing — the property a ranking claim actually needs.
-        expect(at(hits, 0).distance).toBeLessThan(at(hits, 1).distance);
-        expect(at(hits, 1).distance).toBeLessThan(at(hits, 2).distance);
+        const distanceAt = (index: number) => at(hits, index).distance ?? 2;
+        expect(distanceAt(0)).toBeLessThan(distanceAt(1));
+        expect(distanceAt(1)).toBeLessThan(distanceAt(2));
       });
     });
 
@@ -268,14 +269,25 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
       });
     });
 
-    it("does not return a name match that has no vector yet", async () => {
+    /**
+     * The only way a text search reaches an item that was never embedded —
+     * on the shared dev database, 70 of 77 teas. It has no distance to
+     * report, and it sorts after every hit that has one at the same score.
+     */
+    it("finds a name match that has no vector yet, with a null distance", async () => {
       await withTestDb(async (db) => {
         const owner = await seedUser(db);
-        await seedWine(db, owner, "Unembedded Pinot");
-        const input: ItemSearchInput = { text: "unembedded pinot" };
-        expect(
-          await newActor(input, db, owner).all(userCtx(owner), input),
-        ).toEqual([]);
+        const unembedded = await seedWine(db, owner, "Unembedded Pinot");
+        const embedded = await seedWine(db, owner, "Embedded Pinot");
+        await seedItemVector(db, embedded, unitVector(1));
+        const input: ItemSearchInput = { text: "pinot" };
+        const hits = await newActor(input, db, owner).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hits.map((hit) => hit.id)).toEqual([embedded.id, unembedded.id]);
+        expect(at(hits, 1).distance).toBeNull();
+        expect(at(hits, 1).lexicalSimilarity).toBe(1);
       });
     });
 

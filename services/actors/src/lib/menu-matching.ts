@@ -144,7 +144,14 @@ export const itemHitToCandidate = (hit: ItemSearchHit): MenuMatchCandidate => {
   return {
     key: candidateKey(target),
     name: hit.name,
-    similarity: similarityFromDistance(hit.distance),
+    // An item the name found that has no vector yet: "the name matched and
+    // there is no vector opinion" is the bottom of the verification band, as
+    // for a lexical-only recipe hit below — offered to the verifier, never
+    // auto-suggested.
+    similarity:
+      hit.distance === null
+        ? MATCH_MIN_CONFIDENCE
+        : similarityFromDistance(hit.distance),
     lexicalSimilarity: hit.lexicalSimilarity ?? null,
     target,
   };

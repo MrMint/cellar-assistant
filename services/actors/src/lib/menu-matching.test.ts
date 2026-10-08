@@ -13,6 +13,7 @@ import {
   ITEM_TYPES,
   type ItemType,
   MATCH_AUTO_CONFIDENCE,
+  MATCH_MIN_CONFIDENCE,
   SCANNED_ITEM_TYPES,
   type ScannedItemType,
 } from "@cellar-assistant/contracts";
@@ -208,5 +209,18 @@ describe("planCandidates (N08)", () => {
       itemHitToCandidate({ type: "WINE", id: "w", name: "W", distance: 0.4 })
         .lexicalSimilarity,
     ).toBeNull();
+  });
+
+  it("puts an item found by name with no vector at the bottom of the verify band", () => {
+    const candidate = itemHitToCandidate({
+      type: "TEA",
+      id: "t",
+      name: "Tie Guan Yin",
+      distance: null,
+      lexicalSimilarity: 1,
+    });
+    expect(candidate.similarity).toBe(MATCH_MIN_CONFIDENCE);
+    expect(bandOf(candidate.similarity)).toBe("verify");
+    expect(planCandidates([candidate]).verify).toHaveLength(1);
   });
 });

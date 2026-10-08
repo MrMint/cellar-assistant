@@ -115,7 +115,8 @@ type Row = {
   readonly item_type: string;
   readonly item_id: string;
   readonly name: string;
-  readonly distance: string | number;
+  /** `null` only from the lexical arm, for an item with no vector. */
+  readonly distance: string | number | null;
   /** N08's lexical arm only: `strict_word_similarity` of phrase to name. */
   readonly lexical?: string | number | null;
 };
@@ -350,10 +351,13 @@ export class ItemSearchActor
    * "Jameson Irish Whiskey" and "Jameson Black Barrel" are equally good
    * answers to "jameson" by name, and the vector should decide.
    *
-   * An item with no vector is not returned: the hit reports a distance, and
-   * an unembedded item has none. (Every item is embedded on create through
-   * the outbox, so this is the window before that delivery, or a deployment
-   * with no embedding model — where a text search fails at the embed anyway.)
+   * An item with **no vector** is returned too, with `distance: null` — the
+   * one way a text search can find it at all. That is not only the window
+   * before `create`'s outbox delivery embeds it: measured 2026-10-07 on the
+   * shared development database, 70 of 77 teas, 36 of 138 wines and 2 of 6
+   * sakes had no vector (`item_vectors` coverage, the roadmap's "check it
+   * first"). The re-embed job does not create a missing vector; whatever
+   * left them unembedded, the name still finds them.
    */
   async #lexicalRows(
     tx: DbOrTx,
@@ -378,8 +382,8 @@ export class ItemSearchActor
                  similarity(${q.text}, ${t}.name)::float8 as whole,
                  (v.vector <=> ${q.literal}::halfvec(768))::float8 as distance
           from ${ITEM_TABLES[type]} ${t}
-          join ${itemVectors} v on ${VECTORS.column(type, "v")} = ${t}.id
-          where ${q.text} <<% ${t}.name and v.vector is not null`;
+          left join ${itemVectors} v on ${VECTORS.column(type, "v")} = ${t}.id
+          where ${q.text} <<% ${t}.name`;
       }),
       sql` union all `,
     );
@@ -585,7 +589,7 @@ const toHits = (rows: readonly Row[]): ItemSearchHit[] =>
       type: row.item_type,
       id: row.item_id,
       name: row.name,
-      distance: Number(row.distance),
+      distance: row.distance === null ? null : Number(row.distance),
       ...(row.lexical === undefined || row.lexical === null
         ? {}
         : { lexicalSimilarity: Number(row.lexical) }),
@@ -650,12 +654,16 @@ export const fuseHybrid = (
       (a, b) =>
         b.score - a.score ||
         a.lexicalRank - b.lexicalRank ||
-        a.hit.distance - b.hit.distance ||
+        orderedDistance(a.hit) - orderedDistance(b.hit) ||
         compareText(a.hit.name, b.hit.name) ||
         compareText(a.hit.id, b.hit.id),
     )
     .slice(0, limit)
     .map(({ hit }) => hit);
+
+/** A hit with no vector sorts after every hit that has one. */
+const orderedDistance = (hit: ItemSearchHit): number =>
+  hit.distance ?? Number.POSITIVE_INFINITY;
 
 /** Code-unit order, like the SQL's `name asc` under the C collation tests use. */
 const compareText = (a: string, b: string): number =>

@@ -84,11 +84,14 @@ const ItemSearchResult = builder
       id: t.exposeID("id"),
       type: t.field({ type: ItemTypeEnum, resolve: (hit) => hit.type }),
       name: t.exposeString("name"),
-      distance: t.exposeFloat("distance", {
+      distance: t.float({
+        nullable: true,
         description:
           "Cosine distance to the query, 0-2. Lower is closer. For a `text` " +
           "search a result the name match brought in can lie beyond " +
-          "`maxDistance`, which bounds the vector ranking only.",
+          "`maxDistance`, which bounds the vector ranking only, and is null " +
+          "when that item has no embedding yet.",
+        resolve: (hit) => hit.distance,
       }),
       item: t.field({
         type: ItemInterface,

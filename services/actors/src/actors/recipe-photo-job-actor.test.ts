@@ -1146,7 +1146,7 @@ describe("recipe-photo routing", () => {
   });
 
   it("takes the closest hit inside the threshold and no other", () => {
-    const hit = (distance: number): ItemSearchHit => ({
+    const hit = (distance: number | null): ItemSearchHit => ({
       type: "SPIRIT",
       id: randomUUID(),
       name: "x",
@@ -1154,6 +1154,10 @@ describe("recipe-photo routing", () => {
     });
     const near = hit(0.1);
     expect(pickIngredientMatch([hit(0.3), near])).toBe(near);
+    // N08: a hit the name found with no vector has no distance, and is not
+    // close enough to claim an ingredient — even listed first.
+    expect(pickIngredientMatch([hit(null), near])).toBe(near);
+    expect(pickIngredientMatch([hit(null)])).toBeNull();
     expect(
       pickIngredientMatch([hit(INGREDIENT_MATCH_MAX_DISTANCE + 0.01)]),
     ).toBeNull();
