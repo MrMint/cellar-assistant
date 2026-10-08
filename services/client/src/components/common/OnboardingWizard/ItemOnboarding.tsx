@@ -102,7 +102,7 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="type-title-2">Add {itemTypeLabel(type)}</h1>
+      <h1 className="type-title-2 text-ink-1">Add {itemTypeLabel(type)}</h1>
       {state.value === "wizard" && (
         <div className="w-full max-w-[1200px]">
           <OnboardingWizard onComplete={handleOnComplete} itemType={type} />

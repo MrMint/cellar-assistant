@@ -48,10 +48,10 @@ const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
     </div>
     <div className="flex p-4">
       {href === undefined ? (
-        <span className="type-headline grow text-center">{type}</span>
+        <span className="type-headline grow text-center text-ink-1">{type}</span>
       ) : (
         <Link overlay underline="none" href={href} className="grow">
-          <span className="type-headline block text-center">{type}</span>
+          <span className="type-headline block text-center text-ink-1">{type}</span>
         </Link>
       )}
     </div>
@@ -84,7 +84,7 @@ export function AddItemClient({
 
   return (
     <div className="flex flex-col gap-8">
-      <h2 className="type-title-1">
+      <h2 className="type-title-1 text-ink-1">
         {cellarId ? `Add an item to ${cellarName}` : "Add an item"}
       </h2>
       {cellarId && !canAdd && (

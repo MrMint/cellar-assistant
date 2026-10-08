@@ -101,14 +101,15 @@ export function EnumSelect<
     >
       <FieldLabel htmlFor={id} className="gap-1">
         {label}
-        {/* Joy's FormLabel marked a required field with a danger-coloured
-            asterisk, as the Joy labels around this one still do; the
-            data-slot is what tests (and styling) anchor on. */}
+        {/* The required asterisk is ink-3, as ItemFormField's and
+            AuthField's are: the text fields beside these pickers are no
+            longer Joy, and a red star on an untouched form reads as an
+            error. The data-slot is what tests (and styling) anchor on. */}
         {required && (
           <span
             aria-hidden="true"
             data-slot="label-asterisk"
-            className="text-destructive"
+            className="text-ink-3"
           >
             *
           </span>
