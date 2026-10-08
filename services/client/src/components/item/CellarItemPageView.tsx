@@ -74,6 +74,12 @@ export function CellarItemPageView({
         cellarName={cellar.name}
         isOwner={isOwner}
         editHref={editHref}
+        checkInCount={checkInsTotal ?? checkIns.length}
+        bottle={{
+          openAt: bottle.openAt,
+          emptyAt: bottle.emptyAt,
+          percentageRemaining: bottle.percentageRemaining,
+        }}
       />
       <Grid container spacing={2}>
         <Grid xs={12} sm={4}>
@@ -121,6 +127,7 @@ export function CellarItemPageView({
                 percentageRemaining={bottle.percentageRemaining}
                 opened={bottle.openAt}
                 emptied={bottle.emptyAt}
+                itemName={item.name}
               />
               <ItemShare itemId={item.itemId} itemType={item.type} />
               {config.cellarBrandsColumn === "left" && brands}
