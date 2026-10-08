@@ -31,8 +31,11 @@
  * `#reserve` and `settleForModel` transaction is `pg_advisory_xact_lock` on
  * its `(service, endpoint)` (`lockBudgetKind`), held to commit. Every cap here
  * — the replay lookup, the per-user windows, the request cap, the money and
- * its nanocent carry — is scoped to exactly one `(service, endpoint)`, and
- * there is no cap across kinds, so that one lock covers all of them.
+ * its nanocent carry — is scoped to exactly one `(service, endpoint)`, so
+ * that one lock covers all of them. The one cap *across* kinds is Google
+ * Places' paid allowance (D16, `DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS`),
+ * and a Google Places reservation therefore takes a second, service-wide
+ * lock as well.
  *
  * Under the singleton the lock never waits (one turn at a time already), so
  * it changes nothing in the normal case; what it buys is that the caps no
@@ -222,6 +225,19 @@ export const lockBudgetKind = (
       ADVISORY_LOCK_NAMESPACE.budgetKind,
       budgetKind(kind),
     ),
+    // D16: Google Places has one cap *across* its endpoints (the paid
+    // allowance), so every one of its reservations also serialises on the
+    // whole service — otherwise two endpoints could each see the same
+    // pre-spend total and both be allowed past it. `lockAll` sorts, so the
+    // pair is always taken in one order.
+    ...(kind.service === GOOGLE_PLACES_BUDGET_SERVICE
+      ? [
+          advisoryLockKeyForText(
+            ADVISORY_LOCK_NAMESPACE.budgetKind,
+            `${GOOGLE_PLACES_BUDGET_SERVICE}/*`,
+          ),
+        ]
+      : []),
   ]);
 
 const requireKind = (kind: BudgetKind): BudgetKind => {
@@ -848,6 +864,78 @@ export const parseUserCaps = (
   return out;
 };
 
+/* -------------------------------------------------------------------------- */
+/* Google Places: one paid allowance for the whole service (D16)               */
+/* -------------------------------------------------------------------------- */
+
+/** `api_budget_config.service` for every Google Places endpoint. */
+export const GOOGLE_PLACES_BUDGET_SERVICE = "google_places";
+
+/**
+ * D16's default: **about $5 a month beyond Google's free usage**, for all of
+ * Google Places together.
+ *
+ * Google's free usage is per SKU per month, and `api_budget_config` already
+ * models it per endpoint (`free_tier_monthly_requests`); a request inside it
+ * books 0 cents (`#reserve`, step 1). What production's rows never had was
+ * any *paid* room: every `google_places/*` row carries
+ * `monthly_budget_cents = 0`, so the first request past an endpoint's free
+ * tier was refused for the rest of the month. This is that paid room, shared
+ * by every endpoint rather than split across fifteen rows, because the
+ * decision was about the bill ("stay under ~$5/month beyond the free tier"),
+ * not about any one endpoint's share of it.
+ *
+ * Override with `GOOGLE_PLACES_MONTHLY_PAID_CENTS` (whole cents; `0` returns to
+ * free-tier-only). Read per activation like the other overrides, and checked
+ * at boot by `installAI` through {@link readModelBudgetPolicy}.
+ */
+export const DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS = 500;
+
+/**
+ * `GOOGLE_PLACES_MONTHLY_PAID_CENTS`: a non-negative whole number of cents.
+ * Blank is the default. Anything else throws — the same refusal-to-start rule
+ * as every other spend override, because a typo here would otherwise be
+ * either an unbounded bill or a silently dark feature.
+ */
+export const parseGooglePlacesPaidCents = (raw: string | undefined): number => {
+  if (raw === undefined || raw.trim() === "") {
+    return DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS;
+  }
+  const text = raw.trim();
+  const cents = Number(text);
+  if (!/^\d+$/.test(text) || !Number.isSafeInteger(cents)) {
+    throw new ValidationError(
+      `GOOGLE_PLACES_MONTHLY_PAID_CENTS must be a whole number of cents >= 0 ` +
+        `(500 is $5 a month beyond the free tier; 0 is free tier only), got ` +
+        JSON.stringify(text),
+    );
+  }
+  return cents;
+};
+
+/**
+ * Whether a paid (past-free-tier) Google Places call of `cost` cents fits the
+ * service-wide allowance, given what the service has already booked this
+ * month. Pure, so the rule is testable without a database; `#reserve` applies
+ * it under the service lock.
+ */
+export const googlePlacesPoolRefusal = (
+  input: {
+    readonly servicePaidCents: number;
+    readonly cost: number;
+    readonly poolCents: number;
+  },
+  kindLabel: string,
+): string | null => {
+  if (input.poolCents <= 0) {
+    return `${kindLabel} free tier exhausted and no paid Google Places allowance is configured (GOOGLE_PLACES_MONTHLY_PAID_CENTS=0)`;
+  }
+  if (input.servicePaidCents + input.cost > input.poolCents) {
+    return `google_places monthly paid allowance exhausted: ${input.servicePaidCents} of ${input.poolCents} cents spent beyond the free tier, ${input.cost} more requested by ${kindLabel}`;
+  }
+  return null;
+};
+
 /**
  * Every environment-derived input to model pricing, read and validated in one
  * place.
@@ -878,6 +966,11 @@ export type ModelBudgetPolicy = {
   readonly freeProviders: FreeModelProviders;
   /** `BUDGET_USER_CAPS` over {@link USER_CAPS}; every kind, not only models. */
   readonly userCaps: Readonly<Record<string, UserCap>>;
+  /**
+   * D16: the paid cents all of Google Places may book in one UTC month,
+   * across every endpoint ({@link DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS}).
+   */
+  readonly googlePlacesMonthlyPaidCents: number;
 };
 
 export const readModelBudgetPolicy = (
@@ -887,6 +980,9 @@ export const readModelBudgetPolicy = (
   modelRequestCaps: parseRequestCaps(env.AI_BUDGET_MAX_REQUESTS),
   freeProviders: freeModelProviders(env),
   userCaps: { ...USER_CAPS, ...parseUserCaps(env.BUDGET_USER_CAPS) },
+  googlePlacesMonthlyPaidCents: parseGooglePlacesPaidCents(
+    env.GOOGLE_PLACES_MONTHLY_PAID_CENTS,
+  ),
 });
 
 /** The free-provider set that applies to one seam's calls. */
@@ -1380,7 +1476,39 @@ export class BudgetActor
 
       // 1. Inside the free tier: the request counts, and costs nothing.
       const free = totals.requestCount < config.freeTierMonthlyRequests;
-      if (!free) {
+      // D16: Google Places' paid calls draw on one service-wide allowance.
+      const googlePlaces =
+        model === undefined && kind.service === GOOGLE_PLACES_BUDGET_SERVICE;
+      if (!free && googlePlaces) {
+        const servicePaidCents = await this.#serviceMonthToDateCents(
+          tx,
+          kind.service,
+        );
+        const poolCents = aggregate.googlePlacesMonthlyPaidCents;
+        const refusal =
+          // An endpoint with its own paid budget still stops at it…
+          config.monthlyBudgetCents > 0 &&
+          totals.spendCents + cost > config.monthlyBudgetCents
+            ? `${budgetKind(kind)} monthly budget exhausted: ${totals.spendCents} of ${config.monthlyBudgetCents} cents spent, ${cost} more requested`
+            : // …and every endpoint stops at the service's allowance.
+              googlePlacesPoolRefusal(
+                { servicePaidCents, cost, poolCents },
+                budgetKind(kind),
+              );
+        if (refusal !== null) {
+          return {
+            ...base,
+            allowed: false,
+            effectiveCostCents: 0,
+            limitCents:
+              config.monthlyBudgetCents > 0
+                ? Math.min(config.monthlyBudgetCents, poolCents)
+                : poolCents,
+            reason: refusal,
+            usageId: null,
+          };
+        }
+      } else if (!free) {
         // 2. Free tier exhausted with no paid budget — the common config.
         if (config.monthlyBudgetCents <= 0) {
           return {
@@ -1799,6 +1927,21 @@ export class BudgetActor
   /* ---------------------------------------------------------------------- */
   /* Internals                                                               */
   /* ---------------------------------------------------------------------- */
+
+  /**
+   * D16: the paid cents every endpoint of `service` has booked this UTC month
+   * — the total the Google Places allowance is held against. Free-tier rows
+   * book 0, so this is exactly "spend beyond the free tier".
+   */
+  async #serviceMonthToDateCents(tx: DbOrTx, service: string): Promise<number> {
+    const [row] = await tx
+      .select({
+        spendCents: sql<string>`coalesce(sum(${apiUsageLog.estimatedCostCents}), 0)`,
+      })
+      .from(apiUsageLog)
+      .where(and(eq(apiUsageLog.service, service), inMonthOf(CURRENT_MONTH)));
+    return int(row?.spendCents);
+  }
 
   /**
    * Requests and paid cents in one calendar month, for one endpoint — plus,
