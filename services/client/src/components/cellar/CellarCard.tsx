@@ -76,7 +76,7 @@ export const CellarCard = ({
   return (
     <div
       data-slot="cellar-card"
-      className="relative flex flex-col gap-4 rounded-lg bg-surface-1 p-4 transition-colors duration-(--ca-dur-micro) ease-standard hover:bg-surface-2"
+      className="group relative flex flex-col gap-4 rounded-lg bg-surface-1 p-4 transition-colors duration-(--ca-dur-micro) ease-standard hover:bg-surface-2"
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -119,7 +119,9 @@ export const CellarCard = ({
               displayName={owner.displayName}
               title={owner.displayName}
               size="sm"
-              className="ring-2 ring-surface-1"
+              // The ring is the card's own surface, hover included, so the
+              // overlap reads as a cut-out rather than a stray outline.
+              className="ring-2 ring-surface-1 transition-[box-shadow] duration-(--ca-dur-micro) ease-standard group-hover:ring-surface-2"
             />
           ))}
         </div>
