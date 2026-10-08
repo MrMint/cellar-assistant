@@ -103,6 +103,7 @@ import {
   isItemType,
   isOnboardingStatus,
   itemActorId,
+  itemAttributeKeys,
   normalizeBrandName,
   requireItemAttributes,
   ValidationError,
@@ -181,6 +182,13 @@ export const daprResolveBrand: BrandResolver = (ctx, name) =>
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * X19: the longest name, brand or detail `suggestDetails` puts in its prompt.
+ * A product name is a few words; this only stops a client from padding a
+ * metered model call.
+ */
+const MAX_SUGGEST_CONTEXT_CHARS = 200;
 
 const iso = (value: Date | null): string =>
   (value ?? new Date(0)).toISOString();
@@ -841,14 +849,30 @@ export class ItemOnboardingActor
     await this.#requireCorrectable(ctx, input.item);
     const type = input.item.type;
     const bagKey = ITEM_TYPE_SPECS[type].bag;
+    // The form's values go into the prompt as context, so only what the form
+    // could hold does: the type's own attributes, as scalars, each short. A
+    // client cannot pad a metered call with arbitrary keys or prose.
+    const declared = new Set<string>(itemAttributeKeys(type));
+    const attributes: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input.attributes ?? {})) {
+      if (!declared.has(key)) continue;
+      if (typeof value === "string") {
+        attributes[key] = value.slice(0, MAX_SUGGEST_CONTEXT_CHARS);
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        attributes[key] = value;
+      }
+    }
+    const clip = (value: string | null | undefined): string =>
+      (value ?? "").trim().slice(0, MAX_SUGGEST_CONTEXT_CHARS);
+    const country = clip(input.country);
     const known: Record<string, unknown> = {
-      country: input.country ?? null,
-      [bagKey]: input.attributes ?? {},
+      country: country === "" ? null : country,
+      [bagKey]: attributes,
     };
-    const brand = input.brandName?.trim() ?? "";
+    const brand = clip(input.brandName);
     const result = await this.#suggestionsProvider(ctx, {
       itemType: type,
-      name: input.name,
+      name: clip(input.name),
       brandName: brand === "" ? null : brand,
       known,
       wanted: emptySuggestibleFields(type, known),
