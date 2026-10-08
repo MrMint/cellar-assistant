@@ -2,9 +2,9 @@
 --
 -- `ItemSearchActor` now ranks a text search by fusing two lists — the
 -- nearest item vectors (HNSW, as before) and the names most similar to the
--- phrase by pg_trgm (`word_similarity`) — with reciprocal rank fusion. These
--- are what make the lexical list an index scan rather than a scan of every
--- name: `<%` / `%` are GIN-indexable through `gin_trgm_ops`, the operator
+-- phrase by pg_trgm (`strict_word_similarity`) — with reciprocal rank fusion.
+-- These are what make the lexical list an index scan rather than a scan of
+-- every name: `<<%` is GIN-indexable through `gin_trgm_ops`, the operator
 -- class `idx_brands_name_trgm` and `idx_places_name_trgm` already use.
 --
 -- Plain CREATE INDEX, not CONCURRENTLY: `db:migrate` runs each migration in a

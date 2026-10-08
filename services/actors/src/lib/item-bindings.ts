@@ -301,9 +301,10 @@ export const itemInsertValues = <T extends ItemType>(
 
 /**
  * The row properties whose values are embedded, in embedding order — the
- * spec's `embedding` list with each attribute resolved to its property. The
- * property name is also the label in the embedded text (`type: BOURBON`), so
- * this is byte-for-byte the list `ItemActor` used to spell out.
+ * spec's `embedding` list with each attribute resolved to its property,
+ * index for index, so `embeddingTextFor` reads `record[properties[i]]` for
+ * the spec's `fields[i]`. (Format 1 also used the property name as the
+ * label, `type: BOURBON`; format 2 labels by `EMBEDDING_LABELS`.)
  */
 export const EMBEDDING_PROPERTIES: Readonly<
   Record<ItemType, readonly string[]>

@@ -1343,6 +1343,9 @@ export class ItemActor
         ),
       );
     const nameOf = new Map(rows.map((row) => [row.id, row.name]));
+    // Code-unit order, not `localeCompare`: the text is hashed into
+    // `embedding_text`, and an ICU or locale difference between processes
+    // must not make an unchanged item read as stale.
     return links
       .map((link) => ({
         primary: link.isPrimary === true,
@@ -1354,7 +1357,8 @@ export class ItemActor
       )
       .sort(
         (a, b) =>
-          Number(b.primary) - Number(a.primary) || a.name.localeCompare(b.name),
+          Number(b.primary) - Number(a.primary) ||
+          (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
       )
       .map((link) => link.name);
   }
