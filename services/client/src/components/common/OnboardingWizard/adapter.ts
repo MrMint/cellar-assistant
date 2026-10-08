@@ -43,6 +43,7 @@ import {
   type SkippedProposal,
 } from "@/lib/items/extraction-merge";
 import type { QuickAddItemDefaults } from "../QuickAddCard";
+import type { CatalogMatch } from "./catalog-match";
 
 /** What the analyze step hands the form and the quick-add card. */
 export type OnboardingDefaults = {
@@ -72,14 +73,21 @@ const dateKeys = (type: ApiItemType): string[] =>
     .filter((field) => field.kind === "date")
     .map((field) => field.key);
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
  * `ItemOnboarding.defaults` → the restored form's default values.
  *
  * The merge runs against an empty form (the old wizard showed the form only
  * once the analysis was back, so there is nothing typed to protect) but keeps
  * its other half: a value a field cannot hold is reported in `skipped`, and a
- * `static` picker only takes one of its own options. A `date` proposal
- * (`2015-06-01`) becomes the year the old form asked for (`2015`).
+ * `static` picker only takes one of its own options.
+ *
+ * A `date` column is a **year** here, because that is what this form edits
+ * (N02): the merge judges it as `kind: "year"`, so the bare `2015` the model
+ * is asked for — and usually answered even when told `YYYY-MM-DD` — fills
+ * the field, and a full `2015-06-01` is read as `2015`. Anything else
+ * ("June 2015", "NV") is still reported, not guessed at.
  */
 export const formDefaultsFromOnboarding = (
   type: ApiItemType,
@@ -88,24 +96,24 @@ export const formDefaultsFromOnboarding = (
   const merged = mergeExtractedDefaults({
     defaults,
     bagKey: ATTRIBUTE_INPUT_KEY[type],
-    fields: ITEM_FORM_RULES[type].attributes,
+    fields: ITEM_FORM_RULES[type].attributes.map((field) =>
+      field.kind === "date" ? { ...field, kind: "year" as const } : field,
+    ),
     current: { ...emptyFormValues(), brandName: "" },
     edited: new Set(),
     allowedValues: (field) =>
       field.kind === "static" ? staticOptionValues(field.options) : null,
+    coerce: (field, value) =>
+      field.kind === "year" && ISO_DAY.test(value.trim())
+        ? yearFromDate(value.trim())
+        : value,
   });
-  const attributes: Record<string, string> = { ...merged.values.attributes };
-  for (const key of dateKeys(type)) {
-    if (attributes[key] !== undefined) {
-      attributes[key] = yearFromDate(attributes[key]);
-    }
-  }
   return {
     values: {
       name: merged.values.name,
       description: merged.values.description,
       country: merged.values.country,
-      attributes,
+      attributes: { ...merged.values.attributes },
     },
     brandName: merged.values.brandName,
     skipped: merged.skipped,
@@ -173,27 +181,44 @@ export const saveBlocker = (
  *
  * The old guard was `confidence >= 0.9` alone, and E2c is what that cost: with
  * no photograph the model invented a Château d'Yquem at 0.9 and the card
- * saved it on its own. So, as well as the old threshold:
+ * saved it on its own. So, as well as the old threshold, a label photograph
+ * was actually uploaded and read (`labelSent`).
  *
- * - a label photograph was actually uploaded and read (`labelSent`), and
- * - nothing the database requires is missing, so an unattended save cannot
- *   become an outbox row that dies after the card said "added".
+ * **N02 (D25: the AI never adds a new catalogue item without a tap).** The
+ * countdown may only add *another bottle of a known item*:
+ *
+ * - there is an **exact** catalogue match (`catalog-match.ts`): a barcode hit,
+ *   or an `itemSearch` hit with the very name read — and in both cases an
+ *   equal vintage, compared explicitly;
+ * - the wizard is filing into a cellar (`inCellar`), since "another bottle"
+ *   means nothing anywhere else.
+ *
+ * Confirming the card files the matched item (`CONFIRM` in `machines.ts`); it
+ * never calls `confirmItemOnboarding`, so the countdown cannot create a
+ * catalogue row. A label that names nothing the catalogue holds always goes
+ * to the form. (The old "nothing required is missing" clause is gone with the
+ * create it protected: no form values are saved on this path.)
  */
 export const canQuickAdd = ({
-  type,
   labelSent,
   confidence,
   defaults,
+  match,
+  inCellar,
 }: {
-  type: ApiItemType;
   labelSent: boolean;
   confidence: number | undefined;
   defaults: OnboardingDefaults | undefined;
+  match: CatalogMatch | null | undefined;
+  inCellar: boolean;
 }): boolean =>
   labelSent &&
+  inCellar &&
   defaults !== undefined &&
   (confidence ?? 0) >= CONFIDENCE_THRESHOLDS.HIGH &&
-  saveBlocker(type, defaults.values) === null;
+  match !== null &&
+  match !== undefined &&
+  match.exact;
 
 const nonEmpty = (value: string | undefined): string | undefined =>
   value === undefined || value.trim() === "" ? undefined : value;

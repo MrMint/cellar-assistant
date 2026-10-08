@@ -46,9 +46,11 @@ type Navigate = { push: (href: string) => void };
  * - **`itemOnboardingId` and `cellarItemId` are minted once**, so a retried
  *   analysis reuses the session and a retried add files one bottle.
  * - **Quick add (Q7)** is entered only through `canQuickAdd`: a label was
- *   actually photographed and read, confidence ≥ 0.9, and nothing the
- *   database requires is missing — the E2c guard. The 15 s card itself is the
- *   old one.
+ *   actually photographed and read, confidence ≥ 0.9 — the E2c guard — and
+ *   (N02) the catalogue already holds that item at that vintage and the
+ *   wizard is filing into a cellar. Its `CONFIRM` files a bottle of the
+ *   matched item; it never creates one, so the 15 s countdown cannot add a
+ *   catalogue row (D25).
  * - **`matching` (N19)** sits between `analyze` and the form: the name read
  *   goes to `itemSearch` and, if the catalogue already holds that item at
  *   that vintage, the form leads with "Is it this one? +1 bottle"
@@ -124,7 +126,7 @@ export const OnboardingMachine = createMachine(
         | { type: "DISMISS_MATCH" }
         | { type: "ADD_ANOTHER" }
         | { type: "DONE" }
-        | { type: "CONFIRM"; itemId: string }
+        | { type: "CONFIRM" }
         | { type: "EDIT" }
         | { type: "RETRY" };
       actors:
@@ -301,15 +303,16 @@ export const OnboardingMachine = createMachine(
           onDone: [
             // High confidence + quick add enabled + a label was read → quickReview
             {
-              guard: ({ context }) =>
+              guard: ({ context, event }) =>
                 context.quickAddEnabled &&
                 canQuickAdd({
-                  type: context.itemType,
                   labelSent:
                     isNotNil(context.frontLabelFileId) ||
                     isNotNil(context.backLabelFileId),
                   confidence: context.confidence,
                   defaults: context.defaults,
+                  match: event.output,
+                  inCellar: isNotNil(context.cellarId),
                 }),
               target: "quickReview",
               actions: assign({
@@ -329,28 +332,32 @@ export const OnboardingMachine = createMachine(
         },
       },
       quickReview: {
-        // Note: Auto-confirm is handled by the QuickAddCard component
-        // which creates the item and sends CONFIRM with itemId
+        // The QuickAddCard counts down and sends CONFIRM. Only ever a bottle
+        // of the matched catalogue item (N02): nothing here creates an item.
         on: {
-          CONFIRM: [
-            {
-              guard: ({ context }) => isNotNil(context.cellarId),
-              actions: assign({
-                existingItemId: ({ event }) => event.itemId,
-              }),
-              target: "addItemToCellar",
-            },
-            {
-              actions: assign({
-                existingItemId: ({ event }) => event.itemId,
-              }),
-              target: "uploadImage",
-            },
-          ],
+          CONFIRM: {
+            guard: ({ context }) =>
+              isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
+            actions: assign({
+              existingItemId: ({ context }) =>
+                context.catalogMatch?.item.itemId,
+            }),
+            target: "addItemToCellar",
+          },
+          // "Not this one": the form, without the match and without offering
+          // it again.
           EDIT: {
             target: "form",
             actions: assign({
-              quickAddEnabled: () => false, // Disable quick add if user chooses to edit
+              quickAddEnabled: () => false,
+              catalogMatch: undefined,
+              declinedItemIds: ({ context }) =>
+                isNil(context.catalogMatch)
+                  ? context.declinedItemIds
+                  : [
+                      ...context.declinedItemIds,
+                      context.catalogMatch.item.itemId,
+                    ],
             }),
           },
         },

@@ -183,6 +183,15 @@ export type MergeInput = {
    * unknown vocabulary must not manufacture a rejection.
    */
   readonly allowedValues?: (field: ExtractionField) => readonly string[] | null;
+  /**
+   * A proposal re-expressed in the field's own terms before it is judged —
+   * N02. The restored onboarding form edits a `date` column as a four-digit
+   * year (`yearFromDate`), so it passes those fields as `kind: "year"` and
+   * coerces a full `2015-06-01` to `2015`; a bare `2015`, which the model
+   * usually answers, is then a value the field can hold rather than a skip.
+   * Applied to per-type attributes only. Omitted: the value as proposed.
+   */
+  readonly coerce?: (field: ExtractionField, value: string) => string;
 };
 
 /**
@@ -193,7 +202,7 @@ export type MergeInput = {
  * not an object is ignored rather than trusted.
  */
 export const mergeExtractedDefaults = (input: MergeInput): MergeResult => {
-  const { allowedValues, bagKey, current, edited, fields } = input;
+  const { allowedValues, bagKey, coerce, current, edited, fields } = input;
   if (!isRecord(input.defaults)) {
     return { values: current, applied: [], skipped: [] };
   }
@@ -256,7 +265,10 @@ export const mergeExtractedDefaults = (input: MergeInput): MergeResult => {
     const path = `attributes.${field.key}`;
     // The bag is where the schema puts these. The flat fall-back is for a
     // provider that ignores the nesting — cheaper than losing the value.
-    const proposed = attributeBag[field.key] ?? bag[field.key];
+    const raw = attributeBag[field.key] ?? bag[field.key];
+    const text = coerce === undefined ? null : asText(raw);
+    const proposed =
+      text === null || coerce === undefined ? raw : coerce(field, text);
     const next = consider(
       path,
       field.label,

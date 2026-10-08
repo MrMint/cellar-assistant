@@ -182,3 +182,45 @@ describe("matching (N19)", () => {
     assert.equal(state.value, "form");
   });
 });
+
+describe("quick add (N02: only another bottle of a known item)", () => {
+  test("an exact match at high confidence → the card; CONFIRM files that item", async () => {
+    const { actor, filed } = run({ confidence: 0.95, match: exact });
+    const state = await settled(actor);
+    assert.equal(state.value, "quickReview");
+    actor.send({ type: "CONFIRM" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    assert.deepEqual(
+      filed.map((f) => f.itemId),
+      ["known"],
+      "the matched catalogue item — nothing was created",
+    );
+  });
+
+  test("high confidence with no match → the form, never the countdown", async () => {
+    const { actor } = run({ confidence: 1, match: null });
+    assert.equal((await settled(actor)).value, "form");
+  });
+
+  test("a near (not exact) match → the form, led by the tap-to-use prompt", async () => {
+    const { actor } = run({ confidence: 1, match: { ...exact, exact: false } });
+    const state = await settled(actor);
+    assert.equal(state.value, "form");
+    assert.equal(state.context.catalogMatch?.item.itemId, "known");
+  });
+
+  test("outside a cellar an exact match is still only offered", async () => {
+    const { actor } = run({ confidence: 1, match: exact, inCellar: false });
+    assert.equal((await settled(actor)).value, "form");
+  });
+
+  test("Not this one → the form, the item declined", async () => {
+    const { actor } = run({ confidence: 1, match: exact });
+    await settled(actor);
+    actor.send({ type: "EDIT" });
+    const state = actor.getSnapshot();
+    assert.equal(state.value, "form");
+    assert.equal(state.context.catalogMatch, undefined);
+    assert.ok(state.context.declinedItemIds.includes("known"));
+  });
+});

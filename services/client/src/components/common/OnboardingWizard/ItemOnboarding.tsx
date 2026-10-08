@@ -12,7 +12,6 @@ import {
 } from "@/components/cellar-api/itemTypes";
 import { AnimationShowcase } from "../AnimationShowcase";
 import { QuickAddCard } from "../QuickAddCard";
-import { createOnboardedItem } from "./actors/createItem";
 import { emptyDefaults, quickAddDefaultsFrom } from "./adapter";
 import { CatalogMatchPrompt } from "./CatalogMatchPrompt";
 import { FinalPrompt } from "./FinalPrompt";
@@ -75,30 +74,15 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
   // so it is shown and sent as printed.
   const { barcode: scanned } = state.context;
 
-  // Handle quick add confirmation - creates the item and returns the ID
+  // Quick add files another bottle of the matched catalogue item (N02). It
+  // creates nothing: the machine only reaches quickReview with a match.
+  const { catalogMatch } = state.context;
   const handleQuickAddConfirm = useCallback(async (): Promise<
     string | undefined
   > => {
-    const defaults = state.context.defaults ?? emptyDefaults();
-    const itemId = await createOnboardedItem({
-      urqlClient,
-      type,
-      onboardingId: state.context.itemOnboardingId,
-      values: defaults.values,
-      brandName: defaults.brandName,
-      barcode: scanned?.text ?? "",
-      sessionBarcode: scanned?.text,
-    });
-    send({ type: "CONFIRM", itemId });
-    return itemId;
-  }, [
-    state.context.defaults,
-    state.context.itemOnboardingId,
-    scanned,
-    urqlClient,
-    type,
-    send,
-  ]);
+    send({ type: "CONFIRM" });
+    return catalogMatch?.item.itemId;
+  }, [catalogMatch, send]);
 
   const handleQuickAddEdit = useCallback(() => {
     send({ type: "EDIT" });
@@ -169,15 +153,23 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
             </Stack>
           </Grid>
         )}
-        {state.value === "quickReview" && (
+        {state.value === "quickReview" && isNotNil(catalogMatch) && (
           <Grid xs={12} sm={6}>
             <QuickAddCard
-              defaults={quickAddDefaultsFrom(
-                type,
-                state.context.defaults ?? emptyDefaults(),
-              )}
+              heading="Is it this one?"
+              defaults={{
+                ...quickAddDefaultsFrom(
+                  type,
+                  state.context.defaults ?? emptyDefaults(),
+                ),
+                // The card names the item it will file, not the read.
+                name: catalogMatch.item.name,
+                vintage: catalogMatch.item.vintage,
+              }}
               itemType={type}
               confidence={state.context.confidence ?? 0}
+              confirmLabel="+1 bottle"
+              editLabel="Not this one"
               onConfirm={handleQuickAddConfirm}
               onEdit={handleQuickAddEdit}
             />

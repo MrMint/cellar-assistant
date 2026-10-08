@@ -40,6 +40,12 @@ type QuickAddCardProps = {
   onConfirm: () => Promise<string | undefined>;
   onEdit: () => void;
   autoConfirmSeconds?: number;
+  /** A line above the name — "Is it this one?" when it names a known item. */
+  heading?: string;
+  /** The confirm button's words; the old "Add to Cellar" / "Add (Ns)" if unset. */
+  confirmLabel?: string;
+  /** The secondary button's words (default "Edit Details"). */
+  editLabel?: string;
 };
 
 function getConfidenceColor(
@@ -101,6 +107,9 @@ export const QuickAddCard = ({
   onConfirm,
   onEdit,
   autoConfirmSeconds = QUICK_ADD_AUTO_CONFIRM_DELAY,
+  heading,
+  confirmLabel,
+  editLabel = "Edit Details",
 }: QuickAddCardProps) => {
   const [countdown, setCountdown] = useState(autoConfirmSeconds);
   const [isPaused, setIsPaused] = useState(false);
@@ -168,6 +177,11 @@ export const QuickAddCard = ({
     >
       <CardContent>
         <Stack spacing={2}>
+          {heading !== undefined && (
+            <Typography level="title-sm" color="neutral">
+              {heading}
+            </Typography>
+          )}
           {/* Header with name and confidence */}
           <Stack
             direction="row"
@@ -263,7 +277,7 @@ export const QuickAddCard = ({
               disabled={isConfirming}
               sx={{ flex: 1 }}
             >
-              Edit Details
+              {editLabel}
             </Button>
             <Button
               variant="solid"
@@ -275,8 +289,8 @@ export const QuickAddCard = ({
               {isConfirming
                 ? "Adding..."
                 : isPaused
-                  ? "Add to Cellar"
-                  : `Add (${countdown}s)`}
+                  ? (confirmLabel ?? "Add to Cellar")
+                  : `${confirmLabel ?? "Add"} (${countdown}s)`}
             </Button>
           </Stack>
         </Stack>
