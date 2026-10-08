@@ -23,7 +23,12 @@
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
 import type { ItemFormValues } from "@/components/item/ItemForm";
-import { dateFromYear, yearFromDate } from "@/components/item/itemFormLayout";
+import {
+  dateFromYear,
+  entryPath,
+  formLayout,
+  yearFromDate,
+} from "@/components/item/itemFormLayout";
 import {
   ATTRIBUTE_INPUT_KEY,
   attributesToSave,
@@ -237,6 +242,24 @@ export const quickAddDefaultsFrom = (
         caffeine_level: nonEmpty(a.caffeineLevel),
       };
   }
+};
+
+/**
+ * The merge's `skipped` proposals as lines the form shows (N19): what the
+ * label said, and why it is not in the field — never dropped quietly. Named by
+ * the label the form shows for that field, not the rules table's.
+ */
+export const skippedNotes = (
+  type: ApiItemType,
+  skipped: readonly SkippedProposal[],
+): readonly string[] => {
+  const labels = new Map(
+    formLayout(type, "create").map((entry) => [entryPath(entry), entry.label]),
+  );
+  return skipped.map(
+    (proposal) =>
+      `${labels.get(proposal.path) ?? proposal.label}: “${proposal.value}” (${proposal.detail})`,
+  );
 };
 
 /** One match for a scanned code, as `ExistingItems` draws it. */

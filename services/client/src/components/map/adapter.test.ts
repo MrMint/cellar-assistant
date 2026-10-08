@@ -18,6 +18,7 @@ import {
   matchedItemHref,
   menuItemFrom,
   photosFrom,
+  pinAddressDraft,
   placeResultFromNode,
   scanSummaryFrom,
   semanticResultsFrom,
@@ -509,5 +510,25 @@ describe("googlePrefillFields (G21 — the old prefillFromGoogle)", () => {
       ),
       {},
     );
+  });
+});
+
+describe("pinAddressDraft (N19: the pin's draft for AIDraftField)", () => {
+  test("only what the geocode returned, country upper-cased", () => {
+    assert.deepEqual(
+      pinAddressDraft({
+        street_address: "1 Main St",
+        locality: " Portland ",
+        region: "",
+        postcode: undefined,
+        country_code: "us",
+      }),
+      { street_address: "1 Main St", locality: "Portland", country_code: "US" },
+    );
+  });
+
+  test("no geocode drafts nothing — so nothing is marked From pin", () => {
+    assert.deepEqual(pinAddressDraft(null), {});
+    assert.deepEqual(pinAddressDraft({}), {});
   });
 });

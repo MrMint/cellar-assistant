@@ -7,11 +7,13 @@ import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
 import { searchByBarcode } from "./actors/searchByBarcode";
 import { searchByImage } from "./actors/searchByImage";
+import { searchCatalog } from "./actors/searchCatalog";
 import type {
   DefaultValuesResult,
   FetchDefaultsInput,
   InsertCellarItemInput,
   InsertCellarItemResult,
+  SearchCatalogInput,
   UploadItemImageInput,
   UploadItemImageResult,
 } from "./actors/types";
@@ -25,6 +27,7 @@ import {
   finishedHref,
   type OnboardingDefaults,
 } from "./adapter";
+import type { CatalogMatch } from "./catalog-match";
 
 /** `router.push` is all the machine needs of Next's router. */
 type Navigate = { push: (href: string) => void };
@@ -46,6 +49,11 @@ type Navigate = { push: (href: string) => void };
  *   actually photographed and read, confidence ≥ 0.9, and nothing the
  *   database requires is missing — the E2c guard. The 15 s card itself is the
  *   old one.
+ * - **`matching` (N19)** sits between `analyze` and the form: the name read
+ *   goes to `itemSearch` and, if the catalogue already holds that item at
+ *   that vintage, the form leads with "Is it this one? +1 bottle"
+ *   (`USE_MATCH`). Items the person declined in the barcode chooser are never
+ *   offered back.
  * - **`searchingByImage` / `chooseExistingImage` are gone** from the picture
  *   machine: image search is a chosen drop (G32, e4 §6a), so a display photo
  *   goes straight to `done`.
@@ -80,6 +88,10 @@ export const OnboardingMachine = createMachine(
         /** The server's reason nothing was read, shown above the form. */
         extractionError?: string;
         existingItemId?: string;
+        /** Items the person said no to in the picture wizard's choosers. */
+        declinedItemIds: readonly string[];
+        /** N19: the catalogue item the label names, if there is one. */
+        catalogMatch?: CatalogMatch;
         /** The cellar_items ID after adding item to cellar (used for redirect) */
         cellarItemId?: string;
         /** Minted up front so a retried add files one bottle. */
@@ -105,8 +117,11 @@ export const OnboardingMachine = createMachine(
             backLabel?: string;
             existingItemId?: string;
             displayImageDataUrl?: string;
+            declinedItemIds?: readonly string[];
           }
         | { type: "CREATED"; itemId: string }
+        | { type: "USE_MATCH" }
+        | { type: "DISMISS_MATCH" }
         | { type: "ADD_ANOTHER" }
         | { type: "DONE" }
         | { type: "CONFIRM"; itemId: string }
@@ -129,6 +144,10 @@ export const OnboardingMachine = createMachine(
             logic: PromiseActorLogic<DefaultValuesResult, FetchDefaultsInput>;
           }
         | {
+            src: "searchCatalog";
+            logic: PromiseActorLogic<CatalogMatch | null, SearchCatalogInput>;
+          }
+        | {
             src: "uploadItemImage";
             logic: PromiseActorLogic<
               UploadItemImageResult,
@@ -144,6 +163,7 @@ export const OnboardingMachine = createMachine(
       router: input.router,
       retryCount: 0,
       quickAddEnabled: true, // Enable quick add by default
+      declinedItemIds: [],
       itemType: input.itemType,
     }),
     states: {
@@ -157,7 +177,9 @@ export const OnboardingMachine = createMachine(
                 frontLabel: ({ event }) => event.frontLabel,
                 backLabel: ({ event }) => event.backLabel,
                 displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
+                declinedItemIds: ({ event }) => event.declinedItemIds ?? [],
                 defaults: undefined,
+                catalogMatch: undefined,
               }),
               target: "upload",
             },
@@ -254,38 +276,56 @@ export const OnboardingMachine = createMachine(
           onError: {
             target: "retryAnalyze",
           },
+          onDone: {
+            target: "matching",
+            actions: assign({
+              itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
+              defaults: ({ event }) => event.output.defaults,
+              confidence: ({ event }) => event.output.confidence,
+              extractionError: ({ event }) => event.output.extractionError,
+            }),
+          },
+        },
+      },
+      matching: {
+        invoke: {
+          src: "searchCatalog",
+          input: ({
+            context: { urqlClient, itemType, defaults, declinedItemIds },
+          }) => ({
+            urqlClient,
+            itemType,
+            defaults: defaults ?? emptyDefaults(),
+            excludeItemIds: declinedItemIds,
+          }),
           onDone: [
             // High confidence + quick add enabled + a label was read → quickReview
             {
-              guard: ({ event, context }) =>
+              guard: ({ context }) =>
                 context.quickAddEnabled &&
                 canQuickAdd({
                   type: context.itemType,
                   labelSent:
                     isNotNil(context.frontLabelFileId) ||
                     isNotNil(context.backLabelFileId),
-                  confidence: event.output.confidence,
-                  defaults: event.output.defaults,
+                  confidence: context.confidence,
+                  defaults: context.defaults,
                 }),
               target: "quickReview",
               actions: assign({
-                itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
-                defaults: ({ event }) => event.output.defaults,
-                confidence: ({ event }) => event.output.confidence,
-                extractionError: ({ event }) => event.output.extractionError,
+                catalogMatch: ({ event }) => event.output ?? undefined,
               }),
             },
-            // Default → form (existing behavior)
+            // Default → form, led by the match when there is one
             {
               target: "form",
               actions: assign({
-                itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
-                defaults: ({ event }) => event.output.defaults,
-                confidence: ({ event }) => event.output.confidence,
-                extractionError: ({ event }) => event.output.extractionError,
+                catalogMatch: ({ event }) => event.output ?? undefined,
               }),
             },
           ],
+          // The lookup is a convenience: failing it is the old path.
+          onError: { target: "form" },
         },
       },
       quickReview: {
@@ -317,6 +357,38 @@ export const OnboardingMachine = createMachine(
       },
       form: {
         on: {
+          // N19: "Is it this one? +1 bottle" — the person tapped it.
+          USE_MATCH: [
+            {
+              guard: ({ context }) =>
+                isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
+              actions: assign({
+                existingItemId: ({ context }) =>
+                  context.catalogMatch?.item.itemId,
+              }),
+              target: "addItemToCellar",
+            },
+            {
+              guard: ({ context }) => isNotNil(context.catalogMatch),
+              actions: assign({
+                existingItemId: ({ context }) =>
+                  context.catalogMatch?.item.itemId,
+              }),
+              target: "uploadImage",
+            },
+          ],
+          DISMISS_MATCH: {
+            actions: assign({
+              catalogMatch: undefined,
+              declinedItemIds: ({ context }) =>
+                isNil(context.catalogMatch)
+                  ? context.declinedItemIds
+                  : [
+                      ...context.declinedItemIds,
+                      context.catalogMatch.item.itemId,
+                    ],
+            }),
+          },
           CREATED: [
             {
               guard: ({ context }) => isNotNil(context.cellarId),
@@ -438,6 +510,7 @@ export const OnboardingMachine = createMachine(
     actors: {
       uploadFiles,
       fetchDefaults,
+      searchCatalog,
       insertCellarItem,
       uploadItemImage,
     },
@@ -457,6 +530,8 @@ export const pictureOnboardingMachine = createMachine(
         displayImageDataUrl?: string;
         existingItems?: ExistingItem[];
         existingItemId?: string;
+        /** Matches the person passed over with "Create New" — never re-offered. */
+        declinedItemIds: string[];
         urqlClient: Client;
         itemType?: ApiItemType;
       };
@@ -477,6 +552,7 @@ export const pictureOnboardingMachine = createMachine(
     context: ({ input }) => ({
       urqlClient: input.urqlClient,
       itemType: input.itemType,
+      declinedItemIds: [],
     }),
     states: {
       barcode: {
@@ -522,7 +598,15 @@ export const pictureOnboardingMachine = createMachine(
             }),
             target: "display",
           },
-          SKIP: "back",
+          SKIP: {
+            target: "back",
+            actions: assign({
+              declinedItemIds: ({ context }) => [
+                ...context.declinedItemIds,
+                ...(context.existingItems ?? []).map((x) => x.item.itemId),
+              ],
+            }),
+          },
         },
       },
       clearing: {
@@ -615,7 +699,15 @@ export const pictureOnboardingMachine = createMachine(
             }),
             target: "done",
           },
-          SKIP: "done",
+          SKIP: {
+            target: "done",
+            actions: assign({
+              declinedItemIds: ({ context }) => [
+                ...context.declinedItemIds,
+                ...(context.existingItems ?? []).map((x) => x.item.itemId),
+              ],
+            }),
+          },
         },
       },
       done: {

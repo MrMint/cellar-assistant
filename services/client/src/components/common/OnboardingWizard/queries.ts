@@ -81,6 +81,52 @@ export const OnboardingImageMatchQuery = graphql(
 );
 
 /**
+ * N19: after the label is read, the name goes to `itemSearch(text:)`,
+ * narrowed to the type being added, so the wizard can lead with "Is it this
+ * one? +1 bottle" instead of minting a second row for a bottle the catalogue
+ * already holds. `distance` ranks the hits; the vintage is compared
+ * explicitly afterwards (`catalog-match.ts`), never trusted to the embedding.
+ */
+export const CATALOG_MATCH_LIMIT = 5;
+/** Similarity 0.75 and up — near enough to ask about, never to auto-add. */
+export const CATALOG_MATCH_MAX_DISTANCE = 0.5;
+
+export const OnboardingCatalogMatchQuery = graphql(
+  `
+  query OnboardingCatalogMatches(
+    $text: String!
+    $itemTypes: [ItemType!]
+    $first: Int!
+    $limit: Int!
+    $maxDistance: Float!
+  ) {
+    itemSearch(
+      text: $text
+      itemTypes: $itemTypes
+      first: $first
+      limit: $limit
+      maxDistance: $maxDistance
+    ) {
+      __typename
+      ... on ItemSearchConnection {
+        edges {
+          node {
+            __typename
+            distance
+            item {
+              ...ItemCard
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ItemCardFragment, ActorErrorFieldsFragment],
+);
+
+/**
  * Brands the onboarding form's `BrandPicker` offers — the old
  * `SearchBrands($search: "%term%", limit: 10)` over `brands(_ilike)`. Now
  * `brandSearch(term:)`, which takes a term rather than a pattern (so

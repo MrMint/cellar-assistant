@@ -9,6 +9,7 @@ import {
   formDefaultsFromOnboarding,
   quickAddDefaultsFrom,
   saveBlocker,
+  skippedNotes,
 } from "./adapter";
 
 /** A wine as `startItemOnboarding` stores it: camelCase, bag nested. */
@@ -71,6 +72,18 @@ describe("formDefaultsFromOnboarding", () => {
       formDefaultsFromOnboarding("BEER", "nonsense"),
       emptyDefaults(),
     );
+  });
+});
+
+describe("skippedNotes (N19: the merge's skipped proposals, shown)", () => {
+  test("what the label said, and why it is not in the field", () => {
+    const { skipped } = formDefaultsFromOnboarding("WINE", {
+      name: "X",
+      wine: { alcoholContentPercentage: "strong" },
+    });
+    assert.deepEqual(skippedNotes("WINE", skipped), [
+      "Alcohol Content: “strong” (the field is a number)",
+    ]);
   });
 });
 

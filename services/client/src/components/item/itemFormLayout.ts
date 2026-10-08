@@ -146,6 +146,10 @@ const LABELS = {
   country: "Country",
 } as const;
 
+/** The `react-hook-form` path an entry edits (`name`, `attributes.vintage`). */
+export const entryPath = (entry: FormEntry): string =>
+  entry.kind === "attribute" ? `attributes.${entry.field.key}` : entry.kind;
+
 /** The form's entries for one type, old order and labels. */
 export const formLayout = (
   type: ApiItemType,

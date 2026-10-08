@@ -1,24 +1,29 @@
 "use client";
 
 import {
+  Alert,
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
+  List,
+  ListItem,
   Stack,
   Typography,
 } from "@mui/joy";
 import { Fragment, useState } from "react";
-import { type SubmitHandler, useForm } from "react-hook-form";
+import { type SubmitHandler, useForm, useWatch } from "react-hook-form";
 import { useClient } from "urql";
 import { BrandPicker } from "@/components/brand/BrandPicker";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemFormValues } from "@/components/item/ItemForm";
 import { ItemFormField } from "@/components/item/ItemFormField";
-import { formLayout } from "@/components/item/itemFormLayout";
+import { entryPath, formLayout } from "@/components/item/itemFormLayout";
+import { draftedPaths, isDrafted } from "@/lib/forms/ai-draft";
+import { AIDraftField } from "../AIDraftField";
 import { createOnboardedItem } from "./actors/createItem";
-import { type OnboardingDefaults, saveBlocker } from "./adapter";
+import { type OnboardingDefaults, saveBlocker, skippedNotes } from "./adapter";
 
 type OnboardingItemFormProps = {
   type: ApiItemType;
@@ -60,6 +65,11 @@ export const OnboardingItemForm = ({
     formState: { isSubmitting, errors },
   } = useForm<ItemFormValues>({ defaultValues: defaultValues.values });
 
+  // N19: a field is marked "From label" while it still holds what was read.
+  const current = useWatch({ control });
+  const drafted = draftedPaths(defaultValues.values, current);
+  const notFilled = skippedNotes(type, defaultValues.skipped);
+
   const onSubmit: SubmitHandler<ItemFormValues> = async (values) => {
     const blocker = saveBlocker(type, values);
     if (blocker !== null) {
@@ -96,22 +106,46 @@ export const OnboardingItemForm = ({
     >
       <form onSubmit={handleSubmit(onSubmit)}>
         <Stack spacing={4}>
+          {notFilled.length > 0 && (
+            <Alert color="neutral" variant="soft">
+              <Stack spacing={0.5}>
+                <Typography level="title-sm">
+                  Read from the label but not filled in
+                </Typography>
+                <List size="sm" marker="disc">
+                  {notFilled.map((note) => (
+                    <ListItem key={note}>{note}</ListItem>
+                  ))}
+                </List>
+              </Stack>
+            </Alert>
+          )}
           <Stack spacing={2}>
             {layout.map((entry) => (
               <Fragment
                 key={entry.kind === "attribute" ? entry.field.key : entry.kind}
               >
-                <ItemFormField
-                  entry={entry}
-                  control={control}
-                  disabled={isSubmitting}
-                />
-                {entry.kind === "description" && (
-                  <BrandPicker
-                    value={brandName}
-                    onChange={setBrandName}
+                <AIDraftField
+                  source="label"
+                  drafted={drafted.has(entryPath(entry))}
+                >
+                  <ItemFormField
+                    entry={entry}
+                    control={control}
                     disabled={isSubmitting}
                   />
+                </AIDraftField>
+                {entry.kind === "description" && (
+                  <AIDraftField
+                    source="label"
+                    drafted={isDrafted(defaultValues.brandName, brandName)}
+                  >
+                    <BrandPicker
+                      value={brandName}
+                      onChange={setBrandName}
+                      disabled={isSubmitting}
+                    />
+                  </AIDraftField>
                 )}
               </Fragment>
             ))}

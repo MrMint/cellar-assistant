@@ -18,6 +18,8 @@ export type OnboardingResult = {
   backLabelDataUrl?: string;
   displayImageDataUrl?: string;
   existingItemId?: string;
+  /** Matches the person passed over in the choosers ("Create New"). */
+  declinedItemIds?: readonly string[];
 };
 
 export type OnboardingWizardProps = {
@@ -48,6 +50,7 @@ export const OnboardingWizard = ({
             frontLabelDataUrl,
             displayImageDataUrl,
             existingItemId,
+            declinedItemIds,
           },
         }) =>
           onComplete({
@@ -56,6 +59,7 @@ export const OnboardingWizard = ({
             backLabelDataUrl,
             displayImageDataUrl,
             existingItemId,
+            declinedItemIds,
           }),
       },
     }),

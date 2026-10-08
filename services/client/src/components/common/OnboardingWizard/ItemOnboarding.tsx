@@ -14,6 +14,7 @@ import { AnimationShowcase } from "../AnimationShowcase";
 import { QuickAddCard } from "../QuickAddCard";
 import { createOnboardedItem } from "./actors/createItem";
 import { emptyDefaults, quickAddDefaultsFrom } from "./adapter";
+import { CatalogMatchPrompt } from "./CatalogMatchPrompt";
 import { FinalPrompt } from "./FinalPrompt";
 import { type OnboardingResult, OnboardingWizard } from "./index";
 import { OnboardingMachine } from "./machines";
@@ -55,6 +56,7 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
       frontLabelDataUrl,
       backLabelDataUrl,
       displayImageDataUrl,
+      declinedItemIds,
     }: OnboardingResult) => {
       send({
         type: "COMPLETE",
@@ -63,6 +65,7 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
         backLabel: backLabelDataUrl,
         existingItemId,
         displayImageDataUrl,
+        declinedItemIds,
       });
     },
     [send],
@@ -118,13 +121,20 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
         )}
         {(state.value === "addItemToCellar" ||
           state.value === "uploadImage" ||
-          includes(state.value, ["analyze", "retryAnalyze", "upload"])) && (
+          includes(state.value, [
+            "analyze",
+            "retryAnalyze",
+            "upload",
+            "matching",
+          ])) && (
           <Grid xs={12}>
             <AnimationShowcase
               statusText={
-                includes(state.value, ["analyze", "retryAnalyze", "upload"])
-                  ? "Analyzing..."
-                  : "Adding your item..."
+                state.value === "matching"
+                  ? "Looking for it in the catalog..."
+                  : includes(state.value, ["analyze", "retryAnalyze", "upload"])
+                    ? "Analyzing..."
+                    : "Adding your item..."
               }
             />
           </Grid>
@@ -180,6 +190,14 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
                 <Alert color="warning" variant="soft">
                   {state.context.error}
                 </Alert>
+              )}
+              {isNotNil(state.context.catalogMatch) && (
+                <CatalogMatchPrompt
+                  match={state.context.catalogMatch}
+                  inCellar={isNotNil(cellarId)}
+                  onUse={() => send({ type: "USE_MATCH" })}
+                  onDismiss={() => send({ type: "DISMISS_MATCH" })}
+                />
               )}
               {labelSent && isNotNil(state.context.extractionError) && (
                 <Alert color="neutral" variant="soft">

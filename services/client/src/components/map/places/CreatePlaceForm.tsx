@@ -48,6 +48,8 @@ import {
   isValidPhoneNumber,
 } from "react-phone-number-input";
 import PhoneInput from "react-phone-number-input/input";
+import { isDrafted } from "@/lib/forms/ai-draft";
+import { AIDraftField } from "../../common/AIDraftField";
 import {
   type CreatePlaceInput,
   type DuplicatePlace,
@@ -55,7 +57,11 @@ import {
   type GoogleNearbyPlace,
   usePlaceActions,
 } from "../actions";
-import { googlePrefillFields } from "../adapter";
+import {
+  googlePrefillFields,
+  type PinAddressField,
+  pinAddressDraft,
+} from "../adapter";
 import { DuplicatePlaceCheck } from "./DuplicatePlaceCheck";
 import { GooglePlaceSearch } from "./GooglePlaceSearch";
 import { GooglePlaceSuggestions } from "./GooglePlaceSuggestions";
@@ -159,6 +165,10 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
   const [duplicates, setDuplicates] = useState<DuplicatePlace[]>([]);
   const [duplicatesConfirmed, setDuplicatesConfirmed] = useState(false);
   const [addressLoading, setAddressLoading] = useState(true);
+  /** What the pin's reverse geocode filled in — the "From pin" marks' draft. */
+  const [pinDraft, setPinDraft] = useState<
+    Partial<Record<PinAddressField, string>>
+  >({});
   const duplicateCheckTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
   // Google Places state
@@ -194,6 +204,8 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
   });
 
   const nameValue = watch("name");
+  const fromPin = (field: PinAddressField): boolean =>
+    isDrafted(pinDraft[field], watch(field));
   const countryCodeValue = watch("country_code");
   const phoneCountry = toSupportedCountryCode(countryCodeValue) ?? "US";
 
@@ -205,16 +217,11 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
     reverseGeocodeAction(latitude, longitude)
       .then((result) => {
         if (cancelled) return;
-        if (result) {
-          if (result.street_address)
-            setValue("street_address", result.street_address);
-          if (result.locality) setValue("locality", result.locality);
-          if (result.region) setValue("region", result.region);
-          if (result.postcode) setValue("postcode", result.postcode);
-          if (result.country_code) {
-            setValue("country_code", result.country_code.toUpperCase());
-          }
+        const draft = pinAddressDraft(result);
+        for (const [key, value] of Object.entries(draft)) {
+          setValue(key as PinAddressField, value);
         }
+        setPinDraft(draft);
       })
       .finally(() => {
         if (!cancelled) setAddressLoading(false);
@@ -545,7 +552,7 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
         {/* Address section */}
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography level="title-sm">Address</Typography>
-          {addressLoading ? (
+          {addressLoading && (
             <Chip
               variant="soft"
               color="neutral"
@@ -558,10 +565,6 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
               }
             >
               Loading address...
-            </Chip>
-          ) : (
-            <Chip variant="soft" color="success" size="sm">
-              Auto-filled from pin
             </Chip>
           )}
         </Stack>
@@ -577,10 +580,16 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
             name="street_address"
             control={control}
             render={({ field }) => (
-              <FormControl sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}>
-                <FormLabel>Street Address</FormLabel>
-                <Input {...field} placeholder="123 Main St" size="sm" />
-              </FormControl>
+              <AIDraftField
+                source="pin"
+                drafted={fromPin("street_address")}
+                sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}
+              >
+                <FormControl>
+                  <FormLabel>Street Address</FormLabel>
+                  <Input {...field} placeholder="123 Main St" size="sm" />
+                </FormControl>
+              </AIDraftField>
             )}
           />
 
@@ -588,10 +597,12 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
             name="locality"
             control={control}
             render={({ field }) => (
-              <FormControl>
-                <FormLabel>City</FormLabel>
-                <Input {...field} placeholder="City" size="sm" />
-              </FormControl>
+              <AIDraftField source="pin" drafted={fromPin("locality")}>
+                <FormControl>
+                  <FormLabel>City</FormLabel>
+                  <Input {...field} placeholder="City" size="sm" />
+                </FormControl>
+              </AIDraftField>
             )}
           />
 
@@ -599,10 +610,12 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
             name="region"
             control={control}
             render={({ field }) => (
-              <FormControl>
-                <FormLabel>State/Region</FormLabel>
-                <Input {...field} placeholder="State" size="sm" />
-              </FormControl>
+              <AIDraftField source="pin" drafted={fromPin("region")}>
+                <FormControl>
+                  <FormLabel>State/Region</FormLabel>
+                  <Input {...field} placeholder="State" size="sm" />
+                </FormControl>
+              </AIDraftField>
             )}
           />
 
@@ -610,10 +623,12 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
             name="postcode"
             control={control}
             render={({ field }) => (
-              <FormControl>
-                <FormLabel>Postal Code</FormLabel>
-                <Input {...field} placeholder="12345" size="sm" />
-              </FormControl>
+              <AIDraftField source="pin" drafted={fromPin("postcode")}>
+                <FormControl>
+                  <FormLabel>Postal Code</FormLabel>
+                  <Input {...field} placeholder="12345" size="sm" />
+                </FormControl>
+              </AIDraftField>
             )}
           />
 
@@ -631,21 +646,27 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
               },
             }}
             render={({ field }) => (
-              <FormControl error={!!errors.country_code}>
-                <FormLabel>Country Code</FormLabel>
-                <Input
-                  {...field}
-                  value={field.value}
-                  onChange={(event) =>
-                    field.onChange(event.target.value.toUpperCase().slice(0, 2))
-                  }
-                  placeholder="US"
-                  size="sm"
-                />
-                {errors.country_code && (
-                  <FormHelperText>{errors.country_code.message}</FormHelperText>
-                )}
-              </FormControl>
+              <AIDraftField source="pin" drafted={fromPin("country_code")}>
+                <FormControl error={!!errors.country_code}>
+                  <FormLabel>Country Code</FormLabel>
+                  <Input
+                    {...field}
+                    value={field.value}
+                    onChange={(event) =>
+                      field.onChange(
+                        event.target.value.toUpperCase().slice(0, 2),
+                      )
+                    }
+                    placeholder="US"
+                    size="sm"
+                  />
+                  {errors.country_code && (
+                    <FormHelperText>
+                      {errors.country_code.message}
+                    </FormHelperText>
+                  )}
+                </FormControl>
+              </AIDraftField>
             )}
           />
         </Box>
