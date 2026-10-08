@@ -11,15 +11,14 @@ import {
 /**
  * Onboard a wine, put it in a cellar, check it in.
  *
- * The longest chain in the app and the one with the most seams. Since UI
- * parity wave 4 it runs through the restored `82450ad1` wizard
- * (`components/common/OnboardingWizard`): a camera barcode step, back label,
- * front label and display photo — each with Skip — then `startItemOnboarding`,
- * the old `{T}Form` in create mode, `confirmItemOnboarding` (an id for a row
- * **the outbox has not written yet**, so the form waits for `ItemActor` to
- * write it), `addItemToCellar` and "Would you like to add another item?". The
- * headless browser has no camera, so the default flow is Skip ×4 — the same
- * path a person without a label to photograph takes.
+ * The longest chain in the app and the one with the most seams. Since X05 it
+ * runs through the snap-once capture (`components/common/OnboardingWizard`):
+ * one camera — no steps — then `startItemOnboarding`, the draft card (the old
+ * `{T}Form` in create mode), `confirmItemOnboarding` (an id for a row **the
+ * outbox has not written yet**, so the form waits for `ItemActor` to write
+ * it), `addItemToCellar` and N21's success sheet. The headless browser has no
+ * camera, so the flow is "Type it in instead" — the same path a person
+ * without a label to photograph takes.
  *
  * The three standalone tests at the bottom are deliberately outside that chain:
  * each is a known-or-found defect in its own right, and a defect should not
@@ -56,17 +55,9 @@ test.describe("onboard → cellar → check in", () => {
       primary.getByRole("heading", { name: "Add Wine" }),
     ).toBeVisible();
 
-    // Barcode, back label, front label, display photo — Skip each. The
-    // barcode step's Skip is disabled once a code was scanned, never here.
-    for (const step of [
-      "Lets start by scanning the barcode",
-      "Lets take a picture of the back label",
-      "Lets take a picture of the front label",
-      "Lets take a photo that will be used for display",
-    ]) {
-      await expect(primary.getByText(step)).toBeVisible();
-      await primary.getByRole("button", { name: "Skip" }).click();
-    }
+    // X05: one camera, no steps to skip — and N21's copy is fixed.
+    await expect(primary.getByText(/^Lets /)).toHaveCount(0);
+    await primary.getByRole("button", { name: "Type it in instead" }).click();
 
     // "Analyzing..." while `startItemOnboarding` runs; with no photograph the
     // server refuses to invent (E2c), the session stays open, and the form
@@ -95,15 +86,17 @@ test.describe("onboard → cellar → check in", () => {
     await add.click();
 
     // Confirm → wait for the outbox to write the item → `addItemToCellar` →
-    // the old final prompt. Reaching it means the row exists and the bottle
+    // N21's success sheet. Reaching it means the row exists and the bottle
     // was filed.
+    const sheet = primary.getByRole("dialog", { name: "+1 bottle" });
     await expect(
-      primary.getByText("Would you like to add another item?"),
-      "the wizard never reached the final prompt — the confirm was rejected or the outbox did not deliver ItemActor.create",
+      sheet,
+      "the flow never reached the success sheet — the confirm was rejected or the outbox did not deliver ItemActor.create",
     ).toBeVisible({ timeout: 60_000 });
-    await primary.getByRole("button", { name: "No" }).click();
+    await expect(sheet).toContainText(name);
+    await sheet.getByRole("button", { name: "View bottle" }).click();
 
-    // Decision 1: in a cellar, "No" lands on the bottle.
+    // Decision 1: in a cellar, the ending lands on the bottle.
     await expect(primary).toHaveURL(
       new RegExp(`/cellars/${cellarId}/wines/[0-9a-f-]{36}$`),
       { timeout: 30_000 },

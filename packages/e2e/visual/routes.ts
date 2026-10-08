@@ -288,7 +288,7 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       slug: "cellar-items-add",
       path: `/cellars/${cellar("home")}/items/add`,
       as: "demo",
-      note: "add-item type picker",
+      note: "capture surface in a cellar: camera + type picker (X05)",
     },
     {
       slice: "S4",
@@ -482,21 +482,21 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       slug: "add",
       path: "/add",
       as: "demo",
-      note: "add a catalog item: type picker",
+      note: "capture surface: modes, type picker, one camera (X05)",
     },
     {
       slice: "S6",
       slug: "add-wines",
       path: "/add/wines",
       as: "demo",
-      note: "onboarding wizard outside a cellar",
+      note: "capture surface, type fixed, outside a cellar",
     },
     {
       slice: "S6",
       slug: "cellar-wines-add",
       path: `/cellars/${cellar("home")}/wines/add`,
       as: "demo",
-      note: "onboarding wizard in a cellar: first step",
+      note: "capture surface, type fixed, in a cellar",
     },
 
     // S7 — map shell and menu scanning

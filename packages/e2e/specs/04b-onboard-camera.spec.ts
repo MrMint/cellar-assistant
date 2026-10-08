@@ -1,7 +1,8 @@
 import { expect, test } from "../fixtures/test.ts";
 
 /**
- * A photographed label is uploaded and handed to the extraction.
+ * A photographed label is uploaded and handed to the extraction — at the
+ * shutter (X05: the read starts there; there is no step after it).
  *
  * Chromium's fake camera (`--use-fake-device-for-media-stream`, permission
  * granted by `--use-fake-ui-for-media-stream`) supplies a test pattern, so this
@@ -28,15 +29,10 @@ test("a photographed label is uploaded and read honestly", async ({
   primary,
 }) => {
   test.setTimeout(150_000);
+  // X05: one camera, at once — the shutter is the front label.
   await primary.goto("/add/beers");
-  await primary.getByRole("button", { name: "Skip" }).click(); // barcode
 
-  await expect(
-    primary.getByText("Lets take a picture of the back label"),
-  ).toBeVisible();
-  await primary.getByRole("button", { name: "Skip" }).click(); // back
-
-  // Front label: wait for the stream so `getScreenshot` has a frame.
+  // Wait for the stream so the shutter has a frame.
   await expect(primary.locator("video")).toBeVisible();
   await primary.waitForFunction(
     () => (document.querySelector("video")?.readyState ?? 0) >= 2,
@@ -49,10 +45,11 @@ test("a photographed label is uploaded and read honestly", async ({
   );
   await primary.getByRole("button", { name: "Take photo" }).click();
 
+  // N21: the particle bottle is up at once, with the photo beside it.
+  await expect(primary.getByRole("img", { name: /^Reading:/ })).toBeVisible();
   await expect(
-    primary.getByText("Lets take a photo that will be used for display"),
+    primary.getByRole("img", { name: "Your label, as snapped" }),
   ).toBeVisible();
-  await primary.getByRole("button", { name: "Skip" }).click(); // display
 
   const body = JSON.parse((await started).postData() ?? "{}");
   expect(
