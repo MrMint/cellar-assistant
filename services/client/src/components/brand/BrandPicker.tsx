@@ -59,6 +59,7 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
   const id = useId();
   const inputId = `${id}-input`;
   const listId = `${id}-list`;
+  const noteId = `${id}-note`;
   const anchorRef = useRef<HTMLDivElement>(null);
   const [inputValue, setInputValue] = useState(value);
   const [term, setTerm] = useState("");
@@ -100,6 +101,13 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
 
   const listOpen =
     open && !disabled && term !== "" && (fetching || options.length > 0);
+  // While the first answer loads the popover shows a spinner, not the list.
+  const listShown = listOpen && options.length > 0;
+  const showNewBrandNote =
+    trimmedInput.length > 0 &&
+    !matchesExistingOption &&
+    !fetching &&
+    term !== "";
   const activeOption = listOpen ? options[active] : undefined;
 
   const pick = (option: BrandOption) => {
@@ -153,7 +161,9 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
               role="combobox"
               aria-autocomplete="list"
               aria-expanded={listOpen}
-              aria-controls={listOpen ? listId : undefined}
+              aria-controls={listShown ? listId : undefined}
+              // Joy's FormControl tied its helper text to the input.
+              aria-describedby={showNewBrandNote ? noteId : undefined}
               aria-activedescendant={
                 activeOption !== undefined
                   ? `${listId}-${activeOption.id}`
@@ -194,6 +204,10 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
           // The box keeps focus; the list is only ever pointed at.
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
+          // A press anywhere in the popover (an option, the list's
+          // scrollbar) must not blur the box, which would close the list —
+          // Joy's listbox did the same.
+          onMouseDown={(event) => event.preventDefault()}
           onInteractOutside={(event) => {
             if (anchorRef.current?.contains(event.target as Node)) {
               event.preventDefault();
@@ -220,8 +234,6 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
                   role="option"
                   tabIndex={-1}
                   aria-selected={index === active}
-                  // Keep focus in the box while the option is pressed.
-                  onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setActive(index)}
                   onClick={() => pick(option)}
                   className={cn(
@@ -236,14 +248,11 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
           )}
         </PopoverContent>
       </Popover>
-      {trimmedInput.length > 0 &&
-        !matchesExistingOption &&
-        !fetching &&
-        term !== "" && (
-          <FieldDescription>
-            “{trimmedInput}” will be added as a new brand.
-          </FieldDescription>
-        )}
+      {showNewBrandNote && (
+        <FieldDescription id={noteId}>
+          “{trimmedInput}” will be added as a new brand.
+        </FieldDescription>
+      )}
     </Field>
   );
 }

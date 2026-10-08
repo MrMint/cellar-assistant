@@ -168,6 +168,20 @@ describe("BrandPicker (free-solo combobox)", () => {
     const input = await mount(answering("Viet", ["Vietti"]));
     await typeInto(input, "Viet");
     await settle();
+    // Pressing anywhere in the list — an option, or the list itself where
+    // its scrollbar is — must not take focus from the box: a blur closes
+    // the list before the click lands.
+    for (const target of [
+      options()[0],
+      document.querySelector('[role="listbox"]'),
+    ]) {
+      const down = new window.MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+      });
+      target?.dispatchEvent(down);
+      assert.ok(down.defaultPrevented, "mousedown in the list is cancelled");
+    }
     await act(async () => options()[0]?.click());
     assert.equal(input.value, "Vietti");
     assert.deepEqual(changes, ["Viet", "Vietti"]);
@@ -181,11 +195,18 @@ describe("BrandPicker (free-solo combobox)", () => {
       container.textContent ?? "",
       /“Viet” will be added as a new brand\./,
     );
+    const noteId = input.getAttribute("aria-describedby");
+    assert.ok(noteId, "the note describes the box");
+    assert.match(
+      document.getElementById(noteId)?.textContent ?? "",
+      /will be added as a new brand/,
+    );
 
     const exact = await mount(answering("vietti", ["Vietti"]));
     await typeInto(exact, "vietti");
     await settle();
     assert.doesNotMatch(container.textContent ?? "", /will be added/);
+    assert.equal(exact.getAttribute("aria-describedby"), null);
   });
 
   test("Clear empties the box and reports none", async () => {
