@@ -1,6 +1,6 @@
 /**
- * N03 in the markup: a field holding a validation error is drawn as an error
- * (`FormControl error`) with a line saying what is wrong under it.
+ * N03 in the markup: a field holding a validation error is marked
+ * `aria-invalid` with a line saying what is wrong under it.
  *
  * `useForm({ errors })` seeds the errors the way a failed submit would leave
  * them, so a static render can show the state.
@@ -21,6 +21,7 @@ mock.module("@/components/item-api/useReferenceOptions", () => ({
 }));
 
 const { ItemFormField } = await import("./ItemFormField");
+const { openTag } = await import("@/test-support/markup");
 const { formLayout } = await import("./itemFormLayout");
 const { emptyFormValues } = await import(
   "@/components/common/OnboardingWizard/adapter"
@@ -53,7 +54,7 @@ const render = (label: string, errors?: FieldErrors<Values>) => {
 describe("ItemFormField errors (N03)", () => {
   test("a valid field draws no error", () => {
     const html = render("Vintage");
-    assert.doesNotMatch(html, /Mui-error/);
+    assert.doesNotMatch(html, /aria-invalid="true"/);
     assert.doesNotMatch(html, /is required/);
   });
 
@@ -61,8 +62,13 @@ describe("ItemFormField errors (N03)", () => {
     const html = render("Vintage", {
       attributes: { vintage: { type: "required", message: "" } },
     } as FieldErrors<Values>);
-    assert.match(html, /Mui-error/);
-    assert.match(html, /MuiFormHelperText-root[^>]*>Vintage is required\./);
+    const input = openTag(html, 'name="attributes.vintage"');
+    assert.match(input, /aria-invalid="true"/);
+    assert.match(
+      html.slice(html.indexOf(input)),
+      /^<input[^>]*>[\s\S]*>Vintage is required\.</,
+      "the message sits under the control",
+    );
   });
 
   test("the name, and a missing picker, too", () => {
@@ -72,11 +78,10 @@ describe("ItemFormField errors (N03)", () => {
       }),
       />Name is required\.</,
     );
-    assert.match(
-      render("Style", {
-        attributes: { style: { type: "required", message: "" } },
-      } as FieldErrors<Values>),
-      />Style is required\.</,
-    );
+    const picker = render("Style", {
+      attributes: { style: { type: "required", message: "" } },
+    } as FieldErrors<Values>);
+    assert.match(picker, />Style is required\.</);
+    assert.match(openTag(picker, 'role="combobox"'), /aria-invalid="true"/);
   });
 });

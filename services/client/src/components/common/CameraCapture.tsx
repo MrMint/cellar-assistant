@@ -378,6 +378,8 @@ export const CameraCapture = ({
                 variant="solid"
                 color="primary"
                 disabled={isCapturing || !isVideoLoaded}
+                // Joy marks the button `disabled` only after hydration.
+                aria-disabled={isCapturing || !isVideoLoaded || undefined}
                 sx={{
                   transform: isCapturing ? "scale(0.95)" : "scale(1)",
                   transition: "transform 0.1s ease",

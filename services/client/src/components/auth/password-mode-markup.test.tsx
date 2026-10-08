@@ -30,13 +30,15 @@ const SOCIAL = [
 
 const assertSocialButtons = (html: string) => {
   for (const label of SOCIAL) assert.ok(html.includes(label), label);
-  // The production button: soft, neutral, full width.
-  const buttons = html.match(/<button[^>]*>/g) ?? [];
-  const social = buttons.filter((b) => b.includes("MuiButton-variantSoft"));
+  // The production button: one real button per provider, icon then label,
+  // never a submit (it must not post the password form it sits beside).
+  const social = [
+    ...html.matchAll(/<button([^>]*)>((?:(?!<\/button>)[\s\S])*)<\/button>/g),
+  ].filter(([, , inner]) => inner.includes("Continue with"));
   assert.equal(social.length, 3);
-  for (const b of social) {
-    assert.ok(b.includes("MuiButton-colorNeutral"), b);
-    assert.ok(b.includes("MuiButton-fullWidth"), b);
+  for (const [, attrs, inner] of social) {
+    assert.ok(!attrs.includes('type="submit"'), attrs);
+    assert.match(inner, /<svg[\s\S]*<\/svg>[\s\S]*Continue with/, inner);
   }
 };
 

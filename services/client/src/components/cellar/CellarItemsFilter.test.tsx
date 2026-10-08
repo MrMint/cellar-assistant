@@ -1,13 +1,14 @@
 /**
  * Render tests for the restored `CellarItemsFilter` against the old markup:
- * an outlined `Sheet` around a plain `ToggleButtonGroup` of six icon buttons,
- * in the old order (beer, wine, spirit, coffee, sake, tea), each labelled for
+ * a frame around a `role="group"` of six toggle buttons (`aria-pressed`), in
+ * the old order (beer, wine, spirit, coffee, sake, tea), each labelled for
  * assistive tech and showing its count only when one is given.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { textOf } from "@/test-support/markup";
 import { CellarItemsFilter } from "./CellarItemsFilter";
 import { filterCountsFromItemCounts } from "./cellarItemCounts";
 
@@ -20,14 +21,17 @@ const buttons = (html: string) =>
   ].map((m) => ({
     label: m[1],
     pressed: /aria-pressed="true"/.test(m[0]),
-    count: /<p class="MuiTypography[^>]*>(\d+)<\/p>/.exec(m[2])?.[1],
+    count: /^\d+$/.exec(textOf(m[2] ?? ""))?.[0],
   }));
 
 describe("CellarItemsFilter (restored)", () => {
-  test("six type buttons in the old order inside an outlined sheet", () => {
+  test("six type buttons in the old order inside a framed group", () => {
     const html = render(<CellarItemsFilter onTypesChange={() => {}} />);
-    assert.match(html, /^<div class="MuiSheet-root MuiSheet-variantOutlined/);
-    assert.match(html, /MuiToggleButtonGroup-root/);
+    assert.match(html, /^<div\b[^>]*><div[^>]*role="group"/);
+    assert.equal(
+      [...html.matchAll(/aria-pressed="(?:true|false)"/g)].length,
+      6,
+    );
     assert.deepEqual(
       buttons(html).map((b) => b.label),
       ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"],

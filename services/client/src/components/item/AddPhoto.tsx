@@ -39,7 +39,23 @@ export type AddPhotoProps = {
  *   otherwise leave the dialog spinning with no way to set a photo. The
  *   upload's error, which the old modal dropped, is shown.
  */
-export const AddPhotoModal = ({ open, onClose, onCapture }: AddPhotoProps) => {
+export const AddPhotoModal = ({ open, onClose, onCapture }: AddPhotoProps) => (
+  <Modal open={open} onClose={onClose}>
+    <ModalDialog>
+      <AddPhotoBody onCapture={onCapture} />
+    </ModalDialog>
+  </Modal>
+);
+
+/**
+ * The dialog's title and body, apart from the modal around them: a modal
+ * renders through a portal that a static render never mounts, so this is the
+ * part a markup test can reach without stubbing the dialog primitive. Mounted
+ * only while the modal is open, so its state starts fresh each time.
+ */
+export const AddPhotoBody = ({
+  onCapture,
+}: Pick<AddPhotoProps, "onCapture">) => {
   const input = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,49 +84,47 @@ export const AddPhotoModal = ({ open, onClose, onCapture }: AddPhotoProps) => {
   };
 
   return (
-    <Modal open={open} onClose={onClose}>
-      <ModalDialog>
-        <DialogTitle>Set a new display image</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2}>
-            {blockers.length === 0 && (
-              <CameraCapture onCapture={onCameraCapture} showLibrary={false} />
-            )}
-            {busy && <LinearProgress />}
-            <Button
-              variant="outlined"
-              color="neutral"
-              startDecorator={<MdPhotoLibrary />}
-              loading={busy}
-              disabled={blockers.length > 0}
-              onClick={() => input.current?.click()}
-            >
-              Choose a photo
-            </Button>
-            <input
-              ref={input}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file !== undefined) void upload(file);
-              }}
-            />
-            {blockers.map((blocker) => (
-              <Typography key={blocker} level="body-xs" color="warning">
-                {blocker}
-              </Typography>
-            ))}
-            {error !== null && (
-              <Alert size="sm" color="danger" variant="soft">
-                {error}
-              </Alert>
-            )}
-          </Stack>
-        </DialogContent>
-      </ModalDialog>
-    </Modal>
+    <>
+      <DialogTitle>Set a new display image</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2}>
+          {blockers.length === 0 && (
+            <CameraCapture onCapture={onCameraCapture} showLibrary={false} />
+          )}
+          {busy && <LinearProgress />}
+          <Button
+            variant="outlined"
+            color="neutral"
+            startDecorator={<MdPhotoLibrary />}
+            loading={busy}
+            disabled={blockers.length > 0}
+            onClick={() => input.current?.click()}
+          >
+            Choose a photo
+          </Button>
+          <input
+            ref={input}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file !== undefined) void upload(file);
+            }}
+          />
+          {blockers.map((blocker) => (
+            <Typography key={blocker} level="body-xs" color="warning">
+              {blocker}
+            </Typography>
+          ))}
+          {error !== null && (
+            <Alert size="sm" color="danger" variant="soft">
+              {error}
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+    </>
   );
 };

@@ -68,7 +68,15 @@ export function EnumSelect<
             placeholder={loading ? "Loading…" : placeholder}
             disabled={disabled || loading}
             {...field}
-            slotProps={{ button: { ref } }}
+            // Joy only marks its button `disabled` after hydration; say so to
+            // assistive tech from the first paint, and flag a missing pick.
+            slotProps={{
+              button: {
+                ref,
+                "aria-disabled": disabled || loading || undefined,
+                "aria-invalid": invalid !== undefined || undefined,
+              },
+            }}
             onChange={(_, value) => {
               field.onChange(value);
             }}

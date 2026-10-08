@@ -26,6 +26,7 @@ export function ServerBreadcrumbs({
 
   return (
     <Breadcrumbs
+      aria-label="breadcrumb"
       sx={{
         px: 0,
       }}
@@ -33,7 +34,11 @@ export function ServerBreadcrumbs({
       {breadcrumbs.map((breadcrumb) => {
         if (!breadcrumb.href) {
           return (
-            <Typography key={breadcrumb.label} color="neutral">
+            <Typography
+              key={breadcrumb.label}
+              color="neutral"
+              aria-current="page"
+            >
               {breadcrumb.label}
             </Typography>
           );

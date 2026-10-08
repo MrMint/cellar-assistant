@@ -58,7 +58,7 @@ describe("RankingsFilter (restored)", () => {
 describe("RankingsClient (restored)", () => {
   test("title, both filters from the URL, and the grid", () => {
     const html = render(<RankingsClient />);
-    assert.match(html, /MuiTypography-title-lg[^>]*>Rankings</);
+    assert.match(html, /^(?:<[^>]+>)*Rankings</);
     assert.match(html, /aria-label="Friends Scores"/);
     for (const type of ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"]) {
       assert.match(html, new RegExp(`aria-label="${type}"`));

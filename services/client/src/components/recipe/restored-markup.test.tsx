@@ -98,7 +98,7 @@ describe("RecipeDetails (restored)", () => {
   const html = render(<RecipeDetails recipe={recipe} viewerId="me" />);
 
   test("the details card: title, subtitle phrases joined with ' • ', chips", () => {
-    assert.match(html, /MuiTypography-h3[^>]*>Negroni</);
+    assert.match(html, /<h3[^>]*>Negroni</);
     assert.match(html, /cocktail • Easy • 5 minutes • Serves 1 • Version 2/);
     assert.match(html, />Easy</);
     assert.match(html, />5 min</);
@@ -324,7 +324,7 @@ describe("AI Recipe Generator (restored)", () => {
 
   test("the page, without the invented capability numbers", () => {
     const html = render(<AIRecipeGenerator />);
-    assert.match(html, /MuiTypography-h1[^>]*>AI Recipe Generator</);
+    assert.match(html, /<h1[^>]*>AI Recipe Generator</);
     assert.match(html, />AI Features</);
     assert.match(html, />Best Results Tips</);
     assert.match(html, />How It Works</);

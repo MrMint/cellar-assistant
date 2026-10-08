@@ -26,6 +26,7 @@ const { ItemPageView } = await import("./ItemPageView");
 const { CellarItemPageView } = await import("./CellarItemPageView");
 const { ItemForm } = await import("./ItemForm");
 const { ItemImage } = await import("./ItemImage");
+const { isDisabled } = await import("@/test-support/markup");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -101,7 +102,7 @@ describe("ItemPageView (restored {T}Details)", () => {
   );
 
   test("details card: title, subtitle joined with ' - ', description", () => {
-    assert.match(html, /MuiTypography-h3[^>]*>Dragonwell/);
+    assert.match(html, /<h3[^>]*>Dragonwell/);
     assert.match(html, /Green - Loose Leaf - China/);
     assert.match(html, /A green tea\./);
   });
@@ -189,9 +190,14 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     );
     assert.match(html, />Open it!</);
     assert.match(html, />Delete item</);
-    assert.match(
-      html,
-      /Mui-disabled[^>]*><span[^>]*><svg.*?<\/svg><\/span>Edit item/,
+    // Icon, then label, on a disabled button rather than a link.
+    const edit =
+      /<(a|button)\b([^>]*)>(?:(?!<\/\1>)[\s\S])*<svg(?:(?!<\/\1>)[\s\S])*Edit item<\/\1>/.exec(
+        html,
+      );
+    assert.ok(
+      edit?.[1] === "button" && isDisabled(`<button${edit[2]}>`),
+      edit?.[0],
     );
     assert.match(html, /Add a photo/);
     assert.match(html, />Wineries \(1\)</);

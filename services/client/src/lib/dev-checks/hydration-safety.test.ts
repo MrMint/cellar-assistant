@@ -16,7 +16,7 @@
  * the Playwright suite ran against a production build: the container sets no
  * `TZ`, so Node resolved UTC and the server wrote
  *
- *     <span class="…MuiTypography-body-xs…">9/11/2026, 4:46:36 AM</span>
+ *     <span class="…">9/11/2026, 4:46:36 AM</span>
  *
  * for `2026-09-11T04:46:36.348Z`, while a viewer in `America/Chicago` rendered
  * `9/10/2026, 11:46:36 PM` — a different calendar *day*, in a text node React

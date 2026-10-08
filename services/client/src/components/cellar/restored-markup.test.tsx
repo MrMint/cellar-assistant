@@ -44,13 +44,19 @@ const cellar = {
 };
 
 describe("CellarCard (restored)", () => {
-  test("an InteractiveCard whose title links to the cellar's items", () => {
+  test("a card whose title links to the cellar's items", () => {
     const html = render(
       <CellarCard userId="u-zed" cellar={cellar} onEditClick={() => {}} />,
     );
-    assert.match(html, /^<div class="MuiCard-root/);
+    assert.ok(
+      html.indexOf("/cellars/c1/items") < html.indexOf('aria-label="Wines"'),
+      "the title leads, the counts follow",
+    );
     assert.match(html, /href="\/cellars\/c1\/items"/, "absolute, not relative");
-    assert.match(html, /MuiTypography-title-lg[^>]*>Basement</);
+    assert.match(
+      html,
+      /href="\/cellars\/c1\/items"[^>]*>(?:<[^>]+>)*Basement</,
+    );
   });
 
   test("edit button only for the creator or a co-owner", () => {
@@ -60,18 +66,20 @@ describe("CellarCard (restored)", () => {
     const coOwner = render(
       <CellarCard userId="u-bo" cellar={cellar} onEditClick={() => {}} />,
     );
-    assert.doesNotMatch(stranger, /MuiIconButton-root/);
-    assert.match(coOwner, /MuiIconButton-root/);
+    assert.doesNotMatch(stranger, /<button[^>]*aria-label="Edit Cellar"/);
+    assert.match(coOwner, /<button[^>]*aria-label="Edit Cellar"/);
   });
 
-  test("creator then co-owners in an AvatarGroup, by initial", () => {
+  test("creator then co-owners beside the title, by initial", () => {
     const html = render(
       <CellarCard userId="u-ana" cellar={cellar} onEditClick={() => {}} />,
     );
-    assert.match(html, /MuiAvatarGroup-root/);
-    const initials = [...html.matchAll(/MuiAvatar-root[^>]*>([A-Z])</g)].map(
-      (m) => m[1],
+    const owners = html.slice(
+      html.indexOf(">Basement<") + ">Basement<".length,
+      html.indexOf('aria-label="Wines"'),
     );
+    assert.ok(owners.length > 0, "the avatars sit between title and counts");
+    const initials = [...owners.matchAll(/>([A-Z])</g)].map((m) => m[1]);
     assert.deepEqual(initials, ["A", "B"]);
   });
 
@@ -79,10 +87,19 @@ describe("CellarCard (restored)", () => {
     const html = render(
       <CellarCard userId="u-ana" cellar={cellar} onEditClick={() => {}} />,
     );
-    const counts = [...html.matchAll(/MuiTypography-body-md[^>]*>(\d+)</g)].map(
-      (m) => m[1],
-    );
-    assert.deepEqual(counts, ["3", "0", "1", "0", "0", "2"]);
+    const counts = [
+      ...html.matchAll(
+        /aria-label="(Wines|Beers|Spirits|Coffees|Sakes|Teas)"[^>]*>[\s\S]*?>(\d+)</g,
+      ),
+    ].map((m) => `${m[1]} ${m[2]}`);
+    assert.deepEqual(counts, [
+      "Wines 3",
+      "Beers 0",
+      "Spirits 1",
+      "Coffees 0",
+      "Sakes 0",
+      "Teas 2",
+    ]);
     assert.equal([...html.matchAll(/<svg/g)].length >= 7, true);
   });
 });
@@ -118,7 +135,9 @@ describe("CellarForm (restored)", () => {
 
 describe("AddItemClient (restored)", () => {
   const cards = (html: string) =>
-    [...html.matchAll(/MuiTypography-title-lg[^>]*>(\w+)</g)].map((m) => m[1]);
+    [...html.matchAll(/data-next-image="art"[^>]*>[\s\S]*?>(\w+)</g)].map(
+      (m) => m[1],
+    );
 
   test("heading, six image cards in the old order, onboarding links", () => {
     const html = render(
