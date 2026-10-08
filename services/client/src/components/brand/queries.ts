@@ -80,6 +80,7 @@ export const BrandCoreFragment = graphql(`
     id
     name
     brandType
+    firstItemType
     description
     logoUrl
     parentBrandId
@@ -94,6 +95,7 @@ export const BrandListCardFragment = graphql(`
     id
     name
     brandType
+    firstItemType
     description
     logoUrl
     parentBrandId

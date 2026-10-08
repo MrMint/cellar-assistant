@@ -26,7 +26,8 @@ export type BrandCardItem = {
   name: string;
   description?: string | null;
   logo_url?: string | null;
-  brand_type: string;
+  /** Stored or inferred (`inferBrandType`); null shows no chip. */
+  brand_type: string | null;
   parent_brand_id?: string | null;
   item_count?: number; // Count of associated items
   place_count?: number; // Count of associated places
@@ -81,11 +82,13 @@ export const BrandCard = ({ brand, href, onClick }: BrandCardProps) => {
         )}
 
         {/* Brand type badge */}
-        <BrandTypeChip
-          brandType={brand.brand_type}
-          size="sm"
-          className="pointer-events-none absolute top-2 right-2 z-10"
-        />
+        {isNotNil(brand.brand_type) && (
+          <BrandTypeChip
+            brandType={brand.brand_type}
+            size="sm"
+            className="pointer-events-none absolute top-2 right-2 z-10"
+          />
+        )}
       </div>
 
       {isNotNil(href) && (
@@ -118,14 +121,14 @@ export const BrandCard = ({ brand, href, onClick }: BrandCardProps) => {
           {/* Item count */}
           {isNotNil(brand.item_count) && (
             <Count icon={<Cocktail aria-hidden strokeWidth={ICON_STROKE} />}>
-              {brand.item_count} items
+              {brand.item_count} {brand.item_count === 1 ? "item" : "items"}
             </Count>
           )}
 
           {/* Place count */}
           {isNotNil(brand.place_count) && (
             <Count icon={<Place aria-hidden strokeWidth={ICON_STROKE} />}>
-              {brand.place_count} places
+              {brand.place_count} {brand.place_count === 1 ? "place" : "places"}
             </Count>
           )}
         </div>

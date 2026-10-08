@@ -21,11 +21,44 @@ export type BrandCoreSource = {
   id: string;
   name: string;
   brandType?: string | null;
+  /** X23: the earliest-linked item's type (`Brand.firstItemType`). */
+  firstItemType?: ApiItemType | null;
   description?: string | null;
   logoUrl?: string | null;
   parentBrandId?: string | null;
   createdAt?: string | null;
   itemCount?: number | null;
+};
+
+/** The producer each beverage type comes from — a winery makes wine. */
+const PRODUCER_OF: Record<ApiItemType, string> = {
+  WINE: "winery",
+  BEER: "brewery",
+  SPIRIT: "distillery",
+  SAKE: "kura",
+  COFFEE: "roastery",
+  TEA: "tea_house",
+};
+
+/**
+ * X23: the brand's kind as a chip should show it. The stored `brand_type`
+ * when it says something (anything but unset or `other`); otherwise the
+ * producer of its earliest-linked item ("Ridge Vineyards" carries a wine, so
+ * it reads Winery); otherwise `null`, and no chip — the old card's "Other"
+ * on every brand the onboarding created told nobody anything. Display only:
+ * nothing is written back to the shared catalog.
+ */
+export const inferBrandType = (
+  brandType: string | null | undefined,
+  firstItemType: ApiItemType | null | undefined,
+): string | null => {
+  if (brandType !== null && brandType !== undefined && brandType !== "other") {
+    return brandType;
+  }
+  if (firstItemType !== null && firstItemType !== undefined) {
+    return PRODUCER_OF[firstItemType];
+  }
+  return null;
 };
 
 /**
@@ -39,7 +72,7 @@ export const brandCardFromSource = (brand: BrandCoreSource): BrandCardItem => ({
   name: brand.name,
   description: brand.description ?? null,
   logo_url: brand.logoUrl ?? null,
-  brand_type: brand.brandType ?? "other",
+  brand_type: inferBrandType(brand.brandType, brand.firstItemType),
   parent_brand_id: brand.parentBrandId ?? null,
   item_count: brand.itemCount ?? undefined,
 });
@@ -138,9 +171,8 @@ export const brandDetailsFromSource = (
   name: brand.name,
   description: brand.description ?? null,
   logo_url: brand.logoUrl ?? null,
-  brand_type: brand.brandType ?? "other",
+  brand_type: inferBrandType(brand.brandType, brand.firstItemType),
   parent_brand_id: brand.parentBrandId ?? null,
-  created_at: brand.createdAt ?? "",
   parent_brand:
     brand.parentBrand === null || brand.parentBrand === undefined
       ? null
@@ -159,13 +191,3 @@ export const brandDetailsFromSource = (
     brandPlaceFromLink(node),
   ),
 });
-
-/**
- * "Since 2019" without a `Date`: the old `new Date(created_at).getFullYear()`
- * could render a different year on the server (UTC) and in the browser
- * around New Year — a hydration mismatch (React #418).
- */
-export const sinceYear = (createdAt: string): string | null => {
-  const year = createdAt.slice(0, 4);
-  return /^\d{4}$/.test(year) ? year : null;
-};

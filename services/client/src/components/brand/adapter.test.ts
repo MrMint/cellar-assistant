@@ -8,8 +8,8 @@ import {
   brandCardFromSource,
   brandDetailsFromSource,
   brandItemFromLink,
+  inferBrandType,
   itemLinkFromFragment,
-  sinceYear,
 } from "./adapter";
 
 describe("brandCardFromSource (old toBrandCardItems)", () => {
@@ -35,10 +35,19 @@ describe("brandCardFromSource (old toBrandCardItems)", () => {
       },
     );
   });
-  test("a null brand type is 'other', as before", () => {
+  test("X23: no stored type reads as its first item's producer, else none", () => {
+    assert.equal(
+      brandCardFromSource({
+        id: "b",
+        name: "Ridge",
+        brandType: null,
+        firstItemType: "WINE",
+      }).brand_type,
+      "winery",
+    );
     assert.equal(
       brandCardFromSource({ id: "b", name: "X", brandType: null }).brand_type,
-      "other",
+      null,
     );
   });
 });
@@ -131,11 +140,16 @@ describe("brandDetailsFromSource", () => {
       },
     ]);
     assert.equal(details.item_brands.length, 1);
-    assert.equal(details.created_at, "2019-06-01T00:00:00Z");
   });
 });
 
-test("sinceYear slices, never parses", () => {
-  assert.equal(sinceYear("2019-12-31T23:30:00-05:00"), "2019");
-  assert.equal(sinceYear(""), null);
+test("inferBrandType: a stored type wins; `other` and unset defer to the first item", () => {
+  assert.equal(inferBrandType("distillery", "WINE"), "distillery");
+  assert.equal(inferBrandType("restaurant_chain", null), "restaurant_chain");
+  assert.equal(inferBrandType("other", "BEER"), "brewery");
+  assert.equal(inferBrandType(undefined, "SAKE"), "kura");
+  assert.equal(inferBrandType(null, "COFFEE"), "roastery");
+  assert.equal(inferBrandType(null, "TEA"), "tea_house");
+  assert.equal(inferBrandType(null, "SPIRIT"), "distillery");
+  assert.equal(inferBrandType("other", null), null);
 });
