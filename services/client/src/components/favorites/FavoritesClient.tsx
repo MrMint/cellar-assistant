@@ -30,7 +30,8 @@ interface FavoritesClientProps {
 /**
  * `82450ad1:src/components/favorites/FavoritesClient.tsx`, restored.
  *
- * Same tree — "Favorites" title (now an `AppBar`, Back to Me), `CellarItemsFilter` on the old `?types=` URL
+ * Same tree — the title (now an `AppBar`, Back to Me, and "Loved" since
+ * D27 renamed favourites at the edges; the data model keeps its name), `CellarItemsFilter` on the old `?types=` URL
  * state, `VirtualGrid` of `ItemCard`s, "No favorites found" — over
  * `me.favorites(types:)`:
  *
@@ -86,13 +87,13 @@ export function FavoritesClient({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {/* Reached from the Me hub (D1): Back goes there on a cold open. */}
-        <AppBar title="Favorites" parent="/me" className="min-w-0 flex-1" />
+        <AppBar title="Loved" parent="/me" className="min-w-0 flex-1" />
         <div className="flex flex-row gap-4">
           <CellarItemsFilter types={types} onTypesChange={setTypes} />
         </div>
       </div>
       {list.failure !== null && (
-        <ApiError error={list.failure} title="Favorites" />
+        <ApiError error={list.failure} title="Loved" />
       )}
       <VirtualGrid
         items={items}
@@ -102,8 +103,8 @@ export function FavoritesClient({
         gridBreakpoints={{ xs: 6, md: 4, lg: 2 }}
         emptyMessage={
           list.status === "resetting"
-            ? "Loading favorites…"
-            : "No favorites found"
+            ? "Loading what you love…"
+            : "Nothing loved yet. Tap the heart on anything you love."
         }
         onLoadMore={async () => {
           await list.loadMore();

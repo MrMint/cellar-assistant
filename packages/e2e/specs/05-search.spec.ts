@@ -130,7 +130,7 @@ test("the restored landing view: greeting, collection line, Scan, Photo, five qu
     "Cellars",
     "Map",
     "Tier Lists",
-    "Favorites",
+    "Loved",
     "Rankings",
   ]);
   expect(noise.pageErrors, "the search page threw").toEqual([]);

@@ -209,6 +209,7 @@ export const SearchRecentActivityQuery = graphql(`
               id
               type
               name
+              isWantToTry
               images(first: 1) {
                 edges {
                   node {
@@ -237,6 +238,11 @@ export const SearchRecentActivityQuery = graphql(`
               id
               name
               displayName
+              myInteraction {
+                __typename
+                id
+                wantToVisit
+              }
               photos(first: 1) {
                 edges {
                   node {

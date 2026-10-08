@@ -44,7 +44,7 @@ describe("FavoritesClient (restored)", () => {
     const html = render(
       <FavoritesClient initialPage={emptyPage} initialTypes={[]} />,
     );
-    assert.match(html, /^(?:<[^>]+>)*Favorites</, "the title leads the page");
+    assert.match(html, /^(?:<[^>]+>)*Loved</, "the title leads the page");
     for (const type of ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"]) {
       assert.match(html, new RegExp(`aria-label="${type}"`));
     }

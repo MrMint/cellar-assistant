@@ -286,6 +286,11 @@ describe("activityEntryFromNode (the old buildActivityFeed's extractors)", () =>
       userId: "u2",
       userName: "Fran Friend",
       userAvatar: null,
+      // X08: a friend's row carries the bookmark for what they drank.
+      save: {
+        target: { kind: "ITEM", itemType: "WINE", itemId: "w1" },
+        saved: false,
+      },
       score: 4.5,
       // Through the shared `richTextFromReviewText`: the rewrite's
       // `{ body }` shape becomes a Lexical state, which RichTextDisplay needs.
@@ -377,6 +382,67 @@ describe("activityEntryFromNode (the old buildActivityFeed's extractors)", () =>
       null,
     );
     assert.equal(activityEntryFromNode(entry({ item: null })), null);
+  });
+});
+
+describe("the Save target on activity rows (X08)", () => {
+  test("an item row saves the item, with its state", () => {
+    const result = activityEntryFromNode(
+      entry({
+        item: {
+          __typename: "Beer",
+          id: "b9",
+          type: "BEER",
+          name: "Hazy",
+          isWantToTry: true,
+          images: { edges: [] },
+        },
+      }),
+    );
+    assert.deepEqual(result?.save, {
+      target: { kind: "ITEM", itemType: "BEER", itemId: "b9" },
+      saved: true,
+    });
+  });
+
+  test("a tier-listed place saves the place (its wantToVisit)", () => {
+    const result = activityEntryFromNode(
+      entry({
+        kind: "TIER_LISTED",
+        rank: 1,
+        item: null,
+        review: null,
+        place: {
+          __typename: "Place",
+          id: "p1",
+          name: "Corner Bar",
+          displayName: null,
+          myInteraction: {
+            __typename: "PlaceInteraction",
+            id: "i1",
+            wantToVisit: true,
+          },
+          photos: { edges: [] },
+        },
+        tierListItem: {
+          __typename: "TierListItem",
+          id: "t1",
+          tierListId: "l1",
+          tierList: { __typename: "TierList", id: "l1", name: "Best bars" },
+        },
+      }),
+    );
+    assert.deepEqual(result?.save, {
+      target: { kind: "PLACE", placeId: "p1" },
+      saved: true,
+    });
+  });
+
+  test("the viewer's own rows carry no bookmark", () => {
+    const feed = activityFeedFromNodes([entry({})], "u2");
+    assert.equal(feed[0]?.save, null);
+    const others = activityFeedFromNodes([entry({})], "someone-else");
+    assert.notEqual(others[0]?.save, null);
   });
 });
 

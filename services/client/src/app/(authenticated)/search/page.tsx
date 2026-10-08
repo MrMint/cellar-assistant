@@ -174,7 +174,7 @@ const QUICK_LINKS = [
   { href: "/cellars", label: "Cellars", icon: Cellar },
   { href: "/map", label: "Map", icon: MapIcon },
   { href: "/tier-lists", label: "Tier Lists", icon: ListView },
-  { href: "/favorites", label: "Favorites", icon: Love },
+  { href: "/favorites", label: "Loved", icon: Love },
   { href: "/rankings", label: "Rankings", icon: Leaderboard },
 ];
 
@@ -249,6 +249,7 @@ async function DiscoveryContent({
       .then((data): ActivityEntry[] =>
         activityFeedFromNodes(
           data.me?.recentActivity.edges.map((edge) => edge.node) ?? [],
+          data.me?.id ?? null,
         ),
       )
       .catch((error: unknown): ActivityEntry[] => {

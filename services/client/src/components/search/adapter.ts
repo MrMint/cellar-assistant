@@ -11,6 +11,7 @@ import { richTextFromReviewText } from "@/components/common/rich-text";
 import { itemCardFromItem } from "@/components/item/ItemCard/adapter";
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
+import type { WantToTryTarget } from "@/components/want-to-try/adapter";
 import {
   type FragmentOf,
   type ResultOf,
@@ -217,6 +218,12 @@ export const apiActivityKinds = (
   kinds: readonly ActivityKind[],
 ): ApiActivityKind[] => kinds.map((kind) => API_KIND[kind]);
 
+/** X08: the Save target on a friend's row — what it names and its state. */
+export type ActivitySave = {
+  target: WantToTryTarget;
+  saved: boolean;
+};
+
 type ActivityBase = {
   id: string;
   timestamp: string;
@@ -230,6 +237,11 @@ type ActivityBase = {
   userId: string;
   userName: string;
   userAvatar: string | null;
+  /**
+   * The bookmark on the row (X08: "a Save target on activity rows"). Absent
+   * on the viewer's own rows — you do not want to try what you just logged.
+   */
+  save?: ActivitySave | null;
 };
 
 /** The old `ActivityEntry`, one image URL in place of the file id. */
@@ -278,13 +290,16 @@ const itemDisplayName = (item: NonNullable<ActivityNode["item"]>): string => {
  */
 export const activityEntryFromNode = (
   node: ActivityNode,
+  viewerId: string | null = null,
 ): ActivityEntry | null => {
   const user = {
     userId: node.user?.id ?? "",
     userName: node.user?.displayName ?? "",
     userAvatar: node.user?.avatarUrl ?? null,
   };
-  const base = { timestamp: node.occurredAt as string, ...user };
+  const own = viewerId !== null && user.userId === viewerId;
+  const save = own ? null : activitySave(node);
+  const base = { timestamp: node.occurredAt as string, ...user, save };
 
   if (node.kind === "TIER_LISTED") {
     const list = node.tierListItem?.tierList;
@@ -354,16 +369,40 @@ export const activityEntryFromNode = (
   };
 };
 
+/** What the row's bookmark would save: its item, or a tier-listed place. */
+const activitySave = (node: ActivityNode): ActivitySave | null => {
+  if (node.item !== null) {
+    const type = node.item.type;
+    if (!(type in ITEM_ROUTE)) return null;
+    return {
+      target: {
+        kind: "ITEM",
+        itemType: type as ApiItemType,
+        itemId: node.item.id,
+      },
+      saved: node.item.isWantToTry === true,
+    };
+  }
+  if (node.place !== null) {
+    return {
+      target: { kind: "PLACE", placeId: node.place.id },
+      saved: node.place.myInteraction?.wantToVisit === true,
+    };
+  }
+  return null;
+};
+
 /**
  * The old `buildActivityFeed`: entries newest first, capped at eight. The
  * server already merged and ordered them; the sort is kept so the order never
- * depends on that.
+ * depends on that. `viewerId` takes the bookmark off the viewer's own rows.
  */
 export const activityFeedFromNodes = (
   nodes: readonly ActivityNode[],
+  viewerId: string | null = null,
 ): ActivityEntry[] =>
   nodes
-    .map(activityEntryFromNode)
+    .map((node) => activityEntryFromNode(node, viewerId))
     .filter((entry): entry is ActivityEntry => entry !== null)
     .sort(
       (a, b) =>

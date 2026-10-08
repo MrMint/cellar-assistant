@@ -19,6 +19,7 @@ import { Link } from "@/components/app/Link";
 import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
 import { formatDistance } from "@/lib/items/distance";
 import { distance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -235,11 +236,10 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
                   }
                   transition={fadeShort}
                 >
-                  <Link
-                    href={entry.itemHref}
-                    underline="none"
-                    className="flex h-full items-center gap-3 rounded-md bg-surface-1 p-2.5 text-ink-1 transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2"
-                  >
+                  {/* The name is the link, stretched over the row, so the
+                      bookmark beside the avatar can be a button of its own
+                      (a button inside a link is not allowed). */}
+                  <div className="relative flex h-full items-center gap-3 rounded-md bg-surface-1 p-2.5 text-ink-1 transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2">
                     {/* Item thumbnail with action badge */}
                     <div className="relative size-11 shrink-0">
                       <div className="relative size-full overflow-hidden rounded-sm">
@@ -263,7 +263,14 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       {/* Item name */}
                       <p className="type-callout truncate font-semibold">
-                        {entry.itemName}
+                        <Link
+                          href={entry.itemHref}
+                          overlay
+                          underline="none"
+                          className="text-ink-1"
+                        >
+                          {entry.itemName}
+                        </Link>
                       </p>
 
                       {/* Action line */}
@@ -304,7 +311,18 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
                       size="sm"
                       className="size-7 self-center text-xs"
                     />
-                  </Link>
+
+                    {/* X08: Save what a friend is drinking, right from here. */}
+                    {entry.save != null && (
+                      <WantToTryButton
+                        target={entry.save.target}
+                        saved={entry.save.saved}
+                        name={entry.itemName}
+                        size="sm"
+                        className="-my-1 -mr-1 self-center"
+                      />
+                    )}
+                  </div>
                 </motion.div>
               );
             })}
