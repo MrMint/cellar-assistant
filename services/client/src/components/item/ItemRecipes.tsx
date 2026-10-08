@@ -1,18 +1,13 @@
 "use client";
 
-import { Box, Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
 import Image from "next/image";
-import { MdRestaurant } from "react-icons/md";
-import { Link } from "@/components/common/Link";
+import { Restaurant } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { Badge } from "@/components/ui/badge";
 import beer1 from "@/images/beer1.png";
 import wine1 from "@/images/wine1.png";
 import { HeldBackNote } from "./HeldBackNote";
-
-const getDifficultyColor = (level: number) => {
-  if (level <= 2) return "success";
-  if (level <= 3) return "warning";
-  return "danger";
-};
+import { ItemSection } from "./ItemSection";
 
 const getDifficultyText = (level: number) => {
   if (level === 1) return "Very Easy";
@@ -81,6 +76,10 @@ export type ItemRecipesProps = {
  * `Item.recipeIngredients` + `RecipeIngredient.recipe` (G11) through the
  * adapter; a recipe's own `imageUrl` goes into a plain `<img>` (no
  * `remotePatterns` entry), the fallback stays a static `next/image`.
+ *
+ * The difficulty chip was green/amber/red by level with Joy's palette; the
+ * word ("Easy", "Hard") is the information, so it is one neutral outline now
+ * (design §3.1: no decorative hues), like the type and "Optional" chips.
  */
 export const ItemRecipes = ({
   recipeIngredients,
@@ -93,123 +92,77 @@ export const ItemRecipes = ({
   }
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography level="title-sm" sx={{ mb: 2 }}>
-          {title} ({recipeIngredients.length})
-        </Typography>
+    <ItemSection title={`${title} (${recipeIngredients.length})`}>
+      <ul className="flex flex-col gap-4">
+        {recipeIngredients.map((ingredient) => {
+          const recipe = ingredient.recipe;
+          const fallback = getFallback(recipe.type);
+          const quantityText = formatQuantity(
+            ingredient.quantity,
+            ingredient.unit,
+          );
 
-        <Stack spacing={2}>
-          {recipeIngredients.map((ingredient) => {
-            const recipe = ingredient.recipe;
-            const fallback = getFallback(recipe.type);
-            const quantityText = formatQuantity(
-              ingredient.quantity,
-              ingredient.unit,
-            );
+          return (
+            <li key={ingredient.id} className="flex items-center gap-4">
+              <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface-2">
+                {recipe.image_url !== null && recipe.image_url !== undefined ? (
+                  // biome-ignore lint/performance/noImgElement: a recipe's own image URL has no `remotePatterns` entry.
+                  <img
+                    src={recipe.image_url}
+                    alt={recipe.name}
+                    width={48}
+                    height={48}
+                    className="size-full rounded-xs object-cover"
+                  />
+                ) : (
+                  <Image
+                    src={fallback.image}
+                    alt={fallback.alt}
+                    width={48}
+                    height={48}
+                    className="size-full rounded-xs object-cover"
+                  />
+                )}
+              </span>
 
-            return (
-              <Box key={ingredient.id}>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: "sm",
-                      overflow: "hidden",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      bgcolor: "background.level1",
-                    }}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/recipes/${recipe.id}`}
+                    underline="always"
+                    className="type-body font-medium text-ink-1"
                   >
-                    {recipe.image_url !== null &&
-                    recipe.image_url !== undefined ? (
-                      <Box
-                        component="img"
-                        src={recipe.image_url}
-                        alt={recipe.name}
-                        width={48}
-                        height={48}
-                        style={{ objectFit: "cover", borderRadius: "4px" }}
-                      />
-                    ) : (
-                      <Image
-                        src={fallback.image}
-                        alt={fallback.alt}
-                        width={48}
-                        height={48}
-                        style={{ objectFit: "cover", borderRadius: "4px" }}
-                      />
+                    {recipe.name}
+                  </Link>
+                  <Badge variant="secondary" className="capitalize">
+                    {recipe.type === "food" && <Restaurant aria-hidden />}
+                    {recipe.type}
+                  </Badge>
+                  {recipe.difficulty_level !== null &&
+                    recipe.difficulty_level !== undefined && (
+                      <Badge variant="outline">
+                        {getDifficultyText(recipe.difficulty_level)}
+                      </Badge>
                     )}
-                  </Box>
-
-                  <Box sx={{ flex: 1 }}>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      alignItems="center"
-                      flexWrap="wrap"
-                    >
-                      <Link href={`/recipes/${recipe.id}`}>
-                        <Typography
-                          level="body-md"
-                          fontWeight="md"
-                          sx={{ textDecoration: "underline" }}
-                        >
-                          {recipe.name}
-                        </Typography>
-                      </Link>
-
-                      <Chip
-                        variant="soft"
-                        size="sm"
-                        startDecorator={
-                          recipe.type === "food" ? <MdRestaurant /> : undefined
-                        }
-                        sx={{ textTransform: "capitalize" }}
-                      >
-                        {recipe.type}
-                      </Chip>
-
-                      {recipe.difficulty_level !== null &&
-                        recipe.difficulty_level !== undefined && (
-                          <Chip
-                            color={getDifficultyColor(recipe.difficulty_level)}
-                            variant="outlined"
-                            size="sm"
-                          >
-                            {getDifficultyText(recipe.difficulty_level)}
-                          </Chip>
-                        )}
-
-                      {ingredient.is_optional && (
-                        <Chip variant="outlined" size="sm" color="neutral">
-                          Optional
-                        </Chip>
-                      )}
-                    </Stack>
-
-                    <Typography
-                      level="body-sm"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      {quantityText
-                        ? `${quantityText} of ${itemName}`
-                        : `Uses ${itemName}`}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Box>
-            );
-          })}
-        </Stack>
-        <HeldBackNote
-          shown={recipeIngredients.length}
-          total={total}
-          noun="recipes"
-        />
-      </CardContent>
-    </Card>
+                  {ingredient.is_optional && (
+                    <Badge variant="outline">Optional</Badge>
+                  )}
+                </div>
+                <p className="type-callout text-ink-2">
+                  {quantityText
+                    ? `${quantityText} of ${itemName}`
+                    : `Uses ${itemName}`}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <HeldBackNote
+        shown={recipeIngredients.length}
+        total={total}
+        noun="recipes"
+      />
+    </ItemSection>
   );
 };

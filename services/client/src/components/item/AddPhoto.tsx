@@ -1,21 +1,16 @@
 "use client";
 
-import {
-  Alert,
-  Button,
-  DialogContent,
-  DialogTitle,
-  LinearProgress,
-  Modal,
-  ModalDialog,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useRef, useState } from "react";
-import { MdPhotoLibrary } from "react-icons/md";
+import { PhotoLibrary, Warning } from "@/components/app/icons";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { describeUploadBlockers } from "@/lib/api/files";
 import { dataUrlToFile } from "@/lib/items/data-url";
 import { CameraCapture } from "../common/CameraCapture";
+import { LoadingButton } from "./LoadingButton";
+
+/** The dialog's title, as the old modal had it. */
+const TITLE = "Set a new display image";
 
 export type AddPhotoProps = {
   open: boolean;
@@ -40,22 +35,30 @@ export type AddPhotoProps = {
  *   upload's error, which the old modal dropped, is shown.
  */
 export const AddPhotoModal = ({ open, onClose, onCapture }: AddPhotoProps) => (
-  <Modal open={open} onClose={onClose}>
-    <ModalDialog>
-      <AddPhotoBody onCapture={onCapture} />
-    </ModalDialog>
-  </Modal>
+  <ResponsiveDialog
+    open={open}
+    onOpenChange={(next) => {
+      if (!next) onClose();
+    }}
+    title={TITLE}
+  >
+    {/* Mounted only while open: a closed dialog holds no camera stream. */}
+    {open && <AddPhotoBody onCapture={onCapture} showTitle={false} />}
+  </ResponsiveDialog>
 );
 
 /**
  * The dialog's title and body, apart from the modal around them: a modal
  * renders through a portal that a static render never mounts, so this is the
  * part a markup test can reach without stubbing the dialog primitive. Mounted
- * only while the modal is open, so its state starts fresh each time.
+ * only while the modal is open, so its state starts fresh each time. Inside
+ * `AddPhotoModal` the sheet draws the title (`showTitle={false}` here), so it
+ * is not read twice.
  */
 export const AddPhotoBody = ({
   onCapture,
-}: Pick<AddPhotoProps, "onCapture">) => {
+  showTitle = true,
+}: Pick<AddPhotoProps, "onCapture"> & { showTitle?: boolean }) => {
   const input = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,47 +87,45 @@ export const AddPhotoBody = ({
   };
 
   return (
-    <>
-      <DialogTitle>Set a new display image</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2}>
-          {blockers.length === 0 && (
-            <CameraCapture onCapture={onCameraCapture} showLibrary={false} />
-          )}
-          {busy && <LinearProgress />}
-          <Button
-            variant="outlined"
-            color="neutral"
-            startDecorator={<MdPhotoLibrary />}
-            loading={busy}
-            disabled={blockers.length > 0}
-            onClick={() => input.current?.click()}
-          >
-            Choose a photo
-          </Button>
-          <input
-            ref={input}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file !== undefined) void upload(file);
-            }}
-          />
-          {blockers.map((blocker) => (
-            <Typography key={blocker} level="body-xs" color="warning">
-              {blocker}
-            </Typography>
-          ))}
-          {error !== null && (
-            <Alert size="sm" color="danger" variant="soft">
-              {error}
-            </Alert>
-          )}
-        </Stack>
-      </DialogContent>
-    </>
+    <div className="flex flex-col gap-4">
+      {showTitle && <h2 className="type-title-2">{TITLE}</h2>}
+      {blockers.length === 0 && (
+        <CameraCapture onCapture={onCameraCapture} showLibrary={false} />
+      )}
+      <LoadingButton
+        variant="outline"
+        loading={busy}
+        disabled={blockers.length > 0}
+        onClick={() => input.current?.click()}
+      >
+        {!busy && <PhotoLibrary aria-hidden />}
+        Choose a photo
+      </LoadingButton>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file !== undefined) void upload(file);
+        }}
+      />
+      {blockers.map((blocker) => (
+        <p
+          key={blocker}
+          className="type-footnote flex items-start gap-1.5 text-ink-2"
+        >
+          <Warning aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+          {blocker}
+        </p>
+      ))}
+      {error !== null && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
   );
 };

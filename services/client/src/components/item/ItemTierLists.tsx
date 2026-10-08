@@ -1,13 +1,28 @@
-import { Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
-import { MdFormatListNumbered } from "react-icons/md";
-import { BAND_JOY_COLORS, BAND_LABELS } from "@/components/tier-list/constants";
-import { Link } from "../common/Link";
+import { Ranked } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { BAND_LABELS } from "@/components/tier-list/constants";
+import { cn } from "@/lib/utils";
 import { HeldBackNote } from "./HeldBackNote";
+import { ItemSection } from "./ItemSection";
 
 export type ItemTierListEntry = {
   id: string;
   band: number;
   tier_list: { id: string; name: string } | null;
+};
+
+/**
+ * The tier-band ramp (design §3.1): claret → brass for 5 … 1, Unrated on
+ * `surface-3`. The band word is always printed beside the hue. Written out in
+ * full so Tailwind sees every class.
+ */
+const BAND_CLASS: Record<number, string> = {
+  5: "bg-band-5 text-ink-1",
+  4: "bg-band-4 text-ink-1",
+  3: "bg-band-3 text-ink-1",
+  2: "bg-band-2 text-ink-1",
+  1: "bg-band-1 text-ink-1",
+  0: "bg-surface-3 text-ink-2",
 };
 
 /**
@@ -33,45 +48,40 @@ export function ItemTierLists({
   }
 
   return (
-    <Card>
-      <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-          <MdFormatListNumbered size={20} />
-          <Typography level="title-lg">On Lists</Typography>
-        </Stack>
-        <Stack spacing={1}>
-          {entries.map((item) => (
-            <Stack
-              key={item.id}
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              justifyContent="space-between"
-            >
-              {item.tier_list ? (
-                <Link
-                  href={`/tier-lists/${item.tier_list.id}`}
-                  sx={{ textDecoration: "none" }}
-                >
-                  <Typography level="title-sm">
-                    {item.tier_list.name}
-                  </Typography>
-                </Link>
-              ) : (
-                <Typography level="title-sm">Unknown list</Typography>
-              )}
-              <Chip
-                size="sm"
-                variant="soft"
-                color={BAND_JOY_COLORS[item.band] ?? "neutral"}
+    <ItemSection
+      title="On Lists"
+      icon={<Ranked aria-hidden className="size-5 text-ink-2" />}
+    >
+      <ul className="flex flex-col gap-2">
+        {entries.map((item) => (
+          <li
+            key={item.id}
+            className="flex min-h-11 items-center justify-between gap-2"
+          >
+            {item.tier_list ? (
+              <Link
+                href={`/tier-lists/${item.tier_list.id}`}
+                className="type-callout min-w-0 truncate font-semibold text-ink-1"
               >
-                {BAND_LABELS[item.band] ?? `Band ${item.band}`}
-              </Chip>
-            </Stack>
-          ))}
-        </Stack>
-        <HeldBackNote shown={entries.length} total={total} noun="lists" />
-      </CardContent>
-    </Card>
+                {item.tier_list.name}
+              </Link>
+            ) : (
+              <span className="type-callout font-semibold text-ink-1">
+                Unknown list
+              </span>
+            )}
+            <span
+              className={cn(
+                "inline-flex h-6 shrink-0 items-center rounded-full px-2.5 font-medium text-xs",
+                BAND_CLASS[item.band] ?? BAND_CLASS[0],
+              )}
+            >
+              {BAND_LABELS[item.band] ?? `Band ${item.band}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <HeldBackNote shown={entries.length} total={total} noun="lists" />
+    </ItemSection>
   );
 }
