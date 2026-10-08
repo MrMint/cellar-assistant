@@ -1,9 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Spinner } from "@/components/ui/spinner";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { MapMachineProvider } from "../state/MapMachineProvider";
+import { MapShell } from "./MapShell";
 
 interface MapViewProps {
   userId: string;
@@ -15,11 +15,9 @@ const MapLibreRenderer = dynamic(
     import("../maplibre/MapLibreRenderer").then((mod) => mod.MapLibreRenderer),
   {
     ssr: false,
-    loading: () => (
-      <div className="flex h-full w-full items-center justify-center bg-surface-1">
-        <Spinner className="size-8 text-ink-2" />
-      </div>
-    ),
+    // The route's shell again (X24), not a spinner: the chunk arrives into
+    // the frame the tap already showed.
+    loading: () => <MapShell />,
   },
 );
 

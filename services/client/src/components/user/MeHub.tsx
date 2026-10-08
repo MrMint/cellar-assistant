@@ -11,8 +11,10 @@ import {
   Store,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { LoadingShell, ShellBlocks } from "@/components/app/LoadingShell";
 import { InsetSection, ListRow, Page } from "@/components/app/Page";
 import { UserAvatar } from "@/components/app/UserAvatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ServerUser } from "@/utilities/auth-server";
 import { SignOutButton } from "./SignOutButton";
 
@@ -103,5 +105,40 @@ export function MeHub({ user }: { user: ServerUser }) {
         <SignOutButton />
       </InsetSection>
     </Page>
+  );
+}
+
+/**
+ * `/me` while it loads (X24). Everything on the hub but the viewer's own
+ * header is fixed, so the shell draws it for real — the same sections and
+ * rows, live links included — and only the avatar, the name and the email
+ * (and the Sign out row, which needs the client) are placeholders.
+ */
+export function MeHubShell() {
+  return (
+    <LoadingShell label="your profile">
+      <Page>
+        <ShellBlocks className="flex items-center gap-4 px-1 pt-2">
+          <Skeleton className="size-16 shrink-0 rounded-full" />
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <Skeleton className="h-7 w-[60%]" />
+            <Skeleton className="h-4 w-[45%]" />
+          </div>
+        </ShellBlocks>
+        {ME_SECTIONS.map((section) => (
+          <InsetSection key={section.label} label={section.label}>
+            {section.links.map((link) => (
+              <LinkRow key={link.href} {...link} />
+            ))}
+          </InsetSection>
+        ))}
+        <InsetSection label="Account">
+          <LinkRow label="Edit profile" href="/users/edit" icon={Edit} />
+          <ShellBlocks className="flex min-h-11 items-center px-4 py-2.5">
+            <Skeleton className="h-5 w-20" />
+          </ShellBlocks>
+        </InsetSection>
+      </Page>
+    </LoadingShell>
   );
 }

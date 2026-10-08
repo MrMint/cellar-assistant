@@ -8,7 +8,7 @@
  * `interactive.test.tsx`, under happy-dom.
  */
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { ReactNode } from "react";
@@ -72,12 +72,19 @@ describe("nav: which tab is lit", () => {
       ...TABS.map((t) => t.href),
       ...CAPTURE_OPTIONS.map((o) => o.href),
     ];
-    const missing = hrefs.filter(
-      (href) =>
-        href !== "/" &&
-        !existsSync(`${app}${href}/page.tsx`) &&
-        !existsSync(`${app}${href}/page.ts`),
-    );
+    // A page may sit one route group down (`cellars/(list)/page.tsx`, X24's
+    // way of scoping a loading shell to one page).
+    const hasPage = (dir: string) =>
+      existsSync(`${dir}/page.tsx`) || existsSync(`${dir}/page.ts`);
+    const routeExists = (href: string) => {
+      const dir = `${app}${href}`;
+      if (hasPage(dir)) return true;
+      if (!existsSync(dir)) return false;
+      return readdirSync(dir).some(
+        (entry) => /^\(.+\)$/.test(entry) && hasPage(`${dir}/${entry}`),
+      );
+    };
+    const missing = hrefs.filter((href) => href !== "/" && !routeExists(href));
     assert.deepEqual(
       missing.filter((m) => m !== "/me"),
       [],
