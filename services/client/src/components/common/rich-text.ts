@@ -94,3 +94,13 @@ export const richTextFromReviewText = (text: unknown): string | null => {
 
   return null;
 };
+
+/**
+ * The content-editable's classes, shared by `RichTextDisplay` and
+ * `RichTextEditor`. Lexical renders bare `<p>`s, which Preflight strips of
+ * their margins; the `[&_p]` rule gives them back the 1em the old display
+ * had, so the first line sits a line's breathing room below the box's top
+ * (where the editor's placeholder is drawn).
+ */
+export const RICH_TEXT_CONTENT =
+  "type-body max-h-80 overflow-y-auto overflow-x-hidden px-4 text-ink-1 [&_p]:my-4";

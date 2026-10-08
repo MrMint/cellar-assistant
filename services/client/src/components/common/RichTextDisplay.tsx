@@ -7,18 +7,11 @@ import {
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
-import { styled } from "@mui/joy";
+import { RICH_TEXT_CONTENT } from "./rich-text";
 
 export type RichTextDisplayProps = {
   text: string;
 };
-
-const StyledContentEditable = styled(ContentEditable)(({ theme: _theme }) => ({
-  padding: "0 1rem",
-  overflow: "hidden",
-  maxHeight: "20rem",
-  overflowY: "auto",
-}));
 
 export const RichTextDisplay = ({ text }: RichTextDisplayProps) => {
   return (
@@ -31,7 +24,7 @@ export const RichTextDisplay = ({ text }: RichTextDisplayProps) => {
       }
     >
       <RichTextPlugin
-        contentEditable={<StyledContentEditable />}
+        contentEditable={<ContentEditable className={RICH_TEXT_CONTENT} />}
         placeholder={null}
         ErrorBoundary={LexicalErrorBoundary}
       />
