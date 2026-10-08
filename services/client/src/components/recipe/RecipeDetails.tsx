@@ -186,7 +186,12 @@ export const RecipeDetails = ({
                   className="mb-4"
                 />
               )}
-              <RecipeIngredientList ingredients={recipe.ingredients} />
+              <RecipeIngredientList
+                ingredients={recipe.ingredients}
+                // The bar vocabulary is drinks: on a dish every line would
+                // read "Not tracked", which is noise, not information.
+                showAvailability={recipe.type === "cocktail"}
+              />
             </section>
           </div>
 

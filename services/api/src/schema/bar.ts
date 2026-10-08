@@ -349,9 +349,11 @@ builder.objectFields(RecipeType_, (t) => ({
     nullable: true,
     description:
       "G29: can the viewer make this now, or is it one bottle away? Null for " +
-      "an anonymous viewer.",
+      "an anonymous viewer, and for a food recipe — the bar vocabulary is " +
+      "drinks, so a dish would only ever read as missing everything.",
     resolve: async (recipe: RecipeDto, _args, context) => {
       if (context.ctx.viewerId === null) return null;
+      if (recipe.type !== "cocktail") return null;
       const [page, inventory] = await Promise.all([
         context
           .actor(RecipeActorDescriptor, recipe.id)

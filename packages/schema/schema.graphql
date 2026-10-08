@@ -4602,7 +4602,7 @@ type Recipe {
   isLoved: Boolean!
 
   """
-  G29: can the viewer make this now, or is it one bottle away? Null for an anonymous viewer.
+  G29: can the viewer make this now, or is it one bottle away? Null for an anonymous viewer, and for a food recipe — the bar vocabulary is drinks, so a dish would only ever read as missing everything.
   """
   makeability: RecipeMakeability
 

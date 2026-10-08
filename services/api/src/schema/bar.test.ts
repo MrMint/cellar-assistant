@@ -453,3 +453,18 @@ describe("Item.cocktails (X14)", () => {
     expect(call?.args[1]).toEqual({ type: "SPIRIT", id: SPIRIT_ID });
   });
 });
+
+describe("Recipe.makeability on a food recipe", () => {
+  it("is null — the bar vocabulary is drinks", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => ({ ...recipeDto, type: "food" as const }),
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { makeability { status } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ makeability: null });
+    expect(calls.some((call) => call.actorType === "BarActor")).toBe(false);
+  });
+});
