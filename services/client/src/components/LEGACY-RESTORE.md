@@ -44,7 +44,7 @@ own them add those); the recipe and place hooks (`useCanonicalRecipe`,
 
 | Old | New | Where |
 |---|---|---|
-| `getNhostStorageUrl(file_id)` into `next/image` | presigned `ItemImage.file.url` into `next/image`, as before. Read URLs are stable per 24 h window (`services/actors/src/lib/s3-presign.ts`, "Stable read URLs"), so the optimizer's cache hits; the file host's `remotePatterns` entry is derived from `PUBLIC_FILES_HOST` (`next.config.mjs`, `imagesConfig`). Was a plain `<img>` under D10 until 2026-10-06 | `ItemCard`, `ItemImage`, `PlaceDetails`, `PlaceDetailsContent` |
+| `getNhostStorageUrl(file_id)` into `next/image` | presigned `ItemImage.file.url` into `next/image`, as before. Read URLs are stable per 6-day window (`services/actors/src/lib/s3-presign.ts`, "Stable read URLs"), so the optimizer's cache hits; the file host's `remotePatterns` entry is derived from `PUBLIC_FILES_HOST` (`next.config.mjs`, `imagesConfig`). Was a plain `<img>` under D10 until 2026-10-06 | `ItemCard`, `ItemImage`, `PlaceDetails`, `PlaceDetailsContent` |
 | `next/image` `placeholder` from a base64 body | unchanged (`getNextPlaceholder` adds the `data:image/` prefix) | `ItemCard`, `ItemImage` |
 | `next/image` on `brand.logo_url` / `recipe.image_url` | a plain `<img>`: both are free-form URLs on any host, and a `remotePatterns` entry that admits any host is an open SSRF proxy | `BrandCard`, `BrandDetails`, `ItemBrands`, recipe components |
 | `addFavoriteAction` / `deleteFavoriteAction(favoriteId)` server actions | `toggleFavorite(itemId, type)` via URQL, reconciled to the payload's `favorited`; optimistic flip and revert kept | `ItemCard` |

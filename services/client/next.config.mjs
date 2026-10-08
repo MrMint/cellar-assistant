@@ -167,9 +167,9 @@ export const fileImagePattern = (origin) => {
  * D10 kept presigned reads out of the optimizer for three reasons. Two were
  * about the URL changing on every render — a cache key that could never hit,
  * and a cached entry outliving its source. Both are gone: `FileActor.presignRead`
- * now signs **one URL per object per window** (24 h by default,
+ * now signs **one URL per object per window** (6 days by default,
  * `services/actors/src/lib/s3-presign.ts`, "Stable read URLs"), so the same
- * image is the same `url=` all day, the optimizer's cache hits, and no page
+ * image is the same `url=` for the whole window, the optimizer's cache hits, and no page
  * ever asks for a URL after its window rolls over. The third, the SSRF
  * allowlist, is bounded by {@link fileImagePattern}: one origin, ours, which
  * serves nothing unsigned.
@@ -184,10 +184,15 @@ export const fileImagePattern = (origin) => {
  * than the window is one no page will request again — a longer TTL adds no
  * hits. It only lets anyone holding an old `/_next/image?url=<signed URL>`
  * keep fetching the image from the optimizer's (public) cache long after the
- * URL itself stopped verifying. So the floor is the default window, 24 h. For
- * file-host images it is moot anyway: Next takes the larger of this and the
- * upstream `max-age`, and the actor host signs `max-age=<window>` into every
- * read URL. Raise `FILES_READ_URL_WINDOW_SECONDS` there and this follows.
+ * URL itself stopped verifying. So it is the default window, 6 days — set
+ * here explicitly rather than left to the upstream `max-age=<window>` the
+ * actor host signs into every read URL, because that header also says
+ * `private` and the cache that matters in production is Vercel's, not Next's
+ * own `getMaxAge`. Keep the two equal: change `DEFAULT_READ_URL_WINDOW_SECONDS`
+ * (or `FILES_READ_URL_WINDOW_SECONDS`) and change this with it.
+ *
+ * It was a day until 2026-10-05, which meant every image × width was
+ * re-transformed daily — each window rollover is a new `url=`.
  *
  * ## `dangerouslyAllowLocalIP`: only when the file host is loopback
  *
@@ -209,8 +214,9 @@ export const imagesConfig = () => {
   return {
     dangerouslyAllowLocalIP:
       process.env.NODE_ENV === "development" || loopbackOnly,
-    // See "`minimumCacheTTL` is the window" above. Was 31 days (2678400).
-    minimumCacheTTL: 86400,
+    // See "`minimumCacheTTL` is the window" above. Was 31 days (2678400)
+    // under Nhost, then 1 day (86400).
+    minimumCacheTTL: 518400,
     // Only webp — default includes avif+webp which doubles transformations per image.
     formats: ["image/webp"],
     // Only the sizes actually used in the app (200, 400, 500px display sizes + 2x DPR).

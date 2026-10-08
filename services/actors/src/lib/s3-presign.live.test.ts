@@ -171,9 +171,9 @@ describe.skipIf(skip)("setObjectMediaType against MinIO (W4 F5)", () => {
 
     const response = await fetch(url);
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe(
-      "private, max-age=86400, immutable",
-    );
+    // What was signed, not a literal: the value itself is pinned by the unit
+    // test in s3-presign.test.ts; this one proves MinIO honours it.
+    expect(response.headers.get("cache-control")).toBe(window.cacheControl);
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(JPEG);
   });
 });
