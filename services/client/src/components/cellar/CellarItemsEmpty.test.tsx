@@ -25,11 +25,14 @@ describe("cellarItemsEmptyCopy", () => {
       art: "cellar",
       addAction: true,
     });
-    assert.equal(
-      cellarItemsEmptyCopy({ ...base, canAdd: false }).addAction,
-      false,
-      "no Add for a viewer who cannot add",
-    );
+    // A friend's cellar: not "your" cellar, and no Add for a viewer who
+    // cannot add to it.
+    assert.deepEqual(cellarItemsEmptyCopy({ ...base, canAdd: false }), {
+      title: "No bottles here yet.",
+      description: "Bottles its owners add show up here.",
+      art: "cellar",
+      addAction: false,
+    });
     assert.equal(
       cellarItemsEmptyCopy({ ...base, status: "all" }).title,
       "Your cellar is waiting.",

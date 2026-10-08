@@ -99,11 +99,21 @@ export const cellarItemsEmptyCopy = ({
       addAction: false,
     };
   }
+  // Someone else's cellar (a friend's, shared with you): it is not "your"
+  // cellar, and there is nothing for you to add to it.
+  if (!canAdd) {
+    return {
+      title: "No bottles here yet.",
+      description: "Bottles its owners add show up here.",
+      art: "cellar",
+      addAction: false,
+    };
+  }
   return {
     title: "Your cellar is waiting.",
     description: "Add a bottle and it shows up here.",
     art: "cellar",
-    addAction: canAdd,
+    addAction: true,
   };
 };
 
