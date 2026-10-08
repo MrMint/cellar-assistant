@@ -1,5 +1,6 @@
 "use client";
 
+import { formatQuantity } from "@cellar-assistant/contracts/quantity";
 import Image from "next/image";
 import { Restaurant } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
@@ -21,32 +22,6 @@ const getFallback = (type: string) => {
   return type === "food"
     ? { image: beer1, alt: "A food dish" }
     : { image: wine1, alt: "A cocktail" };
-};
-
-const formatQuantity = (quantity?: number | null, unit?: string | null) => {
-  if (quantity === null || quantity === undefined) return "";
-
-  let formatted = quantity.toString();
-
-  // Convert decimals to fractions for common cooking measurements
-  if (quantity % 1 !== 0) {
-    const decimal = quantity % 1;
-    const whole = Math.floor(quantity);
-
-    if (decimal === 0.25) formatted = `${whole > 0 ? whole : ""} 1/4`.trim();
-    else if (decimal === 0.5)
-      formatted = `${whole > 0 ? whole : ""} 1/2`.trim();
-    else if (decimal === 0.75)
-      formatted = `${whole > 0 ? whole : ""} 3/4`.trim();
-    else if (decimal === 0.33)
-      formatted = `${whole > 0 ? whole : ""} 1/3`.trim();
-    else if (decimal === 0.67)
-      formatted = `${whole > 0 ? whole : ""} 2/3`.trim();
-  }
-
-  return unit !== null && unit !== undefined
-    ? `${formatted} ${unit}`
-    : formatted;
 };
 
 export type ItemRecipeIngredient = {
@@ -76,6 +51,9 @@ export type ItemRecipesProps = {
  * `Item.recipeIngredients` + `RecipeIngredient.recipe` (G11) through the
  * adapter; a recipe's own `imageUrl` goes into a plain `<img>` (no
  * `remotePatterns` entry), the fallback stays a static `next/image`.
+ *
+ * Amounts go through the one quantity formatter (X14, contracts
+ * `formatQuantity`): "1½ oz", where this file used to carry its own table.
  *
  * The difficulty chip was green/amber/red by level with Joy's palette; the
  * word ("Easy", "Hard") is the information, so it is one neutral outline now

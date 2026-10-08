@@ -1140,6 +1140,10 @@ describe("C4 · recipe photo extraction", () => {
       itemType: "spirits",
       brandName: null,
       category: null,
+      quantityText: null,
+      brandMentioned: null,
+      baseSpirit: null,
+      role: null,
     });
     expect(result.recipe.instructions).toHaveLength(1);
     expect(loadedIds[0]).toEqual(["main", "extra-1", "extra-2"]);
@@ -1157,6 +1161,71 @@ describe("C4 · recipe photo extraction", () => {
       notes: null,
     });
   };
+
+  /**
+   * X14: the four new per-line fields come through, and the two closed ones
+   * keep only in-vocabulary answers — an illegal `baseSpirit` or `role` is
+   * read as the omission it should have been, never stored.
+   */
+  it("reads quantityText, brandMentioned, baseSpirit and role, dropping illegal answers", async () => {
+    const result = await extract({
+      ...recipe,
+      ingredients: [
+        {
+          name: "Rittenhouse",
+          quantityText: "2 oz",
+          quantity: 2,
+          unit: "oz",
+          brandMentioned: "Rittenhouse",
+          baseSpirit: "rye",
+          role: "base",
+        },
+        {
+          name: "Sweet vermouth",
+          quantityText: "3/4 oz",
+          baseSpirit: "sweet_vermouth",
+          role: "flavour",
+        },
+        { name: "Bitters", brandName: "Angostura" },
+      ],
+    });
+    expect(result.recipe.ingredients[0]).toMatchObject({
+      quantityText: "2 oz",
+      brandMentioned: "Rittenhouse",
+      baseSpirit: "rye",
+      role: "base",
+    });
+    // `sweet_vermouth` is a bar kind but not a spirit; `flavour` no role.
+    expect(result.recipe.ingredients[1]).toMatchObject({
+      quantityText: "3/4 oz",
+      baseSpirit: null,
+      role: null,
+    });
+    // The pre-X14 spelling of the brand still lands.
+    expect(result.recipe.ingredients[2]).toMatchObject({
+      brandMentioned: "Angostura",
+      brandName: "Angostura",
+    });
+  });
+
+  it("decodes each line's readings after its transcription", () => {
+    const items = RECIPE_PHOTO_SCHEMA.properties?.ingredients?.items;
+    const order = Object.keys(
+      (items as { properties?: Record<string, unknown> } | undefined)
+        ?.properties ?? {},
+    );
+    expect(order[0]).toBe("name");
+    expect(order[1]).toBe("quantityText");
+    for (const reading of ["baseSpirit", "role"]) {
+      expect(order.indexOf(reading)).toBeGreaterThan(
+        order.indexOf("brandMentioned"),
+      );
+      expect(order.indexOf(reading)).toBeGreaterThan(order.indexOf("unit"));
+    }
+    expect(
+      (items as { required?: readonly string[] } | undefined)?.required,
+    ).toEqual(["name"]);
+  });
 
   /**
    * **This one asserts a guard that could not fire until C4c.**

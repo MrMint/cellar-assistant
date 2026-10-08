@@ -1,3 +1,4 @@
+import { ItemCocktails } from "@/components/bar/ItemCocktails";
 import { AddReview } from "@/components/review/AddReview";
 import type { CheckInRow, ItemView } from "./adapter";
 import { CellarItemHeader } from "./CellarItemHeader";
@@ -148,6 +149,9 @@ export function CellarItemPageView({
               emptied={bottle.emptyAt}
               itemName={item.name}
             />
+            {/* X14: "Use it up" on an open bottle, else "Cocktails with
+                this"; nothing when no cocktail uses it. */}
+            <ItemCocktails itemId={item.itemId} type={item.type} />
             {config.cellarBrandsColumn === "left" && brands}
             {config.cellarRecipes && (
               <ItemRecipes

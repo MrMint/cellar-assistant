@@ -136,19 +136,45 @@ describe("RecipeDetails (restored)", () => {
     assert.match(html, /Sbagliato v3/);
   });
 
-  test("ingredients: fractions, item link, optional chip, generic category, note", () => {
+  test("ingredients: fractions, item link, optional chip, note", () => {
     assert.match(html, />Ingredients</);
-    assert.match(html, />1 1\/2 oz</);
+    // X14: the one quantity formatter's Unicode fractions.
+    assert.match(html, />1½ oz</);
     assert.match(html, /href="\/wines\/w1"/);
     assert.match(html, />2019 Vermouth</);
-    assert.match(html, />1\/2 oz</);
+    assert.match(html, />½ oz</);
     assert.match(html, />Optional</);
-    assert.match(html, />garnish</);
+    // The generic category chip went with X14: the availability tag says
+    // what matters about the line.
+    assert.doesNotMatch(html, />garnish</);
     assert.match(html, /Note: Any orange/);
+    // The old random icons stay gone; with no availability in the fixture
+    // (a signed-out read) there are no tags at all.
     assert.doesNotMatch(
       html,
-      /In your cellar|Not in cellar|View substitutions/,
+      /In your cellar|Not in cellar|View substitutions|data-availability/,
     );
+  });
+
+  test("Love and the bar's verdict, when the viewer has them (D9, G29)", () => {
+    const signedIn = render(
+      <RecipeDetails
+        recipe={{
+          ...recipe,
+          is_loved: true,
+          makeability: {
+            status: "ONE_AWAY",
+            missing: ["Campari"],
+            substituteCount: 0,
+          },
+        }}
+        viewerId="me"
+      />,
+    );
+    assert.match(signedIn, /aria-label="Loved — tap to remove"/);
+    assert.match(signedIn, /aria-pressed="true"/);
+    assert.match(signedIn, /data-makeability="one_away"/);
+    assert.match(signedIn.replace(/<[^>]+>/g, ""), /One bottle away · Campari/);
   });
 
   test("instructions: numbered chip, type chip, equipment, time", () => {

@@ -124,7 +124,8 @@ describe("ItemPageView (restored {T}Details)", () => {
     assert.match(html, /placeholder="Add a Review\.\.\."/);
     assert.match(html, /Tea Brands \(1\)/);
     assert.match(html, /Used in Recipes \(1\)/);
-    assert.match(html, /1\/2 cup of Dragonwell/);
+    // X14: the one quantity formatter — a Unicode half, not "1/2".
+    assert.match(html, /½ cup of Dragonwell/);
   });
 
   test("header: Add to Cellar (one cellar = a button), Share, Edit for the creator", () => {

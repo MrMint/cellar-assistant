@@ -18,6 +18,7 @@ export const MaintenanceActorDescriptor: ActorDescriptor<MaintenanceActorInterfa
     actorType: MAINTENANCE_ACTOR_TYPE,
     category: "job",
     methods: {
+      backfillRecipeMeta: {},
       reapOrphanFiles: {},
       reportDeadLetters: {},
       acknowledgeDeadLetters: {},

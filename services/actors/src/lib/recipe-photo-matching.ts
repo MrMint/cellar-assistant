@@ -42,11 +42,14 @@
  * which is what "2 oz red wine" actually is.
  */
 import type {
+  BarKind,
   CreateRecipeGroupInput,
   CreateRecipeInput,
   Ctx,
+  ExtractedRecipe,
   ExtractedRecipeIngredient,
   ExtractedRecipeInstruction,
+  InferredIngredientMeta,
   InstructionType,
   ItemSearchHit,
   ItemSearchInput,
@@ -62,8 +65,10 @@ import type {
   SetRecipeInstructionsInput,
 } from "@cellar-assistant/contracts";
 import {
+  baseSpiritOf,
   distanceFromSimilarity,
   ItemSearchActorDescriptor,
+  inferIngredientMeta,
   isGenericItemKind,
   isItemType,
   itemSearchActorId,
@@ -254,15 +259,64 @@ export const instructionInput = (
   timeMinutes: instruction.timeMinutes ?? null,
 });
 
-/** An ingredient row's non-reference half. */
+/**
+ * X14: kind and role for every extracted ingredient, decided together (a role
+ * is relative — the base is the largest spirit pour). From the transcription
+ * alone: the line's own words first, the printed brand, and the model's
+ * `kind`/`role` only where those say nothing (`resolveKind` in contracts
+ * `bar.ts`). An out-of-vocabulary model answer is dropped, never stored.
+ */
+export const extractionMeta = (
+  ingredients: readonly ExtractedRecipeIngredient[],
+): InferredIngredientMeta[] =>
+  inferIngredientMeta(
+    ingredients.map((ingredient) => ({
+      name: clean(ingredient.name),
+      refType: "GENERIC",
+      brandMentioned: clean(ingredient.brandMentioned ?? ingredient.brandName),
+      genericCategory: clean(ingredient.category),
+      quantity: ingredient.quantity ?? null,
+      unit: ingredient.unit ?? null,
+      isOptional: ingredient.isOptional ?? false,
+      modelKind: ingredient.baseSpirit ?? null,
+      modelRole: ingredient.role ?? null,
+    })),
+  );
+
+/**
+ * The drink's base spirit for a new group: the base-role ingredient's kind,
+ * when it is a spirit (`baseSpiritOf`). `null` for food and for drinks with
+ * no spirit base. The per-line `baseSpirit` answers feed in through
+ * `extractionMeta`, so a brand-only line ("2 oz Rittenhouse") still counts.
+ */
+export const extractionBaseSpirit = (
+  extraction: ExtractedRecipe,
+  meta: readonly InferredIngredientMeta[] = extractionMeta(
+    extraction.ingredients,
+  ),
+): BarKind | null => (extraction.type === "food" ? null : baseSpiritOf(meta));
+
+/** At most this many characters of printed amount (the column's check). */
+const QUANTITY_TEXT_LIMIT = 80;
+
+/** An ingredient row's non-reference half, plus X14's four. */
 export const ingredientQuantities = (
   ingredient: ExtractedRecipeIngredient,
-): Omit<RecipeIngredientInput, "ref" | "newGenericItem"> => ({
-  quantity: ingredient.quantity ?? null,
-  unit: ingredient.unit ?? null,
-  isOptional: ingredient.isOptional ?? false,
-  substitutionNotes: ingredient.substitutionNotes ?? null,
-});
+  meta: InferredIngredientMeta = { kind: null, role: null },
+): Omit<RecipeIngredientInput, "ref" | "newGenericItem"> => {
+  const printed = clean(ingredient.quantityText).slice(0, QUANTITY_TEXT_LIMIT);
+  const brand = clean(ingredient.brandMentioned ?? ingredient.brandName);
+  return {
+    quantity: ingredient.quantity ?? null,
+    unit: ingredient.unit ?? null,
+    isOptional: ingredient.isOptional ?? false,
+    substitutionNotes: ingredient.substitutionNotes ?? null,
+    quantityText: printed === "" ? null : printed,
+    brandMentioned: brand === "" ? null : brand.slice(0, 300),
+    kind: meta.kind,
+    role: meta.role,
+  };
+};
 
 /* -------------------------------------------------------------------------- */
 /* Seams (§8.5: job → search, job → entity)                                    */

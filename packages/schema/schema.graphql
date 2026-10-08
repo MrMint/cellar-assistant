@@ -234,6 +234,64 @@ input AttachItemImageInput {
 
 union AttachItemImageResult = BudgetExceededError | ConflictError | ForbiddenError | ItemImage | NotFoundError | ValidationError
 
+enum AvailabilitySource {
+  BOTTLE
+  PANTRY
+  STAPLE
+}
+
+"""
+HAVE: a bottle in your cellars, a Bar pantry toggle, or a staple. SUBSTITUTE: something in the same family (rye for bourbon). MISSING: neither. UNKNOWN: the ingredient could not be placed in the bar vocabulary, so nothing honest can be said (shown as Not tracked).
+"""
+enum AvailabilityStatus {
+  HAVE
+  MISSING
+  SUBSTITUTE
+  UNKNOWN
+}
+
+"""
+D23: the viewer's Bar pantry. The toggles themselves — their order, labels and sections — are `PANTRY_KINDS` / `PANTRY_SECTIONS` in `@cellar-assistant/contracts`, so this carries only which are on.
+"""
+type BarPantry {
+  """The toggles that are on, in pantry order."""
+  have: [IngredientKind!]!
+
+  """Every toggle, in pantry order."""
+  kinds: [IngredientKind!]!
+}
+
+"""One Bar pantry toggle (D23)."""
+type BarPantryEntry {
+  have: Boolean!
+  kind: IngredientKind!
+  label: String!
+}
+
+"""
+A recipe judged against the viewer's bar — one per recipe group (the version closest to makeable).
+"""
+type BarRecipeMatch {
+  makeability: RecipeMakeability!
+  name: String!
+  recipe: Recipe!
+  recipeGroupId: ID
+  recipeId: ID!
+}
+
+type BarRecipeMatchConnection {
+  edges: [BarRecipeMatchEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type BarRecipeMatchEdge {
+  cursor: String!
+  node: BarRecipeMatch!
+}
+
 """
 A scanned code and everything pointing at it. `barcodes` is a natural-key table that doubles as the uniqueness registry (§2.1).
 """
@@ -340,6 +398,11 @@ type Beer implements Item {
     """Defaults to ALL."""
     scope: ItemCheckInScope
   ): ItemCheckInConnection!
+
+  """
+  X14: "Cocktails with this" — recipes that use this item or any bottle of its kind, each judged against the viewer's bar; `useItUp` when they have an open bottle of it. Null for an anonymous viewer.
+  """
+  cocktails: ItemCocktails
 
   """
   X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
@@ -1053,6 +1116,11 @@ type Coffee implements Item {
     """Defaults to ALL."""
     scope: ItemCheckInScope
   ): ItemCheckInConnection!
+
+  """
+  X14: "Cocktails with this" — recipes that use this item or any bottle of its kind, each judged against the viewer's bar; `useItUp` when they have an open bottle of it. Null for an anonymous viewer.
+  """
+  cocktails: ItemCocktails
 
   """
   X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
@@ -1940,6 +2008,119 @@ enum GoogleResolvedVia {
 }
 
 """
+Whether the viewer can cover one ingredient, and with what. Computed from their own bottles and Bar pantry — never a guess.
+"""
+type IngredientAvailability {
+  cellarId: ID
+
+  """The bottle, when `source` is BOTTLE."""
+  cellarItemId: ID
+
+  """What to say: the bottle's name, or the pantry kind's label."""
+  label: String
+  opened: Boolean
+  source: AvailabilitySource
+  status: AvailabilityStatus!
+
+  """The kind that answered — the ingredient's own, or the stand-in's."""
+  via: IngredientKind
+}
+
+"""
+One kind of bar ingredient — `bourbon`, `sweet_vermouth`, `lime`. The closed list availability compares; `kindLabel` fields carry its words.
+"""
+enum IngredientKind {
+  absinthe
+  agave_syrup
+  amaretto
+  amaro
+  aperol
+  aromatic_bitters
+  baijiu
+  beer
+  benedictine
+  blanc_vermouth
+  bourbon
+  brandy
+  cachaca
+  chartreuse
+  cherries
+  coconut_cream
+  coffee
+  coffee_liqueur
+  cola
+  cranberry_juice
+  cream
+  dry_vermouth
+  egg
+  elderflower_liqueur
+  gin
+  ginger_ale
+  ginger_beer
+  grapefruit
+  grenadine
+  honey_syrup
+  ice
+  irish_cream
+  irish_whiskey
+  lemon
+  lillet
+  lime
+  liqueur
+  maple_syrup
+  maraschino
+  mezcal
+  mint
+  moonshine
+  olives
+  orange
+  orange_bitters
+  orange_liqueur
+  orgeat
+  peychauds
+  pineapple_juice
+  pisco
+  port
+  red_bitter
+  red_wine
+  rose_wine
+  rum
+  rye
+  sake
+  salt
+  scotch
+  sherry
+  simple_syrup
+  soda_water
+  soju
+  sparkling_wine
+  sugar
+  sweet_vermouth
+  tea
+  tequila
+  tonic
+  vermouth
+  vodka
+  water
+  whiskey
+  white_wine
+}
+
+"""
+What an ingredient does in the drink. A `garnish` never stops a recipe from being makeable.
+"""
+enum IngredientRole {
+  acid
+  base
+  bitters
+  garnish
+  mixer
+  modifier
+  other
+  sweetener
+}
+
+"""
 The `instruction_types` Postgres enum (`recipe_instructions.instruction_type`). Keyed on `id` in the pre-A3 Hasura table this enum replaces.
 """
 enum InstructionType {
@@ -2026,6 +2207,11 @@ interface Item {
     """Defaults to ALL."""
     scope: ItemCheckInScope
   ): ItemCheckInConnection!
+
+  """
+  X14: "Cocktails with this" — recipes that use this item or any bottle of its kind, each judged against the viewer's bar; `useItUp` when they have an open bottle of it. Null for an anonymous viewer.
+  """
+  cocktails: ItemCocktails
 
   """
   X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
@@ -2282,6 +2468,35 @@ Whose entries `Item.checkIns` lists. ALL: yours, your companions', your friends'
 enum ItemCheckInScope {
   ALL
   MINE
+}
+
+"""
+"Cocktails with this" for an item page — or "Use it up" when the viewer has an open bottle of it.
+"""
+type ItemCocktails {
+  kind: IngredientKind
+  kindLabel: String
+  recipes(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): BarRecipeMatchConnection!
+  total: Int!
+  useItUp: Boolean!
 }
 
 type ItemConnection {
@@ -2606,6 +2821,15 @@ type LoggedDrinkPayload {
 
   """Every entry written, `entry` first."""
   entryIds: [ID!]!
+}
+
+"""
+MAKE_NOW: nothing required is missing (substitutes allowed). ONE_AWAY: exactly one required ingredient is (G29's One bottle away). MISSING: two or more. Optional ingredients and garnishes are never required.
+"""
+enum MakeabilityStatus {
+  MAKE_NOW
+  MISSING
+  ONE_AWAY
 }
 
 """A WGS-84 viewport. All four corners or none."""
@@ -3221,6 +3445,11 @@ type Mutation {
   """
   sendFriendRequest(userId: ID!): SendFriendRequestResult!
 
+  """
+  D23: turn one Bar pantry toggle on or off. Only the pantry kinds; a spirit is a cellar bottle, not a toggle.
+  """
+  setBarPantryItem(have: Boolean!, kind: IngredientKind!): SetBarPantryItemResult!
+
   """Admin only (BrandActor.setParent). Pass null to clear the parent."""
   setBrandParent(id: ID!, parentBrandId: ID): SetBrandParentResult!
   setCellarItemPercentage(cellarId: ID!, cellarItemId: ID!, percentageRemaining: Float!): SetCellarItemPercentageResult!
@@ -3281,6 +3510,9 @@ type Mutation {
 
   """Add or remove one item from the viewer's favourites."""
   toggleFavorite(itemId: ID!, type: ItemType!): ToggleFavoriteResult!
+
+  """D9: Love a recipe, or take the Love back."""
+  toggleRecipeLove(recipeId: ID!): ToggleRecipeLoveResult!
   unlinkItemBrand(brandId: ID!, itemId: ID!, type: ItemType!): UnlinkItemBrandResult!
 
   """Admin only (BrandActor.update)."""
@@ -3906,6 +4138,11 @@ type Pong {
 
 type Query {
   """
+  D23: the viewer's Bar pantry toggles. Cellar bottles are not here — they count automatically.
+  """
+  barPantry: QueryBarPantryResult!
+
+  """
   One barcode by its code. `NotFoundError` when nobody has registered it.
   """
   barcode(code: String!): QueryBarcodeResult!
@@ -4128,6 +4365,27 @@ type Query {
     """
     vector: [Float!]
   ): QueryItemSearchResult!
+
+  """D9: the viewer's loved recipes, newest Love first."""
+  lovedRecipes(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): QueryLovedRecipesResult!
 
   """
   Browse a map viewport (MapActor) — the unfiltered counterpart to `placeSearch`, whose `query` is required. Returns `MapPlace` markers or `MapCluster` bubbles depending on how many places the box holds. Signed-in only, and always the viewer's own map: the visit filter reads the viewer's interactions and there is no argument for whose. A `tierListIds` filter is reduced to the lists the viewer may actually see, and returns nothing if none of them are.
@@ -4551,7 +4809,17 @@ type Query {
     limit: Int
     term: String!
   ): QueryUserSearchResult!
+
+  """
+  G29: Make now · One bottle away, from the viewer's own cellars and Bar pantry. Signed-in only; there is no argument naming whose bar.
+  """
+  whatCanIMake(
+    """Rows per section (1–200, default 50)."""
+    limit: Int
+  ): QueryWhatCanIMakeResult!
 }
+
+union QueryBarPantryResult = BarPantry | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union QueryBarcodeResult = Barcode | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
@@ -4580,6 +4848,8 @@ union QueryItemSearchResult = BudgetExceededError | ConflictError | ForbiddenErr
 type QueryItemSuccess {
   data: Item!
 }
+
+union QueryLovedRecipesResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeConnection | ValidationError
 
 union QueryMapBrowseResult = BudgetExceededError | ConflictError | ForbiddenError | MapEntryConnection | NotFoundError | ValidationError
 
@@ -4624,6 +4894,8 @@ union QueryTierListResult = BudgetExceededError | ConflictError | ForbiddenError
 union QueryUserResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | UserProfile | ValidationError
 
 union QueryUserSearchResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | UserSearchConnection | ValidationError
+
+union QueryWhatCanIMakeResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError | WhatCanIMake
 
 """
 One ranked item: `AVG(score)` and `COUNT(*)` over `item_reviews` for the chosen scope, plus a ref to the item itself.
@@ -4739,9 +5011,19 @@ type Recipe {
   ): RecipeInstructionConnection!
 
   """
+  D9: Love replaces the old heart. `false` for an anonymous viewer. One batched `UserActor` call per request.
+  """
+  isLoved: Boolean!
+
+  """
   Whether this recipe is on the viewer's Want to try list (X08). One batched `UserActor` call per request, shared with `Item.isWantToTry`.
   """
   isWantToTry: Boolean!
+
+  """
+  G29: can the viewer make this now, or is it one bottle away? Null for an anonymous viewer, for a food recipe — the bar vocabulary is drinks, so a dish would only ever read as missing everything — and for a cocktail with no required ingredient, where there is nothing to judge.
+  """
+  makeability: RecipeMakeability
 
   """
   The viewer's own vote on this version, or null — including for an anonymous viewer, and for a recipe in no group.
@@ -4903,6 +5185,16 @@ enum RecipeGroupOrder {
 One ingredient. Exactly one of `item` and `genericItem` is non-null — the table's own `exactly_one_item_reference` check, in the schema.
 """
 type RecipeIngredient {
+  """
+  The amount to show, from the one quantity formatter: the printed text with Unicode fractions, else `quantity` + `unit` ("1½ oz"). Empty when neither is known.
+  """
+  amount: String!
+
+  """
+  D9: whether the viewer has this, from their own bottles and Bar pantry. Null for an anonymous viewer. One inventory read per request.
+  """
+  availability: IngredientAvailability
+  brandMentioned: String
   createdAt: DateTime
 
   """Non-null exactly when refType is GENERIC."""
@@ -4912,12 +5204,26 @@ type RecipeIngredient {
 
   """Non-null exactly when refType is not GENERIC."""
   item: Item
+
+  """
+  X14. Stored, else inferred from the referenced item's name. Null when nothing can place it — shown as "Not tracked".
+  """
+  kind: IngredientKind
+  kindLabel: String
   quantity: Float
+
+  """X14: the amount as printed ("¾ oz", "top with")."""
+  quantityText: String
 
   """The recipe this line belongs to, through the `Recipe` loader."""
   recipe: Recipe!
   recipeId: ID!
   refType: RecipeIngredientType!
+
+  """
+  X14. Stored, else inferred from the recipe's ingredients together (the base is the largest spirit pour).
+  """
+  role: IngredientRole
   substitutionNotes: String
   unit: String
 }
@@ -4939,10 +5245,14 @@ type RecipeIngredientEdge {
 Exactly one of `ref` and `newGenericItem` — the input-level mirror of `exactly_one_item_reference`, which GraphQL cannot express as an input union.
 """
 input RecipeIngredientInput {
+  brandMentioned: String
   isOptional: Boolean
+  kind: IngredientKind
   newGenericItem: NewGenericIngredientInput
   quantity: Float
+  quantityText: String
   ref: RecipeIngredientRefInput
+  role: IngredientRole
   substitutionNotes: String
   unit: String
 }
@@ -5051,6 +5361,23 @@ type RecipeInstructionsPayload {
   ): RecipeInstructionConnection!
   recipe: Recipe!
   recipeId: ID!
+}
+
+"""One recipe against the viewer's bar (G29)."""
+type RecipeMakeability {
+  """Required ingredients covered, substitutes included."""
+  haveCount: Int!
+
+  """What is missing, by name — what to buy."""
+  missing: [String!]!
+
+  """
+  The kinds behind `missing`, where the bar vocabulary places them (an unplaced ingredient has none, so this can be shorter). Two recipes that print "Campari" and "red bitter aperitivo" miss the same kind — what to count when asking which bottle unlocks most.
+  """
+  missingKinds: [IngredientKind!]!
+  requiredCount: Int!
+  status: MakeabilityStatus!
+  substituteCount: Int!
 }
 
 """
@@ -5492,6 +5819,11 @@ type Sake implements Item {
   ): ItemCheckInConnection!
 
   """
+  X14: "Cocktails with this" — recipes that use this item or any bottle of its kind, each judged against the viewer's bar; `useItUp` when they have an open bottle of it. Null for an anonymous viewer.
+  """
+  cocktails: ItemCocktails
+
+  """
   X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
   """
   correction: ItemCorrection
@@ -5674,6 +6006,8 @@ enum SakeServingTemperature {
 
 union SendFriendRequestResult = BudgetExceededError | ConflictError | ForbiddenError | FriendRequest | NotFoundError | ValidationError
 
+union SetBarPantryItemResult = BarPantryEntry | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
 union SetBrandParentResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union SetCellarItemPercentageResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
@@ -5771,6 +6105,11 @@ type Spirit implements Item {
     """Defaults to ALL."""
     scope: ItemCheckInScope
   ): ItemCheckInConnection!
+
+  """
+  X14: "Cocktails with this" — recipes that use this item or any bottle of its kind, each judged against the viewer's bar; `useItUp` when they have an open bottle of it. Null for an anonymous viewer.
+  """
+  cocktails: ItemCocktails
 
   """
   X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
@@ -6041,6 +6380,11 @@ type Tea implements Item {
     """Defaults to ALL."""
     scope: ItemCheckInScope
   ): ItemCheckInConnection!
+
+  """
+  X14: "Cocktails with this" — recipes that use this item or any bottle of its kind, each judged against the viewer's bar; `useItUp` when they have an open bottle of it. Null for an anonymous viewer.
+  """
+  cocktails: ItemCocktails
 
   """
   X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
@@ -6383,6 +6727,15 @@ type ToggleFavoritePayload {
 }
 
 union ToggleFavoriteResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ToggleFavoritePayload | ValidationError
+
+"""The state of one Love after the toggle."""
+type ToggleRecipeLovePayload {
+  loved: Boolean!
+  recipe: Recipe!
+  recipeId: ID!
+}
+
+union ToggleRecipeLoveResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ToggleRecipeLovePayload | ValidationError
 
 union UnlinkItemBrandResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | UnlinkedItemBrand | ValidationError
 
@@ -6834,6 +7187,57 @@ input WantToTryTargetInput {
   recipeId: ID
 }
 
+"""
+G29 / D18: cocktails the viewer can make now, and the ones one bottle away, from their own cellars plus the Bar pantry.
+"""
+type WhatCanIMake {
+  bottleCount: Int!
+  makeNow(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): BarRecipeMatchConnection!
+  makeNowCount: Int!
+  oneBottleAway(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): BarRecipeMatchConnection!
+  oneBottleAwayCount: Int!
+  pantryCount: Int!
+
+  """Cocktail recipes looked at (the newest, up to a cap)."""
+  scanned: Int!
+}
+
 type Wine implements Item {
   alcoholContentPercentage: Float
   barcode: String
@@ -6907,6 +7311,11 @@ type Wine implements Item {
     """Defaults to ALL."""
     scope: ItemCheckInScope
   ): ItemCheckInConnection!
+
+  """
+  X14: "Cocktails with this" — recipes that use this item or any bottle of its kind, each judged against the viewer's bar; `useItUp` when they have an open bottle of it. Null for an anonymous viewer.
+  """
+  cocktails: ItemCocktails
 
   """
   X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.

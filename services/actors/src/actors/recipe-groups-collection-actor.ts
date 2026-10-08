@@ -66,7 +66,10 @@ import type {
   RecipeIngredientUsesFilter,
 } from "@cellar-assistant/contracts";
 import {
+  BAR_KIND_KEYS,
+  BAR_KINDS,
   ITEM_TYPES,
+  isBarKind,
   isItemType,
   mapPage,
   normalizeRecipeGroupOrder,
@@ -171,6 +174,22 @@ const requireCursorFor = (
   }
   return after;
 };
+
+/**
+ * X14: the `base_spirit` values one filter value matches. A bar kind matches
+ * itself and the narrower kinds under it — "whiskey" finds the bourbon, rye,
+ * Scotch and Irish groups, as a whiskey bottle would serve them — and
+ * anything else (a value written before X14) matches only itself.
+ */
+export const baseSpiritMatches = (value: string): string[] =>
+  isBarKind(value)
+    ? [
+        value,
+        ...BAR_KIND_KEYS.filter(
+          (kind) => (BAR_KINDS[kind] as { parent?: string }).parent === value,
+        ),
+      ]
+    : [value];
 
 export class RecipeGroupsCollectionActor
   extends ScopedCollectionActorBase<RecipeGroupsFilter>
@@ -335,7 +354,10 @@ export class RecipeGroupsCollectionActor
     const baseSpirit =
       filter.baseSpirit == null
         ? sql`true`
-        : sql`g.base_spirit = ${filter.baseSpirit}`;
+        : sql`g.base_spirit in (${sql.join(
+            baseSpiritMatches(filter.baseSpirit).map((value) => sql`${value}`),
+            sql`, `,
+          )})`;
     // G26: the old page's one search box — name, description, or any
     // version's name. `escape '\\'` so a `%` or `_` someone typed is a
     // literal, as `RecipeSearchActor` and `BrandSearchActor` do it.

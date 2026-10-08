@@ -8,6 +8,7 @@
  * |---|---|
  * | `MapActor(viewerId)` | `/map` viewport browse |
  * | `RankingsActor(viewerId)` | `/rankings` |
+ * | `BarActor(viewerId)` | `/recipes/bar`, recipe availability, "Cocktails with this" |
  *
  * Both write nothing (§1.1), both are keyed by the viewer, and both return a
  * projection shaped like the screen instead of like a table.
@@ -47,6 +48,7 @@
  *     the viewer's own `friends` rows. There is nothing to smuggle.
  */
 import type { ActorDescriptor } from "./actors.ts";
+import type { BarInventory, BarKind, RecipeMakeability } from "./bar.ts";
 import type { Ctx } from "./ctx.ts";
 import type { ItemRef, ItemType } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
@@ -244,3 +246,86 @@ export const RankingsActorDescriptor: ActorDescriptor<RankingsActorInterface> =
  */
 export const mapActorId = (viewerId: string): string => viewerId;
 export const rankingsActorId = (viewerId: string): string => viewerId;
+
+/* -------------------------------------------------------------------------- */
+/* BarActor (X14, D9, D18/G29, D23)                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How many cocktail recipes one What-can-I-make scan reads, newest first.
+ * Availability is computed in memory over every ingredient of every scanned
+ * recipe (`recipeMakeability`), so this bounds one turn's work. Past it the
+ * screen says how many it looked at rather than pretending it saw them all.
+ */
+export const BAR_RECIPE_SCAN_CAP = 1_000;
+
+/** Rows per section of What can I make, and per item page. */
+export const BAR_MATCH_LIMIT_DEFAULT = 50;
+export const BAR_MATCH_LIMIT_MAX = 200;
+
+/** One recipe, judged against the viewer's bar. */
+export type BarRecipeMatch = {
+  readonly recipeId: string;
+  readonly recipeGroupId: string | null;
+  readonly name: string;
+  readonly makeability: RecipeMakeability;
+};
+
+export type WhatCanIMakeInput = {
+  /** Rows per section; defaults to {@link BAR_MATCH_LIMIT_DEFAULT}. */
+  readonly limit?: number | null;
+};
+
+/**
+ * G29: the two sections, one recipe per group (the version closest to
+ * makeable, the group's canonical on a tie), most makeable first.
+ */
+export type WhatCanIMakeDto = {
+  readonly makeNow: readonly BarRecipeMatch[];
+  readonly oneAway: readonly BarRecipeMatch[];
+  readonly makeNowCount: number;
+  readonly oneAwayCount: number;
+  /** Bottles still in the viewer's own cellars, and pantry toggles on. */
+  readonly bottleCount: number;
+  readonly pantryCount: number;
+  /** Cocktail recipes looked at (≤ {@link BAR_RECIPE_SCAN_CAP}). */
+  readonly scanned: number;
+};
+
+/** "Cocktails with this" / "Use it up" for one item page. */
+export type ItemCocktailsDto = {
+  /** What a bottle of this item answers as; `null` when nothing can say. */
+  readonly kind: BarKind | null;
+  /**
+   * The viewer has an opened, unfinished bottle of this exact item — the
+   * section reads "Use it up" instead of "Cocktails with this".
+   */
+  readonly useItUp: boolean;
+  readonly recipes: readonly BarRecipeMatch[];
+  readonly total: number;
+};
+
+export type BarActorInterface = {
+  /** The viewer's own bottles (owned and co-owned cellars) and pantry. */
+  inventory(ctx: Ctx): Promise<BarInventory>;
+  whatCanIMake(ctx: Ctx, input: WhatCanIMakeInput): Promise<WhatCanIMakeDto>;
+  /**
+   * Cocktails that use this item, or any bottle of its kind (a bourbon page
+   * lists recipes asking for "bourbon" and for "whiskey"), each judged
+   * against the viewer's bar.
+   */
+  cocktailsFor(ctx: Ctx, ref: ItemRef): Promise<ItemCocktailsDto>;
+};
+
+export const BarActorDescriptor: ActorDescriptor<BarActorInterface> = {
+  actorType: "BarActor",
+  category: "view",
+  methods: {
+    inventory: {},
+    whatCanIMake: {},
+    cocktailsFor: {},
+  },
+};
+
+/** Like every view actor, keyed by the viewer (see `mapActorId`). */
+export const barActorId = (viewerId: string): string => viewerId;

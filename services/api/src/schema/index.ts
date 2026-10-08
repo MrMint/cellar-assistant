@@ -22,6 +22,9 @@ import "./ping.ts";
 // B6: `RecipeIngredient` resolves through the `Item` interface and the
 // `GenericItem` type, both declared by `item.ts`.
 import "./recipe.ts";
+// X14: availability, makeability, Love, the Bar pantry and What can I make —
+// fields on `Recipe`, `RecipeIngredient` and `Item`, so after both modules.
+import "./bar.ts";
 import "./reference-data.ts";
 import "./tier-list.ts";
 // B5 grows `tier-list.ts`'s one-field `Place` stub rather than declaring a

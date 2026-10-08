@@ -44,7 +44,9 @@ import type {
   RecipeType,
 } from "@cellar-assistant/contracts";
 import {
+  BASE_SPIRIT_KINDS,
   ConflictError,
+  INGREDIENT_ROLES,
   isRecipeType,
   RECIPE_TYPES,
   ValidationError,
@@ -701,6 +703,20 @@ const describedAs = (description: string | null): string =>
     : ` (the model describes it as "${description.trim().replace(/\.+$/, "")}")`;
 
 /**
+ * X14: a closed-vocabulary answer, or `null`. Unlike `type` (required, and a
+ * refusal when illegal), these fields are omittable, so an illegal answer is
+ * treated as the omission it should have been rather than failing a recipe
+ * that was otherwise read correctly.
+ */
+const inVocabulary = (
+  value: unknown,
+  allowed: readonly string[],
+): string | null => {
+  const answer = str(value);
+  return answer !== null && allowed.includes(answer) ? answer : null;
+};
+
+/**
  * The model's `type`, or a refusal — never `cocktail` by default (C4d).
  *
  * This line used to read `str(parsed.type) ?? "cocktail"`, against a schema
@@ -852,8 +868,18 @@ export const providerRecipePhotoExtractor =
         isOptional: bool(row.isOptional),
         substitutionNotes: str(row.substitutionNotes),
         itemType: str(row.itemType),
-        brandName: str(row.brandName),
+        // `brandName` is the pre-X14 spelling of the same field; a provider
+        // answering an older schema still lands here.
+        brandName: str(row.brandMentioned) ?? str(row.brandName),
         category: str(row.category),
+        // X14. Out-of-vocabulary answers are dropped here, not stored: the
+        // schema's `enum` makes them unsayable for a provider that honours
+        // it, and one that does not gets an absent field, which is the
+        // abstention — never an invented kind.
+        quantityText: str(row.quantityText),
+        brandMentioned: str(row.brandMentioned) ?? str(row.brandName),
+        baseSpirit: inVocabulary(row.baseSpirit, BASE_SPIRIT_KINDS),
+        role: inVocabulary(row.role, INGREDIENT_ROLES),
       });
     }
 

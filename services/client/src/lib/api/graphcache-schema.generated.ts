@@ -350,6 +350,149 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "BarPantry",
+        fields: [
+          {
+            name: "have",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "IngredientKind" },
+                },
+              },
+            },
+          },
+          {
+            name: "kinds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "IngredientKind" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarPantryEntry",
+        fields: [
+          {
+            name: "have",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "IngredientKind" },
+            },
+          },
+          {
+            name: "label",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarRecipeMatch",
+        fields: [
+          {
+            name: "makeability",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "RecipeMakeability" },
+            },
+          },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "recipe",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Recipe" },
+            },
+          },
+          { name: "recipeGroupId", type: { kind: "SCALAR", name: "ID" } },
+          {
+            name: "recipeId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarRecipeMatchConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "BarRecipeMatchEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarRecipeMatchEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BarRecipeMatch" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "Barcode",
         fields: [
           {
@@ -399,6 +542,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
           },
           {
             name: "correction",
@@ -1221,6 +1368,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
           },
           {
             name: "correction",
@@ -2599,6 +2750,29 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "OBJECT",
+        name: "IngredientAvailability",
+        fields: [
+          { name: "cellarId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "cellarItemId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "label", type: { kind: "SCALAR", name: "String" } },
+          { name: "opened", type: { kind: "SCALAR", name: "Boolean" } },
+          {
+            name: "source",
+            type: { kind: "ENUM", name: "AvailabilitySource" },
+          },
+          {
+            name: "status",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "AvailabilityStatus" },
+            },
+          },
+          { name: "via", type: { kind: "ENUM", name: "IngredientKind" } },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "INTERFACE",
         name: "Item",
         fields: [
@@ -2623,6 +2797,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
           },
           {
             name: "correction",
@@ -2965,6 +3143,33 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckIn" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemCocktails",
+        fields: [
+          { name: "kind", type: { kind: "ENUM", name: "IngredientKind" } },
+          { name: "kindLabel", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "recipes",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BarRecipeMatchConnection" },
+            },
+          },
+          {
+            name: "total",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "useItUp",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
         ],
@@ -4428,6 +4633,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "setBarPantryItem",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetBarPantryItemResult" },
+            },
+          },
+          {
             name: "setBrandParent",
             type: {
               kind: "NON_NULL",
@@ -4495,6 +4707,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "ToggleFavoriteResult" },
+            },
+          },
+          {
+            name: "toggleRecipeLove",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "ToggleRecipeLoveResult" },
             },
           },
           {
@@ -5762,6 +5981,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "Query",
         fields: [
           {
+            name: "barPantry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryBarPantryResult" },
+            },
+          },
+          {
             name: "barcode",
             type: {
               kind: "NON_NULL",
@@ -5858,6 +6084,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "QueryItemSearchResult" },
+            },
+          },
+          {
+            name: "lovedRecipes",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryLovedRecipesResult" },
             },
           },
           {
@@ -6023,8 +6256,27 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "UNION", name: "QueryUserSearchResult" },
             },
           },
+          {
+            name: "whatCanIMake",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryWhatCanIMakeResult" },
+            },
+          },
         ],
         interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "QueryBarPantryResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BarPantry" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
       },
       {
         kind: "UNION",
@@ -6183,6 +6435,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
         ],
         interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "QueryLovedRecipesResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RecipeConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
       },
       {
         kind: "UNION",
@@ -6449,6 +6713,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "UNION",
+        name: "QueryWhatCanIMakeResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+          { kind: "OBJECT", name: "WhatCanIMake" },
+        ],
+      },
+      {
         kind: "OBJECT",
         name: "RankingEntry",
         fields: [
@@ -6575,11 +6851,22 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "isLoved",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
             name: "isWantToTry",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
+          },
+          {
+            name: "makeability",
+            type: { kind: "OBJECT", name: "RecipeMakeability" },
           },
           { name: "myVote", type: { kind: "ENUM", name: "RecipeVoteType" } },
           {
@@ -6799,6 +7086,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "RecipeIngredient",
         fields: [
+          {
+            name: "amount",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "availability",
+            type: { kind: "OBJECT", name: "IngredientAvailability" },
+          },
+          { name: "brandMentioned", type: { kind: "SCALAR", name: "String" } },
           { name: "createdAt", type: { kind: "SCALAR", name: "DateTime" } },
           {
             name: "genericItem",
@@ -6816,7 +7115,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          { name: "kind", type: { kind: "ENUM", name: "IngredientKind" } },
+          { name: "kindLabel", type: { kind: "SCALAR", name: "String" } },
           { name: "quantity", type: { kind: "SCALAR", name: "Float" } },
+          { name: "quantityText", type: { kind: "SCALAR", name: "String" } },
           {
             name: "recipe",
             type: {
@@ -6835,6 +7137,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "ENUM", name: "RecipeIngredientType" },
             },
           },
+          { name: "role", type: { kind: "ENUM", name: "IngredientRole" } },
           {
             name: "substitutionNotes",
             type: { kind: "SCALAR", name: "String" },
@@ -7020,6 +7323,58 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "recipeId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecipeMakeability",
+        fields: [
+          {
+            name: "haveCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "missing",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
+            name: "missingKinds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "IngredientKind" },
+                },
+              },
+            },
+          },
+          {
+            name: "requiredCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "status",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "MakeabilityStatus" },
+            },
+          },
+          {
+            name: "substituteCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
         ],
         interfaces: [],
@@ -7776,6 +8131,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
+          },
+          {
             name: "correction",
             type: { kind: "OBJECT", name: "ItemCorrection" },
           },
@@ -7893,6 +8252,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "FriendRequest" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SetBarPantryItemResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BarPantryEntry" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -8024,6 +8395,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
           },
           {
             name: "correction",
@@ -8208,6 +8583,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
           },
           {
             name: "correction",
@@ -8583,6 +8962,43 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ToggleFavoritePayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "ToggleRecipeLovePayload",
+        fields: [
+          {
+            name: "loved",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "recipe",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Recipe" },
+            },
+          },
+          {
+            name: "recipeId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "ToggleRecipeLoveResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ToggleRecipeLovePayload" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -9149,6 +9565,47 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "WhatCanIMake",
+        fields: [
+          {
+            name: "bottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "makeNow",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BarRecipeMatchConnection" },
+            },
+          },
+          {
+            name: "makeNowCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "oneBottleAway",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BarRecipeMatchConnection" },
+            },
+          },
+          {
+            name: "oneBottleAwayCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "pantryCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "scanned",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "Wine",
         fields: [
           {
@@ -9176,6 +9633,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
           },
           {
             name: "correction",

@@ -21,6 +21,7 @@ export type {
 export {
   ArrowDown as SortDescending,
   ArrowLeft as Back,
+  ArrowLeftRight as Swap,
   Award as Medal,
   BadgeCheck as Verified,
   Bell as Notifications,
@@ -36,6 +37,8 @@ export {
   CircleCheck as Success,
   CircleDashed as Unrated,
   CircleHelp as Help,
+  CircleMinus as Missing,
+  Citrus as Pantry,
   Clock as Time,
   CloudOff,
   Coins as Price,

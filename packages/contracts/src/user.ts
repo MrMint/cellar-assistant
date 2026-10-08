@@ -40,6 +40,7 @@
  */
 import type { ActorDescriptor } from "./actors.ts";
 import type { AiCapabilities } from "./ai.ts";
+import type { BarKind } from "./bar.ts";
 import type { Ctx } from "./ctx.ts";
 import type { FriendRequestStatus } from "./enums.ts";
 import { type ItemRef, isItemType, itemActorId } from "./items.ts";
@@ -264,6 +265,28 @@ export type SetWantToTryResult = {
 };
 
 /* -------------------------------------------------------------------------- */
+/* Bar pantry (D23) and recipe Love (D9)                                       */
+/* -------------------------------------------------------------------------- */
+
+export type SetBarPantryItemInput = {
+  /** One of `PANTRY_KINDS`. */
+  readonly kind: BarKind;
+  /** `true` turns the toggle on (a row), `false` off (no row). */
+  readonly have: boolean;
+};
+
+export type BarPantryItemDto = {
+  readonly kind: BarKind;
+  readonly have: boolean;
+};
+
+export type ToggleRecipeLoveResult = {
+  readonly recipeId: string;
+  /** State *after* the toggle. */
+  readonly loved: boolean;
+};
+
+/* -------------------------------------------------------------------------- */
 /* The actor                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -397,6 +420,26 @@ export type UserActorInterface = {
     target: WantToTryTarget,
     wantToTry: boolean,
   ): Promise<SetWantToTryResult>;
+  /** D23: the pantry toggles that are on. Self (or admin) only. */
+  barPantry(ctx: Ctx): Promise<readonly BarKind[]>;
+  /** D23: one toggle. Idempotent — setting what is already set is a no-op. */
+  setBarPantryItem(
+    ctx: Ctx,
+    input: SetBarPantryItemInput,
+  ): Promise<BarPantryItemDto>;
+
+  /**
+   * D9: which of `recipeIds` the viewer loves — the matching subset, as
+   * `favoriteStates` answers, for the same reason. Self only.
+   */
+  recipeLoveStates(
+    ctx: Ctx,
+    recipeIds: readonly string[],
+  ): Promise<readonly string[]>;
+  /** D9: Love replaces the recipe heart. Self only. */
+  toggleRecipeLove(ctx: Ctx, recipeId: string): Promise<ToggleRecipeLoveResult>;
+  /** Loved recipe ids, newest first. Self only. */
+  lovedRecipes(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
 };
 
 export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
@@ -426,5 +469,10 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     wantToTry: {},
     wantToTryStates: {},
     setWantToTry: {},
+    barPantry: {},
+    setBarPantryItem: {},
+    recipeLoveStates: {},
+    toggleRecipeLove: {},
+    lovedRecipes: {},
   },
 };

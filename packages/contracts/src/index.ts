@@ -1,5 +1,6 @@
 export * from "./actors.ts";
 export * from "./ai.ts";
+export * from "./bar.ts";
 export * from "./barcodes.ts";
 export * from "./brand.ts";
 export * from "./budget.ts";
@@ -22,6 +23,7 @@ export * from "./page.ts";
 export * from "./place-categories.ts";
 export * from "./places.ts";
 export * from "./proxy.ts";
+export * from "./quantity.ts";
 export * from "./recipes.ts";
 export * from "./reference.ts";
 export * from "./search.ts";

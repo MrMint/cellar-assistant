@@ -70,6 +70,7 @@ import type {
   PageArgs,
   RecipeCategory,
   RecipeGroupActorInterface,
+  RecipeGroupBaseSpiritResult,
   RecipeGroupDto,
   RecipeVoteDto,
   RecipeVoteResult,
@@ -80,6 +81,7 @@ import type {
   VoteOnRecipeInput,
 } from "@cellar-assistant/contracts";
 import {
+  baseSpiritOf,
   ConflictError,
   ForbiddenError,
   isRecipeVoteType,
@@ -90,8 +92,13 @@ import {
   ValidationError,
   voteWeight,
 } from "@cellar-assistant/contracts";
-import { recipeGroups, recipes, recipeVotes } from "@cellar-assistant/db";
-import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
+import {
+  recipeGroups,
+  recipeIngredients,
+  recipes,
+  recipeVotes,
+} from "@cellar-assistant/db";
+import { and, eq, inArray, isNull, sql } from "@cellar-assistant/db/orm";
 import { bypassesPolicy, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
@@ -104,6 +111,7 @@ import {
 } from "../lib/guards.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
+import { inferRecipeMeta } from "../lib/recipe-ingredients.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 
 type RecipeGroupRow = typeof recipeGroups.$inferSelect;
@@ -733,6 +741,66 @@ export class RecipeGroupActor
         { attributeTo: ctx },
       );
     }
+  }
+
+  /**
+   * X14 — see the interface. Reads the member's ingredient rows (another
+   * actor's table; reads are free, §1.2 is about writes) and derives the base
+   * exactly as the recipe page does (`inferRecipeMeta`, `baseSpiritOf`), so a
+   * group's chip and its recipe's "base" row cannot disagree.
+   *
+   * Does not enqueue the members' `regenerateVector`, though `base_spirit` is
+   * in their embedding text: a backfill over every group would spend an
+   * embedding per recipe for one word. The stamp this write leaves on
+   * `updated_at` makes the next regeneration of each member pick it up.
+   */
+  async backfillBaseSpirit(
+    ctx: Ctx,
+    _payload: Record<string, unknown> = {},
+  ): Promise<RecipeGroupBaseSpiritResult> {
+    const { group } = this.requireAggregate();
+    requirePrivileged(
+      ctx,
+      `only a system or admin caller may backfill recipe group ${this.key}`,
+    );
+    if (group.baseSpirit !== null) {
+      return {
+        groupId: this.key,
+        baseSpirit: group.baseSpirit,
+        written: false,
+      };
+    }
+    const snapshot = await this.#snapshot();
+    const memberId = group.canonicalRecipeId ?? snapshot.recipes[0]?.id ?? null;
+    if (memberId === null) {
+      return { groupId: this.key, baseSpirit: null, written: false };
+    }
+    const rows = await this.db
+      .select()
+      .from(recipeIngredients)
+      .where(eq(recipeIngredients.recipeId, memberId))
+      .orderBy(
+        sql`${recipeIngredients.createdAt} asc, ${recipeIngredients.id} asc`,
+      );
+    const meta = await inferRecipeMeta(this.db, rows);
+    const base = baseSpiritOf(
+      rows.map((row) => meta.get(row.id) ?? { kind: null, role: null }),
+    );
+    if (base === null) {
+      return { groupId: this.key, baseSpirit: null, written: false };
+    }
+    await this.tx(async (tx) => {
+      // `is null` again inside the write: an author who set one between the
+      // read above and here keeps theirs.
+      await tx
+        .update(recipeGroups)
+        .set({ baseSpirit: base })
+        .where(
+          and(eq(recipeGroups.id, this.key), isNull(recipeGroups.baseSpirit)),
+        );
+    });
+    await this.reload();
+    return { groupId: this.key, baseSpirit: base, written: true };
   }
 
   #toDto(snapshot: RecipeGroupSnapshot): RecipeGroupDto {

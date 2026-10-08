@@ -72,6 +72,14 @@ export const apiUsageLog = pgTable("api_usage_log", {
 	index("idx_api_usage_log_service_created").using("btree", table.service.asc().nullsLast(), table.createdAt.asc().nullsLast()),
 ]);
 
+export const barPantryItems = pgTable("bar_pantry_items", {
+	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" } ),
+	kind: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.userId, table.kind], name: "bar_pantry_items_pkey"}),
+check("bar_pantry_items_kind_check", sql`(length(kind) > 0 AND length(kind) <= 64)`),]);
+
 export const barcodes = pgTable("barcodes", {
 	code: text().primaryKey(),
 	type: text(),
@@ -821,6 +829,15 @@ export const recipeGroups = pgTable("recipe_groups", {
 	index("idx_recipe_groups_tags").using("gin", table.tags.asc().nullsLast()),
 check("recipe_groups_name_check", sql`(length(name) > 0)`),]);
 
+export const recipeFavorites = pgTable("recipe_favorites", {
+	id: uuid().defaultRandom().primaryKey(),
+	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" } ),
+	recipeId: uuid("recipe_id").notNull().references(() => recipes.id, { onDelete: "cascade" } ),
+	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
+}, (table) => [
+	index("idx_recipe_favorites_recipe_id").using("btree", table.recipeId.asc().nullsLast()),
+	unique("recipe_favorites_user_id_recipe_id_key").on(table.userId, table.recipeId),]);
+
 export const recipeIngredients = pgTable("recipe_ingredients", {
 	id: uuid().defaultRandom().primaryKey(),
 	recipeId: uuid("recipe_id").notNull().references(() => recipes.id, { onDelete: "cascade" } ),
@@ -836,6 +853,10 @@ export const recipeIngredients = pgTable("recipe_ingredients", {
 	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 	sakeId: uuid("sake_id").references(() => sakes.id),
 	teaId: uuid("tea_id").references(() => teas.id),
+	role: text(),
+	kind: text(),
+	quantityText: text("quantity_text"),
+	brandMentioned: text("brand_mentioned"),
 }, (table) => [
 	index("idx_recipe_ingredients_beer_id").using("btree", table.beerId.asc().nullsLast()),
 	index("idx_recipe_ingredients_coffee_id").using("btree", table.coffeeId.asc().nullsLast()),
@@ -845,7 +866,8 @@ export const recipeIngredients = pgTable("recipe_ingredients", {
 	index("idx_recipe_ingredients_spirit_id").using("btree", table.spiritId.asc().nullsLast()),
 	index("idx_recipe_ingredients_tea_id").using("btree", table.teaId.asc().nullsLast()),
 	index("idx_recipe_ingredients_wine_id").using("btree", table.wineId.asc().nullsLast()),
-check("exactly_one_item_reference", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id, generic_item_id) = 1)`),]);
+	index("idx_recipe_ingredients_kind").using("btree", table.kind.asc().nullsLast()),
+check("exactly_one_item_reference", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id, generic_item_id) = 1)`),check("recipe_ingredients_role_check", sql`((role IS NULL) OR (role = ANY (ARRAY['base'::text, 'modifier'::text, 'sweetener'::text, 'acid'::text, 'bitters'::text, 'mixer'::text, 'garnish'::text, 'other'::text])))`),check("recipe_ingredients_quantity_text_check", sql`((quantity_text IS NULL) OR (length(quantity_text) <= 80))`),]);
 
 export const recipeInstructions = pgTable("recipe_instructions", {
 	id: uuid().defaultRandom().primaryKey(),

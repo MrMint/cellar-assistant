@@ -5,6 +5,7 @@ import { People, Restaurant, Time } from "@/components/app/icons";
 import { Badge } from "@/components/ui/badge";
 import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
 import { cn } from "@/lib/utils";
+import { RecipeLoveButton } from "./RecipeLoveButton";
 
 /**
  * Easy reads as success text, hard as danger text; medium is neutral — the
@@ -39,19 +40,25 @@ export type RecipeDetailsCardProps = {
   description?: string | null;
   /** X08's Save target; omitted, no bookmark is drawn. */
   isWantToTry?: boolean;
+  /**
+   * D9: the viewer's Love. Absent (a signed-out render, the photo page's
+   * preview) shows no button rather than one that cannot work.
+   */
+  isLoved?: boolean;
 };
 
 /**
  * `82450ad1:src/components/recipe/RecipeDetailsCard.tsx`, restored.
  *
- * Dropped: the favourite heart beside the title. Its click handler was a
- * `TODO` that logged "not implemented yet", and there is still no recipe
- * favourite anywhere in the API — so it was a control that did nothing, and
- * the inventory lists it as a deliberate drop (§4, X). Its place is taken
- * by Save (X08, D27): the Want to try bookmark, which does something.
+ * The favourite heart beside the title was dropped in the restore — its
+ * click handler was a `TODO` that logged "not implemented yet". D9 put it
+ * back for real as **Love** (`RecipeLoveButton`, on `recipe_favorites`), and
+ * Save (X08, D27) sits beside it: the Want to try bookmark. Two verbs, two
+ * controls — Love is "I like this", Save is "I mean to make this".
  */
 export function RecipeDetailsCard({
   recipeId,
+  isLoved,
   title,
   type,
   difficulty_level,
@@ -72,7 +79,14 @@ export function RecipeDetailsCard({
   return (
     <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
       <div className="flex items-start gap-2">
-        <h3 className="type-title-2 min-w-0 flex-1">{title}</h3>
+        <h3 className="min-w-0 flex-1 break-words type-title-2">{title}</h3>
+        {isLoved !== undefined && (
+          <RecipeLoveButton
+            recipeId={recipeId}
+            loved={isLoved}
+            className={cn("-my-2", isWantToTry === undefined && "-mr-2")}
+          />
+        )}
         {isWantToTry !== undefined && (
           <WantToTryButton
             target={{ kind: "RECIPE", recipeId }}

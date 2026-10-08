@@ -84,6 +84,7 @@
  * `NOT NULL`. So only `RecipeReviewDto`'s two timestamps are bare strings.
  */
 import type { ActorDescriptor } from "./actors.ts";
+import type { BarKind, IngredientRole } from "./bar.ts";
 import type { Ctx } from "./ctx.ts";
 import type { InstructionType, RecipeCategory } from "./enums.ts";
 import { ValidationError } from "./errors.ts";
@@ -210,6 +211,18 @@ export type RecipeIngredientDto = {
   readonly isOptional: boolean;
   readonly substitutionNotes: string | null;
   readonly createdAt: string | null;
+  /**
+   * X14: what the ingredient does in the drink. Stored, else inferred from
+   * the recipe's ingredients together (`inferIngredientMeta` in `bar.ts`) —
+   * so a recipe written before the column existed still answers.
+   */
+  readonly role: IngredientRole | null;
+  /** X14: the `BAR_KINDS` value availability compares. Stored, else inferred. */
+  readonly kind: BarKind | null;
+  /** X14: the amount as printed. Prefer it to `quantity`/`unit` for display. */
+  readonly quantityText: string | null;
+  /** X14: a brand the recipe line named, as printed. */
+  readonly brandMentioned: string | null;
 };
 
 export type RecipeInstructionDto = {
@@ -367,7 +380,17 @@ export type RecipeIngredientInput = {
   readonly unit?: string | null;
   readonly isOptional?: boolean | null;
   readonly substitutionNotes?: string | null;
+  /** X14 — `INGREDIENT_ROLES`. Omitted is inferred on read. */
+  readonly role?: IngredientRole | null;
+  /** X14 — a `BAR_KINDS` key. Anything else is refused. Omitted is inferred. */
+  readonly kind?: BarKind | null;
+  /** X14 — the amount as printed, at most {@link QUANTITY_TEXT_MAX} characters. */
+  readonly quantityText?: string | null;
+  readonly brandMentioned?: string | null;
 };
+
+/** `recipe_ingredients_quantity_text_check`. */
+export const QUANTITY_TEXT_MAX = 80;
 
 /** `CreateGenericItemInput` (B2), re-exported under the name this file uses. */
 export type NewGenericIngredientInput = CreateGenericItemInput;
@@ -519,6 +542,34 @@ export type RecipeActorInterface = {
     ctx: Ctx,
     payload?: Record<string, unknown>,
   ): Promise<RegenerateRecipeVectorResult>;
+
+  /**
+   * X14's backfill, `system` only (the outbox, enqueued by
+   * `MaintenanceActor.backfillRecipeMeta`). Writes the inferred `kind` and
+   * `role` onto this recipe's ingredient rows **where they are null** — a
+   * stored value is never overwritten — and nothing else. Naturally
+   * idempotent: a second delivery finds nothing null and writes nothing.
+   */
+  backfillIngredientMeta(
+    ctx: Ctx,
+    payload?: Record<string, unknown>,
+  ): Promise<RecipeMetaBackfillResult>;
+};
+
+export type RecipeMetaBackfillResult = {
+  readonly recipeId: string;
+  /** Rows whose `kind` or `role` this call wrote. */
+  readonly updated: number;
+  /** Rows still without a kind: nothing could place them. */
+  readonly unplaced: number;
+};
+
+/** What `RecipeGroupActor.backfillBaseSpirit` did. */
+export type RecipeGroupBaseSpiritResult = {
+  readonly groupId: string;
+  readonly baseSpirit: string | null;
+  /** `false` when the group already had one, or none could be derived. */
+  readonly written: boolean;
 };
 
 export const RecipeActorDescriptor: ActorDescriptor<RecipeActorInterface> = {
@@ -544,6 +595,7 @@ export const RecipeActorDescriptor: ActorDescriptor<RecipeActorInterface> = {
     // An embedding through `EmbeddingActor.embedDocument` (90s), plus the
     // turn around it — `ItemActorDescriptor`'s number, for the same call.
     regenerateVector: { timeoutMs: 100_000 },
+    backfillIngredientMeta: {},
   },
 };
 
@@ -611,6 +663,17 @@ export type RecipeGroupActorInterface = {
    * shape rather than the tier-list one. Move or delete the versions first.
    */
   delete(ctx: Ctx): Promise<DeletedRecipeGroup>;
+
+  /**
+   * X14's backfill for `recipe_groups.base_spirit` — "baseSpirit is never
+   * written" (T7). `system` only, via the outbox. Derives the base spirit
+   * from the canonical member's ingredients (else the oldest member's) and
+   * writes it **only if the column is null**: an author's own value stands.
+   */
+  backfillBaseSpirit(
+    ctx: Ctx,
+    payload?: Record<string, unknown>,
+  ): Promise<RecipeGroupBaseSpiritResult>;
 };
 
 export const RecipeGroupActorDescriptor: ActorDescriptor<RecipeGroupActorInterface> =
@@ -631,5 +694,6 @@ export const RecipeGroupActorDescriptor: ActorDescriptor<RecipeGroupActorInterfa
       voteSummaries: {},
       recomputeCanonical: {},
       delete: {},
+      backfillBaseSpirit: {},
     },
   };

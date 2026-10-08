@@ -104,6 +104,14 @@ export const RecipePageQuery = graphql(
       __typename
       ... on Recipe {
         ...RecipeDetailsData
+        isLoved
+        makeability {
+          status
+          missing
+          substituteCount
+          requiredCount
+          haveCount
+        }
         recipeGroup {
           id
           name

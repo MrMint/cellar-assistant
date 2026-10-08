@@ -71,6 +71,7 @@ import type {
   ActorCategory,
   Ctx,
   ExtractedRecipe,
+  InferredIngredientMeta,
   InternalJobActorInterface,
   RecipeCategory,
   RecipeIngredientInput,
@@ -112,6 +113,8 @@ import type {
 import {
   daprIngredientSearcher,
   daprRecipeWriter,
+  extractionBaseSpirit,
+  extractionMeta,
   genericFallback,
   ingredientQuantities,
   ingredientRefFromHit,
@@ -451,10 +454,16 @@ export class RecipePhotoJobActor
       }
       case "ingredients": {
         const extraction = this.#requireExtraction(state);
+        const kept = extraction.ingredients.filter(
+          (ingredient) => ingredientSearchText(ingredient) !== "",
+        );
+        // Decided over the whole list at once: "base" is relative (X14).
+        const meta = extractionMeta(kept);
         const ingredients: RecipeIngredientInput[] = [];
-        for (const ingredient of extraction.ingredients) {
-          if (ingredientSearchText(ingredient) === "") continue;
-          ingredients.push(await this.#resolveIngredient(owner, ingredient));
+        for (const [index, ingredient] of kept.entries()) {
+          ingredients.push(
+            await this.#resolveIngredient(owner, ingredient, meta[index]),
+          );
         }
         await this.#write.setIngredients(owner, state.recipeId, {
           ingredients,
@@ -504,7 +513,12 @@ export class RecipePhotoJobActor
     const created = await this.#write.createGroup(
       owner,
       derivedUuid(RECIPE_GROUP_ID_NAMESPACE, key),
-      { name, category: groupCategoryOf(extraction) },
+      {
+        name,
+        category: groupCategoryOf(extraction),
+        // X14: T7's "baseSpirit is never written", for every new group.
+        baseSpirit: extractionBaseSpirit(extraction),
+      },
     );
     return created.id;
   }
@@ -520,18 +534,19 @@ export class RecipePhotoJobActor
   async #resolveIngredient(
     owner: Ctx,
     ingredient: Parameters<typeof genericFallback>[0],
+    meta?: InferredIngredientMeta,
   ): Promise<RecipeIngredientInput> {
     const hits = await this.#search(owner, ingredientSearchInput(ingredient));
     const match = pickIngredientMatch(hits);
     if (match !== null) {
       return {
         ref: ingredientRefFromHit(match),
-        ...ingredientQuantities(ingredient),
+        ...ingredientQuantities(ingredient, meta),
       };
     }
     return {
       newGenericItem: genericFallback(ingredient),
-      ...ingredientQuantities(ingredient),
+      ...ingredientQuantities(ingredient, meta),
     };
   }
 

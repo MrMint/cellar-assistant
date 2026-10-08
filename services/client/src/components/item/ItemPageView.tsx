@@ -1,3 +1,4 @@
+import { ItemCocktails } from "@/components/bar/ItemCocktails";
 import { YourLog } from "@/components/drink-log/YourLog";
 import { AddReview } from "@/components/review/AddReview";
 import type { ItemView } from "./adapter";
@@ -101,6 +102,9 @@ export function ItemPageView({
               flavorProfile={item.flavorProfile}
               ingredients={item.ingredients}
             />
+            {/* X14: "Cocktails with this" — every type; renders nothing
+                when no cocktail uses it. */}
+            <ItemCocktails itemId={item.itemId} type={item.type} />
             {/* D8: check-ins restored as "Your log" (X02's drink log). */}
             <YourLog
               subject={{
