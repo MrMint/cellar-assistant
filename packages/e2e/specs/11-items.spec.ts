@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { createCellar, unique } from "../fixtures/data.ts";
 import { deleteCellarWithContents } from "../fixtures/db.ts";
 import { bodyText, expect, test, watch } from "../fixtures/test.ts";
@@ -133,11 +134,23 @@ test("the item page is the old TeaDetails", async ({ primary }) => {
   expect(noise.pageErrors).toEqual([]);
 });
 
+/**
+ * Edit and Delete live behind the AppBar's ⋯ (N26): a dropdown of menuitems
+ * at md+, a BottomSheet of buttons on a phone.
+ */
+async function overflowAction(page: Page, name: string) {
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page
+    .getByRole("menuitem", { name })
+    .or(page.getByRole("dialog").getByRole("button", { name }))
+    .click();
+}
+
 test("the edit form saves an attribute and returns to the item", async ({
   primary,
 }) => {
   await primary.goto(`/teas/${teaId}`);
-  await primary.getByRole("link", { name: "Edit item" }).click();
+  await overflowAction(primary, "Edit item");
   await expect(primary).toHaveURL(new RegExp(`/teas/${teaId}/edit$`));
 
   const temperature = primary.getByLabel("Steeping Temperature");
@@ -182,7 +195,7 @@ test("the bottle page: open it, check in, delete it", async ({ primary }) => {
     timeout: 20_000,
   });
 
-  await primary.getByRole("button", { name: "Delete item" }).click();
+  await overflowAction(primary, "Delete item");
   await primary.getByRole("button", { name: "Delete Tea" }).click();
   await expect(primary).toHaveURL(new RegExp(`/cellars/${cellarId}/items$`), {
     timeout: 20_000,
