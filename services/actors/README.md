@@ -492,7 +492,7 @@ the cellars they created or co-own, plus the Bar pantry toggles
 `@cellar-assistant/contracts` `bar.ts` (`ingredientAvailability`,
 `recipeMakeability`). Every ingredient has a `kind` from that file's closed
 vocabulary and a `role`; a row written before migration
-`20261008214822_recipe_ingredient_meta_bar_pantry_recipe_love` has neither,
+`20261008235751_recipe_ingredient_meta_bar_pantry_recipe_love` has neither,
 and reads infer both from the referenced item's name, so nothing waits on a
 backfill to be right. To persist them (and `recipe_groups.base_spirit`):
 

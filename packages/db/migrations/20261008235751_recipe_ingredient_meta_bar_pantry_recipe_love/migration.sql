@@ -1,3 +1,9 @@
+-- Regenerated at merge as 20261008235751 (was 20261008214822 on wa/recipes),
+-- so it sorts after X27's 20261008214722/214724, X02's 20261008230209, X08's
+-- 20261008231951 and X19's 20261008233536 that other databases already have;
+-- the snapshot now chains from X19's (nv_wines_optional_coffee_description).
+-- The SQL below is unchanged.
+--
 -- X14 (recipes meet the cellar), D23 (Bar pantry), D9 (Love replaces the heart).
 --
 -- `recipe_ingredients` gains what the recipe-photo extraction now reads per
