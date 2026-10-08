@@ -33,7 +33,11 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
   ).toBeVisible();
 
   await primary.getByLabel("Name").fill(name);
-  await primary.getByRole("button", { name: "Add", exact: true }).click();
+  // Inside <main>: the shell's ＋ (TabBar / SideRail) is a button named "Add" too.
+  await primary
+    .getByRole("main")
+    .getByRole("button", { name: "Add", exact: true })
+    .click();
 
   // The old destination: the new cellar's items page.
   await expect(primary, "did not navigate to the new cellar").toHaveURL(
@@ -67,7 +71,12 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
 
   const index = await primary.goto("/cellars");
   expect(index?.status(), "/cellars did not render").toBeLessThan(400);
-  await expect(primary.getByRole("link", { name: "Home" })).toBeVisible();
+  // The breadcrumb's Home, not the SideRail's (both are links named "Home").
+  await expect(
+    primary
+      .getByRole("navigation", { name: "breadcrumb" })
+      .getByRole("link", { name: "Home" }),
+  ).toBeVisible();
   // `myCellars` puts your own cellars first, by most recent activity (D13); a
   // cellar created a moment ago is the newest, so it is in the first rows.
   const card = primary.getByRole("link", { name, exact: true });
@@ -89,7 +98,10 @@ test("a cellar's privacy can be changed to PRIVATE", async ({
   await primary.getByRole("combobox", { name: "Privacy" }).click();
   await primary.getByRole("option", { name: /^private$/i }).click();
 
-  await primary.getByRole("button", { name: "Add", exact: true }).click();
+  await primary
+    .getByRole("main")
+    .getByRole("button", { name: "Add", exact: true })
+    .click();
   await expect(primary).toHaveURL(/\/cellars\/[0-9a-f-]{36}\/items/, {
     timeout: 30_000,
   });

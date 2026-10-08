@@ -71,7 +71,9 @@ test.describe("onboard → cellar → check in", () => {
     // "Analyzing..." while `startItemOnboarding` runs; with no photograph the
     // server refuses to invent (E2c), the session stays open, and the form
     // comes up empty. No alert for that: nothing was sent to be read.
-    const add = primary.getByRole("button", { name: "Add", exact: true });
+    const add = primary
+      .getByRole("main")
+      .getByRole("button", { name: "Add", exact: true });
     await expect(
       add,
       "the form never appeared — startItemOnboarding did not answer",
