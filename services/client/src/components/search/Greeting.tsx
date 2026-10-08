@@ -16,7 +16,10 @@ export function Greeting({ displayName }: GreetingProps) {
   const firstName = displayName?.split(" ")[0];
 
   return (
-    <h2 suppressHydrationWarning className="type-title-1 text-center">
+    <h2
+      suppressHydrationWarning
+      className="type-title-1 text-center text-ink-1"
+    >
       {greeting}
       {firstName ? `, ${firstName}` : ""}
     </h2>

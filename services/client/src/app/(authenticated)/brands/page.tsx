@@ -29,7 +29,7 @@ export default async function BrandsPage() {
   return (
     <Page wide>
       <header className="flex flex-col gap-2">
-        <h1 className="type-large-title">Brands</h1>
+        <h1 className="type-large-title text-ink-1">Brands</h1>
         <p className="type-body text-ink-2">
           Browse the wineries, breweries, distilleries, and other producers
           behind the items in your cellar.

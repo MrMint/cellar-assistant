@@ -143,7 +143,12 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
   };
 
   return (
-    <Field data-disabled={disabled ? true : undefined}>
+    // `text-foreground`, as ItemFormField's shell: the onboarding form's other
+    // labels are ink-1, and without it this one inherits Joy's body ink.
+    <Field
+      data-disabled={disabled ? true : undefined}
+      className="gap-2 text-foreground"
+    >
       <FieldLabel htmlFor={inputId}>Brand</FieldLabel>
       <Popover
         open={listOpen}

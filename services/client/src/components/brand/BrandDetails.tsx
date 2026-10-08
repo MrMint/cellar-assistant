@@ -205,7 +205,7 @@ export const BrandDetails = ({
         </div>
         <div className="flex flex-col gap-4 md:py-2">
           <div>
-            <h1 className="type-title-1">{brand.name}</h1>
+            <h1 className="type-title-1 text-ink-1">{brand.name}</h1>
             {since !== null && (
               <p className="type-callout text-ink-2">Since {since}</p>
             )}
@@ -258,7 +258,7 @@ export const BrandDetails = ({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Associated Items */}
         <section className="flex flex-col rounded-lg bg-surface-1 p-4">
-          <h2 className="type-title-2 mb-4">
+          <h2 className="type-title-2 mb-4 text-ink-1">
             Associated Items ({itemTotal ?? brand.item_brands.length})
           </h2>
 
@@ -270,7 +270,7 @@ export const BrandDetails = ({
             <div className="flex flex-col gap-6">
               {Object.entries(groupedItems).map(([type, items]) => (
                 <div key={type}>
-                  <h3 className="type-callout mb-2 font-medium capitalize">
+                  <h3 className="type-callout mb-2 font-medium text-ink-1 capitalize">
                     {type}s ({items.length})
                   </h3>
                   <ul className="flex flex-col">
@@ -303,7 +303,7 @@ export const BrandDetails = ({
 
         {/* Associated Places */}
         <section className="flex flex-col rounded-lg bg-surface-1 p-4">
-          <h2 className="type-title-2 mb-4">
+          <h2 className="type-title-2 mb-4 text-ink-1">
             Associated Places ({placeTotal ?? brand.place_brands.length})
           </h2>
 

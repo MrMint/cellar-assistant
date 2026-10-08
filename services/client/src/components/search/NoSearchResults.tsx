@@ -22,6 +22,9 @@ export function AddItemLink({
       underline="none"
       className={cn(
         buttonVariants({ variant }),
+        // Joy's body colour (text-secondary) still wins the inherited ink
+        // while Joy's CssBaseline is mounted; outline/ghost set none.
+        "text-ink-1",
         // The ghost line is a sentence; on a phone it may need two lines.
         "h-auto min-h-11 whitespace-normal text-center",
       )}

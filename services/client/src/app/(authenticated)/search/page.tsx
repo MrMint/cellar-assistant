@@ -148,7 +148,7 @@ function ResultsSection({
 }) {
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="type-headline">{title}</h2>
+      <h2 className="type-headline text-ink-1">{title}</h2>
       {children}
     </section>
   );

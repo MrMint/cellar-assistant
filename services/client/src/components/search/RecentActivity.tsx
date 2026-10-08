@@ -177,7 +177,7 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
             className="size-5 text-ink-3"
             strokeWidth={ICON_STROKE}
           />
-          <h2 className="type-headline">Recent Activity</h2>
+          <h2 className="type-headline text-ink-1">Recent Activity</h2>
         </div>
 
         <fieldset

@@ -198,7 +198,7 @@ export function NearbyPlaces({
             className="size-5 text-ink-3"
             strokeWidth={ICON_STROKE}
           />
-          <h2 className="type-headline">Nearby Places</h2>
+          <h2 className="type-headline text-ink-1">Nearby Places</h2>
         </div>
 
         <fieldset

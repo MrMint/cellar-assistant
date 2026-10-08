@@ -386,7 +386,7 @@ function CaptureCard({
 }) {
   return (
     <div className="flex max-w-(--breakpoint-md) flex-col gap-3 rounded-lg bg-surface-1 p-4">
-      <h2 className="type-headline text-center">{title}</h2>
+      <h2 className="type-headline text-center text-ink-1">{title}</h2>
       {children}
       <div className="flex justify-end">
         <Button variant="secondary" onClick={onCancel}>
