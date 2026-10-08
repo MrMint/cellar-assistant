@@ -80,7 +80,7 @@ export function CellarItemPageView({
           percentageRemaining: bottle.percentageRemaining,
         }}
       />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="min-w-0">
           <ItemImageWithCaptureClient
             url={bottle.displayImage?.url}
@@ -92,7 +92,7 @@ export function CellarItemPageView({
             cellarItemId={bottle.id}
           />
         </div>
-        <div className="grid gap-4 sm:col-span-2 lg:grid-cols-2">
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:col-span-2 lg:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">
             <ItemDetails
               itemId={item.itemId}
