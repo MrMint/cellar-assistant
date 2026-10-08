@@ -1,4 +1,3 @@
-import { Box, Typography } from "@mui/joy";
 import {
   RECIPE_GROUPS_PAGE_SIZE,
   RecipeGroupsQuery,
@@ -38,16 +37,14 @@ export default async function RecipesPage({
   const result = unwrapResult(data.recipeGroups, "RecipeGroupConnection");
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
-      <Typography level="h1" sx={{ mb: 3 }}>
-        Recipe Groups
-      </Typography>
+    <div className="mx-auto w-full max-w-[1200px]">
+      <h1 className="mb-6 type-large-title">Recipe Groups</h1>
 
-      <Typography level="body-lg" sx={{ mb: 4, color: "text.secondary" }}>
+      <p className="mb-8 type-body text-ink-2">
         Discover and explore cocktail recipes. Each recipe group shows the
         community's preferred version based on voting, with alternative versions
         available for comparison.
-      </Typography>
+      </p>
 
       {result.ok ? (
         <RecipeGroupSearch
@@ -58,10 +55,10 @@ export default async function RecipesPage({
           initialTotalCount={result.data.totalCount ?? null}
         />
       ) : (
-        <Typography level="body-md" sx={{ color: "danger.500" }}>
+        <p className="type-body text-destructive">
           Error searching recipe groups: {result.error.message}
-        </Typography>
+        </p>
       )}
-    </Box>
+    </div>
   );
 }
