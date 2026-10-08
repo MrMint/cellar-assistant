@@ -78,6 +78,15 @@ export const collectionStatsLine = (stats: {
 /** The longest code `?barcode=` accepts; real symbologies stop well short. */
 export const MAX_BARCODE_LENGTH = 64;
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point.
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+
+/** A code worth sending: not blank, not implausibly long, no control bytes. */
+const plausibleBarcode = (code: string): boolean =>
+  code !== "" &&
+  code.length <= MAX_BARCODE_LENGTH &&
+  !CONTROL_CHARACTER.test(code);
+
 export type SearchParams = {
   q?: string | string[];
   barcode?: string | string[];
@@ -113,7 +122,8 @@ const single = (value: string | string[] | undefined): string | undefined =>
  * - `?barcode=<code>` replaces the old `?barcode_results=<JSON>`: the old page
  *   serialized whole result rows into the URL (forgeable and unbounded, §7);
  *   now the URL carries only the code, and the server looks it up. A code that
- *   is blank or implausibly long is ignored rather than sent.
+ *   is blank, implausibly long or carries a control character (`%00` crashed
+ *   the lookup) is ignored rather than sent.
  * - `?image=<fileId>` replaces the old `?image_results=<JSON>` the same way
  *   (G32): the Photo button uploads the capture and the URL carries only the
  *   file id; the server searches with it. Anything that is not a uuid is
@@ -125,8 +135,7 @@ const single = (value: string | string[] | undefined): string | undefined =>
 export const searchStateFromParams = (params: SearchParams): SearchState => {
   const q = single(params.q)?.trim() ?? "";
   const code = single(params.barcode)?.trim() ?? "";
-  const barcode =
-    code !== "" && code.length <= MAX_BARCODE_LENGTH ? code : null;
+  const barcode = plausibleBarcode(code) ? code : null;
   const image = single(params.image)?.trim().toLowerCase() ?? "";
   const imageFileId = UUID.test(image) ? image : null;
   const legacyImageLink =
@@ -160,7 +169,7 @@ export const imageSearchHref = (fileId: string): string | null => {
  */
 export const barcodeSearchHref = (code: string): string | null => {
   const trimmed = code.trim();
-  if (trimmed === "" || trimmed.length > MAX_BARCODE_LENGTH) return null;
+  if (!plausibleBarcode(trimmed)) return null;
   return `/search?barcode=${encodeURIComponent(trimmed)}`;
 };
 

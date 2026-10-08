@@ -5,6 +5,7 @@ import {
   initialSearchNavState,
   landNavigation,
   planCommitNavigation,
+  planLandedNavigation,
   planTypingNavigation,
   SEARCH_DEBOUNCE_MS,
   type SearchNavigation,
@@ -27,8 +28,9 @@ type UseSearchQueryOptions = {
  * no markup, so the shadcn migration swaps the `<Input>` and keeps this.
  *
  * - `onChange` updates the text at once and navigates after the debounce
- *   (`replace` inside a typing session, `push` to open one or while the
- *   session's push has not landed).
+ *   (`replace` inside a typing session, `push` to open one). While the box's
+ *   push is in flight nothing is sent; when it lands, the text the box holds
+ *   by then goes as one `replace`.
  * - `commit` (Enter, blur) and `clear` flush the debounce and close the
  *   session.
  * - A URL query that is not the box's own echo (Back, Forward, a link)
@@ -91,17 +93,30 @@ export function useSearchQuery({
   }, [cancelDebounce, run, update]);
 
   useEffect(() => {
-    // A push lands whether or not the user is still typing; only a navigation
-    // in flight means it has not.
-    const landed = landNavigation(navStateRef.current, urlQuery, isNavigating);
+    // A navigation lands whether or not the user is still typing; only one in
+    // flight means it has not.
+    const before = navStateRef.current;
+    const landed = landNavigation(before, urlQuery, isNavigating);
     const sync = syncFromUrl(
       landed,
       urlQuery,
       isNavigating || debounceRef.current !== undefined,
     );
     navStateRef.current = sync.state;
-    if (sync.value !== null) update(sync.value);
-  }, [urlQuery, isNavigating, update]);
+    if (sync.value !== null) {
+      update(sync.value);
+      return;
+    }
+    // It just landed: send what the box held back meanwhile. A debounce that
+    // is still waiting sends it itself.
+    if (
+      before.inFlight !== null &&
+      sync.state.inFlight === null &&
+      debounceRef.current === undefined
+    ) {
+      run(planLandedNavigation(sync.state, valueRef.current));
+    }
+  }, [urlQuery, isNavigating, run, update]);
 
   useEffect(() => cancelDebounce, [cancelDebounce]);
 

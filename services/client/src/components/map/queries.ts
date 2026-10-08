@@ -269,6 +269,26 @@ export const PlaceInteractionFragment = graphql(`
   }
 `);
 
+/**
+ * Whether the viewer may see a place at all — the place page asks this on the
+ * server, so a missing or hidden place is a 404 (D24) rather than a 200 with
+ * the client's own message.
+ */
+export const PlaceExistsQuery = graphql(
+  `
+  query PlaceExists($id: ID!) {
+    place(id: $id) {
+      __typename
+      ... on Place {
+        id
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
 /** `GET_PLACE_DETAILS` + `GET_PLACE_ENRICHMENT`, in one read. */
 export const PlaceDetailsQuery = graphql(
   `

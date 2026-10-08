@@ -216,6 +216,29 @@ for (const route of REMOVED_TYPE_INDEXES) {
   });
 }
 
+/**
+ * Pages that look a row up and find nothing (missing, or not the viewer's to
+ * see — one answer, D24). Both used to answer 200: the items page threw
+ * `notFound()` inside its streaming loading boundary, and the place page
+ * rendered its own message on the client.
+ */
+const MISSING_ROWS = [
+  "/cellars/00000000-0000-4000-8000-000000000000/items",
+  "/places/00000000-0000-4000-8000-000000000000",
+];
+
+for (const route of MISSING_ROWS) {
+  test(`${route} is a 404 with the shared message`, async ({ primary }) => {
+    const res = await primary.goto(route);
+    expect(res?.status()).toBe(404);
+    await expect(
+      primary.getByRole("heading", {
+        name: "This doesn't exist or isn't shared with you",
+      }),
+    ).toBeVisible();
+  });
+}
+
 test("an unknown item-type segment is a 404, not a broken wizard", async ({
   primary,
 }) => {

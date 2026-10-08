@@ -41,9 +41,13 @@ export function SearchPageLayout({
     <SearchNavigationProvider>
       <Stack spacing={3} sx={landing ? { pt: { xs: 2, sm: 4 } } : undefined}>
         {landing ? landing.hero : null}
+        {/* `alignSelf`, not `mx: "auto"`: the Stack's spacing resets its
+            children's margins, which left the box flush left on desktop. */}
         <Box
           sx={
-            landing ? { width: "100%", maxWidth: 600, mx: "auto" } : undefined
+            landing
+              ? { width: "100%", maxWidth: 600, alignSelf: "center" }
+              : undefined
           }
         >
           <ClientSearchInterface urlQuery={urlQuery} />

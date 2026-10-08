@@ -10,6 +10,7 @@ import {
   initialSearchNavState,
   landNavigation,
   planCommitNavigation,
+  planLandedNavigation,
   planTypingNavigation,
   type SearchNavigation,
   type SearchNavState,
@@ -71,27 +72,63 @@ describe("planTypingNavigation", () => {
     assert.deepEqual(state, {
       sentQuery: "wine",
       sessionOpen: true,
-      pushPending: false,
+      inFlight: null,
+      commitOnLand: false,
     });
   });
 
-  test("while the session's push is in flight, the next pause pushes again", () => {
-    // The App Router discards the pending push when the next navigation
-    // starts; a replace here would overwrite the landing view's entry.
+  test("while the session's push is in flight, typing sends nothing", () => {
+    // Over a push the router has not applied yet, a replace would discard it
+    // and overwrite the landing view's entry; over one it has, a second push
+    // would land as a second entry (the UX lane's ?q=wi, ?q=win, ?q=wine).
     const { navigations, state } = typeAll(
       initialSearchNavState(null),
-      ["w", "wine"],
+      ["w", "wi", "win", "wine"],
       { land: false },
     );
-    assert.deepEqual(navigations, [
-      { method: "push", href: "/search?q=w" },
-      { method: "push", href: "/search?q=wine" },
-    ]);
-    assert.equal(state.pushPending, true);
-    const landed = landNavigation(state, "wine", false);
-    assert.deepEqual(planTypingNavigation(landed, "wines").navigation, {
+    assert.deepEqual(navigations, [{ method: "push", href: "/search?q=w" }]);
+    assert.deepEqual(state, {
+      sentQuery: "w",
+      sessionOpen: true,
+      inFlight: "push",
+      commitOnLand: false,
+    });
+  });
+
+  test("when the push lands, what the box holds goes as one replace", () => {
+    const { state } = typeAll(initialSearchNavState(null), ["w", "wine"], {
+      land: false,
+    });
+    const landed = landNavigation(state, "w", false);
+    const step = planLandedNavigation(landed, "wine");
+    assert.deepEqual(step.navigation, {
       method: "replace",
-      href: "/search?q=wines",
+      href: "/search?q=wine",
+    });
+    assert.equal(step.state.sessionOpen, true);
+    assert.equal(step.state.inFlight, "replace");
+    // Nothing held back: the landing sends nothing.
+    assert.equal(planLandedNavigation(landed, "w").navigation, null);
+  });
+
+  test("a replace over an in-flight replace goes at once", () => {
+    const { state } = typeAll(initialSearchNavState(null), ["w"]);
+    const { navigations } = typeAll(state, ["wi", "win"], { land: false });
+    assert.deepEqual(navigations, [
+      { method: "replace", href: "/search?q=wi" },
+      { method: "replace", href: "/search?q=win" },
+    ]);
+  });
+
+  test("a new session's push waits for the last session's replace to land", () => {
+    let state = typeAll(initialSearchNavState(null), ["w"]).state;
+    state = planCommitNavigation(state, "wine").state; // replace, in flight
+    assert.equal(state.inFlight, "replace");
+    assert.equal(planTypingNavigation(state, "b").navigation, null);
+    const landed = landNavigation(state, "wine", false);
+    assert.deepEqual(planLandedNavigation(landed, "beer").navigation, {
+      method: "push",
+      href: "/search?q=beer",
     });
   });
 
@@ -129,18 +166,26 @@ describe("planCommitNavigation", () => {
     assert.deepEqual(step.state, {
       sentQuery: "barolo",
       sessionOpen: false,
-      pushPending: true,
+      inFlight: "push",
+      commitOnLand: false,
     });
   });
 
-  test("Enter while the session's push is in flight pushes", () => {
+  test("Enter while the session's push is in flight is sent when it lands", () => {
     const typed = typeAll(initialSearchNavState(null), ["bar"], {
       land: false,
     });
-    assert.deepEqual(planCommitNavigation(typed.state, "barolo").navigation, {
-      method: "push",
+    const step = planCommitNavigation(typed.state, "barolo");
+    assert.equal(step.navigation, null);
+    assert.equal(step.state.commitOnLand, true);
+    const landed = landNavigation(step.state, "bar", false);
+    const sent = planLandedNavigation(landed, "barolo");
+    assert.deepEqual(sent.navigation, {
+      method: "replace",
       href: "/search?q=barolo",
     });
+    assert.equal(sent.state.sessionOpen, false);
+    assert.equal(sent.state.commitOnLand, false);
   });
 
   test("Enter inside a session replaces the session's entry", () => {
@@ -160,7 +205,8 @@ describe("planCommitNavigation", () => {
     assert.deepEqual(step.state, {
       sentQuery: "barolo",
       sessionOpen: false,
-      pushPending: false,
+      inFlight: null,
+      commitOnLand: false,
     });
   });
 
@@ -210,7 +256,8 @@ describe("syncFromUrl", () => {
     assert.deepEqual(sync.state, {
       sentQuery: "wine",
       sessionOpen: false,
-      pushPending: false,
+      inFlight: null,
+      commitOnLand: false,
     });
   });
 
@@ -233,11 +280,22 @@ describe("landNavigation", () => {
     assert.equal(landNavigation(inFlight, null, false), inFlight);
   });
 
+  test("Back while a push is in flight: the box takes the URL", () => {
+    const sync = syncFromUrl(
+      landNavigation(inFlight, null, false),
+      null,
+      false,
+    );
+    assert.equal(sync.value, "");
+    assert.deepEqual(sync.state, initialSearchNavState(null));
+  });
+
   test("the URL showing the sent query, settled, is a landed push", () => {
     assert.deepEqual(landNavigation(inFlight, " wine ", false), {
       sentQuery: "wine",
       sessionOpen: true,
-      pushPending: false,
+      inFlight: null,
+      commitOnLand: false,
     });
   });
 });

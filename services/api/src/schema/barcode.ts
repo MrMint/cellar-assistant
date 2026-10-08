@@ -33,6 +33,7 @@ import {
   BarcodeActorDescriptor,
   barcodeActorId,
   itemActorId,
+  NotFoundError,
   offsetPage,
 } from "@cellar-assistant/contracts";
 import { builder } from "./builder.ts";
@@ -112,10 +113,23 @@ builder.queryField("barcode", (t) =>
       "One barcode by its code. `NotFoundError` when nobody has registered it.",
     errors: {},
     args: { code: t.arg.string({ required: true }) },
-    resolve: (_root, args, context) =>
-      context.actor(BarcodeActorDescriptor, barcodeActorId(args.code)).get(),
+    resolve: (_root, args, context) => {
+      // No row can hold a control character (`BarcodeActor` refuses such a
+      // key on every write), and a NUL sent on to the actor came back as an
+      // "Unexpected error", not an answer: `/search?barcode=%00` crashed the
+      // search page (UX lane, 2026-10-08).
+      if (CONTROL_CHARACTER.test(args.code)) {
+        throw new NotFoundError("no barcode has a control character in it");
+      }
+      return context
+        .actor(BarcodeActorDescriptor, barcodeActorId(args.code))
+        .get();
+    },
   }),
 );
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point.
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 
 builder.mutationField("ensureBarcode", (t) =>
   t.field({
