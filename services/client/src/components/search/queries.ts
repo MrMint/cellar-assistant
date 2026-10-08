@@ -272,6 +272,28 @@ export const SearchRecentActivityQuery = graphql(`
               id
               name
             }
+            checkIn {
+              __typename
+              id
+              score
+              note
+              tags
+              place {
+                __typename
+                id
+                name
+                displayName
+              }
+              companions(first: 5) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    displayName
+                  }
+                }
+              }
+            }
           }
         }
       }

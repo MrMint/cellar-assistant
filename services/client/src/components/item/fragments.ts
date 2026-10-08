@@ -310,19 +310,14 @@ export const ItemReviewsPageQuery = graphql(
 
 /**
  * `/cellars/[cellarId]/{type}s/[bottleId]` — one bottle (G10) with its
- * check-ins (G14) and display photo (G15), the item it holds, the viewer and
- * their friends (the bulk check-in picker).
+ * check-ins (G14) and display photo (G15), the item it holds, and the
+ * viewer's friends (the "Log a drink" sheet's "Who with", preloaded).
  */
 export const CellarItemPageQuery = graphql(
   `
   query CellarItemPage($cellarId: ID!, $bottleId: ID!) {
     me {
       id
-      profile {
-        id
-        displayName
-        avatarUrl
-      }
     }
     myFriends(first: 100) {
       __typename

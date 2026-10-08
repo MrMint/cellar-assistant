@@ -10,7 +10,6 @@ import {
   itemRecipesFromFragment,
   itemViewFromFragment,
   recipeIngredientsTotal,
-  userFromProfile,
 } from "./adapter";
 import { CellarItemPageView } from "./CellarItemPageView";
 import { CellarBottleForQuery, CellarItemPageQuery } from "./fragments";
@@ -78,10 +77,6 @@ export async function CellarItemPage({
   if (bottle === null || view === null) notFound();
 
   const viewerId = data.me?.id ?? null;
-  const viewer =
-    data.me?.profile === null || data.me?.profile === undefined
-      ? { id: viewerId ?? "", displayName: "You", avatarUrl: "" }
-      : userFromProfile(data.me.profile);
   const friendsResult = unwrapResult(data.myFriends, "FriendConnection");
   // The old page read brands and friends unbounded: read the rest first.
   const [brands, friends] = await Promise.all([
@@ -115,7 +110,6 @@ export async function CellarItemPage({
       cellar={{ id: cellar.id, name: cellar.name }}
       checkIns={bottle.checkIns.edges.map((edge) => checkInFromNode(edge.node))}
       checkInsTotal={bottle.checkIns.totalCount ?? null}
-      viewer={viewer}
       friends={friends}
       isOwner={isCellarOwner(cellar, viewerId)}
       editHref={

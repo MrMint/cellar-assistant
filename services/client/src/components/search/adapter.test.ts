@@ -210,11 +210,10 @@ describe("activityKindsFromParams (the old ?activity= parse)", () => {
     );
   });
   test("maps to the API's enum", () => {
-    assert.deepEqual(apiActivityKinds(["added", "reviewed", "tier-listed"]), [
-      "ADDED",
-      "REVIEWED",
-      "TIER_LISTED",
-    ]);
+    assert.deepEqual(
+      apiActivityKinds(["added", "reviewed", "tier-listed", "drank"]),
+      ["ADDED", "REVIEWED", "TIER_LISTED", "CHECKED_IN"],
+    );
   });
 });
 
@@ -358,6 +357,56 @@ describe("activityEntryFromNode (the old buildActivityFeed's extractors)", () =>
       assert.equal(result.tierListName, "Best bars");
       assert.equal(result.rank, 2);
     }
+  });
+
+  test("a drink logged (X02): the log's score, note, who with and where", () => {
+    const result = activityEntryFromNode(
+      entry({
+        id: "CHECKED_IN:l1",
+        kind: "CHECKED_IN",
+        review: null,
+        checkIn: {
+          __typename: "ItemCheckIn",
+          id: "l1",
+          score: 4,
+          note: "dark cherry",
+          tags: ["cherry"],
+          place: {
+            __typename: "Place",
+            id: "p1",
+            name: "corner bar",
+            displayName: "The Corner Bar",
+          },
+          companions: {
+            edges: [
+              {
+                node: {
+                  __typename: "UserProfile",
+                  id: "u1",
+                  displayName: "Sam",
+                },
+              },
+            ],
+          },
+        },
+      }),
+    );
+    assert.equal(result?.kind, "drank");
+    assert.equal(result?.id, "drank-l1");
+    assert.equal(result?.itemHref, "/wines/w1");
+    if (result?.kind === "drank") {
+      assert.equal(result.score, 4);
+      assert.equal(result.note, "dark cherry");
+      assert.deepEqual(result.tags, ["cherry"]);
+      assert.equal(result.context, "with Sam · at The Corner Bar");
+    }
+    // A log the server nulled (no longer visible) drops the row.
+    assert.equal(
+      activityEntryFromNode(
+        entry({ kind: "CHECKED_IN", review: null, checkIn: null }),
+      ),
+      null,
+    );
   });
 
   test("an edge the server nulled (list no longer visible) drops the row", () => {

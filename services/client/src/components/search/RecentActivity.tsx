@@ -9,6 +9,7 @@ import { FilterChip } from "@/components/app/FilterChip";
 import {
   Add,
   type AppIcon,
+  Cocktail,
   History,
   ICON_STROKE,
   ListView,
@@ -66,6 +67,7 @@ const ACTIVITY_KIND_FILTERS: {
   { id: "added", label: "Added", icon: Add },
   { id: "reviewed", label: "Reviews", icon: Star },
   { id: "tier-listed", label: "Tier Lists", icon: ListView },
+  { id: "drank", label: "Drank", icon: Cocktail },
 ];
 
 /** A kind toggled in or out, keeping the order the kinds were picked in. */
@@ -104,7 +106,13 @@ function TypeThumbnail({ type }: { type: string }) {
 /** The small mark on the thumbnail's corner: what kind of activity this is. */
 function KindMark({ kind }: { kind: ActivityKind }) {
   const Icon =
-    kind === "added" ? Add : kind === "tier-listed" ? ListView : Star;
+    kind === "added"
+      ? Add
+      : kind === "tier-listed"
+        ? ListView
+        : kind === "drank"
+          ? Cocktail
+          : Star;
   return (
     <span className="absolute -top-1 -left-1 leading-none drop-shadow-md">
       <Icon
@@ -113,7 +121,7 @@ function KindMark({ kind }: { kind: ActivityKind }) {
         className={cn(
           "size-4",
           kind === "added" && "text-success",
-          kind === "tier-listed" && "text-ink-1",
+          (kind === "tier-listed" || kind === "drank") && "text-ink-1",
           kind === "reviewed" && "fill-current text-ink-1",
         )}
       />
@@ -278,6 +286,15 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
                             #{entry.rank} in {entry.tierListName}
                             {timeAgo !== null && ` \u00B7 ${timeAgo}`}
                           </>
+                        ) : entry.kind === "drank" ? (
+                          <>
+                            {/* X02: a log's score is this glass's, not the review. */}
+                            {isNotNil(entry.score)
+                              ? `Had it \u00B7 ${formatRating(entry.score)}\u2605`
+                              : "Had it"}
+                            {entry.context !== "" && ` \u00B7 ${entry.context}`}
+                            {timeAgo !== null && ` \u00B7 ${timeAgo}`}
+                          </>
                         ) : (
                           <>
                             {/* "Rated 4", as the rating control says it; no score is a text-only review. */}
@@ -288,6 +305,14 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
                           </>
                         )}
                       </p>
+
+                      {/* A log's note, or its flavours when it has no note */}
+                      {entry.kind === "drank" &&
+                        (entry.note !== null || entry.tags.length > 0) && (
+                          <p className="mt-0.5 truncate text-ink-2 text-xs italic">
+                            {entry.note ?? entry.tags.join(", ")}
+                          </p>
+                        )}
 
                       {/* Review text snippet */}
                       {entry.kind === "reviewed" && entry.reviewText && (

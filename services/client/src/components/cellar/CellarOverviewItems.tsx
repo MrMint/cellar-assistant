@@ -10,8 +10,7 @@ import { cellarItemsGridClass } from "./CellarItemsGridSkeleton";
 /**
  * The overview's "Open and recent" preview: restored `ItemCard`s in the old
  * items grid's breakpoints, each with the one bottle action this page keeps —
- * "Check in" — because the cellar's check-in history is what the page is for
- * and the bottle page that will own check-ins (wave 3) is not restored yet.
+ * "Check in", which opens the drink-log sheet (X02) with that bottle.
  * Open / pour / empty / remove go with decision 2's "per-card bottle
  * controls"; they return on the bottle page.
  *
@@ -20,11 +19,9 @@ import { cellarItemsGridClass } from "./CellarItemsGridSkeleton";
 export function CellarOverviewItems({
   cellarId,
   items,
-  viewerId,
 }: {
   cellarId: string;
   items: CellarGridItem[];
-  viewerId: string | null;
 }) {
   const router = useRouter();
   const onCheckedIn = useCallback(() => router.refresh(), [router]);
@@ -48,8 +45,9 @@ export function CellarOverviewItems({
             <CheckInButton
               cellarId={cellarId}
               cellarItemId={x.item.id}
+              itemType={x.type}
+              itemId={x.item.itemId}
               itemName={x.item.name}
-              viewerId={viewerId}
               onCheckedIn={onCheckedIn}
             />
           </div>
