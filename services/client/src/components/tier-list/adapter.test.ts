@@ -15,6 +15,7 @@ import {
   insightsItemsFromNodes,
   itemDisplayFromNode,
   itemEntrySubtitle,
+  itemTypeOfList,
   onListHrefs,
   placeEntrySubtitle,
   reorderCallFor,
@@ -407,5 +408,14 @@ describe("the in-page add picker (already on the list, refusals in words)", () =
       addEntryFailureMessage({ code: "TRANSPORT", message: "No answer." }),
       "No answer.",
     );
+  });
+});
+
+describe("itemTypeOfList (X08: which lists offer Try This Next)", () => {
+  test("an item list is its type; a place list or junk is none", () => {
+    assert.equal(itemTypeOfList("wine"), "WINE");
+    assert.equal(itemTypeOfList("SAKE"), "SAKE");
+    assert.equal(itemTypeOfList("place"), null);
+    assert.equal(itemTypeOfList("bottle"), null);
   });
 });

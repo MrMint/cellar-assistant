@@ -263,3 +263,66 @@ export const placeIdsFromEntries = (
   edges
     .map((edge) => edge.node.place?.id)
     .filter((id): id is string => typeof id === "string");
+
+/* -------------------------------------------------------------------------- */
+/* Insights: "Try this next"                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** How many catalog matches the insight offers under its suggestion. */
+export const TRY_NEXT_SHOWN = 3;
+
+export type TryNextRow = {
+  readonly key: string;
+  readonly target: Extract<WantToTryTarget, { kind: "ITEM" }>;
+  readonly title: string;
+  readonly href: string;
+  readonly saved: boolean;
+};
+
+type TryNextHit = {
+  readonly item: {
+    readonly __typename: string;
+    readonly id: string;
+    readonly type: string;
+    readonly name: string;
+    readonly isWantToTry: boolean;
+    readonly vintage?: unknown;
+    readonly vintageYear?: unknown;
+  };
+};
+
+/**
+ * The search's hits → at most {@link TRY_NEXT_SHOWN} rows, in the search's
+ * order, skipping what is already on the list (`onList`: board hrefs) and
+ * any repeat. Nothing here ranks or invents: an empty answer is shown as
+ * empty, not padded.
+ */
+export const tryNextRows = (
+  hits: readonly TryNextHit[],
+  onList: ReadonlySet<string>,
+): TryNextRow[] => {
+  const rows: TryNextRow[] = [];
+  const seen = new Set<string>();
+  for (const { item } of hits) {
+    if (!isApiItemType(item.type)) continue;
+    const href = itemHref(item.type, item.id);
+    if (onList.has(href) || seen.has(href)) continue;
+    seen.add(href);
+    const vintage =
+      item.__typename === "Wine"
+        ? formatVintage(item.vintage as string | null | undefined)
+        : item.__typename === "Sake"
+          ? formatVintage(item.vintageYear as number | null | undefined)
+          : undefined;
+    const name = displayItemName(item.name);
+    rows.push({
+      key: href,
+      target: { kind: "ITEM", itemType: item.type, itemId: item.id },
+      title: vintage === undefined ? name : `${vintage} ${name}`,
+      href,
+      saved: item.isWantToTry,
+    });
+    if (rows.length === TRY_NEXT_SHOWN) break;
+  }
+  return rows;
+};

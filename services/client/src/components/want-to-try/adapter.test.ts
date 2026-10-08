@@ -9,8 +9,10 @@ import {
   emptyCopy,
   filterFromParam,
   placeIdsFromEntries,
+  TRY_NEXT_SHOWN,
   targetInput,
   targetKey,
+  tryNextRows,
   wantToTryMessage,
   wantToTryPage,
   wantToTryRowFromEntry,
@@ -220,5 +222,50 @@ describe("placeIdsFromEntries", () => {
       ]),
       ["a", "b"],
     );
+  });
+});
+
+describe("tryNextRows (insights' Try This Next, X08)", () => {
+  const hit = (id: string, over: Record<string, unknown> = {}) => ({
+    item: {
+      __typename: "Wine",
+      id,
+      type: "WINE",
+      name: `wine ${id}`,
+      isWantToTry: false,
+      vintage: "2019-01-01",
+      ...over,
+    },
+  });
+
+  test("the search's order, minus what is on the list and repeats, at most three", () => {
+    const rows = tryNextRows(
+      [
+        hit("a"),
+        hit("b"),
+        hit("a"),
+        hit("c", { isWantToTry: true }),
+        hit("d"),
+        hit("e"),
+      ],
+      new Set(["/wines/b"]),
+    );
+    assert.deepEqual(
+      rows.map((row) => row.href),
+      ["/wines/a", "/wines/c", "/wines/d"],
+    );
+    assert.equal(rows.length, TRY_NEXT_SHOWN);
+    assert.equal(rows[1]?.saved, true);
+    assert.equal(rows[0]?.title.startsWith("2019 "), true);
+    assert.deepEqual(rows[0]?.target, {
+      kind: "ITEM",
+      itemType: "WINE",
+      itemId: "a",
+    });
+  });
+
+  test("nothing found is nothing shown — never padded", () => {
+    assert.deepEqual(tryNextRows([], new Set()), []);
+    assert.deepEqual(tryNextRows([hit("a")], new Set(["/wines/a"])), []);
   });
 });

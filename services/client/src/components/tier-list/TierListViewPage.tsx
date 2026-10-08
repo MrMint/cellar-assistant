@@ -50,7 +50,7 @@ import {
 import { cn } from "@/lib/utils";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
-import { onListHrefs } from "./adapter";
+import { itemTypeOfList, onListHrefs } from "./adapter";
 import { TierListInsightsPanel } from "./insights/TierListInsightsPanel";
 import { TierListView } from "./TierListView";
 import type { TierListData, TierListInsightsData } from "./types";
@@ -104,6 +104,9 @@ export function TierListViewPage({
    */
   const [addSession, setAddSession] = useState(0);
   const onList = useMemo(() => onListHrefs(data.items), [data.items]);
+  // X08: an item list's "Try This Next" can be saved from; a place list's
+  // suggestion is a kind of venue, with nothing to look up.
+  const tryNextType = itemTypeOfList(data.listType);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [isEditingLocked, setIsEditingLocked] = useState(data.isEditingLocked);
@@ -321,7 +324,12 @@ export function TierListViewPage({
           />
         </TabsContent>
         <TabsContent value="insights">
-          <TierListInsightsPanel insights={insightsData} />
+          <TierListInsightsPanel
+            insights={insightsData}
+            tryNext={
+              tryNextType === null ? null : { itemType: tryNextType, onList }
+            }
+          />
         </TabsContent>
       </Tabs>
 

@@ -159,3 +159,48 @@ export const WantToGoPlacesQuery = graphql(`
     }
   }
 `);
+
+/**
+ * Insights' "Try this next" made actionable (X08): the AI's suggestion is a
+ * style, never a product (its prompt forbids one), so the bottles offered
+ * under it come from a catalog search for that phrase — real rows, ranked by
+ * the search, not invented by the model. Run only when asked (one tap).
+ */
+export const TryThisNextSearchQuery = graphql(
+  `
+  query TryThisNextSearch(
+    $text: String!
+    $itemTypes: [ItemType!]
+    $limit: Int
+    $first: Int
+  ) {
+    itemSearch(text: $text, itemTypes: $itemTypes, limit: $limit, first: $first) {
+      __typename
+      ... on ItemSearchConnection {
+        edges {
+          node {
+            id
+            type
+            name
+            item {
+              __typename
+              id
+              type
+              name
+              isWantToTry
+              ... on Wine {
+                vintage
+              }
+              ... on Sake {
+                vintageYear
+              }
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
