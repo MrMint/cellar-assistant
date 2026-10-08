@@ -1,5 +1,6 @@
 "use client";
 
+import { useReducedMotion } from "motion/react";
 import { useEffect, useId, useState } from "react";
 
 interface Bubble {
@@ -14,19 +15,15 @@ interface Bubble {
 export function LiquidBackground() {
   const uid = useId();
   const id = uid.replace(/:/g, "");
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const reduceMotion = useReducedMotion() === true;
+  // The bubbles are random, so they exist only after mount; that is also when
+  // the reduced-motion setting is read. The server and the hydrating render
+  // both draw the animated first frame, so the two always agree.
+  const [mounted, setMounted] = useState(false);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
 
   useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setPrefersReducedMotion(mq.matches);
-    const handler = (e: MediaQueryListEvent) =>
-      setPrefersReducedMotion(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-
-  useEffect(() => {
+    setMounted(true);
     setBubbles(
       Array.from({ length: 20 }, (_, i) => ({
         id: i,
@@ -39,7 +36,7 @@ export function LiquidBackground() {
     );
   }, []);
 
-  const anim = !prefersReducedMotion;
+  const anim = !(mounted && reduceMotion);
 
   return (
     <>
@@ -71,9 +68,6 @@ export function LiquidBackground() {
           85%  { opacity: 0.2; }
           100% { transform: translateY(-35vh) scale(0.5); opacity: 0; }
         }
-        @media (prefers-reduced-motion: reduce) {
-          .lb-${id} { animation: none !important; }
-        }
       `}</style>
 
       <div
@@ -90,7 +84,6 @@ export function LiquidBackground() {
 
         {/* Liquid body — bottom: -30px to prevent gap from wobble */}
         <div
-          className={`lb-${id}`}
           style={{
             position: "absolute",
             zIndex: 1,
@@ -108,7 +101,6 @@ export function LiquidBackground() {
         >
           {/* Foam head — starts with 30px, grows to 100px */}
           <div
-            className={`lb-${id}`}
             style={{
               position: "absolute",
               left: -4,
@@ -126,7 +118,6 @@ export function LiquidBackground() {
           {bubbles.map((b) => (
             <div
               key={b.id}
-              className={`lb-${id}`}
               style={{
                 position: "absolute",
                 bottom: `${b.startBottom}%`,
