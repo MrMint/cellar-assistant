@@ -17,6 +17,7 @@ export * from "./jobs.ts";
 export * from "./menu-scans.ts";
 export * from "./onboarding.ts";
 export * from "./page.ts";
+export * from "./place-categories.ts";
 export * from "./places.ts";
 export * from "./proxy.ts";
 export * from "./recipes.ts";

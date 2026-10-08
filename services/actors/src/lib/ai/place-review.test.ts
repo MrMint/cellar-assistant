@@ -28,6 +28,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Ctx } from "@cellar-assistant/contracts";
+import {
+  PLACE_CATEGORIES,
+  PLACE_CATEGORY_TIERS,
+} from "@cellar-assistant/contracts";
 import { describe, expect, it } from "vitest";
 import type { PlaceReviewSubject } from "../../actors/place-creation-actor.ts";
 import {
@@ -129,13 +133,13 @@ describe("PLACE_REVIEW_SCHEMA", () => {
  *
  * `places.categories` is `text[]` with no foreign key, so nothing in the
  * database will ever object to an invented category — it is simply a chip the
- * user cannot act on, because the frontend renders from its own fixed list
- * (`PLACE_CATEGORY_TIERS`, restored from the old shared package with the map).
- * That makes this list a hand-written mirror of a file in another app, which is
- * precisely the shape that goes stale silently. Held against the source rather
- * than against a copy of itself.
+ * user cannot act on, because the frontend renders from its own fixed list.
+ * D15 made that one list (`@cellar-assistant/contracts`' `PLACE_CATEGORIES`),
+ * spread by both the review's enum and the create form; this holds both ends
+ * to it, and pins the form's source so a local copy creeping back in fails
+ * here rather than drifting silently.
  */
-describe("PLACE_REVIEW_CATEGORIES vs the create form", () => {
+describe("PLACE_REVIEW_CATEGORIES vs the create form (D15: one list)", () => {
   const placesDir = new URL(
     "../../../../../services/client/src/components/map/places/",
     import.meta.url,
@@ -145,39 +149,32 @@ describe("PLACE_REVIEW_CATEGORIES vs the create form", () => {
   );
   const formFile = fileURLToPath(new URL("CreatePlaceForm.tsx", placesDir));
 
-  const formCategories = (): readonly string[] => {
-    const source = readFileSync(categoriesFile, "utf8");
-    const block =
-      /export const PLACE_CATEGORY_TIERS[\s\S]*?\n\} as const;/.exec(source);
-    if (block === null) {
-      throw new Error(
-        `PLACE_CATEGORY_TIERS is no longer in ${categoriesFile}. It is what ` +
-          "the place review's category enum mirrors; find where it moved to.",
-      );
-    }
-    // Every slug is a quoted lower-snake-case string; the tier keys
-    // (`venues:`, `retail:`) are bare identifiers, so the pattern separates
-    // them without parsing the file.
-    return [...block[0].matchAll(/"([a-z][a-z_]*)"/g)].map(
-      (match) => match[1] ?? "",
-    );
-  };
+  it("is the shared list itself", () => {
+    expect(PLACE_REVIEW_CATEGORIES).toBe(PLACE_CATEGORIES);
+    expect([...PLACE_REVIEW_CATEGORIES]).toEqual([
+      ...PLACE_CATEGORY_TIERS.venues,
+      ...PLACE_CATEGORY_TIERS.retail,
+    ]);
+  });
 
-  it("reads the list the create form actually renders", () => {
-    // If the form stops building its options from `PLACE_CATEGORY_TIERS`,
-    // the comparison below would be holding the enum against a file nobody
-    // renders — so pin the form's source too.
+  it("the form renders from the shared list, not a copy", () => {
+    const categories = readFileSync(categoriesFile, "utf8");
+    expect(categories).toContain(
+      'from "@cellar-assistant/contracts/place-categories"',
+    );
+    // No local array literal of slugs left behind.
+    expect(categories).not.toMatch(/venues:\s*\[/);
+
     const form = readFileSync(formFile, "utf8");
     expect(form).toMatch(/from "\.\/userPlaceCategories"/);
     expect(form).toContain("PLACE_CATEGORY_TIERS.venues");
     expect(form).toContain("PLACE_CATEGORY_TIERS.retail");
   });
 
-  it("names exactly the categories the form offers", () => {
-    const form = [...formCategories()].sort();
-    expect(form.length).toBeGreaterThan(0);
-    expect(new Set(form).size).toBe(form.length);
-    expect([...PLACE_REVIEW_CATEGORIES].sort()).toEqual(form);
+  it("the schema's enum offers exactly the shared list", () => {
+    expect(
+      PLACE_REVIEW_SCHEMA.properties?.suggestedCategories?.items?.enum,
+    ).toEqual([...PLACE_CATEGORIES]);
   });
 });
 

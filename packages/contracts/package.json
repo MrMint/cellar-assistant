@@ -13,6 +13,7 @@
     "./item-types": "./src/item-types.ts",
     "./items": "./src/items.ts",
     "./page": "./src/page.ts",
+    "./place-categories": "./src/place-categories.ts",
     "./proxy": "./src/proxy.ts"
   },
   "scripts": {

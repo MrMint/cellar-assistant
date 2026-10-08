@@ -48,6 +48,7 @@ import {
   ConflictError,
   ITEM_ATTRIBUTE_KEY,
   ITEM_TYPES,
+  PLACE_CATEGORIES,
   RECIPE_CATEGORIES,
   RECIPE_TYPES,
   REQUIRED_ITEM_ATTRIBUTES,
@@ -1260,49 +1261,21 @@ export const isScannedType = (value: unknown): value is ScannedItemType =>
  * `places.categories` is `text[]` with no foreign key, so an invented category
  * violates nothing in the database — it is simply unusable: the create form
  * (`services/client/src/components/map/places/CreatePlaceForm.tsx`) renders
- * its options from a fixed list (`PLACE_CATEGORY_TIERS` in
- * `services/client/src/components/map/places/userPlaceCategories.ts`, the
- * restored copy of the old `@cellar-assistant/shared` categories) and a
- * suggestion outside it is a word the user cannot act on. So this is an `enum` in the schema for the same
- * reason the reference tables are: a correctness constraint, not a truthfulness
- * one.
+ * its options from a fixed list (`PLACE_CATEGORY_TIERS`, now in
+ * `packages/contracts/src/place-categories.ts`) and a suggestion outside it
+ * is a word the user cannot act on. So this is an `enum` in the schema for
+ * the same reason the reference tables are: a correctness constraint, not a
+ * truthfulness one.
  *
  * The old prompt printed these as Title Case *labels* ("Coffee Shop") while the
  * column and the form both hold slugs, so a model that obeyed the prompt
  * answered with strings the form could never match. This lists the slugs.
  *
- * `place-review.test.ts` holds this against the form's own list rather than
- * against a copy of itself.
+ * D15: this *is* the form's list now — both spread
+ * `@cellar-assistant/contracts`' `PLACE_CATEGORIES` — rather than a copy that
+ * `place-review.test.ts` had to hold against the client's source.
  */
-export const PLACE_REVIEW_CATEGORIES = [
-  // venues
-  "restaurant",
-  "bar",
-  "cafe",
-  "coffee_shop",
-  "cocktail_bar",
-  "wine_bar",
-  "brewery",
-  "winery",
-  "distillery",
-  "pub",
-  "beer_bar",
-  "sports_bar",
-  "lounge",
-  "gastropub",
-  "tapas_bar",
-  "sake_bar",
-  "whiskey_bar",
-  "beer_garden",
-  "wine_tasting_room",
-  "coffee_roastery",
-  "tea_house",
-  // retail
-  "liquor_store",
-  "beer_wine_and_spirits",
-  "beverage_store",
-  "specialty_store",
-] as const;
+export const PLACE_REVIEW_CATEGORIES = PLACE_CATEGORIES;
 
 /** The quality flags the old prompt named, as a closed set. */
 export const PLACE_REVIEW_FLAGS = [
