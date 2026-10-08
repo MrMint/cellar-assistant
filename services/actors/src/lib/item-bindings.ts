@@ -43,6 +43,7 @@ import {
   ITEM_TYPE_SPECS,
   itemAttributeKeys,
   itemAttributeSpec,
+  NON_VINTAGE,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
@@ -393,7 +394,15 @@ const renderEmbeddedValue = (
   field: EmbeddedField,
   value: unknown,
 ): string | null => {
-  if (value === null || value === undefined || value === "") return null;
+  if (value === null || value === undefined || value === "") {
+    // X19: a wine's NULL vintage is an answer — non-vintage — and "NV" is
+    // what a search for one types. No row embedded before X19 can hold one
+    // (the column was NOT NULL), so no stored text changes and
+    // `EMBEDDING_TEXT_VERSION` stays where it is.
+    return value === null && itemAttributeSpec(type, field)?.nonVintage
+      ? NON_VINTAGE
+      : null;
+  }
   if (field === "name" || field === "description") return String(value);
   if (field === "country") return humanizeCode(String(value));
   const spec = itemAttributeSpec(type, field);

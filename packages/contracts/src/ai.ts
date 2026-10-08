@@ -34,6 +34,12 @@ export type AiCapabilities = {
   readonly recipePhoto: boolean;
   /** A tier list's generated insights. */
   readonly tierListInsights: boolean;
+  /**
+   * X19: suggesting an item's missing details from its name and brand alone
+   * (text only — no photograph), shown as "Suggested" chips that are never
+   * applied without a tap.
+   */
+  readonly detailSuggestions: boolean;
 };
 
 /** A process with no AI provider installed: nothing model-backed works. */
@@ -44,4 +50,5 @@ export const NO_AI_CAPABILITIES: AiCapabilities = Object.freeze({
   menuScan: false,
   recipePhoto: false,
   tierListInsights: false,
+  detailSuggestions: false,
 });

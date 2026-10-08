@@ -58,6 +58,10 @@ const AiCapabilitiesType = builder
       tierListInsights: t.exposeBoolean("tierListInsights", {
         description: "Generated tier-list insights.",
       }),
+      detailSuggestions: t.exposeBoolean("detailSuggestions", {
+        description:
+          "Suggesting an item's missing details from its name (X19, text only).",
+      }),
     }),
   });
 

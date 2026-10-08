@@ -63,6 +63,7 @@ import type {
   GenericItemKind,
   ItemActorInterface,
   ItemBrandDto,
+  ItemCorrectionSource,
   ItemDto,
   ItemImageDto,
   ItemRef,
@@ -73,6 +74,7 @@ import type {
   Page,
   PageArgs,
   RegenerateVectorResult,
+  ReplaceItemBrandInput,
   SetItemBarcodeInput,
   UnlinkedItemBrand,
   UpdateGenericItemInput,
@@ -1223,6 +1225,118 @@ export class ItemActor
     });
     await this.reload();
     return { brandId };
+  }
+
+  /**
+   * X19 / D8 — "Wrong brand? Change it", as one turn: `brandId` becomes the
+   * primary, `replacesBrandId` (the brand the page showed) is unlinked, and
+   * any other primary is demoted, so the item ends with exactly one. Creator
+   * only, like `linkBrand` — whose two calls this replaces, which could leave
+   * an item with both brands (or neither) when the second failed.
+   *
+   * Idempotent: when `brandId` is already the only primary and
+   * `replacesBrandId` is no longer linked, nothing is written — so a retried
+   * request, or an Undo of an Undo, is a no-op rather than an error. One
+   * `regenerateVector` is enqueued when anything changed (the brand names are
+   * embedded, N08).
+   */
+  async replacePrimaryBrand(
+    ctx: Ctx,
+    input: ReplaceItemBrandInput,
+  ): Promise<ItemBrandDto> {
+    const aggregate = this.#requireItem();
+    this.#requireCreator(ctx, aggregate.row.createdById, "change its brand");
+    const brandId = requireUuid(input.brandId, "brandId");
+    const replacesBrandId =
+      input.replacesBrandId === null || input.replacesBrandId === undefined
+        ? null
+        : requireUuid(input.replacesBrandId, "replacesBrandId");
+
+    const links = aggregate.brands;
+    const target = links.find((row) => row.brandId === brandId);
+    const toUnlink =
+      replacesBrandId === null || replacesBrandId === brandId
+        ? undefined
+        : links.find((row) => row.brandId === replacesBrandId);
+    const toDemote = links.filter(
+      (row) =>
+        row.brandId !== brandId &&
+        row.id !== toUnlink?.id &&
+        (row.isPrimary ?? false),
+    );
+    const settled =
+      target !== undefined &&
+      (target.isPrimary ?? false) &&
+      toUnlink === undefined &&
+      toDemote.length === 0;
+
+    if (!settled) {
+      await this.tx(async (tx) => {
+        if (toUnlink !== undefined) {
+          await tx.delete(itemBrands).where(eq(itemBrands.id, toUnlink.id));
+        }
+        if (toDemote.length > 0) {
+          await tx
+            .update(itemBrands)
+            .set({ isPrimary: false })
+            .where(
+              inArray(
+                itemBrands.id,
+                toDemote.map((row) => row.id),
+              ),
+            );
+        }
+        if (target === undefined) {
+          await tx.insert(itemBrands).values({
+            id: randomUUID(),
+            brandId,
+            isPrimary: true,
+            ...BRANDS.values(aggregate.ref),
+          });
+        } else if (!(target.isPrimary ?? false)) {
+          await tx
+            .update(itemBrands)
+            .set({ isPrimary: true })
+            .where(eq(itemBrands.id, target.id));
+        }
+        await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
+      });
+      await this.reload();
+    }
+    const reloaded = this.#requireItem();
+    const row = reloaded.brands.find((brand) => brand.brandId === brandId);
+    if (row === undefined) {
+      throw new ConflictError(`item brand ${brandId} was not written`);
+    }
+    return brandRowToDto(reloaded.ref.type, row);
+  }
+
+  /**
+   * X19 — where the creator's "Re-read label" and "Suggest details" would run.
+   * `null` for anyone but the creator: the edit page shows neither, and the
+   * GraphQL field says nothing about another person's onboarding.
+   *
+   * Reads `item_onboardings` (§1.2 governs writers; `#embeddingImageIds` reads
+   * the same two columns). The model calls themselves run in
+   * `ItemOnboardingActor`, never here — `no-external-calls.test.ts`.
+   */
+  async correctionSource(ctx: Ctx): Promise<ItemCorrectionSource | null> {
+    const aggregate = this.#requireItem();
+    if (!isOwner(ctx, aggregate.row.createdById)) return null;
+    const onboardingId = aggregate.row.itemOnboardingId;
+    if (onboardingId === null) return { onboardingId: null, hasLabel: false };
+    const [labels] = await this.db
+      .select({
+        front: itemOnboardings.frontLabelImageId,
+        back: itemOnboardings.backLabelImageId,
+      })
+      .from(itemOnboardings)
+      .where(eq(itemOnboardings.id, onboardingId));
+    if (labels === undefined) return { onboardingId: null, hasLabel: false };
+    return {
+      onboardingId,
+      hasLabel: labels.front !== null || labels.back !== null,
+    };
   }
 
   /* ---------------------------------------------------------------------- */

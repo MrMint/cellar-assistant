@@ -312,6 +312,9 @@ const REPLACES =
   "replaces a whole list; each entry is a new row, so its nulls are 'not given'";
 const STARTS =
   "starts a job or an upload; there is no stored value for null to clear";
+const ASKS =
+  "asks a model a question and writes nothing, so there is no stored value " +
+  "for null to clear";
 
 const NOT_PATCHES: Readonly<Record<string, string>> = {
   addItemReview: CREATES,
@@ -333,6 +336,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   setRecipeInstructions: REPLACES,
   startItemOnboarding: STARTS,
   startRecipePhotoJob: STARTS,
+  suggestItemDetails: ASKS,
 };
 
 /** A name that says "change what is there" cannot be classified away. */

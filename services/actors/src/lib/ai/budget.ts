@@ -143,6 +143,7 @@ export const OUTPUT_TOKEN_ESTIMATES: Readonly<Record<ModelSeam, number>> = {
   image_embedding: 0,
   image_search: 0,
   item_defaults: 1024,
+  item_suggestions: 512,
   menu_extraction: 4096,
   menu_match: 512,
   place_review: 512,

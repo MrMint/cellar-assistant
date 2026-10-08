@@ -525,6 +525,22 @@ describe("embeddingTextFor (golden)", () => {
     );
   });
 
+  it("says NV for a non-vintage wine, and nothing for a beer without one (X19)", () => {
+    const wine = embeddingTextFor({ type: "WINE", id: core.id }, {
+      ...core,
+      vintage: null,
+      variety: null,
+      region: null,
+      wineryId: null,
+      specialDesignation: null,
+      vineyardDesignation: null,
+      alcoholContentPercentage: null,
+      style: "SPARKLING",
+      country: null,
+    } satisfies ItemRowOf<"WINE">);
+    expect(wine).toBe("wine: N; description: D; vintage: NV; style: sparkling");
+  });
+
   it("keeps free text as written and drops empty fields", () => {
     expect(
       embeddingTextFor(

@@ -43,6 +43,7 @@ import {
   queryImageEmbedder,
 } from "../image-embeddings.ts";
 import { itemDefaultsProvider } from "../item-defaults.ts";
+import { itemSuggestionsProvider } from "../item-suggestions.ts";
 import { menuExtractionProvider, menuMatchVerifier } from "../menu-ai.ts";
 import { recipePhotoExtractor } from "../recipe-photo-ai.ts";
 import { embeddingModel, setEmbeddingModel } from "../vectors.ts";
@@ -126,6 +127,9 @@ const ANSWER = {
   instructions: [{ instructionText: "Stir." }],
   // place review
   approved: true,
+  // item suggestions (X19)
+  productNote: "Château Margaux, the Bordeaux first growth.",
+  recognised: true,
 };
 
 const loadImages: ImageLoader = async (_c, ids) =>
@@ -228,6 +232,14 @@ const drive: Readonly<Record<string, (c: Ctx) => Promise<unknown>>> = {
       backLabelImageId: null,
       barcode: null,
       barcodeType: null,
+    }),
+  item_suggestions: (c) =>
+    itemSuggestionsProvider()(c, {
+      itemType: "WINE",
+      name: "Château Margaux",
+      brandName: null,
+      known: {},
+      wanted: [{ field: "country", on: "input" }],
     }),
   menu_extraction: (c) =>
     menuExtractionProvider()(c, {
@@ -340,6 +352,7 @@ describe("installSeams records what a client may offer (N07, D25)", () => {
       menuScan: true,
       recipePhoto: true,
       tierListInsights: true,
+      detailSuggestions: true,
     });
   });
 

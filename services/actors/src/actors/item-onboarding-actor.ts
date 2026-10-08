@@ -80,13 +80,17 @@ import type {
   ConfirmOnboardingResult,
   CreateItemInput,
   Ctx,
+  ItemDetailSuggestions,
+  ItemLabelReading,
   ItemOnboardingActorInterface,
   ItemOnboardingDto,
   ItemRef,
   ItemType,
   OnboardingStatus,
   ReprocessResult,
+  RereadLabelInput,
   StartOnboardingInput,
+  SuggestItemDetailsInput,
 } from "@cellar-assistant/contracts";
 import {
   BarcodeActorDescriptor,
@@ -94,6 +98,7 @@ import {
   barcodeActorId,
   ForbiddenError,
   ITEM_ATTRIBUTE_KEY,
+  ITEM_TYPE_SPECS,
   ItemOnboardingActorDescriptor,
   isItemType,
   isOnboardingStatus,
@@ -122,6 +127,11 @@ import type {
   ItemDefaultsRequest,
 } from "../lib/item-defaults.ts";
 import { itemDefaultsProvider } from "../lib/item-defaults.ts";
+import type { ItemSuggestionsProvider } from "../lib/item-suggestions.ts";
+import {
+  emptySuggestibleFields,
+  itemSuggestionsProvider,
+} from "../lib/item-suggestions.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
@@ -216,6 +226,7 @@ export class ItemOnboardingActor
   readonly #ensureBarcode: BarcodeEnsurer;
   readonly #resolveBrand: BrandResolver;
   readonly #verifyFile: VerifyFile;
+  readonly #suggestionsProvider: ItemSuggestionsProvider;
 
   constructor(
     daprClient: DaprClient,
@@ -225,12 +236,15 @@ export class ItemOnboardingActor
     ensureBarcode: BarcodeEnsurer = daprEnsureBarcode,
     resolveBrand: BrandResolver = daprResolveBrand,
     verifyFile: VerifyFile = daprVerifyFile,
+    // Last, so every existing construction site keeps its meaning (X19).
+    suggestionsProvider: ItemSuggestionsProvider = itemSuggestionsProvider(),
   ) {
     super(daprClient, id, db);
     this.#defaultsProvider = defaultsProvider;
     this.#ensureBarcode = ensureBarcode;
     this.#resolveBrand = resolveBrand;
     this.#verifyFile = verifyFile;
+    this.#suggestionsProvider = suggestionsProvider;
   }
 
   protected async loadAggregate(
@@ -728,6 +742,123 @@ export class ItemOnboardingActor
     });
     await this.reload();
     return onboardingRowToDto(this.requireAggregate().row);
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* X19 — the catalog correction loop                                        */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The gate both correction calls share: this session exists and is the
+   * caller's (`requireVisible` — absent, not forbidden, for anyone else), and
+   * the item named is one **the caller created, through this session**. Both
+   * halves are needed: the session's owner is the person who scanned, and the
+   * item's `item_onboarding_id` is what ties a label photograph to the item
+   * it is evidence about. A caller cannot point this session's photographs at
+   * another item, nor another person's item at their own photographs.
+   *
+   * Reads the item table directly, as `#requireItemNotAnotherUsers` does —
+   * §8.5 allows no synchronous `ItemOnboardingActor → ItemActor` edge, and a
+   * read adds none (§1.2 governs writers).
+   */
+  async #requireCorrectable(
+    ctx: Ctx,
+    item: ItemRef,
+  ): Promise<ItemOnboardingAggregate> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    if (!isItemType(item.type)) {
+      throw new ValidationError(`"${String(item.type)}" is not an item type`);
+    }
+    const itemId = requireUuid(item.id, "item.id");
+    const table = ITEM_TABLES[item.type];
+    const [row] = await this.db
+      .select({
+        createdById: table.createdById,
+        itemOnboardingId: table.itemOnboardingId,
+      })
+      .from(table)
+      .where(eq(table.id, itemId));
+    if (row === undefined || !isOwner(ctx, row.createdById)) {
+      throw new ForbiddenError(
+        `only the creator of ${item.type.toLowerCase()} ${itemId} may correct it`,
+      );
+    }
+    if (row.itemOnboardingId !== this.key) {
+      throw new ValidationError(
+        `${item.type.toLowerCase()} ${itemId} was not created through ` +
+          `onboarding ${this.key}, so its label photographs are not this ` +
+          "item's to read",
+      );
+    }
+    return aggregate;
+  }
+
+  /**
+   * X19 "Re-read label": `start`'s extraction again, over the photographs
+   * this session kept, for the item it created. Runs in this actor's turn for
+   * `start`'s reason (§8.5: the person is waiting, and the blast radius is
+   * this one onboarding id).
+   *
+   * **Stores nothing.** The session's `defaults` stay what the item was
+   * created from; the answer goes back to the edit form, where every value is
+   * a chip the creator taps and Save is the only write. A failed read (no
+   * label kept, a photograph that holds no label, no provider) throws as
+   * `start` does — `requireExtractableInput` and `requireLegibleLabel` are
+   * the provider's — and leaves the row untouched, `CONFIRMED` included.
+   */
+  async rereadLabel(
+    ctx: Ctx,
+    input: RereadLabelInput,
+  ): Promise<ItemLabelReading> {
+    const aggregate = await this.#requireCorrectable(ctx, input.item);
+    const { row } = aggregate;
+    const result = await this.#defaultsProvider(ctx, {
+      itemType: input.item.type,
+      frontLabelImageId: row.frontLabelImageId,
+      backLabelImageId: row.backLabelImageId,
+      barcode: row.barcode,
+      barcodeType: row.barcodeType,
+    });
+    return {
+      defaults: JSON.stringify(result.defaults),
+      brandName: result.brandName ?? null,
+      confidence: result.confidence,
+      model: result.model,
+    };
+  }
+
+  /**
+   * X19 "Suggest details": the text-only pass (`../lib/item-suggestions.ts`)
+   * over what the edit form holds now — the name as just corrected, the brand,
+   * and the details already filled in, which are context and are never
+   * re-suggested. Same gate as `rereadLabel`; stores nothing; may abstain.
+   */
+  async suggestDetails(
+    ctx: Ctx,
+    input: SuggestItemDetailsInput,
+  ): Promise<ItemDetailSuggestions> {
+    await this.#requireCorrectable(ctx, input.item);
+    const type = input.item.type;
+    const bagKey = ITEM_TYPE_SPECS[type].bag;
+    const known: Record<string, unknown> = {
+      country: input.country ?? null,
+      [bagKey]: input.attributes ?? {},
+    };
+    const brand = input.brandName?.trim() ?? "";
+    const result = await this.#suggestionsProvider(ctx, {
+      itemType: type,
+      name: input.name,
+      brandName: brand === "" ? null : brand,
+      known,
+      wanted: emptySuggestibleFields(type, known),
+    });
+    return {
+      abstained: result.abstained,
+      note: result.note,
+      defaults: JSON.stringify(result.defaults),
+      model: result.model,
+    };
   }
 
   /**

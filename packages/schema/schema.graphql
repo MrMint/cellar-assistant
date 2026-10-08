@@ -182,6 +182,9 @@ union AddTierListItemResult = BudgetExceededError | ConflictError | ForbiddenErr
 Which AI-backed features this deployment can serve. False only when the configured provider genuinely cannot (no provider at all, or an embedding model that cannot embed a photo); hide those features.
 """
 type AiCapabilities {
+  """Suggesting an item's missing details from its name (X19, text only)."""
+  detailSuggestions: Boolean!
+
   """Search by photo (`itemSearch(imageFileId:)`)."""
   imageSearch: Boolean!
 
@@ -318,6 +321,11 @@ type Beer implements Item {
     """
     last: Int
   ): ItemCheckInConnection!
+
+  """
+  X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
+  """
+  correction: ItemCorrection
   country: String
   createdAt: DateTime!
   createdById: ID!
@@ -1018,6 +1026,11 @@ type Coffee implements Item {
     """
     last: Int
   ): ItemCheckInConnection!
+
+  """
+  X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
+  """
+  correction: ItemCorrection
   country: String
   createdAt: DateTime!
   createdById: ID!
@@ -1899,6 +1912,11 @@ interface Item {
     """
     last: Int
   ): ItemCheckInConnection!
+
+  """
+  X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
+  """
+  correction: ItemCorrection
   country: String
   createdAt: DateTime!
   createdById: ID!
@@ -2091,6 +2109,38 @@ type ItemConnection {
   totalCount: Int
 }
 
+"""X19: the AI helpers the item's edit page can offer its creator."""
+type ItemCorrection {
+  """
+  The onboarding that created this item kept a label photograph, so `rereadItemLabel` has something to read.
+  """
+  canRereadLabel: Boolean!
+
+  """
+  `suggestItemDetails` can run for this item (it was created through an onboarding). Hide the action when `viewer.aiCapabilities.detailSuggestions` is false.
+  """
+  canSuggestDetails: Boolean!
+}
+
+"""
+What a text model knows about this product, for the details the form has empty. Suggestions only — never read off the bottle, never applied without a tap, never stored.
+"""
+type ItemDetailSuggestions {
+  """
+  The model does not know this product well enough to say. `defaults` is then empty. A correct and common answer.
+  """
+  abstained: Boolean!
+
+  """
+  `country` and/or the per-type bag; closed-list values and region only, never a number or a year.
+  """
+  defaults: JSON!
+  model: String
+
+  """The model's one-line account of what it took this to be."""
+  note: String
+}
+
 type ItemEdge {
   cursor: String!
   node: Item!
@@ -2129,6 +2179,22 @@ type ItemImageConnection {
 type ItemImageEdge {
   cursor: String!
   node: ItemImage!
+}
+
+"""
+A fresh reading of an item's stored label photographs. Not stored, and not applied: every value is a proposal for the edit form.
+"""
+type ItemLabelReading {
+  brandName: String
+
+  """0–1, the model's own."""
+  confidence: Float!
+
+  """
+  Shaped like `ItemOnboarding.defaults`: name, description, country, brandName and the per-type bag. A wine's vintage may be `"NV"` — the label says non-vintage.
+  """
+  defaults: JSON!
+  model: String!
 }
 
 """
@@ -2861,6 +2927,16 @@ type Mutation {
   reorderTierListBand(band: Int!, orderedIds: [ID!]!, tierListId: ID!): ReorderTierListBandResult!
 
   """
+  D8 “Wrong brand? Change it”: `brandId` (from `resolveBrand`) becomes the item's primary brand and `replacesBrandId` — the brand the page showed — is unlinked, in one turn. The creator only. Repeating it is a no-op, so an Undo is the same call with the two swapped.
+  """
+  replaceItemBrand(brandId: ID!, itemId: ID!, replacesBrandId: ID, type: ItemType!): ReplaceItemBrandResult!
+
+  """
+  X19 “Re-read label”: the item's stored label photographs, read again by the vision model. The creator only. **Slow** (the model runs in the request, as `startItemOnboarding`'s does) and **writes nothing**.
+  """
+  rereadItemLabel(itemId: ID!, type: ItemType!): RereadItemLabelResult!
+
+  """
   Finds the brand named `name` (case-insensitive, trimmed) or creates it (BrandRegistryActor.resolve) — the only brand-creation path a client has; there is no direct createBrand mutation (see module doc).
   """
   resolveBrand(name: String!): ResolveBrandResult!
@@ -2904,6 +2980,11 @@ type Mutation {
     """
     jobId: ID
   ): StartRecipePhotoJobResult!
+
+  """
+  X19 “Suggest details”: a text-only model pass over the item's name and brand, for the details still empty. The creator only. May abstain; writes nothing.
+  """
+  suggestItemDetails(input: SuggestItemDetailsInput!, itemId: ID!, type: ItemType!): SuggestItemDetailsResult!
 
   """Add or remove one item from the viewer's favourites."""
   toggleFavorite(itemId: ID!, type: ItemType!): ToggleFavoriteResult!
@@ -4954,6 +5035,10 @@ type ReorderBandPayload {
 
 union ReorderTierListBandResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ReorderBandPayload | ValidationError
 
+union ReplaceItemBrandResult = BudgetExceededError | ConflictError | ForbiddenError | ItemBrand | NotFoundError | ValidationError
+
+union RereadItemLabelResult = BudgetExceededError | ConflictError | ForbiddenError | ItemLabelReading | NotFoundError | ValidationError
+
 union ResolveBrandResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 type ReverseGeocodeResult {
@@ -5037,6 +5122,11 @@ type Sake implements Item {
     """
     last: Int
   ): ItemCheckInConnection!
+
+  """
+  X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
+  """
+  correction: ItemCorrection
   country: String
   createdAt: DateTime!
   createdById: ID!
@@ -5289,6 +5379,11 @@ type Spirit implements Item {
     """
     last: Int
   ): ItemCheckInConnection!
+
+  """
+  X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
+  """
+  correction: ItemCorrection
   country: String
   createdAt: DateTime!
   createdById: ID!
@@ -5460,6 +5555,19 @@ input StartRecipePhotoJobInput {
 
 union StartRecipePhotoJobResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipePhotoJob | ValidationError
 
+"""
+The item as the edit form holds it now — the name may have just been corrected. Filled details are context and are never re-suggested.
+"""
+input SuggestItemDetailsInput {
+  """The per-type attribute bag, by the input's field names."""
+  attributes: JSON
+  brandName: String
+  country: String
+  name: String!
+}
+
+union SuggestItemDetailsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemDetailSuggestions | NotFoundError | ValidationError
+
 type Tea implements Item {
   barcode: String
 
@@ -5531,6 +5639,11 @@ type Tea implements Item {
     """
     last: Int
   ): ItemCheckInConnection!
+
+  """
+  X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
+  """
+  correction: ItemCorrection
   country: String
   createdAt: DateTime!
   createdById: ID!
@@ -6290,6 +6403,11 @@ type Wine implements Item {
     """
     last: Int
   ): ItemCheckInConnection!
+
+  """
+  X19: what the edit page can offer to correct this item — for its creator; null for anyone else. Reads, calls no model.
+  """
+  correction: ItemCorrection
   country: String
   createdAt: DateTime!
   createdById: ID!
@@ -6415,6 +6533,10 @@ type Wine implements Item {
   updatedAt: DateTime!
   variety: String
   vineyardDesignation: String
+
+  """
+  Stored as `YYYY-01-01`; read it as a year. Null is a non-vintage (NV) wine (X19) — the forms ask for a year or NV, so it is an answer, not a gap.
+  """
   vintage: Date
 }
 

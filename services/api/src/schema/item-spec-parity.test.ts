@@ -47,7 +47,7 @@ const SCALAR_OF: Record<ItemAttributeKind, string> = {
  * Required attributes whose object field is nullable anyway, each for the
  * reason `item.ts` gives beside it. Adding to this list is a decision.
  */
-const NULLABLE_BY_CHOICE = new Set(["Wine.style", "Wine.vintage"]);
+const NULLABLE_BY_CHOICE = new Set(["Wine.style"]);
 
 const objectFields = (name: string) => {
   const type = schema.getType(name);

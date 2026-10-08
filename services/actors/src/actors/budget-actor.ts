@@ -379,6 +379,8 @@ export const MODEL_SEAMS = [
   "image_embedding",
   "image_search",
   "item_defaults",
+  // X19: "Suggest details", text only — the edit form's chips.
+  "item_suggestions",
   "menu_extraction",
   "menu_match",
   "place_review",
@@ -494,6 +496,13 @@ export const MODEL_SPENDERS: Readonly<Record<ModelSeam, ModelSpender>> = {
   },
   image_search: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   item_defaults: { maxMonthlyRequests: 5_000, defaultMonthlyBudgetCents: 500 },
+  // X19. A few hundred text tokens in, a short JSON out, at "medium" — a
+  // fraction of a label read, and asked for by a creator correcting their own
+  // item, so a label read's request cap with a fifth of its money.
+  item_suggestions: {
+    maxMonthlyRequests: 5_000,
+    defaultMonthlyBudgetCents: 100,
+  },
   menu_extraction: {
     maxMonthlyRequests: 5_000,
     defaultMonthlyBudgetCents: 500,
@@ -828,6 +837,9 @@ export const USER_CAPS: Readonly<Record<string, UserCap>> = {
   // photographing a whole shelf, and a loop stops inside two minutes.
   "ai_model/image_search": { hourly: 30, daily: 150 },
   "ai_model/item_defaults": { hourly: 30, daily: 150 },
+  // X19: one per "Suggest details" tap on an item's edit page — a person
+  // correcting their own entries, so a label read's share.
+  "ai_model/item_suggestions": { hourly: 30, daily: 150 },
   "ai_model/menu_extraction": { hourly: 20, daily: 60 },
   "ai_model/menu_match": { hourly: 400, daily: 1_500 },
   "ai_model/place_review": { hourly: 100, daily: 500 },

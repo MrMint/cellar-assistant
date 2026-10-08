@@ -47,7 +47,10 @@ import type { ItemType, ScannedItemType } from "@cellar-assistant/contracts";
 import {
   ConflictError,
   ITEM_ATTRIBUTE_KEY,
+  ITEM_TYPE_SPECS,
   ITEM_TYPES,
+  itemAttributeEntries,
+  NON_VINTAGE,
   PLACE_CATEGORIES,
   RECIPE_CATEGORIES,
   RECIPE_TYPES,
@@ -371,6 +374,19 @@ export const VINTAGE_YEAR =
   "Only a year — never a month or a day, which a label does not print.";
 
 /**
+ * X19: what a non-vintage-capable attribute (`wines.vintage`) adds to
+ * {@link VINTAGE_YEAR}. `NULL` is an answer there — non-vintage — so the
+ * model gets a way to *say* it, distinct from leaving the field out ("I could
+ * not read one"). Only for a label that prints it: a back label with no year
+ * on it is not evidence of a non-vintage wine.
+ */
+export const NON_VINTAGE_NOTE =
+  `If the label itself prints "${NON_VINTAGE}", "N.V.", "Non-Vintage" or ` +
+  `"Multi-Vintage", answer exactly "${NON_VINTAGE}". If you cannot read a ` +
+  "year and the label does not say that, leave this out — a missing year is " +
+  "not the same as a non-vintage wine.";
+
+/**
  * The label fields every type shares, plus the per-type bag. `defaults` is
  * stored verbatim in `item_onboardings.defaults`, and `confirm` feeds it to
  * `ItemActor.create`, so the bag key matches `ITEM_ATTRIBUTE_KEY`.
@@ -445,19 +461,29 @@ export const itemDefaultsSchema = (
     `${column} is NOT NULL, so the person cataloguing this has to supply it ` +
     "if you cannot read it. Leave it out rather than guessing.";
 
+  /**
+   * The fields the person has to answer, first: every `NOT NULL` attribute,
+   * and (X19) a non-vintage one — `wines.vintage` stopped being `NOT NULL`,
+   * but the form still needs a year *or* "NV" for it, so it keeps the place it
+   * has always had at the head of the bag. Declaration order, which is what
+   * `REQUIRED_ITEM_ATTRIBUTES` gave before; property order is generation
+   * order, so dropping the constraint does not move the field.
+   */
+  const answerFirst = itemAttributeEntries(type).filter(
+    ([, attribute]) => attribute.required || attribute.nonVintage === true,
+  );
   const bagProperties: Record<string, JsonSchema> = {};
-  for (const field of required.filter((r) => r.on === "attributes")) {
+  for (const [field, attribute] of answerFirst) {
+    const column = `${ITEM_TYPE_SPECS[type].table}.${attribute.column}`;
+    const note =
+      attribute.nonVintage === true ? NON_VINTAGE_NOTE : notNull(column);
     const match = constrained.find(
-      (c) => c.on === "attributes" && c.field === field.field,
+      (c) => c.on === "attributes" && c.field === field,
     );
-    bagProperties[field.field] =
+    bagProperties[field] =
       match === undefined
-        ? string_(
-            dateFields.has(field.field)
-              ? `${VINTAGE_YEAR} ${notNull(field.column)}`
-              : notNull(field.column),
-          )
-        : enumSchema(match, notNull(field.column));
+        ? string_(dateFields.has(field) ? `${VINTAGE_YEAR} ${note}` : note)
+        : enumSchema(match, note);
   }
   for (const attribute of constrained) {
     if (attribute.on !== "attributes") continue;
@@ -680,6 +706,135 @@ Return the fields in the schema. Rules:
   this category. You are transcribing a label, not recalling a catalogue.
 - \`confidence\` is your honest overall confidence, 0 to 1. A blurry or partial
   label should score low. Do not inflate it.`;
+};
+
+/* -------------------------------------------------------------------------- */
+/* X19 · item detail suggestions (text only)                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The text-only pass's schema: abstention first, then only the empty,
+ * suggestible fields the caller asked about (`../item-suggestions.ts`).
+ *
+ * The same two-field opening as `itemDefaultsSchema`, for the same reason and
+ * in the same position — **property order is generation order**, so a verdict
+ * declared after the suggestions would be answered by a model that does not
+ * contradict what it has just written. `productNote` makes the model commit to
+ * *which* product it means before it decides whether it knows it; `recognised`
+ * is the positive question (a negatively named verdict inverted on the menu
+ * seam, `MENU_EXTRACTION_SCHEMA` §3). Both are required, and nothing else is:
+ * a `required` field compiles into the grammar, and "I don't know this one's
+ * grape" has to stay a reachable answer for every suggestion.
+ *
+ * Only closed lists (as `enum`s while small, as listed text past
+ * `MAX_SCHEMA_ENUM_VALUES` — `country`) and `region`. No number, date or year
+ * is in this schema at all, so none can come back; `keepWanted` drops
+ * anything the provider adds regardless.
+ */
+export const itemSuggestionsSchema = (
+  type: ItemType,
+  vocabulary: ItemVocabulary,
+  wanted: readonly { readonly field: string; readonly on: string }[],
+): JsonSchema => {
+  const bagKey = ITEM_ATTRIBUTE_KEY[type];
+  const constrained = CONSTRAINED_ITEM_ATTRIBUTES[type];
+  const note =
+    "Only if you know it for this specific product. Omit it entirely " +
+    "rather than giving what is typical for the producer, the region or " +
+    "the category.";
+  const fieldSchema = (field: string, on: string): JsonSchema => {
+    const attribute = constrained.find((c) => c.field === field && c.on === on);
+    if (attribute === undefined) {
+      return string_(
+        `The region or appellation this product comes from, as it is ` +
+          `usually written (e.g. "Dry Creek Valley", "Rioja"). ${note}`,
+      );
+    }
+    const values = allowedValues(attribute, vocabulary);
+    if (isSentUnconstrained(attribute, vocabulary)) {
+      return {
+        type: "string",
+        description:
+          `${note} If you give it, it must be one of the ${values.length} ` +
+          `values ${attribute.column} accepts, written exactly as listed: ` +
+          `${values.join(", ")}.`,
+      };
+    }
+    return {
+      type: "string",
+      enum: [...values],
+      description: `One of the ${values.length} values ${attribute.column} accepts. ${note}`,
+    };
+  };
+
+  const properties: Record<string, JsonSchema> = {
+    productNote: {
+      type: "string",
+      description:
+        "Before anything else: one short sentence naming the specific " +
+        "product you take this to be — producer and bottling — from the " +
+        "name and brand alone. If you do not know it, or several products " +
+        "share this name, say exactly that.",
+    },
+    recognised: {
+      type: "boolean",
+      description:
+        "Decide this next, from the sentence you just wrote. True only when " +
+        "you recognise this specific product well enough to state facts " +
+        "about it. False when it is unfamiliar to you, when the name is " +
+        "ambiguous or generic, or when anything you said would be a guess " +
+        "from the category rather than knowledge of this product.",
+    },
+  };
+  const bagProperties: Record<string, JsonSchema> = {};
+  for (const { field, on } of wanted) {
+    if (on === "input") properties[field] = fieldSchema(field, on);
+    else bagProperties[field] = fieldSchema(field, on);
+  }
+  if (Object.keys(bagProperties).length > 0) {
+    properties[bagKey] = {
+      type: "object",
+      description: `What you know about this ${type.toLowerCase()}.`,
+      properties: bagProperties,
+    };
+  }
+  return {
+    type: "object",
+    properties,
+    required: ["productNote", "recognised"],
+  };
+};
+
+export const buildItemSuggestionsPrompt = (input: {
+  readonly itemType: ItemType;
+  readonly name: string;
+  readonly brandName: string | null;
+  /** `label: value` lines for what the catalogue already holds. */
+  readonly known: readonly string[];
+}): string => {
+  const type = input.itemType.toLowerCase();
+  return `Someone is correcting a ${type} in their personal catalogue and has asked which of its missing details you can fill in. You have no photograph — only what they typed.
+
+Product name: ${input.name}
+Brand or producer: ${input.brandName ?? "(not given)"}${
+    input.known.length === 0
+      ? ""
+      : `\nAlready recorded:\n${input.known.map((line) => `- ${line}`).join("\n")}`
+  }
+
+Return the fields in the schema. Rules:
+- \`productNote\` comes first: one short sentence naming the specific product
+  you take this to be. Then decide \`recognised\` from that sentence.
+- \`recognised\` is **true** only when you know this specific product. When it
+  is unfamiliar, ambiguous, or you would be guessing from the category, it is
+  **false — and then leave every other field out. That is a correct and
+  useful answer.** The person will fill the details in themselves; a
+  plausible wrong value is the worst thing you can give them.
+- Every other field is optional. Give one only when you know it for this
+  product, not because it is typical for the producer, region or category.
+- Never contradict what is already recorded, and do not repeat it.
+- Your answers are shown as suggestions the person checks before using; none
+  is saved unless they choose it.`;
 };
 
 /* -------------------------------------------------------------------------- */

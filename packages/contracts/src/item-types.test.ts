@@ -70,8 +70,11 @@ type GoldenCore = {
 
 type GoldenWineDto = GoldenCore & {
   readonly type: "WINE";
-  /** Was `string | null`; `wines.vintage` is `date NOT NULL` (a8757dc4). */
-  readonly vintage: string;
+  /**
+   * `string` while `wines.vintage` was `date NOT NULL` (a8757dc4); nullable
+   * again since X19, where `null` means non-vintage.
+   */
+  readonly vintage: string | null;
   readonly variety: string | null;
   readonly region: string | null;
   readonly style: string;
@@ -252,20 +255,27 @@ describe("ITEM_TYPE_SPECS", () => {
 
   it("reproduces REQUIRED_ITEM_ATTRIBUTES exactly (golden)", () => {
     expect(REQUIRED_ITEM_ATTRIBUTES).toEqual({
-      WINE: [
-        { field: "vintage", column: "wines.vintage", on: "attributes" },
-        { field: "style", column: "wines.style", on: "attributes" },
-      ],
+      // X19: `wines.vintage` (NULL is non-vintage) and `coffees.description`
+      // dropped their NOT NULL (`20261008214048_…`).
+      WINE: [{ field: "style", column: "wines.style", on: "attributes" }],
       BEER: [],
       SPIRIT: [
         { field: "spiritType", column: "spirits.type", on: "attributes" },
       ],
-      COFFEE: [
-        { field: "description", column: "coffees.description", on: "input" },
-      ],
+      COFFEE: [],
       SAKE: [],
       TEA: [],
     });
+  });
+
+  it("marks exactly one attribute non-vintage: wine's vintage (X19)", () => {
+    const marked = ITEM_TYPES.flatMap((type) =>
+      itemAttributeEntries(type)
+        .filter(([, attribute]) => attribute.nonVintage === true)
+        .map(([key]) => `${type}.${key}`),
+    );
+    expect(marked).toEqual(["WINE.vintage"]);
+    expect(ITEM_TYPE_SPECS.WINE.attributes.vintage.required).toBe(false);
   });
 
   it("reproduces ITEM_ATTRIBUTE_KEY exactly (golden)", () => {
