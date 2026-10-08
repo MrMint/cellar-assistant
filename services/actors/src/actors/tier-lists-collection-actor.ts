@@ -54,6 +54,7 @@ import {
   uuidArray,
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
+import { placeRefVisibleSql } from "../lib/unshared-places.ts";
 import { visibleWhere } from "../lib/visibility-sql.ts";
 
 type TierListIdRow = { readonly id: string; readonly sort_key: string };
@@ -158,6 +159,7 @@ export class TierListsCollectionActor
           from public.tier_list_items ti
           join public.tier_lists t on t.id = ti.tier_list_id
           where (${entryMatch(refs)}) and ${visible}
+            and ${placeRefVisibleSql(ctx, sql`ti.place_id`)}
           window w as (
             partition by ti.type, coalesce(ti.place_id, ${ENTRY_ARC.idExpr("ti")})
             order by t.content_updated_at desc, t.id desc, ti.id asc

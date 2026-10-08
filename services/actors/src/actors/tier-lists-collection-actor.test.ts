@@ -128,6 +128,41 @@ describe.skipIf(skip)("TierListsCollectionActor", () => {
       `);
     };
 
+    it("X27: a public list's row for its creator's pending place reaches only the creator", async () => {
+      await withTestDb(async (db) => {
+        const creator = await seedUser(db);
+        const stranger = await seedUser(db);
+        const pending = await seedPlace(db, {
+          name: "Pending",
+          lng: 0,
+          lat: 0,
+          reviewStatus: "pending",
+          createdBy: creator,
+        });
+        const list = await seedTierList(db, {
+          createdById: creator,
+          privacy: "PUBLIC",
+        });
+        await seedTierListPlace(db, list, pending, 3);
+
+        const counts: Record<string, number> = {};
+        for (const [who, viewerId] of [
+          ["creator", creator],
+          ["stranger", stranger],
+        ] as const) {
+          const actor = await activate(
+            createActor(TierListsCollectionActor, viewerId, db),
+          );
+          const [forPlace] = await actor.entriesOf(userCtx(viewerId, "r"), [
+            { type: "PLACE", id: pending },
+          ]);
+          counts[who] = forPlace?.totalCount ?? -1;
+        }
+        // Not a hidden row with a count of one: nothing at all.
+        expect(counts).toEqual({ creator: 1, stranger: 0 });
+      });
+    });
+
     it("returns an entry exactly when canSeeTierList shows its list", async () => {
       await withTestDb(async (db) => {
         const owner = await seedUser(db);

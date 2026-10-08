@@ -78,6 +78,7 @@ import {
   uuidArray,
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
+import { placeRefVisibleToSql } from "../lib/unshared-places.ts";
 import { friendshipsOf } from "../lib/visibility.ts";
 import {
   canSeeSql,
@@ -376,6 +377,14 @@ export class FriendsCollectionActor
       where t.created_by_id = any(${authors})
         and ti.created_at is not null
         and ${visible}
+        and ${placeRefVisibleToSql(
+          scope.kind === "everything"
+            ? "everything"
+            : scope.kind === "viewer"
+              ? scope.viewer
+              : null,
+          sql`ti.place_id`,
+        )}
       order by ti.created_at desc, ti.id desc
       limit ${limit}
     `);

@@ -144,6 +144,7 @@ import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import { menuItemRowToDto } from "../lib/place-menu-items.ts";
 import { emit } from "../lib/telemetry.ts";
+import { placeIsVisible } from "../lib/unshared-places.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 
 type ScanRow = typeof menuScans.$inferSelect;
@@ -665,6 +666,16 @@ export class MenuScanActor
       ...(hint.location == null ? {} : { scanLocation: hint.location }),
       processingStatus: "pending" as const,
     };
+
+    // X27: a hinted place the caller cannot see is a place that does not
+    // exist — the same refusal the foreign key gives an unknown id below, so
+    // a scan cannot be filed into (or used to probe for) somebody else's
+    // place under review.
+    for (const placeId of [values.placeId, values.estimatedPlaceId]) {
+      if (placeId !== null && !(await placeIsVisible(this.db, ctx, placeId))) {
+        throw translateFkViolation({ code: "23503" });
+      }
+    }
 
     try {
       await this.tx(async (tx) => {

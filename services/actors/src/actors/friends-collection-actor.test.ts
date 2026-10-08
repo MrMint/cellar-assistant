@@ -193,6 +193,31 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
       `);
     };
 
+    it("X27: a friend ranking their own place under review is not in the viewer's feed — and is in the friend's own", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const pending = await seedPlace(db, {
+          name: "Friend's pending bar",
+          lng: 0,
+          lat: 0,
+          reviewStatus: "pending",
+          createdBy: friend,
+        });
+        const list = await seedTierList(db, {
+          createdById: friend,
+          privacy: "PUBLIC",
+        });
+        await seedTierListPlace(db, list, pending);
+
+        const { entries } = await activityOf(db, viewer);
+        expect(entries.map((e) => e.placeId)).not.toContain(pending);
+        const own = await activityOf(db, friend);
+        expect(own.entries.map((e) => e.placeId)).toContain(pending);
+      });
+    });
+
     it("tier-list entries: the viewer's and friends' lists exactly as canSeeTierList admits them", async () => {
       await withTestDb(async (db) => {
         const viewer = await seedUser(db);

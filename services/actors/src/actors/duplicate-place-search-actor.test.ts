@@ -134,6 +134,41 @@ describe.skipIf(skip)("DuplicatePlaceSearchActor (§2.3)", () => {
     });
   });
 
+  it("X27: the viewer's own place under review is a duplicate for them, and invisible to everyone else", async () => {
+    await withTestDb(async (db) => {
+      const creator = await seedUser(db);
+      const stranger = await seedUser(db);
+      const pending = await seedPlace(db, {
+        name: "The Wine Cellar",
+        ...HERE,
+        reviewStatus: "pending",
+        createdBy: creator,
+      });
+      const shared = await seedPlace(db, {
+        name: "Wine Cellar Annex Bar",
+        ...HERE,
+      });
+      const input: DuplicatePlaceSearchInput = {
+        name: "The Wine Cellar",
+        location: HERE,
+      };
+
+      const mine = await newActor(input, db, creator).all(
+        userCtx(creator),
+        input,
+      );
+      // Merged in the function's own order: similarity, then distance.
+      expect(mine.map((hit) => hit.placeId)).toEqual([pending, shared]);
+      expect(at(mine, 0).location?.lng).toBeCloseTo(-83, 6);
+
+      const theirs = await newActor(input, db, stranger).all(
+        userCtx(stranger),
+        input,
+      );
+      expect(theirs.map((hit) => hit.placeId)).toEqual([shared]);
+    });
+  });
+
   it("agrees with PlaceCreationActor's own check (§2.1's un-taken delegation)", async () => {
     const { PlaceCreationActor } = await import("./place-creation-actor.ts");
     await withTestDb(async (db) => {

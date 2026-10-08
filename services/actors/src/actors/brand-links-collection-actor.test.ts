@@ -266,6 +266,40 @@ describe.skipIf(skip)("BrandLinksCollectionActor", () => {
     });
   });
 
+  it("X27: a link to a place still under review is listed — and counted — for its creator only", async () => {
+    await withTestDb(async (db) => {
+      const creator = await seedUser(db);
+      const stranger = await seedUser(db);
+      const brandId = await seedBrand(db, `zzz-x27-${randomUUID()}`);
+      const shared = await seedPlace(db, "zzz-x27 shared");
+      const pending = await seedPlace(db, "zzz-x27 pending");
+      await db.execute(sql`
+        update public.places
+        set review_status = 'pending', created_by = ${creator}::uuid
+        where id = ${pending}::uuid
+      `);
+      await linkPlace(db, shared, brandId, "serves");
+      await linkPlace(db, pending, brandId, "serves");
+
+      const actor = await actorFor(db, brandId);
+      const mine = await actor.places(
+        userCtx(creator, "r"),
+        { brandId },
+        pageArgs({ first: 10 }),
+      );
+      expect(mine.totalCount).toBe(2);
+      const theirs = await actor.places(
+        userCtx(stranger, "r"),
+        { brandId },
+        pageArgs({ first: 10 }),
+      );
+      expect(theirs.totalCount).toBe(1);
+      expect(theirs.entries.map((entry) => entry.node.placeId)).toEqual([
+        shared,
+      ]);
+    });
+  });
+
   it("refuses anonymous on every turn, warm or cold (§1.6, catalog rule)", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);

@@ -74,6 +74,7 @@ import {
   PlaceActorDescriptor,
   PlaceCreationActorDescriptor,
   PlaceRefreshJobActorDescriptor,
+  PlaceReviewActorDescriptor,
   PlaceSearchActorDescriptor,
   RankingsActorDescriptor,
   RecipeActorDescriptor,
@@ -134,6 +135,7 @@ import { PingActor } from "./ping-actor.ts";
 import { PlaceActor } from "./place-actor.ts";
 import { PlaceCreationActor } from "./place-creation-actor.ts";
 import { PlaceRefreshJobActor } from "./place-refresh-job-actor.ts";
+import { PlaceReviewActor } from "./place-review-actor.ts";
 import { PlaceSearchActor } from "./place-search-actor.ts";
 import { ProbeJobActor, ProbeJobActorDescriptor } from "./probe-job-actor.ts";
 import { RankingsActor } from "./rankings-actor.ts";
@@ -258,6 +260,9 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   // external call reserves through.
   entry(PlaceActor, PlaceActorDescriptor),
   entry(PlaceCreationActor, PlaceCreationActorDescriptor),
+  // X27 / D28: the AI review of a pending place, delivered by the outbox and
+  // keyed by the place — so the model call holds no reader's turn lock.
+  entry(PlaceReviewActor, PlaceReviewActorDescriptor),
   entry(BudgetActor, BudgetActorDescriptor),
   // B6 (§2.1, §3). A group owns `recipe_votes` because what a vote decides is
   // the group's `canonical_recipe_id` — `vote` recomputes it in-turn,

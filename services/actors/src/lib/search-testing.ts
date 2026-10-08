@@ -225,6 +225,10 @@ export type SeedPlaceInput = {
   readonly locality?: string | null;
   readonly isActive?: boolean;
   readonly confidence?: number;
+  /** X27: `approved` (shared) unless a test says otherwise. */
+  readonly reviewStatus?: "pending" | "approved" | "rejected";
+  /** `places.created_by` — whose an unshared place is. */
+  readonly createdBy?: string | null;
 };
 
 /**
@@ -248,7 +252,8 @@ export const seedPlace = async (
   ];
   await db.execute(sql`
     insert into public.places
-      (id, name, location, categories, confidence, rating, locality, is_active, source)
+      (id, name, location, categories, confidence, rating, locality, is_active, source,
+       review_status, created_by)
     values (
       ${id}::uuid,
       ${input.name},
@@ -258,7 +263,9 @@ export const seedPlace = async (
       ${input.rating ?? null},
       ${input.locality ?? null},
       ${input.isActive ?? true},
-      'user'
+      'user',
+      ${input.reviewStatus ?? "approved"},
+      ${input.createdBy ?? null}::uuid
     )
   `);
   return id;

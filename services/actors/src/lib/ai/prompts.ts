@@ -1345,8 +1345,8 @@ export const PLACE_REVIEW_FLAGS = [
  * absent verdict to `true` is the silent approval this whole seam exists to
  * refuse, and defaulting it to `false` rejects a legitimate submission. The
  * abstention lives one level up instead — a reviewer that cannot answer throws,
- * and `PlaceCreationActor` records `review: null`, which is a state the result
- * type has always had a shape for.
+ * and the place stays `pending` (creator-only) until a review succeeds (X27;
+ * `PlaceReviewActor`).
  *
  * Everything else is omittable, and each omission means something: no
  * adjustment, no better description than the user's own, no extra categories,

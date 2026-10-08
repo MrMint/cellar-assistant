@@ -176,6 +176,7 @@ import {
   resolveTierListEntries,
 } from "../lib/tier-list-entries.ts";
 import { tierListInsightsStatus } from "../lib/tier-list-insights-status.ts";
+import { hiddenPlaceIds, placeIsVisible } from "../lib/unshared-places.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import { tierListVisibility } from "../lib/visibility.ts";
 
@@ -401,7 +402,23 @@ export class TierListActor
   async items(ctx: Ctx, page: PageArgs): Promise<Page<TierListItemDto>> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return offsetPage(aggregate.items.map(toItemDto), page);
+    // X27: a place still under review is its creator's alone, so a public
+    // list's entry for one is dropped for every other viewer — silently, as
+    // if it were not on the list. Read fresh: `places` is not ours to cache.
+    const hidden = await hiddenPlaceIds(
+      this.db,
+      ctx,
+      aggregate.items.flatMap((row) =>
+        row.placeId === null ? [] : [row.placeId],
+      ),
+    );
+    const rows =
+      hidden.size === 0
+        ? aggregate.items
+        : aggregate.items.filter(
+            (row) => row.placeId === null || !hidden.has(row.placeId),
+          );
+    return offsetPage(rows.map(toItemDto), page);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -505,6 +522,16 @@ export class TierListActor
 
     const band = input.band === undefined ? MIN_BAND : requireBand(input.band);
     const entry = requireEntry(input.entry);
+    // X27: a place the viewer cannot see is a place that does not exist —
+    // the same answer for a stranger's pending place as for an unknown id,
+    // where the insert would otherwise succeed on one and fail its foreign
+    // key on the other.
+    if (
+      entry.type === "PLACE" &&
+      !(await placeIsVisible(this.db, ctx, entry.id))
+    ) {
+      throw new NotFoundError(`place ${entry.id} not found`);
+    }
     const tierListItemId = requireUuid(
       input.tierListItemId ?? randomUUID(),
       "tierListItemId",

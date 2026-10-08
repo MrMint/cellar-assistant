@@ -11,7 +11,7 @@
  * | `ItemDefaultsProvider` | B2 | `../item-defaults.ts` |
  * | `MenuExtractionProvider` + `MenuMatchVerifier` | B8 | `../menu-ai.ts` |
  * | `RecipePhotoExtractor` | C4 | `../recipe-photo-ai.ts` |
- * | `PlaceReviewer` | B5 | `../../actors/place-creation-actor.ts` |
+ * | `PlaceReviewer` | B5, X27 | `../place-review.ts` |
  *
  * **Nothing here replaces a seam's `unconfigured*` default.** Those stay
  * exactly as their authors wrote them and remain what every one of these
@@ -49,8 +49,6 @@ import {
   RECIPE_TYPES,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import type { PlaceReviewer } from "../../actors/place-creation-actor.ts";
-import { requirePlaceReviewSubject } from "../../actors/place-creation-actor.ts";
 import type { InsightsGenerator } from "../../actors/tier-list-actor.ts";
 import type { Embedder } from "../embeddings.ts";
 import { downscaleForEmbedding } from "../image-downscale.ts";
@@ -69,6 +67,8 @@ import type {
   MenuMatchVerificationRequest,
   MenuMatchVerifier,
 } from "../menu-ai.ts";
+import type { PlaceReviewer } from "../place-review.ts";
+import { requirePlaceReviewSubject } from "../place-review.ts";
 import type { RecipePhotoExtractor } from "../recipe-photo-ai.ts";
 import { requireGroundedEntries } from "../tier-list-entries.ts";
 import { embeddingModel } from "../vectors.ts";
@@ -838,7 +838,7 @@ export const providerRecipePhotoExtractor =
   };
 
 /* -------------------------------------------------------------------------- */
-/* B5 · PlaceCreationActor.createPlace                                         */
+/* B5 · the place review (X27: PlaceReviewActor, via the outbox)              */
 /* -------------------------------------------------------------------------- */
 
 /** The string members of a model's array, in order. Non-strings are not values. */
@@ -859,9 +859,10 @@ const strings = (value: unknown): readonly string[] => {
  * The prompt's job, its voice, its five review criteria, its approve/reject
  * bias ("approve anything that looks like a genuine venue, even when the
  * details are sparse") and the `-0.3 … +0.3` confidence band are the old
- * function's, and `"low"` is the quality tier it asked for — the user is
- * waiting on this call in-turn (§8.5), and a verdict over ten short fields is
- * not the place to spend the 120s budget.
+ * function's, and `"low"` is the quality tier it asked for — a verdict over
+ * ten short fields is not the place to spend a larger model. (The user no
+ * longer waits on it: since X27 the place is saved `pending` at once and this
+ * runs from the outbox in `PlaceReviewActor`.)
  *
  * ## What did not, and why
  *
@@ -873,18 +874,21 @@ const strings = (value: unknown): readonly string[] => {
  *    rewrote a `null` `enriched_description` to `""` before validating,
  *    commenting that the model "sometimes returns null for required string
  *    fields". See `PLACE_REVIEW_SCHEMA` for the whole argument; the field that
- *    made it urgent is `enrichedDescription`, because `createPlace` writes it
- *    into `places.description` whenever the submitter left theirs blank. A
- *    required description is a compelled description of a venue the model has
- *    never heard of, persisted as the place's own words.
+ *    made it urgent is `enrichedDescription`, because `createPlace` used to
+ *    write it into `places.description` whenever the submitter left theirs
+ *    blank. A required description is a compelled description of a venue the
+ *    model has never heard of, persisted as the place's own words. (Since X27
+ *    it is only *offered* to the creator — `places.suggested_description` —
+ *    and reaches the shared row only if they take it.)
  * 2. **The fallback is gone.** `FALLBACK_RESULT` was
  *    `{approved: true, confidence_adjustment: 0, flags: []}`, returned with a
  *    200 on *any* failure — a bad completion, a schema violation, a dead
  *    provider. That is an approval nobody made, and it is indistinguishable at
  *    the call site from one a model reasoned its way to. Every failure here
- *    throws instead. `PlaceCreationActor.#reviewOrNull` catches it, logs it and
- *    records `review: null`, so the place is still created at the neutral
- *    confidence and the result says plainly that no review happened.
+ *    throws instead. Since X27 that fails the `PlaceReviewActor` delivery and
+ *    the place simply stays `pending` — creator-only — until a review does
+ *    succeed; before it, the failure meant `review: null` and a *shared*
+ *    place at the neutral confidence.
  * 3. **The categories are slugs, not labels.** `formatAllCategories()` printed
  *    Title Case ("Coffee Shop") while the column and the form both hold
  *    `coffee_shop`, so a model that obeyed the prompt suggested categories the
@@ -894,11 +898,13 @@ const strings = (value: unknown): readonly string[] => {
  *
  * `requireInVocabulary` exists because an out-of-vocabulary item attribute is a
  * foreign-key violation raised inside the outbox where nobody sees it. Nothing
- * in a `PlaceReview` reaches a constrained column: `suggestedCategories` and
- * `flags` are advisory, returned to the caller and written nowhere, and
+ * in a `PlaceReview` reaches a constrained column: `flags` are advisory and
+ * written nowhere, `suggestedCategories` is stored only as an *offer* to the
+ * creator (X27) — filtered to the category list by `suggestedCategoriesFrom`
+ * in `../place-review.ts`, never applied unless they confirm it — and
  * `places.categories` is `text[]` with no key behind it. Throwing over an
- * advisory field would trade a real verdict for `review: null` — it would lose
- * the approval to protect a chip label.
+ * advisory field would trade a real verdict for a failed review — it would
+ * lose the approval to protect a chip label.
  */
 export const providerPlaceReviewer =
   (provider: ProviderFor): PlaceReviewer =>
@@ -907,8 +913,8 @@ export const providerPlaceReviewer =
     // it is an empty one, and an empty question is answered with an invention.
     requirePlaceReviewSubject(subject);
 
-    // N09: the creation's deadline cancels the call itself, so a review
-    // nobody is waiting for stops running — and stops being metered.
+    // A caller's deadline, when it sets one, cancels the call itself, so a
+    // review nobody is waiting for stops running — and stops being metered.
     const { content } = await provider(ctx).generateContent(
       {
         prompt: buildPlaceReviewPrompt(subject),
@@ -926,8 +932,8 @@ export const providerPlaceReviewer =
           "field this seam cannot fill in for it. Reading an absent verdict as " +
           "approval is the silent approval the whole seam exists to refuse; " +
           "reading it as a rejection turns a decoding glitch into a refused " +
-          "submission the person cannot appeal. PlaceCreationActor records " +
-          "`review: null` for this — the same outcome as no provider at all.",
+          "submission the person cannot appeal. The place stays pending — " +
+          "creator-only — exactly as with no provider at all.",
       );
     }
 

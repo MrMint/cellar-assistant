@@ -1,6 +1,7 @@
 /**
  * A bound on how long a request-driven turn waits on something it does not
- * control — first used for `PlaceCreationActor`'s AI review (N09).
+ * control — first used for `PlaceCreationActor`'s AI review (N09), which X27
+ * has since moved out of the request path altogether.
  *
  * Lives here, not beside the actor: `registry.test.ts` holds every class
  * declared under `src/actors` to be a registered actor.
