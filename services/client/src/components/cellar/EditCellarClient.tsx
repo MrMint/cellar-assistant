@@ -1,6 +1,5 @@
 "use client";
 
-import { Stack } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import {
@@ -57,7 +56,7 @@ export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
   const isCreator = viewer !== null && viewer.id === cellar.createdById;
 
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-4">
       {friends.failure !== null && <ApiError error={friends.failure} />}
       <CellarForm
         id={cellar.id}
@@ -75,14 +74,14 @@ export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
         onSubmitted={handleSubmitted}
       />
       {isCreator && (
-        <Stack direction="row" alignItems="center">
+        <div className="flex flex-row items-center">
           <DeleteCellarButton
             cellarId={cellar.id}
             cellarName={cellar.name}
             itemCount={cellar.itemCount}
           />
-        </Stack>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 };

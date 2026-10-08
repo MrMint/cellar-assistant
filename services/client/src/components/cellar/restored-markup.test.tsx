@@ -101,6 +101,14 @@ describe("CellarCard (restored)", () => {
       "Teas 2",
     ]);
     assert.equal([...html.matchAll(/<svg/g)].length >= 7, true);
+    const dimmed = [
+      ...html.matchAll(
+        /<span[^>]*class="([^"]*)"[^>]*><svg[^>]*aria-label="(\w+)"/g,
+      ),
+    ]
+      .filter((m) => /\bopacity-30\b/.test(m[1] ?? ""))
+      .map((m) => m[2]);
+    assert.deepEqual(dimmed, ["Beers", "Coffees", "Sakes"], "only the zeros");
   });
 });
 

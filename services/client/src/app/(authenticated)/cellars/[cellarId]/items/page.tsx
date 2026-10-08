@@ -1,4 +1,3 @@
-import { Box, Stack, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { canAddToCellar } from "@/components/cellar/adapter";
@@ -49,7 +48,11 @@ export default async function CellarItemsPage({
   if (!result.ok) {
     // §1.6: "no such cellar" and "not yours to see" are one answer.
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="type-body text-destructive">
+        {result.error.message}
+      </p>
+    );
   }
 
   const cellar = readFragment(CellarInfoFragment, result.data);
@@ -57,30 +60,28 @@ export default async function CellarItemsPage({
   const counts = filterCountsFromItemCounts(cellar.itemCounts);
 
   return (
-    <Box>
-      <Stack spacing={2}>
-        {/* Header renders immediately */}
-        <CellarItemsControls
-          cellarId={cellarId}
-          cellarName={cellar.name}
-          counts={counts}
-          canAdd={canAdd}
-          initialSearch={search}
-          initialTypes={validTypes}
-        />
+    <div className="flex flex-col gap-4">
+      {/* Header renders immediately */}
+      <CellarItemsControls
+        cellarId={cellarId}
+        cellarName={cellar.name}
+        counts={counts}
+        canAdd={canAdd}
+        initialSearch={search}
+        initialTypes={validTypes}
+      />
 
-        {/* Items grid streams in with Suspense */}
-        <Suspense
-          key={`${search}-${JSON.stringify(types)}`}
-          fallback={<CellarItemsGridSkeleton />}
-        >
-          <CellarItemsGridServer
-            cellarId={cellarId}
-            search={search}
-            types={validTypes}
-          />
-        </Suspense>
-      </Stack>
-    </Box>
+      {/* Items grid streams in with Suspense */}
+      <Suspense
+        key={`${search}-${JSON.stringify(types)}`}
+        fallback={<CellarItemsGridSkeleton />}
+      >
+        <CellarItemsGridServer
+          cellarId={cellarId}
+          search={search}
+          types={validTypes}
+        />
+      </Suspense>
+    </div>
   );
 }

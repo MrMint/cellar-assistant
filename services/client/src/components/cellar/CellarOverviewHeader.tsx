@@ -1,15 +1,19 @@
 "use client";
 
-import { Button, IconButton, Stack, Tooltip } from "@mui/joy";
-import { MdAdd, MdEdit } from "react-icons/md";
+import { IconButton } from "@/components/app/IconButton";
+import { Edit } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { HeaderBar } from "@/components/common/HeaderBar";
-import { Link } from "@/components/common/Link";
+import { Button } from "@/components/ui/button";
+import { AddItemButton } from "./AddItemButton";
 
 /**
  * The overview's header, from restored parts: `HeaderBar` with the cellar's
  * breadcrumb ("Home / Cellars / <name>"), `CellarCard`'s "Edit Cellar" icon,
- * and `CellarItemsControls`' "Add item". A client module because the buttons
- * take `component={Link}`, which a server component may not pass.
+ * and `CellarItemsControls`' "Add item". A client module because
+ * `HeaderBar` (still Joy) is rendered from one.
+ *
+ * The three controls wrap on a narrow screen rather than run past its edge.
  */
 export function CellarOverviewHeader({
   cellarId,
@@ -27,37 +31,30 @@ export function CellarOverviewHeader({
     <HeaderBar
       serverBreadcrumbs={{ cellarName }}
       endComponent={
-        <Stack direction="row" spacing={2} alignItems="center">
+        <div className="flex flex-wrap items-center gap-4">
           {canAdd && (
-            <Tooltip title="Edit Cellar">
-              <IconButton
-                size="sm"
-                variant="soft"
-                component={Link}
+            <IconButton
+              asChild
+              size="sm"
+              variant="secondary"
+              aria-label="Edit Cellar"
+            >
+              <Link
                 href={`/cellars/${cellarId}/edit`}
-                aria-label="Edit Cellar"
+                underline="none"
+                title="Edit Cellar"
               >
-                <MdEdit />
-              </IconButton>
-            </Tooltip>
+                <Edit />
+              </Link>
+            </IconButton>
           )}
-          <Button
-            component={Link}
-            href={`/cellars/${cellarId}/items`}
-            variant="outlined"
-            color="neutral"
-          >
-            {`All items (${activeCount})`}
+          <Button asChild variant="outline">
+            <Link href={`/cellars/${cellarId}/items`} underline="none">
+              {`All items (${activeCount})`}
+            </Link>
           </Button>
-          <Button
-            component={Link}
-            href={`/cellars/${cellarId}/items/add`}
-            startDecorator={<MdAdd />}
-            disabled={!canAdd}
-          >
-            Add item
-          </Button>
-        </Stack>
+          <AddItemButton cellarId={cellarId} canAdd={canAdd} />
+        </div>
       }
     />
   );

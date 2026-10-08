@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import { Cellars } from "@/components/cellar/Cellars";
 import { GetCellarsQuery } from "@/components/cellar/fragments";
 import { CELLARS_PAGE_SIZE } from "@/components/cellar-api/pagination";
@@ -24,7 +23,11 @@ export default async function CellarsPage() {
   if (!result.ok) {
     // `myCellars` has no "not found" case, and an anonymous request would
     // have been redirected by the layout: every branch here is a failure.
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="type-body text-destructive">
+        {result.error.message}
+      </p>
+    );
   }
 
   return (

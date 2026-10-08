@@ -1,14 +1,6 @@
-import {
-  IconButton,
-  Sheet,
-  Stack,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
-import { isNotNil } from "ramda";
+import { FilterChip } from "@/components/app/FilterChip";
+import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
 import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemTypes";
-import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
 
 type CellarItemsFilterProps = {
   types?: ItemTypeValue[];
@@ -23,84 +15,65 @@ type CellarItemsFilterProps = {
   onTypesChange: (types: ItemTypeValue[]) => void;
 };
 
+/**
+ * The old filter's six types in the old order (beer, wine, spirit, coffee,
+ * sake, tea), each a `FilterChip`: glyph, word and count, any number on at
+ * once. A count of zero is hidden (design §3.7); an absent count shows none.
+ */
+const FILTER_TYPES = [
+  { type: "BEER", count: "beers" },
+  { type: "WINE", count: "wines" },
+  { type: "SPIRIT", count: "spirits" },
+  { type: "COFFEE", count: "coffees" },
+  { type: "SAKE", count: "sakes" },
+  { type: "TEA", count: "teas" },
+] as const satisfies readonly {
+  type: ItemTypeValue;
+  count: keyof NonNullable<CellarItemsFilterProps["counts"]>;
+}[];
+
+/**
+ * Filter a list by item type (the cellar's items, favourites, rankings).
+ *
+ * Was a Joy `ToggleButtonGroup` of glyph-only buttons labelled "text
+ * formatting"; now a named group (a `fieldset`) of `FilterChip`s that wraps
+ * rather than running past a 375 px screen (e2e m05). Same props, same toggling: a tap
+ * adds the type to `types` or takes it out.
+ */
 export const CellarItemsFilter = ({
   types = [],
   counts = {},
   onTypesChange,
 }: CellarItemsFilterProps) => {
+  const toggle = (type: ItemTypeValue) =>
+    onTypesChange(
+      types.includes(type)
+        ? types.filter((value) => value !== type)
+        : [...types, type],
+    );
+
   return (
-    <Sheet
-      variant="outlined"
-      sx={{ borderRadius: "md", display: "flex", gap: 2, p: 0.5 }}
-    >
-      <ToggleButtonGroup
-        variant="plain"
-        spacing={0.5}
-        value={types}
-        onChange={(_event, newTypes) => {
-          onTypesChange(newTypes);
-        }}
-        aria-label="text formatting"
+    <div data-slot="cellar-items-filter" className="flex min-w-0">
+      <fieldset
+        aria-label="Filter by type"
+        className="m-0 flex min-w-0 flex-wrap gap-2 border-0 p-0"
       >
-        <Tooltip title="Beer">
-          <IconButton value={"BEER"} aria-label="Beer">
-            <Stack direction="row" gap={0.5} alignItems="center">
-              {isNotNil(counts.beers) && (
-                <Typography>{counts.beers}</Typography>
-              )}
-              <ItemTypeIcon type="BEER" />
-            </Stack>
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Wine">
-          <IconButton value={"WINE"} aria-label="Wine">
-            <Stack direction="row" gap={0.5} alignItems="center">
-              {isNotNil(counts.wines) && (
-                <Typography>{counts.wines}</Typography>
-              )}
-              <ItemTypeIcon type="WINE" />
-            </Stack>
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Spirit">
-          <IconButton value={"SPIRIT"} aria-label="Spirit">
-            <Stack direction="row" gap={0.5} alignItems="center">
-              {isNotNil(counts.spirits) && (
-                <Typography>{counts.spirits}</Typography>
-              )}
-              <ItemTypeIcon type="SPIRIT" />
-            </Stack>
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Coffee">
-          <IconButton value={"COFFEE"} aria-label="Coffee">
-            <Stack direction="row" gap={0.5} alignItems="center">
-              {isNotNil(counts.coffees) && (
-                <Typography>{counts.coffees}</Typography>
-              )}
-              <ItemTypeIcon type="COFFEE" />
-            </Stack>
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Sake">
-          <IconButton value={"SAKE"} aria-label="Sake">
-            <Stack direction="row" gap={0.5} alignItems="center">
-              {isNotNil(counts.sakes) && (
-                <Typography>{counts.sakes}</Typography>
-              )}
-              <ItemTypeIcon type="SAKE" />
-            </Stack>
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Tea">
-          <IconButton value={"TEA"} aria-label="Tea">
-            <Stack direction="row" gap={0.5} alignItems="center">
-              {isNotNil(counts.teas) && <Typography>{counts.teas}</Typography>}
-              <ItemTypeIcon type="TEA" />
-            </Stack>
-          </IconButton>
-        </Tooltip>
-      </ToggleButtonGroup>
-    </Sheet>
+        {FILTER_TYPES.map(({ type, count }) => {
+          const { label } = itemTypeTokens[type];
+          return (
+            <FilterChip
+              key={type}
+              aria-label={label}
+              selected={types.includes(type)}
+              onClick={() => toggle(type)}
+              icon={<TypeGlyph type={type} />}
+              count={counts[count]}
+            >
+              {label}
+            </FilterChip>
+          );
+        })}
+      </fieldset>
+    </div>
   );
 };

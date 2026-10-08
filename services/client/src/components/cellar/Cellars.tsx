@@ -1,13 +1,14 @@
 "use client";
 
-import { Box, Button, Link, Stack } from "@mui/joy";
 import { useMemo } from "react";
-import { MdAdd } from "react-icons/md";
+import { Add } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { CellarCardClient } from "@/components/cellar/CellarCardClient";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { CELLARS_PAGE_SIZE } from "@/components/cellar-api/pagination";
 import { HeaderBar } from "@/components/common/HeaderBar";
 import { VirtualGrid } from "@/components/common/VirtualGrid";
+import { Button } from "@/components/ui/button";
 import type { FragmentOf } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import { pageOf } from "@/lib/paging/paged-connection";
@@ -77,40 +78,39 @@ export function Cellars({
   }, [list.rows]);
 
   return (
-    <Box>
-      <Stack spacing={2}>
-        <HeaderBar
-          serverBreadcrumbs={{}}
-          endComponent={
-            <Button
-              component={Link}
-              href={"/cellars/add"}
-              startDecorator={<MdAdd />}
-            >
+    <div className="flex flex-col gap-4">
+      <HeaderBar
+        serverBreadcrumbs={{}}
+        endComponent={
+          <Button asChild>
+            <Link href="/cellars/add" underline="none">
+              <Add />
               Add cellar
-            </Button>
-          }
-        />
-        {list.failure !== null && <ApiError error={list.failure} />}
-        <VirtualGrid
-          items={cellarItems}
-          totalCount={virtualTotal(list)}
-          cacheKey="cellars"
-          getItemKey={(x) => x.data.id}
-          gridBreakpoints={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-          estimatedRowHeight={120}
-          emptyMessage="No cellars found"
-          onLoadMore={async () => {
-            await list.loadMore();
-          }}
-          isLoadingMore={list.status === "loadingMore"}
-          renderItem={(x, onBeforeNavigate) => (
-            <Box onClick={onBeforeNavigate}>
-              <CellarCardClient userId={userId} cellar={x.data} />
-            </Box>
-          )}
-        />
-      </Stack>
-    </Box>
+            </Link>
+          </Button>
+        }
+      />
+      {list.failure !== null && <ApiError error={list.failure} />}
+      <VirtualGrid
+        items={cellarItems}
+        totalCount={virtualTotal(list)}
+        cacheKey="cellars"
+        getItemKey={(x) => x.data.id}
+        gridBreakpoints={{ xs: 12, sm: 6, md: 4, lg: 3 }}
+        estimatedRowHeight={120}
+        emptyMessage="No cellars found"
+        onLoadMore={async () => {
+          await list.loadMore();
+        }}
+        isLoadingMore={list.status === "loadingMore"}
+        renderItem={(x, onBeforeNavigate) => (
+          <CellarCardClient
+            userId={userId}
+            cellar={x.data}
+            onBeforeNavigate={onBeforeNavigate}
+          />
+        )}
+      />
+    </div>
   );
 }

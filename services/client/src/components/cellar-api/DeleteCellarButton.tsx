@@ -1,22 +1,13 @@
 "use client";
 
-import {
-  Button,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Modal,
-  ModalDialog,
-  Typography,
-} from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { MdDeleteOutline, MdWarningAmber } from "react-icons/md";
 import { useMutation } from "urql";
+import { ConfirmSheet } from "@/components/app/ConfirmSheet";
+import { Delete } from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
 import { DeleteCellarMutation } from "@/lib/api/cellars";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
-import { ApiError } from "./ApiError";
 
 /**
  * Delete, with the one refusal the schema promises made visible up front:
@@ -24,7 +15,11 @@ import { ApiError } from "./ApiError";
  *
  * The count is from the last render and can be stale, so the button is only
  * *disabled* by it — the real answer still comes from the server, and its
- * message is shown when it disagrees.
+ * message is shown in the confirm when it disagrees.
+ *
+ * The confirm is a `ConfirmSheet` (a sheet on phones, a dialog from `md`):
+ * deleting a cellar cannot be undone, so it is the one place a solid danger
+ * button belongs.
  */
 export function DeleteCellarButton({
   cellarId,
@@ -61,52 +56,39 @@ export function DeleteCellarButton({
   return (
     <>
       <Button
-        variant="soft"
-        color="danger"
-        startDecorator={<MdDeleteOutline />}
+        variant="destructive"
         disabled={blocked || fetching}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
       >
+        <Delete />
         Delete
       </Button>
       {blocked && (
-        <Typography level="body-xs" textColor="text.tertiary" sx={{ ml: 1 }}>
-          Empty the cellar first.
-        </Typography>
+        <span className="type-footnote ml-2">Empty the cellar first.</span>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)}>
-        <ModalDialog variant="outlined" role="alertdialog">
-          <DialogTitle>
-            <MdWarningAmber />
-            Delete this cellar?
-          </DialogTitle>
-          <Divider />
-          <DialogContent>
-            <Typography level="body-sm">
-              “{cellarName}” and its check-in history go for good. This cannot
-              be undone.
-            </Typography>
-            {error !== null && <ApiError error={error} />}
-          </DialogContent>
-          <DialogActions>
-            <Button
-              color="danger"
-              loading={fetching}
-              onClick={() => void confirm()}
-            >
-              Delete
-            </Button>
-            <Button
-              variant="plain"
-              color="neutral"
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-          </DialogActions>
-        </ModalDialog>
-      </Modal>
+      <ConfirmSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Delete this cellar?"
+        description={
+          <>
+            “{cellarName}” and its check-in history go for good. This cannot be
+            undone.
+            {error !== null && (
+              <span role="alert" className="mt-2 block text-destructive">
+                {error.message}
+              </span>
+            )}
+          </>
+        }
+        confirmLabel="Delete"
+        onConfirm={() => void confirm()}
+        pending={fetching}
+      />
     </>
   );
 }

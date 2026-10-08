@@ -1,12 +1,10 @@
 "use client";
 
-import { Button, Stack } from "@mui/joy";
 import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useTransition } from "react";
-import { MdAdd } from "react-icons/md";
 import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemTypes";
 import { HeaderBar } from "@/components/common/HeaderBar";
-import { Link } from "@/components/common/Link";
+import { AddItemButton } from "./AddItemButton";
 import { CellarItemsFilter } from "./CellarItemsFilter";
 import type { CellarItemsFilterCounts as CellarItemCounts } from "./cellarItemCounts";
 import { parseItemTypes } from "./cellarItemsQuery";
@@ -31,6 +29,10 @@ interface CellarItemsControlsProps {
  *
  * One change: "Add item" linked to the relative `items/add` (§7); it takes the
  * cellar id and links absolutely.
+ *
+ * Below `sm` the filter and "Add item" stack under the search field, and the
+ * filter's chips wrap, so nothing is wider than the screen (e2e m05: the old
+ * one-line row pushed all three past the 16 px gutter at 375).
  */
 export function CellarItemsControls({
   cellarId,
@@ -91,21 +93,14 @@ export function CellarItemsControls({
       isSearching={isPending}
       onSearchChange={handleSearchChange}
       endComponent={
-        <Stack direction="row" spacing={2}>
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
           <CellarItemsFilter
             types={currentTypes}
             onTypesChange={handleTypesChange}
             counts={counts}
           />
-          <Button
-            component={Link}
-            href={`/cellars/${cellarId}/items/add`}
-            startDecorator={<MdAdd />}
-            disabled={!canAdd}
-          >
-            Add item
-          </Button>
-        </Stack>
+          <AddItemButton cellarId={cellarId} canAdd={canAdd} />
+        </div>
       }
     />
   );
