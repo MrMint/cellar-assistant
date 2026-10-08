@@ -232,10 +232,7 @@ describe("the edit form's correction loop (X19)", () => {
     const nv = button("NV");
     assert.equal(nv?.getAttribute("aria-pressed"), "false");
     await click(nv);
-    assert.equal(
-      button("NV")?.getAttribute("aria-pressed"),
-      "true",
-    );
+    assert.equal(button("NV")?.getAttribute("aria-pressed"), "true");
     const year = document.querySelector<HTMLInputElement>(
       'input[name="attributes.vintage"]',
     );
