@@ -1,5 +1,5 @@
 /**
- * Render tests for the restored `VirtualGrid`, against the old markup: a
+ * Render tests for `VirtualGrid`, against the old grid's structure: a
  * zero-height sentinel `div` (how it finds its scroll container), then either
  * the empty message or a relative box of absolutely-positioned rows
  * (`data-index`), each holding as many items as the caller's breakpoints give
@@ -61,14 +61,9 @@ mock.module("@/hooks/useMediaQuery", () => ({
 }));
 
 const { VirtualGrid } = await import("./VirtualGrid");
-const { LOADING } = await import("@/test-support/markup");
+const { LOADING, openTag } = await import("@/test-support/markup");
 
-let lastRaw = "";
-/** Markup with Emotion's `<style>` tags removed; the raw string is kept in `lastRaw`. */
-const render = (node: ReactNode) => {
-  lastRaw = renderToStaticMarkup(node);
-  return lastRaw.replace(/<style[^>]*>[^<]*<\/style>/g, "");
-};
+const render = (node: ReactNode) => renderToStaticMarkup(node);
 
 type Row = { id: string; name: string };
 const rows = (n: number): Row[] =>
@@ -87,7 +82,7 @@ const grid = (props: Partial<GridProps> = {}) =>
     />,
   );
 
-describe("VirtualGrid (restored)", () => {
+describe("VirtualGrid", () => {
   test("always renders the zero-height sentinel first", () => {
     assert.match(grid(), /^<div style="height:0;overflow:hidden"><\/div>/);
   });
@@ -117,12 +112,13 @@ describe("VirtualGrid (restored)", () => {
       340,
       "the old default row estimate",
     );
-    // Row 1 starts one estimated row plus one gap down (Emotion's CSS).
+    // Row 1 starts one estimated row plus one gap down, and the row box is
+    // sized for every row (inline styles: they change with each scroll).
     assert.match(
-      lastRaw,
-      /position:absolute;top:0;left:0;width:100%;[^}]*transform:translateY\(356px\)/,
+      openTag(html, 'data-index="1"'),
+      /\sstyle="[^"]*transform:translateY\(356px\)/,
     );
-    assert.match(lastRaw, /height:1068px;width:100%;position:relative/);
+    assert.match(html, /<div\b[^>]*\sstyle="height:1068px"/);
     // xs: 6 of 12 → two items per row.
     const firstRow = html.slice(
       html.indexOf('data-index="0"'),
