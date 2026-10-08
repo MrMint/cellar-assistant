@@ -1,3 +1,7 @@
+-- Regenerated at merge as 20261008230209 (was 20261008214015 on wa/drinklog),
+-- so it sorts after X27's 20261008214722/214724 that other databases already
+-- have; the snapshot now chains from 3d671b94. The SQL below is unchanged.
+--
 -- X02 (D5): a bottle-optional drink log.
 --
 -- `check_ins` was "a timestamp bound to a bottle": `cellar_item_id NOT NULL`,

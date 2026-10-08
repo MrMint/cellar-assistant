@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "80ace2ab-9028-4a41-b532-0ddb64bc6966",
+  "id": "e7136070-78ea-41f4-a35d-00f025684cb7",
   "prevIds": [
-    "edab7ff9-b4bb-4b44-8e0a-a005ed890ca8"
+    "3d671b94-eb0c-4a8b-9d29-dd5a5eecfa4f"
   ],
   "ddl": [
     {
@@ -6129,6 +6129,84 @@
       "table": "places"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'approved'",
+      "generated": null,
+      "identity": null,
+      "name": "review_status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "review_requested_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "rejection_reason",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 1,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "suggested_categories",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "suggested_description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "reviewed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "places"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -11320,6 +11398,27 @@
       "method": "btree",
       "concurrently": false,
       "name": "places_source_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "places"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "created_by",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "(review_status <> 'approved'::text)",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "places_unshared_by_creator_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "places"
@@ -16814,6 +16913,13 @@
       "entityType": "checks",
       "schema": "public",
       "table": "place_menus"
+    },
+    {
+      "value": "(review_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text]))",
+      "name": "places_review_status_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "places"
     },
     {
       "value": "((confidence >= (0)::numeric) AND (confidence <= (1)::numeric))",

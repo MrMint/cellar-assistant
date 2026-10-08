@@ -522,7 +522,7 @@ the same actor. Cancellation is a status flip checked at the top of each batch.
 | Table | Writer | Notes |
 |---|---|---|
 | `cellars`, `cellar_owners`, `cellar_items` | `CellarActor` | |
-| `check_ins` | `CheckInActor` | since X02 (`20261008214015_drink_log`): a drink log needs no bottle; `CellarActor` only reads them. `packages/db/src/writers.ts` is authoritative |
+| `check_ins` | `CheckInActor` | since X02 (`20261008230209_drink_log`): a drink log needs no bottle; `CellarActor` only reads them. `packages/db/src/writers.ts` is authoritative |
 | `wines`, `beers`, `spirits`, `coffees`, `sakes`, `teas`, `generic_items` | `ItemActor` | |
 | `item_image`, `item_vectors`, `item_reviews`, `item_brands` | `ItemActor` | |
 | `item_favorites`, `user_place_interactions` | `UserActor` | |
