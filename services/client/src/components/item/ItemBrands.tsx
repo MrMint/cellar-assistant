@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Business } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,22 @@ export type ItemBrand = {
 export type ItemBrandsProps = {
   brands: ItemBrand[];
   title?: string;
+  /**
+   * D8: the creator's one-tap correction ("Wrong brand? Change it"), drawn
+   * under the list — and, when the item has no brand yet, as the section's
+   * only content, so a missing brand can be added from here too.
+   */
+  change?: ReactNode;
+};
+
+/** The brand the page leads with: the primary link, or the first. */
+export const shownItemBrand = (
+  brands: readonly ItemBrand[],
+): { brandId: string; name: string } | null => {
+  const link = brands.find((b) => b.is_primary) ?? brands[0];
+  return link === undefined
+    ? null
+    : { brandId: link.brand.id, name: link.brand.name };
 };
 
 /** The logo tile: the brand's own logo, or the business glyph on a surface. */
@@ -70,9 +87,18 @@ function BrandLogo({
  * …) with Joy's palette; the type word is the information, so the chips are
  * one neutral outline now (design §3.1: no decorative hues).
  */
-export const ItemBrands = ({ brands, title = "Brands" }: ItemBrandsProps) => {
+export const ItemBrands = ({
+  brands,
+  title = "Brands",
+  change,
+}: ItemBrandsProps) => {
   if (brands.length === 0) {
-    return null;
+    return change === undefined ? null : (
+      <ItemSection title={title}>
+        <p className="type-callout text-ink-3">No brand recorded yet.</p>
+        {change}
+      </ItemSection>
+    );
   }
 
   const primaryBrand = brands.find((b) => b.is_primary);
@@ -123,6 +149,7 @@ export const ItemBrands = ({ brands, title = "Brands" }: ItemBrandsProps) => {
           </li>
         ))}
       </ul>
+      {change}
     </ItemSection>
   );
 };

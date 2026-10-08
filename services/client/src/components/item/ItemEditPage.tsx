@@ -3,6 +3,7 @@ import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { attributesFrom } from "@/components/item-api/itemFormRules";
 import { ViewerQuery } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
+import { ItemCorrectionQuery } from "@/lib/api/item-correction";
 import {
   ItemAttributesFragment,
   ItemCoreFragment,
@@ -12,6 +13,7 @@ import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { formatItemType } from "@/utilities";
 import { displayItemName } from "@/utilities/smart-title-case";
+import { shownBrandOf } from "./brand-change";
 import { ItemAppBar } from "./ItemAppBar";
 import { ItemForm } from "./ItemForm";
 
@@ -25,6 +27,10 @@ import { ItemForm } from "./ItemForm";
  *
  * Creator only: `updateItem` refuses anyone else, so the page says so rather
  * than offering a form that cannot save.
+ *
+ * X19: the form also gets the item's brand (`ItemCorrectionQuery`) for its
+ * BrandPicker, and which AI helpers — re-read the label, suggest details — it
+ * can offer the creator.
  */
 export async function ItemEditPage({
   type,
@@ -52,8 +58,19 @@ export async function ItemEditPage({
     ItemAttributesFragment,
     result.data.data,
   ) as unknown as Record<string, unknown>;
-  const viewer = await apiServerQuery(ViewerQuery, {});
+  const [viewer, extras] = await Promise.all([
+    apiServerQuery(ViewerQuery, {}),
+    apiServerQuery(ItemCorrectionQuery, { itemId, type }),
+  ]);
   const isCreator = viewer.me?.id === core.createdById;
+  // X19: the brand the form starts from, and the AI helpers it may offer.
+  // A failed read leaves both out rather than failing the page: the form
+  // still edits the item's own columns.
+  const correction = unwrapResult(extras.item, "QueryItemSuccess");
+  const brand = correction.ok
+    ? shownBrandOf(correction.data.data.brands.edges.map((edge) => edge.node))
+    : undefined;
+  const tools = correction.ok ? correction.data.data.correction : null;
 
   const itemName = displayItemName(core.name);
 
@@ -76,6 +93,15 @@ export async function ItemEditPage({
             attributes: attributesFrom(attributes, type),
           }}
           onSavedHref={backHref}
+          brand={brand}
+          correction={
+            tools === null
+              ? null
+              : {
+                  canRereadLabel: tools.canRereadLabel,
+                  canSuggestDetails: tools.canSuggestDetails,
+                }
+          }
         />
       ) : (
         <div className="flex flex-col gap-2">

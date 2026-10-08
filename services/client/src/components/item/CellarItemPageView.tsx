@@ -1,7 +1,8 @@
 import { AddReview } from "@/components/review/AddReview";
 import type { CheckInRow, ItemView } from "./adapter";
 import { CellarItemHeader } from "./CellarItemHeader";
-import { ItemBrands } from "./ItemBrands";
+import { ChangeBrand } from "./ChangeBrand";
+import { ItemBrands, shownItemBrand } from "./ItemBrands";
 import type { ItemCellarUser } from "./ItemCellars";
 import { ItemCharacteristics } from "./ItemCharacteristics";
 import { ItemCheckIns } from "./ItemCheckIns";
@@ -58,8 +59,23 @@ export function CellarItemPageView({
   editHref,
 }: CellarItemPageViewProps) {
   const config = ITEM_VIEW_CONFIG[item.type];
+  // D8: the item's creator (the one person `editHref` is set for) can
+  // correct its brand from the bottle page too.
   const brands = (
-    <ItemBrands brands={item.brands} title={config.cellarBrandTitle} />
+    <ItemBrands
+      brands={item.brands}
+      title={config.cellarBrandTitle}
+      change={
+        editHref === null ? undefined : (
+          <ChangeBrand
+            type={item.type}
+            itemId={item.itemId}
+            itemName={item.name}
+            shown={shownItemBrand(item.brands)}
+          />
+        )
+      }
+    />
   );
 
   return (

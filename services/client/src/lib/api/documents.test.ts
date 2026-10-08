@@ -78,6 +78,7 @@ import * as ai from "./ai.ts";
 import * as cellars from "./cellars.ts";
 import * as errors from "./errors.ts";
 import * as files from "./files.ts";
+import * as itemCorrection from "./item-correction.ts";
 import * as items from "./items.ts";
 import * as recipePhotos from "./recipe-photos.ts";
 
@@ -107,6 +108,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "lib/api/cellars.ts": cellars,
   "lib/api/errors.ts": errors,
   "lib/api/files.ts": files,
+  "lib/api/item-correction.ts": itemCorrection,
   "lib/api/items.ts": items,
   "lib/api/recipe-photos.ts": recipePhotos,
 };

@@ -319,6 +319,28 @@ describe("AIDraftField", () => {
     assert.doesNotMatch(m, /ai-draft-mark/);
     assert.doesNotMatch(classOf(m, "ai-draft-field"), /border-ai/);
   });
+  test("X19: a proposal is a chip under the field — offered, never applied", () => {
+    const m = html(
+      <AIDraftField
+        source="suggested"
+        drafted={false}
+        proposal={{
+          display: "Zinfandel",
+          label: "Variety",
+          onUse: () => {},
+          onDismiss: () => {},
+        }}
+      >
+        <input aria-label="Variety" value="" readOnly />
+      </AIDraftField>,
+    );
+    assert.match(m, /data-slot="ai-proposal"/);
+    assert.match(m, /aria-label="Use suggested Variety: Zinfandel"/);
+    assert.match(m, /aria-label="Dismiss the Variety suggestion"/);
+    assert.match(m, /border-dashed/);
+    // Not drafted: the field itself carries no mark until the chip is used.
+    assert.doesNotMatch(m, /data-ai-draft=/);
+  });
   test("teal is the AI's colour and nothing else's: no brass in the mark", () => {
     for (const source of ["label", "suggested", "pin", "barcode"] as const) {
       const m = html(
