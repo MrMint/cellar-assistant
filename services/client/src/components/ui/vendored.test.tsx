@@ -35,6 +35,15 @@ describe("vendored ui/*", () => {
     }
   });
 
+  test("an unchecked checkbox is outlined in ink-3, not the input fill", () => {
+    // shadcn's border-input is surface-3 here: on a surface-2 row (the bulk
+    // check-in picker) the box all but vanished, under WCAG 1.4.11's 3:1.
+    // ink-3 on surface-2 is 5.6:1 (1.1:1 before).
+    const text = sources.find((s) => s.file === "checkbox.tsx")?.text ?? "";
+    assert.match(text, /border border-ink-3 /);
+    assert.doesNotMatch(text, /border border-input /);
+  });
+
   test("the default button is a 44 px brass action", () => {
     const html = renderToStaticMarkup(<Button>Save</Button>);
     assert.match(html, /data-slot="button"/);
