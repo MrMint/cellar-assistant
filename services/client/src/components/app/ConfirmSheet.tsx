@@ -18,6 +18,12 @@ export type ConfirmSheetProps = {
   onConfirm: () => void;
   /** While the action runs: the button spins and nothing can be dismissed. */
   pending?: boolean;
+  /**
+   * A block between the words and the buttons — a server refusal
+   * (`ApiError`), say, which is a block and so cannot sit inside the
+   * description's paragraph.
+   */
+  children?: ReactNode;
 };
 
 /**
@@ -37,6 +43,7 @@ export function ConfirmSheet({
   cancelLabel = "Cancel",
   onConfirm,
   pending = false,
+  children,
 }: ConfirmSheetProps) {
   return (
     <ResponsiveDialog
@@ -66,6 +73,8 @@ export function ConfirmSheet({
           </Button>
         </div>
       }
-    />
+    >
+      {children}
+    </ResponsiveDialog>
   );
 }

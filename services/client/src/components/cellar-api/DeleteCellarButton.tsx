@@ -8,6 +8,7 @@ import { Delete } from "@/components/app/icons";
 import { Button } from "@/components/ui/button";
 import { DeleteCellarMutation } from "@/lib/api/cellars";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
+import { ApiError } from "./ApiError";
 
 /**
  * Delete, with the one refusal the schema promises made visible up front:
@@ -15,7 +16,7 @@ import { type ApiFailure, unwrapResult } from "@/lib/api/result";
  *
  * The count is from the last render and can be stale, so the button is only
  * *disabled* by it — the real answer still comes from the server, and its
- * message is shown in the confirm when it disagrees.
+ * refusal is shown in the confirm, as an `ApiError`, when it disagrees.
  *
  * The confirm is a `ConfirmSheet` (a sheet on phones, a dialog from `md`):
  * deleting a cellar cannot be undone, so it is the one place a solid danger
@@ -78,17 +79,14 @@ export function DeleteCellarButton({
           <>
             “{cellarName}” and its check-in history go for good. This cannot be
             undone.
-            {error !== null && (
-              <span role="alert" className="mt-2 block text-destructive">
-                {error.message}
-              </span>
-            )}
           </>
         }
         confirmLabel="Delete"
         onConfirm={() => void confirm()}
         pending={fetching}
-      />
+      >
+        {error !== null && <ApiError error={error} />}
+      </ConfirmSheet>
     </>
   );
 }
