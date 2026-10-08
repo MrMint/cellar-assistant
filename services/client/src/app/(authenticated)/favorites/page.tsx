@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import {
   favoriteRowFromNode,
   favoritesVariables,
@@ -33,10 +32,10 @@ export default async function FavoritesPage({
 
   if (data.me === null || data.me === undefined) {
     return (
-      <Typography level="body-md" sx={{ color: "text.secondary" }}>
+      <p className="type-body text-ink-2">
         Your session has expired for this part of the app. Sign in again to see
         your favorites.
-      </Typography>
+      </p>
     );
   }
 

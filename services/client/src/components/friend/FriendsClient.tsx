@@ -1,25 +1,23 @@
 "use client";
 
-import {
-  Alert,
-  Button,
-  Card,
-  Grid,
-  List,
-  ListItem,
-  ListItemContent,
-  Typography,
-} from "@mui/joy";
 import { useEffect, useRef, useState } from "react";
-import { MdDelete } from "react-icons/md";
 import { useMutation, useQuery } from "urql";
-import { DebounceInput } from "@/components/common/DebouncedInput";
+import {
+  Delete,
+  ErrorIcon,
+  ICON_STROKE,
+  Warning,
+} from "@/components/app/icons";
+import { UserAvatar } from "@/components/app/UserAvatar";
+import { SearchField } from "@/components/shell/SearchField";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import type { ActorErrorReason } from "@/lib/api/errors";
 import type { ResultOf } from "@/lib/api/graphql";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { useWholeConnection } from "@/lib/paging/use-whole-connection";
-import { UserAvatar } from "../common/UserAvatar";
 import {
   AcceptFriendRequestMutation,
   MyFriendRequestsQuery,
@@ -84,18 +82,85 @@ const ListFailure = ({
 }) =>
   failure === null ? null : (
     <Alert
-      color="danger"
-      variant="soft"
-      size="sm"
-      endDecorator={
-        <Button size="sm" variant="plain" color="danger" onClick={onRetry}>
-          Retry
-        </Button>
-      }
+      variant="destructive"
+      className="flex items-center gap-3 border-destructive/40"
     >
-      {failure.message}
+      <ErrorIcon
+        aria-hidden
+        strokeWidth={ICON_STROKE}
+        className="size-4 shrink-0"
+      />
+      <span className="type-callout flex-1">{failure.message}</span>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-destructive"
+        onClick={onRetry}
+      >
+        Retry
+      </Button>
     </Alert>
   );
+
+/** A pending-aware button: disabled with a spinner while its row's call runs. */
+const RowButton = ({
+  pending,
+  variant,
+  onClick,
+  icon,
+  children,
+}: {
+  pending: boolean;
+  variant?: "default" | "destructive";
+  onClick: () => void;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) => (
+  <Button
+    variant={variant}
+    disabled={pending}
+    aria-busy={pending || undefined}
+    onClick={onClick}
+  >
+    {pending ? <Spinner aria-hidden /> : icon}
+    {children}
+  </Button>
+);
+
+/** A titled panel: one of the three columns from `lg` up. */
+const Panel = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <section className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4">
+    <h2 className="type-headline">{title}</h2>
+    {children}
+  </section>
+);
+
+/** A person row: avatar, name, then the row's actions. */
+const PersonRow = ({
+  avatarUrl,
+  displayName,
+  children,
+}: {
+  avatarUrl?: string | null;
+  displayName: string;
+  children: React.ReactNode;
+}) => (
+  <li className="flex min-h-14 items-center gap-3 rounded-md bg-surface-2 px-3 py-2">
+    <UserAvatar avatarUrl={avatarUrl} displayName={displayName} />
+    <span className="type-headline min-w-0 flex-1 truncate">{displayName}</span>
+    <div className="flex shrink-0 gap-2">{children}</div>
+  </li>
+);
+
+const EmptyRow = ({ children }: { children: React.ReactNode }) => (
+  <li className="type-callout px-1 py-2 text-ink-3">{children}</li>
+);
 
 /**
  * `sendFriendRequest` rejects four cases (plan's D8 brief): to yourself
@@ -316,199 +381,151 @@ export const FriendsClient = () => {
   ]);
 
   return (
-    <Grid container spacing={2} justifyContent="center">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       {banner !== null && (
-        <Grid xs={12}>
-          <Alert
-            color={banner.color}
-            variant="soft"
-            endDecorator={
-              banner.action === undefined ? undefined : (
-                <Button
-                  size="sm"
-                  variant="solid"
-                  onClick={banner.action.onClick}
-                >
-                  {banner.action.label}
-                </Button>
-              )
-            }
-          >
+        <Alert
+          variant={banner.color === "danger" ? "destructive" : "default"}
+          className="flex items-center gap-3 lg:col-span-3"
+        >
+          {banner.color === "danger" ? (
+            <ErrorIcon
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-4 shrink-0"
+            />
+          ) : (
+            <Warning
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-4 shrink-0"
+            />
+          )}
+          <AlertDescription className="type-callout flex-1 text-current">
             {banner.message}
-          </Alert>
-        </Grid>
+          </AlertDescription>
+          {banner.action !== undefined && (
+            <Button size="sm" onClick={banner.action.onClick}>
+              {banner.action.label}
+            </Button>
+          )}
+        </Alert>
       )}
 
-      <Grid xs={12} lg={4}>
-        <Card>
-          <Typography level="title-lg">Friends</Typography>
-          <ListFailure
-            failure={friendsList.failure}
-            onRetry={friendsList.retry}
-          />
-          <List size="lg">
-            {friendRows.length === 0 && !friendsList.loading && (
-              <ListItem>
-                <ListItemContent>
-                  <Typography level="body-sm" sx={{ color: "neutral.500" }}>
-                    No friends yet. Search for users to add friends.
-                  </Typography>
-                </ListItemContent>
-              </ListItem>
-            )}
-            {friendRows.map((row) => (
-              <ListItem variant="outlined" key={row.user.id}>
-                <UserAvatar
-                  avatarUrl={row.user.avatarUrl}
-                  displayName={row.user.displayName}
-                />
-                <ListItemContent>
-                  <Typography level="title-md">
-                    {row.user.displayName}
-                  </Typography>
-                </ListItemContent>
-                <Button
-                  startDecorator={<MdDelete />}
-                  color="danger"
-                  variant="outlined"
-                  loading={pendingIds.has(row.user.id)}
-                  onClick={() => handleRemove(row.user.id)}
-                >
-                  Remove
-                </Button>
-              </ListItem>
-            ))}
-          </List>
-        </Card>
-      </Grid>
+      <Panel title="Friends">
+        <ListFailure
+          failure={friendsList.failure}
+          onRetry={friendsList.retry}
+        />
+        <ul className="flex flex-col gap-2">
+          {friendRows.length === 0 && !friendsList.loading && (
+            <EmptyRow>
+              No friends yet. Search for users to add friends.
+            </EmptyRow>
+          )}
+          {friendRows.map((row) => (
+            <PersonRow
+              key={row.user.id}
+              avatarUrl={row.user.avatarUrl}
+              displayName={row.user.displayName}
+            >
+              <RowButton
+                variant="destructive"
+                icon={<Delete aria-hidden strokeWidth={ICON_STROKE} />}
+                pending={pendingIds.has(row.user.id)}
+                onClick={() => handleRemove(row.user.id)}
+              >
+                Remove
+              </RowButton>
+            </PersonRow>
+          ))}
+        </ul>
+      </Panel>
 
-      <Grid xs={12} lg={4}>
-        <Card>
-          <Typography level="title-lg">Add Friends</Typography>
-          <DebounceInput
-            size="lg"
-            placeholder="Search for users by name..."
-            debounceTimeout={500}
-            handleDebounce={setSearchTerm}
-          />
-          <List size="lg">
-            {searchRows
-              .filter(
-                (edge) => !alreadyRequestedOrFriends.has(edge.node.userId),
-              )
-              .map((edge) => (
-                <ListItem variant="outlined" key={edge.node.userId}>
-                  <UserAvatar
-                    avatarUrl={edge.node.avatarUrl}
-                    displayName={edge.node.displayName}
-                  />
-                  <ListItemContent>
-                    <Typography level="title-md">
-                      {edge.node.displayName}
-                    </Typography>
-                  </ListItemContent>
-                  <Button
-                    color="primary"
-                    variant="solid"
-                    loading={
-                      pendingIds.has(edge.node.userId) || searchResult.fetching
-                    }
-                    onClick={() => handleSendRequest(edge.node.userId)}
-                  >
-                    Request
-                  </Button>
-                </ListItem>
-              ))}
-          </List>
-        </Card>
-      </Grid>
+      <Panel title="Add Friends">
+        <SearchField
+          placeholder="Search for users by name..."
+          debounceTimeout={500}
+          onDebounced={setSearchTerm}
+        />
+        <ul className="flex flex-col gap-2">
+          {searchRows
+            .filter((edge) => !alreadyRequestedOrFriends.has(edge.node.userId))
+            .map((edge) => (
+              <PersonRow
+                key={edge.node.userId}
+                avatarUrl={edge.node.avatarUrl}
+                displayName={edge.node.displayName}
+              >
+                <RowButton
+                  pending={
+                    pendingIds.has(edge.node.userId) || searchResult.fetching
+                  }
+                  onClick={() => handleSendRequest(edge.node.userId)}
+                >
+                  Request
+                </RowButton>
+              </PersonRow>
+            ))}
+        </ul>
+      </Panel>
 
-      <Grid xs={12} lg={4}>
-        <Card>
-          <Typography level="title-lg">Incoming Requests</Typography>
-          <ListFailure
-            failure={incomingList.failure}
-            onRetry={incomingList.retry}
-          />
-          <List size="lg">
-            {incoming.length === 0 && !incomingList.loading && (
-              <ListItem>
-                <ListItemContent>
-                  <Typography level="body-sm" sx={{ color: "neutral.500" }}>
-                    No incoming requests.
-                  </Typography>
-                </ListItemContent>
-              </ListItem>
-            )}
-            {incoming.map((row) => (
-              <ListItem variant="outlined" key={row.id}>
-                <UserAvatar
-                  avatarUrl={row.user.avatarUrl}
-                  displayName={row.user.displayName}
-                />
-                <ListItemContent>
-                  <Typography level="title-md">
-                    {row.user.displayName}
-                  </Typography>
-                </ListItemContent>
-                <Button
-                  color="danger"
-                  variant="solid"
-                  loading={pendingIds.has(row.id)}
-                  onClick={() => handleReject(row.id)}
-                >
-                  Reject
-                </Button>
-                <Button
-                  color="primary"
-                  variant="solid"
-                  loading={pendingIds.has(row.id)}
-                  onClick={() => handleAccept(row.id)}
-                >
-                  Accept
-                </Button>
-              </ListItem>
-            ))}
-          </List>
-          <Typography level="title-lg">Outgoing Requests</Typography>
-          <ListFailure
-            failure={outgoingList.failure}
-            onRetry={outgoingList.retry}
-          />
-          <List size="lg">
-            {outgoing.length === 0 && !outgoingList.loading && (
-              <ListItem>
-                <ListItemContent>
-                  <Typography level="body-sm" sx={{ color: "neutral.500" }}>
-                    No outgoing requests.
-                  </Typography>
-                </ListItemContent>
-              </ListItem>
-            )}
-            {outgoing.map((row) => (
-              <ListItem variant="outlined" key={row.id}>
-                <UserAvatar
-                  avatarUrl={row.user.avatarUrl}
-                  displayName={row.user.displayName}
-                />
-                <ListItemContent>
-                  <Typography level="title-md">
-                    {row.user.displayName}
-                  </Typography>
-                </ListItemContent>
-                <Button
-                  color="danger"
-                  variant="outlined"
-                  loading={pendingIds.has(row.id)}
-                  onClick={() => handleReject(row.id)}
-                >
-                  Cancel
-                </Button>
-              </ListItem>
-            ))}
-          </List>
-        </Card>
-      </Grid>
-    </Grid>
+      <Panel title="Incoming Requests">
+        <ListFailure
+          failure={incomingList.failure}
+          onRetry={incomingList.retry}
+        />
+        <ul className="flex flex-col gap-2">
+          {incoming.length === 0 && !incomingList.loading && (
+            <EmptyRow>No incoming requests.</EmptyRow>
+          )}
+          {incoming.map((row) => (
+            <PersonRow
+              key={row.id}
+              avatarUrl={row.user.avatarUrl}
+              displayName={row.user.displayName}
+            >
+              <RowButton
+                variant="destructive"
+                pending={pendingIds.has(row.id)}
+                onClick={() => handleReject(row.id)}
+              >
+                Reject
+              </RowButton>
+              <RowButton
+                pending={pendingIds.has(row.id)}
+                onClick={() => handleAccept(row.id)}
+              >
+                Accept
+              </RowButton>
+            </PersonRow>
+          ))}
+        </ul>
+        <h2 className="type-headline">Outgoing Requests</h2>
+        <ListFailure
+          failure={outgoingList.failure}
+          onRetry={outgoingList.retry}
+        />
+        <ul className="flex flex-col gap-2">
+          {outgoing.length === 0 && !outgoingList.loading && (
+            <EmptyRow>No outgoing requests.</EmptyRow>
+          )}
+          {outgoing.map((row) => (
+            <PersonRow
+              key={row.id}
+              avatarUrl={row.user.avatarUrl}
+              displayName={row.user.displayName}
+            >
+              <RowButton
+                variant="destructive"
+                pending={pendingIds.has(row.id)}
+                onClick={() => handleReject(row.id)}
+              >
+                Cancel
+              </RowButton>
+            </PersonRow>
+          ))}
+        </ul>
+      </Panel>
+    </div>
   );
 };

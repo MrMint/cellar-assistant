@@ -1,19 +1,12 @@
 "use client";
 
-import {
-  Button,
-  Card,
-  CardContent,
-  FormControl,
-  FormLabel,
-  Grid,
-  Input,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { useMutation } from "urql";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import type { ResultOf } from "@/lib/api/graphql";
 import { type MyProfileQuery, UpdateProfileMutation } from "./fragments";
 
@@ -30,6 +23,7 @@ interface EditProfileClientProps {
 }
 
 export const EditProfileClient = ({ profile }: EditProfileClientProps) => {
+  const inputId = useId();
   const [, updateProfile] = useMutation(UpdateProfileMutation);
 
   const {
@@ -64,38 +58,46 @@ export const EditProfileClient = ({ profile }: EditProfileClientProps) => {
   };
 
   return (
-    <Grid container justifyContent="center">
-      <Grid xs={12} sm={6} md={4}>
-        <Card>
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <Stack spacing={2}>
-                <FormControl required>
-                  <FormLabel>Display Name</FormLabel>
-                  <Controller
-                    name="displayName"
-                    control={control}
-                    rules={{ required: true }}
-                    render={({ field }) => (
-                      <Input disabled={isSubmitting} type="text" {...field} />
-                    )}
-                  />
-                </FormControl>
-                {errors.root !== undefined && (
-                  <Typography>{errors.root.message}</Typography>
-                )}
-                <Button
-                  disabled={!isDirty}
-                  loading={isSubmitting}
-                  type="submit"
-                >
-                  Update
-                </Button>
-              </Stack>
-            </form>
-          </CardContent>
-        </Card>
-      </Grid>
-    </Grid>
+    <div className="flex justify-center">
+      <div className="w-full rounded-lg bg-surface-1 p-4 sm:w-1/2 md:w-1/3">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <Field className="gap-1.5">
+            <FieldLabel htmlFor={inputId}>
+              Display Name
+              <span aria-hidden className="text-ink-3">
+                *
+              </span>
+            </FieldLabel>
+            <Controller
+              name="displayName"
+              control={control}
+              rules={{ required: true }}
+              render={({ field }) => (
+                <Input
+                  id={inputId}
+                  required
+                  disabled={isSubmitting}
+                  type="text"
+                  {...field}
+                />
+              )}
+            />
+          </Field>
+          {errors.root !== undefined && (
+            <p role="alert" className="type-body text-destructive">
+              {errors.root.message}
+            </p>
+          )}
+          <Button
+            disabled={!isDirty || isSubmitting}
+            aria-busy={isSubmitting || undefined}
+            type="submit"
+          >
+            {isSubmitting && <Spinner aria-hidden />}
+            Update
+          </Button>
+        </form>
+      </div>
+    </div>
   );
 };

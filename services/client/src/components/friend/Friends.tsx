@@ -1,4 +1,5 @@
-import { Alert, Typography } from "@mui/joy";
+import { ICON_STROKE, Warning } from "@/components/app/icons";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getApiToken } from "@/lib/api/auth-server";
 import { FriendsClient } from "./FriendsClient";
 
@@ -18,11 +19,12 @@ export async function Friends() {
 
   if (token === null) {
     return (
-      <Alert color="warning" variant="soft">
-        <Typography level="body-md">
+      <Alert>
+        <Warning aria-hidden strokeWidth={ICON_STROKE} />
+        <AlertDescription className="type-body text-ink-1">
           Your session ended while this page was loading. Sign in again to see
           your friends.
-        </Typography>
+        </AlertDescription>
       </Alert>
     );
   }

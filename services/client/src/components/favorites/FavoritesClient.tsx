@@ -1,7 +1,7 @@
 "use client";
 
-import { Stack, Typography } from "@mui/joy";
 import { useEffect, useMemo } from "react";
+import { AppBar } from "@/components/app/AppBar";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { virtualTotal } from "@/components/cellar/virtualTotal";
 import { ApiError } from "@/components/cellar-api/ApiError";
@@ -30,7 +30,7 @@ interface FavoritesClientProps {
 /**
  * `82450ad1:src/components/favorites/FavoritesClient.tsx`, restored.
  *
- * Same tree — "Favorites" title, `CellarItemsFilter` on the old `?types=` URL
+ * Same tree — "Favorites" title (now an `AppBar`, Back to Me), `CellarItemsFilter` on the old `?types=` URL
  * state, `VirtualGrid` of `ItemCard`s, "No favorites found" — over
  * `me.favorites(types:)`:
  *
@@ -83,17 +83,14 @@ export function FavoritesClient({
   const items = useMemo(() => [...list.rows], [list.rows]);
 
   return (
-    <Stack spacing={2}>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        sx={{ justifyContent: "space-between", alignItems: "center" }}
-      >
-        <Typography level="title-lg">Favorites</Typography>
-        <Stack direction="row" spacing={2}>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Reached from the Me hub (D1): Back goes there on a cold open. */}
+        <AppBar title="Favorites" parent="/me" className="min-w-0 flex-1" />
+        <div className="flex flex-row gap-4">
           <CellarItemsFilter types={types} onTypesChange={setTypes} />
-        </Stack>
-      </Stack>
+        </div>
+      </div>
       {list.failure !== null && (
         <ApiError error={list.failure} title="Favorites" />
       )}
@@ -121,6 +118,6 @@ export function FavoritesClient({
           />
         )}
       />
-    </Stack>
+    </div>
   );
 }
