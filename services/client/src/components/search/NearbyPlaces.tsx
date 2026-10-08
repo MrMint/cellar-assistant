@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useQuery } from "urql";
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { type NearbyPlace, nearbyPlacesFromNodes } from "./adapter";
 import { NEARBY_PLACES_LIMIT, SearchNearbyPlacesQuery } from "./queries";
 import { fadeInLeft, fadeShort, staggerContainerFast } from "./search-motion";
-import { useHasMounted } from "./useHasMounted";
+import { useHasMounted, useHydratedReducedMotion } from "./useHasMounted";
 
 /**
  * `82450ad1:src/components/search/NearbyPlaces.tsx`, restored (UI parity
@@ -121,7 +121,7 @@ export function NearbyPlaces({
   const geo = useGeolocation();
   const hasInitialData = initialPlaces != null && initialPlaces.length > 0;
   const [selectedTypes, setSelectedTypes] = useState<ItemType[]>([]);
-  const prefersReducedMotion = useReducedMotion() ?? false;
+  const prefersReducedMotion = useHydratedReducedMotion();
   // The server's render and the hydration pass start visible; only what
   // mounts afterwards (a filter change) plays the entrance. See ./AnimateIn.
   const animateEntrance = useHasMounted();

@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isNotNil } from "ramda";
@@ -27,7 +27,7 @@ import { RichTextDisplay } from "../common/RichTextDisplay";
 import { formatRating } from "../common/rating/rating";
 import type { ActivityEntry, ActivityKind } from "./adapter";
 import { fadeInLeft, fadeShort, staggerContainerFast } from "./search-motion";
-import { useHasMounted } from "./useHasMounted";
+import { useHasMounted, useHydratedReducedMotion } from "./useHasMounted";
 
 /**
  * `82450ad1:src/components/search/RecentActivity.tsx`, restored (UI parity
@@ -148,7 +148,7 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
   const now = useNow();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const prefersReducedMotion = useReducedMotion() ?? false;
+  const prefersReducedMotion = useHydratedReducedMotion();
   // The server's render and the hydration pass start visible; only what
   // mounts afterwards (a filter change) plays the entrance. See ./AnimateIn.
   const animateEntrance = useHasMounted();
