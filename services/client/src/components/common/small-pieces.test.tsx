@@ -1,6 +1,7 @@
 /**
- * Render tests for the three one-screen restorations — `InteractiveCard`,
- * `ItemTypeIcon`, `PageLoading` — against their `82450ad1` markup.
+ * Render tests for three small shared pieces: `InteractiveCard` (still Joy,
+ * against its `82450ad1` markup, until the removal step deletes it),
+ * `ItemTypeIcon` (now `TypeGlyph`) and `PageLoading`.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -30,31 +31,27 @@ describe("InteractiveCard (restored)", () => {
   });
 });
 
-describe("ItemTypeIcon (restored)", () => {
-  test("one distinct react-icons glyph per type", () => {
+describe("ItemTypeIcon", () => {
+  test("one distinct, decorative glyph per type", () => {
     const glyphs = ITEM_TYPES.map((type) => raw(<ItemTypeIcon type={type} />));
-    for (const html of glyphs) assert.match(html, /^<svg[^>]*>.*<\/svg>$/);
+    for (const html of glyphs) {
+      assert.match(html, /^<svg[^>]*>.*<\/svg>$/);
+      assert.match(html, /\saria-hidden="true"/);
+    }
     assert.equal(new Set(glyphs).size, ITEM_TYPES.length);
   });
 
-  test("each type renders the same glyph the old switch chose", async () => {
-    const fa = await import("react-icons/fa");
-    const expected = {
-      BEER: fa.FaBeer,
-      WINE: fa.FaWineGlass,
-      SPIRIT: fa.FaCocktail,
-      COFFEE: fa.FaCoffee,
-      SAKE: fa.FaGlassWhiskey,
-      TEA: fa.FaMugHot,
-    } as const;
+  test("each type renders its TypeGlyph (one glyph set app-wide)", async () => {
+    const { TypeGlyph } = await import("@/components/app/TypeChip");
     for (const type of ITEM_TYPES) {
-      const Glyph = expected[type];
-      assert.equal(raw(<ItemTypeIcon type={type} />), raw(<Glyph />), type);
+      const html = raw(<ItemTypeIcon type={type} />);
+      assert.equal(html, raw(<TypeGlyph type={type} />), type);
+      assert.match(html, new RegExp(`data-type="${type}"`));
     }
   });
 });
 
-describe("PageLoading (restored)", () => {
+describe("PageLoading", () => {
   test("a full-size box holding a loading indicator", () => {
     const html = raw(<PageLoading />);
     // Emotion's rule while it is Joy, Tailwind's classes once it is not.
