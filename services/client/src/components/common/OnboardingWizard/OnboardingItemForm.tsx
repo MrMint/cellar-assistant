@@ -161,7 +161,13 @@ export const OnboardingItemForm = ({
                 )}
               </Fragment>
             ))}
-            <Field data-disabled={isSubmitting || undefined}>
+            {/* AIDraftField gives every field above a 2 px rule and 12 px
+                inset whether or not it is drafted; the same inset keeps
+                Barcode's label in their column. */}
+            <Field
+              data-disabled={isSubmitting || undefined}
+              className="border-transparent border-l-2 pl-3"
+            >
               <FieldLabel htmlFor={barcodeId}>Barcode</FieldLabel>
               <Input
                 id={barcodeId}
