@@ -4,8 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ItemSection } from "./ItemSection";
 
+/**
+ * The type word, or null: a brand whose type is neither stored nor inferable
+ * (`inferBrandType`, X23) says nothing rather than "Other".
+ */
 const formatBrandType = (brandType: string | null) => {
-  if (!brandType) return "Other";
+  if (!brandType) return null;
   return brandType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 };
 
@@ -95,9 +99,11 @@ export const ItemBrands = ({ brands, title = "Brands" }: ItemBrandsProps) => {
                 </Link>
                 <Badge variant="secondary">Primary</Badge>
               </div>
-              <p className="type-callout text-ink-2">
-                {formatBrandType(primaryBrand.brand.brand_type)}
-              </p>
+              {primaryBrand.brand.brand_type !== null && (
+                <p className="type-callout text-ink-2">
+                  {formatBrandType(primaryBrand.brand.brand_type)}
+                </p>
+              )}
             </div>
           </li>
         )}
@@ -113,13 +119,17 @@ export const ItemBrands = ({ brands, title = "Brands" }: ItemBrandsProps) => {
               >
                 {brandRelation.brand.name}
               </Link>
-              <p className="type-footnote">
-                {formatBrandType(brandRelation.brand.brand_type)}
-              </p>
+              {brandRelation.brand.brand_type !== null && (
+                <p className="type-footnote">
+                  {formatBrandType(brandRelation.brand.brand_type)}
+                </p>
+              )}
             </div>
-            <Badge variant="outline">
-              {formatBrandType(brandRelation.brand.brand_type)}
-            </Badge>
+            {brandRelation.brand.brand_type !== null && (
+              <Badge variant="outline">
+                {formatBrandType(brandRelation.brand.brand_type)}
+              </Badge>
+            )}
           </li>
         ))}
       </ul>

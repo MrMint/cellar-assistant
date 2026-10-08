@@ -259,6 +259,7 @@ export const ItemBrandFragment = graphql(`
       id
       name
       brandType
+      firstItemType
       logoUrl
     }
   }

@@ -246,6 +246,34 @@ describe("rows", () => {
         },
       },
     );
+    // X23: unset or "other" falls back to the first item's producer, and
+    // then to nothing — the row never says "Other".
+    assert.equal(
+      brandFromNode({
+        id: "ib",
+        isPrimary: false,
+        brand: {
+          id: "b",
+          name: "Dassai",
+          brandType: null,
+          firstItemType: "SAKE",
+        },
+      }).brand.brand_type,
+      "kura",
+    );
+    assert.equal(
+      brandFromNode({
+        id: "ib",
+        isPrimary: false,
+        brand: {
+          id: "b",
+          name: "Acme",
+          brandType: "other",
+          firstItemType: null,
+        },
+      }).brand.brand_type,
+      null,
+    );
   });
 
   test("check-ins group by UTC day, newest-first order kept", () => {
