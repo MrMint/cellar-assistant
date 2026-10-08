@@ -39,6 +39,7 @@
  * the Dapr wire as an ISO-8601 string, because `services/api` has no Drizzle.
  */
 import type { ActorDescriptor } from "./actors.ts";
+import type { AiCapabilities } from "./ai.ts";
 import type { Ctx } from "./ctx.ts";
 import type { FriendRequestStatus } from "./enums.ts";
 import type { ItemRef } from "./items.ts";
@@ -209,6 +210,13 @@ export type RecordPlaceInteractionInput = {
  */
 export type UserActorInterface = {
   getProfile(ctx: Ctx): Promise<UserProfileDto>;
+  /**
+   * N07/D25: what this deployment's AI can do, behind `viewer.aiCapabilities`,
+   * so a client hides a feature the configured provider genuinely cannot serve
+   * instead of offering it and refusing. Process-wide — the viewer's own actor
+   * answers only because `viewer` is where a client asks. Self only.
+   */
+  aiCapabilities(ctx: Ctx): Promise<AiCapabilities>;
   updateProfile(ctx: Ctx, input: UpdateProfileInput): Promise<UserProfileDto>;
 
   friends(ctx: Ctx, page: PageArgs): Promise<Page<FriendDto>>;
@@ -297,6 +305,7 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
   category: "entity",
   methods: {
     getProfile: {},
+    aiCapabilities: {},
     updateProfile: {},
     friends: {},
     friendRequests: {},

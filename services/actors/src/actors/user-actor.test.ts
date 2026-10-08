@@ -26,6 +26,7 @@ import {
   anonymousCtx,
   ConflictError,
   ForbiddenError,
+  NO_AI_CAPABILITIES,
   NotFoundError,
   pageArgs,
   systemCtx,
@@ -44,6 +45,7 @@ import {
 import { and, eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
+import { setAiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import type { ProfileFields, ProfileStore } from "../lib/profile-store.ts";
 import {
@@ -1163,6 +1165,30 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       });
     });
 
+    it("answers the process's AI capabilities to its owner only (N07)", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const actor = await userActor(alice, db);
+        const installed = {
+          ...NO_AI_CAPABILITIES,
+          semanticSearch: true,
+          labelRead: true,
+        };
+        setAiCapabilities(installed);
+        try {
+          expect(await actor.aiCapabilities(userCtx(alice, "r"))).toEqual(
+            installed,
+          );
+          await expect(
+            actor.aiCapabilities(userCtx(bob, "r")),
+          ).rejects.toBeInstanceOf(ForbiddenError);
+        } finally {
+          setAiCapabilities(NO_AI_CAPABILITIES);
+        }
+      });
+    });
+
     it("lets only the owner update a profile", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
@@ -1856,6 +1882,9 @@ describe("UserActor makes no external call (§2.1, B4 acceptance)", () => {
       "@cellar-assistant/policy",
       "@dapr/dapr",
       "../lib/actor-base.ts",
+      // Pure: a module-local registry `installAI` fills at boot (N07); its
+      // only import is the contracts package.
+      "../lib/ai/capabilities.ts",
       "../lib/db.ts",
       "../lib/delivery.ts",
       "../lib/guards.ts",
