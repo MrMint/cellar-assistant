@@ -72,14 +72,18 @@ function useRankingSegment(): [RankingSegment, (next: RankingSegment) => void] {
   return [segment, setSegment];
 }
 
-/** The board's place for one card: "1", "2", … in Fraunces, #1 in claret. */
-function RankNumeral({ rank }: { rank: number }) {
+/**
+ * The board's place for one card: "1", "2", … in Fraunces, #1 in claret.
+ * Claret *ink* (`brand-ink`): claret itself (`brand`) is a fill colour and
+ * reads at under 2:1 as text on the dark surfaces (palette-contrast.test.ts).
+ */
+export function RankNumeral({ rank }: { rank: number }) {
   return (
     <span
       data-slot="rank-numeral"
       className={cn(
         "pointer-events-none absolute top-2 left-2 z-20 flex h-8 min-w-8 items-center justify-center rounded-full bg-background/85 px-2 font-display text-lg tabular leading-none shadow-sm",
-        rank === 1 ? "text-brand" : "text-ink-1",
+        rank === 1 ? "text-brand-ink" : "text-ink-1",
       )}
     >
       <span className="sr-only">Rank </span>

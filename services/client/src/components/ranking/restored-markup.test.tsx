@@ -20,7 +20,7 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams('scope=friends&types=["WINE"]'),
 }));
 
-const { RankingsClient } = await import("./RankingsClient");
+const { RankingsClient, RankNumeral } = await import("./RankingsClient");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -53,5 +53,17 @@ describe("RankingsClient", () => {
       html,
       /aria-pressed="true"[^>]*aria-label="Wine"|aria-label="Wine"[^>]*aria-pressed="true"/,
     );
+  });
+});
+
+describe("RankNumeral", () => {
+  test("says Rank N to assistive tech; #1 in claret ink, the text-safe claret", () => {
+    const first = renderToStaticMarkup(<RankNumeral rank={1} />);
+    assert.match(first, /<span class="sr-only">Rank <\/span>1/);
+    assert.match(first, /\btext-brand-ink\b/);
+    // Claret itself is a fill: as text on the dark surfaces it fails AA.
+    assert.doesNotMatch(first, /\btext-brand(?!-ink)\b/);
+    const second = renderToStaticMarkup(<RankNumeral rank={2} />);
+    assert.match(second, /\btext-ink-1\b/);
   });
 });
