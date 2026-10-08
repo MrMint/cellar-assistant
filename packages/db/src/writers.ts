@@ -170,6 +170,7 @@ export const TABLE_WRITERS = {
 
   tier_lists: "TierListActor",
   tier_list_items: "TierListActor",
+  tier_list_history: "TierListActor",
 
   menu_scans: "MenuScanActor",
   item_match_suggestions: "MenuScanActor",

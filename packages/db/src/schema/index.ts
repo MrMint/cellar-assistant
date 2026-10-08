@@ -107,6 +107,7 @@ export const tables = {
   spirits: t.spirits,
   tea_category: t.teaCategory,
   teas: t.teas,
+  tier_list_history: t.tierListHistory,
   tier_list_items: t.tierListItems,
   tier_lists: t.tierLists,
   user: t.user,
