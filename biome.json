@@ -14,6 +14,7 @@
       "**/*.tsx",
       "**/*.json",
       "**/*.jsonc",
+      "**/*.css",
       "!**/node_modules",
       "!**/.next",
       "!**/dist",
@@ -48,6 +49,11 @@
       "arrowParentheses": "always"
     }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "json": {
     "formatter": {
       "trailingCommas": "none"
@@ -62,6 +68,21 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["services/client/src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          }
+        }
+      }
+    },
     {
       "includes": ["packages/e2e/**"],
       "linter": {

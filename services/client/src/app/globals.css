@@ -1,0 +1,274 @@
+/*
+ * The app's only stylesheet with values (D20; design-direction.md §3–§4).
+ *
+ * - `--ca-*` on :root are the tokens. `src/lib/tokens.ts` holds the same
+ *   values for code that cannot read CSS (the Joy theme, MapLibre, canvas);
+ *   `src/lib/dev-checks/tokens-parity.test.ts` fails when the two differ.
+ * - `@theme inline` maps them onto shadcn's semantic names and the app's own
+ *   roles, which is what makes `bg-primary`, `text-ink-3`, `bg-surface-1` …
+ * - NAMING TRAP: shadcn's `accent` is the hover/pressed surface, NOT the
+ *   brass accent. Brass is `primary` (or `brass`).
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* shadcn's `dark:` classes. Dark is the default (D21); Daylight is defined below
+   but nothing switches to it yet. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ca-bg: #0e0c0f;
+  --ca-surface-1: #171418;
+  --ca-surface-2: #1f1b21;
+  --ca-surface-3: #29242b;
+  --ca-line: rgb(255 240 225 / 0.08);
+  --ca-highlight: rgb(255 240 225 / 0.06);
+  --ca-ink-1: #f3ede4;
+  --ca-ink-2: #bdb3a7;
+  --ca-ink-3: #9c9287;
+  /* Action. Never white on brass: the ink is --ca-on-accent. */
+  --ca-accent: #c9a15b;
+  --ca-on-accent: #1a1408;
+  --ca-brand: #7b2233;
+  --ca-brand-ink: #d06a7c;
+  /* AI-drafted / AI-working ONLY (enters through AIDraftField). */
+  --ca-ai: #7fb3b9;
+  --ca-success: #6faf7b;
+  --ca-danger: #e07a6a;
+  /* Six types, deep / text-safe; order wine, beer, spirit, sake, coffee, tea. */
+  --ca-type-wine: #8e2a3a;
+  --ca-type-wine-text: #d06a7c;
+  --ca-type-beer: #c98a2b;
+  --ca-type-beer-text: #c98a2b;
+  --ca-type-spirit: #9a6a3c;
+  --ca-type-spirit-text: #c8925e;
+  --ca-type-sake: #5e6fa8;
+  --ca-type-sake-text: #8e9bd0;
+  --ca-type-coffee: #6b4a3a;
+  --ca-type-coffee-text: #b88a72;
+  --ca-type-tea: #5e8c6a;
+  --ca-type-tea-text: #7fb08c;
+  /* Tier bands, Outstanding → Bad. Unrated sits on surface-3. */
+  --ca-band-5: #7b2233;
+  --ca-band-4: #9a4a3a;
+  --ca-band-3: #b8783f;
+  --ca-band-2: #8c7a62;
+  --ca-band-1: #5e5650;
+  /* Motion (src/lib/motion.ts holds the same values). */
+  --ca-dur-micro: 90ms;
+  --ca-dur-short: 160ms;
+  --ca-dur-medium: 240ms;
+  --ca-dur-long: 400ms;
+  --ca-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ca-ease-enter: cubic-bezier(0, 0, 0, 1);
+  --ca-ease-exit: cubic-bezier(0.3, 0, 1, 1);
+  --ca-tabbar-h: 49px;
+  /* shadcn's base radius, used by a few vendored calc()s; = --radius-md. */
+  --radius: 12px;
+}
+
+/* Daylight (design §3.1). Unused until there is evidence for it (D21). */
+[data-theme="light"] {
+  color-scheme: light;
+  --ca-bg: #f6f1e8;
+  --ca-surface-1: #fbf8f2;
+  --ca-surface-2: #efe8dc;
+  --ca-surface-3: #e6ddcd;
+  --ca-line: rgb(42 36 32 / 0.1);
+  --ca-highlight: rgb(255 255 255 / 0.6);
+  --ca-ink-1: #2a2420;
+  --ca-ink-2: #5e5449;
+  --ca-ink-3: #6f6357;
+  --ca-accent: #8a6a2e;
+  --ca-on-accent: #ffffff;
+  --ca-brand: #9c2f43;
+  --ca-ai: #2f6b70;
+}
+
+@theme inline {
+  /* shadcn semantic names → ca roles */
+  --color-background: var(--ca-bg);
+  --color-foreground: var(--ca-ink-1);
+  --color-card: var(--ca-surface-1);
+  --color-card-foreground: var(--ca-ink-1);
+  --color-popover: var(--ca-surface-2);
+  --color-popover-foreground: var(--ca-ink-1);
+  --color-primary: var(--ca-accent);
+  --color-primary-foreground: var(--ca-on-accent);
+  --color-secondary: var(--ca-surface-2);
+  --color-secondary-foreground: var(--ca-ink-1);
+  --color-muted: var(--ca-surface-1);
+  --color-muted-foreground: var(--ca-ink-3);
+  /* NOT brass: shadcn's "accent" is the hover/pressed surface. */
+  --color-accent: var(--ca-surface-3);
+  --color-accent-foreground: var(--ca-ink-1);
+  --color-destructive: var(--ca-danger);
+  --color-border: var(--ca-line);
+  --color-input: var(--ca-surface-3);
+  --color-ring: var(--ca-accent);
+
+  /* app roles */
+  --color-surface-1: var(--ca-surface-1);
+  --color-surface-2: var(--ca-surface-2);
+  --color-surface-3: var(--ca-surface-3);
+  --color-line: var(--ca-line);
+  --color-ink-1: var(--ca-ink-1);
+  --color-ink-2: var(--ca-ink-2);
+  --color-ink-3: var(--ca-ink-3);
+  --color-brass: var(--ca-accent);
+  --color-on-brass: var(--ca-on-accent);
+  --color-brand: var(--ca-brand);
+  --color-brand-ink: var(--ca-brand-ink);
+  --color-ai: var(--ca-ai);
+  --color-success: var(--ca-success);
+  --color-danger: var(--ca-danger);
+  --color-type-wine: var(--ca-type-wine);
+  --color-type-wine-text: var(--ca-type-wine-text);
+  --color-type-beer: var(--ca-type-beer);
+  --color-type-beer-text: var(--ca-type-beer-text);
+  --color-type-spirit: var(--ca-type-spirit);
+  --color-type-spirit-text: var(--ca-type-spirit-text);
+  --color-type-sake: var(--ca-type-sake);
+  --color-type-sake-text: var(--ca-type-sake-text);
+  --color-type-coffee: var(--ca-type-coffee);
+  --color-type-coffee-text: var(--ca-type-coffee-text);
+  --color-type-tea: var(--ca-type-tea);
+  --color-type-tea-text: var(--ca-type-tea-text);
+  --color-band-5: var(--ca-band-5);
+  --color-band-4: var(--ca-band-4);
+  --color-band-3: var(--ca-band-3);
+  --color-band-2: var(--ca-band-2);
+  --color-band-1: var(--ca-band-1);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  /* inputs / tiles / cards + sheets (design §3.3) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 20px;
+
+  --ease-standard: var(--ca-ease-standard);
+  --ease-enter: var(--ca-ease-enter);
+  --ease-exit: var(--ca-ease-exit);
+}
+
+/* Breakpoints = Joy's, so CSS and the JS `useMediaQuery` helpers flip together. */
+@theme {
+  --breakpoint-sm: 600px;
+  --breakpoint-md: 900px;
+  --breakpoint-lg: 1200px;
+  --breakpoint-xl: 1536px;
+}
+
+/* The type ramp (design §3.2): family + size + line + weight in one class. */
+@utility type-large-title {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 40px;
+  font-weight: 600;
+}
+@utility type-title-1 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+}
+@utility type-title-2 {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+}
+@utility type-headline {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+}
+@utility type-body {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+}
+@utility type-callout {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 400;
+}
+@utility type-footnote {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--ca-ink-3);
+}
+@utility type-overline {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+@utility type-numeral-xl {
+  font-family: var(--font-display);
+  font-size: 44px;
+  line-height: 44px;
+  font-weight: 500;
+}
+@utility tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+/* Elevation level 3 (design §3.3): sheets, tab bar, toasts, ActionBar. */
+@utility surface-glass {
+  background: color-mix(in oklab, var(--ca-surface-2) 82%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 var(--ca-highlight),
+    0 12px 32px rgb(0 0 0 / 0.55);
+}
+/* Touch hygiene (design §4.5): cards, the nav and sheet headers. */
+@utility touch-none-select {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background-color: var(--ca-bg);
+    color: var(--ca-ink-1);
+  }
+  /* No iOS focus zoom: inputs are never under 16px. */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+  /* joy-compat (deleted with Joy in the removal step): Preflight makes every
+     svg/img `display: block`, which stacks the inline react-icons glyphs inside
+     Joy components onto their own line. Roll that back inside Joy markup. */
+  [class*="Mui"] svg,
+  [class*="Mui"] img {
+    display: revert-layer;
+    vertical-align: revert-layer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat every transition's own duration. */
+    animation-duration: 0s !important;
+  }
+  * {
+    /* biome-ignore lint/complexity/noImportantStyles: as above, for smooth scrolling. */
+    scroll-behavior: auto !important;
+  }
+}
