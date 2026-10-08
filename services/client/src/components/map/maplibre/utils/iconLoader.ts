@@ -62,14 +62,23 @@ const BOOKMARK_PATH = "M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z";
  * of the Want to try button — so "places I want to go" read at a glance
  * without a second colour scale competing with the item-type hues.
  */
-function wantBadgeSVG(): string {
-  const cx = 24;
-  const cy = 6;
-  const r = 6;
+/**
+ * The badge disc, in the pin's 30×37 viewBox. Its outer edge — radius plus
+ * half the 1-unit stroke — stops inside the box (`iconLoader.test.ts`): at
+ * the first cut (centre 24,6, radius 6) the stroke ran half a unit past the
+ * top and right edges and was clipped flat on every want-to-go pin.
+ */
+export const WANT_BADGE = { cx: 23.5, cy: 6.5, r: 5.5, stroke: 1 } as const;
+
+/** The pin's viewBox, for the test that keeps the badge inside it. */
+export const PIN_VIEWBOX = { width: PIN_WIDTH, height: PIN_HEIGHT } as const;
+
+export function wantBadgeSVG(): string {
+  const { cx, cy, r, stroke } = WANT_BADGE;
   const scale = 0.38;
   const offset = 12 * scale;
   return [
-    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${tokens.bg}" stroke="${tokens.ink1}" stroke-width="1"/>`,
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${tokens.bg}" stroke="${tokens.ink1}" stroke-width="${stroke}"/>`,
     `<g transform="translate(${cx - offset}, ${cy - offset}) scale(${scale})">`,
     `<path d="${BOOKMARK_PATH}" fill="${tokens.ink1}" stroke="${tokens.ink1}" stroke-width="2" stroke-linejoin="round"/>`,
     `</g>`,
