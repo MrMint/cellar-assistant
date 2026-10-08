@@ -228,8 +228,14 @@ const FieldShell = ({
 }) => {
   const text = fieldErrorText(label, error);
   return (
-    <Field data-invalid={error !== undefined || undefined} className="gap-1.5">
-      <FieldLabel htmlFor={id} className="type-callout gap-0.5 text-ink-2">
+    // The same ink, size and gap as EnumSelect's label (the Style, Variety
+    // and Country pickers in this same form): ink-2 callout labels sat
+    // visibly dimmer than the pickers' between them.
+    <Field
+      data-invalid={error !== undefined || undefined}
+      className="gap-2 text-foreground"
+    >
+      <FieldLabel htmlFor={id} className="gap-1">
         {label}
         {required && (
           <span aria-hidden="true" data-slot="asterisk" className="text-ink-3">
