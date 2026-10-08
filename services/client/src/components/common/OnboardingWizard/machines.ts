@@ -8,11 +8,13 @@ import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
 import { searchByBarcode } from "./actors/searchByBarcode";
 import { searchByImage } from "./actors/searchByImage";
+import { searchCatalog } from "./actors/searchCatalog";
 import type {
   DefaultValuesResult,
   FetchDefaultsInput,
   InsertCellarItemInput,
   InsertCellarItemResult,
+  SearchCatalogInput,
   UploadItemImageInput,
   UploadItemImageResult,
 } from "./actors/types";
@@ -26,6 +28,15 @@ import {
   finishedHref,
   type OnboardingDefaults,
 } from "./adapter";
+import type { CatalogMatch } from "./catalog-match";
+
+/**
+ * How long `matching` waits for `itemSearch` before showing the form anyway.
+ * A text search is one embedding plus a vector query; past this the provider
+ * is struggling, and the person should not be left watching a spinner for a
+ * suggestion.
+ */
+export const CATALOG_MATCH_TIMEOUT_MS = 8000;
 
 /** `router.push` is all the machine needs of Next's router. */
 type Navigate = { push: (href: string) => void };
@@ -44,9 +55,16 @@ type Navigate = { push: (href: string) => void };
  * - **`itemOnboardingId` and `cellarItemId` are minted once**, so a retried
  *   analysis reuses the session and a retried add files one bottle.
  * - **Quick add (Q7)** is entered only through `canQuickAdd`: a label was
- *   actually photographed and read, confidence ≥ 0.9, and nothing the
- *   database requires is missing — the E2c guard. The 15 s card itself is the
- *   old one.
+ *   actually photographed and read, confidence ≥ 0.9 — the E2c guard — and
+ *   (N02) the catalogue already holds that item at that vintage and the
+ *   wizard is filing into a cellar. Its `CONFIRM` files a bottle of the
+ *   matched item; it never creates one, so the 15 s countdown cannot add a
+ *   catalogue row (D25).
+ * - **`matching` (N19)** sits between `analyze` and the form: the name read
+ *   goes to `itemSearch` and, if the catalogue already holds that item at
+ *   that vintage, the form leads with "Is it this one? +1 bottle"
+ *   (`USE_MATCH`). Items the person declined in the barcode chooser are never
+ *   offered back.
  * - **`searchingByImage` / `chooseExistingImage` are gone** from the picture
  *   machine: image search is a chosen drop (G32, e4 §6a), so a display photo
  *   goes straight to `done`.
@@ -84,6 +102,10 @@ export const OnboardingMachine = createMachine(
          */
         extractionError?: AiOutcome;
         existingItemId?: string;
+        /** Items the person said no to in the picture wizard's choosers. */
+        declinedItemIds: readonly string[];
+        /** N19: the catalogue item the label names, if there is one. */
+        catalogMatch?: CatalogMatch;
         /** The cellar_items ID after adding item to cellar (used for redirect) */
         cellarItemId?: string;
         /** Minted up front so a retried add files one bottle. */
@@ -109,11 +131,14 @@ export const OnboardingMachine = createMachine(
             backLabel?: string;
             existingItemId?: string;
             displayImageDataUrl?: string;
+            declinedItemIds?: readonly string[];
           }
         | { type: "CREATED"; itemId: string }
+        | { type: "USE_MATCH" }
+        | { type: "DISMISS_MATCH" }
         | { type: "ADD_ANOTHER" }
         | { type: "DONE" }
-        | { type: "CONFIRM"; itemId: string }
+        | { type: "CONFIRM" }
         | { type: "EDIT" }
         | { type: "RETRY" };
       actors:
@@ -133,12 +158,17 @@ export const OnboardingMachine = createMachine(
             logic: PromiseActorLogic<DefaultValuesResult, FetchDefaultsInput>;
           }
         | {
+            src: "searchCatalog";
+            logic: PromiseActorLogic<CatalogMatch | null, SearchCatalogInput>;
+          }
+        | {
             src: "uploadItemImage";
             logic: PromiseActorLogic<
               UploadItemImageResult,
               UploadItemImageInput
             >;
           };
+      delays: "catalogMatchTimeout";
     },
     context: ({ input }) => ({
       itemOnboardingId: crypto.randomUUID(),
@@ -148,6 +178,7 @@ export const OnboardingMachine = createMachine(
       router: input.router,
       retryCount: 0,
       quickAddEnabled: true, // Enable quick add by default
+      declinedItemIds: [],
       itemType: input.itemType,
     }),
     states: {
@@ -161,7 +192,9 @@ export const OnboardingMachine = createMachine(
                 frontLabel: ({ event }) => event.frontLabel,
                 backLabel: ({ event }) => event.backLabel,
                 displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
+                declinedItemIds: ({ event }) => event.declinedItemIds ?? [],
                 defaults: undefined,
+                catalogMatch: undefined,
               }),
               target: "upload",
             },
@@ -258,69 +291,131 @@ export const OnboardingMachine = createMachine(
           onError: {
             target: "retryAnalyze",
           },
+          onDone: {
+            target: "matching",
+            actions: assign({
+              itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
+              defaults: ({ event }) => event.output.defaults,
+              confidence: ({ event }) => event.output.confidence,
+              extractionError: ({ event }) => event.output.extractionError,
+            }),
+          },
+        },
+      },
+      matching: {
+        // The lookup is a convenience, so it never holds the form hostage: a
+        // search that has not answered in time is the old path to the form.
+        // (Leaving the state stops the invoked actor; its late answer is
+        // dropped.)
+        after: {
+          catalogMatchTimeout: { target: "form" },
+        },
+        invoke: {
+          src: "searchCatalog",
+          input: ({
+            context: { urqlClient, itemType, defaults, declinedItemIds },
+          }) => ({
+            urqlClient,
+            itemType,
+            defaults: defaults ?? emptyDefaults(),
+            excludeItemIds: declinedItemIds,
+          }),
           onDone: [
             // High confidence + quick add enabled + a label was read → quickReview
             {
-              guard: ({ event, context }) =>
+              guard: ({ context, event }) =>
                 context.quickAddEnabled &&
                 canQuickAdd({
-                  type: context.itemType,
                   labelSent:
                     isNotNil(context.frontLabelFileId) ||
                     isNotNil(context.backLabelFileId),
-                  confidence: event.output.confidence,
-                  defaults: event.output.defaults,
+                  confidence: context.confidence,
+                  defaults: context.defaults,
+                  match: event.output,
+                  inCellar: isNotNil(context.cellarId),
                 }),
               target: "quickReview",
               actions: assign({
-                itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
-                defaults: ({ event }) => event.output.defaults,
-                confidence: ({ event }) => event.output.confidence,
-                extractionError: ({ event }) => event.output.extractionError,
+                catalogMatch: ({ event }) => event.output ?? undefined,
               }),
             },
-            // Default → form (existing behavior)
+            // Default → form, led by the match when there is one
             {
               target: "form",
               actions: assign({
-                itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
-                defaults: ({ event }) => event.output.defaults,
-                confidence: ({ event }) => event.output.confidence,
-                extractionError: ({ event }) => event.output.extractionError,
+                catalogMatch: ({ event }) => event.output ?? undefined,
               }),
             },
           ],
+          // The lookup is a convenience: failing it is the old path.
+          onError: { target: "form" },
         },
       },
       quickReview: {
-        // Note: Auto-confirm is handled by the QuickAddCard component
-        // which creates the item and sends CONFIRM with itemId
+        // The QuickAddCard counts down and sends CONFIRM. Only ever a bottle
+        // of the matched catalogue item (N02): nothing here creates an item.
         on: {
-          CONFIRM: [
-            {
-              guard: ({ context }) => isNotNil(context.cellarId),
-              actions: assign({
-                existingItemId: ({ event }) => event.itemId,
-              }),
-              target: "addItemToCellar",
-            },
-            {
-              actions: assign({
-                existingItemId: ({ event }) => event.itemId,
-              }),
-              target: "uploadImage",
-            },
-          ],
+          CONFIRM: {
+            guard: ({ context }) =>
+              isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
+            actions: assign({
+              existingItemId: ({ context }) =>
+                context.catalogMatch?.item.itemId,
+            }),
+            target: "addItemToCellar",
+          },
+          // "Not this one": the form, without the match and without offering
+          // it again.
           EDIT: {
             target: "form",
             actions: assign({
-              quickAddEnabled: () => false, // Disable quick add if user chooses to edit
+              quickAddEnabled: () => false,
+              catalogMatch: undefined,
+              declinedItemIds: ({ context }) =>
+                isNil(context.catalogMatch)
+                  ? context.declinedItemIds
+                  : [
+                      ...context.declinedItemIds,
+                      context.catalogMatch.item.itemId,
+                    ],
             }),
           },
         },
       },
       form: {
         on: {
+          // N19: "Is it this one? +1 bottle" — the person tapped it.
+          USE_MATCH: [
+            {
+              guard: ({ context }) =>
+                isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
+              actions: assign({
+                existingItemId: ({ context }) =>
+                  context.catalogMatch?.item.itemId,
+              }),
+              target: "addItemToCellar",
+            },
+            {
+              guard: ({ context }) => isNotNil(context.catalogMatch),
+              actions: assign({
+                existingItemId: ({ context }) =>
+                  context.catalogMatch?.item.itemId,
+              }),
+              target: "uploadImage",
+            },
+          ],
+          DISMISS_MATCH: {
+            actions: assign({
+              catalogMatch: undefined,
+              declinedItemIds: ({ context }) =>
+                isNil(context.catalogMatch)
+                  ? context.declinedItemIds
+                  : [
+                      ...context.declinedItemIds,
+                      context.catalogMatch.item.itemId,
+                    ],
+            }),
+          },
           CREATED: [
             {
               guard: ({ context }) => isNotNil(context.cellarId),
@@ -439,9 +534,13 @@ export const OnboardingMachine = createMachine(
     },
   },
   {
+    delays: {
+      catalogMatchTimeout: CATALOG_MATCH_TIMEOUT_MS,
+    },
     actors: {
       uploadFiles,
       fetchDefaults,
+      searchCatalog,
       insertCellarItem,
       uploadItemImage,
     },
@@ -461,6 +560,8 @@ export const pictureOnboardingMachine = createMachine(
         displayImageDataUrl?: string;
         existingItems?: ExistingItem[];
         existingItemId?: string;
+        /** Matches the person passed over with "Create New" — never re-offered. */
+        declinedItemIds: string[];
         urqlClient: Client;
         itemType?: ApiItemType;
       };
@@ -481,6 +582,7 @@ export const pictureOnboardingMachine = createMachine(
     context: ({ input }) => ({
       urqlClient: input.urqlClient,
       itemType: input.itemType,
+      declinedItemIds: [],
     }),
     states: {
       barcode: {
@@ -526,7 +628,15 @@ export const pictureOnboardingMachine = createMachine(
             }),
             target: "display",
           },
-          SKIP: "back",
+          SKIP: {
+            target: "back",
+            actions: assign({
+              declinedItemIds: ({ context }) => [
+                ...context.declinedItemIds,
+                ...(context.existingItems ?? []).map((x) => x.item.itemId),
+              ],
+            }),
+          },
         },
       },
       clearing: {
@@ -619,7 +729,15 @@ export const pictureOnboardingMachine = createMachine(
             }),
             target: "done",
           },
-          SKIP: "done",
+          SKIP: {
+            target: "done",
+            actions: assign({
+              declinedItemIds: ({ context }) => [
+                ...context.declinedItemIds,
+                ...(context.existingItems ?? []).map((x) => x.item.itemId),
+              ],
+            }),
+          },
         },
       },
       done: {

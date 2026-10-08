@@ -499,7 +499,10 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
                 button.
               </Typography>
               <Box sx={{ height: "400px" }}>
-                <CameraCapture onCapture={handleCameraCapture} />
+                <CameraCapture
+                  onCapture={handleCameraCapture}
+                  showLibrary={false}
+                />
               </Box>
             </Stack>
           </DialogContent>

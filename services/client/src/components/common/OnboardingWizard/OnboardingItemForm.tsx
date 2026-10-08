@@ -1,24 +1,30 @@
 "use client";
 
 import {
+  Alert,
   Box,
   Button,
   FormControl,
   FormLabel,
   Input,
+  List,
+  ListItem,
   Stack,
   Typography,
 } from "@mui/joy";
 import { Fragment, useState } from "react";
-import { type SubmitHandler, useForm } from "react-hook-form";
+import { type SubmitHandler, useForm, useWatch } from "react-hook-form";
 import { useClient } from "urql";
 import { BrandPicker } from "@/components/brand/BrandPicker";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { requiredSummary } from "@/components/item/form-errors";
 import type { ItemFormValues } from "@/components/item/ItemForm";
 import { ItemFormField } from "@/components/item/ItemFormField";
-import { formLayout } from "@/components/item/itemFormLayout";
+import { entryPath, formLayout } from "@/components/item/itemFormLayout";
+import { draftedPaths, isDrafted } from "@/lib/forms/ai-draft";
+import { AIDraftField } from "../AIDraftField";
 import { createOnboardedItem } from "./actors/createItem";
-import { type OnboardingDefaults, saveBlocker } from "./adapter";
+import { type OnboardingDefaults, saveBlocker, skippedNotes } from "./adapter";
 
 type OnboardingItemFormProps = {
   type: ApiItemType;
@@ -56,9 +62,15 @@ export const OnboardingItemForm = ({
   const {
     control,
     handleSubmit,
+    getValues,
     setError,
     formState: { isSubmitting, errors },
   } = useForm<ItemFormValues>({ defaultValues: defaultValues.values });
+
+  // N19: a field is marked "From label" while it still holds what was read.
+  const current = useWatch({ control });
+  const drafted = draftedPaths(defaultValues.values, current);
+  const notFilled = skippedNotes(type, defaultValues.skipped);
 
   const onSubmit: SubmitHandler<ItemFormValues> = async (values) => {
     const blocker = saveBlocker(type, values);
@@ -88,30 +100,71 @@ export const OnboardingItemForm = ({
     }
   };
 
+  // N03: validation stopped the submit — say which fields, beside the button,
+  // as well as under each one. The layout's summary names every starred field
+  // still blank, which includes every column `saveBlocker` checks plus the
+  // create form's own stars (sake, tea) — so it leads, and `saveBlocker` only
+  // speaks when the stars are all filled (a whitespace-only value, which
+  // `required` lets through, is caught by it here and again in `onSubmit`).
+  const onInvalid = () => {
+    const values = getValues();
+    setError("root", {
+      type: "custom",
+      message:
+        requiredSummary(layout, values) ??
+        saveBlocker(type, values) ??
+        "Check the highlighted fields.",
+    });
+  };
+
   return (
     <Box
       sx={(theme) => ({
         maxWidth: theme.breakpoints.values.sm,
       })}
     >
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
         <Stack spacing={4}>
+          {notFilled.length > 0 && (
+            <Alert color="neutral" variant="soft">
+              <Stack spacing={0.5}>
+                <Typography level="title-sm">
+                  Read from the label but not filled in
+                </Typography>
+                <List size="sm" marker="disc">
+                  {notFilled.map((note) => (
+                    <ListItem key={note}>{note}</ListItem>
+                  ))}
+                </List>
+              </Stack>
+            </Alert>
+          )}
           <Stack spacing={2}>
             {layout.map((entry) => (
               <Fragment
                 key={entry.kind === "attribute" ? entry.field.key : entry.kind}
               >
-                <ItemFormField
-                  entry={entry}
-                  control={control}
-                  disabled={isSubmitting}
-                />
-                {entry.kind === "description" && (
-                  <BrandPicker
-                    value={brandName}
-                    onChange={setBrandName}
+                <AIDraftField
+                  source="label"
+                  drafted={drafted.has(entryPath(entry))}
+                >
+                  <ItemFormField
+                    entry={entry}
+                    control={control}
                     disabled={isSubmitting}
                   />
+                </AIDraftField>
+                {entry.kind === "description" && (
+                  <AIDraftField
+                    source="label"
+                    drafted={isDrafted(defaultValues.brandName, brandName)}
+                  >
+                    <BrandPicker
+                      value={brandName}
+                      onChange={setBrandName}
+                      disabled={isSubmitting}
+                    />
+                  </AIDraftField>
                 )}
               </Fragment>
             ))}
@@ -127,7 +180,9 @@ export const OnboardingItemForm = ({
             </FormControl>
           </Stack>
           {errors.root !== undefined && (
-            <Typography>{errors.root.message}</Typography>
+            <Typography color="danger" role="alert">
+              {errors.root.message}
+            </Typography>
           )}
           <Button loading={isSubmitting} type="submit">
             Add

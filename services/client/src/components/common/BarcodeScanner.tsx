@@ -7,12 +7,15 @@ import {
   CardContent,
   CardCover,
   CircularProgress,
+  Stack,
   styled,
   Typography,
 } from "@mui/joy";
 import { useCallback, useEffect, useState } from "react";
 import type { Barcode } from "@/constants";
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner";
+import { useCameraStatus } from "@/hooks/useCameraStatus";
+import { BARCODE_SCAN_CONSTRAINTS } from "@/lib/camera/camera-status";
 
 const StyledVideo = styled("video")(() => ({
   objectFit: "cover",
@@ -93,19 +96,13 @@ type BarcodeScannerProps = {
   onChange: (result: Barcode) => void;
 };
 
-// Optimized constraints for barcode scanning (moved outside component to prevent re-creation)
-const videoConstraints = {
-  video: {
-    width: { ideal: 1920, min: 640 },
-    height: { ideal: 1080, min: 480 },
-    facingMode: "environment",
-    focusMode: "continuous" as const,
-    whiteBalanceMode: "continuous" as const,
-  },
-};
+// N04: `ideal`-only constraints (`BARCODE_SCAN_CONSTRAINTS`); the old
+// `min: 640 × 480` could make getUserMedia refuse outright.
+const videoConstraints: MediaStreamConstraints = BARCODE_SCAN_CONSTRAINTS;
 
 export const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const camera = useCameraStatus();
   const [detectionSuccess, setDetectionSuccess] = useState(false);
 
   // Handle detection with visual feedback
@@ -125,6 +122,7 @@ export const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
     videoRef,
     isSupported,
     error,
+    failure,
     startScanning,
     stopScanning,
     toggleTorch,
@@ -144,15 +142,52 @@ export const BarcodeScanner = ({ onChange }: BarcodeScannerProps) => {
     }
   }, [isSupported, startScanning, stopScanning]); // Only depend on isSupported
 
+  // N04: a camera that refuses, or never answers, says so — the step's Skip
+  // button is the way on, and "Try again" asks for the stream afresh.
+  const { onError, onStream, retry } = camera;
+  useEffect(() => {
+    if (failure !== null) onError(failure);
+  }, [failure, onError]);
+
   const handleVideoLoad = () => {
     setIsVideoLoaded(true);
+    onStream();
   };
+
+  const handleRetry = () => {
+    retry();
+    stopScanning();
+    void startScanning();
+  };
+
+  const failed = camera.status.kind === "failed" ? camera.status : null;
 
   return (
     <Card sx={{ aspectRatio: "16/10", position: "relative" }}>
-      {!isVideoLoaded && (
+      {!isVideoLoaded && failed === null && (
         <CardCover>
           <CircularProgress />
+        </CardCover>
+      )}
+      {failed !== null && !isVideoLoaded && (
+        <CardCover sx={{ zIndex: 1 }}>
+          <Stack
+            spacing={1.5}
+            alignItems="center"
+            justifyContent="center"
+            sx={{ p: 3, textAlign: "center" }}
+            role="alert"
+          >
+            <Typography level="body-md">
+              {failed.reason === "timeout"
+                ? "The camera is taking too long to start."
+                : "The barcode scanner can't use the camera."}{" "}
+              Skip this step to photograph the label instead.
+            </Typography>
+            <Button variant="outlined" color="neutral" onClick={handleRetry}>
+              Try again
+            </Button>
+          </Stack>
         </CardCover>
       )}
       <CardCover>

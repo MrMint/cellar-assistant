@@ -1,6 +1,12 @@
 "use client";
 
-import { FormControl, FormLabel, Option, Select } from "@mui/joy";
+import {
+  FormControl,
+  FormHelperText,
+  FormLabel,
+  Option,
+  Select,
+} from "@mui/joy";
 import {
   type Control,
   Controller,
@@ -45,18 +51,24 @@ export function EnumSelect<
     console.error(`Failed to load enum options for ${enumKey}:`, error);
   }
 
+  // N03: the error is drawn here, under the select — a required pick that is
+  // missing says so instead of only scrolling to it.
   return (
-    <FormControl required={required}>
-      <FormLabel>{label}</FormLabel>
-      <Controller
-        name={name}
-        control={control}
-        rules={rules}
-        render={({ field }) => (
+    <Controller
+      name={name}
+      control={control}
+      rules={rules}
+      render={({
+        field: { ref, ...field },
+        fieldState: { error: invalid },
+      }) => (
+        <FormControl required={required} error={invalid !== undefined}>
+          <FormLabel>{label}</FormLabel>
           <Select
             placeholder={loading ? "Loading…" : placeholder}
             disabled={disabled || loading}
             {...field}
+            slotProps={{ button: { ref } }}
             onChange={(_, value) => {
               field.onChange(value);
             }}
@@ -67,8 +79,15 @@ export function EnumSelect<
               </Option>
             ))}
           </Select>
-        )}
-      />
-    </FormControl>
+          {invalid !== undefined && (
+            <FormHelperText>
+              {invalid.message !== undefined && invalid.message !== ""
+                ? invalid.message
+                : `${label} is required.`}
+            </FormHelperText>
+          )}
+        </FormControl>
+      )}
+    />
   );
 }

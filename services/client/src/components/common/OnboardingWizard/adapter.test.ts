@@ -9,7 +9,13 @@ import {
   formDefaultsFromOnboarding,
   quickAddDefaultsFrom,
   saveBlocker,
+  skippedNotes,
 } from "./adapter";
+import {
+  type CatalogCandidate,
+  type CatalogMatch,
+  findCatalogMatch,
+} from "./catalog-match";
 
 /** A wine as `startItemOnboarding` stores it: camelCase, bag nested. */
 const wineDefaults = {
@@ -43,7 +49,7 @@ describe("formDefaultsFromOnboarding", () => {
   test("a proposal a field cannot hold is reported, not dropped", () => {
     const { values, skipped } = formDefaultsFromOnboarding("WINE", {
       name: "X",
-      wine: { vintage: "2015", alcoholContentPercentage: "strong" },
+      wine: { vintage: "June 2015", alcoholContentPercentage: "strong" },
     });
     assert.equal(values.attributes.vintage, undefined);
     assert.deepEqual(
@@ -53,6 +59,28 @@ describe("formDefaultsFromOnboarding", () => {
         ["attributes.alcoholContentPercentage", "unusable"],
       ],
     );
+  });
+
+  test("N02: a bare year fills a date column the form edits as a year", () => {
+    const { values, skipped } = formDefaultsFromOnboarding("WINE", {
+      name: "X",
+      wine: { vintage: "2015", style: "RED" },
+    });
+    assert.equal(values.attributes.vintage, "2015");
+    assert.deepEqual(skipped, []);
+    assert.equal(
+      confirmInputFrom("WINE", values, "").attributes.vintage,
+      "2015-01-01",
+      "and goes back to the date column on save",
+    );
+  });
+
+  test("N02: a numeric year from the model is a year too", () => {
+    const { values } = formDefaultsFromOnboarding("BEER", {
+      name: "X",
+      beer: { vintage: 2019 },
+    });
+    assert.equal(values.attributes.vintage, "2019");
   });
 
   test("a static picker only takes its own options", () => {
@@ -71,6 +99,18 @@ describe("formDefaultsFromOnboarding", () => {
       formDefaultsFromOnboarding("BEER", "nonsense"),
       emptyDefaults(),
     );
+  });
+});
+
+describe("skippedNotes (N19: the merge's skipped proposals, shown)", () => {
+  test("what the label said, and why it is not in the field", () => {
+    const { skipped } = formDefaultsFromOnboarding("WINE", {
+      name: "X",
+      wine: { alcoholContentPercentage: "strong" },
+    });
+    assert.deepEqual(skippedNotes("WINE", skipped), [
+      "Alcohol Content: “strong” (the field is a number)",
+    ]);
   });
 });
 
@@ -114,6 +154,11 @@ describe("saveBlocker", () => {
       saveBlocker("SAKE", emptyDefaults().values),
       "Name cannot be empty.",
     );
+    // N03: every missing column at once, never one at a time.
+    assert.equal(
+      saveBlocker("WINE", emptyDefaults().values),
+      "Name, Vintage, Style cannot be empty.",
+    );
     assert.equal(
       saveBlocker("SAKE", { ...emptyDefaults().values, name: "Dassai" }),
       null,
@@ -123,49 +168,95 @@ describe("saveBlocker", () => {
 
 describe("canQuickAdd (Q7, the E2c guard)", () => {
   const defaults = formDefaultsFromOnboarding("WINE", wineDefaults);
+  const match: CatalogMatch = {
+    item: { id: "m", itemId: "m", name: "Château Margaux", vintage: "2015" },
+    type: "WINE",
+    source: "search",
+    distance: 0.1,
+    exact: true,
+  };
+  const ok = {
+    labelSent: true,
+    confidence: 0.95,
+    defaults,
+    match,
+    inCellar: true,
+  };
 
   test("the old rule — confidence ≥ 0.9 — with a label actually read", () => {
-    assert.equal(
-      canQuickAdd({
-        type: "WINE",
-        labelSent: true,
-        confidence: 0.95,
-        defaults,
-      }),
-      true,
-    );
-    assert.equal(
-      canQuickAdd({
-        type: "WINE",
-        labelSent: true,
-        confidence: 0.89,
-        defaults,
-      }),
-      false,
-    );
+    assert.equal(canQuickAdd(ok), true);
+    assert.equal(canQuickAdd({ ...ok, confidence: 0.89 }), false);
   });
 
   test("never without a photographed label, whatever the confidence", () => {
     assert.equal(
-      canQuickAdd({ type: "WINE", labelSent: false, confidence: 1, defaults }),
+      canQuickAdd({ ...ok, labelSent: false, confidence: 1 }),
       false,
     );
   });
 
-  test("never when an unattended save would die in the outbox", () => {
-    const noStyle = formDefaultsFromOnboarding("WINE", {
-      ...wineDefaults,
-      wine: { vintage: "2015-01-01" },
-    });
+  // N02: the countdown can only add another bottle of a known item, so it can
+  // never create a catalogue row (D25).
+  test("N02: never without a catalogue match, however complete the read", () => {
     assert.equal(
-      canQuickAdd({
-        type: "WINE",
-        labelSent: true,
-        confidence: 1,
-        defaults: noStyle,
-      }),
+      canQuickAdd({ ...ok, confidence: 1, match: null }),
+      false,
+      "a label naming nothing the catalogue holds goes to the form",
+    );
+    assert.equal(canQuickAdd({ ...ok, match: undefined }), false);
+  });
+
+  test("N02: a near neighbour is offered with a tap, never counted down", () => {
+    assert.equal(
+      canQuickAdd({ ...ok, match: { ...match, exact: false } }),
       false,
     );
+  });
+
+  test("N02: a barcode hit or a same-name hit (equal vintage) qualifies", () => {
+    const read = formDefaultsFromOnboarding("WINE", {
+      ...wineDefaults,
+      wine: { vintage: "2015" },
+    });
+    const sameName = findCatalogMatch({
+      type: "WINE",
+      values: read.values,
+      brandName: read.brandName,
+      candidates: [{ ...match, exact: undefined } as CatalogCandidate],
+    });
+    assert.equal(canQuickAdd({ ...ok, defaults: read, match: sameName }), true);
+    const barcode = findCatalogMatch({
+      type: "WINE",
+      values: read.values,
+      brandName: read.brandName,
+      candidates: [
+        {
+          item: { id: "b", itemId: "b", name: "GV Margaux", vintage: "2015" },
+          type: "WINE",
+          source: "barcode",
+        },
+      ],
+    });
+    assert.equal(canQuickAdd({ ...ok, defaults: read, match: barcode }), true);
+  });
+
+  test("N02: the same item at another vintage is no match, so no countdown", () => {
+    const read = formDefaultsFromOnboarding("WINE", {
+      ...wineDefaults,
+      wine: { vintage: "2016" },
+    });
+    const found = findCatalogMatch({
+      type: "WINE",
+      values: read.values,
+      brandName: read.brandName,
+      candidates: [{ ...match, source: "search" }],
+    });
+    assert.equal(found, null);
+    assert.equal(canQuickAdd({ ...ok, defaults: read, match: found }), false);
+  });
+
+  test("N02: only into a cellar — another bottle means nothing elsewhere", () => {
+    assert.equal(canQuickAdd({ ...ok, inCellar: false }), false);
   });
 });
 

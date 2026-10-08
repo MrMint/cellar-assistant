@@ -115,9 +115,11 @@ export const CONSTRAINED_ITEM_ATTRIBUTES: Readonly<
  * `wines.vintage` is `date NOT NULL` — which is why E2c's save error names it.
  * JSON Schema's `format` is a description, not a grammar: Ollama constrains
  * decoding to `type`/`enum` and nothing else, so a model told "YYYY-MM-DD"
- * still answers `"2005"`, measured. The schema says the format anyway, and the
- * *form* is what refuses to silently accept a value its `date` input cannot
- * hold — see `src/lib/items/extraction-merge.ts`.
+ * still answered `"2005"`, measured. Since N02 the schema asks for exactly
+ * that — a four-digit year (`VINTAGE_YEAR` in `prompts.ts`) — because the
+ * onboarding form edits these columns as a year and writes `YYYY-01-01`
+ * itself; anything that is not a year is still reported by the form's merge
+ * (`services/client/src/lib/items/extraction-merge.ts`), never guessed at.
  */
 export const DATE_ITEM_ATTRIBUTES: Readonly<
   Record<ItemType, readonly string[]>

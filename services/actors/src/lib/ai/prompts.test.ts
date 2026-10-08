@@ -100,3 +100,22 @@ describe("AI response schemas", () => {
     expect(country?.description).toContain("COUNTRY_196");
   });
 });
+
+/**
+ * N02: a vintage is asked for as a year. The form edits it as one and writes
+ * `YYYY-01-01` itself; asking the model for a month and a day the label never
+ * prints only invited it to invent them.
+ */
+describe("itemDefaultsSchema date attributes", () => {
+  for (const type of ["WINE", "BEER", "SPIRIT"] as const) {
+    it(`${type}'s vintage asks for a four-digit year`, () => {
+      const schema = prompts.itemDefaultsSchema(type, LARGE_VOCABULARY);
+      const bag = Object.values(schema.properties ?? {}).find(
+        (child) => child.properties?.vintage !== undefined,
+      );
+      const description = bag?.properties?.vintage?.description ?? "";
+      expect(description).toContain(prompts.VINTAGE_YEAR);
+      expect(description).not.toContain("YYYY-MM-DD");
+    });
+  }
+});

@@ -60,6 +60,15 @@ export type FetchDefaultsInput = {
   backLabelFileId?: string;
 };
 
+/** N19: the read label, looked up in the catalogue. */
+export type SearchCatalogInput = {
+  urqlClient: Client;
+  itemType: ApiItemType;
+  defaults: OnboardingDefaults;
+  /** Items the person already declined (the barcode chooser's "Create New"). */
+  excludeItemIds: readonly string[];
+};
+
 export interface DefaultValuesResult {
   defaults: OnboardingDefaults;
   itemOnboardingId: string;

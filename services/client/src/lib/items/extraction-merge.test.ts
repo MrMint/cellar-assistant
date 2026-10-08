@@ -264,6 +264,39 @@ describe("mergeExtractedDefaults · a value the picker cannot offer", () => {
   });
 });
 
+describe("coerce (N02: a field judged in its own terms)", () => {
+  const asYear = (value: string) =>
+    mergeExtractedDefaults({
+      defaults: { wine: { vintage: value, region: "Margaux" } },
+      bagKey: "wine",
+      fields: WINE_FIELDS.map((f) =>
+        f.kind === "date" ? { ...f, kind: "year" as const } : f,
+      ),
+      current: empty,
+      edited: new Set(),
+      coerce: (field, v) =>
+        field.kind === "year" && /^\d{4}-\d{2}-\d{2}$/.test(v)
+          ? v.slice(0, 4)
+          : v,
+    });
+
+  test("a full date and a bare year both land as the year", () => {
+    assert.equal(asYear("2015-06-01").values.attributes.vintage, "2015");
+    assert.equal(asYear("2015").values.attributes.vintage, "2015");
+  });
+
+  test("what still is not a year is reported, not guessed", () => {
+    const result = asYear("NV");
+    assert.equal(result.values.attributes.vintage, undefined);
+    assert.equal(result.skipped[0]?.reason, "unusable");
+    assert.equal(result.skipped[0]?.value, "NV");
+  });
+
+  test("coerce does not touch a field it returns unchanged", () => {
+    assert.equal(asYear("2015").values.attributes.region, "Margaux");
+  });
+});
+
 describe("editedPaths", () => {
   test("names the top-level field that changed", () => {
     assert.deepEqual(editedPaths(empty, { ...empty, country: "ITALY" }), [

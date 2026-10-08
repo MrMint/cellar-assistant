@@ -79,7 +79,7 @@ export const subtitleDescriptor = (
  * The new connection has no order argument, so the primary is chosen here
  * from whatever page the caller selected, falling back to the first.
  */
-const primaryBrandName = (item: ItemCardSource): string | undefined => {
+export const primaryBrandName = (item: ItemCardSource): string | undefined => {
   const nodes = item.brands?.edges.map((edge) => edge.node) ?? [];
   const chosen = nodes.find((node) => node.isPrimary === true) ?? nodes[0];
   return chosen?.brand?.name ?? undefined;

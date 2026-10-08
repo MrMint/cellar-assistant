@@ -718,3 +718,38 @@ export function googlePrefillFields(
       : {}),
   };
 }
+
+/** The address fields the dropped pin's reverse geocode can fill. */
+export type PinAddressField =
+  | "street_address"
+  | "locality"
+  | "region"
+  | "postcode"
+  | "country_code";
+
+/**
+ * What the pin's reverse geocode drafts into the create-place form — only the
+ * parts it actually returned, the country upper-cased the way the field holds
+ * it. `CreatePlaceForm` writes these and keeps them as the draft its
+ * `AIDraftField source="pin"` marks are diffed against (N19), so "From pin"
+ * shows on exactly the fields that still hold the pin's value — not, as the
+ * old section chip did, whenever the lookup merely finished.
+ */
+export function pinAddressDraft(
+  geocode: Partial<Record<PinAddressField, string | null>> | null,
+): Partial<Record<PinAddressField, string>> {
+  if (geocode === null) return {};
+  const draft: Partial<Record<PinAddressField, string>> = {};
+  for (const key of [
+    "street_address",
+    "locality",
+    "region",
+    "postcode",
+    "country_code",
+  ] as const) {
+    const value = geocode[key]?.trim();
+    if (value === undefined || value === "") continue;
+    draft[key] = key === "country_code" ? value.toUpperCase() : value;
+  }
+  return draft;
+}

@@ -13,8 +13,8 @@ import {
 import { AiStatus } from "../AiStatus";
 import { AnimationShowcase } from "../AnimationShowcase";
 import { QuickAddCard } from "../QuickAddCard";
-import { createOnboardedItem } from "./actors/createItem";
 import { emptyDefaults, quickAddDefaultsFrom } from "./adapter";
+import { CatalogMatchPrompt } from "./CatalogMatchPrompt";
 import { FinalPrompt } from "./FinalPrompt";
 import { type OnboardingResult, OnboardingWizard } from "./index";
 import { OnboardingMachine } from "./machines";
@@ -56,6 +56,7 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
       frontLabelDataUrl,
       backLabelDataUrl,
       displayImageDataUrl,
+      declinedItemIds,
     }: OnboardingResult) => {
       send({
         type: "COMPLETE",
@@ -64,6 +65,7 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
         backLabel: backLabelDataUrl,
         existingItemId,
         displayImageDataUrl,
+        declinedItemIds,
       });
     },
     [send],
@@ -73,30 +75,15 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
   // so it is shown and sent as printed.
   const { barcode: scanned } = state.context;
 
-  // Handle quick add confirmation - creates the item and returns the ID
+  // Quick add files another bottle of the matched catalogue item (N02). It
+  // creates nothing: the machine only reaches quickReview with a match.
+  const { catalogMatch } = state.context;
   const handleQuickAddConfirm = useCallback(async (): Promise<
     string | undefined
   > => {
-    const defaults = state.context.defaults ?? emptyDefaults();
-    const itemId = await createOnboardedItem({
-      urqlClient,
-      type,
-      onboardingId: state.context.itemOnboardingId,
-      values: defaults.values,
-      brandName: defaults.brandName,
-      barcode: scanned?.text ?? "",
-      sessionBarcode: scanned?.text,
-    });
-    send({ type: "CONFIRM", itemId });
-    return itemId;
-  }, [
-    state.context.defaults,
-    state.context.itemOnboardingId,
-    scanned,
-    urqlClient,
-    type,
-    send,
-  ]);
+    send({ type: "CONFIRM" });
+    return catalogMatch?.item.itemId;
+  }, [catalogMatch, send]);
 
   const handleQuickAddEdit = useCallback(() => {
     send({ type: "EDIT" });
@@ -119,13 +106,20 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
         )}
         {(state.value === "addItemToCellar" ||
           state.value === "uploadImage" ||
-          includes(state.value, ["analyze", "retryAnalyze", "upload"])) && (
+          includes(state.value, [
+            "analyze",
+            "retryAnalyze",
+            "upload",
+            "matching",
+          ])) && (
           <Grid xs={12}>
             <AnimationShowcase
               statusText={
-                includes(state.value, ["analyze", "retryAnalyze", "upload"])
-                  ? "Analyzing..."
-                  : "Adding your item..."
+                state.value === "matching"
+                  ? "Looking for it in the catalog..."
+                  : includes(state.value, ["analyze", "retryAnalyze", "upload"])
+                    ? "Analyzing..."
+                    : "Adding your item..."
               }
             />
           </Grid>
@@ -160,15 +154,23 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
             </Stack>
           </Grid>
         )}
-        {state.value === "quickReview" && (
+        {state.value === "quickReview" && isNotNil(catalogMatch) && (
           <Grid xs={12} sm={6}>
             <QuickAddCard
-              defaults={quickAddDefaultsFrom(
-                type,
-                state.context.defaults ?? emptyDefaults(),
-              )}
+              heading="Is it this one?"
+              defaults={{
+                ...quickAddDefaultsFrom(
+                  type,
+                  state.context.defaults ?? emptyDefaults(),
+                ),
+                // The card names the item it will file, not the read.
+                name: catalogMatch.item.name,
+                vintage: catalogMatch.item.vintage,
+              }}
               itemType={type}
               confidence={state.context.confidence ?? 0}
+              confirmLabel="+1 bottle"
+              editLabel="Not this one"
               onConfirm={handleQuickAddConfirm}
               onEdit={handleQuickAddEdit}
             />
@@ -181,6 +183,14 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
                 <Alert color="warning" variant="soft">
                   {state.context.error}
                 </Alert>
+              )}
+              {isNotNil(state.context.catalogMatch) && (
+                <CatalogMatchPrompt
+                  match={state.context.catalogMatch}
+                  inCellar={isNotNil(cellarId)}
+                  onUse={() => send({ type: "USE_MATCH" })}
+                  onDismiss={() => send({ type: "DISMISS_MATCH" })}
+                />
               )}
               {labelSent && isNotNil(state.context.extractionError) && (
                 <AiStatus outcome={state.context.extractionError} />
