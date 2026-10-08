@@ -182,6 +182,9 @@ export const QuickAddCard = ({
       className="mx-auto w-full max-w-[400px] gap-4 border-0 bg-surface-1 p-4 shadow-none"
       onMouseEnter={handlePause}
       onTouchStart={handlePause}
+      // A keyboard reaching either button pauses it too, so the countdown
+      // never files the item under someone still deciding (WCAG 2.2.1).
+      onFocus={handlePause}
     >
       {heading !== undefined && (
         <p className="type-callout font-semibold text-ink-2">{heading}</p>
@@ -228,6 +231,11 @@ export const QuickAddCard = ({
         <div>
           <Progress
             value={progress}
+            // `ui/progress` draws `value` but does not hand it to Radix's
+            // root, which would leave the bar indeterminate to a screen
+            // reader; Joy's determinate bar announced it.
+            aria-valuenow={Math.round(progress)}
+            aria-valuetext={`${countdown} seconds`}
             aria-label="Time until it is added"
             className="h-1"
           />
