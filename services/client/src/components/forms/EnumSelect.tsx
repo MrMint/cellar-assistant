@@ -58,7 +58,10 @@ export function EnumSelect<
       name={name}
       control={control}
       rules={rules}
-      render={({ field: { ref, ...field }, fieldState: { error: invalid } }) => (
+      render={({
+        field: { ref, ...field },
+        fieldState: { error: invalid },
+      }) => (
         <FormControl required={required} error={invalid !== undefined}>
           <FormLabel>{label}</FormLabel>
           <Select
