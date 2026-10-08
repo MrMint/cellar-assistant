@@ -21,6 +21,10 @@ export const BAND_LABELS: Record<number, string> = {
  * Each band's token as a CSS colour, for what takes a colour value rather
  * than a class: a chart's SVG `fill`, an inline swatch. MapLibre paint cannot
  * read a variable; it reads `bandColor` from `lib/tokens.ts` instead.
+ *
+ * Unrated is a mark here, not a surface: `surface-3` on a `surface-1`
+ * section is about 1.2:1, so its bar all but vanished from the histogram.
+ * Half-strength ink-3 stays the quietest bar and still reads as one.
  */
 export const BAND_COLORS: Record<number, string> = {
   5: "var(--ca-band-5)",
@@ -28,7 +32,7 @@ export const BAND_COLORS: Record<number, string> = {
   3: "var(--ca-band-3)",
   2: "var(--ca-band-2)",
   1: "var(--ca-band-1)",
-  0: "var(--ca-surface-3)",
+  0: "color-mix(in oklab, var(--ca-ink-3) 50%, transparent)",
 };
 
 /**
