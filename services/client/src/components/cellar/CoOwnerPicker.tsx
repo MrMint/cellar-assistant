@@ -97,7 +97,7 @@ export function CoOwnerPicker({
           aria-haspopup="listbox"
           disabled={disabled}
           data-slot="co-owner-picker"
-          className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-left text-base shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 md:text-sm dark:bg-input/30"
+          className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-sm border border-input bg-transparent px-3 py-1.5 text-left text-base shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 md:text-sm dark:bg-input/30"
         >
           {chosen.length === 0 ? (
             <span className="min-w-0 flex-1 truncate text-ink-3">
