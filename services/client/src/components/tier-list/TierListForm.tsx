@@ -120,8 +120,8 @@ export function TierListForm({
   return (
     <div className="max-w-[600px]">
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-        <Field>
-          <FieldLabel htmlFor={`${fieldId}-name`}>
+        <Field className="gap-2 text-foreground">
+          <FieldLabel htmlFor={`${fieldId}-name`} className="gap-1">
             Name
             <RequiredMark />
           </FieldLabel>
@@ -143,8 +143,8 @@ export function TierListForm({
           />
         </Field>
 
-        <Field>
-          <FieldLabel htmlFor={`${fieldId}-description`}>
+        <Field className="gap-2 text-foreground">
+          <FieldLabel htmlFor={`${fieldId}-description`} className="gap-1">
             Description
           </FieldLabel>
           <Controller
@@ -172,8 +172,8 @@ export function TierListForm({
         />
 
         {!isEditing && (
-          <Field>
-            <FieldLabel htmlFor={`${fieldId}-list-type`}>
+          <Field className="gap-2 text-foreground">
+            <FieldLabel htmlFor={`${fieldId}-list-type`} className="gap-1">
               List Type
               <RequiredMark />
             </FieldLabel>
@@ -195,7 +195,7 @@ export function TierListForm({
                     ref={ref}
                     id={`${fieldId}-list-type`}
                     onBlur={onBlur}
-                    className="w-full"
+                    className="w-full text-base md:text-sm"
                   >
                     <SelectValue />
                   </SelectTrigger>
@@ -227,10 +227,13 @@ export function TierListForm({
   );
 }
 
-/** Joy's required asterisk, kept: the label says the field is required. */
+/**
+ * The required asterisk, ink-3 as EnumSelect's (Privacy, beside these) and
+ * ItemFormField's are: a red star on an untouched form reads as an error.
+ */
 function RequiredMark() {
   return (
-    <span aria-hidden className="text-destructive">
+    <span aria-hidden data-slot="label-asterisk" className="text-ink-3">
       *
     </span>
   );
