@@ -7,6 +7,10 @@
  * and Visited as a solid green one; design §3.1 bans both, so "on" is a
  * filled glyph on the secondary surface (a claret heart, a success check)
  * and the label still says which state it is in.
+ *
+ * D27 renamed the heart: it is Love ("Loved"), no longer Save — Save is now
+ * the Want to try bookmark (`want-to-try/WantToTryButton`, X08), which these
+ * pages draw beside it.
  */
 
 import type React from "react";
@@ -82,8 +86,8 @@ type ToggleProps = {
   className?: string;
 };
 
-/** "Save" / "Saved" with the heart. */
-export function SaveToggleButton({
+/** "Love" / "Loved" with the heart (D27; the data model keeps `isFavorite`). */
+export function LoveToggleButton({
   on,
   pending,
   onClick,
@@ -106,7 +110,7 @@ export function SaveToggleButton({
           className={on ? "fill-brand text-brand" : undefined}
         />
       )}
-      {on ? "Saved" : "Save"}
+      {on ? "Loved" : "Love"}
     </Button>
   );
 }

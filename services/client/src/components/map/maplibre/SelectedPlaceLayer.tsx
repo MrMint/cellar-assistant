@@ -8,9 +8,12 @@ import { Layer, Source } from "react-map-gl/maplibre";
 import type { PlaceResult } from "../types";
 import { LAYER_IDS, SOURCE_IDS } from "./constants";
 import { categoryToIcon, getDominantItemType } from "./utils/geoJsonTransform";
+import { pinImageName as pinName } from "./utils/iconLoader";
 
 interface SelectedPlaceLayerProps {
   selectedPlace: PlaceResult | null;
+  /** X08: the selected pin keeps its want-to-go badge. */
+  wantToGo?: ReadonlySet<string>;
   isDarkMode?: boolean;
 }
 
@@ -21,6 +24,7 @@ const EMPTY_GEOJSON: GeoJSON.FeatureCollection = {
 
 export function SelectedPlaceLayer({
   selectedPlace,
+  wantToGo,
   isDarkMode,
 }: SelectedPlaceLayerProps) {
   const geoJson = useMemo(() => {
@@ -29,7 +33,11 @@ export function SelectedPlaceLayer({
     const dominant = getDominantItemType(selectedPlace.itemTypeScores);
     const colorKey = dominant ?? "default";
     const iconName = categoryToIcon(selectedPlace.primary_category);
-    const pinImageName = `pin-${colorKey}-${iconName}`;
+    const pinImageName = pinName(
+      colorKey,
+      iconName,
+      wantToGo?.has(selectedPlace.id) ?? false,
+    );
 
     return {
       type: "FeatureCollection" as const,
@@ -48,7 +56,7 @@ export function SelectedPlaceLayer({
         },
       ],
     };
-  }, [selectedPlace]);
+  }, [selectedPlace, wantToGo]);
 
   const pinLayer: SymbolLayerSpecification = useMemo(
     () => ({

@@ -18,6 +18,8 @@ import {
 interface POISymbolLayerProps {
   items: MapDataItem[];
   filters?: MapFilters;
+  /** X08: the viewer's want-to-go place ids — those pins wear the badge. */
+  wantToGo?: ReadonlySet<string>;
   isDarkMode?: boolean;
   currentZoom?: number;
 }
@@ -561,12 +563,13 @@ const clusterLabelsLayer: SymbolLayerSpecification = {
 export function POISymbolLayer({
   items,
   filters,
+  wantToGo,
   isDarkMode,
   currentZoom,
 }: POISymbolLayerProps) {
   const allGeoJson = useMemo(
-    () => transformToGeoJSON(items, filters),
-    [items, filters],
+    () => transformToGeoJSON(items, filters, wantToGo),
+    [items, filters, wantToGo],
   );
 
   const { poiFeatures, clusterFeatures } = useMemo(() => {

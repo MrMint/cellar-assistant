@@ -312,7 +312,9 @@ describe("drawer content (restored)", () => {
     assert.match(html, /4\.4/);
     assert.match(html, /1 Main, Madison/);
     assert.match(html, /Directions/);
-    assert.match(html, /Saved/);
+    // D27: the heart is Love ("Loved"); Save is the Want to try bookmark.
+    assert.match(html, /Loved/);
+    assert.match(html, /Want to try/);
     assert.match(html, /Menu Items/);
     assert.match(html, /Kubota Junmai/);
     assert.doesNotMatch(html, /Load more/);

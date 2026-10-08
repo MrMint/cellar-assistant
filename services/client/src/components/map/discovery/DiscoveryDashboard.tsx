@@ -12,6 +12,7 @@ import {
   Place,
   Restaurant,
   Visible,
+  WantToTry,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { ITEM_TYPES_IN_ORDER, TypeGlyph } from "@/components/app/TypeChip";
@@ -45,8 +46,8 @@ import {
  *   scans (the old query reached other users' scans through any place the
  *   viewer had touched: a disclosure leak), with the line and place (G20);
  *   Accept / Reject → `actOnMenuScanSuggestion`.
- * - Saved Places: `myPlaceInteractions` filtered to favourite-or-visited, as
- *   the old `_or` did, with each place (G16) and its menu-line count. The
+ * - Saved Places: `myPlaceInteractions` filtered to loved, want-to-try
+ *   (X08 — the old `_or` predates it) or visited, with each place (G16) and its menu-line count. The
  *   API pages it at 100, so "Load more" walks the rest (the old read was
  *   unbounded); the tab's count is of the saved places loaded so far.
  * - Recent Additions is **not restored**: it read `cellar_items` by
@@ -73,6 +74,7 @@ interface SavedPlaceInteraction {
   id: string;
   is_favorite?: boolean;
   is_visited?: boolean;
+  want_to_visit?: boolean;
   last_visited_at?: string;
   visit_count?: number;
   place: {
@@ -110,11 +112,14 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
         unwrapResult(answer?.myPlaceInteractions, "PlaceInteractionConnection"),
         (edge): SavedPlaceInteraction | null => {
           const node = edge.node;
-          if (!node.isFavorite && !node.isVisited) return null;
+          if (!node.isFavorite && !node.isVisited && !node.wantToVisit) {
+            return null;
+          }
           return {
             id: node.id,
             is_favorite: node.isFavorite,
             is_visited: node.isVisited,
+            want_to_visit: node.wantToVisit,
             last_visited_at: node.lastVisitedAt ?? undefined,
             visit_count: node.visitCount,
             place: {
@@ -361,7 +366,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                 <EmptyState
                   illustration={<Love />}
                   title="No saved places"
-                  description="Places you favorite or visit will appear here."
+                  description="Places you love, want to try or visit will appear here."
                 />
               </div>
             ) : (
@@ -383,9 +388,17 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                           {interaction.is_favorite && (
                             <Love
                               role="img"
-                              aria-label="Favorite"
+                              aria-label="Loved"
                               strokeWidth={ICON_STROKE}
                               className="size-4 shrink-0 fill-brand text-brand"
+                            />
+                          )}
+                          {interaction.want_to_visit && (
+                            <WantToTry
+                              role="img"
+                              aria-label="Want to try"
+                              strokeWidth={ICON_STROKE}
+                              className="size-4 shrink-0 fill-current text-ink-1"
                             />
                           )}
                         </div>

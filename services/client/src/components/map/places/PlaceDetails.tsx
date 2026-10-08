@@ -49,6 +49,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { announceWantToTry } from "@/components/want-to-try/changes";
+import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
 import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
 import { cn } from "@/lib/utils";
 import { AddToTierListModal } from "../../tier-list/AddToTierListModal";
@@ -56,8 +58,8 @@ import { usePlaceDetails } from "../hooks/usePlaceDetails";
 import { MenuScanner } from "../scanning/MenuScanner";
 import { GoogleAttribution } from "./GoogleAttribution";
 import {
+  LoveToggleButton,
   PlaceCategoryTile,
-  SaveToggleButton,
   VisitedToggleButton,
 } from "./PlaceActionButtons";
 import { PlaceMenuItems } from "./PlaceMenuItems";
@@ -65,6 +67,8 @@ import {
   formatCategoryName,
   formatTimeString,
   getPriceLevelText,
+  loveToastText,
+  visitToastText,
 } from "./place-utils";
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -322,14 +326,14 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
         isFavorite: !userInteraction?.is_favorite,
       });
       if (error) {
-        notify("Failed to update favorite", { tone: "error" });
+        notify("Couldn't update Love. Try again.", { tone: "error" });
       } else {
-        notify(userInteraction?.is_favorite ? "Removed from saved" : "Saved", {
+        notify(loveToastText(!userInteraction?.is_favorite), {
           tone: "success",
         });
       }
     } catch {
-      notify("Failed to update favorite", { tone: "error" });
+      notify("Couldn't update Love. Try again.", { tone: "error" });
     } finally {
       setIsTogglingFavorite(false);
     }
@@ -339,13 +343,20 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     if (!placeData) return;
     setIsMarkingVisited(true);
     const willBeVisited = !userInteraction?.is_visited;
+    const wasWantToTry = userInteraction?.want_to_visit === true;
     try {
       const error = await setInteraction({ isVisited: willBeVisited });
       if (error) {
         notify("Failed to update visited status", { tone: "error" });
       } else {
-        notify(willBeVisited ? "Marked as visited" : "Unmarked", {
+        const toast = visitToastText(willBeVisited, wasWantToTry);
+        // The server took it off Want to try; tell the map's pins too.
+        if (willBeVisited && wasWantToTry && placeData.id) {
+          announceWantToTry({ kind: "PLACE", placeId: placeData.id }, false);
+        }
+        notify(toast.message, {
           tone: "success",
+          description: toast.description,
         });
       }
     } catch {
@@ -581,11 +592,15 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
           </Button>
         </div>
 
+        {/* D27's order: Save (Want to try) and Log (visited) first, then
+            Love. The bookmark follows the server's state, so the refetch
+            after Mark visited (which takes it off the list) empties it. */}
         <div className="flex flex-row gap-2">
-          <SaveToggleButton
-            on={!!userInteraction?.is_favorite}
-            pending={isTogglingFavorite}
-            onClick={() => void handleToggleFavorite()}
+          <WantToTryButton
+            variant="button"
+            target={{ kind: "PLACE", placeId: placeData.id }}
+            saved={userInteraction?.want_to_visit ?? false}
+            name={placeData.name}
             className="flex-1"
           />
           <VisitedToggleButton
@@ -597,6 +612,12 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
         </div>
 
         <div className="flex flex-row gap-2">
+          <LoveToggleButton
+            on={!!userInteraction?.is_favorite}
+            pending={isTogglingFavorite}
+            onClick={() => void handleToggleFavorite()}
+            className="flex-1"
+          />
           <Button
             variant="outline"
             className="flex-1"
@@ -605,15 +626,16 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
             <Share aria-hidden />
             Share
           </Button>
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={() => setTierListModalOpen(true)}
-          >
-            <Ranked aria-hidden />
-            Add to Tier List
-          </Button>
         </div>
+
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => setTierListModalOpen(true)}
+        >
+          <Ranked aria-hidden />
+          Add to Tier List
+        </Button>
       </Section>
 
       {/* Editorial Summary */}

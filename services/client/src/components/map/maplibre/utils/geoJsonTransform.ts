@@ -7,6 +7,7 @@ import type {
   PlaceCluster,
   PlaceResult,
 } from "../../types";
+import { pinImageName as pinName } from "./iconLoader";
 
 // ============================================================================
 // Icon name mapping
@@ -122,6 +123,8 @@ export interface POIFeatureProperties {
   opacity: number;
   sortKey: number;
   isCluster: false;
+  /** X08: on the viewer's Want to try list — the badged pin, drawn first. */
+  wantToTry: boolean;
   rating: number | null;
   address: string | null;
   phone: string | null;
@@ -162,13 +165,19 @@ function clusterRadius(count: number): number {
 // GeoJSON transform
 // ============================================================================
 
+/** How far a want-to-go pin's sort key outranks any relevance (0–100). */
+export const WANT_TO_TRY_SORT_BOOST = 1000;
+
 /**
  * Main entry point: takes the mixed MapDataItem[] array and splits
- * it into places & clusters before building GeoJSON.
+ * it into places & clusters before building GeoJSON. `wantToGo` is the
+ * viewer's want-to-try place ids (X08): those pins get the bookmark badge
+ * and placement priority over their neighbours.
  */
 export function transformToGeoJSON(
   items: Array<PlaceResult | PlaceCluster>,
   filters?: MapFilters,
+  wantToGo: ReadonlySet<string> = new Set(),
 ): GeoJSON.FeatureCollection<GeoJSON.Point, MapFeatureProperties> {
   const places: PlaceResult[] = [];
   const clusters: PlaceCluster[] = [];
@@ -179,13 +188,14 @@ export function transformToGeoJSON(
       places.push(item as PlaceResult);
     }
   }
-  return placesToGeoJSON(places, clusters, filters);
+  return placesToGeoJSON(places, clusters, filters, wantToGo);
 }
 
 function placesToGeoJSON(
   places: PlaceResult[],
   clusters: PlaceCluster[],
-  filters?: MapFilters,
+  filters: MapFilters | undefined,
+  wantToGo: ReadonlySet<string>,
 ): GeoJSON.FeatureCollection<GeoJSON.Point, MapFeatureProperties> {
   const hasFilters =
     !!filters &&
@@ -202,7 +212,8 @@ function placesToGeoJSON(
         : (ITEM_TYPE_COLORS.wine as string);
       const colorKey = dominant ?? "default";
       const iconName = categoryToIcon(place.primary_category);
-      const pinImageName = `pin-${colorKey}-${iconName}`;
+      const wantToTry = wantToGo.has(place.id);
+      const pinImageName = pinName(colorKey, iconName, wantToTry);
 
       const address = [place.street_address, place.locality, place.region]
         .filter(Boolean)
@@ -223,9 +234,12 @@ function placesToGeoJSON(
           pinImageName,
           itemTypeColor: color,
           relevance,
-          opacity: computeOpacity(relevance, hasFilters),
-          sortKey: relevance,
+          // A pin you saved stays fully drawn even when a filter dims its
+          // neighbours: it is the one you came to the map to find.
+          opacity: wantToTry ? 1 : computeOpacity(relevance, hasFilters),
+          sortKey: wantToTry ? relevance + WANT_TO_TRY_SORT_BOOST : relevance,
           isCluster: false as const,
+          wantToTry,
           rating: place.rating ?? null,
           address: address || null,
           phone: place.phone ?? null,
