@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { canAddToCellar, cellarGridItem } from "@/components/cellar/adapter";
 import { CellarOverviewHeader } from "@/components/cellar/CellarOverviewHeader";
 import { CellarOverviewItems } from "@/components/cellar/CellarOverviewItems";
+import { EmptyCellar } from "@/components/cellar/EmptyCellar";
 import {
   CellarInfoFragment,
   GetCellarOverviewQuery,
@@ -71,12 +72,22 @@ export default async function CellarPage({
         canAdd={canAdd}
       />
 
-      <h2 className="type-headline">Open and recent</h2>
-      <CellarOverviewItems
-        cellarId={cellar.id}
-        items={result.data.items.edges.map((edge) => cellarGridItem(edge.node))}
-        viewerId={viewerId}
-      />
+      {cellar.itemCounts.total === 0 ? (
+        // N15: the same first-run state as the items page, not "Open and
+        // recent" over "No items in this cellar".
+        <EmptyCellar cellarId={cellar.id} canAdd={canAdd} />
+      ) : (
+        <>
+          <h2 className="type-headline">Open and recent</h2>
+          <CellarOverviewItems
+            cellarId={cellar.id}
+            items={result.data.items.edges.map((edge) =>
+              cellarGridItem(edge.node),
+            )}
+            viewerId={viewerId}
+          />
+        </>
+      )}
 
       <CellarCheckIns
         cellarId={cellar.id}

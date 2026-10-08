@@ -1,18 +1,15 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { EmptyState } from "@/components/app/EmptyState";
-import { Camera, Cellar } from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import { CellarItemsControls } from "@/components/cellar/CellarItemsControls";
 import { CellarItemsGridServer } from "@/components/cellar/CellarItemsGridServer";
 import { CellarItemsGridSkeleton } from "@/components/cellar/CellarItemsGridSkeleton";
 import { filterCountsFromItemCounts } from "@/components/cellar/cellarItemCounts";
+import { EmptyCellar } from "@/components/cellar/EmptyCellar";
 import {
   CellarInfoFragment,
   GetCellarInfoQuery,
 } from "@/components/cellar/fragments";
-import { Button } from "@/components/ui/button";
 import { ViewerQuery } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
@@ -95,39 +92,5 @@ export default async function CellarItemsPage({
         </Suspense>
       )}
     </div>
-  );
-}
-
-/**
- * An empty cellar (N15, design §3.6): one line and one action — snap the
- * first bottle in. A viewer who may not add to it (a friend) gets the line
- * alone.
- */
-function EmptyCellar({
-  cellarId,
-  canAdd,
-}: {
-  cellarId: string;
-  canAdd: boolean;
-}) {
-  return canAdd ? (
-    <EmptyState
-      illustration={<Cellar aria-hidden strokeWidth={1.5} />}
-      title="Your cellar is waiting."
-      description="Snap a label and the bottle is in."
-      action={
-        <Button asChild>
-          <Link href={`/cellars/${cellarId}/items/add`} underline="none">
-            <Camera aria-hidden />
-            Snap a bottle
-          </Link>
-        </Button>
-      }
-    />
-  ) : (
-    <EmptyState
-      illustration={<Cellar aria-hidden strokeWidth={1.5} />}
-      title="Nothing in this cellar yet."
-    />
   );
 }
