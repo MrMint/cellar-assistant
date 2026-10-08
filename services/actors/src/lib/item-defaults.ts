@@ -256,6 +256,14 @@ export const requireLegibleLabel = (answer: {
   /** `null` when the field was absent — not the same as `false`. */
   readonly labelIsLegible: boolean | null;
   readonly imageDescription: string | null;
+  /**
+   * X05: what the model said the text is printed on. Read **only** when the
+   * verdict is already false — it refines a refusal into `LOOKS_LIKE_MENU`,
+   * and never overrules a `true` verdict (the measured E2g/E2h order decides
+   * that, not this). Optional and free text on the way in: anything but
+   * `menu` is the plain `NOTHING_READ`.
+   */
+  readonly surfaceKind?: string | null;
 }): void => {
   const noun = answer.itemType.toLowerCase();
   if (answer.labelIsLegible === null) {
@@ -269,6 +277,20 @@ export const requireLegibleLabel = (answer: {
     );
   }
   if (answer.labelIsLegible) return;
+  if (answer.surfaceKind === "menu") {
+    throw new ValidationError(
+      `no ${noun} label was found in this image: the model reads it as a ` +
+        "menu or drinks list" +
+        (answer.imageDescription === null
+          ? ""
+          : ` ("${sentence(answer.imageDescription)}")`) +
+        `. A menu names what somebody sells, not what is in a ${noun} ` +
+        "container, so nothing has been stored. Scan it as a menu instead, " +
+        `or photograph the ${noun}'s own label — the onboarding session is ` +
+        "open either way.",
+      "LOOKS_LIKE_MENU",
+    );
+  }
   throw new ValidationError(
     `no ${noun} label was found in this image — nothing here is a ${noun} ` +
       "container showing its own printed label" +

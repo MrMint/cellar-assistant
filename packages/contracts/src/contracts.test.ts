@@ -278,6 +278,7 @@ describe("actor errors (§8.3)", () => {
       "SERVICE_BUDGET",
       "AI_UNCONFIGURED",
       "NOTHING_READ",
+      "LOOKS_LIKE_MENU",
     ]);
   });
 

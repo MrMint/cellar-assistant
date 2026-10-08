@@ -106,6 +106,9 @@ const REASON_SUMMARY: Partial<Record<ActorErrorReason, string>> = {
   /** The model ran and found nothing to read. */
   NOTHING_READ:
     "Nothing could be read from that photo. Retake it with the writing in focus and upload it again.",
+  /** X05: the label read abstained on what it took for a menu. */
+  LOOKS_LIKE_MENU:
+    "That photo looks like a menu, not a label. Scan it as a menu, or retake it on the bottle's own label.",
 };
 
 /**
