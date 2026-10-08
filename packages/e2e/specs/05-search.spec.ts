@@ -399,7 +399,16 @@ test("Recent Activity shows a friend's review and their FRIENDS list — never t
     ).toBeVisible();
     const reviewCard = primary.getByRole("link").filter({ hasText: teaName });
     await expect(reviewCard.first()).toBeVisible();
-    await expect(reviewCard.first()).toContainText("Rated 4.5");
+    // X08: the row is no longer one big link — the name is the link,
+    // stretched over the row, so the row's Want to try bookmark can be a
+    // button of its own. "Rated 4.5" is in the row, beside the link: the
+    // innermost element holding both is the row.
+    const reviewRow = primary
+      .locator("div")
+      .filter({ has: reviewCard.first() })
+      .filter({ hasText: "Rated 4.5" })
+      .last();
+    await expect(reviewRow).toBeVisible();
     await expect(reviewCard.first()).toHaveAttribute("href", `/teas/${teaId}`);
 
     await primary.goto("/search?activity=tier-listed");
