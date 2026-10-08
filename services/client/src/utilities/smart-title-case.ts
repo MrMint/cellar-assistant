@@ -88,9 +88,12 @@ const DIGIT = /[0-9]/;
 // Case, not `\p{L}`: property escapes need the `u` flag, which the client's
 // `es5` target refuses. A character is a (cased) letter when its two cases
 // differ, and lowercase when uppercasing changes it (`ß` → `SS` included).
+// Locale-independent on purpose: `toLocaleLowerCase` under a Turkish browser
+// turns `DI` into `dı`, and a server (en) and client (tr) that disagree on a
+// name is a hydration mismatch.
 const isLetter = (char: string): boolean =>
-  char.toLocaleLowerCase() !== char.toLocaleUpperCase();
-const isLower = (char: string): boolean => char !== char.toLocaleUpperCase();
+  char.toLowerCase() !== char.toUpperCase();
+const isLower = (char: string): boolean => char !== char.toUpperCase();
 const lettersOf = (word: string): string =>
   Array.from(word).filter(isLetter).join("");
 const alphanumericOf = (word: string): string =>
@@ -117,7 +120,7 @@ const capitalize = (word: string): string => {
   if (first === -1) return word;
   return (
     chars.slice(0, first).join("") +
-    chars[first].toLocaleUpperCase() +
+    chars[first].toUpperCase() +
     chars.slice(first + 1).join("")
   );
 };
@@ -128,9 +131,9 @@ const caseWord = (word: string, isInner: boolean): string => {
   if (bare === "") return word;
   if (ACRONYMS.has(bare) || ROMAN.test(bare)) return word;
   if (DIGIT.test(bare)) {
-    return ORDINAL.test(bare) ? word.toLocaleLowerCase() : word;
+    return ORDINAL.test(bare) ? word.toLowerCase() : word;
   }
-  const lower = word.toLocaleLowerCase();
+  const lower = word.toLowerCase();
   // An initial (`E.` in `E. GUIGAL`) is never a particle.
   if (isInner && !word.includes(".") && PARTICLES.has(lower)) return lower;
 
