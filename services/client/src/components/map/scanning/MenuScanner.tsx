@@ -247,7 +247,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
 
         {showCaptureButtons && (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-row gap-4">
+            <div className="flex flex-row flex-wrap gap-4">
               <Button size="lg" onClick={() => setShowCamera(true)}>
                 <Camera aria-hidden />
                 Take Photo
@@ -297,7 +297,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
               {(selectedFile.size / 1024 / 1024).toFixed(1)} MB)
             </p>
 
-            <div className="flex flex-row justify-center gap-4">
+            <div className="flex flex-row flex-wrap justify-center gap-4">
               <Button
                 size="lg"
                 onClick={handleStartScan}
@@ -403,7 +403,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
               </Alert>
             )}
 
-            <div className="flex flex-row justify-center gap-4">
+            <div className="flex flex-row flex-wrap justify-center gap-4">
               {opensResults && scanId && (
                 <Button asChild>
                   <Link href={`/map/scans/${scanId}`} underline="none">

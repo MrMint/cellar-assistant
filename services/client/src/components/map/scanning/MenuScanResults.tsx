@@ -467,7 +467,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                               tone="ai"
                               className="mt-2"
                               action={
-                                <div className="flex flex-row gap-2">
+                                <div className="flex flex-row flex-wrap gap-2">
                                   <Button
                                     variant="destructive"
                                     aria-label={`Reject ${suggestedName} for ${item.menu_item_name}`}
