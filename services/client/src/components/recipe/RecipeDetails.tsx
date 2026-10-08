@@ -1,20 +1,10 @@
 "use client";
 
-import {
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  Grid,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import Image from "next/image";
-import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { isNotNil } from "ramda";
-import { Link } from "@/components/common/Link";
+import { Link } from "@/components/app/Link";
+import { Badge } from "@/components/ui/badge";
 import beer1 from "@/images/beer1.png";
 import wine1 from "@/images/wine1.png";
 import { AddRecipeReview } from "./AddRecipeReview";
@@ -95,221 +85,167 @@ export const RecipeDetails = ({
   };
 
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-4">
       <RecipeHeaderServer
         recipeId={recipe.id}
         recipeName={recipe.name}
         recipeType={recipe.type}
       />
 
-      <Grid container spacing={2}>
-        <Grid xs={12} sm={4}>
-          <Stack spacing={1}>
-            <Card sx={{ aspectRatio: "1" }}>
-              <CardContent sx={{ p: 0, position: "relative" }}>
-                {isNotNil(recipe.image_url) ? (
-                  <Box
-                    component="img"
-                    src={recipe.image_url}
-                    alt={recipe.name}
-                    sx={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  <Image
-                    src={fallback.image}
-                    alt={fallback.alt}
-                    fill
-                    style={{
-                      objectFit: "cover",
-                    }}
-                  />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="flex flex-col gap-2">
+          <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-1">
+            {isNotNil(recipe.image_url) ? (
+              // biome-ignore lint/performance/noImgElement: a free-form URL; next/image would need its host allowlisted.
+              <img
+                src={recipe.image_url}
+                alt={recipe.name}
+                className="absolute inset-0 size-full object-cover"
+              />
+            ) : (
+              <Image
+                src={fallback.image}
+                alt={fallback.alt}
+                fill
+                className="object-cover"
+              />
+            )}
+          </div>
+          <RecipeShare recipeId={recipe.id} recipeType={recipe.type} />
+        </div>
+
+        <div className="grid gap-4 sm:col-span-2 lg:grid-cols-2">
+          <div className="flex flex-col gap-4">
+            <RecipeDetailsCard
+              recipeId={recipe.id}
+              title={recipe.name}
+              type={recipe.type}
+              difficulty_level={recipe.difficulty_level}
+              prep_time_minutes={recipe.prep_time_minutes}
+              serving_size={recipe.serving_size}
+              version={recipe.version}
+              description={recipe.description}
+            />
+
+            {/* Recipe variations */}
+            {(isNotNil(recipe.canonical_recipe) || variations.length > 0) && (
+              <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
+                {isCanonical && <CanonicalRecipeBadge size="sm" />}
+                {isNotNil(recipe.canonical_recipe) && (
+                  <p className="type-callout text-ink-2">
+                    Variation of:{" "}
+                    <Link
+                      href={`/recipes/${recipe.canonical_recipe.id}`}
+                      className="font-medium text-ink-1"
+                    >
+                      {recipe.canonical_recipe.name}
+                    </Link>
+                  </p>
                 )}
-              </CardContent>
-            </Card>
-            <RecipeShare recipeId={recipe.id} recipeType={recipe.type} />
-          </Stack>
-        </Grid>
 
-        <Grid container xs={12} sm={8}>
-          <Grid xs={12} sm={12} lg={6}>
-            <Stack spacing={2}>
-              <RecipeDetailsCard
-                recipeId={recipe.id}
-                title={recipe.name}
-                type={recipe.type}
-                difficulty_level={recipe.difficulty_level}
-                prep_time_minutes={recipe.prep_time_minutes}
-                serving_size={recipe.serving_size}
-                version={recipe.version}
-                description={recipe.description}
-              />
-
-              {/* Recipe variations */}
-              {(isNotNil(recipe.canonical_recipe) || variations.length > 0) && (
-                <Card>
-                  <CardContent>
-                    <Stack spacing={2}>
-                      {isCanonical && <CanonicalRecipeBadge size="sm" />}
-                      {isNotNil(recipe.canonical_recipe) && (
-                        <Box>
-                          <Typography
-                            level="body-sm"
-                            sx={{ color: "text.secondary" }}
+                {variations.length > 0 && (
+                  <div>
+                    <p className="mb-2 type-callout text-ink-2">
+                      Other variations:
+                    </p>
+                    {/* A 28 px chip with a 44 px target: the pseudo-element
+                        reaches 8 px above and below, and the 16 px row gap
+                        keeps neighbouring rows' targets from overlapping. */}
+                    <div className="flex flex-wrap gap-x-2 gap-y-4">
+                      {variations.map((variation) => (
+                        <Badge key={variation.id} variant="outline" asChild>
+                          <Link
+                            href={`/recipes/${variation.id}`}
+                            underline="none"
+                            className="relative h-7 max-w-full overflow-visible px-3 text-sm after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
                           >
-                            Variation of:{" "}
-                            <Link
-                              href={`/recipes/${recipe.canonical_recipe.id}`}
-                              level="body-sm"
-                              fontWeight="md"
-                            >
-                              {recipe.canonical_recipe.name}
-                            </Link>
-                          </Typography>
-                        </Box>
-                      )}
+                            <span className="min-w-0 truncate">
+                              {variation.name}
+                              {isNotNil(variation.version) &&
+                                ` v${variation.version}`}
+                            </span>
+                          </Link>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
 
-                      {variations.length > 0 && (
-                        <Box>
-                          <Typography
-                            level="body-sm"
-                            sx={{ color: "text.secondary", mb: 1 }}
-                          >
-                            Other variations:
-                          </Typography>
-                          <Stack direction="row" spacing={1} flexWrap="wrap">
-                            {variations.map((variation) => (
-                              <Chip
-                                key={variation.id}
-                                variant="outlined"
-                                size="sm"
-                                slotProps={{
-                                  action: {
-                                    component: NextLink,
-                                    href: `/recipes/${variation.id}`,
-                                  },
-                                }}
-                              >
-                                {variation.name}
-                                {isNotNil(variation.version) &&
-                                  ` v${variation.version}`}
-                              </Chip>
-                            ))}
-                          </Stack>
-                        </Box>
-                      )}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              )}
+            {/* Ingredients */}
+            <section className="rounded-lg bg-surface-1 p-4">
+              <h2 className="mb-4 type-title-2">Ingredients</h2>
+              <RecipeIngredientList ingredients={recipe.ingredients} />
+            </section>
+          </div>
 
-              {/* Ingredients */}
-              <Card>
-                <CardContent>
-                  <Typography level="h4" component="h2" sx={{ mb: 2 }}>
-                    Ingredients
-                  </Typography>
-                  <RecipeIngredientList ingredients={recipe.ingredients} />
-                </CardContent>
-              </Card>
-            </Stack>
-          </Grid>
+          <div className="flex flex-col gap-4">
+            {/* Instructions */}
+            <section className="rounded-lg bg-surface-1 p-4">
+              <h2 className="mb-4 type-title-2">Instructions</h2>
+              <ol className="flex flex-col divide-y divide-line">
+                {recipe.instructions.map((instruction) => (
+                  <li
+                    key={instruction.id}
+                    className="flex items-start gap-4 py-4 first:pt-0 last:pb-0"
+                  >
+                    <span className="tabular inline-flex h-6 min-w-8 shrink-0 items-center justify-center rounded-full bg-surface-3 px-2 font-bold text-ink-1 text-xs">
+                      {instruction.step_number}
+                    </span>
+                    <div className="flex flex-1 flex-col gap-2">
+                      <p className="type-body">
+                        {instruction.instruction_text}
+                      </p>
 
-          <Grid xs={12} sm={12} lg={6}>
-            <Stack spacing={2}>
-              {/* Instructions */}
-              <Card>
-                <CardContent>
-                  <Typography level="h4" component="h2" sx={{ mb: 2 }}>
-                    Instructions
-                  </Typography>
-                  <Stack spacing={2}>
-                    {recipe.instructions.map((instruction, index) => (
-                      <Box key={instruction.id}>
-                        <Stack
-                          direction="row"
-                          spacing={2}
-                          alignItems="flex-start"
-                        >
-                          <Chip
-                            variant="solid"
-                            color="primary"
-                            size="sm"
-                            sx={{ minWidth: "32px", fontWeight: "bold" }}
-                          >
-                            {instruction.step_number}
-                          </Chip>
-                          <Stack spacing={1} sx={{ flex: 1 }}>
-                            <Typography level="body-md">
-                              {instruction.instruction_text}
-                            </Typography>
-
-                            <Stack direction="row" spacing={2} flexWrap="wrap">
-                              {isNotNil(instruction.instruction_type) && (
-                                <Chip variant="outlined" size="sm">
-                                  {instruction.instruction_type}
-                                </Chip>
-                              )}
-
-                              {isNotNil(instruction.equipment_needed) && (
-                                <Typography
-                                  level="body-sm"
-                                  sx={{ color: "text.secondary" }}
-                                >
-                                  Equipment: {instruction.equipment_needed}
-                                </Typography>
-                              )}
-
-                              {isNotNil(instruction.time_minutes) && (
-                                <Typography
-                                  level="body-sm"
-                                  sx={{ color: "text.secondary" }}
-                                >
-                                  Time: {instruction.time_minutes}m
-                                </Typography>
-                              )}
-                            </Stack>
-                          </Stack>
-                        </Stack>
-
-                        {index < recipe.instructions.length - 1 && (
-                          <Divider sx={{ my: 2 }} />
+                      <div className="flex flex-wrap items-center gap-4">
+                        {isNotNil(instruction.instruction_type) && (
+                          <Badge variant="outline">
+                            {instruction.instruction_type}
+                          </Badge>
                         )}
-                      </Box>
-                    ))}
-                  </Stack>
-                </CardContent>
-              </Card>
 
-              {/* Reviews */}
-              <AddRecipeReview
-                key={mine?.id ?? "new"}
+                        {isNotNil(instruction.equipment_needed) && (
+                          <p className="type-callout text-ink-2">
+                            Equipment: {instruction.equipment_needed}
+                          </p>
+                        )}
+
+                        {isNotNil(instruction.time_minutes) && (
+                          <p className="type-callout text-ink-2">
+                            Time: {instruction.time_minutes}m
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            {/* Reviews */}
+            <AddRecipeReview
+              key={mine?.id ?? "new"}
+              recipeId={recipe.id}
+              viewerId={viewerId}
+              myReview={
+                mine === null
+                  ? null
+                  : { id: mine.id, score: mine.score, text: mine.text }
+              }
+              onReviewAdded={changed}
+            />
+            {isNotNil(recipe.recipe_reviews) && (
+              <RecipeReviews
+                reviews={recipe.recipe_reviews}
                 recipeId={recipe.id}
-                viewerId={viewerId}
-                myReview={
-                  mine === null
-                    ? null
-                    : { id: mine.id, score: mine.score, text: mine.text }
-                }
-                onReviewAdded={changed}
+                endCursor={reviewsEndCursor}
+                hasNextPage={reviewsHasNextPage}
               />
-              {isNotNil(recipe.recipe_reviews) && (
-                <RecipeReviews
-                  reviews={recipe.recipe_reviews}
-                  recipeId={recipe.id}
-                  endCursor={reviewsEndCursor}
-                  hasNextPage={reviewsHasNextPage}
-                />
-              )}
-            </Stack>
-          </Grid>
-        </Grid>
-      </Grid>
-    </Stack>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

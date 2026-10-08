@@ -1,23 +1,13 @@
-import { Box, CircularProgress, Stack, Typography } from "@mui/joy";
+import { Spinner } from "@/components/ui/spinner";
 
 export default function RecipesLoading() {
   return (
-    <Box>
-      <Typography level="h1" sx={{ mb: 3 }}>
-        All Recipes
-      </Typography>
-      <Stack
-        direction="row"
-        spacing={2}
-        alignItems="center"
-        justifyContent="center"
-        sx={{ py: 4 }}
-      >
-        <CircularProgress size="sm" />
-        <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-          Loading recipes...
-        </Typography>
-      </Stack>
-    </Box>
+    <div>
+      <h1 className="mb-6 type-large-title">All Recipes</h1>
+      <div className="flex items-center justify-center gap-4 py-8">
+        <Spinner />
+        <p className="type-callout text-ink-2">Loading recipes...</p>
+      </div>
+    </div>
   );
 }

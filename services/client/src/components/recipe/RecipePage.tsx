@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { readFragment } from "@/lib/api/graphql";
@@ -36,7 +35,7 @@ export async function RecipePage({
   const result = unwrapResult(data.recipe, "Recipe");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return <p className="type-body text-destructive">{result.error.message}</p>;
   }
 
   const group = result.data.recipeGroup ?? null;

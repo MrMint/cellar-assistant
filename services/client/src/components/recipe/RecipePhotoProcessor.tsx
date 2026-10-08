@@ -1,26 +1,21 @@
 "use client";
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  Divider,
-  LinearProgress,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  MdCheckCircle,
-  MdError,
-  MdInfoOutline,
-  MdPhotoCamera,
-} from "react-icons/md";
 import { useClient, useMutation, useQuery } from "urql";
+import {
+  Camera,
+  ErrorIcon,
+  ICON_STROKE,
+  Info,
+  Success,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 import { aiOutcome } from "@/lib/ai/outcome";
 import {
   describeUploadBlockers,
@@ -38,7 +33,7 @@ import {
   StartRecipePhotoJobMutation,
 } from "@/lib/api/recipe-photos";
 import { unwrapResult } from "@/lib/api/result";
-import { Link } from "../common/Link";
+import { cn } from "@/lib/utils";
 import { recipeCreatedLine, stageProgress } from "./adapter";
 import { RecipeDetailsFragment } from "./fragments";
 import { RecipePageQuery, recipePageVariables } from "./queries";
@@ -256,172 +251,158 @@ export function RecipePhotoProcessor({
   const progress = phase.kind === "running" ? stageProgress(phase.stage) : 0;
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Stack spacing={3}>
-          {/* Header */}
-          <Box>
-            <Typography level="h3" startDecorator={<MdPhotoCamera />}>
-              AI Recipe Generator
-            </Typography>
-            <Typography level="body-sm" sx={{ color: "text.tertiary" }}>
-              Simply upload a photo and our AI will extract the recipe it shows,
-              with ingredients and instructions
-            </Typography>
-          </Box>
+    <section className="flex flex-col gap-6 rounded-lg bg-surface-1 p-4">
+      {/* Header */}
+      <div>
+        <h3 className="flex items-center gap-2 type-title-2">
+          <Camera
+            aria-hidden
+            strokeWidth={ICON_STROKE}
+            className="size-5 shrink-0 text-ink-2"
+          />
+          AI Recipe Generator
+        </h3>
+        <p className="type-callout text-ink-3">
+          Simply upload a photo and our AI will extract the recipe it shows,
+          with ingredients and instructions
+        </p>
+      </div>
 
-          {blockers.length > 0 ? (
-            <Alert
-              variant="soft"
-              color="warning"
-              startDecorator={<MdInfoOutline />}
+      {blockers.length > 0 ? (
+        <Alert>
+          <Info aria-hidden />
+          {/* AlertTitle clamps to one line; at 390 this one is wider. */}
+          <AlertTitle className="line-clamp-none">
+            Uploads are not possible from this build
+          </AlertTitle>
+          <AlertDescription>{blockers.join(" ")}</AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          {/* File Upload */}
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full"
+              disabled={isProcessing}
             >
-              <Box>
-                <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
-                  Uploads are not possible from this build
-                </Typography>
-                <Typography level="body-sm">{blockers.join(" ")}</Typography>
-              </Box>
-            </Alert>
-          ) : (
-            <>
-              {/* File Upload */}
-              <Box>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  style={{ display: "none" }}
-                />
-                <Button
-                  variant="outlined"
-                  onClick={() => fileInputRef.current?.click()}
-                  startDecorator={<MdPhotoCamera />}
-                  fullWidth
-                  disabled={isProcessing}
-                >
-                  {selectedFile
-                    ? `Selected: ${selectedFile.name}`
-                    : "Choose Photo"}
-                </Button>
-              </Box>
+              <Camera aria-hidden />
+              <span className="truncate">
+                {selectedFile
+                  ? `Selected: ${selectedFile.name}`
+                  : "Choose Photo"}
+              </span>
+            </Button>
+          </div>
 
-              {/* Process Button */}
-              <Button
-                variant="solid"
-                color="primary"
-                onClick={() => void handleUploadAndProcess()}
-                disabled={!selectedFile || isProcessing}
-                loading={isProcessing}
-                loadingIndicator={<CircularProgress size="sm" />}
-                fullWidth
-                size="lg"
+          {/* Process Button */}
+          <Button
+            onClick={() => void handleUploadAndProcess()}
+            disabled={!selectedFile || isProcessing}
+            aria-busy={isProcessing || undefined}
+            className="w-full"
+            size="lg"
+          >
+            {isProcessing && <Spinner aria-hidden />}
+            {isProcessing ? "Processing..." : "Extract Recipes"}
+          </Button>
+        </>
+      )}
+
+      {/* Progress Display — an AI progress state, so it is drawn in teal. */}
+      {isProcessing && (
+        <div>
+          <div className="mb-2 flex items-center justify-between type-callout">
+            <span>{currentStep}</span>
+            <span className="tabular">{Math.round(progress)}%</span>
+          </div>
+          <Progress
+            aria-label={currentStep}
+            value={phase.kind === "running" ? progress : null}
+            className={cn(
+              "bg-ai/20 [&>[data-slot=progress-indicator]]:bg-ai",
+              phase.kind !== "running" && "motion-safe:animate-pulse",
+            )}
+          />
+          {phase.kind === "running" && phase.lastError !== null && (
+            // A stage that throws is retried with backoff — a note, not
+            // a failure. Only `status: FAILED` ends the job.
+            <p className="mt-2 type-footnote text-ink-2">
+              Retry {phase.attempts}: {phase.lastError}
+            </p>
+          )}
+          {phase.kind === "running" && (
+            <Button
+              variant="ghost"
+              disabled={phase.cancelRequested}
+              onClick={() => void handleStop()}
+              className="mt-2"
+            >
+              {phase.cancelRequested ? "Stopping…" : "Stop"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Error Display */}
+      {phase.kind === "failed" && (
+        <Alert variant="destructive">
+          <ErrorIcon aria-hidden />
+          <AlertTitle>Processing Failed</AlertTitle>
+          <AlertDescription>{phase.reason}</AlertDescription>
+        </Alert>
+      )}
+
+      {phase.kind === "cancelled" && (
+        <Alert>
+          <ErrorIcon aria-hidden />
+          <AlertDescription>Stopped. Nothing was saved.</AlertDescription>
+        </Alert>
+      )}
+
+      {phase.kind === "stalled" && (
+        <Alert>
+          <Info aria-hidden />
+          <AlertTitle>Still processing</AlertTitle>
+          <AlertDescription>
+            <p>
+              This is taking longer than usual, so the page has stopped
+              watching. Nothing was cancelled; the recipe will be at{" "}
+              <Link
+                href={`/recipes/${phase.recipeId}`}
+                underline="always"
+                className="text-ink-1"
               >
-                {isProcessing ? "Processing..." : "Extract Recipes"}
-              </Button>
-            </>
-          )}
+                its page
+              </Link>{" "}
+              once the job finishes.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
 
-          {/* Progress Display */}
-          {isProcessing && (
-            <Box>
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  mb: 1,
-                }}
-              >
-                <Typography level="body-sm">{currentStep}</Typography>
-                <Typography level="body-sm">{Math.round(progress)}%</Typography>
-              </Box>
-              <LinearProgress
-                determinate={phase.kind === "running"}
-                value={progress}
-                sx={{ height: 8, borderRadius: 4 }}
-              />
-              {phase.kind === "running" && phase.lastError !== null && (
-                // A stage that throws is retried with backoff — a note, not
-                // a failure. Only `status: FAILED` ends the job.
-                <Typography
-                  level="body-xs"
-                  sx={{ color: "warning.plainColor", mt: 1 }}
-                >
-                  Retry {phase.attempts}: {phase.lastError}
-                </Typography>
-              )}
-              {phase.kind === "running" && (
-                <Button
-                  size="sm"
-                  variant="plain"
-                  color="neutral"
-                  disabled={phase.cancelRequested}
-                  onClick={() => void handleStop()}
-                  sx={{ mt: 1 }}
-                >
-                  {phase.cancelRequested ? "Stopping…" : "Stop"}
-                </Button>
-              )}
-            </Box>
-          )}
+      {/* Results Display */}
+      {phase.kind === "done" && (
+        <div className="flex flex-col gap-4">
+          <Separator />
 
-          {/* Error Display */}
-          {phase.kind === "failed" && (
-            <Alert color="danger" startDecorator={<MdError />}>
-              <Box>
-                <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
-                  Processing Failed
-                </Typography>
-                <Typography level="body-sm">{phase.reason}</Typography>
-              </Box>
-            </Alert>
-          )}
-
-          {phase.kind === "cancelled" && (
-            <Alert color="neutral" startDecorator={<MdError />}>
-              <Typography level="body-sm">
-                Stopped. Nothing was saved.
-              </Typography>
-            </Alert>
-          )}
-
-          {phase.kind === "stalled" && (
-            <Alert color="warning" startDecorator={<MdInfoOutline />}>
-              <Box>
-                <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
-                  Still processing
-                </Typography>
-                <Typography level="body-sm">
-                  This is taking longer than usual, so the page has stopped
-                  watching. Nothing was cancelled; the recipe will be at{" "}
-                  <Link href={`/recipes/${phase.recipeId}`}>its page</Link> once
-                  the job finishes.
-                </Typography>
-              </Box>
-            </Alert>
-          )}
-
-          {/* Results Display */}
-          {phase.kind === "done" && (
-            <Box>
-              <Divider sx={{ my: 2 }} />
-
-              <Alert color="success" startDecorator={<MdCheckCircle />}>
-                <Box>
-                  <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
-                    Processing Complete
-                  </Typography>
-                  <Typography level="body-sm">
-                    {recipeCreatedLine(ingredientCount)}
-                  </Typography>
-                </Box>
-              </Alert>
-            </Box>
-          )}
-        </Stack>
-      </CardContent>
-    </Card>
+          <Alert className="border-success/50 text-success">
+            <Success aria-hidden />
+            <AlertTitle>Processing Complete</AlertTitle>
+            <AlertDescription>
+              {recipeCreatedLine(ingredientCount)}
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+    </section>
   );
 }

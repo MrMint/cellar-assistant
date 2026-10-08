@@ -1,6 +1,5 @@
-import { Box, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
-import { Link } from "@/components/common/Link";
+import { Link } from "@/components/app/Link";
 import { versionFromNodes } from "@/components/recipe/adapter";
 import {
   RecipeDetailsFragment,
@@ -35,7 +34,7 @@ export default async function RecipeVersionsPage({
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return <p className="type-body text-destructive">{result.error.message}</p>;
   }
 
   const recipeGroup = result.data;
@@ -49,10 +48,10 @@ export default async function RecipeVersionsPage({
   const hidden = recipeGroup.recipeCount - recipes.length;
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1400, mx: "auto" }}>
+    <div className="mx-auto w-full max-w-[1400px]">
       {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography level="body-sm" sx={{ mb: 1 }}>
+      <div className="mb-8">
+        <p className="mb-2 type-callout">
           <Link href="/recipes" underline="always">
             Recipe Groups
           </Link>
@@ -61,29 +60,27 @@ export default async function RecipeVersionsPage({
             {recipeGroup.name}
           </Link>
           {" > Versions"}
-        </Typography>
+        </p>
 
-        <Typography level="h1" sx={{ mb: 1 }}>
+        <h1 className="mb-2 type-large-title">
           {recipeGroup.name} - All Versions
-        </Typography>
+        </h1>
 
         {recipeGroup.description && (
-          <Typography level="body-lg" sx={{ color: "text.secondary", mb: 2 }}>
-            {recipeGroup.description}
-          </Typography>
+          <p className="mb-4 type-body text-ink-2">{recipeGroup.description}</p>
         )}
 
-        <Typography level="body-md" sx={{ color: "text.secondary" }}>
+        <p className="type-body text-ink-2">
           Compare all {recipeGroup.recipeCount} versions of this recipe and vote
           for your favorite. The community's preferred version is shown as the
           canonical recipe.
-        </Typography>
+        </p>
         {hidden > 0 && (
-          <Typography level="body-sm" sx={{ color: "text.tertiary", mt: 1 }}>
+          <p className="mt-2 type-callout text-ink-3">
             Showing the top {recipes.length}; {hidden} more are not listed.
-          </Typography>
+          </p>
         )}
-      </Box>
+      </div>
 
       {/* Recipe Versions Comparison */}
       <RecipeVersionsTab
@@ -91,6 +88,6 @@ export default async function RecipeVersionsPage({
         canonicalRecipeId={canonicalRecipeId}
         groupId={recipeGroup.id}
       />
-    </Box>
+    </div>
   );
 }

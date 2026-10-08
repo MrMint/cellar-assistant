@@ -1,20 +1,14 @@
 "use client";
 
-import {
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  Input,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { isNotNil } from "ramda";
-import { useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useMutation } from "urql";
+import { RatingInput } from "@/components/app/RatingInput";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { unwrapResult } from "@/lib/api/result";
 import { RichTextEditor } from "../common/RichTextEditor";
-import { StarRating } from "../common/rating/StarRating";
 import { reviewTextForSave } from "./adapter";
 import {
   AddRecipeReviewMutation,
@@ -69,6 +63,23 @@ export const AddRecipeReview = ({
   onReviewAdded,
 }: AddRecipeReviewProps) => {
   const [open, setOpen] = useState(false);
+  // The prompt and the form replace each other, so focus would drop to
+  // <body> on either swap: carry it across (the form on open, the prompt on
+  // Cancel). Never on mount — the page must not scroll to the review box.
+  const formRef = useRef<HTMLElement>(null);
+  const promptRef = useRef<HTMLInputElement>(null);
+  const toggled = useRef(false);
+  const headingId = useId();
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    if (open) formRef.current?.focus();
+    else promptRef.current?.focus();
+  }, [open]);
+  const toggle = (next: boolean) => {
+    toggled.current = true;
+    setOpen(next);
+  };
   const [score, setScore] = useState<number | undefined>(myReview?.score);
   const [text, setText] = useState<string | undefined>(
     myReview?.text ?? undefined,
@@ -157,7 +168,7 @@ export const AddRecipeReview = ({
   };
 
   const handleCancel = () => {
-    setOpen(false);
+    toggle(false);
     setError(null);
     setScore(myReview?.score);
     setText(myReview?.text ?? undefined);
@@ -171,70 +182,75 @@ export const AddRecipeReview = ({
             ? "Edit your review of this recipe..."
             : "Add a review for this recipe..."
         }
-        onClick={() => setOpen(true)}
-        slotProps={{ input: { readOnly: true } }}
-        sx={{ cursor: "pointer" }}
+        ref={promptRef}
+        onClick={() => toggle(true)}
+        // A read-only field that opens the form: Enter and Space open it too,
+        // as a click does.
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggle(true);
+          }
+        }}
+        readOnly
+        className="cursor-pointer"
       />
     );
   }
 
   return (
-    <Card>
-      <Stack spacing={2}>
-        <Typography level="title-lg">
-          {editing ? "Edit Recipe Review:" : "Add Recipe Review:"}
-        </Typography>
-        <CardContent>
-          <Stack spacing={2}>
-            <div>
-              <Typography level="body-sm" sx={{ mb: 1 }}>
-                Rate this recipe:
-              </Typography>
-              <StarRating
-                value={score}
-                onChange={setScore}
-                onClear={() => setScore(undefined)}
-                disabled={isPending}
-                label="Rate this recipe"
-              />
-            </div>
+    <section
+      ref={formRef}
+      tabIndex={-1}
+      aria-labelledby={headingId}
+      className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4 outline-none"
+    >
+      <p id={headingId} className="type-headline">
+        {editing ? "Edit Recipe Review:" : "Add Recipe Review:"}
+      </p>
+      <div className="flex flex-col gap-4">
+        <div>
+          <p className="mb-2 type-callout">Rate this recipe:</p>
+          <RatingInput
+            value={score}
+            onChange={setScore}
+            onClear={() => setScore(undefined)}
+            disabled={isPending}
+            label="Rate this recipe"
+          />
+        </div>
 
-            <RichTextEditor
-              placeholder="How was this recipe? Did you make any modifications?"
-              onChange={setText}
-              initialText={text}
-            />
-            {error !== null && (
-              <Typography level="body-sm" color="danger">
-                {error}
-              </Typography>
-            )}
-          </Stack>
-        </CardContent>
-      </Stack>
-      <CardActions>
+        <RichTextEditor
+          placeholder="How was this recipe? Did you make any modifications?"
+          onChange={setText}
+          initialText={text}
+        />
+        {error !== null && (
+          <p className="type-callout text-destructive">{error}</p>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           onClick={handleClick}
-          disabled={!dirty}
-          loading={isPending}
-          color="primary"
+          disabled={!dirty || isPending}
+          aria-busy={isPending || undefined}
         >
+          {isPending && <Spinner aria-hidden />}
           {editing ? "Save Review" : "Add Review"}
         </Button>
         {editing && (
           <Button
-            variant="plain"
-            color="danger"
+            variant="destructive"
             disabled={isPending}
             onClick={handleDelete}
           >
             Delete
           </Button>
         )}
-        <Button onClick={handleCancel} variant="outlined" disabled={isPending}>
+        <Button onClick={handleCancel} variant="outline" disabled={isPending}>
           Cancel
         </Button>
-      </CardActions>
-    </Card>
+      </div>
+    </section>
   );
 };

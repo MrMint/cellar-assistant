@@ -1,97 +1,58 @@
-"use client";
-
-import {
-  AspectRatio,
-  Box,
-  Card,
-  CardContent,
-  CardOverflow,
-  Skeleton,
-  Stack,
-} from "@mui/joy";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export type RecipeGroupCardSkeletonProps = {
   count?: number;
 };
 
+/** `RecipeGroupCard`'s shape while a page of groups loads. */
 export const RecipeGroupCardSkeleton = ({
   count = 1,
 }: RecipeGroupCardSkeletonProps) => {
   return (
     <>
       {Array.from({ length: count }, (_, i) => `skeleton-${i}`).map((key) => (
-        <Card key={key} variant="outlined">
-          <CardOverflow>
-            <AspectRatio ratio="4/3">
-              <Skeleton variant="overlay" />
-            </AspectRatio>
-          </CardOverflow>
+        <div
+          key={key}
+          aria-hidden
+          className="flex flex-col overflow-hidden rounded-lg bg-surface-1"
+        >
+          <Skeleton className="aspect-[4/3] rounded-none" />
 
-          <CardContent sx={{ gap: 1 }}>
+          <div className="flex flex-col gap-2 p-4">
             {/* Recipe Group Name */}
-            <Skeleton variant="text" level="title-md" />
+            <Skeleton className="h-5 w-full" />
 
             {/* Featured Recipe Name */}
-            <Skeleton variant="text" level="body-sm" width="70%" />
+            <Skeleton className="h-4 w-[70%]" />
 
             {/* Description */}
-            <Box sx={{ mt: 1 }}>
-              <Skeleton variant="text" level="body-sm" />
-              <Skeleton variant="text" level="body-sm" width="80%" />
-            </Box>
+            <div className="mt-2 flex flex-col gap-1.5">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-[80%]" />
+            </div>
 
             {/* Recipe Details */}
-            <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-              <Skeleton variant="text" level="body-xs" width="60px" />
-              <Skeleton variant="text" level="body-xs" width="40px" />
-              <Skeleton variant="text" level="body-xs" width="70px" />
-            </Stack>
+            <div className="mt-2 flex gap-4">
+              <Skeleton className="h-3.5 w-15" />
+              <Skeleton className="h-3.5 w-10" />
+              <Skeleton className="h-3.5 w-[70px]" />
+            </div>
 
             {/* Category and Tags */}
-            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              <Skeleton
-                variant="rectangular"
-                width="80px"
-                height="24px"
-                sx={{ borderRadius: "sm" }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="60px"
-                height="24px"
-                sx={{ borderRadius: "sm" }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="90px"
-                height="24px"
-                sx={{ borderRadius: "sm" }}
-              />
-            </Stack>
+            <div className="mt-2 flex gap-2">
+              <Skeleton className="h-6 w-20 rounded-sm" />
+              <Skeleton className="h-6 w-15 rounded-sm" />
+              <Skeleton className="h-6 w-[90px] rounded-sm" />
+            </div>
 
             {/* Tags */}
-            <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
-              <Skeleton
-                variant="rectangular"
-                width="50px"
-                height="20px"
-                sx={{ borderRadius: "sm" }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="65px"
-                height="20px"
-                sx={{ borderRadius: "sm" }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="45px"
-                height="20px"
-                sx={{ borderRadius: "sm" }}
-              />
-            </Stack>
-          </CardContent>
-        </Card>
+            <div className="mt-2 flex gap-1">
+              <Skeleton className="h-5 w-[50px] rounded-sm" />
+              <Skeleton className="h-5 w-[65px] rounded-sm" />
+              <Skeleton className="h-5 w-[45px] rounded-sm" />
+            </div>
+          </div>
+        </div>
       ))}
     </>
   );

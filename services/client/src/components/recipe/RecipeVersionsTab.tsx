@@ -1,22 +1,11 @@
 "use client";
 
-import {
-  Alert,
-  Box,
-  Card,
-  CardContent,
-  Grid,
-  Stack,
-  Tab,
-  TabList,
-  TabPanel,
-  Tabs,
-  Typography,
-} from "@mui/joy";
 import { isNotNil } from "ramda";
 import { useCallback, useEffect, useState } from "react";
-import { MdAccessTime, MdGroup, MdPerson } from "react-icons/md";
 import { useClient } from "urql";
+import { People, Person, Time } from "@/components/app/icons";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createLatestOnly, runLatest } from "@/lib/latest-only";
 import { readRecipeGroupVoteSnapshot } from "@/lib/recipes/group-snapshot";
 import { Timestamp } from "../common/Timestamp";
@@ -49,7 +38,7 @@ const getDifficultyDisplay = (level?: number | null) => {
 };
 
 /**
- * `82450ad1:src/components/recipe/RecipeVersionsTab.tsx`, restored — one Joy
+ * `82450ad1:src/components/recipe/RecipeVersionsTab.tsx`, restored — one
  * tab per version, best-scoring first, each with its picture, the vote card,
  * "Recipe Info", description, ingredients and steps. In production the page
  * threw before rendering it (`recipe_votes` had no Hasura permission).
@@ -112,286 +101,195 @@ export const RecipeVersionsTab = ({
     ...recipe,
     isCanonical: recipe.id === canonicalRecipeId,
   }));
-  const selectedVersion = Math.max(
-    0,
-    recipesWithScores.findIndex((recipe) => recipe.id === selectedId),
-  );
+  const selected =
+    recipesWithScores.find((recipe) => recipe.id === selectedId) ??
+    recipesWithScores[0];
 
   return (
-    <Box>
+    <div>
       {error !== null && (
-        <Alert color="danger" variant="soft" sx={{ mb: 2 }}>
-          {error}
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
       {canonicalMoved && (
-        <Typography level="body-sm" sx={{ color: "success.plainColor", mb: 2 }}>
+        <p className="mb-4 type-callout text-success">
           That changed which version the community prefers.
-        </Typography>
+        </p>
       )}
       <Tabs
-        value={selectedVersion}
-        onChange={(_, value) =>
-          setSelectedId(recipesWithScores[value as number]?.id ?? null)
-        }
+        value={selected?.id ?? ""}
+        onValueChange={(value) => setSelectedId(value)}
+        className="gap-6"
       >
         {/* Tab List - Recipe Versions */}
-        <TabList variant="outlined" sx={{ mb: 3 }}>
-          {recipesWithScores.map((recipe, index) => (
-            <Tab key={recipe.id} value={index}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Box>
-                  <Typography level="title-sm">
-                    {recipe.name}
-                    {recipe.version && ` v${recipe.version}`}
-                  </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography
-                      level="body-xs"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      Score: {formatNetScore(recipe.netScore)}
-                    </Typography>
-                    {recipe.isCanonical && <CanonicalRecipeBadge size="sm" />}
-                  </Stack>
-                </Box>
-              </Stack>
-            </Tab>
+        <TabsList className="w-full justify-start overflow-x-auto rounded-md p-1 group-data-[orientation=horizontal]/tabs:h-auto">
+          {recipesWithScores.map((recipe) => (
+            <TabsTrigger
+              key={recipe.id}
+              value={recipe.id}
+              className="h-auto min-h-11 flex-none justify-start px-3 py-2 text-left"
+            >
+              <span className="flex flex-col items-start gap-0.5">
+                <span className="type-callout font-semibold">
+                  {recipe.name}
+                  {recipe.version && ` v${recipe.version}`}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="tabular type-footnote text-ink-2">
+                    Score: {formatNetScore(recipe.netScore)}
+                  </span>
+                  {recipe.isCanonical && <CanonicalRecipeBadge size="sm" />}
+                </span>
+              </span>
+            </TabsTrigger>
           ))}
-        </TabList>
+        </TabsList>
 
         {/* Tab Panels - Recipe Details */}
-        {recipesWithScores.map((recipe, index) => (
-          <TabPanel key={recipe.id} value={index} sx={{ px: 0 }}>
-            <Grid container spacing={3}>
+        {recipesWithScores.map((recipe) => (
+          <TabsContent key={recipe.id} value={recipe.id}>
+            <div className="grid gap-6 md:grid-cols-3">
               {/* Recipe Image and Voting */}
-              <Grid xs={12} md={4}>
-                <Stack spacing={2}>
-                  {/* Recipe Image */}
-                  <Card sx={{ aspectRatio: "1" }}>
-                    <CardContent sx={{ p: 0, position: "relative" }}>
-                      {isNotNil(recipe.image_url) ? (
-                        <Box
-                          component="img"
-                          src={recipe.image_url}
-                          alt={recipe.name}
-                          sx={{
-                            position: "absolute",
-                            inset: 0,
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        <Box
-                          sx={{
-                            width: "100%",
-                            height: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            bgcolor: "neutral.100",
-                            color: "neutral.400",
-                          }}
-                        >
-                          <Typography level="body-lg">No Image</Typography>
-                        </Box>
-                      )}
-                    </CardContent>
-                  </Card>
+              <div className="flex flex-col gap-4">
+                {/* Recipe Image */}
+                <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-1">
+                  {isNotNil(recipe.image_url) ? (
+                    // biome-ignore lint/performance/noImgElement: a free-form URL; next/image would need its host allowlisted.
+                    <img
+                      src={recipe.image_url}
+                      alt={recipe.name}
+                      className="absolute inset-0 size-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex size-full items-center justify-center bg-surface-2 text-ink-3">
+                      <p className="type-body">No Image</p>
+                    </div>
+                  )}
+                </div>
 
-                  {/* Voting Section */}
-                  <Card>
-                    <CardContent>
-                      <Stack spacing={2}>
-                        {recipe.isCanonical && (
-                          <CanonicalRecipeBadge size="lg" />
-                        )}
+                {/* Voting Section */}
+                <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
+                  {recipe.isCanonical && <CanonicalRecipeBadge size="lg" />}
 
-                        <Typography level="title-sm" textAlign="center">
-                          Community Vote
-                        </Typography>
+                  <p className="text-center type-callout font-semibold">
+                    Community Vote
+                  </p>
 
-                        <RecipeVoteButtons
-                          recipeId={recipe.id}
-                          recipeGroupId={groupId}
-                          recipeName={recipe.name}
-                          currentVote={recipe.userVote}
-                          upvotes={recipe.upvotes}
-                          downvotes={recipe.downvotes}
-                          onVoted={({ canonicalChanged }) => {
-                            setError(null);
-                            setCanonicalMoved(canonicalChanged);
-                            void refresh();
-                          }}
-                          onError={setError}
-                        />
+                  <RecipeVoteButtons
+                    recipeId={recipe.id}
+                    recipeGroupId={groupId}
+                    recipeName={recipe.name}
+                    currentVote={recipe.userVote}
+                    upvotes={recipe.upvotes}
+                    downvotes={recipe.downvotes}
+                    onVoted={({ canonicalChanged }) => {
+                      setError(null);
+                      setCanonicalMoved(canonicalChanged);
+                      void refresh();
+                    }}
+                    onError={setError}
+                  />
 
-                        <Typography
-                          level="body-xs"
-                          textAlign="center"
-                          sx={{ color: "text.secondary" }}
-                        >
-                          Net Score: {formatNetScore(recipe.netScore)}
-                        </Typography>
-                      </Stack>
-                    </CardContent>
-                  </Card>
+                  <p className="tabular text-center type-footnote text-ink-2">
+                    Net Score: {formatNetScore(recipe.netScore)}
+                  </p>
+                </section>
 
-                  {/* Recipe Metadata */}
-                  <Card>
-                    <CardContent>
-                      <Stack spacing={1}>
-                        <Typography level="title-sm">Recipe Info</Typography>
+                {/* Recipe Metadata */}
+                <section className="flex flex-col gap-2 rounded-lg bg-surface-1 p-4">
+                  <p className="type-callout font-semibold">Recipe Info</p>
 
-                        {recipe.difficulty_level && (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1,
-                            }}
-                          >
-                            <Typography
-                              level="body-sm"
-                              sx={{ fontWeight: "bold" }}
-                            >
-                              Difficulty:
-                            </Typography>
-                            <Typography level="body-sm">
-                              {getDifficultyDisplay(recipe.difficulty_level)}
-                            </Typography>
-                          </Box>
-                        )}
-
-                        {recipe.prep_time_minutes && (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1,
-                            }}
-                          >
-                            <MdAccessTime size={16} />
-                            <Typography level="body-sm">
-                              {recipe.prep_time_minutes} minutes
-                            </Typography>
-                          </Box>
-                        )}
-
-                        {recipe.serving_size && (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1,
-                            }}
-                          >
-                            <MdGroup size={16} />
-                            <Typography level="body-sm">
-                              Serves {recipe.serving_size}
-                            </Typography>
-                          </Box>
-                        )}
-
-                        <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                        >
-                          <MdPerson size={16} />
-                          <Typography level="body-sm">
-                            By{" "}
-                            {recipe.created_by_user?.displayName || "Unknown"}
-                          </Typography>
-                        </Box>
-
-                        {recipe.created_at !== null && (
-                          <Typography
-                            level="body-xs"
-                            sx={{ color: "text.secondary" }}
-                          >
-                            Created{" "}
-                            <Timestamp
-                              iso={recipe.created_at}
-                              precision="date"
-                            />
-                          </Typography>
-                        )}
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Stack>
-              </Grid>
-
-              {/* Recipe Content */}
-              <Grid xs={12} md={8}>
-                <Stack spacing={3}>
-                  {/* Recipe Description */}
-                  {recipe.description && (
-                    <Card>
-                      <CardContent>
-                        <Typography level="title-sm" sx={{ mb: 1 }}>
-                          Description
-                        </Typography>
-                        <Typography level="body-md">
-                          {recipe.description}
-                        </Typography>
-                      </CardContent>
-                    </Card>
+                  {recipe.difficulty_level && (
+                    <div className="flex items-center gap-2 type-callout">
+                      <span className="font-bold">Difficulty:</span>
+                      <span>
+                        {getDifficultyDisplay(recipe.difficulty_level)}
+                      </span>
+                    </div>
                   )}
 
-                  {/* Ingredients */}
-                  <Card>
-                    <CardContent>
-                      <Typography level="title-sm" sx={{ mb: 2 }}>
-                        Ingredients
-                      </Typography>
-                      <RecipeIngredientList ingredients={recipe.ingredients} />
-                    </CardContent>
-                  </Card>
+                  {recipe.prep_time_minutes && (
+                    <div className="flex items-center gap-2 type-callout">
+                      <Time aria-hidden className="size-4" />
+                      <span>{recipe.prep_time_minutes} minutes</span>
+                    </div>
+                  )}
 
-                  {/* Instructions */}
-                  <Card>
-                    <CardContent>
-                      <Typography level="title-sm" sx={{ mb: 2 }}>
-                        Instructions
-                      </Typography>
-                      <Stack spacing={2}>
-                        {recipe.instructions.map((instruction) => (
-                          <Box key={instruction.id}>
-                            <Typography level="title-sm" sx={{ mb: 0.5 }}>
-                              Step {instruction.step_number}
-                              {instruction.time_minutes && (
-                                <Typography
-                                  level="body-xs"
-                                  sx={{ ml: 1, color: "text.secondary" }}
-                                >
-                                  ({instruction.time_minutes}min)
-                                </Typography>
-                              )}
-                            </Typography>
-                            <Typography level="body-md">
-                              {instruction.instruction_text}
-                            </Typography>
-                            {instruction.equipment_needed && (
-                              <Typography
-                                level="body-xs"
-                                sx={{ color: "text.secondary", mt: 0.5 }}
-                              >
-                                Equipment: {instruction.equipment_needed}
-                              </Typography>
-                            )}
-                          </Box>
-                        ))}
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Stack>
-              </Grid>
-            </Grid>
-          </TabPanel>
+                  {recipe.serving_size && (
+                    <div className="flex items-center gap-2 type-callout">
+                      <People aria-hidden className="size-4" />
+                      <span>Serves {recipe.serving_size}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 type-callout">
+                    <Person aria-hidden className="size-4" />
+                    <span>
+                      By {recipe.created_by_user?.displayName || "Unknown"}
+                    </span>
+                  </div>
+
+                  {recipe.created_at !== null && (
+                    <p className="type-footnote text-ink-2">
+                      Created{" "}
+                      <Timestamp iso={recipe.created_at} precision="date" />
+                    </p>
+                  )}
+                </section>
+              </div>
+
+              {/* Recipe Content */}
+              <div className="flex flex-col gap-6 md:col-span-2">
+                {/* Recipe Description */}
+                {recipe.description && (
+                  <section className="rounded-lg bg-surface-1 p-4">
+                    <p className="mb-2 type-callout font-semibold">
+                      Description
+                    </p>
+                    <p className="type-body">{recipe.description}</p>
+                  </section>
+                )}
+
+                {/* Ingredients */}
+                <section className="rounded-lg bg-surface-1 p-4">
+                  <p className="mb-4 type-callout font-semibold">Ingredients</p>
+                  <RecipeIngredientList ingredients={recipe.ingredients} />
+                </section>
+
+                {/* Instructions */}
+                <section className="rounded-lg bg-surface-1 p-4">
+                  <p className="mb-4 type-callout font-semibold">
+                    Instructions
+                  </p>
+                  <div className="flex flex-col gap-4">
+                    {recipe.instructions.map((instruction) => (
+                      <div key={instruction.id}>
+                        <p className="mb-1 type-callout font-semibold">
+                          Step {instruction.step_number}
+                          {instruction.time_minutes && (
+                            <span className="ml-2 font-normal type-footnote text-ink-2">
+                              ({instruction.time_minutes}min)
+                            </span>
+                          )}
+                        </p>
+                        <p className="type-body">
+                          {instruction.instruction_text}
+                        </p>
+                        {instruction.equipment_needed && (
+                          <p className="mt-1 type-footnote text-ink-2">
+                            Equipment: {instruction.equipment_needed}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </TabsContent>
         ))}
       </Tabs>
-    </Box>
+    </div>
   );
 };

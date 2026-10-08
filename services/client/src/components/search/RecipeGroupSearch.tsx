@@ -1,20 +1,8 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  FormControl,
-  FormLabel,
-  Input,
-  Option,
-  Select,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import { useCallback, useRef, useState } from "react";
-import { MdClear, MdRestaurant, MdSearch } from "react-icons/md";
+import { useCallback, useId, useRef, useState } from "react";
+import { EmptyState } from "@/components/app/EmptyState";
+import { Close, Restaurant, Search } from "@/components/app/icons";
 import {
   type RecipeGroupCardData,
   recipeGroupCardFromNode,
@@ -25,6 +13,21 @@ import {
   RecipeGroupsQuery,
 } from "@/components/recipe/queries";
 import { VirtualizedRecipeGroupGrid } from "@/components/recipe/VirtualizedRecipeGroupGrid";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import { useEnum } from "@/hooks/useEnum";
 import type { FragmentOf } from "@/lib/api/graphql";
@@ -47,6 +50,9 @@ const CATEGORY_OPTIONS = [
 ] as const;
 
 type Category = (typeof CATEGORY_OPTIONS)[number]["value"];
+
+/** Radix Select reserves `""` for "no value", so "Any Spirit" needs a name. */
+const ANY_SPIRIT = "any";
 
 export type RecipeGroupSearchFilters = {
   searchTerm: string;
@@ -102,6 +108,8 @@ export const RecipeGroupSearch = ({
   initialHasNextPage = false,
   initialTotalCount = null,
 }: RecipeGroupSearchProps) => {
+  const searchId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<RecipeGroupSearchFilters>({
     ...DEFAULT_FILTERS,
     searchTerm: initialQuery,
@@ -195,118 +203,124 @@ export const RecipeGroupSearch = ({
   const error = list.failure;
 
   return (
-    <Box>
+    <div>
       {/* Search Header */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack spacing={2}>
-            {/* Main search input */}
-            <FormControl>
-              <FormLabel>Search Recipe Groups</FormLabel>
-              <Input
-                placeholder="Search by recipe name, description, or tags..."
-                value={filters.searchTerm}
-                onChange={(e) =>
-                  handleUpdateFilters({ searchTerm: e.target.value })
-                }
-                startDecorator={<MdSearch />}
-                endDecorator={
-                  filters.searchTerm && (
-                    <Button
-                      variant="plain"
-                      size="sm"
-                      aria-label="Clear search"
-                      onClick={() => handleUpdateFilters({ searchTerm: "" })}
-                    >
-                      <MdClear />
-                    </Button>
-                  )
-                }
-              />
-            </FormControl>
+      <section className="mb-6 flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
+        {/* Main search input */}
+        <Field>
+          <FieldLabel htmlFor={searchId}>Search Recipe Groups</FieldLabel>
+          <InputGroup>
+            <InputGroupAddon>
+              <Search aria-hidden />
+            </InputGroupAddon>
+            <InputGroupInput
+              ref={searchInputRef}
+              id={searchId}
+              placeholder="Search by recipe name, description, or tags..."
+              value={filters.searchTerm}
+              onChange={(e) =>
+                handleUpdateFilters({ searchTerm: e.target.value })
+              }
+            />
+            {filters.searchTerm && (
+              <InputGroupAddon align="inline-end">
+                {/* 32 px drawn inside the 44 px field; the pseudo-element
+                    keeps the target at 44. The button unmounts once the term
+                    is empty, so focus goes back to the field, not <body>. */}
+                <InputGroupButton
+                  size="icon-sm"
+                  aria-label="Clear search"
+                  className="relative after:absolute after:-inset-1.5 after:content-['']"
+                  onClick={() => {
+                    handleUpdateFilters({ searchTerm: "" });
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  <Close aria-hidden />
+                </InputGroupButton>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
+        </Field>
 
-            {/* Quick filters */}
-            <Stack
-              direction="row"
-              spacing={2}
-              flexWrap="wrap"
-              alignItems="center"
-            >
-              <Select
-                value={filters.category}
-                onChange={(_, value) =>
-                  value && handleUpdateFilters({ category: value })
-                }
-                size="sm"
-                sx={{ minWidth: 120 }}
-                aria-label="Category"
-              >
-                <Option value="all">All Categories</Option>
-                {CATEGORY_OPTIONS.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
+        {/* Quick filters */}
+        <div className="flex flex-wrap items-center gap-4">
+          <Select
+            value={filters.category}
+            onValueChange={(value) =>
+              handleUpdateFilters({ category: value as "all" | Category })
+            }
+          >
+            <SelectTrigger aria-label="Category" className="min-w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {CATEGORY_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-              <Select
-                value={filters.baseSpirit || ""}
-                onChange={(_, value) =>
-                  handleUpdateFilters({ baseSpirit: value || null })
-                }
-                size="sm"
-                sx={{ minWidth: 140 }}
-                placeholder="Base Spirit"
-                aria-label="Base Spirit"
-              >
-                <Option value="">Any Spirit</Option>
-                {spiritOptions.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
+          <Select
+            value={filters.baseSpirit ?? ANY_SPIRIT}
+            onValueChange={(value) =>
+              handleUpdateFilters({
+                baseSpirit: value === ANY_SPIRIT ? null : value,
+              })
+            }
+          >
+            <SelectTrigger aria-label="Base Spirit" className="min-w-[140px]">
+              <SelectValue placeholder="Base Spirit" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY_SPIRIT}>Any Spirit</SelectItem>
+              {spiritOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-              {/* Active filters indicator */}
-              {(filters.searchTerm ||
-                filters.category !== "all" ||
-                filters.baseSpirit) && (
-                <Button variant="plain" size="sm" onClick={handleClearFilters}>
-                  Clear All
-                </Button>
-              )}
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
+          {/* Active filters indicator */}
+          {(filters.searchTerm ||
+            filters.category !== "all" ||
+            filters.baseSpirit) && (
+            <Button variant="ghost" onClick={handleClearFilters}>
+              Clear All
+            </Button>
+          )}
+        </div>
+      </section>
 
       {/* Results */}
       {error && (
-        <Typography level="body-md" sx={{ color: "danger.500" }}>
+        <p className="type-body text-destructive">
           Error searching recipe groups: {error.message}
-        </Typography>
+        </p>
       )}
 
       {/* Results summary */}
-      <Box sx={{ mb: 2 }}>
-        <Typography level="body-sm" sx={{ color: "text.secondary" }}>
+      <div className="mb-4 flex flex-wrap items-center gap-4">
+        <p className="type-callout text-ink-2">
           {isLoading && results.length === 0
             ? "Searching recipe groups..."
             : results.length > 0
               ? `Found ${totalCount} recipe groups${hasMore ? ` (showing ${results.length})` : ``}`
               : "No recipe groups found"}
-        </Typography>
+        </p>
         {hasMore && (
           <Button
-            variant="plain"
-            size="sm"
+            variant="ghost"
             onClick={() => void reset(undefined, { fresh: true })}
-            sx={{ ml: 2 }}
           >
             Refresh
           </Button>
         )}
-      </Box>
+      </div>
 
       {/* Recipe group grid */}
       {results.length > 0 ? (
@@ -322,31 +336,19 @@ export const RecipeGroupSearch = ({
         />
       ) : (
         !isLoading && (
-          <Card>
-            <CardContent sx={{ textAlign: "center", py: 4 }}>
-              <MdRestaurant
-                size={48}
-                style={{
-                  color: "var(--joy-palette-neutral-400)",
-                  marginBottom: 16,
-                }}
-              />
-              <Typography level="h4" sx={{ mb: 1 }}>
-                No recipe groups found
-              </Typography>
-              <Typography
-                level="body-md"
-                sx={{ color: "text.secondary", mb: 2 }}
-              >
-                Try adjusting your search criteria or filters
-              </Typography>
-              <Button variant="outlined" onClick={handleClearFilters}>
+          <EmptyState
+            className="rounded-lg bg-surface-1"
+            illustration={<Restaurant aria-hidden />}
+            title="No recipe groups found"
+            description="Try adjusting your search criteria or filters"
+            action={
+              <Button variant="outline" onClick={handleClearFilters}>
                 Clear Filters
               </Button>
-            </CardContent>
-          </Card>
+            }
+          />
         )
       )}
-    </Box>
+    </div>
   );
 };

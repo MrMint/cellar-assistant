@@ -1,6 +1,5 @@
 "use client";
 
-import { Box, Grid } from "@mui/joy";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RecipeGroupCardData } from "./adapter";
 import { RecipeGroupCard } from "./RecipeGroupCard";
@@ -125,66 +124,42 @@ export const VirtualizedRecipeGroupGrid = memo<VirtualizedRecipeGroupGridProps>(
     );
 
     return (
-      <Box
+      <div
         ref={containerRef}
-        sx={{
-          height: containerHeight,
-          overflow: "auto",
-          "&::-webkit-scrollbar": {
-            width: "8px",
-          },
-          "&::-webkit-scrollbar-track": {
-            background: "neutral.100",
-            borderRadius: "4px",
-          },
-          "&::-webkit-scrollbar-thumb": {
-            background: "neutral.400",
-            borderRadius: "4px",
-            "&:hover": {
-              background: "neutral.500",
-            },
-          },
-        }}
+        className="overflow-auto [scrollbar-color:var(--ca-surface-3)_transparent] [scrollbar-width:thin]"
+        style={{ height: containerHeight }}
         onScroll={handleScroll}
       >
         {/* Top spacer for virtual scrolling */}
-        {topSpacerHeight > 0 && <Box sx={{ height: topSpacerHeight }} />}
+        {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} />}
 
         {/* Visible items */}
-        <Grid container spacing={2} sx={{ px: 1 }}>
+        <div className="grid grid-cols-1 gap-4 px-2 sm:grid-cols-2 md:grid-cols-3">
           {visibleRecipeGroups.map((recipeGroup) => (
-            <Grid key={recipeGroup.id} xs={12} sm={6} md={4}>
-              <RecipeGroupCard
-                recipeGroup={recipeGroup}
-                href={`/recipes/groups/${recipeGroup.id}`}
-                onClick={onRecipeGroupSelect}
-              />
-            </Grid>
+            <RecipeGroupCard
+              key={recipeGroup.id}
+              recipeGroup={recipeGroup}
+              href={`/recipes/groups/${recipeGroup.id}`}
+              onClick={onRecipeGroupSelect}
+            />
           ))}
 
           {/* Loading skeletons */}
-          {isLoading &&
-            Array.from({ length: loadingItems }, (_, i) => `loading-${i}`).map(
-              (key) => (
-                <Grid key={key} xs={12} sm={6} md={4}>
-                  <RecipeGroupCardSkeleton />
-                </Grid>
-              ),
-            )}
-        </Grid>
+          {isLoading && <RecipeGroupCardSkeleton count={loadingItems} />}
+        </div>
 
         {/* Bottom spacer for virtual scrolling */}
-        {bottomSpacerHeight > 0 && <Box sx={{ height: bottomSpacerHeight }} />}
+        {bottomSpacerHeight > 0 && (
+          <div style={{ height: bottomSpacerHeight }} />
+        )}
 
         {/* End of list indicator */}
         {!hasMore && !isLoading && recipeGroups.length > 0 && (
-          <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
-            <Box sx={{ fontSize: "sm" }}>
-              End of results • {recipeGroups.length} recipe groups
-            </Box>
-          </Box>
+          <p className="py-4 text-center type-callout text-ink-2">
+            End of results • {recipeGroups.length} recipe groups
+          </p>
         )}
-      </Box>
+      </div>
     );
   },
 );

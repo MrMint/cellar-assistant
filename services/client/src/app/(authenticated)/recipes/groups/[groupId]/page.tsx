@@ -1,8 +1,8 @@
-import { Alert, Box, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
-import { Link } from "@/components/common/Link";
+import { Link } from "@/components/app/Link";
 import { RecipeGroupPageQuery } from "@/components/recipe/queries";
 import { RecipePage } from "@/components/recipe/RecipePage";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
@@ -35,7 +35,7 @@ export default async function RecipeGroupPage({
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return <p className="type-body text-destructive">{result.error.message}</p>;
   }
 
   const recipeGroup = result.data;
@@ -44,54 +44,53 @@ export default async function RecipeGroupPage({
   const shownId = canonicalId ?? recipeGroup.recipes.edges[0]?.node.id ?? null;
 
   const header = (
-    <Box sx={{ mb: 4 }}>
-      <Typography level="h1" sx={{ mb: 1 }}>
-        {recipeGroup.name}
-      </Typography>
+    <div className="mb-8">
+      <h1 className="mb-2 type-large-title">{recipeGroup.name}</h1>
 
       {recipeGroup.description && (
-        <Typography level="body-lg" sx={{ color: "text.secondary", mb: 2 }}>
-          {recipeGroup.description}
-        </Typography>
+        <p className="mb-4 type-body text-ink-2">{recipeGroup.description}</p>
       )}
 
       {versionCount > 1 && (
-        <Typography level="body-md" sx={{ color: "text.secondary" }}>
+        <p className="type-body text-ink-2">
           {canonicalId === null
             ? "Showing the top version • "
             : "Showing community's preferred version • "}
           <Link
             href={`/recipes/groups/${recipeGroup.id}/versions`}
             underline="always"
+            className="text-ink-1"
           >
             View all {versionCount} versions
           </Link>
-        </Typography>
+        </p>
       )}
 
       {canonicalId === null && versionCount > 1 && (
-        <Alert color="neutral" variant="soft" sx={{ mt: 2 }}>
-          Nobody has voted yet, so this group has no community pick. Vote on the
-          versions page to choose one.
+        <Alert className="mt-4 border-none bg-surface-2">
+          <AlertDescription className="text-ink-1">
+            Nobody has voted yet, so this group has no community pick. Vote on
+            the versions page to choose one.
+          </AlertDescription>
         </Alert>
       )}
-    </Box>
+    </div>
   );
 
   if (shownId === null) {
     return (
-      <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
+      <div className="mx-auto w-full max-w-[1200px]">
         {header}
-        <Typography level="body-lg" sx={{ color: "text.secondary" }}>
+        <p className="type-body text-ink-2">
           This recipe group has no versions yet.
-        </Typography>
-      </Box>
+        </p>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
+    <div className="mx-auto w-full max-w-[1200px]">
       <RecipePage recipeId={shownId} header={header} />
-    </Box>
+    </div>
   );
 }

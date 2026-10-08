@@ -1,25 +1,11 @@
 "use client";
 
-import {
-  AspectRatio,
-  Box,
-  Card,
-  CardContent,
-  CardOverflow,
-  Chip,
-  Link as JoyLink,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import Link from "next/link";
 import { memo, useMemo } from "react";
-import {
-  MdAccessTime,
-  MdGroup,
-  MdLocalBar,
-  MdSignalCellular1Bar,
-} from "react-icons/md";
+import { Cocktail, People, Time, WeakSignal } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { Badge } from "@/components/ui/badge";
 import { breakpointDown, useMediaQuery } from "@/hooks/useMediaQuery";
+import { cn } from "@/lib/utils";
 import { formatSpirit, type RecipeGroupCardData } from "./adapter";
 
 export type { RecipeGroupCardData };
@@ -50,8 +36,8 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
     onClick,
     showVersionCount = true,
   }: RecipeGroupCardProps) => {
+    // Logic only (how many tags, "3" or "3 versions"); sizes are `sm:` classes.
     const isMobile = useMediaQuery(breakpointDown("sm"));
-    const _isTablet = useMediaQuery(breakpointDown("md"));
     const handleClick = () => {
       if (onClick) {
         onClick(recipeGroup.id);
@@ -81,194 +67,122 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
       };
     }, []);
 
-    const cardContent = (
-      <Card
-        variant="outlined"
-        sx={{
-          cursor: href || onClick ? "pointer" : "default",
-          transition: "all 0.2s ease-in-out",
-          "&:hover": {
-            transform: href || onClick ? "translateY(-2px)" : "none",
-            boxShadow: href || onClick ? "lg" : "none",
-          },
-        }}
+    const interactive = Boolean(href || onClick);
+    const tagLimit = isMobile ? 2 : 3;
+
+    return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: the old card's optional `onClick(groupId)`; the keyboard path is the title link.
+      // biome-ignore lint/a11y/useKeyWithClickEvents: as above.
+      <div
+        data-slot="recipe-group-card"
+        className={cn(
+          "touch-none-select relative flex flex-col overflow-hidden rounded-lg bg-surface-1",
+          interactive &&
+            "cursor-pointer transition-transform duration-(--ca-dur-short) ease-standard active:scale-97 motion-reduce:transition-none hover:-translate-y-0.5 motion-reduce:active:scale-100 motion-reduce:hover:translate-y-0",
+        )}
         onClick={handleClick}
       >
         {imageUrl && (
-          <CardOverflow>
-            <AspectRatio ratio="4/3">
-              <Box
-                component="img"
-                src={imageUrl}
-                alt={canonical?.name || recipeGroup.name}
-                sx={{ objectFit: "cover" }}
-              />
-            </AspectRatio>
-          </CardOverflow>
+          <div className="aspect-[4/3] bg-surface-2">
+            {/* biome-ignore lint/performance/noImgElement: a free-form URL; next/image would need its host allowlisted. */}
+            <img
+              src={imageUrl}
+              alt={canonical?.name || recipeGroup.name}
+              className="size-full object-cover"
+            />
+          </div>
         )}
 
-        <CardContent sx={{ gap: 1 }}>
+        <div className="flex flex-col gap-2 p-4">
           {/* Recipe Group Name */}
-          <Typography level="title-md" component="h3">
-            {recipeGroup.name}
-          </Typography>
+          <h3 className="type-headline">
+            {href ? (
+              <Link href={href} overlay underline="none">
+                {recipeGroup.name}
+              </Link>
+            ) : (
+              recipeGroup.name
+            )}
+          </h3>
 
           {/* Canonical Recipe Name (if different) */}
           {canonical && canonical.name !== recipeGroup.name && (
-            <Typography level="body-sm" sx={{ color: "text.secondary" }}>
+            <p className="type-callout text-ink-2">
               Featured: {canonical.name}
-            </Typography>
+            </p>
           )}
 
           {/* Description */}
           {(canonical?.description || recipeGroup.description) && (
-            <Typography
-              level="body-sm"
-              sx={{
-                color: "text.secondary",
-                display: "-webkit-box",
-                WebkitLineClamp: isMobile ? 1 : 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-                fontSize: isMobile ? "0.8rem" : undefined,
-              }}
-            >
+            <p className="line-clamp-1 type-footnote text-ink-2 sm:line-clamp-2 sm:type-callout">
               {canonical?.description || recipeGroup.description}
-            </Typography>
+            </p>
           )}
 
           {/* Recipe Details */}
           {canonical && (
-            <Stack
-              direction="row"
-              spacing={isMobile ? 1 : 2}
-              flexWrap="wrap"
-              sx={{ mt: 1 }}
-            >
+            <div className="mt-2 flex flex-wrap gap-2 type-footnote sm:gap-4">
               {canonical.difficulty_level && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <MdSignalCellular1Bar size={isMobile ? 14 : 16} />
-                  <Typography
-                    level="body-xs"
-                    sx={{ fontSize: isMobile ? "0.7rem" : undefined }}
-                  >
-                    {getDifficultyDisplay(canonical.difficulty_level)}
-                  </Typography>
-                </Box>
+                <span className="flex items-center gap-1">
+                  <WeakSignal aria-hidden className="size-3.5 sm:size-4" />
+                  {getDifficultyDisplay(canonical.difficulty_level)}
+                </span>
               )}
 
               {canonical.prep_time_minutes && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <MdAccessTime size={isMobile ? 14 : 16} />
-                  <Typography
-                    level="body-xs"
-                    sx={{ fontSize: isMobile ? "0.7rem" : undefined }}
-                  >
+                <span className="flex items-center gap-1">
+                  <Time aria-hidden className="size-3.5 sm:size-4" />
+                  <span className="tabular">
                     {canonical.prep_time_minutes}m
-                  </Typography>
-                </Box>
+                  </span>
+                </span>
               )}
 
               {canonical.serving_size && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <Typography
-                    level="body-xs"
-                    sx={{ fontSize: isMobile ? "0.7rem" : undefined }}
-                  >
-                    Serves {canonical.serving_size}
-                  </Typography>
-                </Box>
+                <span className="flex items-center gap-1">
+                  Serves {canonical.serving_size}
+                </span>
               )}
-            </Stack>
+            </div>
           )}
 
           {/* Category and Base Spirit */}
-          <Stack
-            direction="row"
-            spacing={isMobile ? 0.5 : 1}
-            flexWrap="wrap"
-            sx={{ mt: 1 }}
-          >
-            <Chip
-              size={isMobile ? "sm" : "sm"}
-              variant="soft"
-              color="primary"
-              sx={{ fontSize: isMobile ? "0.7rem" : undefined }}
-            >
-              {recipeGroup.category}
-            </Chip>
+          <div className="mt-2 flex flex-wrap gap-1 sm:gap-2">
+            <Badge variant="secondary">{recipeGroup.category}</Badge>
 
             {formattedSpirit && (
-              <Chip
-                size={isMobile ? "sm" : "sm"}
-                variant="soft"
-                color="neutral"
-                startDecorator={<MdLocalBar size={isMobile ? 14 : 16} />}
-                sx={{ fontSize: isMobile ? "0.7rem" : undefined }}
-              >
+              <Badge variant="secondary">
+                <Cocktail aria-hidden />
                 {formattedSpirit}
-              </Chip>
+              </Badge>
             )}
 
             {showVersionCount && versionCount > 1 && (
-              <Chip
-                size={isMobile ? "sm" : "sm"}
-                variant="soft"
-                color="warning"
-                startDecorator={<MdGroup size={isMobile ? 14 : 16} />}
-                sx={{ fontSize: isMobile ? "0.7rem" : undefined }}
-              >
+              <Badge variant="secondary">
+                <People aria-hidden />
                 {isMobile ? `${versionCount}` : `${versionCount} versions`}
-              </Chip>
+              </Badge>
             )}
-          </Stack>
+          </div>
 
           {/* Tags */}
           {recipeGroup.tags && recipeGroup.tags.length > 0 && (
-            <Stack
-              direction="row"
-              spacing={isMobile ? 0.25 : 0.5}
-              flexWrap="wrap"
-              sx={{ mt: 1 }}
-            >
-              {recipeGroup.tags.slice(0, isMobile ? 2 : 3).map((tag) => (
-                <Chip
-                  key={`tag-${tag}`}
-                  size={isMobile ? "sm" : "sm"}
-                  variant="outlined"
-                  color="neutral"
-                  sx={{ fontSize: isMobile ? "0.65rem" : undefined }}
-                >
+            <div className="mt-2 flex flex-wrap gap-0.5 sm:gap-1">
+              {recipeGroup.tags.slice(0, tagLimit).map((tag) => (
+                <Badge key={`tag-${tag}`} variant="outline">
                   {tag}
-                </Chip>
+                </Badge>
               ))}
-              {recipeGroup.tags.length > (isMobile ? 2 : 3) && (
-                <Typography
-                  level="body-xs"
-                  sx={{
-                    color: "text.secondary",
-                    alignSelf: "center",
-                    fontSize: isMobile ? "0.65rem" : undefined,
-                  }}
-                >
-                  +{recipeGroup.tags.length - (isMobile ? 2 : 3)} more
-                </Typography>
+              {recipeGroup.tags.length > tagLimit && (
+                <span className="self-center type-footnote text-ink-2">
+                  +{recipeGroup.tags.length - tagLimit} more
+                </span>
               )}
-            </Stack>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
-
-    if (href) {
-      return (
-        <JoyLink component={Link} href={href} underline="none">
-          {cardContent}
-        </JoyLink>
-      );
-    }
-
-    return cardContent;
   },
 );
 

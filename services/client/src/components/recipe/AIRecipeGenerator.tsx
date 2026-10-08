@@ -1,29 +1,22 @@
 "use client";
 
-import {
-  Box,
-  Card,
-  CardContent,
-  Container,
-  Grid,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useMemo, useState } from "react";
-import {
-  MdAutoFixHigh,
-  MdPhotoCamera,
-  MdPsychology,
-  MdTrendingUp,
-  MdVisibility,
-} from "react-icons/md";
 import { useQuery } from "urql";
+import {
+  AI,
+  AutoFill,
+  Camera,
+  ICON_STROKE,
+  Trending,
+  Visible,
+} from "@/components/app/icons";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { AiStatus } from "@/components/common/AiStatus";
 import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { readFragment } from "@/lib/api/graphql";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
+import { cn } from "@/lib/utils";
 import { recipeDetailsFromNode } from "./adapter";
 import { RecipeDetailsFragment, RecipeReviewFragment } from "./fragments";
 import { RecipePageQuery, recipePageVariables } from "./queries";
@@ -81,17 +74,17 @@ export function GeneratedRecipe({ recipeId }: { recipeId: string }) {
 
 const FEATURES = [
   {
-    icon: MdPsychology,
+    icon: AI,
     title: "Smart Vision Analysis",
     text: "Advanced OCR and computer vision to extract recipes from photos",
   },
   {
-    icon: MdAutoFixHigh,
+    icon: AutoFill,
     title: "Ingredient Classification",
     text: "Automatically categorizes ingredients and links them to items in the catalog",
   },
   {
-    icon: MdVisibility,
+    icon: Visible,
     title: "Recipe Groups",
     text: "Files the recipe beside other versions of the same drink or dish",
   },
@@ -99,22 +92,22 @@ const FEATURES = [
 
 const STEPS = [
   {
-    icon: MdPhotoCamera,
+    icon: Camera,
     title: "1. Upload Photo",
     text: "Take or upload a photo of any menu, recipe card, or cookbook page",
   },
   {
-    icon: MdPsychology,
+    icon: AI,
     title: "2. AI Analysis",
     text: "Advanced AI extracts recipes, ingredients, and cooking instructions",
   },
   {
-    icon: MdAutoFixHigh,
+    icon: AutoFill,
     title: "3. Smart Matching",
     text: "Ingredients are automatically matched to items in the catalog",
   },
   {
-    icon: MdTrendingUp,
+    icon: Trending,
     title: "4. Ready to Cook",
     text: "Get a complete recipe with ingredients and steps, ready to review",
   },
@@ -169,27 +162,27 @@ export function AIRecipeGeneratorView({
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <div className="mx-auto w-full max-w-[1200px] py-8">
       {/* Header */}
-      <Box sx={{ mb: 6, textAlign: "center" }}>
-        <Typography level="h1" component="h1" sx={{ mb: 2 }}>
-          AI Recipe Generator
-        </Typography>
+      <div className="mb-12 text-center">
+        <h1 className="mb-4 type-large-title">AI Recipe Generator</h1>
         {recipePhotoOffered && (
-          <Typography
-            level="body-lg"
-            sx={{ color: "text.secondary", maxWidth: 600, mx: "auto" }}
-          >
+          <p className="mx-auto max-w-[600px] type-body text-ink-2">
             Transform any menu photo, recipe card, or cookbook page into a
             detailed, executable recipe, with its ingredients matched to items
             in the catalog.
-          </Typography>
+          </p>
         )}
-      </Box>
+      </div>
 
       {/* Main Generator */}
-      <Grid container spacing={4}>
-        <Grid xs={12} lg={recipePhotoOffered ? 8 : 12}>
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-8",
+          recipePhotoOffered && "lg:grid-cols-3",
+        )}
+      >
+        <div className={cn(recipePhotoOffered && "lg:col-span-2")}>
           {recipePhotoOffered ? (
             <RecipePhotoProcessor onRecipesCreated={handleRecipesCreated} />
           ) : (
@@ -204,131 +197,84 @@ export function AIRecipeGeneratorView({
               }}
             />
           )}
-        </Grid>
+        </div>
 
         {recipePhotoOffered && (
-          <Grid xs={12} lg={4}>
-            <Stack spacing={3}>
-              {/* Features */}
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography level="h3" sx={{ mb: 2 }}>
-                    AI Features
-                  </Typography>
-                  <Stack spacing={2}>
-                    {FEATURES.map(({ icon: Icon, title, text }) => (
-                      <Box
-                        key={title}
-                        sx={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: 2,
-                        }}
-                      >
-                        <Icon
-                          style={{
-                            color: "var(--joy-palette-primary-500)",
-                            marginTop: 4,
-                          }}
-                        />
-                        <Box>
-                          <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
-                            {title}
-                          </Typography>
-                          <Typography
-                            level="body-xs"
-                            sx={{ color: "text.tertiary" }}
-                          >
-                            {text}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    ))}
-                  </Stack>
-                </CardContent>
-              </Card>
+          <div className="flex flex-col gap-6">
+            {/* Features */}
+            <section className="rounded-lg bg-surface-1 p-4">
+              <h3 className="mb-4 type-title-2">AI Features</h3>
+              <div className="flex flex-col gap-4">
+                {FEATURES.map(({ icon: Icon, title, text }) => (
+                  <div key={title} className="flex items-start gap-4">
+                    <Icon
+                      aria-hidden
+                      strokeWidth={ICON_STROKE}
+                      className="mt-1 size-4 shrink-0 text-ink-2"
+                    />
+                    <div>
+                      <p className="type-callout font-semibold">{title}</p>
+                      <p className="type-footnote">{text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
 
-              {/* Tips */}
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography level="h3" sx={{ mb: 2 }}>
-                    Best Results Tips
-                  </Typography>
-                  <Stack spacing={1.5}>
-                    <Typography level="body-sm">
-                      📱 <strong>Clear photos:</strong> Ensure text is readable
-                      and well-lit
-                    </Typography>
-                    <Typography level="body-sm">
-                      🍸 <strong>One recipe per photo:</strong> Each photo
-                      becomes one recipe
-                    </Typography>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Stack>
-          </Grid>
+            {/* Tips */}
+            <section className="rounded-lg bg-surface-1 p-4">
+              <h3 className="mb-4 type-title-2">Best Results Tips</h3>
+              <div className="flex flex-col gap-3">
+                <p className="type-callout">
+                  📱 <strong>Clear photos:</strong> Ensure text is readable and
+                  well-lit
+                </p>
+                <p className="type-callout">
+                  🍸 <strong>One recipe per photo:</strong> Each photo becomes
+                  one recipe
+                </p>
+              </div>
+            </section>
+          </div>
         )}
-      </Grid>
+      </div>
 
       {/* How It Works */}
       {recipePhotoOffered && (
-        <Box sx={{ mt: 8 }}>
-          <Typography
-            level="h2"
-            component="h2"
-            sx={{ mb: 4, textAlign: "center" }}
-          >
-            How It Works
-          </Typography>
-          <Grid container spacing={4}>
+        <div className="mt-16">
+          <h2 className="mb-8 text-center type-title-1">How It Works</h2>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
             {STEPS.map(({ icon: Icon, title, text }) => (
-              <Grid key={title} xs={12} md={3}>
-                <Card variant="outlined" sx={{ height: "100%" }}>
-                  <CardContent sx={{ textAlign: "center" }}>
-                    <Icon
-                      size={40}
-                      style={{
-                        color: "var(--joy-palette-primary-500)",
-                        marginBottom: 16,
-                        marginLeft: "auto",
-                        marginRight: "auto",
-                      }}
-                    />
-                    <Typography level="h4" sx={{ mb: 1 }}>
-                      {title}
-                    </Typography>
-                    <Typography
-                      level="body-sm"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      {text}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
+              <section
+                key={title}
+                className="flex h-full flex-col items-center rounded-lg bg-surface-1 p-4 text-center"
+              >
+                <Icon
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="mb-4 size-10 text-ink-2"
+                />
+                <h4 className="mb-2 type-title-2">{title}</h4>
+                <p className="type-callout text-ink-2">{text}</p>
+              </section>
             ))}
-          </Grid>
-        </Box>
+          </div>
+        </div>
       )}
 
       {/* Generated Recipes Display */}
       {createdRecipeIds.length > 0 && (
-        <Box sx={{ mt: 8 }}>
-          <Typography
-            level="h2"
-            component="h2"
-            sx={{ mb: 4, textAlign: "center" }}
-          >
+        <div className="mt-16">
+          <h2 className="mb-8 text-center type-title-1">
             Your Generated Recipes
-          </Typography>
-          <Stack spacing={6}>
+          </h2>
+          <div className="flex flex-col gap-12">
             {createdRecipeIds.map((recipeId) => (
               <GeneratedRecipe key={recipeId} recipeId={recipeId} />
             ))}
-          </Stack>
-        </Box>
+          </div>
+        </div>
       )}
-    </Container>
+    </div>
   );
 }
