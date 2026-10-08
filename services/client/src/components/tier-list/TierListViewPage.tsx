@@ -226,9 +226,10 @@ export function TierListViewPage({
     [data.id, redoAction, router, setHistory, undoAction],
   );
 
-  // ⌘Z / ⇧⌘Z (Ctrl on other systems) while arranging, outside text fields.
+  // ⌘Z / ⇧⌘Z (Ctrl on other systems) while arranging, outside text fields
+  // and not behind the Add entry sheet, whose own focus owns the keyboard.
   useEffect(() => {
-    if (!isArranging) return;
+    if (!isArranging || addOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z")
         return;
@@ -246,7 +247,7 @@ export function TierListViewPage({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [history.canRedo, history.canUndo, isArranging, step]);
+  }, [addOpen, history.canRedo, history.canUndo, isArranging, step]);
 
   const handleAddEntry = useCallback(
     async (candidate: AddEntryCandidate) => {
