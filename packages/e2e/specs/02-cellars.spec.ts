@@ -68,7 +68,8 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
   const index = await primary.goto("/cellars");
   expect(index?.status(), "/cellars did not render").toBeLessThan(400);
   await expect(primary.getByRole("link", { name: "Home" })).toBeVisible();
-  // `myCellars` is newest first, so the new card is in the first virtual rows.
+  // `myCellars` puts your own cellars first, by most recent activity (D13); a
+  // cellar created a moment ago is the newest, so it is in the first rows.
   const card = primary.getByRole("link", { name, exact: true });
   await expect(card, "the new cellar is not on /cellars").toBeVisible({
     timeout: 20_000,

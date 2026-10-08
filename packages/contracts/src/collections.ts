@@ -149,7 +149,7 @@ export type CellarsCollectionActorInterface = {
    */
   list(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
   /**
-   * The `/search` landing line ("N items across M cellars"), UI parity G36.
+   * The `/search` landing line ("N bottles across M cellars"), UI parity G36.
    *
    * **Not** `list`'s set. `list` is every cellar the viewer may *see*, which
    * includes strangers' PUBLIC cellars and friends' FRIENDS ones; summing it
