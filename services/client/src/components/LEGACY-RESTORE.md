@@ -37,7 +37,7 @@ file the rewrite owns: `common/` already held the old `DebouncedInput`, `Link`,
 | `components/cellar/CellarItemsFilter.tsx` | same, plus `cellarItemCounts.ts` | `ItemTypeValue` → SDL `ItemType` |
 | `hooks/useMediaQuery.ts`, `useColumnCount.ts`, `useDebouncedCallback.ts`, `useAnimatedPlaceholder.ts` | same | verbatim |
 | `hooks/useEnum.ts` | same, plus `hooks/enum-options.ts` | rewritten over `useReferenceOptions` |
-| `utilities/hooks.ts` | same | safe `?types=` parse (`utilities/types-param.ts`); `useReviewersFilterState` left to rankings |
+| `utilities/hooks.ts` | same | safe `?types=` parse (`utilities/types-param.ts`); `useReviewersFilterState` removed with the rankings toggles (N15: `/rankings` keeps `?scope=`) |
 | `utilities/index.ts` | same (pure half only) | see below |
 | `functions/_packages/shared/utility/index.ts` (formatters) | `utilities/formatters.ts` | copied; "Vieena" typo fixed |
 
