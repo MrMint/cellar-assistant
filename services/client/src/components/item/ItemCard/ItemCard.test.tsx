@@ -1,9 +1,12 @@
 /**
  * Render tests for the restored `ItemCard`, asserting the **old** card's
- * markup (`82450ad1:src/components/item/ItemCard/index.tsx`): image overflow,
- * then the title block, then the soft footer of favourite · reviews · score
- * separated by two vertical dividers — and each footer section present only
- * when its value is.
+ * layout (`82450ad1:src/components/item/ItemCard/index.tsx`): the image, then
+ * the linked title block, then the footer of favourite · reviews · score
+ * separated by two vertical separators — and each footer section present only
+ * when its value is. Read through what a person or assistive tech observes
+ * (image, link, `aria-pressed`, separators, the numbers, in document order),
+ * never a UI library's class names, so the card can change library without
+ * this test noticing.
  *
  * Server-rendered with `react-dom/server`, which is what the first paint of a
  * client component is anyway; no DOM library needed. `next/image` is the
@@ -39,13 +42,27 @@ const render = (node: ReactNode) =>
     </NextImageConfig>,
   ).replace(/<style[^>]*>[^<]*<\/style>/g, "");
 
-/** The card's section skeleton, in document order. */
+/**
+ * The card's sections, in document order: the image, the title link, the
+ * favourite toggle, the footer's separators (an `<hr>` or a
+ * `role="separator"`), and every number shown as a whole text node.
+ */
 const skeleton = (html: string): string[] =>
   [
     ...html.matchAll(
-      /Mui(Card|CardOverflow|CardContent|Divider|Button|Link)-root/g,
+      /(<img\b|data-next-image=)|(<a\b[^>]*\shref=)|(\saria-pressed=)|(<hr\b|\srole="separator")|>(\d+(?:\.\d+)?)</g,
     ),
-  ].map((m) => m[1]);
+  ].map(([, image, link, toggle, separator, number]) =>
+    image !== undefined
+      ? "image"
+      : link !== undefined
+        ? "link"
+        : toggle !== undefined
+          ? "favorite"
+          : separator !== undefined
+            ? "separator"
+            : `${number}`,
+  );
 
 const base = { id: "bottle-1", itemId: "item-1", name: "Barolo" };
 
@@ -69,15 +86,17 @@ describe("ItemCard (restored)", () => {
         }}
       />,
     );
+    // Image, title link, then the footer: the favourite toggle with its
+    // count, a separator, the review count, a separator, the score.
     assert.deepEqual(skeleton(html), [
-      "Card",
-      "CardOverflow",
-      "CardContent",
-      "Link",
-      "CardOverflow",
-      "Button",
-      "Divider",
-      "Divider",
+      "image",
+      "link",
+      "favorite",
+      "4",
+      "separator",
+      "7",
+      "separator",
+      "4.26",
     ]);
     // The presigned photo goes through the optimizer, as the old card's Nhost
     // URL did: 400 px at 1x, the next configured size (828) at 2x, never the
@@ -124,13 +143,10 @@ describe("ItemCard (restored)", () => {
   test("missing counts hide their footer sections; the dividers stay", () => {
     const html = render(<ItemCard type="WINE" href="/wines/i" item={base} />);
     assert.deepEqual(skeleton(html), [
-      "Card",
-      "CardOverflow",
-      "CardContent",
-      "Link",
-      "CardOverflow",
-      "Divider",
-      "Divider",
+      "image",
+      "link",
+      "separator",
+      "separator",
     ]);
     // An empty subtitle keeps its line with a non-breaking space.
     assert.match(html, /text-overflow:ellipsis"> </);
@@ -141,6 +157,13 @@ describe("ItemCard (restored)", () => {
       <ItemCard type="TEA" href="/teas/i" item={{ ...base, reviewCount: 0 }} />,
     );
     assert.match(html, />0<span/);
+    assert.deepEqual(skeleton(html), [
+      "image",
+      "link",
+      "separator",
+      "0",
+      "separator",
+    ]);
   });
 
   test("unreviewed score uses the icon colour, not gold", () => {
@@ -151,8 +174,9 @@ describe("ItemCard (restored)", () => {
         item={{ ...base, score: 3, reviewed: false }}
       />,
     );
-    assert.match(html, />3\.00<span/);
-    assert.match(html, /color:var\(--Icon-color\)/);
+    // The star still follows the score; only its colour drops the gold.
+    // The score is the footer's last section, so any icon after it is its star.
+    assert.match(html, />3\.00<[\s\S]*<svg/);
     assert.doesNotMatch(html, /#ffba26/);
   });
 
@@ -160,13 +184,14 @@ describe("ItemCard (restored)", () => {
     const html = render(
       <ItemCard type="SPIRIT" onClick={() => {}} item={base} />,
     );
-    assert.equal(skeleton(html).includes("Link"), false);
-    assert.equal(skeleton(html).includes("CardContent"), false);
+    assert.deepEqual(skeleton(html), ["image", "separator", "separator"]);
+    assert.doesNotMatch(html, /<a\b/);
     assert.match(html, />Barolo</);
   });
 
   test("neither href nor onClick: image and footer only", () => {
     const html = render(<ItemCard type="WINE" item={base} />);
+    assert.deepEqual(skeleton(html), ["image", "separator", "separator"]);
     assert.doesNotMatch(html, />Barolo</);
   });
 

@@ -60,7 +60,7 @@ describe("EnumSelect (restored)", () => {
     const html = render(<Harness enumKey="wineStyle" />);
     const id = /<label[^>]*for="([^"]+)"[^>]*>Style</.exec(html)?.[1];
     assert.ok(id, "the label names its control");
-    assert.match(html, new RegExp(`role="combobox"[^>]*id="${id}"`));
+    assert.match(openTag(html, `id="${id}"`), /\srole="combobox"/);
     assert.ok(html.indexOf(">Style<") < html.indexOf('role="combobox"'));
     assert.match(html, />Choose one…</);
     assert.equal(isDisabled(openTag(html, 'role="combobox"')), false);

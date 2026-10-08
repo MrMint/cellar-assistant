@@ -3,7 +3,7 @@
  *
  * Markup tests here assert on what a user or assistive tech can observe —
  * copy, order, `href`, roles, `aria-*`, `data-slot` — and never on a UI
- * library's class names (`MuiCard-root`, `MuiTypography-title-lg`, …). A test
+ * library's class names (Joy's `Mui…-root` and friends). A test
  * anchored on a class name breaks the moment its component moves from Joy to
  * shadcn, even when nothing a person sees has changed; one anchored on these
  * survives the move and still catches a real regression
@@ -17,11 +17,14 @@
 export const LOADING = /role="(?:progressbar|status)"/;
 
 /**
- * The first opening tag matching `attr` (a fragment such as
- * `aria-label="Take photo"`), or `""` when there is none.
+ * The first opening tag carrying the attribute `attr` exactly (a fragment such
+ * as `aria-label="Take photo"`, matched literally and as a whole attribute, so
+ * `name="x"` does not match `data-name="x"`), or `""` when there is none.
  */
 export const openTag = (html: string, attr: string): string =>
-  new RegExp(`<[a-z][^>]*${attr}[^>]*>`).exec(html)?.[0] ?? "";
+  new RegExp(
+    `<[a-z][^>]*\\s${attr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^>]*>`,
+  ).exec(html)?.[0] ?? "";
 
 /**
  * Whether an opening tag is disabled for assistive tech: a native `disabled`
