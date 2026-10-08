@@ -381,7 +381,7 @@ async function capture(page: Page, route: VisualRoute, viewport: string) {
       await page.screenshot({ path: join(VISUAL.out, file), mask });
       const stateAxe = await runAxe(
         page,
-        '[role="dialog"], [role="alertdialog"]',
+        '[role="dialog"], [role="alertdialog"], [role="menu"]',
       );
       await page.keyboard.press("Escape");
       await page.waitForTimeout(500);
