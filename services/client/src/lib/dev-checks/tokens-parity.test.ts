@@ -83,6 +83,26 @@ describe("tokens: globals.css ⇄ lib/tokens.ts", () => {
     }
   });
 
+  test("every border defaults to the hairline, not currentColor", () => {
+    // Without shadcn's base rule a bare `border` (Card, Popover, Dialog,
+    // DropdownMenu, Alert, Sheet) draws a bright ink-1 line.
+    assert.match(
+      css,
+      /@layer base\s*\{[\s\S]*?\*,[\s\S]*?\{\s*@apply border-border outline-ring\/50;/,
+    );
+  });
+
+  test("reduced motion reaches what MotionConfig cannot (vaul, tw-animate)", () => {
+    const block = css.slice(css.search(/@media \(prefers-reduced-motion/));
+    assert.match(block, /--tw-enter-scale:\s*1 !important/);
+    assert.match(block, /--tw-enter-translate-y:\s*0 !important/);
+    assert.match(
+      block,
+      /\[data-vaul-drawer\][\s\S]*?transition-duration:\s*0s !important/,
+    );
+    assert.match(block, /animation-name:\s*ca-fade-in !important/);
+  });
+
   test("shadcn's `accent` is a surface, and `primary` is brass", () => {
     assert.match(css, /--color-accent:\s*var\(--ca-surface-3\)/);
     assert.match(css, /--color-primary:\s*var\(--ca-accent\)/);

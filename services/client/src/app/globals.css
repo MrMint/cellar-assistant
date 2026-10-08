@@ -168,12 +168,14 @@
 /* The type ramp (design §3.2): family + size + line + weight in one class. */
 @utility type-large-title {
   font-family: var(--font-display);
+  font-variation-settings: "SOFT" 50;
   font-size: 34px;
   line-height: 40px;
   font-weight: 600;
 }
 @utility type-title-1 {
   font-family: var(--font-display);
+  font-variation-settings: "SOFT" 50;
   font-size: 28px;
   line-height: 34px;
   font-weight: 600;
@@ -213,6 +215,7 @@
 }
 @utility type-numeral-xl {
   font-family: var(--font-display);
+  font-variation-settings: "SOFT" 50;
   font-size: 44px;
   line-height: 44px;
   font-weight: 500;
@@ -237,6 +240,17 @@
 }
 
 @layer base {
+  /* shadcn's base: without it every `border` utility (Card, Popover, Dialog,
+     DropdownMenu, Alert, Accordion, Sheet…) draws in currentColor — a bright
+     ink-1 line instead of the hairline. Joy sets its own border colours
+     (unlayered), so this only reaches Tailwind markup and raw elements. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    @apply border-border outline-ring/50;
+  }
   html {
     -webkit-tap-highlight-color: transparent;
   }
@@ -270,5 +284,49 @@
   * {
     /* biome-ignore lint/complexity/noImportantStyles: as above, for smooth scrolling. */
     scroll-behavior: auto !important;
+    /* tw-animate (dialogs, menus, popovers, selects): keep the fade, drop the
+       zoom and the slide (design §4.9: no translation or scale). */
+    /* biome-ignore lint/complexity/noImportantStyles: beats the utilities that set them. */
+    --tw-enter-scale: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    --tw-exit-scale: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    --tw-enter-translate-x: 0 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    --tw-enter-translate-y: 0 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    --tw-exit-translate-x: 0 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    --tw-exit-translate-y: 0 !important;
+  }
+  /* vaul (BottomSheet) is not `motion`, so MotionConfig cannot reach it: its
+     slide and its 500 ms snap settle become a 120 ms fade and a jump
+     ("sheets snap with a 120 ms fade", design §4.9). Dragging still tracks
+     the finger — that is direct manipulation, not animation. */
+  [data-vaul-drawer],
+  [data-vaul-overlay] {
+    /* biome-ignore lint/complexity/noImportantStyles: vaul sets its transitions inline from JS. */
+    transition-duration: 0s !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above, for vaul's injected keyframes. */
+    animation-duration: 120ms !important;
+  }
+  [data-vaul-drawer][data-state="open"] {
+    /* biome-ignore lint/complexity/noImportantStyles: replaces vaul's slideFromBottom. */
+    animation-name: ca-fade-in !important;
+  }
+  [data-vaul-drawer][data-state="closed"] {
+    /* biome-ignore lint/complexity/noImportantStyles: replaces vaul's slideToBottom. */
+    animation-name: ca-fade-out !important;
+  }
+}
+
+@keyframes ca-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ca-fade-out {
+  to {
+    opacity: 0;
   }
 }
