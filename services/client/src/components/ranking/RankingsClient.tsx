@@ -97,7 +97,9 @@ export const RankingsClient = () => {
 
   return (
     <>
-      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* One row only from xl: the eight chips (glyph + word since S4) need
+          ~920px, and a row any narrower squeezed "Rankings" down to "R.". */}
+      <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         {/* "Top rated" on the Me hub (D1): Back goes there on a cold open. */}
         <AppBar title="Rankings" parent="/me" className="min-w-0 flex-1" />
         <div className="flex flex-row flex-wrap items-center gap-4">
