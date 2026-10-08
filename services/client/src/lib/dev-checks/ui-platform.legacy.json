@@ -1,8 +1,6 @@
 {
   "_frozen": "Written once by the foundation (F) on 2026-10-08 (branch shadcn/foundation, cut from 004cbac4): every client source file that still used the legacy UI platform (MUI Joy, Emotion, sx, react-icons, raw colours, literal motion). Slices NEVER edit this list: a converted file simply stops matching. The removal step (R) deletes it and makes the guard absolute. See ui-platform.ts.",
   "files": [
-    "src/app/(authenticated)/brands/[brandId]/page.tsx",
-    "src/app/(authenticated)/brands/page.tsx",
     "src/app/(authenticated)/cellars/[cellarId]/edit/page.tsx",
     "src/app/(authenticated)/cellars/[cellarId]/items/add/page.tsx",
     "src/app/(authenticated)/cellars/[cellarId]/items/page.tsx",
@@ -28,12 +26,6 @@
     "src/components/auth/SignInApiClient.tsx",
     "src/components/auth/SignUpApiClient.tsx",
     "src/components/auth/SocialButtons.tsx",
-    "src/components/brand/BrandCard.tsx",
-    "src/components/brand/BrandDetails.tsx",
-    "src/components/brand/BrandDetailsClient.tsx",
-    "src/components/brand/BrandPicker.tsx",
-    "src/components/brand/BrandsListClient.tsx",
-    "src/components/brand/brand-type-display.tsx",
     "src/components/cellar-api/ApiError.tsx",
     "src/components/cellar-api/CellarCheckIns.tsx",
     "src/components/cellar-api/CheckInButton.tsx",

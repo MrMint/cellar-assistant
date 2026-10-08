@@ -10,31 +10,20 @@
  *   lists now page; `itemsFooter`, `childrenFooter` and `placesFooter` are
  *   where the page puts each list's "Show more" (the old page read every row
  *   at once and had none).
+ * - On the app primitives: borderless `surface-1` blocks in place of Joy
+ *   `Card`s (design §3.3), the type chip from `brand-type-display`, and
+ *   `app/Link`s. Same headings, copy, order and links.
  */
 
-import {
-  AspectRatio,
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  Grid,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import Image from "next/image";
 import { isNotNil } from "ramda";
 import type { ReactNode } from "react";
-import { MdLocationOn } from "react-icons/md";
-import { Link } from "@/components/common/Link";
+import { ICON_STROKE, Place } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { Badge } from "@/components/ui/badge";
 import cellar1 from "@/images/cellar1.png";
 import { sinceYear } from "./adapter";
-import {
-  formatBrandType,
-  getBrandTypeColor,
-  getBrandTypeIcon,
-} from "./brand-type-display";
+import { BrandTypeChip } from "./brand-type-display";
 
 export type BrandItem = {
   id: string;
@@ -194,227 +183,160 @@ export const BrandDetails = ({
   );
 
   return (
-    <Stack spacing={3}>
+    <div className="flex flex-col gap-6">
       {/* Brand Header */}
-      <Card>
-        <Grid container spacing={2}>
-          <Grid xs={12} md={4}>
-            <AspectRatio ratio="1">
-              {isNotNil(brand.logo_url) ? (
-                // biome-ignore lint/performance/noImgElement: `logoUrl` is any producer's host, not routable through /_next/image.
-                <img
-                  src={brand.logo_url}
-                  alt={`${brand.name} logo`}
-                  style={{ objectFit: "contain" }}
-                />
-              ) : (
-                <Image
-                  src={cellar1}
-                  alt={`${brand.name} placeholder`}
-                  fill
-                  style={{ objectFit: "contain" }}
-                />
-              )}
-            </AspectRatio>
-          </Grid>
-          <Grid xs={12} md={8}>
-            <CardContent>
-              <Stack spacing={2}>
-                <Box>
-                  <Typography level="h2" component="h1">
-                    {brand.name}
-                  </Typography>
-                  {since !== null && (
-                    <Typography
-                      level="body-sm"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      Since {since}
-                    </Typography>
-                  )}
-                </Box>
+      <div className="grid grid-cols-1 gap-4 rounded-lg bg-surface-1 p-4 md:grid-cols-[1fr_2fr]">
+        <div className="relative aspect-square overflow-hidden rounded-md">
+          {isNotNil(brand.logo_url) ? (
+            // biome-ignore lint/performance/noImgElement: `logoUrl` is any producer's host, not routable through /_next/image.
+            <img
+              src={brand.logo_url}
+              alt={`${brand.name} logo`}
+              className="size-full object-contain"
+            />
+          ) : (
+            <Image
+              src={cellar1}
+              alt={`${brand.name} placeholder`}
+              fill
+              className="object-contain"
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-4 md:py-2">
+          <div>
+            <h1 className="type-title-1">{brand.name}</h1>
+            {since !== null && (
+              <p className="type-callout text-ink-2">Since {since}</p>
+            )}
+          </div>
 
-                {isNotNil(brand.description) && (
-                  <Typography level="body-md">{brand.description}</Typography>
-                )}
+          {isNotNil(brand.description) && (
+            <p className="type-body">{brand.description}</p>
+          )}
 
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Chip
-                    variant="soft"
-                    color={getBrandTypeColor(brand.brand_type)}
-                    startDecorator={getBrandTypeIcon(brand.brand_type)}
+          <div className="flex flex-wrap gap-2">
+            <BrandTypeChip brandType={brand.brand_type} />
+          </div>
+
+          {/* Brand hierarchy */}
+          {isNotNil(brand.parent_brand) && (
+            <p className="type-callout text-ink-2">
+              Part of:{" "}
+              <Link
+                href={`/brands/${brand.parent_brand.id}`}
+                underline="always"
+                className="font-medium text-ink-1"
+              >
+                {brand.parent_brand.name}
+              </Link>
+            </p>
+          )}
+
+          {isNotNil(brand.child_brands) && brand.child_brands.length > 0 && (
+            <div>
+              <p className="type-callout mb-2 text-ink-2">Owns brands:</p>
+              <div className="flex flex-wrap gap-2">
+                {brand.child_brands.map((child) => (
+                  <Link
+                    key={child.id}
+                    href={`/brands/${child.id}`}
+                    underline="none"
+                    className="relative inline-flex h-8 items-center rounded-full bg-surface-2 px-3 text-ink-1 text-sm transition-colors duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-[''] hover:bg-surface-3"
                   >
-                    {formatBrandType(brand.brand_type)}
-                  </Chip>
-                </Stack>
-
-                {/* Brand hierarchy */}
-                {isNotNil(brand.parent_brand) && (
-                  <Box>
-                    <Typography
-                      level="body-sm"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      Part of:{" "}
-                      <Link href={`/brands/${brand.parent_brand.id}`}>
-                        <Typography
-                          component="span"
-                          level="body-sm"
-                          fontWeight="md"
-                          sx={{ textDecoration: "underline" }}
-                        >
-                          {brand.parent_brand.name}
-                        </Typography>
-                      </Link>
-                    </Typography>
-                  </Box>
-                )}
-
-                {isNotNil(brand.child_brands) &&
-                  brand.child_brands.length > 0 && (
-                    <Box>
-                      <Typography
-                        level="body-sm"
-                        sx={{ color: "text.secondary", mb: 1 }}
-                      >
-                        Owns brands:
-                      </Typography>
-                      <Stack direction="row" spacing={1} flexWrap="wrap">
-                        {brand.child_brands.map((child) => (
-                          <Link key={child.id} href={`/brands/${child.id}`}>
-                            <Chip
-                              variant="outlined"
-                              size="sm"
-                              sx={{ cursor: "pointer" }}
-                            >
-                              {child.name}
-                            </Chip>
-                          </Link>
-                        ))}
-                      </Stack>
-                      {childrenFooter}
-                    </Box>
-                  )}
-              </Stack>
-            </CardContent>
-          </Grid>
-        </Grid>
-      </Card>
+                    {child.name}
+                  </Link>
+                ))}
+              </div>
+              {childrenFooter}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Items and Places */}
-      <Grid container spacing={3}>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Associated Items */}
-        <Grid xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography level="h3" component="h2" sx={{ mb: 2 }}>
-                Associated Items ({itemTotal ?? brand.item_brands.length})
-              </Typography>
+        <section className="flex flex-col rounded-lg bg-surface-1 p-4">
+          <h2 className="type-title-2 mb-4">
+            Associated Items ({itemTotal ?? brand.item_brands.length})
+          </h2>
 
-              {Object.keys(groupedItems).length === 0 ? (
-                <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-                  No items associated with this brand yet.
-                </Typography>
-              ) : (
-                <Stack spacing={3}>
-                  {Object.entries(groupedItems).map(([type, items]) => (
-                    <Box key={type}>
-                      <Typography
-                        level="title-sm"
-                        sx={{
-                          mb: 1,
-                          textTransform: "capitalize",
-                          fontWeight: "md",
-                        }}
-                      >
-                        {type}s ({items.length})
-                      </Typography>
-                      <Stack spacing={1}>
-                        {items.map((item) => (
-                          <Box key={item.itemId}>
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              alignItems="center"
-                            >
-                              <Link href={item.href}>
-                                <Typography
-                                  level="body-sm"
-                                  sx={{ textDecoration: "underline" }}
-                                >
-                                  {item.name}
-                                </Typography>
-                              </Link>
-                              {item.isPrimary && (
-                                <Chip variant="soft" size="sm" color="primary">
-                                  Primary
-                                </Chip>
-                              )}
-                            </Stack>
-                          </Box>
-                        ))}
-                      </Stack>
-                    </Box>
-                  ))}
-                </Stack>
-              )}
-              {itemsFooter}
-            </CardContent>
-          </Card>
-        </Grid>
+          {Object.keys(groupedItems).length === 0 ? (
+            <p className="type-callout text-ink-2">
+              No items associated with this brand yet.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {Object.entries(groupedItems).map(([type, items]) => (
+                <div key={type}>
+                  <h3 className="type-callout mb-2 font-medium capitalize">
+                    {type}s ({items.length})
+                  </h3>
+                  <ul className="flex flex-col gap-2">
+                    {items.map((item) => (
+                      <li key={item.itemId} className="flex items-center gap-2">
+                        <Link
+                          href={item.href}
+                          underline="always"
+                          className="type-callout text-ink-1"
+                        >
+                          {item.name}
+                        </Link>
+                        {item.isPrimary && (
+                          <Badge variant="secondary">Primary</Badge>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+          {itemsFooter}
+        </section>
 
         {/* Associated Places */}
-        <Grid xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography level="h3" component="h2" sx={{ mb: 2 }}>
-                Associated Places ({placeTotal ?? brand.place_brands.length})
-              </Typography>
+        <section className="flex flex-col rounded-lg bg-surface-1 p-4">
+          <h2 className="type-title-2 mb-4">
+            Associated Places ({placeTotal ?? brand.place_brands.length})
+          </h2>
 
-              {brand.place_brands.length === 0 ? (
-                <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-                  No places associated with this brand yet.
-                </Typography>
-              ) : (
-                <Stack spacing={2}>
-                  {brand.place_brands.map((placeRelation) => (
-                    <Box key={placeRelation.id}>
-                      <Stack direction="row" spacing={2} alignItems="center">
-                        <Box sx={{ flex: 1 }}>
-                          <Link href={`/places/${placeRelation.place.id}`}>
-                            <Typography
-                              level="body-md"
-                              sx={{ textDecoration: "underline" }}
-                            >
-                              {placeRelation.place.name}
-                            </Typography>
-                          </Link>
-                          <Typography
-                            level="body-sm"
-                            sx={{ color: "text.secondary" }}
-                          >
-                            {formatRelationshipType(
-                              placeRelation.relationship_type,
-                            )}
-                          </Typography>
-                        </Box>
-                        <MdLocationOn
-                          style={{ color: "var(--joy-palette-neutral-500)" }}
-                        />
-                      </Stack>
-                      {placeRelation !==
-                        brand.place_brands[brand.place_brands.length - 1] && (
-                        <Divider sx={{ my: 1 }} />
-                      )}
-                    </Box>
-                  ))}
-                </Stack>
-              )}
-              {placesFooter}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    </Stack>
+          {brand.place_brands.length === 0 ? (
+            <p className="type-callout text-ink-2">
+              No places associated with this brand yet.
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line">
+              {brand.place_brands.map((placeRelation) => (
+                <li
+                  key={placeRelation.id}
+                  className="flex items-center gap-4 py-2 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/places/${placeRelation.place.id}`}
+                      underline="always"
+                      className="type-body text-ink-1"
+                    >
+                      {placeRelation.place.name}
+                    </Link>
+                    <p className="type-callout text-ink-2">
+                      {formatRelationshipType(placeRelation.relationship_type)}
+                    </p>
+                  </div>
+                  <Place
+                    aria-hidden
+                    strokeWidth={ICON_STROKE}
+                    className="size-5 text-ink-3"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          {placesFooter}
+        </section>
+      </div>
+    </div>
   );
 };

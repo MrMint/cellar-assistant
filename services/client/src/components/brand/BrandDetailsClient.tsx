@@ -1,8 +1,9 @@
 "use client";
 
-import { Box, Button } from "@mui/joy";
 import { useMemo } from "react";
 import { ApiError } from "@/components/cellar-api/ApiError";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import {
@@ -41,21 +42,22 @@ function ShowMore<TRow>({
   title: string;
   loadMore: () => void;
 }) {
+  const loading = list.status === "loadingMore";
   return (
     <>
       {list.failure !== null && <ApiError error={list.failure} title={title} />}
       {list.hasNextPage && (
-        <Box sx={{ mt: 2 }}>
+        <div className="mt-4">
           <Button
-            variant="outlined"
-            size="sm"
-            loading={list.status === "loadingMore"}
-            disabled={!list.canLoadMore}
+            variant="outline"
+            aria-busy={loading}
+            disabled={loading || !list.canLoadMore}
             onClick={loadMore}
           >
+            {loading && <Spinner aria-hidden />}
             Show more
           </Button>
-        </Box>
+        </div>
       )}
     </>
   );
