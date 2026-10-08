@@ -28,17 +28,35 @@ type CellarCardClientProps = {
     coOwners: User[];
     itemCounts: ItemCounts;
   };
+  /**
+   * Called before either way off the card (its link, its edit button) — the
+   * grid saves its scroll position here, which the old wrapper `Box` did with
+   * an `onClick` on a plain `div`.
+   */
+  onBeforeNavigate?: () => void;
 };
 
-export function CellarCardClient({ userId, cellar }: CellarCardClientProps) {
+export function CellarCardClient({
+  userId,
+  cellar,
+  onBeforeNavigate,
+}: CellarCardClientProps) {
   const router = useRouter();
 
   const handleEditClick = useCallback(
-    (cellarId: string) => router.push(`/cellars/${cellarId}/edit`),
-    [router],
+    (cellarId: string) => {
+      onBeforeNavigate?.();
+      router.push(`/cellars/${cellarId}/edit`);
+    },
+    [router, onBeforeNavigate],
   );
 
   return (
-    <CellarCard userId={userId} cellar={cellar} onEditClick={handleEditClick} />
+    <CellarCard
+      userId={userId}
+      cellar={cellar}
+      onEditClick={handleEditClick}
+      onNavigate={onBeforeNavigate}
+    />
   );
 }
