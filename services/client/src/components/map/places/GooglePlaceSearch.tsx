@@ -111,7 +111,12 @@ export function GooglePlaceSearch({
               aria-label="Search Google for this place"
               placeholder="Search Google for this place..."
               value={inputValue}
-              onValueChange={setInputValue}
+              onValueChange={(value) => {
+                setInputValue(value);
+                // Typing again after a pick or an Escape reopens the list,
+                // as Joy's Autocomplete did (focus never left the input).
+                setFocused(true);
+              }}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               onKeyDown={(e) => {
