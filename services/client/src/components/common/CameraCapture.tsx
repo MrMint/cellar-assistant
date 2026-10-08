@@ -297,9 +297,11 @@ export const CameraCapture = ({
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/30 p-4 backdrop-blur-xs">
             {/* Torch control, or a spacer that keeps the shutter centred */}
             {torchSupported ? (
+              // The label names the action, as BarcodeScanner's torch does, so
+              // no `aria-pressed`: "Turn off light, pressed" reads as a
+              // contradiction.
               <IconButton
                 aria-label={torchEnabled ? "Turn off light" : "Turn on light"}
-                aria-pressed={torchEnabled}
                 onClick={toggleTorch}
                 variant="outline"
                 className={cn(
