@@ -19,11 +19,16 @@ import {
   canSeeCheckIn,
   canSeeItemImage,
   canSeeTierList,
+  canShareAnonymously,
+  canShareItemImageAnonymously,
+  canShareRecipeAnonymously,
+  canShareTierListAnonymously,
   type Friendship,
   isFriend,
   isOwner,
   PRIVACY_VALUES,
   type Privacy,
+  RECIPE_PRIVACY_WITHOUT_A_COLUMN,
 } from "./index.ts";
 
 const OWNER = "11111111-1111-1111-1111-111111111111";
@@ -316,5 +321,47 @@ describe("canSeeItemImage", () => {
   it("anonymous: sees a public image", () => {
     expect(canSeeItemImage(anonymous, image(true))).toBe(true);
     expect(canSeeItemImage(anonymous, image(false))).toBe(false);
+  });
+});
+
+describe("anonymous sharing (X17)", () => {
+  it("shares PUBLIC and nothing else", () => {
+    expect(
+      PRIVACY_VALUES.filter((privacy) => canShareAnonymously({ privacy })),
+    ).toEqual(["PUBLIC"]);
+  });
+
+  it("a FRIENDS tier list is not public, even though friends can see it", () => {
+    const tierList = { createdById: OWNER, privacy: "FRIENDS" as const };
+    expect(
+      canSeeTierList(friend, { ...tierList, viewerIsFriendOfCreator: true }),
+    ).toBe(true);
+    expect(canShareTierListAnonymously(tierList)).toBe(false);
+  });
+
+  it("is never wider than what an anonymous viewer may see", () => {
+    for (const privacy of PRIVACY_VALUES) {
+      const subject = { privacy, ownerIds: [OWNER], viewerIsFriendOfCreator: false };
+      if (canShareAnonymously({ privacy })) {
+        expect(canSee(anonymous, subject)).toBe(true);
+      }
+    }
+  });
+
+  it("recipes: shareable while they carry no privacy column (until D22)", () => {
+    expect(RECIPE_PRIVACY_WITHOUT_A_COLUMN).toBe("PUBLIC");
+    expect(
+      canShareRecipeAnonymously({ privacy: RECIPE_PRIVACY_WITHOUT_A_COLUMN }),
+    ).toBe(true);
+    expect(canShareRecipeAnonymously({ privacy: "PRIVATE" })).toBe(false);
+  });
+
+  it("item images: public ones only, even the uploader's own private photo is not", () => {
+    expect(canShareItemImageAnonymously({ isPublic: true })).toBe(true);
+    expect(canShareItemImageAnonymously({ isPublic: false })).toBe(false);
+    // The contrast with the per-viewer rule, which is right on the owner's page.
+    expect(canSeeItemImage(owner, { userId: OWNER, isPublic: false })).toBe(
+      true,
+    );
   });
 });

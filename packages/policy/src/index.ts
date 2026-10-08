@@ -232,3 +232,59 @@ export const canSeeItemImage = (
   if (image.isPublic) return true;
   return isOwner(ctx, image.userId);
 };
+
+/* -------------------------------------------------------------------------- */
+/* Anonymous sharing (X17)                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The public share pages' rule: a thing may be read with **no viewer at all**
+ * — by a signed-out friend, or by a link-preview crawler — only when it is
+ * `PUBLIC`.
+ *
+ * Deliberately not `canSee(anonymous, …)`, though the two agree today. These
+ * take no `ctx` because the share reads are **viewer-independent**: the answer
+ * is the same for every caller, signed in or not, so an owner cannot reach
+ * their own PRIVATE list through a share URL, a friend cannot reach a FRIENDS
+ * one, and a rendered card can never carry one viewer's view to another. A
+ * signed-in viewer reads the real page instead, under `canSee`.
+ *
+ * The other half of the policy lives in the shared DTOs
+ * (`packages/contracts/src/share.ts`): what crosses is a closed whitelist no
+ * wider than what a signed-in stranger already sees.
+ */
+export const canShareAnonymously = (subject: {
+  readonly privacy: Privacy;
+}): boolean => subject.privacy === "PUBLIC";
+
+/** `tier_lists.privacy` — PUBLIC only. FRIENDS is not public. */
+export const canShareTierListAnonymously = (tierList: {
+  readonly privacy: Privacy;
+}): boolean => canShareAnonymously(tierList);
+
+/**
+ * A recipe, by the privacy its caller states.
+ *
+ * `recipes` has **no privacy column** yet: every recipe is catalog data that
+ * any signed-in user can read (`RecipeActor`'s module doc), so its one caller
+ * passes `RECIPE_PRIVACY_WITHOUT_A_COLUMN`. Decision D22 makes recipes
+ * private-first (roadmap X15); when that column lands, `RecipeActor.getShared`
+ * must pass the row's value here instead, and nothing else has to change.
+ * The parameter is required, not optional, so the change cannot be forgotten
+ * into a silent "public".
+ */
+export const canShareRecipeAnonymously = (recipe: {
+  readonly privacy: Privacy;
+}): boolean => canShareAnonymously(recipe);
+
+/** See {@link canShareRecipeAnonymously}: what every recipe is until D22. */
+export const RECIPE_PRIVACY_WITHOUT_A_COLUMN: Privacy = "PUBLIC";
+
+/**
+ * An `item_image` on a share page: public ones only. `canSeeItemImage` also
+ * admits the uploader's own private photos, which is right on their own page
+ * and wrong on a page anyone can open.
+ */
+export const canShareItemImageAnonymously = (image: {
+  readonly isPublic: boolean;
+}): boolean => image.isPublic;
