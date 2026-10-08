@@ -1,8 +1,6 @@
-"use client";
-
-import { Button } from "@mui/joy";
-import NextLink from "next/link";
-import { MdSearchOff } from "react-icons/md";
+import { ICON_STROKE, NoResults } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { Button } from "@/components/ui/button";
 import { ShellMessage } from "./ShellMessage";
 import { NOT_FOUND_COPY } from "./shell-copy";
 
@@ -17,10 +15,12 @@ export function NotFoundMessage({ signedIn = true }: { signedIn?: boolean }) {
   return (
     <ShellMessage
       copy={NOT_FOUND_COPY}
-      icon={<MdSearchOff />}
+      icon={<NoResults strokeWidth={ICON_STROKE} />}
       actions={
-        <Button component={NextLink} href={signedIn ? "/" : "/sign-in"}>
-          {signedIn ? "Go home" : "Sign in"}
+        <Button asChild>
+          <Link href={signedIn ? "/" : "/sign-in"} underline="none">
+            {signedIn ? "Go home" : "Sign in"}
+          </Link>
         </Button>
       }
     />

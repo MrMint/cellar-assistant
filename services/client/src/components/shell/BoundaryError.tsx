@@ -1,8 +1,14 @@
 "use client";
 
-import { Button } from "@mui/joy";
 import { useEffect, useTransition } from "react";
-import { MdCloudOff, MdErrorOutline, MdRefresh } from "react-icons/md";
+import {
+  CloudOff,
+  ErrorIcon,
+  ICON_STROKE,
+  Refresh,
+} from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { ShellMessage } from "./ShellMessage";
 import { describeBoundaryError, errorReference } from "./shell-copy";
@@ -33,14 +39,25 @@ export function BoundaryError({
   return (
     <ShellMessage
       copy={describeBoundaryError({ online })}
-      icon={online ? <MdErrorOutline /> : <MdCloudOff />}
+      icon={
+        online ? (
+          <ErrorIcon strokeWidth={ICON_STROKE} />
+        ) : (
+          <CloudOff strokeWidth={ICON_STROKE} />
+        )
+      }
       footnote={errorReference(error.digest)}
       actions={
         <Button
-          startDecorator={<MdRefresh />}
-          loading={retrying}
+          disabled={retrying}
+          aria-busy={retrying || undefined}
           onClick={() => startRetry(() => retry())}
         >
+          {retrying ? (
+            <Spinner aria-hidden />
+          ) : (
+            <Refresh aria-hidden strokeWidth={ICON_STROKE} />
+          )}
           Try again
         </Button>
       }
