@@ -1,96 +1,13 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CardCover,
-  CircularProgress,
-  Stack,
-  styled,
-  Typography,
-} from "@mui/joy";
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import type { Barcode } from "@/constants";
 import { useBarcodeScanner } from "@/hooks/useBarcodeScanner";
 import { useCameraStatus } from "@/hooks/useCameraStatus";
 import { BARCODE_SCAN_CONSTRAINTS } from "@/lib/camera/camera-status";
-
-const StyledVideo = styled("video")(() => ({
-  objectFit: "cover",
-  width: "100%",
-  height: "100%",
-  // Ensure we're showing the center of the video stream
-  objectPosition: "center center",
-}));
-
-const DetectionOverlay = styled(Box, {
-  shouldForwardProp: (prop) => prop !== "success",
-})<{ success?: boolean }>(({ success }) => ({
-  position: "absolute",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  width: "70%",
-  height: "30%",
-  border: success
-    ? "3px solid rgba(0, 255, 0, 0.9)"
-    : "2px solid rgba(255, 255, 255, 0.8)",
-  borderRadius: "8px",
-  backgroundColor: success
-    ? "rgba(0, 255, 0, 0.2)"
-    : "rgba(255, 255, 255, 0.1)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  pointerEvents: "none",
-  transition: "all 0.3s ease",
-  "&::before": {
-    content: '""',
-    position: "absolute",
-    top: "-3px",
-    left: "-3px",
-    right: "-3px",
-    bottom: "-3px",
-    border: success
-      ? "3px solid rgba(0, 255, 0, 0.9)"
-      : "2px solid rgba(0, 255, 0, 0.6)",
-    borderRadius: "8px",
-    opacity: success ? 1 : 0,
-    animation: success ? "successFlash 0.5s ease" : "pulse 2s infinite",
-  },
-  "@keyframes pulse": {
-    "0%, 100%": {
-      opacity: 0,
-    },
-    "50%": {
-      opacity: 1,
-    },
-  },
-  "@keyframes successFlash": {
-    "0%": {
-      opacity: 0,
-      transform: "scale(0.95)",
-    },
-    "50%": {
-      opacity: 1,
-      transform: "scale(1.05)",
-    },
-    "100%": {
-      opacity: 1,
-      transform: "scale(1)",
-    },
-  },
-}));
-
-const DetectionGuide = styled(Typography)(() => ({
-  color: "rgba(255, 255, 255, 0.9)",
-  textAlign: "center",
-  textShadow: "0 1px 3px rgba(0, 0, 0, 0.8)",
-  fontSize: "0.875rem",
-  fontWeight: 500,
-}));
+import { cn } from "@/lib/utils";
 
 type BarcodeScannerProps = {
   onChange: (result: Barcode) => void;
@@ -175,73 +92,90 @@ export const BarcodeScanner = ({
   const failed = camera.status.kind === "failed" ? camera.status : null;
 
   return (
-    <Card sx={{ aspectRatio: "16/10", position: "relative" }}>
+    <div
+      data-slot="barcode-scanner"
+      className="relative aspect-[16/10] w-full overflow-hidden rounded-lg bg-surface-2"
+    >
       {!isVideoLoaded && failed === null && (
-        <CardCover>
-          <CircularProgress />
-        </CardCover>
+        <div className="absolute inset-0 flex items-center justify-center">
+          {/* `progressbar`, as Joy's CircularProgress was (see CameraCapture). */}
+          <Spinner
+            role="progressbar"
+            aria-label="Starting the camera"
+            className="size-8 text-ink-2"
+          />
+        </div>
       )}
       {failed !== null && !isVideoLoaded && (
-        <CardCover sx={{ zIndex: 1 }}>
-          <Stack
-            spacing={1.5}
-            alignItems="center"
-            justifyContent="center"
-            sx={{ p: 3, textAlign: "center" }}
-            role="alert"
-          >
-            <Typography level="body-md">
-              {failed.reason === "timeout"
-                ? "The camera is taking too long to start."
-                : "The barcode scanner can't use the camera."}{" "}
-              {cameraFallbackHint}
-            </Typography>
-            <Button variant="outlined" color="neutral" onClick={handleRetry}>
-              Try again
-            </Button>
-          </Stack>
-        </CardCover>
+        <div
+          role="alert"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface-2 p-6 text-center"
+        >
+          <p className="type-body">
+            {failed.reason === "timeout"
+              ? "The camera is taking too long to start."
+              : "The barcode scanner can't use the camera."}{" "}
+            {cameraFallbackHint}
+          </p>
+          <Button variant="outline" onClick={handleRetry}>
+            Try again
+          </Button>
+        </div>
       )}
-      <CardCover>
-        <StyledVideo
-          ref={videoRef}
-          onLoadedData={handleVideoLoad}
-          autoPlay
-          playsInline
-          muted
-        />
-      </CardCover>
+      <video
+        ref={videoRef}
+        onLoadedData={handleVideoLoad}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 size-full object-cover object-center"
+      />
 
       {/* Detection overlay to show scanning area */}
       {isVideoLoaded && (
-        <CardCover>
-          <DetectionOverlay success={detectionSuccess}>
-            <DetectionGuide>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div
+            className={cn(
+              "relative flex h-[30%] w-[70%] items-center justify-center rounded-sm transition-colors duration-(--ca-dur-medium) ease-standard",
+              detectionSuccess
+                ? "border-3 border-success bg-success/20"
+                : "border-2 border-white/80 bg-white/10",
+            )}
+          >
+            {/* The frame's outer ring: a slow pulse while it looks, a flash
+                on a read (replayed by its key). */}
+            <span
+              key={detectionSuccess ? "hit" : "looking"}
+              aria-hidden
+              className={cn(
+                "absolute -inset-[3px] rounded-sm",
+                detectionSuccess
+                  ? "fade-in-0 zoom-in-95 animate-in border-3 border-success duration-(--ca-dur-long)"
+                  : "animate-pulse border-2 border-success/60 motion-reduce:animate-none motion-reduce:opacity-0",
+              )}
+            />
+            <p className="text-center font-medium text-sm text-white/90 text-shadow-black/80 text-shadow-sm">
               {detectionSuccess
                 ? "Barcode detected!"
                 : "Position barcode within this frame"}
-            </DetectionGuide>
-          </DetectionOverlay>
-        </CardCover>
+            </p>
+          </div>
+        </div>
       )}
 
       {isVideoLoaded && (
-        <CardContent>
+        <div className="relative z-10 flex flex-col items-start gap-2 p-4">
           {torchSupported && (
             <Button onClick={toggleTorch}>
               {torchEnabled ? "Turn off light" : "Turn on light"}
             </Button>
           )}
-          <Typography level="body-lg" fontWeight="lg">
+          <p className="type-body font-semibold text-shadow-black/80 text-shadow-sm">
             Scanning{usingNativeAPI ? " (Native API)" : " (ZXing)"}...
-          </Typography>
-          {error && (
-            <Typography level="body-sm" color="danger">
-              {error}
-            </Typography>
-          )}
-        </CardContent>
+          </p>
+          {error && <p className="type-callout text-destructive">{error}</p>}
+        </div>
       )}
-    </Card>
+    </div>
   );
 };
