@@ -229,11 +229,11 @@ describe("the edit form's correction loop (X19)", () => {
   test("the vintage is a year or the NV chip", async () => {
     const { client } = clientAnswering({});
     await mount(wineForm(client));
-    const nv = button("Non-vintage (NV)");
+    const nv = button("NV");
     assert.equal(nv?.getAttribute("aria-pressed"), "false");
     await click(nv);
     assert.equal(
-      button("Non-vintage (NV)")?.getAttribute("aria-pressed"),
+      button("NV")?.getAttribute("aria-pressed"),
       "true",
     );
     const year = document.querySelector<HTMLInputElement>(

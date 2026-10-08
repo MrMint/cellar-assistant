@@ -202,14 +202,20 @@ export const ItemFormField = ({
                   onChange={(event) => onChange(event.target.value)}
                   {...errorAria(id, entry.label, fieldState)}
                 />
+                {/* Named by its visible "NV" and described, not labelled:
+                    a label containing "vintage" would also answer to the
+                    year field's own name. */}
                 <FilterChip
                   selected={nonVintage}
                   disabled={disabled}
-                  aria-label="Non-vintage (NV)"
+                  aria-describedby={`${id}-nv`}
                   onClick={() => onChange(nonVintage ? "" : NON_VINTAGE)}
                 >
                   NV
                 </FilterChip>
+                <span id={`${id}-nv`} className="sr-only">
+                  Non-vintage: this wine has no vintage year
+                </span>
               </div>
             </FieldShell>
           );
