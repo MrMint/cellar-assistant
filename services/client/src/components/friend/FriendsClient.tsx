@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
+import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import {
   Delete,
   ErrorIcon,
   ICON_STROKE,
   Warning,
 } from "@/components/app/icons";
+import { notify } from "@/components/app/notify";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { SearchField } from "@/components/shell/SearchField";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -219,6 +221,18 @@ const usePolledRefresh = (refresh: () => void) => {
 
 export const FriendsClient = () => {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  /**
+   * X23: Remove asks first. Unfriending cannot be undone from this side —
+   * being friends again takes a new request the other person must accept —
+   * so it is the one person-level action here that confirms (design §4.7:
+   * reversible actions toast with Undo, irreversible ones confirm). Open is
+   * its own flag so the name outlives the sheet's closing animation.
+   */
+  const [removeTarget, setRemoveTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [banner, setBanner] = useState<{
     color: "danger" | "warning";
@@ -344,13 +358,14 @@ export const FriendsClient = () => {
     });
   };
 
-  const handleRemove = (userId: string) => {
+  const handleRemove = (userId: string, displayName: string) => {
     void withPending(userId, async () => {
       const result = await removeFriend({ userId });
       const payload = result.data?.removeFriend;
       if (payload?.__typename === "RemoveFriendPayload") {
         setBanner(null);
         refreshLists();
+        notify(`You and ${displayName} are no longer friends`);
         return;
       }
       setBanner({
@@ -432,7 +447,13 @@ export const FriendsClient = () => {
                 variant="destructive"
                 icon={<Delete aria-hidden strokeWidth={ICON_STROKE} />}
                 pending={pendingIds.has(row.user.id)}
-                onClick={() => handleRemove(row.user.id)}
+                onClick={() => {
+                  setRemoveTarget({
+                    id: row.user.id,
+                    name: row.user.displayName,
+                  });
+                  setRemoveOpen(true);
+                }}
               >
                 Remove
               </RowButton>
@@ -527,6 +548,25 @@ export const FriendsClient = () => {
           ))}
         </ul>
       </Panel>
+
+      <ConfirmSheet
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+        title={`Remove ${removeTarget?.name ?? "this friend"}?`}
+        description={
+          <>
+            You&apos;ll stop seeing each other&apos;s friends-only cellars and
+            lists. To be friends again, one of you sends a new request.
+          </>
+        }
+        confirmLabel="Remove friend"
+        onConfirm={() => {
+          setRemoveOpen(false);
+          if (removeTarget !== null) {
+            handleRemove(removeTarget.id, removeTarget.name);
+          }
+        }}
+      />
     </div>
   );
 };
