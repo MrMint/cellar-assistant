@@ -11,13 +11,13 @@ import {
   Typography,
 } from "@mui/joy";
 import { useEffect } from "react";
-import { Rating } from "react-simple-star-rating";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { RichTextDisplay } from "../common/RichTextDisplay";
+import { StarRatingDisplay } from "../common/rating/StarRating";
 import { Timestamp } from "../common/Timestamp";
 import { UserAvatar } from "../common/UserAvatar";
 import { reviewFromRow } from "./adapter";
@@ -118,12 +118,7 @@ export const ItemReviews = ({
                 />
                 <ListItemContent>
                   <Typography level="title-md">{x.user.displayName}</Typography>
-                  <Rating
-                    initialValue={x.score}
-                    allowFraction
-                    size={25}
-                    readonly
-                  />
+                  <StarRatingDisplay value={x.score} size={25} />
                 </ListItemContent>
                 <Typography>
                   <Timestamp iso={x.createdAt} precision="date" />

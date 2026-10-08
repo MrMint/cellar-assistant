@@ -11,7 +11,6 @@ import {
 } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Rating } from "react-simple-star-rating";
 import { useMutation } from "urql";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import {
@@ -21,6 +20,7 @@ import {
 } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import { RichTextEditor } from "../common/RichTextEditor";
+import { StarRating } from "../common/rating/StarRating";
 
 export type AddReviewProps = {
   itemId: string;
@@ -162,25 +162,11 @@ export const AddReview = ({
           {editing ? "Edit Review:" : "Add Review:"}
         </Typography>
         <CardContent>
-          <Rating
-            onClick={handleRatingClick}
-            initialValue={score ?? 0}
-            showTooltip
-            tooltipDefaultText="Your Score"
-            allowFraction
-            tooltipArray={[
-              "Terrible",
-              "Bad",
-              "Bad+",
-              "Mediocre",
-              "Mediocre+",
-              "Good",
-              "Good+",
-              "Very Good",
-              "Very Good+",
-              "Outstanding",
-            ]}
-            readonly={isPending}
+          <StarRating
+            value={score}
+            onChange={handleRatingClick}
+            disabled={isPending}
+            label="Your score"
           />
         </CardContent>
         <RichTextEditor

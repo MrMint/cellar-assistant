@@ -12,12 +12,12 @@ import {
 } from "@mui/joy";
 import { isEmpty, isNotNil, not } from "ramda";
 import { useEffect } from "react";
-import { Rating } from "react-simple-star-rating";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { RichTextDisplay } from "../common/RichTextDisplay";
+import { StarRatingDisplay } from "../common/rating/StarRating";
 import { Timestamp } from "../common/Timestamp";
 import { UserAvatar } from "../common/UserAvatar";
 import { type RecipeReview, reviewFromNode } from "./adapter";
@@ -106,12 +106,10 @@ export const RecipeReviews = ({
                 />
                 <ListItemContent>
                   <Typography level="title-md">{x.user.displayName}</Typography>
-                  <Rating
-                    initialValue={x.score}
-                    allowFraction
-                    size={25}
-                    readonly
-                  />
+                  {/* A text-only review has no score: no stars, rather than five empty ones reading as zero. */}
+                  {x.score !== undefined && (
+                    <StarRatingDisplay value={x.score} size={25} />
+                  )}
                 </ListItemContent>
                 <Typography>
                   <Timestamp iso={x.created_at} precision="date" />

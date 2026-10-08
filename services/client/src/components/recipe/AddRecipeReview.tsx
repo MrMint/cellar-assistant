@@ -11,10 +11,10 @@ import {
 } from "@mui/joy";
 import { isNotNil } from "ramda";
 import { useState, useTransition } from "react";
-import { Rating } from "react-simple-star-rating";
 import { useMutation } from "urql";
 import { unwrapResult } from "@/lib/api/result";
 import { RichTextEditor } from "../common/RichTextEditor";
+import { StarRating } from "../common/rating/StarRating";
 import { reviewTextForSave } from "./adapter";
 import {
   AddRecipeReviewMutation,
@@ -190,25 +190,12 @@ export const AddRecipeReview = ({
               <Typography level="body-sm" sx={{ mb: 1 }}>
                 Rate this recipe:
               </Typography>
-              <Rating
-                onClick={setScore}
-                showTooltip
-                tooltipDefaultText="Your Score"
-                allowFraction
-                tooltipArray={[
-                  "Terrible",
-                  "Bad",
-                  "Bad+",
-                  "Mediocre",
-                  "Mediocre+",
-                  "Good",
-                  "Good+",
-                  "Very Good",
-                  "Very Good+",
-                  "Outstanding",
-                ]}
-                readonly={isPending}
-                initialValue={score}
+              <StarRating
+                value={score}
+                onChange={setScore}
+                onClear={() => setScore(undefined)}
+                disabled={isPending}
+                label="Rate this recipe"
               />
             </div>
 
