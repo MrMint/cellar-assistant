@@ -116,6 +116,7 @@ import type {
   RegenerateRecipeVectorResult,
   SetRecipeIngredientsInput,
   SetRecipeInstructionsInput,
+  SharedRecipeDto,
   UpdateRecipeInput,
   UpdateRecipeReviewInput,
 } from "@cellar-assistant/contracts";
@@ -145,7 +146,12 @@ import {
   recipeVectors,
 } from "@cellar-assistant/db";
 import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
-import { bypassesPolicy, isOwner } from "@cellar-assistant/policy";
+import {
+  bypassesPolicy,
+  canShareRecipeAnonymously,
+  isOwner,
+  RECIPE_PRIVACY_WITHOUT_A_COLUMN,
+} from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
 import type { DbOrTx } from "../lib/db.ts";
@@ -168,6 +174,7 @@ import {
   ingredientRefOf,
   ingredientRowToDto,
 } from "../lib/recipe-ingredients.ts";
+import { ingredientNames, shareKey } from "../lib/share-reads.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 import {
   embeddingModel,
@@ -603,6 +610,55 @@ export class RecipeActor
     const aggregate = this.requireAggregate();
     requireSignedIn(ctx, "view a recipe");
     return this.#toDto(aggregate);
+  }
+
+  /**
+   * X17's public share page: the one read here an anonymous caller may make.
+   *
+   * Whether a recipe may be shared is `canShareRecipeAnonymously`, which is
+   * handed {@link RECIPE_PRIVACY_WITHOUT_A_COLUMN} because `recipes` has no
+   * privacy column: every recipe is catalog data any signed-in user can read
+   * (module doc). **D22 / X15 makes recipes private-first; when that column
+   * lands, pass the row's value here** — the policy refuses anything but
+   * PUBLIC, and a refusal is worded as a missing row (`refuseAsAbsent`).
+   *
+   * What crosses is `SharedRecipeDto`'s whitelist: no author, no votes, no
+   * reviews, ingredients by name only. Viewer-independent, like every share
+   * read.
+   */
+  async getShared(_ctx: Ctx): Promise<SharedRecipeDto> {
+    const aggregate = this.requireAggregate();
+    if (
+      !canShareRecipeAnonymously({ privacy: RECIPE_PRIVACY_WITHOUT_A_COLUMN })
+    ) {
+      this.refuseAsAbsent();
+    }
+    const rows = aggregate.ingredients.map(ingredientRowToDto);
+    const names = await ingredientNames(
+      this.db,
+      rows.map((row) => row.ref),
+    );
+    const recipe = aggregate.recipe;
+    return {
+      id: recipe.id,
+      name: recipe.name,
+      description: recipe.description,
+      type: requireRecipeType(recipe.type),
+      difficultyLevel: recipe.difficultyLevel,
+      prepTimeMinutes: recipe.prepTimeMinutes,
+      servingSize: recipe.servingSize,
+      imageUrl: recipe.imageUrl,
+      ingredients: rows.map((row) => ({
+        name: names.get(shareKey(row.ref)) ?? null,
+        quantity: row.quantity,
+        unit: row.unit,
+        isOptional: row.isOptional,
+      })),
+      instructions: aggregate.instructions.map((row) => ({
+        stepNumber: row.stepNumber,
+        text: row.instructionText,
+      })),
+    };
   }
 
   async ingredients(

@@ -25,6 +25,7 @@ import {
   ConflictError,
   type EmbedDocumentInput,
   ForbiddenError,
+  ITEM_TYPE_SPECS,
   type ItemRef,
   type ItemType,
   NotFoundError,
@@ -1425,6 +1426,78 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         await expect(
           actor.addReview(userCtx(user, "r"), { score: 3.7 }),
         ).rejects.toThrow(ValidationError);
+      });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* getShared — the X17 share page's read                               */
+  /* ------------------------------------------------------------------ */
+
+  describe("getShared (X17): catalog facts, public photo, the same for everyone", () => {
+    it("answers anonymous callers, with the spec attributes and nothing else", async () => {
+      await withTestDb(async (db) => {
+        const { owner, ref, actor } = await seedScenario(db);
+        const reviewer = await seedUser(db);
+        await actor.addReview(userCtx(reviewer, "r"), { score: 4 });
+
+        const shared = await actor.getShared(anonymousCtx("r"));
+        expect(shared).toMatchObject({
+          id: ref.id,
+          type: "WINE",
+          scoreAverage: 4,
+          scoreCount: 1,
+          imageFileId: null,
+        });
+        expect(Object.keys(shared.attributes).sort()).toEqual(
+          Object.keys(ITEM_TYPE_SPECS.WINE.attributes).sort(),
+        );
+        // The creator and the barcode are not catalog facts for a stranger.
+        const serialised = JSON.stringify(shared);
+        expect(serialised).not.toContain(owner);
+        expect(shared).not.toHaveProperty("createdById");
+        expect(shared).not.toHaveProperty("barcodeCode");
+      });
+    });
+
+    it("carries the newest public photo, never a private one — even to its uploader", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, ref } = await seedScenario(db);
+        const verify: VerifyFile = async (_ctx, id) => ({
+          id,
+          verifiedAt: new Date().toISOString(),
+        });
+        const actor = await activate(newItemActor(actorIdFor(ref), db, verify));
+        const publicFile = await seedFile(db, owner, true);
+        await actor.attachImage(userCtx(owner, "r"), {
+          fileId: publicFile,
+          isPublic: true,
+        });
+        // Newer, but private: must not displace the public one.
+        await actor.attachImage(userCtx(friend, "r"), {
+          fileId: await seedFile(db, friend, true),
+          isPublic: false,
+        });
+
+        for (const ctx of [
+          anonymousCtx("r"),
+          userCtx(owner, "r"),
+          userCtx(friend, "r"),
+          userCtx(stranger, "r"),
+        ]) {
+          expect((await actor.getShared(ctx)).imageFileId).toBe(publicFile);
+        }
+      });
+    });
+
+    it("a missing item is NotFound", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(
+          newItemActor(actorIdFor({ type: "WINE", id: randomUUID() }), db),
+        );
+        await expect(actor.getShared(anonymousCtx("r"))).rejects.toThrow(
+          NotFoundError,
+        );
       });
     });
   });

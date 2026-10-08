@@ -29,11 +29,13 @@ import {
   NO_AI_CAPABILITIES,
   NotFoundError,
   pageArgs,
+  parseInviteToken,
   systemCtx,
   userCtx,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
+  friendInvites,
   friendRequests,
   friends,
   itemFavorites,
@@ -236,6 +238,9 @@ const withUserDb = <T>(fn: (db: DbOrTx) => Promise<T>): Promise<T> =>
     await quiesceOutbox(db);
     return fn(db);
   });
+
+/** A uuid no `user` row has — `crypto.randomUUID`, without the import. */
+const randomUUIDLike = (): string => globalThis.crypto.randomUUID();
 
 const nodes = <T>(page: Page<T>): T[] => page.entries.map((e) => e.node);
 const firstPage: PageArgs = pageArgs({ first: 20 });
@@ -483,6 +488,186 @@ describe.skipIf(skip)("UserActor (B4)", () => {
   /* ---------------------------------------------------------------------- */
   /* sendFriendRequest — the three rejections                                */
   /* ---------------------------------------------------------------------- */
+
+  describe("friend invites (X17)", () => {
+    const secretOf = (token: string): string =>
+      parseInviteToken(token)?.secret ?? "";
+
+    it("mints one invite on first use, returns it again, and is self only", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const actor = await userActor(alice, db);
+
+        expect(await actor.friendInvite(userCtx(alice, "r"))).toBeNull();
+        const first = await actor.ensureFriendInvite(userCtx(alice, "r"));
+        const again = await actor.ensureFriendInvite(userCtx(alice, "r"));
+        expect(again.token).toBe(first.token);
+        expect(parseInviteToken(first.token)?.inviterId).toBe(alice);
+        expect((await actor.friendInvite(userCtx(alice, "r")))?.token).toBe(
+          first.token,
+        );
+
+        for (const ctx of [userCtx(bob, "r"), anonymousCtx("r")]) {
+          await expect(actor.friendInvite(ctx)).rejects.toThrow(ForbiddenError);
+          await expect(actor.ensureFriendInvite(ctx)).rejects.toThrow(
+            ForbiddenError,
+          );
+          await expect(actor.resetFriendInvite(ctx)).rejects.toThrow(
+            ForbiddenError,
+          );
+        }
+      });
+    });
+
+    it("previews to anyone holding the link, and says where they stand", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const carol = await seedPerson(db, "Carol");
+        await befriend(db, alice, carol);
+        const actor = await userActor(alice, db);
+        const { token } = await actor.ensureFriendInvite(userCtx(alice, "r"));
+        const secret = secretOf(token);
+
+        const statusFor = async (ctx: Ctx) =>
+          (await (await userActor(alice, db)).previewFriendInvite(ctx, secret))
+            .status;
+        expect(await statusFor(anonymousCtx("r"))).toBe("SIGNED_OUT");
+        expect(await statusFor(userCtx(alice, "r"))).toBe("OWN_INVITE");
+        expect(await statusFor(userCtx(bob, "r"))).toBe("CAN_ACCEPT");
+        expect(await statusFor(userCtx(carol, "r"))).toBe("ALREADY_FRIENDS");
+
+        const preview = await actor.previewFriendInvite(
+          anonymousCtx("r"),
+          secret,
+        );
+        expect(preview).toEqual({
+          inviterId: alice,
+          inviterDisplayName: "Alice",
+          inviterAvatarUrl: null,
+          status: "SIGNED_OUT",
+        });
+        expect(JSON.stringify(preview)).not.toContain("@example.test");
+      });
+    });
+
+    it("a wrong or rotated secret answers exactly as a user who does not exist", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const actor = await userActor(alice, db);
+        const { token } = await actor.ensureFriendInvite(userCtx(alice, "r"));
+        const old = secretOf(token);
+        const fresh = await actor.resetFriendInvite(userCtx(alice, "r"));
+        expect(fresh.token).not.toBe(token);
+
+        const message = async (id: string, secret: string) => {
+          try {
+            await (await userActor(id, db)).previewFriendInvite(
+              anonymousCtx("r"),
+              secret,
+            );
+          } catch (error) {
+            expect(error).toBeInstanceOf(NotFoundError);
+            return (error as Error).message.replaceAll(id, "<id>");
+          }
+          throw new Error("expected NotFound");
+        };
+        const missingUser = await message(randomUUIDLike(), old);
+        expect(await message(alice, old)).toBe(missingUser);
+        expect(await message(alice, "not-a-secret")).toBe(missingUser);
+        await expect(
+          actor.previewFriendInvite(anonymousCtx("r"), secretOf(fresh.token)),
+        ).resolves.toMatchObject({ inviterId: alice });
+      });
+    });
+
+    it("accepting makes both friends rows — one now, one through the outbox", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const { token } = await (await userActor(alice, db)).ensureFriendInvite(
+          userCtx(alice, "r"),
+        );
+        // Bob had already asked; the invite settles that too.
+        await (await userActor(bob, db)).sendFriendRequest(
+          userCtx(bob, "r"),
+          alice,
+        );
+
+        const input = parseInviteToken(token);
+        if (input === null) throw new Error("bad token");
+        const accepted = await (await userActor(bob, db)).acceptFriendInvite(
+          userCtx(bob, "r"),
+          input,
+        );
+        expect(accepted).toEqual({ friendId: alice, becameFriends: true });
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u2→u1"]);
+        expect(
+          await db
+            .select()
+            .from(friendRequests)
+            .where(eq(friendRequests.userId, bob)),
+        ).toEqual([]);
+
+        const result = await (await drainer(db)).drain(systemCtx("drain"));
+        expect(result).toMatchObject({ delivered: 1, dead: 0 });
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u1→u2", "u2→u1"]);
+
+        // Idempotent: a second accept writes nothing.
+        const again = await (await userActor(bob, db)).acceptFriendInvite(
+          userCtx(bob, "r2"),
+          input,
+        );
+        expect(again).toEqual({ friendId: alice, becameFriends: false });
+        expect(
+          (
+            await (
+              await userActor(alice, db)
+            ).previewFriendInvite(userCtx(bob, "r"), input.secret)
+          ).status,
+        ).toBe("ALREADY_FRIENDS");
+      });
+    });
+
+    it("refuses anonymous, a rotated link, and your own link", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const aliceActor = await userActor(alice, db);
+        const { token } = await aliceActor.ensureFriendInvite(
+          userCtx(alice, "r"),
+        );
+        const input = parseInviteToken(token);
+        if (input === null) throw new Error("bad token");
+
+        await expect(
+          (await userActor(bob, db)).acceptFriendInvite(
+            anonymousCtx("r"),
+            input,
+          ),
+        ).rejects.toThrow(ForbiddenError);
+        await expect(
+          aliceActor.acceptFriendInvite(userCtx(alice, "r"), input),
+        ).rejects.toThrow(ValidationError);
+
+        await aliceActor.resetFriendInvite(userCtx(alice, "r"));
+        await expect(
+          (await userActor(bob, db)).acceptFriendInvite(
+            userCtx(bob, "r"),
+            input,
+          ),
+        ).rejects.toThrow(NotFoundError);
+        expect(await friendPairs(db, [alice, bob])).toEqual([]);
+        expect(
+          await db
+            .select()
+            .from(friendInvites)
+            .where(eq(friendInvites.userId, alice)),
+        ).toHaveLength(1);
+      });
+    });
+  });
 
   describe("sendFriendRequest rejections", () => {
     it("refuses yourself, an existing friend, and a pending recipient", async () => {
@@ -1900,6 +2085,9 @@ describe("UserActor makes no external call (§2.1, B4 acceptance)", () => {
       // Pure: the display-name rule (a regex, `node:crypto` for a handle).
       // Guarded import by import in `no-external-calls.test.ts`.
       "../auth/display-name.ts",
+      // X17: `randomBytes` for an invite secret, `timingSafeEqual` to check
+      // one. Local CPU only — no socket.
+      "node:crypto",
     ]);
     expect(
       specifiers.filter((s) => s !== undefined && !allowed.has(s)),

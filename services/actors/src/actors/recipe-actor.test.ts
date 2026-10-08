@@ -282,6 +282,84 @@ describe.skipIf(skip)("RecipeActor", () => {
   });
 
   /* ---------------------------------------------------------------------- */
+  /* getShared — the X17 public share page                                  */
+  /* ---------------------------------------------------------------------- */
+
+  describe("getShared (X17): the one anonymous read, a closed whitelist", () => {
+    it("serves the recipe with its ingredients by name and its steps to anyone", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const ctx = userCtx(owner, "r");
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          name: "Negroni",
+        });
+        const wineId = await seedWine(db, owner, "Sweet Vermouth");
+        const calls: string[] = [];
+        const actor = await activate(
+          newRecipeActor(recipeId, db, inProcessGenericItems(db, calls)),
+        );
+        await actor.setIngredients(ctx, {
+          ingredients: [
+            { ref: { type: "WINE", id: wineId }, quantity: 30, unit: "ml" },
+            {
+              newGenericItem: {
+                name: "Campari",
+                category: "liqueur",
+                kind: "spirit",
+              },
+              quantity: 30,
+              unit: "ml",
+            },
+            {
+              newGenericItem: {
+                name: "Orange peel",
+                category: "garnish",
+                kind: "ingredient",
+              },
+              isOptional: true,
+            },
+          ],
+        });
+        await actor.setInstructions(ctx, {
+          instructions: [{ instructionText: "Stir with ice" }],
+        });
+        await actor.addReview(userCtx(owner, "r2"), {
+          score: 5,
+          text: "review-text-q7z",
+        });
+
+        const shared = await actor.getShared(anonymousCtx("r-anon"));
+        expect(shared).toMatchObject({ id: recipeId, name: "Negroni" });
+        expect(shared.ingredients.map((row) => row.name).sort()).toEqual([
+          "Campari",
+          "Orange peel",
+          "Sweet Vermouth",
+        ]);
+        expect(
+          shared.ingredients.find((row) => row.name === "Orange peel"),
+        ).toMatchObject({ isOptional: true });
+        expect(shared.instructions).toEqual([
+          { stepNumber: 1, text: "Stir with ice" },
+        ]);
+        // No author, no review text, no vote state.
+        const serialised = JSON.stringify(shared);
+        expect(serialised).not.toContain(owner);
+        expect(serialised).not.toContain("review-text-q7z");
+      });
+    });
+
+    it("is NotFound for an id with no row, anonymous or not", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newRecipeActor(randomUUID(), db));
+        await expect(actor.getShared(anonymousCtx("r"))).rejects.toThrow(
+          NotFoundError,
+        );
+      });
+    });
+  });
+
+  /* ---------------------------------------------------------------------- */
   /* create / update                                                         */
   /* ---------------------------------------------------------------------- */
 

@@ -59,5 +59,8 @@ import "./place-edges.ts";
 // link `UserProfile`, `Item`, `ItemReview`, `TierListItem` and `Cellar`,
 // nearby places link `Place`, so it comes after every module declaring them.
 import "./discovery.ts";
+// X17: the share reads and friend invites. Reuses enums from `item.ts`,
+// `recipe.ts` and `tier-list.ts`, and adds a field to `Viewer`.
+import "./share.ts";
 
 export const schema = builder.toSchema();

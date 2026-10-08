@@ -74,6 +74,8 @@ import type {
   PageArgs,
   RegenerateVectorResult,
   SetItemBarcodeInput,
+  SharedAttributeValue,
+  SharedItemDto,
   UnlinkedItemBrand,
   UpdateGenericItemInput,
   UpdateItemInput,
@@ -114,6 +116,7 @@ import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import {
   bypassesPolicy,
   canSeeItemImage,
+  canShareItemImageAnonymously,
   isOwner,
 } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
@@ -182,6 +185,33 @@ const vectorDisplayFileId = (images: readonly ItemImageRow[]): string | null =>
   images.find((image) => image.isPublic)?.fileId ?? null;
 type ItemReviewRow = typeof itemReviews.$inferSelect;
 type ItemBrandRow = typeof itemBrands.$inferSelect;
+
+/**
+ * §2.1: "computed from reviews in memory; replaces the `_aggregate` calls".
+ * `average` is `null` with no reviews — not `0`, which reads as "everyone
+ * hated it". Rounded to 2dp so a `float4` sum does not leak
+ * `3.6666666666666665` into the API.
+ */
+const scoreOf = (reviews: readonly ItemReviewRow[]): ItemScoreDto => {
+  const count = reviews.length;
+  if (count === 0) return { average: null, count: 0 };
+  const total = reviews.reduce((sum, row) => sum + Number(row.score), 0);
+  return { average: Math.round((total / count) * 100) / 100, count };
+};
+
+/** A value that may cross on a share page: scalars only, dates as ISO. */
+const sharedValue = (value: unknown): SharedAttributeValue => {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  return null;
+};
 
 export type ItemAggregate =
   | {
@@ -542,22 +572,46 @@ export class ItemActor
     );
   }
 
-  /**
-   * §2.1: "computed from reviews in memory; replaces the `_aggregate` calls".
-   * `average` is `null` with no reviews — not `0`, which reads as "everyone
-   * hated it". Rounded to 2dp so a `float4` sum does not leak
-   * `3.6666666666666665` into the API.
-   */
+  /** {@link scoreOf}, over every review this actor holds. */
   async score(ctx: Ctx): Promise<ItemScoreDto> {
     const aggregate = this.#requireItem();
     requireSignedIn(ctx, "view an item score");
-    const count = aggregate.reviews.length;
-    if (count === 0) return { average: null, count: 0 };
-    const total = aggregate.reviews.reduce(
-      (sum, row) => sum + Number(row.score),
-      0,
-    );
-    return { average: Math.round((total / count) * 100) / 100, count };
+    return scoreOf(aggregate.reviews);
+  }
+
+  /**
+   * X17's public share page: the one read here an anonymous caller may make.
+   * Items are catalog data — what makes this safe is the shape, a closed
+   * whitelist (`SharedItemDto`): the name, the type's spec attributes, the
+   * newest **public** photo and the everyone score. Not `createdById`, not the
+   * barcode, not a review, and never a private upload, whoever asks — the
+   * answer does not depend on `ctx` at all (`canShareAnonymously`).
+   */
+  async getShared(_ctx: Ctx): Promise<SharedItemDto> {
+    const aggregate = this.#requireItem();
+    const { type } = aggregate.ref;
+    const dto = itemRowToDto(type, aggregate.row) as unknown as Record<
+      string,
+      unknown
+    >;
+    const attributes: Record<string, SharedAttributeValue> = {};
+    for (const name of Object.keys(ITEM_TYPE_SPECS[type].attributes)) {
+      attributes[name] = sharedValue(dto[name]);
+    }
+    const image = aggregate.images.find(canShareItemImageAnonymously) ?? null;
+    const score = scoreOf(aggregate.reviews);
+    return {
+      id: aggregate.row.id,
+      type,
+      name: aggregate.row.name,
+      description: aggregate.row.description,
+      country: aggregate.row.country,
+      attributes,
+      imageFileId: image?.fileId ?? null,
+      imagePlaceholder: image?.placeholder ?? null,
+      scoreAverage: score.average,
+      scoreCount: score.count,
+    };
   }
 
   /**

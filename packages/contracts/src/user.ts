@@ -44,6 +44,12 @@ import type { Ctx } from "./ctx.ts";
 import type { FriendRequestStatus } from "./enums.ts";
 import type { ItemRef } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type {
+  AcceptFriendInviteInput,
+  AcceptFriendInviteResult,
+  FriendInviteDto,
+  FriendInvitePreviewDto,
+} from "./share.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Profile                                                                     */
@@ -116,7 +122,11 @@ export type FriendRequestDto = {
 export type ConfirmFriendshipPayload = {
   /** The user who accepted — the *other* side of the friendship. */
   readonly friendId: string;
-  /** The `friend_requests` row to close. Absent only for a hand-driven repair. */
+  /**
+   * The `friend_requests` row to close. Absent for a hand-driven repair, and
+   * for an accepted friend invite (X17), where there was no request — the
+   * receiving actor closes any pending request between the two either way.
+   */
   readonly requestId?: string;
 };
 
@@ -240,6 +250,36 @@ export type UserActorInterface = {
   removeFriend(ctx: Ctx, friendId: string): Promise<boolean>;
   removeFriendOtherSide(ctx: Ctx, payload: OtherSidePayload): Promise<boolean>;
 
+  /**
+   * X17 friend invites (`share.ts`). The viewer's own live invite, or `null`
+   * if they never made one. Self only.
+   */
+  friendInvite(ctx: Ctx): Promise<FriendInviteDto | null>;
+  /** The live invite, minted on first use — idempotent. Self only. */
+  ensureFriendInvite(ctx: Ctx): Promise<FriendInviteDto>;
+  /** A new secret; every earlier link stops working. Self only. */
+  resetFriendInvite(ctx: Ctx): Promise<FriendInviteDto>;
+  /**
+   * On the **inviter's** actor: who sent this invite and where the viewer
+   * stands with them. Anonymous allowed — the link's holder was given it.
+   * `NotFoundError` for a wrong or rotated secret, the same as for a user
+   * who does not exist.
+   */
+  previewFriendInvite(
+    ctx: Ctx,
+    secret: string,
+  ): Promise<FriendInvitePreviewDto>;
+  /**
+   * On the **invitee's** (the viewer's own) actor: become friends with the
+   * inviter. Inserts the viewer's `friends` row and, through the outbox, the
+   * inviter's (`confirmFriendship`, §1.7) — the same two-sided write as
+   * accepting a request. Idempotent: already friends writes nothing.
+   */
+  acceptFriendInvite(
+    ctx: Ctx,
+    input: AcceptFriendInviteInput,
+  ): Promise<AcceptFriendInviteResult>;
+
   favorites(ctx: Ctx, page: PageArgs): Promise<Page<ItemRef>>;
   /**
    * Which of `refs` the viewer has favourited, as `ItemActor` ids
@@ -316,6 +356,11 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     withdrawFriendRequest: {},
     removeFriend: {},
     removeFriendOtherSide: {},
+    friendInvite: {},
+    ensureFriendInvite: {},
+    resetFriendInvite: {},
+    previewFriendInvite: {},
+    acceptFriendInvite: {},
     favorites: {},
     favoriteStates: {},
     favoriteCounts: {},

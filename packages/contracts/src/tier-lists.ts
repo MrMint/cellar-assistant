@@ -51,6 +51,7 @@ import type { PermissionType } from "./enums.ts";
 import type { ActorErrorReason } from "./errors.ts";
 import { ITEM_TYPES, type ItemType } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { SharedTierListDto } from "./share.ts";
 
 /* -------------------------------------------------------------------------- */
 /* The wider entry type — items, plus places                                   */
@@ -253,6 +254,12 @@ export type GenerateInsightsResult = {
  */
 export type TierListActorInterface = {
   get(ctx: Ctx): Promise<TierListDto>;
+  /**
+   * X17: the public share page's read — PUBLIC lists only, the same answer
+   * for every caller (anonymous included), `NotFoundError` for a list that is
+   * missing or not PUBLIC alike. See `share.ts`.
+   */
+  getShared(ctx: Ctx): Promise<SharedTierListDto>;
   create(ctx: Ctx, input: CreateTierListInput): Promise<TierListDto>;
   update(ctx: Ctx, input: UpdateTierListInput): Promise<TierListDto>;
   delete(ctx: Ctx): Promise<DeletedTierList>;
@@ -304,6 +311,7 @@ export const TierListActorDescriptor: ActorDescriptor<TierListActorInterface> =
     // Each edit enqueues `generateInsights`, an LLM call.
     methods: {
       get: {},
+      getShared: {},
       create: {},
       update: {},
       delete: {},

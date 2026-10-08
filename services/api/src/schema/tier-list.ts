@@ -68,7 +68,7 @@ import { type PatchPolicy, patch, present } from "./patch.ts";
 /* Enums                                                                       */
 /* -------------------------------------------------------------------------- */
 
-const TierListEntryTypeEnum = builder.enumType("TierListEntryType", {
+export const TierListEntryTypeEnum = builder.enumType("TierListEntryType", {
   description:
     "Everything a tier list can rank: the six Item types, plus PLACE — the " +
     "value `item_type` (a Postgres enum) cannot represent, which is why " +

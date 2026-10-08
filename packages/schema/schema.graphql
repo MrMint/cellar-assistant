@@ -2,6 +2,16 @@
 # Printed from services/api by `bun run --filter @cellar-assistant/api schema:print`.
 # A change here is a schema change: call it out in the PR (plan §7).
 
+type AcceptFriendInvitePayload {
+  """
+  False when you were already friends and nothing was written. The inviter's side of a new friendship follows through the outbox.
+  """
+  becameFriends: Boolean!
+  friendId: ID!
+}
+
+union AcceptFriendInviteResult = AcceptFriendInvitePayload | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
 """
 The recipient's half of the handshake. The requester's `friends` row and the closing of the request follow through the outbox (§1.7), so a client that re-reads immediately may briefly see one row, not two — `isFriend` is true either way.
 """
@@ -1559,6 +1569,8 @@ type EnrichPlacePayload {
 
 union EnsureBarcodeResult = Barcode | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+union EnsureFriendInviteResult = BudgetExceededError | ConflictError | ForbiddenError | FriendInvite | NotFoundError | ValidationError
+
 """Anything a client can be told about and act on."""
 interface Error {
   message: String!
@@ -1639,6 +1651,31 @@ type FriendConnection {
 type FriendEdge {
   cursor: String!
   node: Friend!
+}
+
+"""
+The viewer's own invite link, as its token: the link is `/invite/<token>`. Anyone who opens it can become your friend.
+"""
+type FriendInvite {
+  createdAt: DateTime!
+  token: String!
+}
+
+type FriendInvitePreview {
+  inviterAvatarUrl: String
+  inviterDisplayName: String!
+  inviterId: ID!
+  status: FriendInviteStatus!
+}
+
+"""
+Where the viewer stands with an invite's author. SIGNED_OUT: no session — offer sign-up and come back. OWN_INVITE: the viewer sent it. ALREADY_FRIENDS: nothing to do. CAN_ACCEPT: `acceptFriendInvite` will make you friends.
+"""
+enum FriendInviteStatus {
+  ALREADY_FRIENDS
+  CAN_ACCEPT
+  OWN_INVITE
+  SIGNED_OUT
 }
 
 """A pending `friend_requests` row."""
@@ -2646,6 +2683,11 @@ enum MenuScanStatus {
 
 type Mutation {
   """
+  Become friends with the person whose link this is. Idempotent. Writes your `friends` row now; theirs follows through the outbox.
+  """
+  acceptFriendInvite(token: String!): AcceptFriendInviteResult!
+
+  """
   Accept a request addressed to you. Writes the viewer's own `friends` row; the requester's row follows through the outbox (§1.7).
   """
   acceptFriendRequest(requestId: ID!): AcceptFriendRequestResult!
@@ -2796,6 +2838,9 @@ type Mutation {
   """
   ensureBarcode(code: String!, type: String): EnsureBarcodeResult!
 
+  """Your invite link, made on first use. Idempotent."""
+  ensureFriendInvite: EnsureFriendInviteResult!
+
   """
   The stored proposal, without re-running the model. A mutation only because §8.3 keeps the command vocabulary on `Mutation`; it writes nothing.
   """
@@ -2859,6 +2904,9 @@ type Mutation {
   orderedIds is the complete post-reorder membership of `band`, in order. An id not currently in `band` is moved into it — a cross-band drag is one call, and the band it moved out of is renumbered too, in the same transaction.
   """
   reorderTierListBand(band: Int!, orderedIds: [ID!]!, tierListId: ID!): ReorderTierListBandResult!
+
+  """A new invite link. Every earlier link stops working."""
+  resetFriendInvite: ResetFriendInviteResult!
 
   """
   Finds the brand named `name` (case-insensitive, trimmed) or creates it (BrandRegistryActor.resolve) — the only brand-creation path a client has; there is no direct createBrand mutation (see module doc).
@@ -3641,6 +3689,11 @@ type Query {
   """
   file(id: ID!): QueryFileResult!
 
+  """
+  Who sent an invite link, and where the viewer stands with them. Works with no session. `NotFoundError` for a link that was reset or never existed.
+  """
+  friendInvitePreview(token: String!): QueryFriendInvitePreviewResult!
+
   """One `generic_items` row. Not an Item — see `GenericItem`."""
   genericItem(id: ID!): QueryGenericItemResult!
 
@@ -4099,6 +4152,17 @@ type Query {
   """Address components for a coordinate (GeocodeActor)."""
   reverseGeocode(location: LngLatInput!): ReverseGeocodeResult
 
+  """An item for its share page. Works with no session."""
+  sharedItem(id: ID!, type: ItemType!): QuerySharedItemResult!
+
+  """A recipe for its share page. Works with no session."""
+  sharedRecipe(id: ID!): QuerySharedRecipeResult!
+
+  """
+  A PUBLIC tier list for its share page. Works with no session. `NotFoundError` for a list that is missing or not PUBLIC alike — including your own private one: read `tierList` for that.
+  """
+  sharedTierList(id: ID!): QuerySharedTierListResult!
+
   """
   One tier list by id. `NotFoundError` covers both 'no such list' and 'not yours to see' (§1.6).
   """
@@ -4155,6 +4219,8 @@ union QueryDuplicatePlacesResult = BudgetExceededError | ConflictError | Duplica
 
 union QueryFileResult = BudgetExceededError | ConflictError | File | ForbiddenError | NotFoundError | ValidationError
 
+union QueryFriendInvitePreviewResult = BudgetExceededError | ConflictError | ForbiddenError | FriendInvitePreview | NotFoundError | ValidationError
+
 union QueryGenericItemResult = BudgetExceededError | ConflictError | ForbiddenError | GenericItem | NotFoundError | ValidationError
 
 union QueryItemOnboardingResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
@@ -4204,6 +4270,12 @@ union QueryRecipeResult = BudgetExceededError | ConflictError | ForbiddenError |
 union QueryRecipeSearchResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeSearchConnection | ValidationError
 
 union QueryReferenceDataResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ReferenceRowConnection | ValidationError
+
+union QuerySharedItemResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SharedItem | ValidationError
+
+union QuerySharedRecipeResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SharedRecipe | ValidationError
+
+union QuerySharedTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SharedTierList | ValidationError
 
 union QueryTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierList | ValidationError
 
@@ -4954,6 +5026,8 @@ type ReorderBandPayload {
 
 union ReorderTierListBandResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ReorderBandPayload | ValidationError
 
+union ResetFriendInviteResult = BudgetExceededError | ConflictError | ForbiddenError | FriendInvite | NotFoundError | ValidationError
+
 union ResolveBrandResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 type ReverseGeocodeResult {
@@ -5218,6 +5292,193 @@ union SetCellarItemPercentageResult = BudgetExceededError | CellarItem | Conflic
 union SetRecipeIngredientsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeIngredientsPayload | ValidationError
 
 union SetRecipeInstructionsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeInstructionsPayload | ValidationError
+
+"""
+An item as its share page shows it — readable with no session. Catalog facts, the newest public photo and everyone's score; nothing else.
+"""
+type SharedItem {
+  """
+  The type's attributes, keyed as the type's own fields are named (`vintage`, `style`, `variety`, …). Scalars only.
+  """
+  attributes: JSON!
+  country: String
+  description: String
+  id: ID!
+  imagePlaceholder: String
+  imageUrl: String
+  name: String!
+  scoreAverage: Float
+  scoreCount: Int!
+  type: ItemType!
+}
+
+"""
+A recipe as its share page shows it — readable with no session. No author, votes or reviews; ingredients by name.
+"""
+type SharedRecipe {
+  description: String
+  difficultyLevel: Int
+  id: ID!
+  imageUrl: String
+
+  """Required first, then by name — `Recipe.ingredients`' order."""
+  ingredients(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): SharedRecipeIngredientConnection!
+
+  """In step order."""
+  instructions(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): SharedRecipeInstructionConnection!
+  name: String!
+  prepTimeMinutes: Int
+  servingSize: Int
+  type: RecipeType!
+}
+
+type SharedRecipeIngredient {
+  isOptional: Boolean!
+  name: String
+  quantity: Float
+  unit: String
+}
+
+type SharedRecipeIngredientConnection {
+  edges: [SharedRecipeIngredientEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type SharedRecipeIngredientEdge {
+  cursor: String!
+  node: SharedRecipeIngredient!
+}
+
+type SharedRecipeInstruction {
+  stepNumber: Int!
+  text: String!
+}
+
+type SharedRecipeInstructionConnection {
+  edges: [SharedRecipeInstructionEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type SharedRecipeInstructionEdge {
+  cursor: String!
+  node: SharedRecipeInstruction!
+}
+
+"""
+A PUBLIC tier list as its share page shows it — readable with no session. Not the `TierList` type: no creator id, no insights, no viewer-relative state.
+"""
+type SharedTierList {
+  description: String
+
+  """
+  Every entry, `band desc, position asc`, paged like every list (§1.5). Each entry's `imageUrl` is one presign, so the page bounds that too.
+  """
+  entries(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): SharedTierListEntryConnection!
+  id: ID!
+  listType: String!
+  name: String!
+
+  """
+  The author's display name, as signed-in viewers see it beside the list. Null for a deleted author, or a name shaped like an email.
+  """
+  ownerDisplayName: String
+  privacy: PermissionType!
+  updatedAt: DateTime
+}
+
+"""
+One ranked entry on a public tier list, described for a viewer who may not be signed in.
+"""
+type SharedTierListEntry {
+  band: Int!
+  entryId: ID!
+  entryType: TierListEntryType!
+  id: ID!
+
+  """
+  The ranked item's newest public photo, presigned. Null for a place, and for an item with no public photo.
+  """
+  imageUrl: String
+  location: String
+
+  """Null only when the ranked row could not be read."""
+  name: String
+  notes: String
+  position: Int!
+}
+
+type SharedTierListEntryConnection {
+  edges: [SharedTierListEntryEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type SharedTierListEntryEdge {
+  cursor: String!
+  node: SharedTierListEntry!
+}
 
 type Spirit implements Item {
   alcoholContentPercentage: Float
@@ -6132,6 +6393,11 @@ type Viewer {
     """
     types: [ItemType!]
   ): ItemConnection!
+
+  """
+  Your invite link, or null if you have not made one (`ensureFriendInvite`).
+  """
+  friendInvite: FriendInvite
   id: ID!
 
   """

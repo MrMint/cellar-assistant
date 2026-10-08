@@ -7,6 +7,7 @@
  *   - `friend_requests` — rows where `user_id = me` (i.e. the ones **I** sent)
  *   - `item_favorites` — rows where `user_id = me`
  *   - `user_place_interactions` — rows where `user_id = me`
+ *   - `friend_invites` — the one row where `user_id = me` (X17)
  *
  * Profile fields are not on that list: there is no `public.users` table, and
  * A6 moved identity to better-auth's `user` table in its own database
@@ -59,6 +60,22 @@
  *
  * Each returns whether it *actually* changed anything, so a test can prove the
  * second delivery did nothing rather than merely assert the row count.
+ *
+ * ## Reading both directions
+ *
+ * ## Friend invites (X17)
+ *
+ * A fifth owned table, `friend_invites`: at most one live invite secret per
+ * user, minted by `ensureFriendInvite` and rotated by `resetFriendInvite`.
+ * The link's token packs the inviter's id with that secret
+ * (`packages/contracts/src/share.ts`), so `previewFriendInvite` runs on the
+ * **inviter's** actor — anonymous allowed, since the holder of the link was
+ * given it — and `acceptFriendInvite` on the **invitee's**, which reads the
+ * inviter's row fresh (another key's row, like `#incomingRequests`) and then
+ * makes the same two-sided write `acceptFriendRequest` does: its own
+ * `friends` row now, the inviter's through the outbox's `confirmFriendship`.
+ * A wrong or rotated secret is `NotFoundError` worded as a missing user, so a
+ * guessed token learns nothing about who exists.
  *
  * ## Reading both directions
  *
@@ -115,7 +132,10 @@
  * Postgres and the profile store's Postgres. `user-actor.test.ts` asserts that
  * statically against this file's own source.
  */
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type {
+  AcceptFriendInviteInput,
+  AcceptFriendInviteResult,
   AcceptFriendRequestResult,
   ActorCategory,
   AiCapabilities,
@@ -123,6 +143,8 @@ import type {
   ConfirmFriendshipResult,
   Ctx,
   FriendDto,
+  FriendInviteDto,
+  FriendInvitePreviewDto,
   FriendRequestDirection,
   FriendRequestDto,
   ItemRef,
@@ -139,6 +161,8 @@ import type {
 import {
   ConflictError,
   ForbiddenError,
+  formatInviteToken,
+  isInviteSecret,
   isItemType,
   itemActorId,
   NotFoundError,
@@ -148,6 +172,7 @@ import {
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
+  friendInvites,
   friendRequests,
   friends,
   itemFavorites,
@@ -158,8 +183,8 @@ import {
 import { and, eq, inArray, or, sql } from "@cellar-assistant/db/orm";
 import { type Friendship, isFriend, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
-import { isEmailShaped } from "../auth/display-name.ts";
-import { EntityActorBase } from "../lib/actor-base.ts";
+import { handleForId, isEmailShaped } from "../auth/display-name.ts";
+import { absentRow, EntityActorBase } from "../lib/actor-base.ts";
 import { aiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
@@ -177,6 +202,7 @@ export type FriendRow = typeof friends.$inferSelect;
 export type FriendRequestRow = typeof friendRequests.$inferSelect;
 export type FavoriteRow = typeof itemFavorites.$inferSelect;
 export type PlaceInteractionRow = typeof userPlaceInteractions.$inferSelect;
+export type FriendInviteRow = typeof friendInvites.$inferSelect;
 
 /**
  * **Only the rows this actor writes** — see the module doc's "Only the rows
@@ -190,6 +216,8 @@ export type UserAggregate = {
   readonly outgoing: readonly FriendRequestRow[];
   readonly favorites: readonly FavoriteRow[];
   readonly interactions: readonly PlaceInteractionRow[];
+  /** `friend_invites` where `user_id = me` — at most one row (X17). */
+  readonly invite: FriendInviteRow | null;
 };
 
 /** The owned rows plus a *fresh* read of the ones another key writes. */
@@ -294,7 +322,7 @@ export class UserActor
     // Only `user_id = me`, in both cases: the mirrored rows are another
     // `UserActor` key's to write, so caching them here goes stale with nothing
     // to invalidate it (module doc). `#snapshot()` reads those fresh.
-    const [ownFriends, outgoing, favoriteRows, interactionRows] =
+    const [ownFriends, outgoing, favoriteRows, interactionRows, inviteRows] =
       await Promise.all([
         this.db.select().from(friends).where(eq(friends.userId, id)),
         this.db
@@ -309,6 +337,10 @@ export class UserActor
           .select()
           .from(userPlaceInteractions)
           .where(eq(userPlaceInteractions.userId, id)),
+        this.db
+          .select()
+          .from(friendInvites)
+          .where(eq(friendInvites.userId, id)),
       ]);
 
     return {
@@ -316,6 +348,7 @@ export class UserActor
       outgoing,
       favorites: favoriteRows,
       interactions: interactionRows,
+      invite: inviteRows[0] ?? null,
     };
   }
 
@@ -945,6 +978,174 @@ export class UserActor
   }
 
   /* ---------------------------------------------------------------------- */
+  /* Friend invites (X17)                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  /** The viewer's own live invite, or `null`. Self only. */
+  async friendInvite(ctx: Ctx): Promise<FriendInviteDto | null> {
+    const { invite } = this.requireAggregate();
+    this.#requireSelf(ctx, "read this invite link");
+    return invite === null ? null : this.#toInviteDto(invite);
+  }
+
+  /**
+   * The live invite, minted on first use. Idempotent: a second call returns
+   * the same secret (`on conflict do nothing`, then the row that is there).
+   */
+  async ensureFriendInvite(ctx: Ctx): Promise<FriendInviteDto> {
+    const { invite } = this.requireAggregate();
+    this.#requireSelf(ctx, "create an invite link");
+    if (invite !== null) return this.#toInviteDto(invite);
+    await this.tx(async (tx) =>
+      tx
+        .insert(friendInvites)
+        .values({ userId: this.key, secret: newInviteSecret() })
+        .onConflictDoNothing(),
+    );
+    await this.reload();
+    return this.#requireInvite();
+  }
+
+  /** A new secret in place of the old one: every earlier link stops working. */
+  async resetFriendInvite(ctx: Ctx): Promise<FriendInviteDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "reset this invite link");
+    const secret = newInviteSecret();
+    await this.tx(async (tx) =>
+      tx
+        .insert(friendInvites)
+        .values({ userId: this.key, secret })
+        .onConflictDoUpdate({
+          target: friendInvites.userId,
+          set: { secret, createdAt: sql`now()` },
+        }),
+    );
+    await this.reload();
+    return this.#requireInvite();
+  }
+
+  /**
+   * On the inviter's actor: who sent this invite, and where the viewer stands
+   * with them. Anonymous allowed. A wrong or rotated secret is refused with
+   * exactly the bytes a nonexistent user gets (`refuseAsAbsent`).
+   *
+   * The name shown is the display name every signed-in user already sees,
+   * except one shaped like an email address (a pre-rule row), which becomes
+   * the neutral handle instead.
+   */
+  async previewFriendInvite(
+    ctx: Ctx,
+    secret: string,
+  ): Promise<FriendInvitePreviewDto> {
+    const { invite } = this.requireAggregate();
+    if (!secretMatches(invite, secret)) this.refuseAsAbsent();
+
+    const profile = await this.#profileFields(this.key);
+    const viewer = ctx.viewerId;
+    let status: FriendInvitePreviewDto["status"];
+    if (viewer === null) status = "SIGNED_OUT";
+    else if (viewer === this.key) status = "OWN_INVITE";
+    else {
+      const { friendships } = await this.#snapshot();
+      status = this.#areFriends(friendships, viewer)
+        ? "ALREADY_FRIENDS"
+        : "CAN_ACCEPT";
+    }
+    return {
+      inviterId: this.key,
+      inviterDisplayName: isEmailShaped(profile.displayName)
+        ? handleForId(this.key)
+        : profile.displayName,
+      inviterAvatarUrl: profile.avatarUrl,
+      status,
+    };
+  }
+
+  /**
+   * On the invitee's — the viewer's own — actor. Step 1 of §1.7, the same
+   * shape as `acceptFriendRequest`, with the invite standing in for the
+   * request: this user's `friends` row and the outbox row carrying
+   * `confirmFriendship` to the inviter, in one transaction. A pending request
+   * this user had sent the inviter is closed in the same transaction (it is
+   * this actor's own row); one the inviter had sent is closed by
+   * `confirmFriendship` on their side, as it always is.
+   *
+   * Idempotent: already friends (either direction, as `isFriend` reads it)
+   * writes nothing and says so.
+   */
+  async acceptFriendInvite(
+    ctx: Ctx,
+    input: AcceptFriendInviteInput,
+  ): Promise<AcceptFriendInviteResult> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "accept a friend invite as this user");
+    const inviterId = requireUuid(input?.inviterId, "inviterId");
+
+    // The inviter's row, read fresh: their actor rotates it in its own turns.
+    const [invite] = await this.db
+      .select()
+      .from(friendInvites)
+      .where(eq(friendInvites.userId, inviterId));
+    if (!secretMatches(invite ?? null, input?.secret)) {
+      throw absentRow(USER_ACTOR_TYPE, inviterId);
+    }
+    if (inviterId === this.key) {
+      throw new ValidationError(
+        "this is your own invite link",
+        "CANNOT_FRIEND_SELF",
+      );
+    }
+
+    const { friendships } = await this.#snapshot();
+    if (this.#areFriends(friendships, inviterId)) {
+      return { friendId: inviterId, becameFriends: false };
+    }
+
+    await this.tx(async (tx) => {
+      await tx
+        .insert(friends)
+        .values({ userId: this.key, friendId: inviterId })
+        .onConflictDoNothing();
+      await tx
+        .delete(friendRequests)
+        .where(
+          and(
+            eq(friendRequests.userId, this.key),
+            eq(friendRequests.friendId, inviterId),
+          ),
+        );
+      await enqueueOutbox(
+        tx,
+        OUTBOX_TARGETS["UserActor.confirmFriendship"],
+        {
+          targetId: inviterId,
+          payload: { friendId: this.key } satisfies ConfirmFriendshipPayload,
+        },
+        { attributeTo: ctx },
+      );
+    });
+    await this.reload();
+    return { friendId: inviterId, becameFriends: true };
+  }
+
+  #requireInvite(): FriendInviteDto {
+    const { invite } = this.requireAggregate();
+    if (invite === null) {
+      throw new ConflictError(
+        `no invite row for ${this.key} after writing one`,
+      );
+    }
+    return this.#toInviteDto(invite);
+  }
+
+  #toInviteDto(invite: FriendInviteRow): FriendInviteDto {
+    return {
+      token: formatInviteToken(this.key, invite.secret),
+      createdAt: requiredIso(invite.createdAt),
+    };
+  }
+
+  /* ---------------------------------------------------------------------- */
   /* Favorites                                                               */
   /* ---------------------------------------------------------------------- */
 
@@ -1409,6 +1610,23 @@ export class UserActor
 /* -------------------------------------------------------------------------- */
 /* Module-level helpers                                                       */
 /* -------------------------------------------------------------------------- */
+
+/** 16 random bytes, base64url: the 22 characters `friend_invites` checks. */
+const newInviteSecret = (): string => randomBytes(16).toString("base64url");
+
+/**
+ * Whether `candidate` is this invite's secret. Constant-time over equal
+ * lengths; anything that is not secret-shaped is simply not a match.
+ */
+const secretMatches = (
+  invite: FriendInviteRow | null,
+  candidate: unknown,
+): boolean => {
+  if (invite === null || !isInviteSecret(candidate)) return false;
+  const expected = Buffer.from(invite.secret);
+  const given = Buffer.from(candidate);
+  return expected.length === given.length && timingSafeEqual(expected, given);
+};
 
 const byId = (a: { id: string }, b: { id: string }): number =>
   a.id.localeCompare(b.id);

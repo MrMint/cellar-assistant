@@ -24,6 +24,7 @@ export * from "./proxy.ts";
 export * from "./recipes.ts";
 export * from "./reference.ts";
 export * from "./search.ts";
+export * from "./share.ts";
 export * from "./stored-failure.ts";
 export * from "./tier-lists.ts";
 export * from "./user.ts";
