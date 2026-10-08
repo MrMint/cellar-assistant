@@ -10,7 +10,9 @@ import { newContext } from "../fixtures/test.ts";
  * broken in half a dozen ways the endpoint cannot show you.
  */
 
-test("signs in through the form and lands on /cellars", async ({ browser }) => {
+test("signs in through the form and lands on Home (X01)", async ({
+  browser,
+}) => {
   const ctx = await newContext(browser);
   const page = await ctx.newPage();
 
@@ -21,7 +23,12 @@ test("signs in through the form and lands on /cellars", async ({ browser }) => {
   await page.getByLabel("Password").fill(ACCOUNTS.primary.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/cellars/, { timeout: 30_000 });
+  // (That the button stays busy until the next page commits is held by
+  // `components/auth/landing.test.tsx`: here the sign-in is too quick to
+  // observe without racing it.)
+
+  // Every landing goes to `/`, which shows search until X10 (D1).
+  await expect(page).toHaveURL(/\/search(?:\?|$)/, { timeout: 30_000 });
 
   // The cookie is what every later request depends on; assert it directly so a
   // failure says "no session cookie" rather than "some page did not render".
@@ -80,7 +87,7 @@ test("sign out ends the session", async ({ browser }) => {
   await page.getByLabel("Email").fill(ACCOUNTS.primary.email);
   await page.getByLabel("Password").fill(ACCOUNTS.primary.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/cellars/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/search(?:\?|$)/, { timeout: 30_000 });
 
   // Sign out lives on the Me hub (D1: the side navigation and its avatar
   // menu are gone), a plain button rather than a menu item.
@@ -141,5 +148,31 @@ test("a garbage session cookie is not a session", async ({ browser }) => {
   const page = await ctx.newPage();
   await page.goto("/cellars");
   await expect(page).toHaveURL(/\/sign-in/);
+  await ctx.close();
+});
+
+test("a signed-out deep link signs in and returns there, not Home", async ({
+  browser,
+}) => {
+  const ctx = await newContext(browser);
+  const page = await ctx.newPage();
+  // `/cellars` is no longer the default landing (X01), so it is carried like
+  // any other page.
+  await page.goto("/cellars");
+  await expect(page).toHaveURL(/\/sign-in\?returnTo=%2Fcellars/);
+  await page.getByLabel("Email").fill(ACCOUNTS.primary.email);
+  await page.getByLabel("Password").fill(ACCOUNTS.primary.password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/cellars$/, { timeout: 30_000 });
+  await ctx.close();
+});
+
+test("a signed-in visit to /sign-in goes Home", async ({ browser }) => {
+  const ctx = await newContext(browser, {
+    storageState: storageStatePath("primary"),
+  });
+  const page = await ctx.newPage();
+  await page.goto("/sign-in");
+  await expect(page).toHaveURL(/\/search(?:\?|$)/);
   await ctx.close();
 });

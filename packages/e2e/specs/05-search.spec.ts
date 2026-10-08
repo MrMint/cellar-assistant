@@ -100,7 +100,7 @@ test("semantic item search returns ranked results", async ({ api }) => {
 const searchBox = (page: import("@playwright/test").Page) =>
   page.getByRole("textbox").first();
 
-test("the restored landing view: greeting, collection line, Scan, Photo, five quick links", async ({
+test("the landing view: greeting, collection line, Scan, Photo — and no quick-link chips (X01)", async ({
   api,
   primary,
 }) => {
@@ -123,16 +123,10 @@ test("the restored landing view: greeting, collection line, Scan, Photo, five qu
   if (imageSearch) await expect(photo).toBeVisible();
   else await expect(photo).toHaveCount(0);
   await expect(primary.getByRole("tab")).toHaveCount(0);
-  const main = primary
-    .getByRole("navigation", { name: "Quick links" })
-    .getByRole("link");
-  await expect(main).toHaveText([
-    "Cellars",
-    "Map",
-    "Tier Lists",
-    "Favorites",
-    "Rankings",
-  ]);
+  // X01: the five chips duplicated the tabs and the Me hub, and are gone.
+  await expect(
+    primary.getByRole("navigation", { name: "Quick links" }),
+  ).toHaveCount(0);
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 });
 
@@ -465,7 +459,10 @@ test("the landing view is visible before any script runs", async ({
   browser,
 }) => {
   // AnimateIn used to server-render `opacity:0` and wait for framer-motion to
-  // hydrate; with JavaScript off nothing but the search box ever appeared.
+  // hydrate; with JavaScript off nothing but the search box ever appeared. The
+  // chips it animated are gone (X01), so hold the box itself to the rule —
+  // and the greeting to its own: it is the viewer's clock, so the server
+  // sends none (X01, observation 6).
   const ctx = await newContext(browser, {
     storageState: storageStatePath("primary"),
     javaScriptEnabled: false,
@@ -473,14 +470,10 @@ test("the landing view is visible before any script runs", async ({
   try {
     const page = await ctx.newPage();
     await page.goto("/search");
-    const chip = page
-      .getByRole("navigation", { name: "Quick links" })
-      .getByRole("link", { name: "Cellars" });
-    await expect(chip).toBeVisible();
-    // The CSS entrance takes ~0.5s; what matters is where it comes to rest
-    // with no script at all — the old markup rested at opacity 0.
+    const box = searchBox(page);
+    await expect(box).toBeVisible();
     const restingOpacity = () =>
-      chip.evaluate((el) => {
+      box.evaluate((el) => {
         let node: Element | null = el;
         let min = 1;
         while (node) {
@@ -491,11 +484,49 @@ test("the landing view is visible before any script runs", async ({
       });
     await expect
       .poll(restingOpacity, {
-        message: "a quick-link chip stays hidden without JavaScript",
+        message: "the search box stays hidden without JavaScript",
         timeout: 5_000,
       })
       .toBe(1);
+    await expect(
+      page.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ }),
+      "the server rendered a greeting from its own clock",
+    ).toHaveCount(0);
   } finally {
     await ctx.close();
   }
+});
+
+test("a text search ends with the catalog's Brands, See all into /brands (D1)", async ({
+  api,
+  primary,
+}) => {
+  // Brands left the nav (D1): search is one way in. Take a real brand off the
+  // index rather than assuming one exists by name on this stack.
+  const data = await api.query(
+    `query { brands(first: 1) {
+       __typename ... on BrandConnection { edges { node { id name } } }
+     } }`,
+  );
+  const brand = data.brands.edges?.[0]?.node as
+    | { id: string; name: string }
+    | undefined;
+  test.skip(brand === undefined, "no brands on this stack to search for");
+  if (brand === undefined) return;
+
+  const noise = watch(primary);
+  await primary.goto(`/search?q=${encodeURIComponent(brand.name)}`);
+  await expect(
+    primary.getByRole("heading", { name: "Brands", exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    primary.locator(`a[href="/brands/${brand.id}"]`).first(),
+  ).toBeVisible();
+  expect(noise.pageErrors, "the search page threw").toEqual([]);
+
+  // `/brands?q=` opens with the term already searched.
+  await primary.goto(`/brands?q=${encodeURIComponent(brand.name)}`);
+  await expect(
+    primary.getByRole("textbox", { name: "Search brands" }),
+  ).toHaveValue(brand.name);
 });

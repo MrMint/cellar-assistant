@@ -248,13 +248,67 @@ test("a stranger cannot read a PRIVATE tier list", async ({ api2 }) => {
   ).toBe("NotFoundError");
 });
 
-test("the rankings board renders for every scope", async ({ primary }) => {
+test("Top rated: Me · Friends · Everyone, Me first, each scope renders (N15)", async ({
+  primary,
+}) => {
   const noise = watch(primary);
   await primary.goto("/rankings");
-  await settleNetwork(primary);
+  await expect(
+    primary.getByRole("heading", { name: "Top rated" }),
+  ).toBeVisible();
+  const scopes = primary.getByRole("radiogroup", { name: "Whose scores" });
+  await expect(scopes.getByRole("radio")).toHaveText([
+    "Me",
+    "Friends",
+    "Everyone",
+  ]);
+  // Me by default: a new account's first look is its own scores, never
+  // strangers' items under a label it did not choose (observation 3).
+  await expect(
+    scopes.getByRole("radio", { name: "Me", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
+  for (const [label, param] of [
+    ["Friends", "friends"],
+    ["Everyone", "everyone"],
+  ] as const) {
+    await scopes.getByRole("radio", { name: label }).click();
+    await expect(primary).toHaveURL(new RegExp(`[?&]scope=${param}`));
+    await settleNetwork(primary);
+  }
+  // Every board is ranked: a card carries its place as a numeral.
+  const numerals = primary.locator('[data-slot="rank-numeral"]');
+  if ((await numerals.count()) > 0) {
+    await expect(numerals.first()).toHaveText(/Rank\s*1$/);
+  }
   expect(noise.pageErrors, "the rankings page threw").toEqual([]);
-  // D7's behaviour change: "friends exist but none reviewed" and "no friends
-  // yet" must read differently, and neither may silently fall back.
   const text = await bodyText(primary);
   expect(text.length).toBeGreaterThan(0);
+});
+
+test("/tier-lists: your own lists are under Yours and never under Discover (X11)", async ({
+  api,
+  primary,
+}) => {
+  const data = await api.query(
+    `query { myTierLists(first: 100, section: MINE) {
+       __typename ... on TierListConnection { edges { node { id } } }
+     } }`,
+  );
+  const mine: string[] = (data.myTierLists.edges ?? []).map(
+    (edge: { node: { id: string } }) => edge.node.id,
+  );
+  await primary.goto("/tier-lists");
+  await expect(primary.getByRole("region", { name: "Yours" })).toBeVisible();
+  const discoverLinks = await primary
+    .getByRole("region", { name: "Discover" })
+    .locator('a[href^="/tier-lists/"]')
+    .evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href") ?? ""),
+    );
+  for (const id of mine) {
+    expect(
+      discoverLinks,
+      "one of your own tier lists is listed under Discover",
+    ).not.toContain(`/tier-lists/${id}`);
+  }
 });
