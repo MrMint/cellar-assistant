@@ -460,10 +460,15 @@ describe("B2 · item onboarding defaults", () => {
       "confidence",
     ]);
     expect(schema?.properties?.wine?.required).toBeUndefined();
-    // Still *asked* for, and still told why someone will have to supply it.
+    // Still *asked* for, and still told why someone will have to supply it —
+    // style by its NOT NULL; vintage (nullable since X19, NULL = non-vintage)
+    // by the year-or-NV the form needs.
+    expect(schema?.properties?.wine?.properties?.style?.description).toContain(
+      "wines.style is NOT NULL",
+    );
     expect(
       schema?.properties?.wine?.properties?.vintage?.description,
-    ).toContain("wines.vintage is NOT NULL");
+    ).toContain("Non-Vintage");
   });
 
   /**

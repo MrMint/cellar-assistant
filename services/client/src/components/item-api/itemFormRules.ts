@@ -6,8 +6,8 @@
  * at the GraphQL boundary**, and both were found by running the real mutations
  * against the running stack rather than by reading the schema:
  *
- * 1. **`wines.style`, `wines.vintage` and `spirits.type` are `NOT NULL`, and
- *    `coffees.description` is too** — but `WineAttributesInput.style` and
+ * 1. **`wines.style` and `spirits.type` are `NOT NULL`** (and `wines.vintage`
+ *    and `coffees.description` were, until X19) — but `WineAttributesInput.style` and
  *    friends are all nullable, so the schema will happily accept a confirm
  *    without them. `ItemOnboardingActor.confirm` then hands `ItemActor.create`
  *    to the **outbox**, the insert fails there, and the row is retried and
@@ -242,13 +242,30 @@ export type AttributeField<K extends string = string> = {
   options?: StaticSource;
   /** A `NOT NULL` column. Omitting it fails *inside the outbox*, not here. */
   required?: boolean;
+  /**
+   * X19: the field takes a year **or** "NV" (`NON_VINTAGE`), and the column's
+   * `NULL` means non-vintage — `ITEM_TYPE_SPECS`' `nonVintage`, wine's vintage
+   * only. The form asks for one or the other (it stars the field although the
+   * column is nullable), so a stored `NULL` is always an answer.
+   */
+  nonVintage?: boolean;
   help?: string;
 };
+
+/** The form value for "this wine is non-vintage" — stored as `NULL`. */
+export const NON_VINTAGE = "NV";
+
+/**
+ * What a label or a person may write for a non-vintage wine: "NV", "N.V.",
+ * "Non-Vintage", "Multi-Vintage", any case.
+ */
+export const isNonVintageText = (value: string): boolean =>
+  /^(n\.?\s*v\.?|non[-\s]?vintage|multi[-\s]?vintage)$/i.test(value.trim());
 
 export type ItemTypeRules<K extends string = string> = {
   /** `false` for the four types whose table has `item_onboarding_id NOT NULL`. */
   canCreateDirectly: boolean;
-  /** `description` is `NOT NULL` on `coffees` and nullable everywhere else. */
+  /** `description NOT NULL` — no type since X19 (coffee's was dropped). */
   descriptionRequired: boolean;
   attributes: readonly AttributeField<K>[];
 };
@@ -270,8 +287,9 @@ const RULES = {
         key: "vintage",
         label: "Vintage",
         kind: "date",
-        required: true,
-        help: "wines.vintage is NOT NULL — a wine without one never gets written.",
+        // X19: nullable since `20261008214048`; NULL is non-vintage.
+        nonVintage: true,
+        help: "A year, or NV — wines.vintage NULL means non-vintage.",
       },
       {
         key: "style",
@@ -339,7 +357,8 @@ const RULES = {
   },
   COFFEE: {
     canCreateDirectly: false,
-    descriptionRequired: true,
+    // X19: `coffees.description` is nullable since `20261008214048`.
+    descriptionRequired: false,
     attributes: [
       {
         key: "roastLevel",
@@ -500,6 +519,7 @@ export const coerceAttributeValue = (
 ): string | number | boolean | null => {
   const value = raw.trim();
   if (value === "") return null;
+  if (field.nonVintage === true && isNonVintageText(value)) return null;
   if (field.kind === "boolean") {
     return value === "true" ? true : value === "false" ? false : null;
   }
@@ -560,6 +580,9 @@ export const attributesFrom = (
       typeof value === "boolean"
     ) {
       out[field.key] = String(value);
+    } else if (value === null && field.nonVintage === true) {
+      // X19: a stored NULL here is the answer "non-vintage", not a blank.
+      out[field.key] = NON_VINTAGE;
     }
   }
   return out;
@@ -573,11 +596,17 @@ export const attributesFrom = (
 export const attributesToSave = (
   type: ApiItemType,
   values: Record<string, string>,
-): Record<string, string | number | boolean> => {
-  const attributes: Record<string, string | number | boolean> = {};
+): Record<string, string | number | boolean | null> => {
+  const attributes: Record<string, string | number | boolean | null> = {};
   for (const field of ITEM_FORM_RULES[type].attributes) {
     const raw = values[field.key] ?? "";
     if (raw.trim() === "") continue;
+    // X19: "NV" is sent, as `null` — the one blank-looking value that is an
+    // answer, and the only way an edit can turn a dated wine non-vintage.
+    if (field.nonVintage === true && isNonVintageText(raw)) {
+      attributes[field.key] = null;
+      continue;
+    }
     const coerced = coerceAttributeValue(field, raw);
     if (coerced !== null) attributes[field.key] = coerced;
   }

@@ -296,13 +296,15 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         await seedReferenceValues(db);
         const onboardingId = await seedOnboarding(db, user, "WINE");
         const actor = await activate(newItemActor(`wine:${randomUUID()}`, db));
+        // `wines.style` — `wines.vintage` was the example here until X19
+        // made it nullable (NULL is non-vintage).
         await expect(
           actor.create(userCtx(user, "r"), {
-            name: "No Vintage",
+            name: "No Style",
             itemOnboardingId: onboardingId,
-            wine: { style: "RED" },
+            wine: { vintage: "2019-01-01" },
           }),
-        ).rejects.toThrow(/wines\.vintage is NOT NULL/);
+        ).rejects.toThrow(/wines\.style is NOT NULL/);
       });
     });
 
@@ -611,6 +613,178 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         await expect(
           actor.unlinkBrand(userCtx(owner, "r"), brandId),
         ).resolves.toEqual({ brandId });
+      });
+    });
+
+    it("replacePrimaryBrand (X19/D8): one primary, the wrong one gone, creator only", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, ref, actor } = await seedScenario(db);
+        const wrong = await seedBrand(db, `Wrong ${randomUUID()}`);
+        const other = await seedBrand(db, `Other ${randomUUID()}`);
+        const right = await seedBrand(db, `Right ${randomUUID()}`);
+        const ctx = userCtx(owner, "r");
+        await actor.linkBrand(ctx, { brandId: wrong, isPrimary: true });
+        await actor.linkBrand(ctx, { brandId: other });
+
+        for (const viewer of [friend, stranger]) {
+          await expect(
+            actor.replacePrimaryBrand(userCtx(viewer, "r"), {
+              brandId: right,
+              replacesBrandId: wrong,
+            }),
+          ).rejects.toThrow(ForbiddenError);
+        }
+
+        const before = (await pendingOutbox(db, actorIdFor(ref))).length;
+        const link = await actor.replacePrimaryBrand(ctx, {
+          brandId: right,
+          replacesBrandId: wrong,
+        });
+        expect(link).toMatchObject({ brandId: right, isPrimary: true });
+        const after = (await actor.brands(ctx, page)).entries.map(
+          (entry) => entry.node,
+        );
+        expect(after.map((row) => [row.brandId, row.isPrimary]).sort()).toEqual(
+          [
+            [right, true],
+            [other, false],
+          ].sort(),
+        );
+        // One re-embed for the whole change (the brands are embedded, N08).
+        expect((await pendingOutbox(db, actorIdFor(ref))).length).toBe(
+          before + 1,
+        );
+
+        // Settled: asking again writes nothing and enqueues nothing.
+        await actor.replacePrimaryBrand(ctx, {
+          brandId: right,
+          replacesBrandId: wrong,
+        });
+        expect((await pendingOutbox(db, actorIdFor(ref))).length).toBe(
+          before + 1,
+        );
+
+        // Undo: the old brand back as primary, the correction unlinked.
+        await actor.replacePrimaryBrand(ctx, {
+          brandId: wrong,
+          replacesBrandId: right,
+        });
+        const undone = (await actor.brands(ctx, page)).entries.map(
+          (entry) => entry.node,
+        );
+        expect(
+          undone.map((row) => [row.brandId, row.isPrimary]).sort(),
+        ).toEqual(
+          [
+            [wrong, true],
+            [other, false],
+          ].sort(),
+        );
+      });
+    });
+
+    it("replacePrimaryBrand promotes an existing link and demotes the old primary when nothing is replaced", async () => {
+      await withTestDb(async (db) => {
+        const { owner, actor } = await seedScenario(db);
+        const first = await seedBrand(db, `First ${randomUUID()}`);
+        const second = await seedBrand(db, `Second ${randomUUID()}`);
+        const ctx = userCtx(owner, "r");
+        await actor.linkBrand(ctx, { brandId: first, isPrimary: true });
+        await actor.linkBrand(ctx, { brandId: second });
+        await actor.replacePrimaryBrand(ctx, { brandId: second });
+        const rows = (await actor.brands(ctx, page)).entries.map(
+          (entry) => entry.node,
+        );
+        expect(rows.map((row) => [row.brandId, row.isPrimary]).sort()).toEqual(
+          [
+            [first, false],
+            [second, true],
+          ].sort(),
+        );
+        await expect(
+          actor.replacePrimaryBrand(ctx, { brandId: "not-a-uuid" }),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+
+    it("correctionSource (X19): the creator's onboarding and whether it kept a label; null for anyone else", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, actor } = await seedScenario(db);
+        for (const viewer of [friend, stranger]) {
+          await expect(
+            actor.correctionSource(userCtx(viewer, "r")),
+          ).resolves.toBeNull();
+        }
+        const source = await actor.correctionSource(userCtx(owner, "r"));
+        expect(source?.onboardingId).toEqual(expect.any(String));
+        expect(source?.hasLabel).toBe(false);
+
+        const front = await seedFile(db, owner, true);
+        await db.execute(sql`
+          update public.item_onboardings set front_label_image_id = ${front}::uuid
+          where id = ${source?.onboardingId ?? ""}::uuid
+        `);
+        await expect(
+          actor.correctionSource(userCtx(owner, "r")),
+        ).resolves.toEqual({
+          onboardingId: source?.onboardingId,
+          hasLabel: true,
+        });
+
+        // A tea added directly has no onboarding to run in.
+        const { actor: tea } = await createItem(db, "TEA", owner);
+        await expect(
+          tea.correctionSource(userCtx(owner, "r")),
+        ).resolves.toEqual({ onboardingId: null, hasLabel: false });
+      });
+    });
+
+    it("a wine may be non-vintage (X19): created and cleared to a NULL vintage", async () => {
+      await withTestDb(async (db) => {
+        await seedReferenceValues(db);
+        const owner = await seedUser(db);
+        const onboardingId = await seedOnboarding(db, owner, "WINE");
+        const ref: ItemRef = { type: "WINE", id: randomUUID() };
+        const actor = await activate(newItemActor(actorIdFor(ref), db));
+        const ctx = userCtx(owner, "r");
+        // Left out, the vintage is refused: NULL means NV, so it is asked
+        // for — an explicit `null` is the answer, a missing key is not.
+        await expect(
+          actor.create(ctx, {
+            name: "Krug Grande Cuvée",
+            itemOnboardingId: onboardingId,
+            wine: { style: "RED" },
+          }),
+        ).rejects.toThrow(/wine\.vintage: a year, or null/);
+        const created = await actor.create(ctx, {
+          name: "Krug Grande Cuvée",
+          itemOnboardingId: onboardingId,
+          wine: { style: "RED", vintage: null },
+        });
+        expect(created).toMatchObject({ type: "WINE", vintage: null });
+
+        const dated = await actor.update(ctx, {
+          wine: { vintage: "2012-01-01" },
+        });
+        expect(dated).toMatchObject({ vintage: "2012-01-01" });
+        const cleared = await actor.update(ctx, { wine: { vintage: null } });
+        expect(cleared).toMatchObject({ vintage: null });
+      });
+    });
+
+    it("a coffee needs no description (X19)", async () => {
+      await withTestDb(async (db) => {
+        await seedReferenceValues(db);
+        const owner = await seedUser(db);
+        const onboardingId = await seedOnboarding(db, owner, "COFFEE");
+        const ref: ItemRef = { type: "COFFEE", id: randomUUID() };
+        const actor = await activate(newItemActor(actorIdFor(ref), db));
+        const created = await actor.create(userCtx(owner, "r"), {
+          name: "Ethiopia Guji",
+          itemOnboardingId: onboardingId,
+          coffee: {},
+        });
+        expect(created).toMatchObject({ type: "COFFEE", description: null });
       });
     });
 

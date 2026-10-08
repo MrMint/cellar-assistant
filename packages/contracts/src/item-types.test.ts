@@ -30,6 +30,7 @@ import {
   type ItemDtoOf,
   type ItemType,
   REQUIRED_ITEM_ATTRIBUTES,
+  requireItemAttributes,
   type SakeAttributesInput,
   type SakeDto,
   type SpiritAttributesInput,
@@ -70,8 +71,11 @@ type GoldenCore = {
 
 type GoldenWineDto = GoldenCore & {
   readonly type: "WINE";
-  /** Was `string | null`; `wines.vintage` is `date NOT NULL` (a8757dc4). */
-  readonly vintage: string;
+  /**
+   * `string` while `wines.vintage` was `date NOT NULL` (a8757dc4); nullable
+   * again since X19, where `null` means non-vintage.
+   */
+  readonly vintage: string | null;
   readonly variety: string | null;
   readonly region: string | null;
   readonly style: string;
@@ -252,20 +256,57 @@ describe("ITEM_TYPE_SPECS", () => {
 
   it("reproduces REQUIRED_ITEM_ATTRIBUTES exactly (golden)", () => {
     expect(REQUIRED_ITEM_ATTRIBUTES).toEqual({
-      WINE: [
-        { field: "vintage", column: "wines.vintage", on: "attributes" },
-        { field: "style", column: "wines.style", on: "attributes" },
-      ],
+      // X19: `wines.vintage` (NULL is non-vintage) and `coffees.description`
+      // dropped their NOT NULL (`20261008214048_…`).
+      WINE: [{ field: "style", column: "wines.style", on: "attributes" }],
       BEER: [],
       SPIRIT: [
         { field: "spiritType", column: "spirits.type", on: "attributes" },
       ],
-      COFFEE: [
-        { field: "description", column: "coffees.description", on: "input" },
-      ],
+      COFFEE: [],
       SAKE: [],
       TEA: [],
     });
+  });
+
+  it("asks a wine for its vintage — a year or an explicit null (X19)", () => {
+    // NULL means non-vintage, so an absent key is refused rather than filed
+    // as NV; `null` is the answer and passes, as does a year.
+    expect(() =>
+      requireItemAttributes("WINE", { name: "x", wine: { style: "RED" } }),
+    ).toThrow(/wine\.vintage: a year, or null/);
+    expect(() =>
+      requireItemAttributes("WINE", {
+        name: "x",
+        wine: { style: "RED", vintage: "" },
+      }),
+    ).toThrow(/wine\.vintage/);
+    expect(() =>
+      requireItemAttributes("WINE", {
+        name: "x",
+        wine: { style: "RED", vintage: null },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      requireItemAttributes("WINE", {
+        name: "x",
+        wine: { style: "RED", vintage: "2015-01-01" },
+      }),
+    ).not.toThrow();
+    // Nobody else's vintage is non-vintage-capable: a beer may leave it out.
+    expect(() =>
+      requireItemAttributes("BEER", { name: "x", beer: {} }),
+    ).not.toThrow();
+  });
+
+  it("marks exactly one attribute non-vintage: wine's vintage (X19)", () => {
+    const marked = ITEM_TYPES.flatMap((type) =>
+      itemAttributeEntries(type)
+        .filter(([, attribute]) => attribute.nonVintage === true)
+        .map(([key]) => `${type}.${key}`),
+    );
+    expect(marked).toEqual(["WINE.vintage"]);
+    expect(ITEM_TYPE_SPECS.WINE.attributes.vintage.required).toBe(false);
   });
 
   it("reproduces ITEM_ATTRIBUTE_KEY exactly (golden)", () => {

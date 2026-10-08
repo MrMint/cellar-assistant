@@ -142,6 +142,61 @@ export type ConfirmOnboardingResult = {
   readonly barcode: string | null;
 };
 
+/**
+ * X19 — "Re-read label": what `ItemOnboardingActor.rereadLabel` returns. The
+ * same reading `start` makes, of the same stored photographs, **not stored**:
+ * the session that created the item keeps its original `defaults`, and nothing
+ * here is written to the item. The edit form offers each value as a chip the
+ * creator taps; Save is the only write.
+ */
+export type ItemLabelReading = {
+  /** JSON, the shape `ItemOnboardingDto.defaults` has. */
+  readonly defaults: string;
+  readonly brandName: string | null;
+  /** 0–1, the model's own. */
+  readonly confidence: number;
+  readonly model: string;
+};
+
+export type RereadLabelInput = {
+  /** The item being corrected; its onboarding must be this actor's key. */
+  readonly item: ItemRef;
+};
+
+/**
+ * X19 — the text-only pass's question: the item as the edit form holds it
+ * now (the name may have just been corrected), and which details are empty.
+ */
+export type SuggestItemDetailsInput = {
+  readonly item: ItemRef;
+  readonly name: string;
+  readonly brandName?: string | null;
+  readonly country?: string | null;
+  /** The per-type bag as the form holds it now, by wire key. */
+  readonly attributes?: Record<string, unknown> | null;
+};
+
+/**
+ * What the text-only pass came back with. `defaults` is shaped like a label
+ * read's (`country` and the per-type bag) so the client merges both the same
+ * way, but every value is a **suggestion**: recalled from what the model knows
+ * about a named product, never read off it, so the form shows each as a
+ * "Suggested" chip and applies none without a tap.
+ */
+export type ItemDetailSuggestions = {
+  /**
+   * The model declined — it does not recognise this product well enough to
+   * say anything about it. `defaults` is then `{}`. A correct and common
+   * answer, not a failure.
+   */
+  readonly abstained: boolean;
+  /** The model's one-line account of what it took the product to be. */
+  readonly note: string | null;
+  /** JSON object; only fields the form had empty, only from closed lists. */
+  readonly defaults: string;
+  readonly model: string | null;
+};
+
 export type ReprocessResult = {
   readonly onboardingId: string;
   readonly reprocessed: boolean;
@@ -168,6 +223,21 @@ export type ItemOnboardingActorInterface = {
    * session that already `CONFIRMED` an item of its own stays `CONFIRMED`.
    */
   closeAsMatched(ctx: Ctx): Promise<ItemOnboardingDto>;
+  /**
+   * X19: read the session's label photographs again, for the item it created.
+   * The item's creator only, and only from the onboarding that item records.
+   * Not idempotent by design — asking again is the point — and not stored.
+   */
+  rereadLabel(ctx: Ctx, input: RereadLabelInput): Promise<ItemLabelReading>;
+  /**
+   * X19: suggest the item's empty details from its name and brand — a text
+   * model call, no photograph. Same gate as `rereadLabel`. Abstains rather
+   * than guesses (`ItemDetailSuggestions.abstained`); never writes anything.
+   */
+  suggestDetails(
+    ctx: Ctx,
+    input: SuggestItemDetailsInput,
+  ): Promise<ItemDetailSuggestions>;
 };
 
 /**
@@ -195,6 +265,12 @@ export const ItemOnboardingActorDescriptor: ActorDescriptor<
     confirm: { modelBacked: true },
     // One status write; no model, no outbox.
     closeAsMatched: {},
+    // `start`'s vision call again, with the person waiting on it (§8.5's
+    // exception, for the same reason and in the same actor).
+    rereadLabel: { timeoutMs: 120_000, modelBacked: true },
+    // A short text-only answer; nothing like a label read, but a local model
+    // on a busy laptop still takes tens of seconds.
+    suggestDetails: { timeoutMs: 60_000, modelBacked: true },
   },
   internalMethods: {
     // A vision call per row, from `OnboardingReprocessJobActor`; "over a

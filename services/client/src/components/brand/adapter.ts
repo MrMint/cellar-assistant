@@ -10,7 +10,7 @@
 
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
-import { formatVintage } from "@/utilities";
+import { formatItemVintage } from "@/utilities";
 import type { BrandCardItem } from "./BrandCard";
 import type { BrandDetailsItem, BrandItem, BrandPlace } from "./BrandDetails";
 import { BrandItemLinkFragment } from "./queries";
@@ -85,7 +85,10 @@ export const brandItemFromLink = (link: BrandItemLinkSource): BrandItem => {
     is_primary: link.isPrimary,
     [relation]:
       relation === "wine"
-        ? { ...base, vintage: formatVintage(link.item.vintage) ?? null }
+        ? {
+            ...base,
+            vintage: formatItemVintage("WINE", link.item.vintage) ?? null,
+          }
         : base,
   } satisfies BrandItem;
 };

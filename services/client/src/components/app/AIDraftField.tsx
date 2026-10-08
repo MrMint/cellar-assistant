@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { DRAFT_SOURCE_LABEL, type DraftSource } from "@/lib/forms/ai-draft";
 import { cn } from "@/lib/utils";
-import { Barcode } from "./icons";
+import { AI, Barcode, Close } from "./icons";
 
 export type DraftConfidence = "sure" | "likely" | "check";
 
@@ -24,6 +24,19 @@ export type AIDraftFieldProps = {
   confidence?: DraftConfidence;
   /** Layout only (e.g. a grid placement the wrapped field used to carry). */
   className?: string;
+  /**
+   * X19: a value the AI proposes that the field does **not** hold — shown as
+   * a chip under the field in this source's mark, applied only by a tap
+   * (`onUse`), and dismissable. The proposal never writes on its own.
+   */
+  proposal?: {
+    /** What the chip says ("Zinfandel", "2016", "NV"). */
+    display: string;
+    /** The field's label, for the chip's accessible name. */
+    label: string;
+    onUse: () => void;
+    onDismiss: () => void;
+  };
   children: ReactNode;
 };
 
@@ -49,6 +62,7 @@ export function AIDraftField({
   drafted,
   confidence,
   className,
+  proposal,
   children,
 }: AIDraftFieldProps) {
   return (
@@ -76,6 +90,47 @@ export function AIDraftField({
           {confidence !== undefined && ` · ${CONFIDENCE_LABEL[confidence]}`}
         </span>
       )}
+      {proposal !== undefined && (
+        <div
+          data-slot="ai-proposal"
+          className="mt-2 flex items-center gap-1 animate-in fade-in-0 duration-(--ca-dur-short)"
+        >
+          <button
+            type="button"
+            onClick={proposal.onUse}
+            aria-label={`Use ${DRAFT_SOURCE_LABEL[source].toLowerCase()} ${proposal.label}: ${proposal.display}`}
+            className={cn(
+              "relative inline-flex h-9 min-w-0 items-center gap-1.5 rounded-full px-3 text-sm outline-none transition-transform duration-(--ca-dur-micro) after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100",
+              PROPOSAL[source],
+            )}
+          >
+            <AI aria-hidden className="size-4 shrink-0" />
+            <span className="shrink-0 font-medium">
+              {DRAFT_SOURCE_LABEL[source]}:
+            </span>
+            <span className="min-w-0 truncate text-ink-1">
+              {proposal.display}
+            </span>
+            <span className="shrink-0 font-semibold">Use</span>
+          </button>
+          <button
+            type="button"
+            onClick={proposal.onDismiss}
+            aria-label={`Dismiss the ${proposal.label} suggestion`}
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink-3 outline-none hover:bg-surface-2 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <Close aria-hidden className="size-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
+
+/** The chip for a value not yet in the field: the source's mark, outlined. */
+const PROPOSAL: Record<DraftSource, string> = {
+  label: "border border-ai text-ai",
+  suggested: "border border-ai border-dashed text-ai",
+  pin: "border border-ai/60 text-ai",
+  barcode: "border border-ai/60 text-ai",
+};

@@ -1,7 +1,8 @@
 import { YourLog } from "@/components/drink-log/YourLog";
 import { AddReview } from "@/components/review/AddReview";
 import type { ItemView } from "./adapter";
-import { ItemBrands } from "./ItemBrands";
+import { ChangeBrand } from "./ChangeBrand";
+import { ItemBrands, shownItemBrand } from "./ItemBrands";
 import { type ItemCellar, ItemCellars } from "./ItemCellars";
 import { ItemCharacteristics } from "./ItemCharacteristics";
 import ItemDetails from "./ItemDetails";
@@ -46,7 +47,25 @@ export function ItemPageView({
   editHref,
 }: ItemPageViewProps) {
   const config = ITEM_VIEW_CONFIG[item.type];
-  const brands = <ItemBrands brands={item.brands} title={config.brandTitle} />;
+  // D8: the creator — the one person `editHref` is set for — can correct the
+  // brand from here in one tap.
+  const brands = (
+    <ItemBrands
+      brands={item.brands}
+      title={config.brandTitle}
+      change={
+        editHref === null ? undefined : (
+          <ChangeBrand
+            type={item.type}
+            itemId={item.itemId}
+            itemName={item.name}
+            shown={shownItemBrand(item.brands)}
+            linkedBrandIds={item.brands.map((link) => link.brand.id)}
+          />
+        )
+      }
+    />
+  );
 
   return (
     <div className="flex flex-col gap-4">

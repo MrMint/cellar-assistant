@@ -36,6 +36,7 @@ import {
   setQueryImageEmbedder,
 } from "../image-embeddings.ts";
 import { setItemDefaultsProvider } from "../item-defaults.ts";
+import { setItemSuggestionsProvider } from "../item-suggestions.ts";
 import { setMenuExtractionProvider, setMenuMatchVerifier } from "../menu-ai.ts";
 import { setPlaceReviewer } from "../place-review.ts";
 import { setRecipePhotoExtractor } from "../recipe-photo-ai.ts";
@@ -60,6 +61,7 @@ import {
   providerImageEmbedder,
   providerInsightsGenerator,
   providerItemDefaults,
+  providerItemSuggestions,
   providerMenuExtraction,
   providerMenuMatchVerifier,
   providerPlaceReviewer,
@@ -129,6 +131,11 @@ export const SEAMS = {
     entityType: "item_onboarding",
     install: (provider, loadImages) =>
       setItemDefaultsProvider(providerItemDefaults(provider, loadImages)),
+  },
+  item_suggestions: {
+    entityType: "item_onboarding",
+    install: (provider) =>
+      setItemSuggestionsProvider(providerItemSuggestions(provider)),
   },
   menu_extraction: {
     entityType: "menu_scan",

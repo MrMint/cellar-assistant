@@ -22,7 +22,7 @@ import wine1 from "@/images/wine1.png";
 import { ToggleFavoriteMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
-import { formatVintage, getNextPlaceholder } from "@/utilities";
+import { formatItemVintage, getNextPlaceholder } from "@/utilities";
 import type { ItemCardItem } from "./types";
 
 export type { ItemCardItem } from "./types";
@@ -147,8 +147,10 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
   };
 
   const placeholder = getNextPlaceholder(item.placeholder);
-  const title =
-    type === "WINE" ? `${formatVintage(item.vintage)} ${item.name}` : item.name;
+  // `item.vintage` is already the display year (or "NV", X19); a wine
+  // without one used to render as "undefined Name".
+  const vintage = type === "WINE" ? formatItemVintage(type, item.vintage) : "";
+  const title = vintage ? `${vintage} ${item.name}` : item.name;
   const handleClick = isNotNil(onClick) ? () => onClick(item.id) : undefined;
   const interactive = isNotNil(href) || isNotNil(onClick);
   const hasFavorites = isNotNil(item.favoriteCount);

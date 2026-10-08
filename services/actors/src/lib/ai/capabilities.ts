@@ -36,4 +36,5 @@ export const capabilitiesForInstalledProvider = (input: {
   menuScan: true,
   recipePhoto: true,
   tierListInsights: true,
+  detailSuggestions: true,
 });

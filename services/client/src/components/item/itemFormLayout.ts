@@ -28,6 +28,8 @@ import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import {
   type AttributeField,
   ITEM_FORM_RULES,
+  isNonVintageText,
+  NON_VINTAGE,
 } from "@/components/item-api/itemFormRules";
 
 export type FormEntry =
@@ -35,7 +37,7 @@ export type FormEntry =
   | {
       kind: "description";
       label: string;
-      /** Coffee's `description` is NOT NULL (`descriptionRequired`). */
+      /** `descriptionRequired` — no type since X19 dropped coffee's NOT NULL. */
       required?: boolean;
     }
   | { kind: "country"; label: string }
@@ -174,8 +176,11 @@ export const formLayout = (
     if (field === undefined) {
       throw new Error(`itemFormLayout: ${type} has no attribute ${key}`);
     }
+    // X19: a non-vintage-capable field is starred in both forms — the column
+    // is nullable, but NULL means "NV", so the form asks for a year or NV.
     const required =
       field.required === true ||
+      field.nonVintage === true ||
       (mode === "create" && (CREATE_REQUIRED[type] ?? []).includes(key));
     return { kind: "attribute", label, field, multiline, required };
   });
@@ -187,6 +192,7 @@ export const formLayout = (
  * which case the stored date is kept as it was rather than rounded to 1 Jan.
  */
 export const yearFromDate = (date: string): string => {
+  if (isNonVintageText(date)) return NON_VINTAGE;
   const year = date.slice(0, 4);
   return /^\d{4}$/.test(year) ? year : "";
 };
@@ -194,6 +200,8 @@ export const yearFromDate = (date: string): string => {
 export const dateFromYear = (year: string, original: string): string => {
   const trimmed = year.trim();
   if (trimmed === "") return "";
+  // X19: "NV" stays "NV" — `attributesToSave` sends it as `null`.
+  if (isNonVintageText(trimmed)) return NON_VINTAGE;
   if (yearFromDate(original) === trimmed) return original;
   return /^\d{4}$/.test(trimmed) ? `${trimmed}-01-01` : trimmed;
 };

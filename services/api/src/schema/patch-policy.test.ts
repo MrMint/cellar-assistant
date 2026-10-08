@@ -336,6 +336,9 @@ const PICKS =
 const NAMES_A_TARGET =
   "its input only names which thing to act on (exactly one of the fields is " +
   "set); a null there is 'not this kind', never 'clear it'";
+const ASKS =
+  "asks a model a question and writes nothing, so there is no stored value " +
+  "for null to clear";
 
 const NOT_PATCHES: Readonly<Record<string, string>> = {
   acceptPlaceSuggestion: PICKS,
@@ -361,6 +364,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   setWantToTry: NAMES_A_TARGET,
   startItemOnboarding: STARTS,
   startRecipePhotoJob: STARTS,
+  suggestItemDetails: ASKS,
 };
 
 /** A name that says "change what is there" cannot be classified away. */

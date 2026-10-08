@@ -1123,19 +1123,26 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
       });
     });
 
-    it("names each of the four NOT NULL columns the outbox used to swallow", async () => {
+    // Four until X19 made `wines.vintage` (NULL = non-vintage) and
+    // `coffees.description` nullable; the two left are still refused here,
+    // and so is a wine whose vintage was never answered — `null` is the
+    // answer "NV", an absent key is not an answer at all.
+    it("names each NOT NULL column the outbox used to swallow", async () => {
       await withOnboardingDb(async (db) => {
         const owner = await seedUser(db);
         await seedReferenceValues(db);
         const cases = [
-          { itemType: "WINE", attributes: { style: "RED" }, field: /vintage/ },
+          {
+            itemType: "WINE",
+            attributes: { style: "RED" },
+            field: /wine\.vintage: a year, or null/,
+          },
           {
             itemType: "WINE",
             attributes: { vintage: "2019-01-01" },
             field: /style/,
           },
           { itemType: "SPIRIT", attributes: {}, field: /spiritType/ },
-          { itemType: "COFFEE", attributes: {}, field: /description/ },
         ] as const;
 
         for (const testCase of cases) {

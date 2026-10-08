@@ -248,6 +248,12 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     // N08: an item's brands are in its embedded text, so a link re-embeds it.
     ["Mutation.linkItemBrand", { via: ["ItemActor.linkBrand"] }],
     ["Mutation.unlinkItemBrand", { via: ["ItemActor.unlinkBrand"] }],
+    ["Mutation.replaceItemBrand", { via: ["ItemActor.replacePrimaryBrand"] }],
+    ["Mutation.rereadItemLabel", { via: ["ItemOnboardingActor.rereadLabel"] }],
+    [
+      "Mutation.suggestItemDetails",
+      { via: ["ItemOnboardingActor.suggestDetails"] },
+    ],
     [
       "Mutation.confirmItemOnboarding",
       { via: ["ItemOnboardingActor.confirm"] },

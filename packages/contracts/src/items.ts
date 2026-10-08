@@ -412,6 +412,23 @@ export const requireItemAttributes = (
       );
     }
   }
+
+  // X19: a non-vintage-capable attribute (`wines.vintage`) is nullable, but
+  // its NULL *means* non-vintage — so it has to be answered, not left out.
+  // An explicit `null` is the answer "NV"; an absent key is a caller that
+  // never asked, and storing it would file an undated wine as NV. Checked on
+  // presence only (the key may hold `null`), which JSON — the outbox payload,
+  // Dapr's wire — preserves where it drops `undefined`.
+  for (const [field, attribute] of itemAttributeEntries(type)) {
+    if (attribute.nonVintage !== true) continue;
+    if (bag[field] === undefined || bag[field] === "") {
+      throw new ValidationError(
+        `a ${type.toLowerCase()} needs ${bagKey}.${field}: a year, or null ` +
+          `for a non-vintage (NV) ${type.toLowerCase()} — leaving it out ` +
+          "would file it as NV without anyone having said so",
+      );
+    }
+  }
 };
 
 export type CreateGenericItemInput = {
@@ -475,6 +492,39 @@ export type SetItemBarcodeInput = {
 
 export type DeletedItemReview = { readonly id: string };
 export type UnlinkedItemBrand = { readonly brandId: string };
+
+/**
+ * X19 / D8 — "Wrong brand? Change it": one turn that makes `brandId` the
+ * item's primary brand and drops the one it corrects.
+ *
+ * `replacesBrandId` is the brand the person saw and is correcting away from —
+ * named by the caller rather than inferred, because an item's links are a set
+ * and "the wrong one" is whichever the page showed (the primary, or the first
+ * link when none is marked). It is unlinked; any *other* primary is demoted to
+ * an ordinary link, so the item ends with exactly one primary. Absent or
+ * `null`: nothing is unlinked (the item had no brand, or the person is adding
+ * one). Naming the same brand twice is a no-op, and so is naming a link that is
+ * already gone — an Undo of an Undo lands where it started.
+ */
+export type ReplaceItemBrandInput = {
+  readonly brandId: string;
+  readonly replacesBrandId?: string | null;
+};
+
+/**
+ * X19 — what the item's creator can ask the AI for on its edit page, and what
+ * it would read. `null` from `ItemActor.correctionSource` for anyone else.
+ */
+export type ItemCorrectionSource = {
+  /**
+   * The onboarding the item was created through — the actor its label re-read
+   * and text suggestions run in (§8.5: a model call blocks one onboarding id,
+   * never the item). `null` for a sake or tea added without one.
+   */
+  readonly onboardingId: string | null;
+  /** That onboarding kept a front or back label photograph to re-read. */
+  readonly hasLabel: boolean;
+};
 export type DetachedItemImage = { readonly id: string };
 
 /** What an `ItemActor.regenerateVector` outbox row carries. */
@@ -580,7 +630,17 @@ export type ItemActorInterface = {
   myReview(ctx: Ctx): Promise<ItemReviewDto | null>;
   linkBrand(ctx: Ctx, input: LinkItemBrandInput): Promise<ItemBrandDto>;
   unlinkBrand(ctx: Ctx, brandId: string): Promise<UnlinkedItemBrand>;
+  /** X19 / D8: creator only. See {@link ReplaceItemBrandInput}. */
+  replacePrimaryBrand(
+    ctx: Ctx,
+    input: ReplaceItemBrandInput,
+  ): Promise<ItemBrandDto>;
   brands(ctx: Ctx, page: PageArgs): Promise<Page<ItemBrandDto>>;
+  /**
+   * X19: where this item's label re-read and detail suggestions would run, for
+   * its creator; `null` for anyone else. A read — it calls no model.
+   */
+  correctionSource(ctx: Ctx): Promise<ItemCorrectionSource | null>;
   /**
    * `system`, via the outbox. Idempotent on the outbox row id (§8.4). The
    * payload is forensic — it says in the `outbox` row why the vector was
@@ -639,7 +699,10 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     // its embedded text.
     linkBrand: { modelBacked: true },
     unlinkBrand: { modelBacked: true },
+    // The same `regenerateVector` as a link or an unlink, once.
+    replacePrimaryBrand: { modelBacked: true },
     brands: {},
+    correctionSource: {},
     // An embedding through `EmbeddingActor.embedDocument` (90s: up to three
     // label/display image downloads and the model call), plus the turn around
     // it. The outbox waits this long for the delivery (`pairDeliveryTimeoutMs`).

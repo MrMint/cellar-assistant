@@ -533,7 +533,14 @@ ItemCheckInType.implement({
 builder.objectRef<Extract<ItemDto, { type: "WINE" }>>("Wine").implement({
   interfaces: [ItemInterface],
   fields: (t) => ({
-    vintage: t.expose("vintage", { type: "Date", nullable: true }),
+    vintage: t.expose("vintage", {
+      type: "Date",
+      nullable: true,
+      description:
+        "Stored as `YYYY-01-01`; read it as a year. Null is a non-vintage " +
+        "(NV) wine (X19) — the forms ask for a year or NV, so it is an " +
+        "answer, not a gap.",
+    }),
     variety: t.exposeString("variety", { nullable: true }),
     region: t.exposeString("region", { nullable: true }),
     /**
@@ -787,7 +794,8 @@ const UnlinkedItemBrandType = builder
  * GraphQL has no input unions, so `CreateItemInput` carries all six attribute
  * bags and the actor requires the one matching `type` — which is also where
  * the per-table NOT NULL columns are enforced with a message a client can act
- * on (`wines.vintage`, `wines.style`, `spirits.type`, `coffees.description`).
+ * on (`wines.style`, `spirits.type`; `wines.vintage` and `coffees.description`
+ * were on this list until X19 made them nullable).
  */
 const WineAttributesInput = builder.inputType("WineAttributesInput", {
   fields: (t) => ({

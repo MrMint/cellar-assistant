@@ -15,6 +15,9 @@ import "./item.ts";
 // declares the interface.
 import "./barcode.ts";
 import "./item-onboarding.ts";
+// X19: `Item.correction` and the three correction mutations reference `Item`,
+// `ItemBrand` and the onboarding actor's types.
+import "./item-correction.ts";
 import "./ping.ts";
 // B6: `RecipeIngredient` resolves through the `Item` interface and the
 // `GenericItem` type, both declared by `item.ts`.

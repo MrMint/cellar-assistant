@@ -2,7 +2,12 @@
 
 import { type ReactNode, useId } from "react";
 import { type Control, Controller } from "react-hook-form";
+import { FilterChip } from "@/components/app/FilterChip";
 import { EnumSelect } from "@/components/forms/EnumSelect";
+import {
+  isNonVintageText,
+  NON_VINTAGE,
+} from "@/components/item-api/itemFormRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -156,6 +161,65 @@ export const ItemFormField = ({
             </Label>
           </div>
         )}
+      />
+    );
+  }
+
+  if (field.nonVintage === true) {
+    return (
+      <Controller
+        key={field.key}
+        name={name}
+        control={control}
+        rules={requiredRule(entry)}
+        render={({ field: { ref, value, onChange, ...input }, fieldState }) => {
+          const nonVintage = isNonVintageText(value ?? "");
+          return (
+            <FieldShell
+              id={id}
+              label={entry.label}
+              required={required}
+              error={fieldState.error}
+            >
+              {/* X19: a year, or NV. The chip is the answer "this wine has no
+                  vintage" — stored as NULL — so it sits beside the year it
+                  replaces rather than behind a menu. */}
+              <div className="flex items-center gap-2">
+                <Input
+                  id={id}
+                  ref={ref}
+                  required={required && !nonVintage}
+                  type="number"
+                  inputMode="numeric"
+                  disabled={disabled || nonVintage}
+                  placeholder={nonVintage ? "Non-vintage" : "Year"}
+                  min="1900"
+                  max="2099"
+                  step="1"
+                  className="min-w-0 flex-1"
+                  {...input}
+                  value={nonVintage ? "" : (value ?? "")}
+                  onChange={(event) => onChange(event.target.value)}
+                  {...errorAria(id, entry.label, fieldState)}
+                />
+                {/* Named by its visible "NV" and described, not labelled:
+                    a label containing "vintage" would also answer to the
+                    year field's own name. */}
+                <FilterChip
+                  selected={nonVintage}
+                  disabled={disabled}
+                  aria-describedby={`${id}-nv`}
+                  onClick={() => onChange(nonVintage ? "" : NON_VINTAGE)}
+                >
+                  NV
+                </FilterChip>
+                <span id={`${id}-nv`} className="sr-only">
+                  Non-vintage: this wine has no vintage year
+                </span>
+              </div>
+            </FieldShell>
+          );
+        }}
       />
     );
   }

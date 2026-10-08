@@ -140,6 +140,30 @@ describe("confirmInputFrom", () => {
   });
 });
 
+describe("non-vintage wines (X19)", () => {
+  test("a label's NV turns the chip on, and is saved as a NULL vintage", () => {
+    for (const said of ["NV", "N.V.", "Non-Vintage"]) {
+      const { values, skipped } = formDefaultsFromOnboarding("WINE", {
+        name: "Krug Grande Cuvée",
+        wine: { vintage: said, style: "SPARKLING" },
+      });
+      assert.equal(values.attributes.vintage, "NV", said);
+      assert.deepEqual(skipped, [], said);
+      const input = confirmInputFrom("WINE", values, "Krug");
+      assert.equal(input.attributes.vintage, null, said);
+    }
+  });
+
+  test("a beer's NV is still reported, not filled", () => {
+    const { values, skipped } = formDefaultsFromOnboarding("BEER", {
+      name: "Old Ale",
+      beer: { vintage: "NV" },
+    });
+    assert.equal(values.attributes.vintage, undefined);
+    assert.equal(skipped[0]?.path, "attributes.vintage");
+  });
+});
+
 describe("saveBlocker", () => {
   test("names the NOT NULL columns the outbox would otherwise swallow", () => {
     assert.equal(
@@ -149,7 +173,8 @@ describe("saveBlocker", () => {
         country: "",
         attributes: {},
       }),
-      "Vintage, Style cannot be empty.",
+      // X19: vintage is the form's star (a year or NV), not a NOT NULL.
+      "Style cannot be empty.",
     );
     assert.equal(
       saveBlocker("COFFEE", {
@@ -158,7 +183,7 @@ describe("saveBlocker", () => {
         country: "",
         attributes: {},
       }),
-      "Description cannot be empty.",
+      null,
     );
     assert.equal(
       saveBlocker("SAKE", emptyDefaults().values),
@@ -167,7 +192,7 @@ describe("saveBlocker", () => {
     // N03: every missing column at once, never one at a time.
     assert.equal(
       saveBlocker("WINE", emptyDefaults().values),
-      "Name, Vintage, Style cannot be empty.",
+      "Name, Style cannot be empty.",
     );
     assert.equal(
       saveBlocker("SAKE", { ...emptyDefaults().values, name: "Dassai" }),

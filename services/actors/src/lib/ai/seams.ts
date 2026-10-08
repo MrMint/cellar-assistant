@@ -67,6 +67,12 @@ import {
   requireExtractableInput,
   requireLegibleLabel,
 } from "../item-defaults.ts";
+import type { ItemSuggestionsProvider } from "../item-suggestions.ts";
+import {
+  keepWanted,
+  requireRecognition,
+  requireSuggestibleInput,
+} from "../item-suggestions.ts";
 import type {
   ExtractedMenuLine,
   MenuExtractionProvider,
@@ -94,6 +100,7 @@ import {
   buildFlavourTagsPrompt,
   buildInsightsPrompt,
   buildItemDefaultsPrompt,
+  buildItemSuggestionsPrompt,
   buildMenuExtractionPrompt,
   buildMenuMatchPrompt,
   buildPlaceReviewPrompt,
@@ -104,6 +111,7 @@ import {
   INSIGHTS_SCHEMA,
   isScannedType,
   itemDefaultsSchema,
+  itemSuggestionsSchema,
   MENU_EXTRACTION_SCHEMA,
   menuMatchSchema,
   PLACE_REVIEW_SCHEMA,
@@ -403,6 +411,75 @@ export const providerItemDefaults =
       brandName: str(defaults.brandName),
     };
     return result;
+  };
+
+/* -------------------------------------------------------------------------- */
+/* X19 · ItemOnboardingActor.suggestDetails                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The text-only pass behind "Suggest details" — the contract and its three
+ * code-enforced rules are in `../item-suggestions.ts`; this is the call.
+ *
+ * In order, as the label read does it: the input gate before anything is
+ * built (`requireSuggestibleInput`), the schema from the live vocabulary
+ * (only the empty suggestible fields, abstention first), the verdict read
+ * before the rest of the answer (`requireRecognition` — `false` discards
+ * every suggestion), then the vocabulary mapped back and checked
+ * (`normaliseUnconstrainedAttributes`, `requireInVocabulary`), and last
+ * `keepWanted`, which drops anything the caller did not ask for whatever the
+ * provider sent. "medium": a few short fields from a name, no image — the
+ * label read's "high" buys reading, which this does not do.
+ */
+export const providerItemSuggestions =
+  (provider: ProviderFor): ItemSuggestionsProvider =>
+  async (ctx, request) => {
+    requireSuggestibleInput(request);
+    const vocabulary = await itemVocabulary();
+    const known: string[] = [];
+    for (const [key, value] of Object.entries(request.known)) {
+      if (typeof value === "string" && value.trim() !== "") {
+        known.push(`${key}: ${value.trim()}`);
+      } else if (value !== null && typeof value === "object") {
+        for (const [field, inner] of Object.entries(value)) {
+          if (inner === null || inner === undefined || inner === "") continue;
+          known.push(`${field}: ${String(inner)}`);
+        }
+      }
+    }
+    const { content, metadata } = await provider(ctx).generateContent(
+      {
+        prompt: buildItemSuggestionsPrompt({
+          itemType: request.itemType,
+          name: request.name.trim(),
+          brandName: request.brandName,
+          known,
+        }),
+        schema: itemSuggestionsSchema(
+          request.itemType,
+          vocabulary,
+          request.wanted,
+        ),
+      },
+      "medium",
+    );
+    const answer = parseModelJson(content, "detail suggestions");
+    const note = str(answer.productNote);
+    if (!requireRecognition(bool(answer.recognised))) {
+      return { abstained: true, note, defaults: {}, model: metadata.model };
+    }
+    const normalised = normaliseUnconstrainedAttributes(
+      request.itemType,
+      answer,
+      vocabulary,
+    );
+    requireInVocabulary(request.itemType, normalised, vocabulary);
+    return {
+      abstained: false,
+      note,
+      defaults: keepWanted(request.itemType, normalised, request),
+      model: metadata.model,
+    };
   };
 
 /* -------------------------------------------------------------------------- */

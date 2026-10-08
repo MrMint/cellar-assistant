@@ -62,8 +62,20 @@ describe("readVintage / sameVintage — the explicit vintage compare", () => {
     assert.equal(sameVintage("WINE", "2015", { vintage: "2016" }), false);
     assert.equal(sameVintage("WINE", undefined, { vintage: "2015" }), false);
     assert.equal(sameVintage("WINE", "2015", { vintage: undefined }), false);
-    assert.equal(sameVintage("WINE", undefined, { vintage: undefined }), true);
+    assert.equal(sameVintage("BEER", undefined, { vintage: undefined }), true);
     assert.equal(sameVintage("TEA", undefined, { vintage: undefined }), true);
+  });
+
+  // X19: a wine's NULL vintage is non-vintage — an answer, compared like one.
+  test("NV matches NV and nothing else; a wine read with no vintage matches nothing", () => {
+    assert.equal(sameVintage("WINE", "NV", { vintage: "NV" }), true);
+    assert.equal(sameVintage("WINE", "N.V.", { vintage: "NV" }), true);
+    assert.equal(sameVintage("WINE", "NV", { vintage: "2015" }), false);
+    assert.equal(sameVintage("WINE", "2015", { vintage: "NV" }), false);
+    assert.equal(sameVintage("WINE", undefined, { vintage: "NV" }), false);
+    assert.equal(sameVintage("WINE", undefined, { vintage: undefined }), false);
+    assert.equal(readVintage("WINE", wine("Krug", "NV")), "NV");
+    assert.equal(readVintage("WINE", wine("Krug", "Non-Vintage")), "NV");
   });
 });
 

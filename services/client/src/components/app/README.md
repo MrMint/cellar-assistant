@@ -352,7 +352,11 @@ behaviour is `common/rating/useStarRatingInput` and `rating.ts`.
 
 **`AIDraftField`** — `source`, `drafted`, `className`, plus `confidence?: "sure" | "likely" | "check"` (X05). The 2 pt teal
 rule and the source mark. **Teal enters the UI only here** (and AI progress
-states).
+states). `proposal?: { display, label, onUse, onDismiss }` (X19) draws a value
+the AI proposes but the field does not hold as a chip under it — "From
+label: 2016 · Use", dashed "Suggested: Zinfandel · Use" — plus a dismiss
+button; nothing is applied until `onUse`, after which the caller marks the
+field `drafted` with the same source.
 
 **`ActionBar`** — one brass `Button` (a second, secondary one at most),
 sticky 12 pt above the tab bar on glass. Give the page `withActionBar`.

@@ -285,6 +285,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "AiCapabilities",
         fields: [
           {
+            name: "detailSuggestions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
             name: "imageSearch",
             type: {
               kind: "NON_NULL",
@@ -392,6 +399,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
           },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
@@ -1210,6 +1221,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
           },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
@@ -2609,6 +2624,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -2981,6 +3000,50 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "ItemCorrection",
+        fields: [
+          {
+            name: "canRereadLabel",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "canSuggestDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemDetailSuggestions",
+        fields: [
+          {
+            name: "abstained",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "defaults",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "JSON" },
+            },
+          },
+          { name: "model", type: { kind: "SCALAR", name: "String" } },
+          { name: "note", type: { kind: "SCALAR", name: "String" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "ItemEdge",
         fields: [
           {
@@ -3103,6 +3166,35 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemImage" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemLabelReading",
+        fields: [
+          { name: "brandName", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "confidence",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+          {
+            name: "defaults",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "JSON" },
+            },
+          },
+          {
+            name: "model",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
             },
           },
         ],
@@ -4301,6 +4393,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "replaceItemBrand",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "ReplaceItemBrandResult" },
+            },
+          },
+          {
+            name: "rereadItemLabel",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RereadItemLabelResult" },
+            },
+          },
+          {
             name: "resolveBrand",
             type: {
               kind: "NON_NULL",
@@ -4375,6 +4481,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SuggestFlavourTagsResult" },
+            },
+          },
+          {
+            name: "suggestItemDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SuggestItemDetailsResult" },
             },
           },
           {
@@ -7571,6 +7684,30 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "ReplaceItemBrandResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemBrand" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RereadItemLabelResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemLabelReading" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "ResolveBrandResult",
         possibleTypes: [
           { kind: "OBJECT", name: "Brand" },
@@ -7637,6 +7774,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
           },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
@@ -7884,6 +8025,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -8025,6 +8170,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "UNION",
+        name: "SuggestItemDetailsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemDetailSuggestions" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "OBJECT",
         name: "Tea",
         fields: [
@@ -8051,6 +8208,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
           },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
@@ -9015,6 +9176,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
           },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {

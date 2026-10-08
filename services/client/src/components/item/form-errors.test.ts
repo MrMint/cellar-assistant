@@ -25,11 +25,23 @@ describe("N03: required fields say what's wrong", () => {
     assert.equal(requiredRule(description), undefined);
   });
 
-  test("coffee's NOT NULL description is starred and validated", () => {
+  // X19: `coffees.description` is nullable now, like the other five types'.
+  test("coffee's description is optional", () => {
     const description = formLayout("COFFEE").find(
       (e) => e.kind === "description",
     );
-    assert.ok(description !== undefined && isRequired(description));
+    assert.ok(description !== undefined && !isRequired(description));
+  });
+
+  // X19: the column is nullable (NULL = non-vintage), but the form still
+  // asks for a year or NV, in the edit form as well as the create one.
+  test("a wine's vintage is starred in both forms", () => {
+    for (const mode of ["create", "edit"] as const) {
+      const vintage = formLayout("WINE", mode).find(
+        (e) => entryPath(e) === "attributes.vintage",
+      );
+      assert.ok(vintage !== undefined && isRequired(vintage), mode);
+    }
   });
 
   test("no error is ever silent", () => {

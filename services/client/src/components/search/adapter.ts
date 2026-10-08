@@ -18,7 +18,7 @@ import {
   type ResultOf,
   readFragment,
 } from "@/lib/api/graphql";
-import { formatVintage } from "@/utilities";
+import { formatItemVintage, formatVintage } from "@/utilities";
 import { displayItemName } from "@/utilities/smart-title-case";
 import {
   RECENT_ACTIVITY_CAP,
@@ -287,7 +287,7 @@ const ITEM_ROUTE: Record<string, string> = {
 const itemDisplayName = (item: NonNullable<ActivityNode["item"]>): string => {
   const vintage =
     item.__typename === "Wine"
-      ? formatVintage(item.vintage)
+      ? formatItemVintage("WINE", item.vintage)
       : item.__typename === "Sake"
         ? formatVintage(item.vintageYear)
         : undefined;
