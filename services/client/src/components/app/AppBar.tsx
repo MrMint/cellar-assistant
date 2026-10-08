@@ -134,12 +134,16 @@ export function AppBar({
               <Fragment key={`${crumb.label}-${crumb.href ?? i}`}>
                 {i > 0 && <BreadcrumbSeparator />}
                 <BreadcrumbItem>
-                  {crumb.href !== undefined && i < breadcrumbs.length - 1 ? (
+                  {i === breadcrumbs.length - 1 ? (
+                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                  ) : crumb.href !== undefined ? (
                     <BreadcrumbLink asChild>
                       <Link href={crumb.href}>{crumb.label}</Link>
                     </BreadcrumbLink>
                   ) : (
-                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    // An ancestor with no page of its own (an item's type
+                    // label): plain text, not a second "current page".
+                    <span data-slot="breadcrumb-text">{crumb.label}</span>
                   )}
                 </BreadcrumbItem>
               </Fragment>

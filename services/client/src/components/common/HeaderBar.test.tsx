@@ -51,6 +51,20 @@ describe("HeaderBar", () => {
     assert.match(html, /aria-current="page"[^>]*>Items</);
   });
 
+  test("an ancestor crumb without a page is plain text; only the last crumb is current", () => {
+    // generateBreadcrumbs' type label ("Teas") has no href. It used to render
+    // as BreadcrumbPage, so the trail announced two current pages.
+    pathname = "/teas/4f7e2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6";
+    const html = render(
+      <HeaderBar serverBreadcrumbs={{ itemName: "Sencha" }} />,
+    );
+    const trail = crumbs(html);
+    assert.equal(trail.at(-1), "Sencha");
+    assert.ok(trail.includes("Teas"), trail.join(" | "));
+    assert.equal(html.match(/aria-current="page"/g)?.length, 1);
+    assert.match(html, /aria-current="page"[^>]*>Sencha</);
+  });
+
   test("the bar: the page's title, and a Back off a tab root (cold open: the parent)", () => {
     pathname = "/cellars/0b9a1c52-6a0e-4d33-9a43-7f1e2c3d4e5f/items";
     const html = render(
