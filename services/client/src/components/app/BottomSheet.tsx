@@ -10,6 +10,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { useReturnFocus } from "./useReturnFocus";
 
 export type SheetSnap = "peek" | "half" | "full";
 
@@ -96,6 +97,7 @@ export function BottomSheet({
       ? undefined
       : vaulSnapPoint(initialSnap ?? snapPoints?.[0] ?? "half");
   const [snap, setSnap] = useState<number | string | null | undefined>(initial);
+  const returnFocus = useReturnFocus(open);
 
   // Re-opening starts from the declared snap, not wherever it was left.
   useEffect(() => {
@@ -125,6 +127,7 @@ export function BottomSheet({
       <DrawerContent
         data-slot="bottom-sheet"
         role={role}
+        onCloseAutoFocus={returnFocus}
         className={cn(
           "surface-glass touch-none-select rounded-t-lg border-none text-foreground outline-none",
           "pb-[max(1rem,env(safe-area-inset-bottom))]",

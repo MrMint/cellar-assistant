@@ -11,6 +11,7 @@ import {
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { BottomSheet, type BottomSheetProps } from "./BottomSheet";
+import { useReturnFocus } from "./useReturnFocus";
 
 export type ResponsiveDialogProps = Pick<
   BottomSheetProps,
@@ -46,6 +47,7 @@ export function ResponsiveDialog({
   role = "dialog",
 }: ResponsiveDialogProps) {
   const desktop = useMediaQuery(breakpointUp("md"));
+  const returnFocus = useReturnFocus(open && desktop);
 
   if (!desktop) {
     return (
@@ -75,6 +77,7 @@ export function ResponsiveDialog({
       <DialogContent
         role={role}
         showCloseButton={dismissible}
+        onCloseAutoFocus={returnFocus}
         onEscapeKeyDown={(e) => {
           if (!dismissible) e.preventDefault();
         }}
