@@ -122,10 +122,11 @@ export type MenuMatchCandidate = {
   readonly similarity: number;
   /**
    * N08: how well the line's search text matched the candidate's **name**
-   * (`ItemSearchHit.lexicalSimilarity`), when it did. Evidence for the order
-   * and for the record, never for the band: `similarity` alone decides auto
-   * versus verify, so a name match can bring a candidate to the verifier but
-   * never past it.
+   * (`ItemSearchHit.lexicalSimilarity`, on every item candidate; `null` for
+   * a recipe). Evidence for the order, for the record and for telling an
+   * auto-band winner from its siblings (`AUTO_LEXICAL_MARGIN`), never for the
+   * band itself: `similarity` alone decides auto versus verify, so a name
+   * match can bring a candidate to the verifier but never past it.
    */
   readonly lexicalSimilarity?: number | null;
   readonly target: MatchSuggestionTarget;

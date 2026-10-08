@@ -38,7 +38,7 @@ import {
   seedUser,
   withTestDb,
 } from "../lib/testing.ts";
-import { ItemSearchActor } from "./item-search-actor.ts";
+import { ItemSearchActor, LEXICAL_THRESHOLD } from "./item-search-actor.ts";
 
 const { skip } = await resolveTestDatabase();
 
@@ -174,8 +174,8 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
             name: "A Beer",
             distance: 0,
             // A text search: the name did not match "q", so the vector alone
-            // found it (N08).
-            lexicalSimilarity: null,
+            // found it — and still reports how well its name matched (N08).
+            lexicalSimilarity: 0,
           },
         ]);
       });
@@ -209,12 +209,12 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
           "Pliny the Elder",
           "Some Other IPA",
         ]);
-        // Each hit still reports its own vector distance; only the named
-        // one carries a lexical similarity.
+        // Each hit still reports its own vector distance and how well its
+        // name matched; only the named one matched above the threshold.
         expect(at(hits, 0).distance).toBeCloseTo(1 - Math.cos(Math.PI / 6), 3);
         expect(at(hits, 0).lexicalSimilarity).toBe(1);
         expect(at(hits, 1).distance).toBeCloseTo(0, 3);
-        expect(at(hits, 1).lexicalSimilarity).toBeNull();
+        expect(at(hits, 1).lexicalSimilarity).toBeLessThan(LEXICAL_THRESHOLD);
         expect(hits[0]?.id).toBe(elder.id);
       });
     });
@@ -288,6 +288,41 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
         expect(hits.map((hit) => hit.id)).toEqual([embedded.id, unembedded.id]);
         expect(at(hits, 1).distance).toBeNull();
         expect(at(hits, 1).lexicalSimilarity).toBe(1);
+      });
+    });
+
+    /**
+     * The lexical arm lists only its own `limit`, so a name can match the
+     * phrase as well as the listed ones and still be left off it. The hit the
+     * vector brought in must still say how well its name matched, or
+     * `planCandidates` would read "not listed" as "no name match" and let the
+     * listed sibling win by name.
+     */
+    it("scores the name of a vector hit the lexical arm crowded out", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const exact = await seedWine(db, owner, "Caymus Cabernet");
+        const longer = await seedWine(db, owner, "Caymus Cabernet Sauvignon");
+        const longest = await seedWine(
+          db,
+          owner,
+          "Caymus Cabernet Sauvignon Special Selection 2019",
+        );
+        await seedItemVector(db, longest, unitVector(0));
+        await seedItemVector(db, exact, unitVector(1));
+        // `longer` has no vector: the lexical arm's second and last place.
+        const input: ItemSearchInput = {
+          text: "caymus cabernet",
+          limit: 2,
+          maxDistance: 1.5,
+        };
+        const hits = await newActor(input, db, owner).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hits.map((hit) => hit.id)).toEqual([exact.id, longest.id]);
+        expect(hits.map((hit) => hit.lexicalSimilarity)).toEqual([1, 1]);
+        expect(hits.some((hit) => hit.id === longer.id)).toBe(false);
       });
     });
 

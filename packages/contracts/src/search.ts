@@ -289,8 +289,10 @@ export type ItemSearchHit = ItemRef & {
   readonly distance: number | null;
   /**
    * N08: pg_trgm `strict_word_similarity` of the phrase to the item's name,
-   * 0–1, when the name matched it; `null` (or absent) when only the vector
-   * found the item, and for a vector or photo search, which have no phrase.
+   * 0–1, on every hit of a `text` search — also one only the vector found,
+   * whose name scored under the lexical ranking's threshold — so two hits'
+   * name matches can be compared. `null` (or absent) for a vector or photo
+   * search, which have no phrase.
    */
   readonly lexicalSimilarity?: number | null;
 };

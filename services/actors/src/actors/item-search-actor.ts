@@ -117,7 +117,11 @@ type Row = {
   readonly name: string;
   /** `null` only from the lexical arm, for an item with no vector. */
   readonly distance: string | number | null;
-  /** N08's lexical arm only: `strict_word_similarity` of phrase to name. */
+  /**
+   * N08, a text search only: `strict_word_similarity` of phrase to name —
+   * on both arms' rows, so a vector hit carries it too. `null` for a vector
+   * or photo search, which have no phrase.
+   */
   readonly lexical?: string | number | null;
 };
 
@@ -296,7 +300,17 @@ export class ItemSearchActor
           ${VECTORS.typeExpr(m, types)} as item_type,
           ${VECTORS.idExpr(m, types)} as item_id,
           coalesce(${nameCoalesce}) as name,
-          m.distance as distance
+          m.distance as distance,
+          ${
+            // A text search scores every vector hit's name as well, so a hit
+            // the lexical arm did not list (under its threshold, or crowded
+            // out of its `limit`) still says how well its name matched: the
+            // name margin `planCandidates` applies must not read "not listed"
+            // as "no match at all".
+            query.kind === "text"
+              ? sql`strict_word_similarity(${query.text}, coalesce(${nameCoalesce}))::float8`
+              : sql`null::float8`
+          } as lexical
         from nearest m
         ${joins}
         where (${typeFilter})
@@ -621,9 +635,11 @@ export const LEXICAL_TIE = 0.05;
  * Hop first by vector, each second in the other list. The name is the more
  * specific evidence of what was typed.
  *
- * A hit carries its vector distance either way, and its lexical similarity
- * when the name matched. With no lexical match at all the order is exactly
- * the vector order: RRF over one list is that list.
+ * A hit carries its vector distance either way, and the strict word
+ * similarity of the phrase to its name whichever arm found it (the vector
+ * arm scores names too, it just does not rank by them). With no lexical
+ * match at all the order is exactly the vector order: RRF over one list is
+ * that list.
  */
 export const fuseHybrid = (
   vector: readonly ItemSearchHit[],
@@ -646,7 +662,10 @@ export const fuseHybrid = (
           id: hit.id,
           name: hit.name,
           distance: hit.distance,
-          lexicalSimilarity: fromLexical?.lexicalSimilarity ?? null,
+          lexicalSimilarity:
+            fromLexical?.lexicalSimilarity ??
+            fromVector?.lexicalSimilarity ??
+            null,
         },
       };
     })
