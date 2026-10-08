@@ -14,6 +14,7 @@ import {
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { LocationPrePrompt } from "../core/LocationPrePrompt";
+import { MapBottomStack } from "../core/MapBottomStack";
 import { MapControls } from "../core/MapControls";
 import { MapErrorBanner } from "../core/MapErrorBanner";
 import {
@@ -471,15 +472,33 @@ export function MapLibreRenderer({
         {userLocation && <UserLocationLayer location={userLocation} />}
       </MapGL>
 
-      {/* Error overlay — bottom-anchored, clear of the controls panel */}
-      {mapUI.error ? (
-        <MapErrorBanner
-          message={mapUI.error}
-          onDismiss={mapActions.clearError}
-        />
-      ) : placesError ? (
-        <MapErrorBanner message={placesError} />
-      ) : null}
+      {/* Bottom cards, one column: the error above whichever card shows */}
+      <MapBottomStack>
+        {mapUI.error ? (
+          <MapErrorBanner
+            message={mapUI.error}
+            onDismiss={mapActions.clearError}
+          />
+        ) : placesError ? (
+          <MapErrorBanner message={placesError} />
+        ) : null}
+
+        {/* N22: a search that found nothing offers to add the place */}
+        {notOnMapYet && !showLocationPrePrompt && (
+          <SearchEmptyState
+            query={mapFilters.searchQuery.trim()}
+            onAddHere={handleAddSearchedPlace}
+          />
+        )}
+
+        {/* D14: our one-line reason, then the browser's prompt on Continue */}
+        {showLocationPrePrompt && !isPlacing && (
+          <LocationPrePrompt
+            onContinue={geolocation.request}
+            onDismiss={geolocation.dismiss}
+          />
+        )}
+      </MapBottomStack>
 
       {/* Search results overlay */}
       {mapFilters.isSemanticSearch &&
@@ -495,22 +514,6 @@ export function MapLibreRenderer({
             isDetailOpen={mapUI.isDrawerOpen}
           />
         )}
-
-      {/* N22: a search that found nothing offers to add the place */}
-      {notOnMapYet && !showLocationPrePrompt && (
-        <SearchEmptyState
-          query={mapFilters.searchQuery.trim()}
-          onAddHere={handleAddSearchedPlace}
-        />
-      )}
-
-      {/* D14: our one-line reason, then the browser's prompt on Continue */}
-      {showLocationPrePrompt && !isPlacing && (
-        <LocationPrePrompt
-          onContinue={geolocation.request}
-          onDismiss={geolocation.dismiss}
-        />
-      )}
 
       {/* Pin placement overlay */}
       {isPlacing && (

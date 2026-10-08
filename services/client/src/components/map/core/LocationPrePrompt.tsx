@@ -27,12 +27,6 @@ export function LocationPrePrompt({
       aria-label="Location"
       variant="outlined"
       sx={{
-        position: "absolute",
-        left: "50%",
-        bottom: 40,
-        transform: "translateX(-50%)",
-        zIndex: 11,
-        width: "min(420px, calc(100% - 32px))",
         borderRadius: "md",
         boxShadow: "md",
         px: 2,

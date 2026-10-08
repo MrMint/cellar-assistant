@@ -10,7 +10,11 @@ import {
   LOCATION_PRE_PROMPT_COPY,
   LocationPrePrompt,
 } from "./core/LocationPrePrompt";
-import { MAP_ERROR_Z_INDEX, MapErrorBanner } from "./core/MapErrorBanner";
+import {
+  MAP_BOTTOM_STACK_Z_INDEX,
+  MapBottomStack,
+} from "./core/MapBottomStack";
+import { MapErrorBanner } from "./core/MapErrorBanner";
 import { SearchEmptyState } from "./places/SearchEmptyState";
 
 const render = (node: React.ReactNode) =>
@@ -43,10 +47,12 @@ describe("LocationPrePrompt (D14)", () => {
 describe("MapErrorBanner (D14 follow-up)", () => {
   test("is a readable alert at the bottom, not under the controls panel", () => {
     const raw = renderToStaticMarkup(
-      <MapErrorBanner
-        message="Location is off for this site."
-        onDismiss={() => {}}
-      />,
+      <MapBottomStack>
+        <MapErrorBanner
+          message="Location is off for this site."
+          onDismiss={() => {}}
+        />
+      </MapBottomStack>,
     );
     assert.match(raw, /role="alert"/);
     assert.ok(raw.includes("Location is off for this site."));
@@ -54,7 +60,24 @@ describe("MapErrorBanner (D14 follow-up)", () => {
     // The regression: `top: 80` put it beneath the search/filter panel.
     assert.match(raw, /bottom:40px/);
     assert.doesNotMatch(raw, /top:80px/);
-    assert.ok(MAP_ERROR_Z_INDEX > 11, "above the location pre-prompt");
+    assert.ok(MAP_BOTTOM_STACK_Z_INDEX > 11, "above the map's own layers");
+  });
+
+  test("stacks above the location pre-prompt instead of covering it", () => {
+    const html = render(
+      <MapBottomStack>
+        <MapErrorBanner message="Couldn't load places." />
+        <LocationPrePrompt onContinue={() => {}} onDismiss={() => {}} />
+      </MapBottomStack>,
+    );
+    // One column: the error first, then the card, neither positioned alone.
+    assert.ok(
+      html.indexOf('role="alert"') < html.indexOf('aria-label="Location"'),
+    );
+    const raw = renderToStaticMarkup(
+      <LocationPrePrompt onContinue={() => {}} onDismiss={() => {}} />,
+    );
+    assert.doesNotMatch(raw, /position:absolute/);
   });
 
   test("an error the map clears itself offers no dismiss button", () => {
