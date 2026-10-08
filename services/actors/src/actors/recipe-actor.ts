@@ -100,6 +100,7 @@ import type {
   DeletedRecipe,
   DeletedRecipeReview,
   GenericItemDto,
+  InferredIngredientMeta,
   InstructionType,
   Page,
   PageArgs,
@@ -110,6 +111,7 @@ import type {
   RecipeIngredientRef,
   RecipeIngredientType,
   RecipeInstructionDto,
+  RecipeMetaBackfillResult,
   RecipeReviewDto,
   RecipeScoreDto,
   RecipeType,
@@ -123,14 +125,18 @@ import {
   ConflictError,
   ForbiddenError,
   GENERIC_ITEM_KINDS,
+  INGREDIENT_ROLES,
   INSTRUCTION_TYPES,
   ITEM_TYPES,
   ItemActorDescriptor,
+  isBarKind,
   isGenericItemKind,
+  isIngredientRole,
   isRecipeIngredientType,
   isRecipeType,
   NotFoundError,
   offsetPage,
+  QUANTITY_TEXT_MAX,
   RecipeActorDescriptor,
   requireOneIngredientSource,
   ValidationError,
@@ -165,6 +171,7 @@ import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import {
+  inferRecipeMeta,
   ingredientRefOf,
   ingredientRowToDto,
 } from "../lib/recipe-ingredients.ts";
@@ -401,6 +408,48 @@ const requireInstructionType = (
   return value as InstructionType;
 };
 
+/** X14: `recipe_ingredients_role_check`, before Postgres sees it. */
+const requireRole = (value: string | null | undefined) => {
+  if (value === null || value === undefined) return null;
+  if (!isIngredientRole(value)) {
+    throw new ValidationError(
+      `ingredient role must be one of ${INGREDIENT_ROLES.join("|")}, got ${value}`,
+    );
+  }
+  return value;
+};
+
+/**
+ * X14: a kind outside the vocabulary is refused rather than stored — the
+ * column has no CHECK (the list grows in code; see the migration), so this is
+ * the only gate, and a stored typo would silently never match a bottle.
+ */
+const requireKind = (value: string | null | undefined) => {
+  if (value === null || value === undefined) return null;
+  if (!isBarKind(value)) {
+    throw new ValidationError(
+      `ingredient kind ${JSON.stringify(value)} is not in the bar vocabulary ` +
+        "(BAR_KINDS in @cellar-assistant/contracts)",
+    );
+  }
+  return value;
+};
+
+/** Trimmed, blank as null, bounded. */
+const optionalText = (
+  value: string | null | undefined,
+  what: string,
+  max: number,
+): string | null => {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  if (trimmed.length > max) {
+    throw new ValidationError(`${what} must be ${max} characters or less`);
+  }
+  return trimmed;
+};
+
 const instructionRowToDto = (
   row: RecipeInstructionRow,
 ): RecipeInstructionDto => ({
@@ -490,6 +539,17 @@ export class RecipeActor
 
   readonly #ensureGenericItem: EnsureGenericItem;
   readonly #embed: EmbedDocument;
+  /**
+   * X14: the inferred kind/role per ingredient row, for the ingredient rows
+   * it was computed from. Held against the array's identity — `reload()`
+   * replaces the aggregate, so a write invalidates it without a hook.
+   * Computed on first read rather than on activate, for the reason
+   * `#ingredientNames` gives: the names live in seven other tables.
+   */
+  #meta: {
+    readonly rows: readonly RecipeIngredientRow[];
+    readonly meta: ReadonlyMap<string, InferredIngredientMeta>;
+  } | null = null;
 
   constructor(
     daprClient: DaprClient,
@@ -611,7 +671,7 @@ export class RecipeActor
   ): Promise<Page<RecipeIngredientDto>> {
     const aggregate = this.requireAggregate();
     requireSignedIn(ctx, "view a recipe's ingredients");
-    return offsetPage(aggregate.ingredients.map(ingredientRowToDto), page);
+    return offsetPage(await this.#ingredientDtos(aggregate), page);
   }
 
   async instructions(
@@ -809,7 +869,28 @@ export class RecipeActor
     });
 
     await this.reload();
-    return this.requireAggregate().ingredients.map(ingredientRowToDto);
+    return this.#ingredientDtos(this.requireAggregate());
+  }
+
+  /** The DTOs, with any null kind/role inferred (`../lib/recipe-ingredients.ts`). */
+  async #ingredientDtos(
+    aggregate: RecipeAggregate,
+  ): Promise<RecipeIngredientDto[]> {
+    const meta = await this.#inferredMeta(aggregate);
+    return aggregate.ingredients.map((row) =>
+      ingredientRowToDto(row, meta.get(row.id)),
+    );
+  }
+
+  async #inferredMeta(
+    aggregate: RecipeAggregate,
+  ): Promise<ReadonlyMap<string, InferredIngredientMeta>> {
+    if (this.#meta !== null && this.#meta.rows === aggregate.ingredients) {
+      return this.#meta.meta;
+    }
+    const meta = await inferRecipeMeta(this.db, aggregate.ingredients);
+    this.#meta = { rows: aggregate.ingredients, meta };
+    return meta;
   }
 
   /**
@@ -870,6 +951,18 @@ export class RecipeActor
           unit: ingredient.unit ?? null,
           isOptional,
           substitutionNotes: ingredient.substitutionNotes ?? null,
+          role: requireRole(ingredient.role),
+          kind: requireKind(ingredient.kind),
+          quantityText: optionalText(
+            ingredient.quantityText,
+            "quantityText",
+            QUANTITY_TEXT_MAX,
+          ),
+          brandMentioned: optionalText(
+            ingredient.brandMentioned,
+            "brandMentioned",
+            300,
+          ),
           ...ingredientValues(ref),
         },
       });
@@ -1279,6 +1372,51 @@ export class RecipeActor
             ? "embedding changed"
             : "recipe or group changed",
     };
+  }
+
+  /**
+   * X14's backfill — see the interface. Writes only into null `kind`/`role`
+   * cells, one `UPDATE` per changed row inside one transaction, and touches
+   * neither `recipes.updated_at` nor the vector: kind and role are not in
+   * the embedding text, so there is nothing to regenerate.
+   */
+  async backfillIngredientMeta(
+    ctx: Ctx,
+    _payload: Record<string, unknown> = {},
+  ): Promise<RecipeMetaBackfillResult> {
+    const aggregate = this.requireAggregate();
+    requirePrivileged(
+      ctx,
+      `only a system or admin caller may backfill recipe ${this.key}`,
+    );
+    const meta = await this.#inferredMeta(aggregate);
+    const writes: {
+      id: string;
+      kind: string | null;
+      role: string | null;
+    }[] = [];
+    let unplaced = 0;
+    for (const row of aggregate.ingredients) {
+      const inferred = meta.get(row.id);
+      const kind = row.kind ?? inferred?.kind ?? null;
+      const role = row.role ?? inferred?.role ?? null;
+      if (kind === null) unplaced += 1;
+      if (kind !== row.kind || role !== row.role) {
+        writes.push({ id: row.id, kind, role });
+      }
+    }
+    if (writes.length > 0) {
+      await this.tx(async (tx) => {
+        for (const write of writes) {
+          await tx
+            .update(recipeIngredients)
+            .set({ kind: write.kind, role: write.role })
+            .where(eq(recipeIngredients.id, write.id));
+        }
+      });
+      await this.reload();
+    }
+    return { recipeId: this.key, updated: writes.length, unplaced };
   }
 
   /**

@@ -119,6 +119,8 @@ import type {
   AcceptFriendRequestResult,
   ActorCategory,
   AiCapabilities,
+  BarKind,
+  BarPantryItemDto,
   ConfirmFriendshipPayload,
   ConfirmFriendshipResult,
   Ctx,
@@ -131,7 +133,9 @@ import type {
   PageArgs,
   PlaceInteractionDto,
   RecordPlaceInteractionInput,
+  SetBarPantryItemInput,
   ToggleFavoriteResult,
+  ToggleRecipeLoveResult,
   UpdateProfileInput,
   UserActorInterface,
   UserProfileDto,
@@ -140,18 +144,23 @@ import {
   ConflictError,
   ForbiddenError,
   isItemType,
+  isPantryKind,
   itemActorId,
   NotFoundError,
   offsetPage,
+  PANTRY_KINDS,
   requireReverseEdgeBatch,
   UserActorDescriptor,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
+  barPantryItems,
   friendRequests,
   friends,
   itemFavorites,
   places,
+  recipeFavorites,
+  recipes,
   userPlaceInteractions,
   user as userTable,
 } from "@cellar-assistant/db";
@@ -177,6 +186,8 @@ export type FriendRow = typeof friends.$inferSelect;
 export type FriendRequestRow = typeof friendRequests.$inferSelect;
 export type FavoriteRow = typeof itemFavorites.$inferSelect;
 export type PlaceInteractionRow = typeof userPlaceInteractions.$inferSelect;
+export type BarPantryRow = typeof barPantryItems.$inferSelect;
+export type RecipeLoveRow = typeof recipeFavorites.$inferSelect;
 
 /**
  * **Only the rows this actor writes** — see the module doc's "Only the rows
@@ -190,6 +201,10 @@ export type UserAggregate = {
   readonly outgoing: readonly FriendRequestRow[];
   readonly favorites: readonly FavoriteRow[];
   readonly interactions: readonly PlaceInteractionRow[];
+  /** X14 / D23: pantry toggles that are on. */
+  readonly pantry: readonly BarPantryRow[];
+  /** X14 / D9: loved recipes. */
+  readonly recipeLoves: readonly RecipeLoveRow[];
 };
 
 /** The owned rows plus a *fresh* read of the ones another key writes. */
@@ -294,28 +309,41 @@ export class UserActor
     // Only `user_id = me`, in both cases: the mirrored rows are another
     // `UserActor` key's to write, so caching them here goes stale with nothing
     // to invalidate it (module doc). `#snapshot()` reads those fresh.
-    const [ownFriends, outgoing, favoriteRows, interactionRows] =
-      await Promise.all([
-        this.db.select().from(friends).where(eq(friends.userId, id)),
-        this.db
-          .select()
-          .from(friendRequests)
-          .where(eq(friendRequests.userId, id)),
-        this.db
-          .select()
-          .from(itemFavorites)
-          .where(eq(itemFavorites.userId, id)),
-        this.db
-          .select()
-          .from(userPlaceInteractions)
-          .where(eq(userPlaceInteractions.userId, id)),
-      ]);
+    const [
+      ownFriends,
+      outgoing,
+      favoriteRows,
+      interactionRows,
+      pantryRows,
+      recipeLoveRows,
+    ] = await Promise.all([
+      this.db.select().from(friends).where(eq(friends.userId, id)),
+      this.db
+        .select()
+        .from(friendRequests)
+        .where(eq(friendRequests.userId, id)),
+      this.db.select().from(itemFavorites).where(eq(itemFavorites.userId, id)),
+      this.db
+        .select()
+        .from(userPlaceInteractions)
+        .where(eq(userPlaceInteractions.userId, id)),
+      this.db
+        .select()
+        .from(barPantryItems)
+        .where(eq(barPantryItems.userId, id)),
+      this.db
+        .select()
+        .from(recipeFavorites)
+        .where(eq(recipeFavorites.userId, id)),
+    ]);
 
     return {
       ownFriends,
       outgoing,
       favorites: favoriteRows,
       interactions: interactionRows,
+      pantry: pantryRows,
+      recipeLoves: recipeLoveRows,
     };
   }
 
@@ -1289,6 +1317,143 @@ export class UserActor
     });
     await this.reload();
     return toInteractionDto(row);
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Bar pantry (D23)                                                        */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The toggles that are on, in pantry-screen order. A stored kind this build
+   * no longer lists is dropped from the answer, not the table: renaming a kind
+   * is a migration, and until it runs the row is simply not a toggle.
+   */
+  async barPantry(ctx: Ctx): Promise<readonly BarKind[]> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "read this bar pantry");
+    const on = new Set(aggregate.pantry.map((row) => row.kind));
+    return PANTRY_KINDS.filter((kind) => on.has(kind));
+  }
+
+  /**
+   * One toggle. `have: true` inserts (a no-op if the row is there — the
+   * primary key is `(user_id, kind)`), `have: false` deletes. Only the
+   * ~30 `PANTRY_KINDS`: cellar spirits count automatically (D23) and are not
+   * a toggle.
+   */
+  async setBarPantryItem(
+    ctx: Ctx,
+    input: SetBarPantryItemInput,
+  ): Promise<BarPantryItemDto> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "change this bar pantry");
+    if (!isPantryKind(input?.kind)) {
+      throw new ValidationError(
+        `not a Bar pantry item: ${JSON.stringify(input?.kind)} (one of ` +
+          `${PANTRY_KINDS.join(", ")})`,
+      );
+    }
+    if (typeof input.have !== "boolean") {
+      throw new ValidationError("`have` must be true or false");
+    }
+    const kind = input.kind;
+    const present = aggregate.pantry.some((row) => row.kind === kind);
+    if (present === input.have) return { kind, have: input.have };
+    await this.tx(async (tx) => {
+      if (input.have) {
+        await tx
+          .insert(barPantryItems)
+          .values({ userId: this.key, kind })
+          .onConflictDoNothing();
+      } else {
+        await tx
+          .delete(barPantryItems)
+          .where(
+            and(
+              eq(barPantryItems.userId, this.key),
+              eq(barPantryItems.kind, kind),
+            ),
+          );
+      }
+    });
+    await this.reload();
+    return { kind, have: input.have };
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Recipe Love (D9)                                                        */
+  /* ---------------------------------------------------------------------- */
+
+  async recipeLoveStates(
+    ctx: Ctx,
+    recipeIds: readonly string[],
+  ): Promise<readonly string[]> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "read these loves");
+    if (!Array.isArray(recipeIds)) {
+      throw new ValidationError("recipeLoveStates takes a list of recipe ids");
+    }
+    const loved = new Set(aggregate.recipeLoves.map((row) => row.recipeId));
+    return recipeIds.filter(
+      (id) => typeof id === "string" && loved.has(id.toLowerCase()),
+    );
+  }
+
+  /**
+   * Love on, or off. Same turn-lock argument as `toggleFavorite`, and the
+   * same database backstop: `recipe_favorites_user_id_recipe_id_key`.
+   */
+  async toggleRecipeLove(
+    ctx: Ctx,
+    requested: string,
+  ): Promise<ToggleRecipeLoveResult> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "love recipes as this user");
+    const recipeId = requireUuid(requested, "recipeId");
+    const existing = aggregate.recipeLoves.find(
+      (row) => row.recipeId === recipeId,
+    );
+    if (existing !== undefined) {
+      await this.tx(async (tx) => {
+        await tx
+          .delete(recipeFavorites)
+          .where(eq(recipeFavorites.id, existing.id));
+      });
+      await this.reload();
+      return { recipeId, loved: false };
+    }
+    const [found] = await this.db
+      .select({ id: recipes.id })
+      .from(recipes)
+      .where(eq(recipes.id, recipeId));
+    if (found === undefined) {
+      throw new NotFoundError(`recipe ${recipeId} not found`);
+    }
+    await this.tx(async (tx) => {
+      // The wall clock, not the column's `now()` default: `now()` is the
+      // transaction's start, and "newest Love first" needs the moment of the
+      // tap.
+      await tx
+        .insert(recipeFavorites)
+        .values({ userId: this.key, recipeId, createdAt: new Date() });
+    });
+    await this.reload();
+    return { recipeId, loved: true };
+  }
+
+  async lovedRecipes(ctx: Ctx, page: PageArgs): Promise<Page<string>> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "view these loves");
+    return offsetPage(
+      [...aggregate.recipeLoves]
+        .sort(
+          (a, b) =>
+            b.createdAt.getTime() - a.createdAt.getTime() ||
+            a.id.localeCompare(b.id),
+        )
+        .map((row) => row.recipeId),
+      page,
+    );
   }
 
   /* ---------------------------------------------------------------------- */

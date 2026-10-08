@@ -93,7 +93,11 @@ describe("operator: the command line", () => {
     expect(declaredMethods(OutboxActorDescriptor)).toContain(
       parseCommand(["drain"]).method,
     );
-    for (const argv of [["report"], ["ack", "--by", "me"]]) {
+    for (const argv of [
+      ["report"],
+      ["ack", "--by", "me"],
+      ["backfill-recipes"],
+    ]) {
       expect(declaredMethods(MaintenanceActorDescriptor)).toContain(
         parseCommand(argv).method,
       );
@@ -101,6 +105,22 @@ describe("operator: the command line", () => {
     // What `reembed` calls: `start`, then `progress` (the one with a cursor).
     expect(declaredMethods(VectorReembedJobActorDescriptor)).toEqual(
       expect.arrayContaining(["start", "progress"]),
+    );
+  });
+
+  it("turns backfill-recipes' --limit into the payload, and refuses a bad one", () => {
+    expect(parseCommand(["backfill-recipes"])).toMatchObject({
+      method: "backfillRecipeMeta",
+      payload: {},
+    });
+    expect(
+      parseCommand(["backfill-recipes", "--limit", "200"]).payload,
+    ).toEqual({ limit: 200 });
+    expect(() => parseCommand(["backfill-recipes", "--limit", "x"])).toThrow(
+      UsageError,
+    );
+    expect(() => parseCommand(["backfill-recipes", "--by", "me"])).toThrow(
+      UsageError,
     );
   });
 

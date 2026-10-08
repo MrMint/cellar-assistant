@@ -41,6 +41,7 @@ import type {
   AnyActorDescriptor,
 } from "@cellar-assistant/contracts";
 import {
+  BarActorDescriptor,
   BarcodeActorDescriptor,
   BrandActorDescriptor,
   BrandLinksCollectionActorDescriptor,
@@ -91,6 +92,7 @@ import {
 import type { AbstractActor, ActorId, DaprClient } from "@dapr/dapr";
 import { guardDeclaredMethods } from "../lib/actor-method-allowlist.ts";
 import type { KeepAlive } from "../lib/keep-alive.ts";
+import { BarActor } from "./bar-actor.ts";
 import { BarcodeActor } from "./barcode-actor.ts";
 import { BrandActor } from "./brand-actor.ts";
 import { BrandLinksCollectionActor } from "./brand-links-collection-actor.ts";
@@ -291,6 +293,10 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   // See `packages/contracts/src/views.ts`.
   entry(MapActor, MapActorDescriptor),
   entry(RankingsActor, RankingsActorDescriptor),
+  // X14 (D9, D18/G29, D23). The viewer's bar — own cellars' bottles plus
+  // the Bar pantry — and every cocktail judged against it. A view actor for
+  // the same reasons as the two above. See `./bar-actor.ts`.
+  entry(BarActor, BarActorDescriptor),
   // B8 (§2.1, §1.4, §8.5). `MenuScanActor` owns `menu_scans` and
   // `item_match_suggestions` and replaces the `processing_status` event
   // trigger with three outbox rows. `MenuMatchJobActor` exists because §8.5

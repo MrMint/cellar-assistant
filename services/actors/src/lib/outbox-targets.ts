@@ -727,6 +727,41 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
     },
   ),
 
+  "RecipeActor.backfillIngredientMeta": target(
+    RecipeActorDescriptor,
+    "backfillIngredientMeta",
+    {
+      enqueuedBy: [
+        {
+          module: "actors/maintenance-actor.ts",
+          targetId: "derived",
+          note:
+            "`row.recipe_id` — `recipe_ingredients` rows the backfill's own " +
+            "query selected (a null `kind` or `role`). No caller input reaches " +
+            "this id; the delivery writes only null cells of that recipe's own " +
+            "rows, from that recipe's own ingredients.",
+        },
+      ],
+    },
+  ),
+
+  "RecipeGroupActor.backfillBaseSpirit": target(
+    RecipeGroupActorDescriptor,
+    "backfillBaseSpirit",
+    {
+      enqueuedBy: [
+        {
+          module: "actors/maintenance-actor.ts",
+          targetId: "derived",
+          note:
+            "`row.id` — `recipe_groups` rows the backfill's own query selected " +
+            "(members, no `base_spirit`). No caller input reaches this id; the " +
+            "delivery writes `base_spirit` only while it is still null.",
+        },
+      ],
+    },
+  ),
+
   "RecipeGroupActor.recomputeCanonical": target(
     RecipeGroupActorDescriptor,
     "recomputeCanonical",

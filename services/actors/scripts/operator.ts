@@ -13,6 +13,7 @@
  * | `drain`  | `OutboxActor.drain`                        | one drain turn now, rather than on the next 2s tick; prints its `DrainResult` |
  * | `report` | `MaintenanceActor.reportDeadLetters`       | the dead-letter report now, rather than within the hour; prints it |
  * | `ack`    | `MaintenanceActor.acknowledgeDeadLetters`  | record a triage decision so the dead-letter alarm stops paging for those rows (only rows already `dead`; `--by` is required and stored) |
+ * | `backfill-recipes` | `MaintenanceActor.backfillRecipeMeta` | X14: enqueue the per-recipe ingredient kind/role backfill and the per-group `base_spirit` backfill (up to `--limit` each, default 500); prints what it scheduled. Run it again until both counts stop falling — ingredients nothing can place are re-selected, harmlessly |
  * | `reembed`| `VectorReembedJobActor(<id>).start`, then `progress` until terminal | re-embed every vector another embedding model made — the cutover step after `gemini-embedding-2` — and every item vector made from an older `embeddingTextFor` format (N08's backfill: `--tables item_vectors`) |
  *
  *   bun scripts/operator.ts reembed [--batch-size N] [--max-vectors N]
@@ -144,6 +145,7 @@ const USAGE = [
   "       bun scripts/operator.ts report",
   "       bun scripts/operator.ts ack --by <who> [--note <why>] [--ids <id,…>]",
   "                                   [--target-actor <Type>] [--method <m>] [--before <ISO-8601>]",
+  "       bun scripts/operator.ts backfill-recipes [--limit N]",
   "       bun scripts/operator.ts reembed [--batch-size N] [--max-vectors N]",
   "                                   [--tables item_vectors,recipe_vectors] [--poll-seconds 5] [--job-id <uuid>]",
 ].join("\n");
@@ -182,6 +184,17 @@ export const parseCommand = (argv: readonly string[]): OperatorCall => {
     case "report":
       only([]);
       return call(MAINTENANCE, "reportDeadLetters");
+    case "backfill-recipes": {
+      only(["limit"]);
+      const raw = flags.get("limit");
+      if (raw === undefined)
+        return { ...call(MAINTENANCE, "backfillRecipeMeta"), payload: {} };
+      const limit = Number(raw);
+      if (!Number.isInteger(limit) || limit < 1) {
+        throw new UsageError(`--limit must be a positive integer, got ${raw}`);
+      }
+      return { ...call(MAINTENANCE, "backfillRecipeMeta"), payload: { limit } };
+    }
     case "ack": {
       only(["by", "note", "ids", "target-actor", "method", "before"]);
       const by = flags.get("by")?.trim() ?? "";

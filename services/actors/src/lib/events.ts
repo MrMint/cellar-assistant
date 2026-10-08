@@ -157,6 +157,12 @@ export const EVENTS = {
     severity: ["INFO"],
     attributes: ["scheduled"],
   },
+  // X14: `MaintenanceActor.backfillRecipeMeta` (the operator's
+  // `backfill-recipes`) — how many recipe and group backfills it enqueued.
+  "maintenance.recipe_backfill_scheduled": {
+    severity: ["INFO"],
+    attributes: ["recipes", "groups"],
+  },
   // Two emitters, one name: the keep-alive's arming (`lib/keep-alive.ts`)
   // and the watchdog reminder's own failure (`MaintenanceActor`).
   "maintenance.reminder_armed": { severity: ["INFO"], attributes: [] },

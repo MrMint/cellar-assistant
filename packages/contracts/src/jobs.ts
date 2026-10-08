@@ -467,6 +467,21 @@ export type ExtractedRecipeIngredient = {
   readonly brandName?: string | null;
   /** `generic_items.category` for the fallback generic item. */
   readonly category?: string | null;
+  /**
+   * X14: the amount exactly as printed ("¾ oz", "2 dashes", "top with") —
+   * what `ingredientAmount` shows in preference to `quantity`/`unit`.
+   */
+  readonly quantityText?: string | null;
+  /** X14: a brand the line names ("Campari"), as printed. Never resolved. */
+  readonly brandMentioned?: string | null;
+  /**
+   * X14: for a spirit line, which spirit (`BASE_SPIRIT_KINDS`) — or absent.
+   * Used only where the name's own keywords say nothing (`resolveKind` in
+   * `bar.ts`); out-of-vocabulary answers are dropped at the seam.
+   */
+  readonly baseSpirit?: string | null;
+  /** X14: `INGREDIENT_ROLES`, or absent. Used only when no kind is known. */
+  readonly role?: string | null;
 };
 
 export type ExtractedRecipeInstruction = {

@@ -516,7 +516,33 @@ export const deadLetterEvents = (
  * reminder, or by an admin — never by another process — so the contract lives
  * beside the class and its result types stay this module's.
  */
+/** X14: what one `backfillRecipeMeta` call scheduled. */
+export type RecipeMetaBackfillSchedule = {
+  /** `RecipeActor.backfillIngredientMeta` rows enqueued. */
+  readonly recipes: number;
+  /** `RecipeGroupActor.backfillBaseSpirit` rows enqueued. */
+  readonly groups: number;
+  readonly limit: number;
+};
+
+/** The default and the ceiling for one backfill call's batch. */
+export const RECIPE_BACKFILL_DEFAULT_LIMIT = 500;
+export const RECIPE_BACKFILL_MAX_LIMIT = 5_000;
+
 export type MaintenanceActorInterface = {
+  /**
+   * X14's backfill, `system`/admin only (`bun scripts/operator.ts
+   * backfill-recipes`). Enqueues `RecipeActor.backfillIngredientMeta` for up
+   * to `limit` recipes with an ingredient whose `kind` or `role` is null, and
+   * `RecipeGroupActor.backfillBaseSpirit` for up to `limit` groups with
+   * members and no `base_spirit`. Each delivery writes only null cells, so a
+   * repeat is harmless; ingredients nothing can place keep a null kind and
+   * are selected again by the next run, which costs one read each.
+   */
+  backfillRecipeMeta(
+    ctx: Ctx,
+    payload?: Record<string, unknown>,
+  ): Promise<RecipeMetaBackfillSchedule>;
   reapOrphanFiles(
     ctx: Ctx,
     payload?: Record<string, unknown>,
@@ -782,6 +808,84 @@ export class MaintenanceActor
     }
 
     return { scheduled: orphans.map((o) => o.id) };
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* X14: the recipe-meta backfill                                           */
+  /* ---------------------------------------------------------------------- */
+
+  async backfillRecipeMeta(
+    ctx: Ctx,
+    payload: Record<string, unknown> = {},
+  ): Promise<RecipeMetaBackfillSchedule> {
+    requirePrivileged(
+      ctx,
+      "MaintenanceActor.backfillRecipeMeta is system/admin only",
+    );
+    const requested = payload.limit ?? RECIPE_BACKFILL_DEFAULT_LIMIT;
+    if (
+      typeof requested !== "number" ||
+      !Number.isInteger(requested) ||
+      requested < 1 ||
+      requested > RECIPE_BACKFILL_MAX_LIMIT
+    ) {
+      throw new ValidationError(
+        `limit must be an integer from 1 to ${RECIPE_BACKFILL_MAX_LIMIT}`,
+      );
+    }
+    const limit = requested;
+
+    const [recipeRows, groupRows] = await Promise.all([
+      this.db.execute<{ recipe_id: string }>(sql`
+        select distinct recipe_id from public.recipe_ingredients
+        where kind is null or role is null
+        order by recipe_id
+        limit ${limit}
+      `),
+      this.db.execute<{ id: string }>(sql`
+        select g.id from public.recipe_groups g
+        where g.base_spirit is null
+          and exists (select 1 from public.recipes r where r.recipe_group_id = g.id)
+        order by g.id
+        limit ${limit}
+      `),
+    ]);
+
+    await this.tx(async (tx) => {
+      for (const row of recipeRows.rows) {
+        await enqueueOutbox(
+          tx,
+          OUTBOX_TARGETS["RecipeActor.backfillIngredientMeta"],
+          { targetId: row.recipe_id, payload: {} },
+          { attributeTo: ctx },
+        );
+      }
+      for (const row of groupRows.rows) {
+        await enqueueOutbox(
+          tx,
+          OUTBOX_TARGETS["RecipeGroupActor.backfillBaseSpirit"],
+          { targetId: row.id, payload: {} },
+          { attributeTo: ctx },
+        );
+      }
+    });
+
+    emit({
+      name: "maintenance.recipe_backfill_scheduled",
+      severity: "INFO",
+      message:
+        `MaintenanceActor scheduled ${recipeRows.rows.length} recipe and ` +
+        `${groupRows.rows.length} group backfill(s)`,
+      attributes: {
+        recipes: recipeRows.rows.length,
+        groups: groupRows.rows.length,
+      },
+    });
+    return {
+      recipes: recipeRows.rows.length,
+      groups: groupRows.rows.length,
+      limit,
+    };
   }
 
   /* ---------------------------------------------------------------------- */

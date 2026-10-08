@@ -45,7 +45,9 @@
  */
 import type { ItemType, ScannedItemType } from "@cellar-assistant/contracts";
 import {
+  BASE_SPIRIT_KINDS,
   ConflictError,
+  INGREDIENT_ROLES,
   ITEM_ATTRIBUTE_KEY,
   ITEM_TYPES,
   PLACE_CATEGORIES,
@@ -1103,10 +1105,34 @@ export const RECIPE_PHOTO_SCHEMA: JsonSchema = {
       type: "array",
       items: {
         type: "object",
+        // X14 — the order is the point here too. `name` and `quantityText`
+        // are transcription and come first; `baseSpirit` and `role` are
+        // readings of the line and come after everything copied off it, so
+        // they are answered from the words on the card and not from the
+        // title. Both are omittable (`required` is `name` alone): leaving one
+        // out is the abstention, and the job then decides from the name's own
+        // words (`resolveKind` in contracts `bar.ts` — the keywords lead, the
+        // model's answer only fills a gap).
+        //
+        // Why `baseSpirit` (17 values) and not the whole bar vocabulary
+        // (~70): `MAX_SCHEMA_ENUM_VALUES` (50, `vocabulary.ts`) — Vertex
+        // refuses a grammar with too much branching, and an enum inside an
+        // array item multiplies it. The non-spirit kinds (limes, simple
+        // syrup, Angostura) are exactly the ones the keyword classifier
+        // places best; the spirits are where a brand-only line ("2 oz
+        // Rittenhouse") needs the model.
         properties: {
           name: string_("The ingredient as written."),
+          quantityText: string_(
+            "The amount exactly as printed on this line ('3/4 oz', '2 dashes', " +
+              "'top with'), including words. Copy it; do not convert it.",
+          ),
           quantity: number_("Numeric amount, if given."),
           unit: string_("Unit of measure ('oz', 'ml', 'dash')."),
+          brandMentioned: string_(
+            "A brand this line names ('Campari', 'Angostura'), as printed. " +
+              "Leave it out when the line names none.",
+          ),
           isOptional: { type: "boolean", description: "True if optional." },
           substitutionNotes: string_("Any substitution the recipe suggests."),
           // Spelled from `ITEM_TYPES` (see RECIPE_INGREDIENT_ITEM_TYPES). The
@@ -1120,8 +1146,23 @@ export const RECIPE_PHOTO_SCHEMA: JsonSchema = {
               (type) => `'${type}'`,
             ).join(", ")}. Omit for a pantry ingredient.`,
           ),
-          brandName: string_("Brand as printed, if the recipe names one."),
           category: string_("A generic category for a non-branded ingredient."),
+          baseSpirit: {
+            type: "string",
+            enum: [...BASE_SPIRIT_KINDS],
+            description:
+              "Only when this line is a spirit: which one, from this list, " +
+              "decided from the words you just copied (a brand counts). Leave " +
+              "it out for everything else, and when none clearly fits.",
+          },
+          role: {
+            type: "string",
+            enum: [...INGREDIENT_ROLES],
+            description:
+              "What this line does in the drink: the 'base' spirit, a " +
+              "'modifier', a 'sweetener', an 'acid', 'bitters', a 'mixer', a " +
+              "'garnish', or 'other'.",
+          },
         },
         required: ["name"],
       },
@@ -1270,7 +1311,13 @@ Rules:
 - One recipe. If the photograph shows several, take the one that is most
   prominent and ignore the rest.
 - Ingredients in the order the recipe lists them, with quantities and units
-  exactly as written. Do not convert between units.
+  exactly as written. Do not convert between units. \`quantityText\` is the
+  amount copied character for character ("3/4 oz", "top with").
+- \`brandMentioned\` only when the line itself names a brand.
+- \`baseSpirit\` and \`role\` come after the line is copied, and only from
+  their lists. \`baseSpirit\` is only for a line that is a spirit; leave it
+  out otherwise, and whenever no listed spirit clearly fits — a wrong one tells
+  someone they can make a drink they cannot.
 - Instructions as separate steps, in order, in the recipe's own words.
 - \`groupName\` only when the recipe is recognisably a variation of a classic.
   Leave it out rather than inventing a lineage.

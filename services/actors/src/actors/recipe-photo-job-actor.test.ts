@@ -850,6 +850,81 @@ describe.skipIf(skip)("RecipePhotoJobActor — the stage chain (§2.6)", () => {
     });
   });
 
+  /**
+   * X14: what the job writes per line is decided over the whole list —
+   * the rye is the base because it is the largest spirit pour — and the
+   * printed amount and brand ride along. A new group gets its base spirit
+   * (T7: "baseSpirit is never written").
+   */
+  it("writes kind, role, the printed amount and the brand, and the group's base spirit", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const fileId = await seedFile(db, owner);
+      const jobId = randomUUID();
+      const extract: RecipePhotoExtractor = async () => ({
+        recipe: {
+          ...EXTRACTION,
+          ingredients: [
+            {
+              name: "Rittenhouse",
+              quantity: 2,
+              unit: "oz",
+              quantityText: "2 oz",
+              brandMentioned: "Rittenhouse",
+              baseSpirit: "rye",
+            },
+            {
+              name: "simple syrup",
+              quantity: 0.25,
+              unit: "oz",
+              quantityText: "1/4 oz",
+              category: "syrup",
+            },
+            {
+              name: "Angostura bitters",
+              quantityText: "2 dashes",
+              role: "garnish",
+            },
+            { name: "orange twist", role: "garnish" },
+          ],
+        },
+        model: "fake-vision-1",
+      });
+      const { write, calls } = recordingWriter();
+      const actor = await jobActor(db, jobId, extract, noHits, write);
+      await actor.start(userCtx(owner, "req"), { fileId });
+      await runToCompletion(actor, jobId);
+
+      const group = calls.find((call) => call.method === "createGroup");
+      expect(group?.input).toMatchObject({ baseSpirit: "rye" });
+
+      const ingredientsCall = calls.find(
+        (call) => call.method === "setIngredients",
+      );
+      if (ingredientsCall === undefined) {
+        throw new Error("setIngredients was never called");
+      }
+      const written = (
+        ingredientsCall.input as {
+          ingredients: readonly RecipeIngredientInput[];
+        }
+      ).ingredients;
+      expect(written.map((line) => [line.kind, line.role])).toEqual([
+        ["rye", "base"],
+        ["simple_syrup", "sweetener"],
+        // The rules know bitters; the model's "garnish" is not trusted over
+        // them (a wrong garnish would make a drink look makeable).
+        ["aromatic_bitters", "bitters"],
+        ["orange", "garnish"],
+      ]);
+      expect(written[0]).toMatchObject({
+        quantityText: "2 oz",
+        brandMentioned: "Rittenhouse",
+      });
+      expect(written[1]).toMatchObject({ quantityText: "1/4 oz" });
+    });
+  });
+
   it("normalises the instruction verbs the check constraint refuses", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
