@@ -137,9 +137,10 @@ export const viewerCollectionActorId = (viewerId: string): string => viewerId;
  * admin too, whose visibility clause is `true`: an admin's Discover is other
  * people's PUBLIC rows, not every private cellar in the database.
  *
- * Omitting the section keeps the old behaviour — the whole visible set — so
- * callers that only need "anything the viewer can see" (the item page's
- * pickers) are unchanged. A stranger's PUBLIC row is never in `MINE`.
+ * Omitting the section keeps the old behaviour — the whole visible set — for
+ * any caller that wants "anything the viewer can see". (The client's own
+ * pickers — add to cellar, add to tier list — ask for `MINE`.) A stranger's
+ * PUBLIC row is never in `MINE`.
  */
 export const COLLECTION_SECTIONS = ["MINE", "FRIENDS", "DISCOVER"] as const;
 

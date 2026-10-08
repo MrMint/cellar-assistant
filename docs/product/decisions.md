@@ -94,8 +94,9 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   uses the brass action colour, since every request is something to act on.
 - **Sections (X11, D2).** Server-side: `myCellars` and `myTierLists` take an
   optional `section` (`MINE`, `FRIENDS`, `DISCOVER`) that partitions what the
-  viewer may see; omitted, they return the old whole set (the item page's
-  pickers still use that). From friends means *created by* a friend, so a
+  viewer may see; omitted, they return the old whole set. The item page's
+  add-to-cellar picker and the own-tier-list pickers ask for `MINE`, so they
+  no longer page through everyone else's to find yours. From friends means *created by* a friend, so a
   stranger's PUBLIC cellar that a friend co-owns is in Discover. Discover shows
   **six** at a time; Yours and From friends a screenful (24 cellars, 100 tier
   lists); all have "Show more". Empty From friends and Discover sections are

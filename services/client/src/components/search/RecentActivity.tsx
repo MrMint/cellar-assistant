@@ -150,7 +150,7 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
   const searchParams = useSearchParams();
   const prefersReducedMotion = useHydratedReducedMotion();
   // The server's render and the hydration pass start visible; only what
-  // mounts afterwards (a filter change) plays the entrance. See ./AnimateIn.
+  // mounts afterwards (a filter change) plays the entrance (./useHasMounted).
   const animateEntrance = useHasMounted();
 
   const handleKindsChange = useCallback(
