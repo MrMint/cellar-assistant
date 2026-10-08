@@ -2,9 +2,10 @@
 
 import { Box, Stack, Typography } from "@mui/joy";
 import { useColorScheme } from "@mui/joy/styles";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { MAPLIBRE_WORKER_URL } from "@/components/map/maplibre/workerUrl";
 import { BAND_COLORS } from "../constants";
 import type { CountryHeatmapEntry } from "./computeInsightsStats";
 
@@ -72,6 +73,7 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
 
   const colorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -109,14 +111,24 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
   useEffect(() => {
     if (!mapContainer.current || !hasEntries) return;
 
-    const map = new maplibregl.Map({
-      container: mapContainer.current,
-      style: mode === "dark" ? CARTO_DARK : CARTO_LIGHT,
-      center: mapView.center,
-      zoom: mapView.zoom,
-      interactive: false,
-      attributionControl: false,
-    });
+    maplibregl.setWorkerUrl(MAPLIBRE_WORKER_URL);
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container: mapContainer.current,
+        style: mode === "dark" ? CARTO_DARK : CARTO_LIGHT,
+        center: mapView.center,
+        zoom: mapView.zoom,
+        interactive: false,
+        attributionControl: false,
+      });
+    } catch {
+      // maplibre-gl v6 needs WebGL2 and throws from the constructor without
+      // it. Uncaught here, that throw would take the whole insights panel
+      // down with it; losing only the heatmap is the right failure.
+      setUnavailable(true);
+      return;
+    }
 
     mapRef.current = map;
 
@@ -171,7 +183,7 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
     );
   }, [colorMap, loaded]);
 
-  if (!hasEntries) return null;
+  if (!hasEntries || unavailable) return null;
 
   return (
     <Stack spacing={1}>
