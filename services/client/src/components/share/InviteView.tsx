@@ -55,7 +55,8 @@ export function InviteView({
       />
       {state === "CAN_ACCEPT" && (
         <Button
-          className="w-full max-w-[360px]"
+          // Names the inviter, so it wraps rather than overflow on a phone.
+          className="h-auto min-h-11 w-full max-w-[360px] whitespace-normal text-balance text-center wrap-anywhere"
           disabled={fetching}
           aria-busy={fetching || undefined}
           onClick={() => void onAccept()}

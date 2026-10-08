@@ -51,7 +51,12 @@ export function ShareFrame({
           {pitch !== undefined && (
             <p className="type-footnote px-1 text-center">{pitch}</p>
           )}
-          <Button asChild>
+          {/* A CTA can carry a person's name ("Join to connect with …"), so
+              it wraps rather than run off a 390 px screen. */}
+          <Button
+            asChild
+            className="h-auto min-h-11 whitespace-normal text-balance text-center wrap-anywhere"
+          >
             <Link
               href={withReturnTo("/sign-up", canonicalPath)}
               underline="none"
