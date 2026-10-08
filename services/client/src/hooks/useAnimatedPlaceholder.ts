@@ -1,7 +1,7 @@
 "use client";
 
+import { useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { useMediaQuery } from "./useMediaQuery";
 
 type Phase = "typing" | "paused";
 
@@ -19,9 +19,10 @@ export function useAnimatedPlaceholder({
   enabled = true,
 }: UseAnimatedPlaceholderOptions): string {
   const [displayText, setDisplayText] = useState("");
-  const prefersReducedMotion = useMediaQuery(
-    "(prefers-reduced-motion: reduce)",
-  );
+  // motion's own read of the setting (the one the root MotionConfig
+  // honours): false on the server and the first client render, like the
+  // media query it replaces, so hydration agrees.
+  const prefersReducedMotion = useReducedMotion() ?? false;
 
   const animState = useRef({
     phase: "typing" as Phase,
