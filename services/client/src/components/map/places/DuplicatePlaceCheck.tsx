@@ -64,13 +64,24 @@ export function DuplicatePlaceCheck({
                 </p>
               )}
             </div>
-            <Button variant="outline" onClick={() => onSelectExisting(dup.id)}>
+            {/* type="button": this renders inside CreatePlaceForm's <form>,
+                and a bare <button> there is a submit (Joy defaulted it). */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onSelectExisting(dup.id)}
+            >
               This is it
             </Button>
           </li>
         ))}
       </ul>
-      <Button variant="ghost" onClick={onConfirmNew} className="mt-2">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={onConfirmNew}
+        className="mt-2"
+      >
         None of these — create new place
       </Button>
     </div>

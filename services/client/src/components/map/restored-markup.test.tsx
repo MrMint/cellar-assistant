@@ -176,6 +176,11 @@ describe("create place (restored)", () => {
     assert.match(html, /We found similar places nearby/);
     assert.match(html, /This is it/);
     assert.match(html, /None of these — create new place/);
+    // It renders inside CreatePlaceForm's <form>: a button without
+    // type="button" would submit (and create) the place on either choice.
+    const buttons = html.match(/<button[^>]*>/g) ?? [];
+    assert.equal(buttons.length, 2);
+    for (const button of buttons) assert.match(button, /type="button"/);
   });
 
   test("GooglePlaceSuggestions copy", () => {
