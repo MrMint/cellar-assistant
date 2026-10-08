@@ -115,7 +115,11 @@ const baseInput = async (
   const spec = ITEM_TYPE_SPECS[type];
   const bag: Record<string, unknown> = {};
   for (const [key, attribute] of itemAttributeEntries(type)) {
-    if (attribute.required) bag[key] = (await valuesFor(db, attribute))[0];
+    // X19: a non-vintage-capable year (wine.vintage) is not `required`, but
+    // leaving it out is refused — it must be a year or an explicit null (NV).
+    if (attribute.required || attribute.nonVintage === true) {
+      bag[key] = (await valuesFor(db, attribute))[0];
+    }
   }
   const input: Record<string, unknown> = {
     name: `itemspec ${type}`,
