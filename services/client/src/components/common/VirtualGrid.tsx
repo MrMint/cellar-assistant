@@ -119,6 +119,11 @@ export interface VirtualGridProps<T> {
   /** Message shown when items array is empty. */
   emptyMessage?: string;
   /**
+   * A whole empty state (an `EmptyState`, with its one action) shown instead
+   * of `emptyMessage` when the items array is empty.
+   */
+  empty?: ReactNode;
+  /**
    * Each item's share of a 12-column row per breakpoint, the old Grid's units
    * (e.g. { xs: 6, sm: 6, md: 4, lg: 3, xl: 2 } is 2/2/3/4/6 columns).
    */
@@ -139,6 +144,7 @@ export function VirtualGrid<T>({
   renderItem,
   renderSkeleton,
   emptyMessage = "No items found",
+  empty,
   gridBreakpoints,
   onLoadMore,
   isLoadingMore = false,
@@ -295,7 +301,11 @@ export function VirtualGrid<T>({
       <div ref={sentinelRef} style={{ height: 0, overflow: "hidden" }} />
 
       {items.length === 0 ? (
-        <p className="type-body py-8 text-center text-ink-2">{emptyMessage}</p>
+        (empty ?? (
+          <p className="type-body py-8 text-center text-ink-2">
+            {emptyMessage}
+          </p>
+        ))
       ) : (
         <div
           className="relative w-full"

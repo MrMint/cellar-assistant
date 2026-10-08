@@ -1,6 +1,6 @@
 /**
- * Render tests for the restored rankings components, asserting the **old**
- * markup (`82450ad1:src/components/ranking/*`).
+ * Render tests for `/rankings` ("Top rated"): the scope control N15 put in
+ * place of the old two toggles, and the restored type chips.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -17,12 +17,9 @@ mock.module("next/image", () => ({
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
   usePathname: () => "/rankings",
-  useSearchParams: () => new URLSearchParams('reviewers=["ME"]&types=["WINE"]'),
+  useSearchParams: () => new URLSearchParams('scope=friends&types=["WINE"]'),
 }));
 
-const { RankingsFilter, RankingsFilterValue } = await import(
-  "./RankingsFilter"
-);
 const { RankingsClient } = await import("./RankingsClient");
 
 const client = new Client({
@@ -35,39 +32,23 @@ const render = (node: ReactNode) =>
     "",
   );
 
-describe("RankingsFilter (restored)", () => {
-  test("two toggles, Your Scores then Friends Scores, the pressed one marked", () => {
-    const html = render(
-      <RankingsFilter
-        types={[RankingsFilterValue.ME]}
-        onTypesChange={() => {}}
-      />,
-    );
-    const labels = [...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(
-      labels.filter((l) => l.endsWith("Scores")),
-      ["Your Scores", "Friends Scores"],
-    );
+describe("RankingsClient", () => {
+  test("Top rated, the labelled scope control from the URL, the type chips", () => {
+    const html = render(<RankingsClient />);
+    assert.match(html, /^(?:<[^>]+>)*Top rated</);
+    assert.match(html, /role="radiogroup"[^>]*aria-label="Whose scores"/);
+    const segments = [
+      ...html.matchAll(/role="radio"[^>]*>(?:<[^>]+>)*([^<]+)</g),
+    ].map((m) => m[1]);
+    assert.deepEqual(segments, ["Me", "Friends", "Everyone"]);
+    // `?scope=friends` reaches the control.
     assert.match(
       html,
-      /aria-pressed="true"[^>]*aria-label="Your Scores"|aria-label="Your Scores"[^>]*aria-pressed="true"/,
+      /aria-checked="true"[^>]*>(?:<[^>]+>)*Friends<|data-state="on"[^>]*>(?:<[^>]+>)*Friends</,
     );
-  });
-});
-
-describe("RankingsClient (restored)", () => {
-  test("title, both filters from the URL, and the grid", () => {
-    const html = render(<RankingsClient />);
-    assert.match(html, /^(?:<[^>]+>)*Rankings</);
-    assert.match(html, /aria-label="Friends Scores"/);
     for (const type of ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"]) {
       assert.match(html, new RegExp(`aria-label="${type}"`));
     }
-    // The old URL state reaches the toggles.
-    assert.match(
-      html,
-      /aria-pressed="true"[^>]*aria-label="Your Scores"|aria-label="Your Scores"[^>]*aria-pressed="true"/,
-    );
     assert.match(
       html,
       /aria-pressed="true"[^>]*aria-label="Wine"|aria-label="Wine"[^>]*aria-pressed="true"/,

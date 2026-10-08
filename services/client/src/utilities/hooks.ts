@@ -3,8 +3,9 @@
  *
  * Unchanged except: `ItemTypeValue`/`ITEM_TYPES` come from the SDL's
  * `ItemType`; `?types=` is parsed by `parseTypesParam` instead of a bare
- * `JSON.parse` that crashed the page on a hand-edited URL (§7), and
- * `?reviewers=` likewise by `parseReviewersParam`.
+ * `JSON.parse` that crashed the page on a hand-edited URL (§7). The old
+ * `?reviewers=` hook went with the rankings toggles it served: `/rankings`
+ * keeps its own `?scope=` (N15, `components/ranking/RankingsClient.tsx`).
  */
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -22,8 +23,6 @@ import {
   ITEM_TYPES,
   type ApiItemType as ItemTypeValue,
 } from "@/components/cellar-api/itemTypes";
-import type { RankingsFilterValue } from "@/components/ranking/RankingsFilter";
-import { parseReviewersParam } from "./reviewers-param";
 import { parseTypesParam } from "./types-param";
 
 const SCROLL_STORAGE_KEY = "scroll-restore";
@@ -198,26 +197,4 @@ export const useTypesFilterState = () => {
   };
 
   return { types: optimisticTypes, setTypes };
-};
-
-export const useReviewersFilterState = () => {
-  const router = useRouter();
-  const searchParams = new URLSearchParams(useSearchParams());
-
-  const parsedReviewers = parseReviewersParam(searchParams.get("reviewers"));
-  const [optimisticReviewers, setOptimisticReviewers] =
-    useOptimistic<RankingsFilterValue[]>(parsedReviewers);
-
-  const setReviewers = (r: RankingsFilterValue[]) => {
-    if (isEmpty(r)) {
-      startTransition(() => setOptimisticReviewers([]));
-      searchParams.delete("reviewers");
-    } else {
-      startTransition(() => setOptimisticReviewers(r));
-      searchParams.set("reviewers", JSON.stringify(r));
-    }
-    router.replace(`?${searchParams}`);
-  };
-
-  return { reviewers: optimisticReviewers, setReviewers };
 };
