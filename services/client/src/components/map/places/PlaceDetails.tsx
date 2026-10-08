@@ -61,6 +61,7 @@ import {
 } from "react-icons/md";
 import { Timestamp } from "@/components/common/Timestamp";
 import { ItemTierLists } from "@/components/item/ItemTierLists";
+import { NotFoundMessage } from "@/components/shell/NotFoundMessage";
 import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
 import { AddToTierListModal } from "../../tier-list/AddToTierListModal";
 import { usePlaceDetails } from "../hooks/usePlaceDetails";
@@ -392,12 +393,10 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     );
   }
 
+  // The page 404s a missing place on the server; this is the same message
+  // for one that disappears while the page is open (D24).
   if (!placeData) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Alert color="warning">Place not found</Alert>
-      </Box>
-    );
+    return <NotFoundMessage />;
   }
 
   // ── Derived ────────────────────────────────────────────────────────

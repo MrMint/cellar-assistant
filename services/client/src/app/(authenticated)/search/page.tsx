@@ -32,7 +32,10 @@ import {
 } from "@/components/search/queries";
 import { SearchDiscoveryContent } from "@/components/search/SearchDiscovery";
 import { SearchPageLayout } from "@/components/search/SearchPageLayout";
-import { SearchResultsSkeleton } from "@/components/search/SearchResultsSkeleton";
+import {
+  SearchDiscoverySkeleton,
+  SearchResultsSkeleton,
+} from "@/components/search/SearchResultsSkeleton";
 import { ServerBarcodeResults } from "@/components/search/ServerBarcodeResults";
 import {
   ExpiredImageSearch,
@@ -91,7 +94,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
     >
       {/* Discovery: the hero renders instantly from SSR, this streams in */}
       {!hasActiveSearch && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<SearchDiscoverySkeleton />}>
           <DiscoveryContent activityKinds={activityKinds} />
         </Suspense>
       )}

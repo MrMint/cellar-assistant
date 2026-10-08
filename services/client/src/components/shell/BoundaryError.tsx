@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@mui/joy";
-import { useEffect } from "react";
+import { useEffect, useTransition } from "react";
 import { MdCloudOff, MdErrorOutline, MdRefresh } from "react-icons/md";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { ShellMessage } from "./ShellMessage";
@@ -21,6 +21,10 @@ export function BoundaryError({
   retry: () => void;
 }) {
   const online = useOnlineStatus();
+  // `retry` refreshes in a transition; holding it in ours shows that the tap
+  // did something while the server renders again (UX lane: a retry that
+  // failed again left the page looking untouched).
+  const [retrying, startRetry] = useTransition();
 
   useEffect(() => {
     console.error(error);
@@ -32,7 +36,11 @@ export function BoundaryError({
       icon={online ? <MdErrorOutline /> : <MdCloudOff />}
       footnote={errorReference(error.digest)}
       actions={
-        <Button startDecorator={<MdRefresh />} onClick={() => retry()}>
+        <Button
+          startDecorator={<MdRefresh />}
+          loading={retrying}
+          onClick={() => startRetry(() => retry())}
+        >
           Try again
         </Button>
       }
