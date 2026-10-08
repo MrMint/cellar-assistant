@@ -1059,6 +1059,16 @@ export const tierLists = pgTable("tier_lists", {
 	aiInsights: jsonb("ai_insights"),
 	insightsGeneratedAt: timestamp("insights_generated_at", { withTimezone: true }),
 	isEditingLocked: boolean("is_editing_locked").default(false).notNull(),
+	// N07 (`TierList.insightsStatus`): when insights were last asked for (the
+	// content bump that enqueued them), and how the latest attempt failed —
+	// a stored failure (`CODE[REASON]: message`), when, and when the refusal
+	// said asking again could work. Together with `insights_generated_at`
+	// they let the read say PENDING / READY / FAILED instead of the client
+	// guessing "generating" forever.
+	insightsRequestedAt: timestamp("insights_requested_at", { withTimezone: true }),
+	insightsFailure: text("insights_failure"),
+	insightsFailedAt: timestamp("insights_failed_at", { withTimezone: true }),
+	insightsRetryAt: timestamp("insights_retry_at", { withTimezone: true }),
 }, (table) => [
 	index("tier_lists_created_by_id_idx").using("btree", table.createdById.asc().nullsLast()),
 	index("tier_lists_privacy_idx").using("btree", table.privacy.asc().nullsLast()),

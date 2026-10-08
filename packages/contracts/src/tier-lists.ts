@@ -48,6 +48,7 @@
 import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
 import type { PermissionType } from "./enums.ts";
+import type { ActorErrorReason } from "./errors.ts";
 import { ITEM_TYPES, type ItemType } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
 
@@ -112,10 +113,57 @@ export type TierListDto = {
    * `tier_list_items_content_changed` trigger it used to be.
    */
   readonly contentUpdatedAt: string;
+  /**
+   * N07: where this list's generated insights stand, decided by the actor
+   * from what it knows (`tierListInsightsStatus` in
+   * `services/actors/src/lib/tier-list-insights-status.ts`). A client renders
+   * this rather than inferring "generating" from `aiInsights === null`,
+   * which is how a list whose generation could never happen showed
+   * "Generating Insights" forever.
+   */
+  readonly insightsStatus: TierListInsightsStatus;
+  /**
+   * Why the latest attempt failed (`FAILED`), when the actor recorded a
+   * reason — `AI_UNCONFIGURED`, `USER_CAP`, `SERVICE_BUDGET`,
+   * `NOTHING_READ`. `null` otherwise.
+   */
+  readonly insightsFailureReason: ActorErrorReason | null;
+  /**
+   * When the next attempt can or will happen: the budget window's `retryAt`
+   * on a `FAILED` refusal, or the end of the once-a-day throttle on a
+   * `PENDING` refresh. `null` when there is no such time.
+   */
+  readonly insightsRetryAt: string | null;
   /** See the module doc: nullable in the live schema, unlike `cellars`. */
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
 };
+
+/**
+ * N07's states for a tier list's generated insights.
+ *
+ * - `NOT_ENOUGH_ENTRIES` — fewer entries than insights need; nothing runs.
+ * - `UNAVAILABLE` — this deployment has no AI provider (and no earlier
+ *   insights to show); nothing will run until one is configured.
+ * - `PENDING` — asked for and not yet answered: queued, generating, retrying
+ *   or waiting out the once-a-day throttle (`insightsRetryAt`).
+ * - `FAILED` — the latest attempt failed (`insightsFailureReason`).
+ * - `READY` — `aiInsights` holds the latest answer.
+ * - `IDLE` — enough entries, nothing generated and nothing asked for (a list
+ *   last changed before insights were requested on change). The next change
+ *   asks.
+ */
+export const TIER_LIST_INSIGHTS_STATUSES = [
+  "NOT_ENOUGH_ENTRIES",
+  "UNAVAILABLE",
+  "PENDING",
+  "FAILED",
+  "READY",
+  "IDLE",
+] as const;
+
+export type TierListInsightsStatus =
+  (typeof TIER_LIST_INSIGHTS_STATUSES)[number];
 
 export type TierListItemDto = {
   readonly id: string;

@@ -148,6 +148,8 @@ import type {
 import {
   ConflictError,
   ForbiddenError,
+  formatStoredFailure,
+  isActorError,
   isTierListEntryType,
   MAX_BAND,
   MIN_BAND,
@@ -161,6 +163,7 @@ import { eq, sql } from "@cellar-assistant/db/orm";
 import { canSeeTierList, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
+import { aiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import { ARCS } from "../lib/item-arcs.ts";
@@ -172,6 +175,7 @@ import {
   MIN_GROUNDED_ENTRIES,
   resolveTierListEntries,
 } from "../lib/tier-list-entries.ts";
+import { tierListInsightsStatus } from "../lib/tier-list-insights-status.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import { tierListVisibility } from "../lib/visibility.ts";
 
@@ -683,16 +687,30 @@ export class TierListActor
       generatedAt !== null &&
       Date.now() - generatedAt.getTime() < INSIGHTS_THROTTLE_MS
     ) {
+      // Only a list that changed since its insights is worth a refresh; a
+      // redelivery with nothing new must not schedule a daily regeneration.
+      if (aggregate.tierList.contentUpdatedAt > generatedAt) {
+        await this.#deferThrottled(ctx, generatedAt);
+      }
       return { tierListId: this.key, skipped: true, reason: "throttled" };
     }
 
-    const insights = await this.#generateInsights(ctx, {
-      tierListId: this.key,
-      name: aggregate.tierList.name,
-      description: aggregate.tierList.description,
-      listType: aggregate.tierList.listType,
-      entries: await this.#describeEntries(aggregate.items),
-    });
+    let insights: Record<string, unknown>;
+    try {
+      insights = await this.#generateInsights(ctx, {
+        tierListId: this.key,
+        name: aggregate.tierList.name,
+        description: aggregate.tierList.description,
+        listType: aggregate.tierList.listType,
+        entries: await this.#describeEntries(aggregate.items),
+      });
+    } catch (error) {
+      // N07: write the failure down where the read can see it — its class,
+      // reason and retry time — then fail the delivery exactly as before, so
+      // the outbox's retry schedule is unchanged.
+      await this.#recordInsightsFailure(error);
+      throw error;
+    }
 
     await this.tx(async (tx) => {
       await tx
@@ -700,12 +718,70 @@ export class TierListActor
         .set({
           aiInsights: insights,
           insightsGeneratedAt: new Date(),
+          insightsFailure: null,
+          insightsFailedAt: null,
+          insightsRetryAt: null,
           updatedAt: new Date(),
         })
         .where(eq(tierLists.id, this.key));
     });
     await this.reload();
     return { tierListId: this.key, skipped: false, reason: "generated" };
+  }
+
+  /**
+   * A change inside the once-a-day throttle used to be dropped: the delivery
+   * answered "throttled" and nothing ever asked again, while the panel said
+   * "Updated insights will generate automatically". Now the throttled
+   * delivery queues the refresh for the moment the throttle lifts —
+   * `enqueueOutboxOnce`, so a burst of changes still leaves one row — and
+   * records that moment, which the read reports as `PENDING` until then.
+   */
+  async #deferThrottled(ctx: Ctx, generatedAt: Date): Promise<void> {
+    const runAt = new Date(generatedAt.getTime() + INSIGHTS_THROTTLE_MS);
+    await this.tx(async (tx) => {
+      await enqueueOutboxOnce(
+        tx,
+        OUTBOX_TARGETS["TierListActor.generateInsights"],
+        {
+          targetId: this.key,
+          payload: {},
+          // A minute's floor: the throttle is judged on this host's clock and
+          // the delay on the database's, so a delivery that fires a moment
+          // early must not re-defer itself in a tight loop.
+          delayMs: Math.max(60_000, runAt.getTime() - Date.now()),
+        },
+        { attributeTo: ctx },
+      );
+      await tx
+        .update(tierLists)
+        .set({ insightsRetryAt: runAt })
+        .where(eq(tierLists.id, this.key));
+    });
+    await this.reload();
+  }
+
+  /**
+   * The failed attempt, as `insightsStatus` will read it: a stored failure
+   * (`CODE[REASON]: message`, so the reason survives), when, and the
+   * refusal's `retryAt` when it had one (a budget window).
+   */
+  async #recordInsightsFailure(error: unknown): Promise<void> {
+    const retryAt =
+      isActorError(error) && error.retryAt !== null
+        ? new Date(error.retryAt)
+        : null;
+    await this.tx(async (tx) => {
+      await tx
+        .update(tierLists)
+        .set({
+          insightsFailure: formatStoredFailure(error),
+          insightsFailedAt: new Date(),
+          insightsRetryAt: retryAt,
+        })
+        .where(eq(tierLists.id, this.key));
+    });
+    await this.reload();
   }
 
   /* ---------------------------------------------------------------------- */
@@ -793,9 +869,17 @@ export class TierListActor
   }
 
   async #bumpContentAndEnqueueInsights(tx: DbOrTx, ctx: Ctx): Promise<void> {
+    // `insightsRequestedAt` is what `insightsStatus` reads as "asked for and
+    // not yet answered" (N07). Bumped only when the list is long enough for a
+    // generation to run, so a two-entry list never reads as pending.
+    const now = new Date();
+    const enough = (await this.#itemCount(tx)) >= MIN_ITEMS_FOR_INSIGHTS;
     await tx
       .update(tierLists)
-      .set({ contentUpdatedAt: new Date() })
+      .set({
+        contentUpdatedAt: now,
+        ...(enough ? { insightsRequestedAt: now } : {}),
+      })
       .where(eq(tierLists.id, this.key));
     // `enqueueOutboxOnce`, not `enqueueOutbox`: at most one live row per tier
     // list. See the class doc, "Bounding what one request can enqueue".
@@ -847,6 +931,46 @@ export class TierListActor
     return written;
   }
 
+  /** N07: see `lib/tier-list-insights-status.ts` for the rule. */
+  #insightsStatus(
+    aggregate: TierListAggregate,
+  ): Pick<
+    TierListDto,
+    "insightsStatus" | "insightsFailureReason" | "insightsRetryAt"
+  > {
+    const row = aggregate.tierList;
+    const status = tierListInsightsStatus({
+      itemCount: aggregate.items.length,
+      minimumItems: MIN_ITEMS_FOR_INSIGHTS,
+      hasInsights: row.aiInsights !== null,
+      aiAvailable: aiCapabilities().tierListInsights,
+      requestedAt: row.insightsRequestedAt,
+      generatedAt: row.insightsGeneratedAt,
+      failedAt: row.insightsFailedAt,
+      failure: row.insightsFailure,
+      retryAt: row.insightsRetryAt,
+      now: new Date(),
+    });
+    return {
+      insightsStatus: status.status,
+      insightsFailureReason: status.failureReason,
+      insightsRetryAt: status.retryAt,
+    };
+  }
+
+  /**
+   * The list's entry count as of this transaction — the write that called
+   * `#bumpContentAndEnqueueInsights` has already added or removed its row,
+   * which the cached aggregate does not yet show.
+   */
+  async #itemCount(tx: DbOrTx): Promise<number> {
+    const [row] = await tx
+      .select({ count: sql<string>`count(*)` })
+      .from(tierListItems)
+      .where(eq(tierListItems.tierListId, this.key));
+    return Number(row?.count ?? 0);
+  }
+
   #toDto(aggregate: TierListAggregate): TierListDto {
     return {
       id: aggregate.tierList.id,
@@ -862,6 +986,7 @@ export class TierListActor
         null,
       insightsGeneratedAt: iso(aggregate.tierList.insightsGeneratedAt),
       contentUpdatedAt: requiredIso(aggregate.tierList.contentUpdatedAt),
+      ...this.#insightsStatus(aggregate),
       createdAt: iso(aggregate.tierList.createdAt),
       updatedAt: iso(aggregate.tierList.updatedAt),
     };
