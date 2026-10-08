@@ -105,15 +105,16 @@ const CollectionStatsType = builder
   .implement({
     description:
       "The viewer's own collection: cellars they created or co-own, and the " +
-      "distinct items with a bottle in one of them. Never other people's " +
-      "cellars, however visible (UI parity G36).",
+      "bottles still in them. Never other people's cellars, however visible " +
+      "(UI parity G36).",
     fields: (t) => ({
       cellarCount: t.exposeInt("cellarCount"),
       itemCounts: t.field({
         type: ItemTypeCountsType,
         description:
-          "Distinct items per type, whatever their bottles' state — what the " +
-          "old /search line counted.",
+          "Bottles still in the cellar (not finished) per type — the count " +
+          "every cellar card shows (decision D13). Two bottles of one wine " +
+          "count 2.",
         resolve: (stats) => stats.itemCounts,
       }),
     }),
@@ -506,7 +507,9 @@ builder.queryField("myCellars", (t) =>
       "co-own, and other people's that are PUBLIC or FRIENDS-and-a-friend " +
       "(C3's `CellarsCollectionActor`, §2.2). The collection returns ids; " +
       "the `Cellar` DataLoader batches them into parallel `CellarActor.get` " +
-      "calls (§1.5).",
+      "calls (§1.5). Ordered with the viewer's own and co-owned cellars " +
+      "first, then the rest, each by most recent activity: a bottle added " +
+      "or changed, or a check-in (decision D13).",
     args: t.arg.connectionArgs(),
     errors: {},
     resolve: async (_root, args, context) => {

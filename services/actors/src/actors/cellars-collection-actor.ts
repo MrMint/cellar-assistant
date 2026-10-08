@@ -23,6 +23,19 @@
  * function itself for owner, co-owner, friend and stranger — the §1.6 trio plus
  * the branch a cellar has and a tier list does not.
  *
+ * ## Order: yours first, then by recent activity (decision D13)
+ *
+ * The page used to be newest-*created* first, so a cellar you filled last
+ * night sat below an empty one you made this morning, and a stranger's PUBLIC
+ * cellar could sit between two of your own. It is now cellars you created or
+ * co-own first, then everything else, each by **last activity**: the newest of
+ * the cellar's own creation, any bottle's add or change (`cellar_items.updated_at`
+ * is stamped by the shared trigger, so opening, the remaining slider and
+ * finishing all count) and any check-in on its bottles. {@link SORT_KEY} folds
+ * both into one `text` key so the keyset cursor stays a `(sort, id)` pair.
+ * Activity moves, so a cellar that changes between two page reads can move
+ * past the cursor; the next full read puts it back in its place.
+ *
  * The one input the SQL cannot derive is friendship, because §1.6's `isFriend`
  * *"answers a question of fact, not of permission"* and deliberately does not
  * short-circuit for admin. `friendshipsOf` reads it in one round trip for the
@@ -97,9 +110,44 @@ const CELLAR_ROW: VisibleRow = {
   coOwnedCellarId: sql`c.id`,
 };
 
-/** `cellars.created_at` is `not null`, so the cursor needs no `coalesce`. */
-const SORT = sql`c.created_at`;
-const ID = sql`c.id`;
+/** Cellars `viewer` created or co-owns (`c` is `cellars`). Privacy plays no part. */
+const ownedBy = (viewer: string): SQL => sql`(
+  c.created_by_id = ${viewer}::uuid
+  or exists (
+    select 1 from public.cellar_owners o
+    where o.cellar_id = c.id and o.user_id = ${viewer}::uuid
+  )
+)`;
+
+/**
+ * The newest thing that happened in cellar `c`: its creation, a bottle added
+ * or changed, or a check-in on one of its bottles. Grouped joins rather than
+ * correlated subqueries, because `check_ins.cellar_item_id` has no index and a
+ * per-cellar probe of it would scan the table once per row.
+ */
+const ACTIVITY = sql`greatest(c.created_at, a.bottle_at, a.check_in_at)`;
+const ACTIVITY_JOIN = sql`
+  left join (
+    select ci.cellar_id,
+           max(ci.updated_at) as bottle_at,
+           max(k.created_at) as check_in_at
+    from public.cellar_items ci
+    left join public.check_ins k on k.cellar_item_id = ci.id
+    group by ci.cellar_id
+  ) a on a.cellar_id = c.id`;
+
+/**
+ * `1|2026-10-07T18:04:05.123456` for one of yours, `0|…` for anyone else's:
+ * fixed width, so a descending byte-wise (`collate "C"`) comparison is
+ * "yours first, then newest activity". The collation is pinned because a
+ * linguistic one may ignore the punctuation and still agree today by luck.
+ */
+const sortKeyOf = (viewer: string): SQL => sql`(
+  (case when ${ownedBy(viewer)} then '1|' else '0|' end)
+  || to_char(${ACTIVITY} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US')
+)`;
+const SORT_KEY = sql`s.sort_key collate "C"`;
+const ID = sql`s.id`;
 
 export class CellarsCollectionActor
   extends ViewerCollectionActorBase<null>
@@ -129,11 +177,17 @@ export class CellarsCollectionActor
    * cellars" included every stranger's PUBLIC cellar and every friend's
    * FRIENDS one. The old page asked a narrower question
    * (`82450ad1:src/components/search/fragments.ts`): cellars the viewer
-   * **created or co-owns**, and per type the number of **distinct items**
-   * with a bottle in one of them. This is that question, verbatim — privacy
-   * plays no part, because ownership is the whole filter, and an admin gets
-   * their own numbers rather than the world's (`bypassesPolicy` is about
-   * seeing rows, not about whose collection this is).
+   * **created or co-owns** — privacy plays no part, because ownership is the
+   * whole filter, and an admin gets their own numbers rather than the world's
+   * (`bypassesPolicy` is about seeing rows, not about whose collection this
+   * is).
+   *
+   * What it counts per type is decision D13's: **bottles still in the
+   * cellar** (`empty_at is null`), the same thing every cellar card and the
+   * cellar page's type bar count (`CellarDto.itemCounts`). The old line
+   * counted distinct items whatever their bottles' state, so two bottles of
+   * one wine read as 1 and a finished bottle still counted; that is the drift
+   * D13 removed.
    *
    * Two statements, both bounded by the viewer's own cellars.
    */
@@ -142,13 +196,7 @@ export class CellarsCollectionActor
     const viewer = ctx.viewerId;
     if (viewer === null) throw new ForbiddenError("sign in to see your stats");
 
-    const mine = sql`(
-      c.created_by_id = ${viewer}::uuid
-      or exists (
-        select 1 from public.cellar_owners o
-        where o.cellar_id = c.id and o.user_id = ${viewer}::uuid
-      )
-    )`;
+    const mine = ownedBy(viewer);
 
     const cellarRows = await this.db.execute<{ count: number }>(sql`
       select count(*)::int as count from public.cellars c where ${mine}
@@ -157,7 +205,7 @@ export class CellarsCollectionActor
     const arc = ARCS.cellarItems;
     const perType = ITEM_TYPES.map(
       (type) =>
-        sql`count(distinct ${sql.identifier("ci")}.${sql.identifier(
+        sql`count(${sql.identifier("ci")}.${sql.identifier(
           arc.columns[type].name,
         )})::int as ${sql.identifier(type)}`,
     );
@@ -165,7 +213,7 @@ export class CellarsCollectionActor
       select ${sql.join(perType, sql`, `)}
       from public.cellar_items ci
       join public.cellars c on c.id = ci.cellar_id
-      where ${mine}
+      where ${mine} and ci.empty_at is null
     `);
 
     const counted = itemRows.rows[0];
@@ -257,13 +305,18 @@ export class CellarsCollectionActor
     after: KeysetCursor | null,
     limit: number,
   ): Promise<readonly CellarIdRow[]> {
+    const viewer = ctx.viewerId;
+    if (viewer === null) throw new ForbiddenError("sign in to see cellars");
     const { from, where } = await this.#scope(ctx);
     const { rows } = await this.db.execute<CellarIdRow>(sql`
-      select c.id, (c.created_at)::text as sort_key
-      from ${from}
-      where ${where}
-        and ${keysetWhere(after, SORT, ID, "timestamptz", "desc")}
-      order by ${keysetOrder(SORT, ID, "desc")}
+      select s.id, s.sort_key from (
+        select c.id, ${sortKeyOf(viewer)} as sort_key
+        from ${from}
+        ${ACTIVITY_JOIN}
+        where ${where}
+      ) s
+      where ${keysetWhere(after, SORT_KEY, ID, "text", "desc")}
+      order by ${keysetOrder(SORT_KEY, ID, "desc")}
       limit ${limit}
     `);
     return rows;

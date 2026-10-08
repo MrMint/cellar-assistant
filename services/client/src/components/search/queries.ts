@@ -139,7 +139,8 @@ export const SearchBarcodeQuery = graphql(
  * `*_aggregate` counts over cellars the viewer created or co-owns; the rewrite
  * summed `myCellars`, which lists every *visible* cellar — strangers' PUBLIC
  * and friends' FRIENDS ones too — so it over-counted. `collectionStats` is the
- * old question, answered server-side (G36).
+ * old question, answered server-side (G36), counting bottles still in the
+ * cellar rather than distinct items (decision D13).
  */
 export const SearchCollectionStatsQuery = graphql(`
   query SearchCollectionStats {

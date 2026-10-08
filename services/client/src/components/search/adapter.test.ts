@@ -30,20 +30,20 @@ import {
 
 const zero = { wine: 0, beer: 0, spirit: 0, coffee: 0, sake: 0, tea: 0 };
 
-describe("collectionStatsLine (the old CollectionStats copy)", () => {
+describe("collectionStatsLine (bottles still in the cellar, D13)", () => {
   test("nothing yet", () => {
     assert.equal(
       collectionStatsLine({ cellarCount: 2, itemCounts: zero }),
       "Your collection awaits. Start by adding your first item.",
     );
   });
-  test("one item, one cellar", () => {
+  test("one bottle, one cellar", () => {
     assert.equal(
       collectionStatsLine({
         cellarCount: 1,
         itemCounts: { ...zero, sake: 1 },
       }),
-      "1 item across 1 cellar",
+      "1 bottle across 1 cellar",
     );
   });
   test("the six types are summed, sake and tea included", () => {
@@ -52,7 +52,7 @@ describe("collectionStatsLine (the old CollectionStats copy)", () => {
         cellarCount: 3,
         itemCounts: { wine: 4, beer: 1, spirit: 2, coffee: 1, sake: 1, tea: 1 },
       }),
-      "10 items across 3 cellars",
+      "10 bottles across 3 cellars",
     );
   });
 });

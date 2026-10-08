@@ -46,8 +46,11 @@ export const searchResultsFromNodes = (
 ): SearchResultItem[] => nodes.map(searchResultFromCard);
 
 /**
- * The old `CollectionStats` line, verbatim: the six per-type counts summed,
- * and the cellar count.
+ * The old `CollectionStats` line: the six per-type counts summed, and the
+ * cellar count. Decision D13: the counts are **bottles still in the cellar**
+ * (`me.collectionStats` counts unfinished bottles, as every cellar card does),
+ * so the line says "bottles" — the old "items" counted distinct items, which
+ * read 34 for a collection of 53 bottles.
  */
 export const collectionStatsLine = (stats: {
   cellarCount: number;
@@ -67,8 +70,8 @@ export const collectionStatsLine = (stats: {
     return "Your collection awaits. Start by adding your first item.";
   }
   return totalItems === 1
-    ? `1 item across ${cellars}`
-    : `${totalItems} items across ${cellars}`;
+    ? `1 bottle across ${cellars}`
+    : `${totalItems} bottles across ${cellars}`;
 };
 
 /** The longest code `?barcode=` accepts; real symbologies stop well short. */
