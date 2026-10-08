@@ -21,7 +21,8 @@ const React = await import("react");
 const { act, useState } = React;
 const { createRoot } = await import("react-dom/client");
 const { Client, Provider, createRequest, ssrExchange } = await import("urql");
-const { LogDrinkForm } = await import("./LogDrinkSheet");
+const { mapExchange } = await import("urql");
+const { LogDrinkForm, LogDrinkSheet } = await import("./LogDrinkSheet");
 const { EMPTY_DRAFT } = await import("./log-draft");
 const { SuggestFlavourTagsMutation } = await import("./queries");
 
@@ -211,5 +212,56 @@ describe("LogDrinkForm", () => {
     await act(async () => sam.click());
     assert.equal(button(/Sam$/)?.getAttribute("aria-pressed"), "true");
     assert.match(container.textContent ?? "", /their own log/);
+  });
+});
+
+describe("LogDrinkSheet", () => {
+  test("Edit opens on the entry's own note and does not ask the model about it", async () => {
+    const asked: string[] = [];
+    const client = new Client({
+      url: "http://test.invalid/graphql",
+      exchanges: [
+        mapExchange({
+          onOperation(operation) {
+            for (const definition of operation.query.definitions) {
+              if (definition.kind === "OperationDefinition") {
+                asked.push(definition.name?.value ?? "?");
+              }
+            }
+          },
+        }),
+        ssrExchange({ isClient: true, initialState: {} }),
+      ],
+    });
+    // "Your log" mounts one sheet, closed, in "new" mode, and an entry's ⋯ →
+    // Edit switches it to "edit" and opens it in the same update.
+    const sheet = (open: boolean, edit: boolean) => (
+      <Provider value={client}>
+        <LogDrinkSheet
+          open={open}
+          onOpenChange={() => {}}
+          subject={{ itemType: "WINE", itemId: "w1", itemName: "Barolo" }}
+          mode={
+            edit
+              ? {
+                  kind: "edit",
+                  entryId: LOG_ID,
+                  initial: { ...EMPTY_DRAFT, note: NOTE, tags: ["cherry"] },
+                }
+              : { kind: "new" }
+          }
+        />
+      </Provider>
+    );
+    await act(async () => root.render(sheet(false, false)));
+    await act(async () => root.render(sheet(true, true)));
+    await flush(1300);
+    const note = document.querySelector("textarea");
+    assert.equal(note?.value, NOTE, "the form opens on the entry, not a blank");
+    assert.deepEqual(
+      asked.filter((name) => name === "SuggestFlavourTags"),
+      [],
+      "an untouched note is not sent to the model again",
+    );
   });
 });

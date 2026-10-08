@@ -426,7 +426,7 @@ function NoteAndTags({
                     data-slot="suggested-tag"
                     onClick={() => add(suggestion.tag)}
                     aria-label={`Add ${suggestion.tag} (from “${suggestion.evidence}”)`}
-                    className="inline-flex h-9 items-center gap-1 rounded-full border border-line border-dashed bg-surface-2 px-3 font-medium text-ink-1 text-sm transition-transform duration-(--ca-dur-micro) ease-standard active:scale-97 motion-reduce:active:scale-100"
+                    className="relative inline-flex h-9 items-center gap-1 rounded-full border border-line border-dashed bg-surface-2 px-3 font-medium text-ink-1 text-sm transition-transform duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] active:scale-97 motion-reduce:active:scale-100"
                   >
                     <Add aria-hidden className="size-3.5" />
                     {suggestion.tag}
@@ -442,7 +442,7 @@ function NoteAndTags({
                       ...shown.map((suggestion) => suggestion.tag),
                     ])
                   }
-                  className="inline-flex h-9 items-center px-2 text-ink-3 text-sm underline-offset-2 hover:underline"
+                  className="relative inline-flex h-9 items-center px-2 text-ink-3 text-sm underline-offset-2 after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] hover:underline"
                 >
                   Not these
                 </button>
@@ -672,7 +672,7 @@ function CompanionPicker({
       ) : (
         <ul
           aria-labelledby={`${ids}-who`}
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+          className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1"
         >
           {friends.map((friend) => (
             <li key={friend.id}>
