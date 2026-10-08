@@ -1,34 +1,40 @@
-import {
-  Autocomplete,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Divider,
-  IconButton,
-  Sheet,
-  Stack,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
 import { AnimatePresence, motion } from "motion/react";
-import { type FC, useEffect, useRef, useState } from "react";
+import { type FC, type ReactNode, useEffect, useRef, useState } from "react";
+import { IconButton } from "@/components/app/IconButton";
 import {
-  FaBeer,
-  FaCocktail,
-  FaCoffee,
-  FaGlassWhiskey,
-  FaMugHot,
-  FaWineGlass,
-} from "react-icons/fa";
+  Check,
+  ChevronDown,
+  Close,
+  Filter,
+  ICON_STROKE,
+  Place,
+  Star,
+} from "@/components/app/icons";
+import { SegmentedControl } from "@/components/app/SegmentedControl";
+import { TypeGlyph } from "@/components/app/TypeChip";
+import { Button } from "@/components/ui/button";
 import {
-  MdCheck,
-  MdClose,
-  MdFilterList,
-  MdPlace,
-  MdStar,
-} from "react-icons/md";
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { spring, tween } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import type { TierListFilterOption } from "../hooks/useTierListFilter";
 import type { ItemType, VisitStatus } from "../types";
 import { ITEM_TYPES } from "./ItemTypeCategoryMapper";
@@ -70,15 +76,68 @@ type MapFilterProps = {
   isMobile?: boolean;
 };
 
-// Icon mapping for item types
-const ITEM_TYPE_ICONS = {
-  WineBar: FaWineGlass,
-  SportsBar: FaBeer,
-  LocalBar: FaCocktail,
-  Coffee: FaCoffee,
-  Sake: FaGlassWhiskey,
-  Tea: FaMugHot,
-};
+const ITEM_TYPE_VALUES = new Set<string>(ITEM_TYPES.map((t) => t.id));
+
+const RATING_OPTIONS = [
+  { value: "any", label: "Any" },
+  ...[3, 4, 5].map((rating) => ({
+    value: String(rating),
+    label: `${rating}+`,
+    icon: <Star aria-hidden strokeWidth={ICON_STROKE} />,
+  })),
+] as const;
+
+const VISIT_OPTIONS = [
+  { value: "any", label: "Any" },
+  {
+    value: "unvisited",
+    label: "New Places",
+    icon: <Place aria-hidden strokeWidth={ICON_STROKE} />,
+  },
+  {
+    value: "visited",
+    label: "Visited",
+    icon: <Check aria-hidden strokeWidth={ICON_STROKE} />,
+  },
+] as const;
+
+/** A removable "active filter" pill: the label and an × that clears it. */
+function ActiveFilter({
+  children,
+  onRemove,
+}: {
+  children: string;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="inline-flex h-8 items-center gap-0.5 rounded-full bg-surface-3 pr-0.5 pl-3 font-medium text-ink-1 text-sm">
+      {children}
+      <IconButton
+        aria-label={`Remove ${children}`}
+        size="sm"
+        onClick={onRemove}
+        className="size-7 text-ink-2 [&_svg:not([class*='size-'])]:size-3.5"
+      >
+        <Close />
+      </IconButton>
+    </span>
+  );
+}
+
+function FilterSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="type-callout font-medium text-ink-1">{label}</p>
+      {children}
+    </div>
+  );
+}
 
 export const MapFilter: FC<MapFilterProps> = ({
   selectedItemTypes = [],
@@ -97,16 +156,10 @@ export const MapFilter: FC<MapFilterProps> = ({
   isMobile = false,
 }: MapFilterProps) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [tierListPickerOpen, setTierListPickerOpen] = useState(false);
   const [mobilePanelTop, setMobilePanelTop] = useState<number>(88);
   const filterRef = useRef<HTMLDivElement>(null);
   const advancedFiltersPanelId = "map-advanced-filters";
-
-  // Get icon component for item type
-  const getIconComponent = (iconName: string) => {
-    return (
-      ITEM_TYPE_ICONS[iconName as keyof typeof ITEM_TYPE_ICONS] || FaCocktail
-    );
-  };
 
   // Close advanced filters when clicking outside
   useEffect(() => {
@@ -114,7 +167,9 @@ export const MapFilter: FC<MapFilterProps> = ({
       const target = event.target as HTMLElement;
       if (
         target.closest('[role="listbox"]') ||
-        target.closest('[role="option"]')
+        target.closest('[role="option"]') ||
+        // The tier-list picker portals to <body>, outside this panel.
+        target.closest('[data-slot="popover-content"]')
       ) {
         return;
       }
@@ -134,7 +189,9 @@ export const MapFilter: FC<MapFilterProps> = ({
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      // Escape in the open tier-list picker closes the picker (Radix), not
+      // the whole panel underneath it.
+      if (event.key === "Escape" && !tierListPickerOpen) {
         setShowAdvanced(false);
       }
     };
@@ -145,7 +202,7 @@ export const MapFilter: FC<MapFilterProps> = ({
         document.removeEventListener("keydown", handleEscape);
       };
     }
-  }, [showAdvanced]);
+  }, [showAdvanced, tierListPickerOpen]);
 
   useEffect(() => {
     if (!showAdvanced || !isMobile) return;
@@ -197,88 +254,87 @@ export const MapFilter: FC<MapFilterProps> = ({
     return status;
   };
 
-  const getVisitStatusColor = (status: VisitStatus) => {
-    if (status === "unvisited") return "primary";
-    if (status === "visited") return "success";
-    return "warning";
+  const selectedTierLists = tierLists.filter((tierList) =>
+    selectedTierListIds.includes(tierList.id),
+  );
+
+  const toggleTierList = (id: string) => {
+    onTierListsChange?.(
+      selectedTierListIds.includes(id)
+        ? selectedTierListIds.filter((tierListId) => tierListId !== id)
+        : [...selectedTierListIds, id],
+    );
   };
 
   return (
-    <Stack direction="row" ref={filterRef} sx={{ position: "relative" }}>
+    <div ref={filterRef} className="relative flex flex-row">
       {/* Item type filters + more filters toggle */}
-      <Sheet
-        variant="outlined"
-        sx={{
-          borderRadius: "md",
-          display: "flex",
-          alignItems: "center",
-          gap: 0.5,
-          p: 0.5,
-        }}
-      >
-        <ToggleButtonGroup
-          variant="plain"
-          spacing={0.5}
+      <div className="flex items-center gap-1 rounded-md bg-surface-2 p-1">
+        <ToggleGroup
+          type="multiple"
+          spacing={1}
           value={selectedItemTypes}
-          onChange={(_event, newItemTypes) => {
-            onItemTypesChange(newItemTypes);
+          onValueChange={(next) => {
+            onItemTypesChange(
+              next.filter((value): value is ItemType =>
+                ITEM_TYPE_VALUES.has(value),
+              ),
+            );
           }}
           aria-label="item types"
+          className="flex-wrap"
         >
-          {ITEM_TYPES.map((itemType) => {
-            const IconComponent = getIconComponent(itemType.icon);
+          {ITEM_TYPES.map((itemType) => (
+            <Tooltip key={itemType.id}>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem
+                  value={itemType.id}
+                  aria-label={itemType.label}
+                  className="size-9 px-0"
+                >
+                  <TypeGlyph
+                    type={
+                      itemType.id.toUpperCase() as Uppercase<typeof itemType.id>
+                    }
+                  />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent>{itemType.label}</TooltipContent>
+            </Tooltip>
+          ))}
+        </ToggleGroup>
 
-            return (
-              <Tooltip key={itemType.id} title={itemType.label}>
-                <IconButton value={itemType.id} aria-label={itemType.label}>
-                  <IconComponent />
-                </IconButton>
-              </Tooltip>
-            );
-          })}
-        </ToggleButtonGroup>
-
-        <Divider orientation="vertical" />
+        <Separator orientation="vertical" className="h-6 self-center" />
 
         {/* Advanced filter toggle */}
-        <Tooltip title="More filters">
-          <IconButton
-            color={hasAdvancedFilters || showAdvanced ? "primary" : "neutral"}
-            variant={showAdvanced ? "soft" : "plain"}
-            onClick={() => setShowAdvanced((prev) => !prev)}
-            size="sm"
-            aria-label="More filters"
-            aria-expanded={showAdvanced}
-            aria-controls={advancedFiltersPanelId}
-            sx={{
-              position: "relative",
-            }}
-          >
-            <MdFilterList />
-            {activeFilterCount > 0 && !showAdvanced && (
-              <Box
-                sx={{
-                  position: "absolute",
-                  top: -1,
-                  right: -1,
-                  minWidth: 14,
-                  height: 14,
-                  px: 0.25,
-                  borderRadius: "999px",
-                  backgroundColor: "primary.500",
-                  color: "common.white",
-                  fontSize: "10px",
-                  lineHeight: "14px",
-                  textAlign: "center",
-                  fontWeight: "lg",
-                }}
-              >
-                {activeFilterCount}
-              </Box>
-            )}
-          </IconButton>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <IconButton
+              aria-label="More filters"
+              aria-expanded={showAdvanced}
+              aria-controls={advancedFiltersPanelId}
+              size="sm"
+              onClick={() => setShowAdvanced((prev) => !prev)}
+              className={cn(
+                "text-ink-2",
+                (hasAdvancedFilters || showAdvanced) && "text-ink-1",
+                showAdvanced && "bg-accent",
+              )}
+            >
+              <Filter />
+              {activeFilterCount > 0 && !showAdvanced && (
+                <span
+                  aria-hidden
+                  className="tabular absolute -top-0.5 -right-0.5 h-3.5 min-w-3.5 rounded-full bg-ink-1 px-0.5 text-center font-semibold text-[10px] text-background leading-3.5"
+                >
+                  {activeFilterCount}
+                </span>
+              )}
+            </IconButton>
+          </TooltipTrigger>
+          <TooltipContent>More filters</TooltipContent>
         </Tooltip>
-      </Sheet>
+      </div>
 
       {/* Advanced filters popup */}
       <AnimatePresence>
@@ -297,295 +353,209 @@ export const MapFilter: FC<MapFilterProps> = ({
                 ? { y: -10, opacity: 0, scale: 0.98 }
                 : { y: -6, opacity: 0, scale: 0.98 }
             }
-            transition={{
-              type: "spring",
-              stiffness: 500,
-              damping: 35,
-              opacity: { duration: 0.15 },
-            }}
-            style={{
-              position: isMobile ? "fixed" : "absolute",
-              top: isMobile ? `${mobilePanelTop}px` : "calc(100% + 8px)",
-              left: isMobile ? 8 : undefined,
-              right: isMobile ? 8 : 0,
-              zIndex: 1200,
-            }}
+            transition={{ ...spring.snappy, opacity: tween("short") }}
+            className={cn(
+              "z-[1200]",
+              isMobile
+                ? "fixed inset-x-2"
+                : "absolute top-[calc(100%+8px)] right-0",
+            )}
+            style={isMobile ? { top: mobilePanelTop } : undefined}
           >
-            <Sheet
-              sx={{
-                p: 2,
-                borderRadius: "md",
-                boxShadow: "lg",
-                minWidth: isMobile ? "auto" : 340,
-                maxWidth: isMobile ? "none" : 420,
-                border: "1px solid",
-                borderColor: "divider",
-                backgroundColor: "background.surface",
-                maxHeight: isMobile
-                  ? `calc(100dvh - ${mobilePanelTop + 8}px)`
-                  : "min(75vh, 640px)",
-                overflowY: "auto",
-              }}
+            <div
+              className={cn(
+                "overflow-y-auto rounded-md bg-surface-2 p-4 text-ink-1 shadow-lg",
+                !isMobile &&
+                  "max-h-[min(75vh,640px)] min-w-[340px] max-w-[420px]",
+              )}
+              style={
+                isMobile
+                  ? { maxHeight: `calc(100dvh - ${mobilePanelTop + 8}px)` }
+                  : undefined
+              }
             >
-              <Stack spacing={2}>
+              <div className="flex flex-col gap-4">
                 {hasAdvancedFilters && (
-                  <Box>
-                    <Typography
-                      level="body-sm"
-                      sx={{ mb: 1, fontWeight: "md" }}
-                    >
-                      Active Filters
-                    </Typography>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      flexWrap="wrap"
-                      useFlexGap
-                    >
-                      {minRating !== undefined && (
-                        <Chip
-                          variant="soft"
-                          color="warning"
-                          size="sm"
-                          endDecorator={
-                            <IconButton
-                              size="sm"
-                              variant="plain"
-                              color="neutral"
-                              onClick={() => onMinRatingChange(undefined)}
-                              sx={{ ml: 0.5 }}
-                            >
-                              <MdClose size={14} />
-                            </IconButton>
-                          }
-                        >
-                          {minRating}+ stars
-                        </Chip>
-                      )}
+                  <div className="flex flex-col gap-3">
+                    <FilterSection label="Active Filters">
+                      <div className="flex flex-wrap gap-2">
+                        {minRating !== undefined && (
+                          <ActiveFilter
+                            onRemove={() => onMinRatingChange(undefined)}
+                          >
+                            {`${minRating}+ stars`}
+                          </ActiveFilter>
+                        )}
 
-                      {visitStatuses.map((status) => (
-                        <Chip
-                          key={status}
-                          variant="soft"
-                          color={getVisitStatusColor(status)}
-                          size="sm"
-                          endDecorator={
-                            <IconButton
-                              size="sm"
-                              variant="plain"
-                              color="neutral"
-                              onClick={() => {
-                                onVisitStatusesChange(
-                                  visitStatuses.filter((s) => s !== status),
-                                );
-                              }}
-                              sx={{ ml: 0.5 }}
-                            >
-                              <MdClose size={14} />
-                            </IconButton>
-                          }
-                        >
-                          {getVisitStatusLabel(status)}
-                        </Chip>
-                      ))}
+                        {visitStatuses.map((status) => (
+                          <ActiveFilter
+                            key={status}
+                            onRemove={() => {
+                              onVisitStatusesChange(
+                                visitStatuses.filter((s) => s !== status),
+                              );
+                            }}
+                          >
+                            {getVisitStatusLabel(status)}
+                          </ActiveFilter>
+                        ))}
 
-                      {selectedTierListIds.length > 0 &&
-                        selectedTierListIds.map((id) => {
-                          const tierList = tierLists.find((t) => t.id === id);
-                          if (!tierList) return null;
-                          return (
-                            <Chip
-                              key={id}
-                              variant="soft"
-                              color="primary"
-                              size="sm"
-                              endDecorator={
-                                <IconButton
-                                  size="sm"
-                                  variant="plain"
-                                  color="neutral"
-                                  onClick={() => {
-                                    onTierListsChange?.(
-                                      selectedTierListIds.filter(
-                                        (tierListId) => tierListId !== id,
-                                      ),
-                                    );
-                                  }}
-                                  sx={{ ml: 0.5 }}
-                                >
-                                  <MdClose size={14} />
-                                </IconButton>
-                              }
-                            >
-                              {tierList.name}
-                            </Chip>
-                          );
-                        })}
-                    </Stack>
-                    <Divider sx={{ mt: 1.5 }} />
-                  </Box>
+                        {selectedTierLists.map((tierList) => (
+                          <ActiveFilter
+                            key={tierList.id}
+                            onRemove={() => toggleTierList(tierList.id)}
+                          >
+                            {tierList.name}
+                          </ActiveFilter>
+                        ))}
+                      </div>
+                    </FilterSection>
+                    <Separator />
+                  </div>
                 )}
 
                 {/* Rating filter */}
-                <Box>
-                  <Typography level="body-sm" sx={{ mb: 1, fontWeight: "md" }}>
-                    Minimum Rating
-                  </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    <Button
-                      variant={minRating === undefined ? "solid" : "outlined"}
-                      color="neutral"
-                      size="sm"
-                      onClick={() => onMinRatingChange(undefined)}
-                    >
-                      Any
-                    </Button>
-                    {[3, 4, 5].map((rating) => (
-                      <Button
-                        key={rating}
-                        variant={minRating === rating ? "solid" : "outlined"}
-                        color="warning"
-                        size="sm"
-                        onClick={() => onMinRatingChange(rating)}
-                        startDecorator={<MdStar size={16} />}
-                        sx={{ minWidth: "auto", px: 1.25, flexShrink: 0 }}
-                      >
-                        {rating}+
-                      </Button>
-                    ))}
-                  </Stack>
-                </Box>
+                <FilterSection label="Minimum Rating">
+                  <SegmentedControl
+                    aria-label="Minimum Rating"
+                    options={RATING_OPTIONS}
+                    value={minRating === undefined ? "any" : String(minRating)}
+                    onValueChange={(value) =>
+                      onMinRatingChange(
+                        value === "any" ? undefined : Number(value),
+                      )
+                    }
+                  />
+                </FilterSection>
 
-                <Divider />
+                <Separator />
 
                 {/* Visit status filter */}
-                <Box>
-                  <Typography level="body-sm" sx={{ mb: 1, fontWeight: "md" }}>
-                    Visit Status
-                  </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    <Button
-                      variant={visitMode === "any" ? "solid" : "outlined"}
-                      color="neutral"
-                      size="sm"
-                      onClick={() => setVisitMode("any")}
-                    >
-                      Any
-                    </Button>
-                    <Button
-                      variant={visitMode === "unvisited" ? "solid" : "outlined"}
-                      color="primary"
-                      size="sm"
-                      startDecorator={<MdPlace />}
-                      onClick={() => setVisitMode("unvisited")}
-                    >
-                      New Places
-                    </Button>
-                    <Button
-                      variant={visitMode === "visited" ? "solid" : "outlined"}
-                      color="success"
-                      size="sm"
-                      startDecorator={<MdCheck />}
-                      onClick={() => setVisitMode("visited")}
-                    >
-                      Visited
-                    </Button>
-                  </Stack>
-                </Box>
+                <FilterSection label="Visit Status">
+                  <SegmentedControl
+                    aria-label="Visit Status"
+                    options={VISIT_OPTIONS}
+                    value={visitMode}
+                    onValueChange={setVisitMode}
+                  />
+                </FilterSection>
 
                 {/* Tier list filter */}
                 {(tierLists.length > 0 || tierListsLoading) && (
                   <>
-                    <Divider />
-                    <Box>
-                      <Typography
-                        level="body-sm"
-                        sx={{ mb: 1, fontWeight: "md" }}
+                    <Separator />
+                    <FilterSection label="Tier Lists">
+                      <Popover
+                        open={tierListPickerOpen}
+                        onOpenChange={setTierListPickerOpen}
                       >
-                        Tier Lists
-                      </Typography>
-                      <Autocomplete
-                        multiple
-                        size="sm"
-                        options={tierLists}
-                        loading={tierListsLoading}
-                        getOptionLabel={(option) => option.name}
-                        isOptionEqualToValue={(option, value) =>
-                          option.id === value.id
-                        }
-                        value={tierLists.filter((tierList) =>
-                          selectedTierListIds.includes(tierList.id),
-                        )}
-                        onChange={(_, value) => {
-                          onTierListsChange?.(
-                            value.map((tierList) => tierList.id),
-                          );
-                        }}
-                        placeholder="Select tier lists..."
-                        noOptionsText={
-                          tierListsLoading
-                            ? "Loading tier lists..."
-                            : "No tier lists"
-                        }
-                        endDecorator={
-                          tierListsLoading ? (
-                            <CircularProgress size="sm" />
-                          ) : undefined
-                        }
-                      />
-                      <Typography
-                        level="body-xs"
-                        sx={{ mt: 0.75, color: "text.tertiary" }}
-                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={tierListPickerOpen}
+                            aria-label="Tier Lists"
+                            className="h-auto min-h-11 w-full justify-between whitespace-normal py-1.5 pr-3 pl-3 font-normal"
+                          >
+                            {selectedTierLists.length > 0 ? (
+                              <span className="flex min-w-0 flex-wrap gap-1">
+                                {selectedTierLists.map((tierList) => (
+                                  <span
+                                    key={tierList.id}
+                                    className="rounded-full bg-surface-3 px-2 py-0.5 text-ink-1 text-xs"
+                                  >
+                                    {tierList.name}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                Select tier lists...
+                              </span>
+                            )}
+                            {tierListsLoading ? (
+                              <Spinner className="text-ink-3" />
+                            ) : (
+                              <ChevronDown
+                                aria-hidden
+                                strokeWidth={ICON_STROKE}
+                                className="text-ink-3"
+                              />
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="start"
+                          className="w-(--radix-popover-trigger-width) min-w-60 p-0"
+                        >
+                          <Command>
+                            <CommandInput placeholder="Search tier lists..." />
+                            <CommandList>
+                              <CommandEmpty>
+                                {tierListsLoading
+                                  ? "Loading tier lists..."
+                                  : "No tier lists"}
+                              </CommandEmpty>
+                              {tierLists.map((tierList) => {
+                                const selected = selectedTierListIds.includes(
+                                  tierList.id,
+                                );
+                                return (
+                                  <CommandItem
+                                    key={tierList.id}
+                                    value={tierList.id}
+                                    keywords={[tierList.name]}
+                                    // cmdk owns `aria-selected` (the
+                                    // highlighted row); which lists are
+                                    // chosen is `aria-checked`.
+                                    aria-checked={selected}
+                                    onSelect={() => toggleTierList(tierList.id)}
+                                    className="min-h-11"
+                                  >
+                                    <Check
+                                      aria-hidden
+                                      strokeWidth={ICON_STROKE}
+                                      className={cn(
+                                        "text-ink-1",
+                                        !selected && "invisible",
+                                      )}
+                                    />
+                                    {tierList.name}
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <p className="type-footnote">
                         Leave empty to include all tier lists.
-                      </Typography>
-                    </Box>
+                      </p>
+                    </FilterSection>
                   </>
                 )}
 
-                <Divider />
-                <Box
-                  sx={{
-                    position: "sticky",
-                    bottom: 0,
-                    pt: 0.5,
-                    backgroundColor: "background.surface",
-                  }}
-                >
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    justifyContent="space-between"
+                <Separator />
+                <div className="sticky bottom-0 flex justify-between gap-2 bg-surface-2 pt-1">
+                  <Button
+                    variant="destructive"
+                    disabled={!hasAdvancedFilters}
+                    onClick={() => {
+                      onMinRatingChange(undefined);
+                      onVisitStatusesChange([]);
+                      onTierListsChange?.([]);
+                    }}
                   >
-                    <Button
-                      variant="outlined"
-                      color="danger"
-                      size="sm"
-                      disabled={!hasAdvancedFilters}
-                      onClick={() => {
-                        onMinRatingChange(undefined);
-                        onVisitStatusesChange([]);
-                        onTierListsChange?.([]);
-                      }}
-                    >
-                      Reset
-                    </Button>
-                    <Button
-                      variant="solid"
-                      color="primary"
-                      size="sm"
-                      onClick={() => setShowAdvanced(false)}
-                    >
-                      Close
-                    </Button>
-                  </Stack>
-                </Box>
-              </Stack>
-            </Sheet>
+                    Reset
+                  </Button>
+                  <Button onClick={() => setShowAdvanced(false)}>Close</Button>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </Stack>
+    </div>
   );
 };
 

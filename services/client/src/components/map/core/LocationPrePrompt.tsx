@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, Sheet, Stack, Typography } from "@mui/joy";
-import { MdMyLocation } from "react-icons/md";
+import { ICON_STROKE, MyLocation } from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
 
 /** D14's one line: why we are about to ask, before the browser asks. */
 export const LOCATION_PRE_PROMPT_COPY =
@@ -22,31 +22,25 @@ export function LocationPrePrompt({
   onDismiss,
 }: LocationPrePromptProps) {
   return (
-    <Sheet
+    <div
       role="dialog"
       aria-label="Location"
-      variant="outlined"
-      sx={{
-        borderRadius: "md",
-        boxShadow: "md",
-        px: 2,
-        py: 1.5,
-      }}
+      className="surface-glass flex flex-col gap-2.5 rounded-md px-4 py-3"
     >
-      <Stack spacing={1.25}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <MdMyLocation aria-hidden />
-          <Typography level="body-sm">{LOCATION_PRE_PROMPT_COPY}</Typography>
-        </Stack>
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
-          <Button size="sm" variant="plain" color="neutral" onClick={onDismiss}>
-            Not now
-          </Button>
-          <Button size="sm" variant="solid" onClick={onContinue}>
-            Continue
-          </Button>
-        </Stack>
-      </Stack>
-    </Sheet>
+      <div className="flex items-center gap-2">
+        <MyLocation
+          aria-hidden
+          strokeWidth={ICON_STROKE}
+          className="size-4 shrink-0 text-ink-2"
+        />
+        <p className="type-callout">{LOCATION_PRE_PROMPT_COPY}</p>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onDismiss}>
+          Not now
+        </Button>
+        <Button onClick={onContinue}>Continue</Button>
+      </div>
+    </div>
   );
 }

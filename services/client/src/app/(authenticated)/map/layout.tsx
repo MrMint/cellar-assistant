@@ -20,17 +20,7 @@ export default function MapLayout({ children }: MapLayoutProps) {
   // nav (and the safe-area insets), so the map ran ~50 px under the nav and
   // its attribution — a licensing obligation — was hidden behind it.
   return (
-    <div
-      style={{
-        flex: "1 1 auto",
-        minHeight: 0,
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        overscrollBehavior: "contain",
-      }}
-    >
+    <div className="flex h-full min-h-0 flex-auto flex-col overflow-hidden overscroll-contain">
       {children}
     </div>
   );

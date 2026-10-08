@@ -1,16 +1,9 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import { MdPlace } from "react-icons/md";
+import { ICON_STROKE, Place } from "@/components/app/icons";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import type { GoogleNearbyPlace } from "../actions";
 
 interface GooglePlaceSuggestionsProps {
@@ -33,78 +26,63 @@ export function GooglePlaceSuggestions({
 }: GooglePlaceSuggestionsProps) {
   if (loading) {
     return (
-      <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-        <CircularProgress size="sm" />
-        <Typography level="body-sm" color="neutral">
+      <div className="mb-4 flex items-center gap-2">
+        <Spinner className="text-ink-2" />
+        <p className="type-callout text-ink-2">
           Checking for known places nearby...
-        </Typography>
-      </Box>
+        </p>
+      </div>
     );
   }
 
   if (places.length === 0) return null;
 
   return (
-    <Box sx={{ mb: 2 }}>
-      <Typography level="title-sm" color="primary" sx={{ mb: 1 }}>
+    <div className="mb-4">
+      <p className="type-callout mb-2 font-semibold text-ink-1">
         We found these places nearby. Is yours one of them?
-      </Typography>
-      <Stack spacing={1}>
+      </p>
+      <ul className="flex flex-col gap-2">
         {places.map((place) => (
-          <Card key={place.googlePlaceId} variant="outlined" size="sm">
-            <CardContent
-              sx={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 1,
-              }}
-            >
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <MdPlace size={20} />
-                  <Typography level="title-sm" noWrap>
-                    {place.name}
-                  </Typography>
-                </Stack>
-                <Stack
-                  direction="row"
-                  spacing={0.5}
-                  sx={{ mt: 0.5 }}
-                  flexWrap="wrap"
-                >
-                  {place.types.slice(0, 2).map((type) => (
-                    <Chip key={type} size="sm" variant="soft">
-                      {formatPlaceType(type)}
-                    </Chip>
-                  ))}
-                </Stack>
-                {place.address && (
-                  <Typography level="body-xs" sx={{ mt: 0.5 }} noWrap>
-                    {place.address}
-                  </Typography>
-                )}
-              </Box>
-              <Button
-                size="sm"
-                variant="outlined"
-                onClick={() => onSelect(place)}
-              >
-                This is it
-              </Button>
-            </CardContent>
-          </Card>
+          <li
+            key={place.googlePlaceId}
+            className="flex items-center justify-between gap-2 rounded-md bg-surface-2 px-3 py-2.5"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <Place
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-5 shrink-0 text-ink-2"
+                />
+                <p className="type-callout truncate font-semibold text-ink-1">
+                  {place.name}
+                </p>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {place.types.slice(0, 2).map((type) => (
+                  <Badge key={type} variant="secondary">
+                    {formatPlaceType(type)}
+                  </Badge>
+                ))}
+              </div>
+              {place.address && (
+                <p className="type-footnote mt-1 truncate">{place.address}</p>
+              )}
+            </div>
+            <Button variant="outline" onClick={() => onSelect(place)}>
+              This is it
+            </Button>
+          </li>
         ))}
-      </Stack>
+      </ul>
       <Button
-        size="sm"
-        variant="plain"
-        color="neutral"
+        variant="ghost"
         onClick={onDismiss}
-        sx={{ mt: 1 }}
+        className="mt-2 h-auto min-h-11 whitespace-normal text-left"
       >
         None of these — I'll enter details manually
       </Button>
-    </Box>
+    </div>
   );
 }

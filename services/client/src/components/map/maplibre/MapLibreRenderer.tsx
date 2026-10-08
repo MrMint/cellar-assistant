@@ -1,11 +1,9 @@
 "use client";
 
-import { Alert, Box } from "@mui/joy";
 import type * as GeoJSON from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   Map as MapGL,
   type MapLayerMouseEvent,
@@ -13,6 +11,7 @@ import {
 } from "react-map-gl/maplibre";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
+import { cn } from "@/lib/utils";
 import { LocationPrePrompt } from "../core/LocationPrePrompt";
 import { MapBottomStack } from "../core/MapBottomStack";
 import { MapControls } from "../core/MapControls";
@@ -36,6 +35,7 @@ import {
 import { useMapPlaceSelection } from "../hooks/useMapPlaceSelection";
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
 import { useSearchParamsSync } from "../hooks/useSearchParamsSync";
+import { useViewportInsets } from "../hooks/useViewportInsets";
 import { CenterPinOverlay } from "../places/CenterPinOverlay";
 import {
   PlaceDetailsDrawer,
@@ -69,6 +69,10 @@ export function MapLibreRenderer({
   const detailDrawerRef = useRef<PlaceDetailsDrawerRef>(null);
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  // The map's own box: the fixed panels sit beside the rail and above the
+  // tab bar by measuring it (`useViewportInsets`).
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const insets = useViewportInsets(container);
 
   // XState hooks
   const mapCore = useMapCore();
@@ -129,6 +133,7 @@ export function MapLibreRenderer({
     mapReady,
     isDesktop,
     hasSidebar,
+    insets,
     isManualSelectionRef,
   });
 
@@ -296,7 +301,7 @@ export function MapLibreRenderer({
             center: [lng, lat],
             zoom: Math.max(currentZoom, 15),
             duration: 600,
-            offset: getDrawerOffset(isDesktop, hasSidebar),
+            offset: getDrawerOffset(isDesktop, hasSidebar, insets),
           });
         }
       }
@@ -310,6 +315,7 @@ export function MapLibreRenderer({
       placeLookup,
       isDesktop,
       hasSidebar,
+      insets,
     ],
   );
 
@@ -387,11 +393,11 @@ export function MapLibreRenderer({
           center: [lng, lat],
           zoom: Math.max(currentZoom, 15),
           duration: 600,
-          offset: getDrawerOffset(isDesktop, hasSidebar),
+          offset: getDrawerOffset(isDesktop, hasSidebar, insets),
         });
       }
     },
-    [isDesktop, hasSidebar],
+    [isDesktop, hasSidebar, insets],
   );
 
   const mapStyle = basemapStyle(mapCore.isDarkMode);
@@ -399,43 +405,36 @@ export function MapLibreRenderer({
   // Location loading state
   if (!isLocationReady) {
     return (
-      <Box
-        sx={{
-          height: "100%",
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "background.surface",
-        }}
-      >
-        <Alert color="neutral">Getting your location...</Alert>
-      </Box>
+      <div className="flex h-full w-full items-center justify-center bg-surface-1">
+        <p
+          role="status"
+          className="type-callout rounded-md bg-surface-2 px-4 py-3 text-ink-1"
+        >
+          Getting your location...
+        </p>
+      </div>
     );
   }
 
   return (
-    <Box
-      sx={{
-        height: "100%",
-        width: "100%",
-        position: "relative",
+    <div
+      ref={setContainer}
+      data-slot="map-canvas"
+      className={cn(
+        // `isolate`: every map overlay (controls 1000+, the drawer, the
+        // results list, the pin) orders itself inside the map, so the app's
+        // own layers — Radix tooltips and popovers (z-50 on <body>), the tab
+        // bar, toasts — draw above all of them.
+        "relative isolate h-full w-full",
         // N22: the theme's surface until the first tile, never a cream flash.
-        backgroundColor: "background.surface",
+        "bg-surface-1",
         // The attribution stays (a licensing obligation) but on the dark
         // basemap it was the brightest thing on screen: the theme's surface,
-        // translucent, instead of MapLibre's white pill.
-        ...(mapCore.isDarkMode && {
-          "& .maplibregl-ctrl-attrib, & .maplibregl-ctrl-attrib.maplibregl-compact":
-            {
-              backgroundColor:
-                "color-mix(in srgb, var(--joy-palette-background-surface) 75%, transparent)",
-              color: "text.tertiary",
-            },
-          "& .maplibregl-ctrl-attrib a": { color: "text.secondary" },
-          "& .maplibregl-ctrl-attrib-button": { filter: "invert(1)" },
-        }),
-      }}
+        // translucent, instead of MapLibre's white pill. `!`: MapLibre's
+        // stylesheet is unlayered, so a plain (layered) utility loses to it.
+        mapCore.isDarkMode &&
+          "[&_.maplibregl-ctrl-attrib]:bg-surface-1/75! [&_.maplibregl-ctrl-attrib]:text-ink-3! [&_.maplibregl-ctrl-attrib_a]:text-ink-2! [&_.maplibregl-ctrl-attrib-button]:invert!",
+      )}
     >
       <MapGL
         ref={mapRef}
@@ -512,6 +511,7 @@ export function MapLibreRenderer({
             onCenterOnPlace={handleCenterOnPlace}
             onClose={() => searchParams.setSearch("")}
             isDetailOpen={mapUI.isDrawerOpen}
+            insets={insets}
           />
         )}
 
@@ -526,17 +526,18 @@ export function MapLibreRenderer({
       {/* Map controls */}
       <MapControls onLocationClick={handleLocationClick} />
 
-      {/* Place details drawer via portal */}
-      {createPortal(
-        <PlaceDetailsDrawer
-          ref={detailDrawerRef}
-          place={mapUI.selectedPlace}
-          open={mapUI.isDrawerOpen}
-          onClose={handleCloseDrawer}
-          userId={userId}
-        />,
-        document.body,
-      )}
-    </Box>
+      {/* Place details drawer: fixed to the viewport, but inside the map's
+          stacking context so the desktop search stays above it (it was
+          portalled to <body>, which `isolate` would now put over the
+          controls). */}
+      <PlaceDetailsDrawer
+        ref={detailDrawerRef}
+        place={mapUI.selectedPlace}
+        open={mapUI.isDrawerOpen}
+        onClose={handleCloseDrawer}
+        userId={userId}
+        insets={insets}
+      />
+    </div>
   );
 }

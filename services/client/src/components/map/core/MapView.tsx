@@ -1,7 +1,7 @@
 "use client";
 
-import { Box, CircularProgress } from "@mui/joy";
 import dynamic from "next/dynamic";
+import { Spinner } from "@/components/ui/spinner";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { MapMachineProvider } from "../state/MapMachineProvider";
 
@@ -16,18 +16,9 @@ const MapLibreRenderer = dynamic(
   {
     ssr: false,
     loading: () => (
-      <Box
-        sx={{
-          height: "100%",
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "background.surface",
-        }}
-      >
-        <CircularProgress />
-      </Box>
+      <div className="flex h-full w-full items-center justify-center bg-surface-1">
+        <Spinner className="size-8 text-ink-2" />
+      </div>
     ),
   },
 );

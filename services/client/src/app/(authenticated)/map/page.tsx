@@ -1,6 +1,6 @@
-import { Box, CircularProgress, Typography } from "@mui/joy";
 import { Suspense } from "react";
 import { MapWrapper } from "@/components/map/core/MapWrapper";
+import { Spinner } from "@/components/ui/spinner";
 import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
 import { getServerUser } from "@/utilities/auth-server";
 
@@ -19,40 +19,18 @@ export default async function MapPage() {
   ]);
 
   return (
-    <Box
-      sx={{
-        // N22: fill the content area (map/layout.tsx), not the viewport.
-        flex: "1 1 auto",
-        minHeight: 0,
-        height: "100%",
-        width: "100%",
-        backgroundColor: "background.surface",
-        position: "relative",
-        overflow: "hidden",
-        // Ensure map takes full available space
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    // N22: fill the content area (map/layout.tsx), not the viewport.
+    <div className="relative flex h-full min-h-0 w-full flex-auto flex-col overflow-hidden bg-surface-1">
       <Suspense
         fallback={
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "100%",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            <CircularProgress />
-            <Typography>Loading map...</Typography>
-          </Box>
+          <div className="flex h-full flex-col items-center justify-center gap-4">
+            <Spinner className="size-8 text-ink-2" />
+            <p className="type-body">Loading map...</p>
+          </div>
         }
       >
         <MapWrapper userId={user.id} cachedLocation={cachedLocation} />
       </Suspense>
-    </Box>
+    </div>
   );
 }
