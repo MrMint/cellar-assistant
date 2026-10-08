@@ -49,6 +49,13 @@ interface MapContext {
 
   // Semantic search results (now handled by unified service)
   semanticResults: SemanticPlaceResult[];
+  /**
+   * The query `semanticResults` answers — null when they answer none. N22's
+   * empty state ("Not on the map yet") needs to know that a search for *this*
+   * query has come back empty, not merely that results are empty right now
+   * (they are also empty while the first fetch for a query is in flight).
+   */
+  semanticResultsQuery: string | null;
   semanticError: string | null;
 
   // Geocode navigation target (set when address search resolves)
@@ -142,6 +149,7 @@ const fetchPlacesService = fromPromise(
         places,
         mapItems: result.mapItems,
         semanticResults: result.semanticResults,
+        searchedQuery: isSemanticSearch ? searchQuery : null,
         isSemanticSearch: result.isSemanticSearch,
         geocodeResult: result.geocodeResult,
       };
@@ -298,6 +306,12 @@ const actions = {
       }
       return context.semanticResults;
     },
+    semanticResultsQuery: ({ context, event }) => {
+      if (event.type === "SET_SEARCH_QUERY" && event.query === "") {
+        return null;
+      }
+      return context.semanticResultsQuery;
+    },
   }),
 
   performSemanticSearch: assign({
@@ -355,6 +369,16 @@ const actions = {
         return event.output.semanticResults || [];
       }
       return [];
+    },
+    // A geocoded address search is not a place search that came back empty.
+    semanticResultsQuery: ({ event }) => {
+      if (
+        event.type === "xstate.done.actor.fetchPlaces" &&
+        !event.output.geocodeResult
+      ) {
+        return event.output.searchedQuery;
+      }
+      return null;
     },
     // When the server returns a geocode result, store it so the map can fly there.
     // Clear semantic search mode — the bounded search will fill in nearby places.
@@ -442,6 +466,7 @@ const actions = {
 
   clearSemanticResults: assign({
     semanticResults: [],
+    semanticResultsQuery: null,
     semanticError: null,
   }),
 };
@@ -466,7 +491,9 @@ export const mapMachine = createMachine(
       client: input.client,
       hasInitialized: false,
       currentZoom: 12,
-      isDarkMode: false,
+      // N22 / D21: the basemap is dark by default, like the rest of the app;
+      // the map controls still offer the light one.
+      isDarkMode: true,
       isDesktop: false,
       bounds: undefined,
       userLocation: undefined,
@@ -484,6 +511,7 @@ export const mapMachine = createMachine(
       mapItems: [],
       placesError: null,
       semanticResults: [],
+      semanticResultsQuery: null,
       semanticError: null,
       geocodeTarget: undefined,
       pendingRefresh: false,

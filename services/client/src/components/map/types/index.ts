@@ -51,7 +51,6 @@ export type PlaceCategory =
   | "casino"
   | "music_venue"
   // Overture-only: Tea
-  | "tea_shop"
   | "bubble_tea";
 
 export type ItemType = "wine" | "beer" | "spirit" | "coffee" | "sake" | "tea";

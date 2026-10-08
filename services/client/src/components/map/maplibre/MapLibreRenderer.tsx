@@ -13,7 +13,13 @@ import {
 } from "react-map-gl/maplibre";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
+import { LocationPrePrompt } from "../core/LocationPrePrompt";
 import { MapControls } from "../core/MapControls";
+import {
+  LOCATION_DENIED_MESSAGE,
+  locationButtonAction,
+  locationPrePromptVisible,
+} from "../hooks/geolocation-store";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useMapDeepLink } from "../hooks/useMapDeepLink";
 import { useMapInitialFlight } from "../hooks/useMapInitialFlight";
@@ -33,9 +39,12 @@ import {
   PlaceDetailsDrawer,
   type PlaceDetailsDrawerRef,
 } from "../places/PlaceDetailsDrawer";
+import { SearchEmptyState } from "../places/SearchEmptyState";
 import { SearchResultsList } from "../places/SearchResultsList";
+import { createPlaceHref, showNotOnMapYet } from "../places/search-empty-state";
 import type { PlaceResult } from "../types";
 import { getDrawerOffset } from "../utils/layout";
+import { basemapStyle, MAP_CANVAS_BACKGROUND } from "./basemap";
 import { INTERACTIVE_LAYER_IDS } from "./constants";
 import { useMapBoundsML } from "./hooks/useMapBoundsML";
 import { useMapInteraction } from "./hooks/useMapInteraction";
@@ -49,11 +58,6 @@ interface MapLibreRendererProps {
   userId: string;
   cachedLocation?: CachedLocation | null;
 }
-
-const CARTO_LIGHT_STYLE =
-  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
-const CARTO_DARK_STYLE =
-  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 export function MapLibreRenderer({
   userId,
@@ -81,6 +85,7 @@ export function MapLibreRenderer({
   const {
     mapItems,
     semanticResults,
+    semanticResultsQuery,
     isLoading: placesLoading,
     placesError,
     geocodeTarget,
@@ -90,8 +95,14 @@ export function MapLibreRenderer({
   const { bounds, handleBoundsChange } = useMapBoundsML();
   useMapInteraction(mapRef, iconsLoaded);
 
-  // Geolocation (survives remounts via module-level store)
-  const { location: userLocation, loading: locationLoading } = useGeolocation();
+  // Geolocation (survives remounts via module-level store). D14: asked for
+  // when the map opens, but only after our own one-line reason.
+  const geolocation = useGeolocation();
+  const { location: userLocation, loading: locationLoading } = geolocation;
+  const showLocationPrePrompt = locationPrePromptVisible(geolocation);
+
+  /** N22: the searched name the pin drop carries into the create form. */
+  const pendingPlaceNameRef = useRef<string | null>(null);
 
   // Initial flight + view state
   const { initialViewState, isLocationReady } = useMapInitialFlight({
@@ -300,6 +311,7 @@ export function MapLibreRenderer({
     ],
   );
 
+  // On demand (D14): the location button asks when nobody has yet.
   const handleLocationClick = useCallback(() => {
     if (userLocation && mapRef.current) {
       mapRef.current.flyTo({
@@ -307,20 +319,62 @@ export function MapLibreRenderer({
         zoom: 16,
         duration: 600,
       });
-    } else if (!userLocation) {
-      mapActions.setError(
-        "Location access denied. Please enable location services.",
-      );
+      return;
     }
-  }, [userLocation, mapActions]);
+    if (userLocation) return;
+    switch (locationButtonAction(geolocation)) {
+      case "request":
+        geolocation.request();
+        return;
+      case "explain-denied":
+        mapActions.setError(LOCATION_DENIED_MESSAGE);
+        return;
+      case "unsupported":
+        mapActions.setError("This browser can't share your location.");
+        return;
+      case "wait":
+        return;
+    }
+  }, [userLocation, geolocation, mapActions]);
 
   const handleConfirmPinLocation = useCallback(() => {
     const center = mapRef.current?.getCenter();
     if (center) {
       mapActions.exitPinPlacement();
-      router.push(`/map/create-place?lat=${center.lat}&lng=${center.lng}`);
+      const name = pendingPlaceNameRef.current;
+      pendingPlaceNameRef.current = null;
+      router.push(
+        createPlaceHref({
+          latitude: center.lat,
+          longitude: center.lng,
+          name,
+        }),
+      );
     }
   }, [mapActions, router]);
+
+  // However the pin drop ends (Confirm reads the name first; Cancel, or the
+  // controls' own toggle), a searched name must not leak into the next one.
+  useEffect(() => {
+    if (!isPlacing) pendingPlaceNameRef.current = null;
+  }, [isPlacing]);
+
+  // N22: "Not on the map yet: Add it here" drops a pin at the map's centre,
+  // carrying the searched name into the create form.
+  const handleAddSearchedPlace = useCallback(() => {
+    pendingPlaceNameRef.current = mapFilters.searchQuery.trim() || null;
+    searchParams.setSearch("");
+    mapActions.enterPinPlacement();
+  }, [mapFilters.searchQuery, searchParams, mapActions]);
+
+  const notOnMapYet = showNotOnMapYet({
+    isSemanticSearch: mapFilters.isSemanticSearch,
+    searchQuery: mapFilters.searchQuery,
+    answeredQuery: semanticResultsQuery,
+    resultCount: semanticResults?.length ?? 0,
+    isLoading: placesLoading,
+    isPlacing,
+  });
 
   const handleCenterOnPlace = useCallback(
     (place: PlaceResult) => {
@@ -338,7 +392,7 @@ export function MapLibreRenderer({
     [isDesktop, hasSidebar],
   );
 
-  const mapStyle = mapCore.isDarkMode ? CARTO_DARK_STYLE : CARTO_LIGHT_STYLE;
+  const mapStyle = basemapStyle(mapCore.isDarkMode);
 
   // Location loading state
   if (!isLocationReady) {
@@ -359,7 +413,15 @@ export function MapLibreRenderer({
   }
 
   return (
-    <Box sx={{ height: "100%", width: "100%", position: "relative" }}>
+    <Box
+      sx={{
+        height: "100%",
+        width: "100%",
+        position: "relative",
+        // N22: the theme's surface until the first tile, never a cream flash.
+        backgroundColor: "background.surface",
+      }}
+    >
       <MapGL
         ref={mapRef}
         workerUrl={MAPLIBRE_WORKER_URL}
@@ -370,7 +432,11 @@ export function MapLibreRenderer({
         onClick={handleClick}
         interactiveLayerIds={INTERACTIVE_LAYER_IDS as unknown as string[]}
         maxZoom={22}
-        style={{ width: "100%", height: "100%" }}
+        style={{
+          width: "100%",
+          height: "100%",
+          background: MAP_CANVAS_BACKGROUND,
+        }}
       >
         {iconsLoaded && (
           <POISymbolLayer
@@ -422,6 +488,22 @@ export function MapLibreRenderer({
             isDetailOpen={mapUI.isDrawerOpen}
           />
         )}
+
+      {/* N22: a search that found nothing offers to add the place */}
+      {notOnMapYet && !showLocationPrePrompt && (
+        <SearchEmptyState
+          query={mapFilters.searchQuery.trim()}
+          onAddHere={handleAddSearchedPlace}
+        />
+      )}
+
+      {/* D14: our one-line reason, then the browser's prompt on Continue */}
+      {showLocationPrePrompt && !isPlacing && (
+        <LocationPrePrompt
+          onContinue={geolocation.request}
+          onDismiss={geolocation.dismiss}
+        />
+      )}
 
       {/* Pin placement overlay */}
       {isPlacing && (

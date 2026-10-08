@@ -39,6 +39,7 @@ import { eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
+import { DeadlineExceededError, withDeadline } from "../lib/deadline.ts";
 import { geocellOf } from "../lib/geocell.ts";
 import {
   activate,
@@ -56,6 +57,7 @@ import type {
 } from "./place-creation-actor.ts";
 import {
   confidenceFromReview,
+  PLACE_REVIEW_TIMEOUT_MS,
   PlaceCreationActor,
   setPlaceReviewer,
   unconfiguredPlaceReviewer,
@@ -88,7 +90,11 @@ const approves = (overrides: Partial<PlaceReview> = {}): PlaceReviewer => {
 const newCreationActor = (
   db: DbOrTx,
   viewerId: string,
-  seams: { create?: PlaceCreator; review?: PlaceReviewer } = {},
+  seams: {
+    create?: PlaceCreator;
+    review?: PlaceReviewer;
+    reviewTimeoutMs?: number;
+  } = {},
 ): PlaceCreationActor =>
   new PlaceCreationActor(
     daprClient(),
@@ -96,7 +102,28 @@ const newCreationActor = (
     db,
     seams.create ?? inProcessCreator(db),
     seams.review ?? unconfiguredPlaceReviewer,
+    seams.reviewTimeoutMs,
   );
+
+/** A reviewer that answers `review` only after `ms` — or never, by default. */
+const slowReviewer =
+  (ms = Number.POSITIVE_INFINITY, review?: PlaceReview): PlaceReviewer =>
+  () =>
+    new Promise<PlaceReview>((resolve) => {
+      if (Number.isFinite(ms)) {
+        setTimeout(
+          () =>
+            resolve(
+              review ?? {
+                approved: true,
+                confidenceAdjustment: 0.2,
+                flags: [],
+              },
+            ),
+          ms,
+        );
+      }
+    });
 
 const SAN_FRANCISCO = { lng: -122.4194, lat: 37.7749 };
 
@@ -310,6 +337,99 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
       );
       expect(result.review).toBeNull();
       expect(result.place.confidence).toBe(0.5);
+    });
+  });
+
+  it("N09: a review that outlives the deadline takes the no-model-ran path — review: null, neutral confidence, never an approval", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const actor = await activate(
+        newCreationActor(db, viewer, {
+          review: slowReviewer(),
+          reviewTimeoutMs: 50,
+        }),
+      );
+      const started = performance.now();
+      const result = await actor.createPlace(
+        userCtx(viewer, "r"),
+        baseInput(fixtureName()),
+      );
+      expect(performance.now() - started).toBeLessThan(5_000);
+      expect(result.review).toBeNull();
+      expect(result.place.confidence).toBe(0.5);
+    });
+  });
+
+  it("N09: a rejection that arrives after the deadline is not heard — the place is recorded unreviewed, not approved", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const actor = await activate(
+        newCreationActor(db, viewer, {
+          review: slowReviewer(200, {
+            approved: false,
+            rejectionReason: "too late to matter",
+            confidenceAdjustment: -0.3,
+            flags: [],
+          }),
+          reviewTimeoutMs: 20,
+        }),
+      );
+      const result = await actor.createPlace(
+        userCtx(viewer, "r"),
+        baseInput(fixtureName()),
+      );
+      expect(result.review).toBeNull();
+      expect(result.place.confidence).toBe(0.5);
+    });
+  });
+
+  it("N09: a review inside the deadline is used as before", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const actor = await activate(
+        newCreationActor(db, viewer, {
+          review: slowReviewer(10, {
+            approved: true,
+            confidenceAdjustment: 0.2,
+            flags: [],
+          }),
+          reviewTimeoutMs: 2_000,
+        }),
+      );
+      const result = await actor.createPlace(
+        userCtx(viewer, "r"),
+        baseInput(fixtureName()),
+      );
+      expect(result.review?.approved).toBe(true);
+      expect(result.place.confidence).toBe(0.7);
+    });
+  });
+
+  it("N09: a retry with the same placeId after a timed-out review returns the existing row, not a duplicate refusal", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const actor = await activate(
+        newCreationActor(db, viewer, {
+          review: slowReviewer(),
+          reviewTimeoutMs: 20,
+        }),
+      );
+      const placeId = crypto.randomUUID();
+      const input = { ...baseInput(fixtureName()), placeId };
+      const first = await actor.createPlace(userCtx(viewer, "r1"), input);
+      // The user, having waited, taps Save again — possibly after touching up
+      // the description. Same minted id: the same creation, not a second one.
+      const retry = await actor.createPlace(userCtx(viewer, "r2"), {
+        ...input,
+        description: "edited while waiting",
+      });
+      expect(retry.place.id).toBe(first.place.id);
+      expect(retry.nearbyDuplicates).toEqual([]);
+      const rows = await db
+        .select({ id: places.id })
+        .from(places)
+        .where(eq(places.id, placeId));
+      expect(rows).toHaveLength(1);
     });
   });
 
@@ -917,4 +1037,42 @@ describe.skipIf(skip)("PlaceCreationActor keyed per creator (Wave 6)", () => {
       expect(aSecond.place.createdById).toBe(userA);
     });
   }, 30_000);
+});
+
+describe("withDeadline (N09)", () => {
+  it("resolves with the work when it finishes first", async () => {
+    await expect(
+      withDeadline(Promise.resolve("done"), 1_000, () => new Error("late")),
+    ).resolves.toBe("done");
+  });
+
+  it("rejects with the timeout error when the deadline passes first", async () => {
+    const never = new Promise<string>(() => {});
+    await expect(
+      withDeadline(never, 10, () => new DeadlineExceededError("late")),
+    ).rejects.toBeInstanceOf(DeadlineExceededError);
+  });
+
+  it("propagates the work's own rejection", async () => {
+    await expect(
+      withDeadline(
+        Promise.reject(new Error("model down")),
+        1_000,
+        () => new Error("late"),
+      ),
+    ).rejects.toThrow("model down");
+  });
+
+  it("treats a non-positive or non-finite deadline as none", async () => {
+    const slow = new Promise<string>((resolve) =>
+      setTimeout(() => resolve("eventually"), 20),
+    );
+    await expect(withDeadline(slow, 0, () => new Error("late"))).resolves.toBe(
+      "eventually",
+    );
+  });
+
+  it("the default deadline is about eight seconds", () => {
+    expect(PLACE_REVIEW_TIMEOUT_MS).toBe(8_000);
+  });
 });

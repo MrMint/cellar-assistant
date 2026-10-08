@@ -90,9 +90,14 @@ one-line or small change to reverse. Answer per item.
     order was arbitrary. — orchestrator
 14. Tier-list lock is enforced in the UI only, as in production. — TierListsWave
 15. The map asks for geolocation on load (old), not on click (rewrite). — MapPlacesWave
+    *Superseded by D14 (`docs/product/decisions.md`): still when the map opens,
+    but after the app's own one-line reason, and the OS prompt only on its
+    Continue (`components/map/hooks/geolocation-store.ts`).*
 16. AI place-review categories now equal the restored create form's 25 slugs
     (12 added, 6 dropped: wine_shop, vineyard, taproom, coffee_roaster,
     tea_shop, izakaya). — FinalGate 90d1e8e9
+    *Superseded by D15: the six are back, and the form and the reviewer now
+    read one list (`packages/contracts/src/place-categories.ts`).*
 20. **Email verification is superseded by social-first sign-in in production
     (user, 2026-10-05).** No email is sent at all, so verification and
     reset-by-email are not restored. Production runs

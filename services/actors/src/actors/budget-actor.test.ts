@@ -44,12 +44,16 @@ import type { ModelReserveInput } from "./budget-actor.ts";
 import {
   AI_MODEL_SERVICE,
   BudgetActor,
+  DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS,
+  GOOGLE_PLACES_BUDGET_SERVICE,
+  googlePlacesPoolRefusal,
   MODEL_RATES,
   MODEL_SPENDERS,
   modelCallNanoCents,
   monthStart,
   NANOCENTS_PER_CENT,
   nextMonthStart,
+  parseGooglePlacesPaidCents,
   parseModelPrices,
   parseRequestCaps,
   parseUserCaps,
@@ -2246,6 +2250,218 @@ describe.skipIf(skip)(
             seam: "menu_match",
           }),
         ).rejects.toBeInstanceOf(ForbiddenError);
+      });
+    });
+  },
+);
+
+/* -------------------------------------------------------------------------- */
+/* D16: one paid allowance for all of Google Places                            */
+/* -------------------------------------------------------------------------- */
+
+describe("Google Places paid allowance: parsing and the rule (D16)", () => {
+  it("defaults to about $5 beyond the free tier, and reads whole cents", () => {
+    expect(DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS).toBe(500);
+    expect(parseGooglePlacesPaidCents(undefined)).toBe(500);
+    expect(parseGooglePlacesPaidCents("  ")).toBe(500);
+    expect(parseGooglePlacesPaidCents("0")).toBe(0);
+    expect(parseGooglePlacesPaidCents(" 750 ")).toBe(750);
+    for (const bad of ["-1", "5.5", "five", "1e3", "9".repeat(20)]) {
+      expect(() => parseGooglePlacesPaidCents(bad), bad).toThrow(
+        ValidationError,
+      );
+    }
+  });
+
+  it("is part of the boot-checked policy, so a malformed value stops the boot", () => {
+    expect(
+      readModelBudgetPolicy({ GOOGLE_PLACES_MONTHLY_PAID_CENTS: "" }),
+    ).toMatchObject({ googlePlacesMonthlyPaidCents: 500 });
+    expect(
+      readModelBudgetPolicy({ GOOGLE_PLACES_MONTHLY_PAID_CENTS: "120" }),
+    ).toMatchObject({ googlePlacesMonthlyPaidCents: 120 });
+    expect(() =>
+      readModelBudgetPolicy({ GOOGLE_PLACES_MONTHLY_PAID_CENTS: "lots" }),
+    ).toThrow(ValidationError);
+  });
+
+  it("allows up to the allowance and refuses the call that would cross it", () => {
+    const at = (servicePaidCents: number, cost: number, poolCents = 500) =>
+      googlePlacesPoolRefusal(
+        { servicePaidCents, cost, poolCents },
+        "google_places/place_details",
+      );
+    expect(at(0, 3)).toBeNull();
+    expect(at(497, 3)).toBeNull();
+    expect(at(498, 3)).toMatch(/paid allowance exhausted: 498 of 500/);
+    expect(at(0, 3, 0)).toMatch(/GOOGLE_PLACES_MONTHLY_PAID_CENTS=0/);
+  });
+});
+
+describe.skipIf(skip)(
+  "Google Places paid allowance against Postgres (D16)",
+  () => {
+    /** What Google Places has booked this month in this database already. */
+    const servicePaid = async (db: DbOrTx): Promise<number> => {
+      const [row] = await db
+        .select({
+          cents: sql<string>`coalesce(sum(${apiUsageLog.estimatedCostCents}), 0)`,
+        })
+        .from(apiUsageLog)
+        .where(
+          and(
+            eq(apiUsageLog.service, GOOGLE_PLACES_BUDGET_SERVICE),
+            sql`${apiUsageLog.createdAt} >= date_trunc('month', now(), 'UTC')`,
+          ),
+        );
+      return Number(row?.cents ?? 0);
+    };
+
+    /** Rows in this rolled-back transaction only; production's stay untouched. */
+    const freeTierOnly = async (
+      actor: BudgetActor,
+      endpoint: string,
+      freeTierMonthlyRequests = 0,
+    ) =>
+      actor.setBudget(admin, {
+        kind: { service: GOOGLE_PLACES_BUDGET_SERVICE, endpoint },
+        monthlyBudgetCents: 0,
+        freeTierMonthlyRequests,
+        isEnabled: true,
+      });
+
+    const reserve = (actor: BudgetActor, endpoint: string, cents: number) =>
+      actor.reserve(
+        system,
+        call({
+          kind: { service: GOOGLE_PLACES_BUDGET_SERVICE, endpoint },
+          estimatedCostCents: cents,
+        }),
+      );
+
+    it("past the free tier, every endpoint draws on one shared allowance until it is spent", async () => {
+      await withTestDb(async (db) => {
+        const baseline = await servicePaid(db);
+        await withEnv(
+          { GOOGLE_PLACES_MONTHLY_PAID_CENTS: String(baseline + 5) },
+          async () => {
+            const setup = await activate(newBudgetActor(db));
+            await freeTierOnly(setup, "place_details");
+            await freeTierOnly(setup, "photo");
+            const actor = await reactivate(db);
+
+            const details = await reserve(actor, "place_details", 3);
+            expect(details.allowed).toBe(true);
+            expect(details.effectiveCostCents).toBe(3);
+
+            expect((await reserve(actor, "photo", 1)).allowed).toBe(true);
+            expect((await reserve(actor, "photo", 1)).allowed).toBe(true);
+
+            // 5 of 5 spent, across two endpoints: the next call on either is out.
+            const over = await reserve(actor, "photo", 1);
+            expect(over.allowed).toBe(false);
+            expect(over.usageId).toBeNull();
+            expect(over.reason).toMatch(/paid allowance exhausted/);
+            // N07: typed like every other monthly service limit.
+            expect(over.refusal).toBe("SERVICE_BUDGET");
+            expect(over.retryAt).toBe(nextMonthStart().toISOString());
+            const overDetails = await reserve(actor, "place_details", 3);
+            expect(overDetails.allowed).toBe(false);
+          },
+        );
+      });
+    });
+
+    it("free-tier calls cost the allowance nothing", async () => {
+      await withTestDb(async (db) => {
+        const baseline = await servicePaid(db);
+        await withEnv(
+          { GOOGLE_PLACES_MONTHLY_PAID_CENTS: String(baseline + 3) },
+          async () => {
+            const setup = await activate(newBudgetActor(db));
+            await freeTierOnly(setup, "place_details", 2);
+            const actor = await reactivate(db);
+
+            for (let i = 0; i < 2; i += 1) {
+              const free = await reserve(actor, "place_details", 3);
+              expect(free.allowed).toBe(true);
+              expect(free.effectiveCostCents).toBe(0);
+            }
+            const paid = await reserve(actor, "place_details", 3);
+            expect(paid.allowed).toBe(true);
+            expect(paid.effectiveCostCents).toBe(3);
+            expect((await reserve(actor, "place_details", 3)).allowed).toBe(
+              false,
+            );
+          },
+        );
+      });
+    });
+
+    it("an allowance of 0 is free tier only, as before D16", async () => {
+      await withTestDb(async (db) => {
+        await withEnv({ GOOGLE_PLACES_MONTHLY_PAID_CENTS: "0" }, async () => {
+          const setup = await activate(newBudgetActor(db));
+          await freeTierOnly(setup, "nearby_search", 1);
+          const actor = await reactivate(db);
+          expect((await reserve(actor, "nearby_search", 4)).allowed).toBe(true);
+          const over = await reserve(actor, "nearby_search", 4);
+          expect(over.allowed).toBe(false);
+          expect(over.reason).toMatch(/free tier exhausted/);
+        });
+      });
+    });
+
+    it("an endpoint with its own paid budget still stops at it, inside the allowance", async () => {
+      await withTestDb(async (db) => {
+        const baseline = await servicePaid(db);
+        await withEnv(
+          { GOOGLE_PLACES_MONTHLY_PAID_CENTS: String(baseline + 100) },
+          async () => {
+            const setup = await activate(newBudgetActor(db));
+            await setup.setBudget(admin, {
+              kind: {
+                service: GOOGLE_PLACES_BUDGET_SERVICE,
+                endpoint: "text_search",
+              },
+              monthlyBudgetCents: 4,
+              freeTierMonthlyRequests: 0,
+              isEnabled: true,
+            });
+            const actor = await reactivate(db);
+            expect((await reserve(actor, "text_search", 4)).allowed).toBe(true);
+            const over = await reserve(actor, "text_search", 4);
+            expect(over.allowed).toBe(false);
+            expect(over.reason).toMatch(/monthly budget exhausted/);
+          },
+        );
+      });
+    });
+
+    it("services other than Google Places are untouched by the allowance", async () => {
+      await withTestDb(async (db) => {
+        await withEnv(
+          { GOOGLE_PLACES_MONTHLY_PAID_CENTS: "1000" },
+          async () => {
+            const service = fixtureService();
+            const actor = await activate(newBudgetActor(db));
+            await actor.setBudget(admin, {
+              kind: { service, endpoint: "call" },
+              monthlyBudgetCents: 0,
+              freeTierMonthlyRequests: 0,
+              isEnabled: true,
+            });
+            const result = await actor.reserve(
+              system,
+              call({
+                kind: { service, endpoint: "call" },
+                estimatedCostCents: 1,
+              }),
+            );
+            expect(result.allowed).toBe(false);
+            expect(result.reason).toMatch(/no paid budget is configured/);
+          },
+        );
       });
     });
   },

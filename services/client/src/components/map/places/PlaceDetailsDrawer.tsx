@@ -107,6 +107,7 @@ export const PlaceDetailsDrawer = forwardRef<
     enrichment,
     googlePhotos,
     isEnriching,
+    detailsPending,
     fetching: loadingDetails,
     failure: error,
     refetch,
@@ -332,6 +333,7 @@ export const PlaceDetailsDrawer = forwardRef<
     setInteraction,
     enrichment,
     isEnriching,
+    detailsPending,
     googlePhotos,
   } as const;
 

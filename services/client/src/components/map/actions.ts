@@ -245,6 +245,13 @@ export interface CreatePlaceInput {
   description?: string;
   /** Bound after creation through enrichment; never posted with the place. */
   google_place_id?: string;
+  /**
+   * The creation's idempotency key (§8.4). The form mints it once and sends
+   * the same one on every retry, so a retry of a creation that did land
+   * returns that row instead of being refused as a duplicate of itself (N09).
+   * Minted here when absent.
+   */
+  placeId?: string;
 }
 
 export interface GoogleNearbyPlace {
@@ -342,6 +349,31 @@ const blankToNull = (value?: string): string | null => {
   const trimmed = value?.trim() ?? "";
   return trimmed === "" ? null : trimmed;
 };
+
+/**
+ * `createPlace`'s `input` from the form's fields. The `placeId` is the
+ * caller's when it has one — the form keeps one per creation, so a retry
+ * converges (N09) — and freshly minted only when it does not.
+ */
+export function createPlaceMutationInput(
+  input: CreatePlaceInput,
+  mint: () => string = () => crypto.randomUUID(),
+) {
+  return {
+    placeId: input.placeId ?? mint(),
+    name: input.name.trim(),
+    categories: input.categories,
+    location: { lat: input.latitude, lng: input.longitude },
+    streetAddress: blankToNull(input.street_address),
+    locality: blankToNull(input.locality),
+    region: blankToNull(input.region),
+    postcode: blankToNull(input.postcode),
+    countryCode: blankToNull(input.country_code)?.toUpperCase() ?? null,
+    phone: blankToNull(input.phone),
+    website: normalizeWebsite(input.website),
+    description: blankToNull(input.description),
+  };
+}
 
 export function usePlaceActions() {
   const client = useClient();
@@ -558,23 +590,9 @@ export function usePlaceActions() {
       const invalid = validateCreatePlaceInput(input);
       if (invalid) return { success: false, error: invalid };
 
-      const placeId = crypto.randomUUID();
       const response = await client
         .mutation(CreatePlaceMutation, {
-          input: {
-            placeId,
-            name: input.name.trim(),
-            categories: input.categories,
-            location: { lat: input.latitude, lng: input.longitude },
-            streetAddress: blankToNull(input.street_address),
-            locality: blankToNull(input.locality),
-            region: blankToNull(input.region),
-            postcode: blankToNull(input.postcode),
-            countryCode: blankToNull(input.country_code)?.toUpperCase() ?? null,
-            phone: blankToNull(input.phone),
-            website: normalizeWebsite(input.website),
-            description: blankToNull(input.description),
-          },
+          input: createPlaceMutationInput(input),
         })
         .toPromise();
       if (response.error) {

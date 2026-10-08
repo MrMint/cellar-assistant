@@ -16,9 +16,10 @@
  *   latest pick's answer lands. The place is still bound to that listing
  *   right after it is created (`enrichPlaceFromGoogle(placeId,
  *   { googlePlaceId })`), which stores the full enrichment and photos.
- * - `createPlace` gets a client-minted `placeId` (a retried submit is
- *   idempotent) and does the rate limit, duplicate re-check and AI review
- *   server-side — closed, where the old action failed open.
+ * - `createPlace` gets a client-minted `placeId`, minted once per form and
+ *   reused on every retry (N09), so a retried submit is idempotent; it does
+ *   the rate limit, duplicate re-check and AI review server-side — closed,
+ *   where the old action failed open.
  */
 
 import {
@@ -139,13 +140,19 @@ interface FormFields {
 interface CreatePlaceFormProps {
   latitude: number;
   longitude: number;
+  /** N22: the name searched for when "Add it here" started this. */
+  initialName?: string;
 }
 
 // =============================================================================
 // Component
 // =============================================================================
 
-export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
+export function CreatePlaceForm({
+  latitude,
+  longitude,
+  initialName = "",
+}: CreatePlaceFormProps) {
   const router = useRouter();
   const {
     checkDuplicatePlacesAction,
@@ -171,6 +178,13 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
   const [enriching, setEnriching] = useState(false);
   /** Which pick's details may still land — a later pick retires earlier ones. */
   const prefillRequest = useRef(0);
+  /**
+   * N09: one idempotency key for this creation, however many times Save is
+   * tapped. A retry after a slow or failed-looking first attempt is then the
+   * same creation — the server returns the row the first attempt wrote
+   * instead of refusing the retry as a duplicate of it.
+   */
+  const [creationId] = useState(() => crypto.randomUUID());
 
   const {
     control,
@@ -180,7 +194,7 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
     formState: { isSubmitting, errors },
   } = useForm<FormFields>({
     defaultValues: {
-      name: "",
+      name: initialName,
       categories: [],
       street_address: "",
       locality: "",
@@ -388,6 +402,7 @@ export function CreatePlaceForm({ latitude, longitude }: CreatePlaceFormProps) {
       website: normalizedWebsite ?? undefined,
       description: data.description || undefined,
       google_place_id: selectedGooglePlaceId ?? undefined,
+      placeId: creationId,
     };
 
     startTransition(async () => {

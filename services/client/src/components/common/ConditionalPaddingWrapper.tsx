@@ -25,6 +25,9 @@ export function ConditionalPaddingWrapper({
         padding: isMapRoute ? 0 : "1rem",
         overflowY: isMapCanvas ? "hidden" : "auto",
         overflowX: "hidden",
+        // N22: the map canvas fills exactly this box, so it ends above the
+        // bottom nav and MapLibre's attribution stays visible.
+        ...(isMapCanvas && { display: "flex", flexDirection: "column" }),
       }}
     >
       {children}

@@ -216,6 +216,17 @@ describe("create place (restored)", () => {
     assert.match(html, /Loading address\.\.\./);
     assert.match(html, />Add Place</);
   });
+
+  test("N22: 'Add it here' arrives with the searched name already in the form", () => {
+    const html = render(
+      <CreatePlaceForm
+        latitude={43.07}
+        longitude={-89.4}
+        initialName="Copper Lantern"
+      />,
+    );
+    assert.match(html, /value="Copper Lantern"/);
+  });
 });
 
 describe("drawer content (restored)", () => {
@@ -254,6 +265,42 @@ describe("drawer content (restored)", () => {
     assert.match(html, /Kubota Junmai/);
     assert.doesNotMatch(html, /Load more/);
     assert.match(html, /aria-label="Close place details"/);
+  });
+
+  test("N22: Google details on their way are a skeleton, then a calm 'Details pending' — never a spinner with a sentence", () => {
+    const props = {
+      place: {
+        id: "p1",
+        name: "Rusty Barrel",
+        primary_category: "bar",
+        categories: [],
+        street_address: null,
+        locality: null,
+        rating: null,
+      },
+      userInteraction: null,
+      menuItems: [],
+      loadingDetails: false,
+      hasMenuItems: false,
+      userId: "",
+      variant: "desktop" as const,
+      onClose: () => {},
+      refetch: () => {},
+      setInteraction: async () => null,
+      enrichment: null,
+      googlePhotos: [],
+    };
+    const loading = render(<PlaceDetailsContent {...props} isEnriching />);
+    assert.match(loading, /aria-label="Loading details"/);
+    assert.doesNotMatch(loading, /Loading additional details/);
+    assert.doesNotMatch(loading, /Details pending/);
+
+    const pending = render(<PlaceDetailsContent {...props} detailsPending />);
+    assert.match(pending, /Details pending/);
+    assert.doesNotMatch(pending, /aria-label="Loading details"/);
+
+    const idle = render(<PlaceDetailsContent {...props} />);
+    assert.doesNotMatch(idle, /Details pending|Loading details/);
   });
 
   test("the mirrored photo goes through /_next/image, as the old Nhost one did", () => {

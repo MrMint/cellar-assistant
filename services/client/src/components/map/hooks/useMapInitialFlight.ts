@@ -64,6 +64,13 @@ export function useMapInitialFlight({
     };
   }
 
+  // Sticky (D14): once the map has drawn, a location request started later —
+  // the pre-prompt's Continue, or the location button — must not put the
+  // "Getting your location..." screen back over it and unmount the map.
+  const readyRef = useRef(false);
+  readyRef.current ||=
+    !locationLoading || userLocation !== null || cachedLocation != null;
+
   return {
     initialViewState: initialViewStateRef.current ?? {
       longitude: FALLBACK_CENTER.longitude,
@@ -71,7 +78,6 @@ export function useMapInitialFlight({
       zoom: 8,
     },
     /** True once geolocation has resolved, cached location exists, or location arrived. Controls the loading screen. */
-    isLocationReady:
-      !locationLoading || userLocation !== null || cachedLocation != null,
+    isLocationReady: readyRef.current,
   };
 }

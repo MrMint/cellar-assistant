@@ -16,6 +16,7 @@ import {
   Chip,
   CircularProgress,
   IconButton,
+  Skeleton,
   Snackbar,
   Stack,
   Tooltip,
@@ -110,7 +111,10 @@ interface PlaceDetailsContentProps {
     isVisited?: boolean;
   }) => Promise<string | null>;
   enrichment?: PlaceEnrichment | null;
+  /** N22: Google details on their way — a skeleton, for at most 8 s. */
   isEnriching?: boolean;
+  /** N22/D16: details owed but not coming yet — "Details pending". */
+  detailsPending?: boolean;
   googlePhotos?: PlaceGooglePhoto[];
 }
 
@@ -208,6 +212,7 @@ export function PlaceDetailsContent({
   setInteraction,
   enrichment,
   isEnriching,
+  detailsPending,
   googlePhotos,
 }: PlaceDetailsContentProps) {
   // Merge Google enrichment data with existing place data (Google takes precedence)
@@ -571,25 +576,30 @@ export function PlaceDetailsContent({
         </Box>
       )}
 
-      {/* Enriching indicator */}
+      {/* Google details: a skeleton for at most 8 s, then a calm line (N22) */}
       {isEnriching && (
         <Box
-          sx={{
-            px: isDesktop ? 0 : 2,
-            pb: 1,
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-          }}
+          role="status"
+          aria-busy="true"
+          aria-label="Loading details"
+          sx={{ px: isDesktop ? 0 : 2, pb: 1 }}
         >
-          <CircularProgress
-            size="sm"
-            sx={{ "--CircularProgress-size": "14px" }}
-          />
-          <Typography level="body-xs" color="neutral">
-            Loading additional details...
+          <Typography level="body-sm">
+            <Skeleton variant="text" sx={{ width: "70%" }} />
+          </Typography>
+          <Typography level="body-sm">
+            <Skeleton variant="text" sx={{ width: "45%" }} />
           </Typography>
         </Box>
+      )}
+      {!isEnriching && detailsPending && (
+        <Typography
+          level="body-xs"
+          color="neutral"
+          sx={{ px: isDesktop ? 0 : 2, pb: 1 }}
+        >
+          Details pending
+        </Typography>
       )}
 
       {/* Contact Info — hidden when collapsed */}

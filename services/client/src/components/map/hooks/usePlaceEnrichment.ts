@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePlaceActions } from "../actions";
+import {
+  askFromStatus,
+  type EnrichmentAsk,
+  enrichmentView,
+  enrichmentViewChangesIn,
+} from "./enrichment-view";
 
 /**
  * `82450ad1:src/hooks/usePlaceEnrichment.ts`, over the new API.
@@ -29,6 +35,11 @@ import { usePlaceActions } from "../actions";
  * nothing to fetch. A queued resume is polled the same bounded way until
  * `photosFetchedAt` is stamped. The spinner stays the details spinner — the
  * old page fetched the photos without one.
+ *
+ * N22: what the user *sees* is decided by `enrichmentView` — a skeleton for
+ * at most 8 s after the ask was queued, then a calm "Details pending" while
+ * the bounded poll carries on in the background. The poll is unchanged; only
+ * the three-minute spinner is gone.
  */
 
 const POLL_INTERVAL_MS = 15_000;
@@ -66,9 +77,19 @@ export function usePlaceEnrichment({
   hasEnrichment,
   photosPending = false,
   refetch,
-}: UsePlaceEnrichmentOptions): { isEnriching: boolean } {
+}: UsePlaceEnrichmentOptions): {
+  isEnriching: boolean;
+  detailsPending: boolean;
+} {
   const { enrichPlaceAction } = usePlaceActions();
   const [waitingFor, setWaitingFor] = useState<string | null>(null);
+  /** The last ask's outcome, for the place it was about. */
+  const [ask, setAsk] = useState<{
+    placeId: string;
+    ask: EnrichmentAsk;
+  } | null>(null);
+  /** Bumped when the skeleton's time is up, to re-derive the view. */
+  const [, setTick] = useState(0);
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
 
@@ -85,6 +106,7 @@ export function usePlaceEnrichment({
     let cancelled = false;
     enrichPlaceAction({ placeId }).then((result) => {
       if (cancelled) return;
+      setAsk({ placeId, ask: askFromStatus(result.status, Date.now()) });
       if (result.status === "QUEUED") {
         setWaitingFor(placeId);
       } else if (result.status !== null && result.status !== "BUDGET_DENIED") {
@@ -97,7 +119,27 @@ export function usePlaceEnrichment({
   }, [placeId, loaded, pending, enrichPlaceAction]);
 
   const waiting = waitingFor !== null && waitingFor === placeId && pending;
-  const isEnriching = waiting && !hasEnrichment;
+  // A queued ask stops counting once the bounded poll has given up on it.
+  const currentAsk: EnrichmentAsk =
+    ask === null || ask.placeId !== placeId
+      ? { kind: "none" }
+      : ask.ask.kind === "queued" && !waiting
+        ? { kind: "none" }
+        : ask.ask;
+  const now = Date.now();
+  const view = enrichmentView({ hasEnrichment, ask: currentAsk, now });
+  const changesIn = enrichmentViewChangesIn({
+    hasEnrichment,
+    ask: currentAsk,
+    now,
+  });
+
+  // Re-render once when the skeleton's 8 s are up, so it becomes "pending".
+  useEffect(() => {
+    if (changesIn === null) return;
+    const timer = setTimeout(() => setTick((n) => n + 1), changesIn);
+    return () => clearTimeout(timer);
+  }, [changesIn]);
 
   // Bounded poll while a queued enrichment (or photo resume) is outstanding.
   useEffect(() => {
@@ -115,5 +157,8 @@ export function usePlaceEnrichment({
     return () => clearInterval(timer);
   }, [waiting]);
 
-  return { isEnriching };
+  return {
+    isEnriching: view === "loading",
+    detailsPending: view === "pending",
+  };
 }

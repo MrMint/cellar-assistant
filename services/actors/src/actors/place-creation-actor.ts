@@ -82,6 +82,11 @@
  * tell "the model approved this" from "no model ran"; what it can never get is
  * a fabricated approval.
  *
+ * A review that has not answered within `PLACE_REVIEW_TIMEOUT_MS` (~8 s, N09)
+ * takes the same path: `review: null`, never an approval. The user is waiting
+ * on a form, and an unbounded review was what made one measured create take
+ * 48.7 s and another fail at the API's 120 s after its row had been written.
+ *
  * B5b is the fix for the version of this that shipped: the constructor default
  * was the throwing stub itself, so *every* production activation took the
  * `review: null` path and the feature was dark behind a green suite. The
@@ -127,6 +132,7 @@ import type { ActorId, DaprClient } from "@dapr/dapr";
 import { ActorBase } from "../lib/actor-base.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
+import { DeadlineExceededError, withDeadline } from "../lib/deadline.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
 import {
@@ -165,6 +171,25 @@ export const CONFIDENCE_FLOOR = 0.1;
 export const CONFIDENCE_CEILING = 0.9;
 /** `reviewUserPlace` clamps its own output to this; so does this actor. */
 export const MAX_CONFIDENCE_ADJUSTMENT = 0.3;
+
+/**
+ * N09: how long the user's form waits on the AI review before the creation
+ * goes ahead unreviewed.
+ *
+ * The review runs in-turn (module doc, "Two request-driven external calls"),
+ * and with nothing bounding it a slow model held the form for as long as the
+ * provider's own timeout allowed — 48.7 s for one measured create, and 120.8 s
+ * for another that the API then reported as a failure although the row had
+ * been written. Past this bound the review is treated exactly as a review that
+ * threw: `review: null`, the neutral confidence, and no claim that anything
+ * approved the place (`#reviewOrNull`). It never becomes an approval.
+ *
+ * What a timeout gives up is the synchronous *rejection*: a model that would
+ * have said "not approved" after nine seconds is not heard. That trade is the
+ * roadmap's (N09; insert-first moderation with a pending state is X27), and it
+ * is the same trade an unconfigured provider already makes.
+ */
+export const PLACE_REVIEW_TIMEOUT_MS = 8_000;
 
 /* -------------------------------------------------------------------------- */
 /* Injected seams                                                              */
@@ -338,6 +363,7 @@ export class PlaceCreationActor
 
   readonly #createPlaceRow: PlaceCreator;
   readonly #review: PlaceReviewer;
+  readonly #reviewTimeoutMs: number;
 
   constructor(
     daprClient: DaprClient,
@@ -350,10 +376,12 @@ export class PlaceCreationActor
     // activation. `GooglePlacesActor` (`google: GooglePlacesClient =
     // googlePlacesClient()`) and `GeocodeActor` (X5) set the same precedent.
     review: PlaceReviewer = placeReviewer(),
+    reviewTimeoutMs: number = PLACE_REVIEW_TIMEOUT_MS,
   ) {
     super(daprClient, id, db);
     this.#createPlaceRow = createPlaceRow;
     this.#review = review;
+    this.#reviewTimeoutMs = reviewTimeoutMs;
   }
 
   /**
@@ -530,13 +558,25 @@ export class PlaceCreationActor
     return findDuplicatePlaces(this.db, name, location, radiusMeters);
   }
 
-  /** Never throws: a review that fails is a review that did not happen. */
+  /**
+   * Never throws: a review that fails is a review that did not happen — and
+   * so is one that has not answered within `PLACE_REVIEW_TIMEOUT_MS` (N09).
+   * Both take the one "no model ran" path; a timeout is never an approval.
+   */
   async #reviewOrNull(
     ctx: Ctx,
     subject: PlaceReviewSubject,
   ): Promise<PlaceReview | null> {
     try {
-      const review = await this.#review(ctx, subject);
+      const review = await withDeadline(
+        this.#review(ctx, subject),
+        this.#reviewTimeoutMs,
+        () =>
+          new DeadlineExceededError(
+            `the AI review took longer than ${this.#reviewTimeoutMs}ms; ` +
+              "the place is created unreviewed (review: null)",
+          ),
+      );
       return {
         ...review,
         confidenceAdjustment: Number.isFinite(review.confidenceAdjustment)
