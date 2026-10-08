@@ -111,7 +111,7 @@ describe("the route shells", () => {
 
   test("Home: the search box drawn, not live (the real one takes focus)", () => {
     const out = html(<SearchLandingShell />);
-    assert.match(out, />Search your collection\.\.\.</);
+    assert.match(out, />Search</);
     assert.doesNotMatch(out, /<input/);
   });
 

@@ -34,9 +34,11 @@ export function SearchLandingShell() {
             strokeWidth={ICON_STROKE}
             className="size-5 opacity-50"
           />
-          <span className="type-body text-ink-3">
-            Search your collection...
-          </span>
+          <span className="type-body flex-1 text-ink-3">Search</span>
+          {/* Where the box's Scan (and Photo) pills sit. */}
+          <ShellBlocks>
+            <Skeleton className="h-8 w-18 rounded-full" />
+          </ShellBlocks>
         </div>
       </div>
       <ShellBlocks className="flex flex-wrap justify-center gap-2">

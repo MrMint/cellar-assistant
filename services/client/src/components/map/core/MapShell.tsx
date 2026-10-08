@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
  * edge — never a spinner on a blank page, never a cream flash (N22) — and the
  * search panel where `MapControls` will put it, so the one thing a thumb
  * reaches for is already in place. On a phone that is the full-width card
- * with the type filters under the box; from 769 px the box alone, top left.
+ * with the type toggles and the actions under the box; from 769 px the box
+ * alone, top left.
  *
  * One shell for every stage the map passes through: the route's
  * `loading.tsx`, the page's Suspense fallback, the renderer's lazy chunk and
@@ -44,11 +45,19 @@ export function MapShell({
             />
             <span className="type-body text-ink-3">Search places...</span>
           </div>
-          <ShellBlocks className="mt-1 flex h-11 items-center gap-2 border-line border-t pt-1 min-[769px]:hidden">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-8 w-16 rounded-full" />
-            ))}
-            <Skeleton className="ml-auto size-9 rounded-md" />
+          {/* Phones: the six type toggles and the filter, then the actions. */}
+          <ShellBlocks className="mt-1 flex flex-col gap-2 border-line border-t pt-2 min-[769px]:hidden">
+            <div className="flex h-9 items-center gap-2 px-1">
+              {["wine", "beer", "spirit", "coffee", "sake", "tea"].map((t) => (
+                <Skeleton key={t} className="size-7 rounded-full" />
+              ))}
+              <Skeleton className="ml-auto size-9 rounded-md" />
+            </div>
+            <div className="flex h-9 items-center gap-2 px-1">
+              {["add-place", "locate", "theme"].map((a) => (
+                <Skeleton key={a} className="size-8 rounded-md" />
+              ))}
+            </div>
           </ShellBlocks>
         </div>
       </div>
