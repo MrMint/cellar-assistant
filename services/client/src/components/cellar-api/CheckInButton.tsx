@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { Cocktail } from "@/components/app/icons";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
@@ -33,9 +33,12 @@ import { ApiError } from "./ApiError";
  * after a dropped response idempotent (§8.4).
  *
  * The Joy `Dropdown` menu is a `ui/dropdown-menu` (still a `menu` of
- * `menuitem`s, which e2e 04 drives), non-modal so that "Me and friends…" can
- * open the picker without racing the menu's own teardown; the picker `Modal`
- * is a `ResponsiveDialog` (a sheet on phones).
+ * `menuitem`s, which e2e 04 drives), non-modal; the picker `Modal` is a
+ * `ResponsiveDialog` (a sheet on phones). "Me and friends…" opens the picker
+ * only once the menu has gone and handed focus back to "Check in": opened
+ * from `onSelect`, the picker mounted while the menu was still animating out,
+ * took the doomed menu item as the place to return focus to, and dropped it
+ * on `<body>` when it closed (Radix's own dropdown-to-dialog pattern).
  */
 export function CheckInButton({
   cellarId,
@@ -55,6 +58,8 @@ export function CheckInButton({
   const [bulkOpen, setBulkOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const checkboxIdPrefix = useId();
+  /** "Me and friends…" was chosen; open the picker when the menu is gone. */
+  const pickerPending = useRef(false);
 
   const [checkInState, checkIn] = useMutation(CheckInMutation);
   const [bulkState, bulkCheckIn] = useMutation(BulkCheckInMutation);
@@ -129,7 +134,18 @@ export function CheckInButton({
             Check in
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent
+          align="end"
+          onCloseAutoFocus={() => {
+            // Runs as the menu unmounts, just before it focuses the trigger;
+            // the picker mounts after that and so restores focus there.
+            if (!pickerPending.current) return;
+            pickerPending.current = false;
+            setError(null);
+            setSelected([]);
+            setBulkOpen(true);
+          }}
+        >
           <DropdownMenuItem
             className="min-h-11"
             onSelect={() => void checkInSelf()}
@@ -139,9 +155,7 @@ export function CheckInButton({
           <DropdownMenuItem
             className="min-h-11"
             onSelect={() => {
-              setError(null);
-              setSelected([]);
-              setBulkOpen(true);
+              pickerPending.current = true;
             }}
           >
             Me and friends…
