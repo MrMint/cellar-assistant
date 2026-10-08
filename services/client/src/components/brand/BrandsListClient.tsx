@@ -106,7 +106,13 @@ export const BrandsListClient = ({
     }
   }, [debouncedSearch, resetSearch]);
 
-  const searching = hasSearch && searchList.status === "resetting";
+  // Also "searching" before the reset above has run for this term: a page
+  // opened at `/brands?q=` (search's See all) renders — on the server, and
+  // for the first client frame — with the term set and no search started,
+  // which would otherwise say "No brands found" for a term that has some.
+  const searching =
+    hasSearch &&
+    (searchList.status === "resetting" || searchList.args !== debouncedSearch);
   const active = hasSearch ? searchList : list;
   const brands = [...active.rows];
   const failure = active.failure;
