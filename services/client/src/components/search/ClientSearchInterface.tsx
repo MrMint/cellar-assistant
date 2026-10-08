@@ -1,7 +1,7 @@
 "use client";
 
 import { useActor } from "@xstate/react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { includes } from "ramda";
 import {
@@ -39,6 +39,7 @@ import { barcodeSearchHref, imageSearchHref } from "./adapter";
 import { useSearchNavigation } from "./SearchNavigation";
 import { modalScale } from "./search-motion";
 import type { SearchNavigation } from "./search-navigation";
+import { useHydratedReducedMotion } from "./useHasMounted";
 import { useSearchQuery } from "./useSearchQuery";
 
 const SEARCH_EXAMPLES_DESKTOP = [
@@ -58,6 +59,13 @@ const SEARCH_EXAMPLES_MOBILE = [
   "Ethiopian coffee...",
   "date night pick...",
 ];
+
+/**
+ * The Scan / Photo pills: `sm` (36 px) to sit inside the 48 px box, with a
+ * pseudo-element keeping the touch target at 44 px tall (design §3.3).
+ */
+const PILL =
+  "relative rounded-full after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']";
 
 interface ClientSearchInterfaceProps {
   /**
@@ -189,7 +197,7 @@ export const ClientSearchInterface = ({
     inputRef.current?.focus();
   };
 
-  const prefersReducedMotion = useReducedMotion() ?? false;
+  const prefersReducedMotion = useHydratedReducedMotion();
 
   const isIdle = !includes(state.value, ["barcode", "image"]);
   const isSearching = includes(state.value, [
@@ -275,7 +283,7 @@ export const ClientSearchInterface = ({
                       <Button
                         variant="secondary"
                         size="sm"
-                        className="rounded-full"
+                        className={PILL}
                         onClick={() => send({ type: "SEARCH_BARCODE" })}
                       >
                         <Scan aria-hidden strokeWidth={ICON_STROKE} />
@@ -285,7 +293,7 @@ export const ClientSearchInterface = ({
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="rounded-full"
+                          className={PILL}
                           onClick={() => send({ type: "SEARCH_IMAGE" })}
                         >
                           <Camera aria-hidden strokeWidth={ICON_STROKE} />
