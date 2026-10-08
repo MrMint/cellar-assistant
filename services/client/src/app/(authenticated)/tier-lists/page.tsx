@@ -1,9 +1,11 @@
 import type { SectionKey } from "@/components/common/CollectionSection";
-import { GetTierListsQuery } from "@/components/tier-list/queries";
+import {
+  GetTierListsQuery,
+  tierListPageSize,
+} from "@/components/tier-list/queries";
 import {
   type TierListSectionSeed,
   TierListsPage,
-  tierListPageSize,
 } from "@/components/tier-list/TierListsPage";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";

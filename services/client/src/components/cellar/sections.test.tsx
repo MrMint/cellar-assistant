@@ -21,9 +21,8 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { Cellars, uniqueCellarCards, sectionPageSize } = await import(
-  "./Cellars"
-);
+const { Cellars, uniqueCellarCards } = await import("./Cellars");
+const { sectionPageSize } = await import("../cellar-api/pagination");
 const { CellarSegments, CELLAR_SEGMENTS } = await import("./CellarSegments");
 const { TierListsPage } = await import("../tier-list/TierListsPage");
 const { textOf } = await import("@/test-support/markup");

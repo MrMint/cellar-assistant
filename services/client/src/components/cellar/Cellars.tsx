@@ -5,10 +5,7 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { Add, Cellar } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { CellarCardClient } from "@/components/cellar/CellarCardClient";
-import {
-  CELLARS_PAGE_SIZE,
-  DISCOVER_PAGE_SIZE,
-} from "@/components/cellar-api/pagination";
+import { sectionPageSize } from "@/components/cellar-api/pagination";
 import {
   CollectionSection,
   type SectionKey,
@@ -39,10 +36,6 @@ interface CellarsProps {
   userId: string;
   sections: Record<SectionKey, CellarSectionSeed>;
 }
-
-/** How many cards one page of a section holds. */
-export const sectionPageSize = (section: SectionKey): number =>
-  section === "DISCOVER" ? DISCOVER_PAGE_SIZE : CELLARS_PAGE_SIZE;
 
 /**
  * `myCellars` is ordered by activity (decision D13), which moves: a cellar

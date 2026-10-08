@@ -22,6 +22,7 @@
  * - Every write is a named command returning a result union.
  */
 
+import { sectionPageSize } from "@/components/cellar-api/pagination";
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 import {
@@ -33,6 +34,11 @@ import {
 
 /** The API caps `first` at 100 on every connection. */
 export const TIER_LISTS_PAGE_SIZE = 100;
+
+/** One page of a `/tier-lists` section (X11): a short Discover, else 100. */
+export const tierListPageSize = (
+  section: "MINE" | "FRIENDS" | "DISCOVER",
+): number => sectionPageSize(section, TIER_LISTS_PAGE_SIZE);
 export const TIER_LIST_ITEMS_PAGE_SIZE = 100;
 /** `Item/Place.tierListEntries` reaches at most 100 rows. */
 export const ENTITY_ENTRIES_PAGE_SIZE = 100;

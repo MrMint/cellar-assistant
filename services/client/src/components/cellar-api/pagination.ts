@@ -23,6 +23,16 @@ export const CELLARS_PAGE_SIZE = 24;
 export const DISCOVER_PAGE_SIZE = 6;
 
 /**
+ * How many cards one page of a `/cellars` or `/tier-lists` section holds
+ * (X11): a short Discover, a screenful otherwise. Here, not beside the client
+ * components, because the server pages read it too (client-boundary.test.ts).
+ */
+export const sectionPageSize = (
+  section: "MINE" | "FRIENDS" | "DISCOVER",
+  screenful: number = CELLARS_PAGE_SIZE,
+): number => (section === "DISCOVER" ? DISCOVER_PAGE_SIZE : screenful);
+
+/**
  * The cellar overview's "Open and recent" preview: a fixed handful, never
  * paged. (The items page's own size is `ITEMS_PAGE_SIZE` in
  * `components/cellar/cellarItemsQuery.ts`, the old 50.)

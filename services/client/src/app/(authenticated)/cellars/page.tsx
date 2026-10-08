@@ -1,9 +1,6 @@
-import {
-  type CellarSectionSeed,
-  Cellars,
-  sectionPageSize,
-} from "@/components/cellar/Cellars";
+import { type CellarSectionSeed, Cellars } from "@/components/cellar/Cellars";
 import { GetCellarsQuery } from "@/components/cellar/fragments";
+import { sectionPageSize } from "@/components/cellar-api/pagination";
 import type { SectionKey } from "@/components/common/CollectionSection";
 import { ViewerQuery } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";

@@ -3,7 +3,6 @@
 import { EmptyState } from "@/components/app/EmptyState";
 import { Add, Ranked } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import { DISCOVER_PAGE_SIZE } from "@/components/cellar-api/pagination";
 import {
   CollectionSection,
   type SectionKey,
@@ -14,7 +13,7 @@ import type { ApiFailure } from "@/lib/api/result";
 import { unwrapResult } from "@/lib/api/result";
 import { type Page, pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
-import { GetTierListsQuery, TIER_LISTS_PAGE_SIZE } from "./queries";
+import { GetTierListsQuery, tierListPageSize } from "./queries";
 import type { TierListCardData } from "./TierListCard";
 import { TierListCard } from "./TierListCard";
 
@@ -23,10 +22,6 @@ export type TierListSectionSeed = {
   page: Page<TierListCardData>;
   failure: ApiFailure | null;
 };
-
-/** How many cards one page of a section holds. */
-export const tierListPageSize = (section: SectionKey): number =>
-  section === "DISCOVER" ? DISCOVER_PAGE_SIZE : TIER_LISTS_PAGE_SIZE;
 
 /** Yours, with nothing in it yet (N15). */
 function NoTierListsYet() {
