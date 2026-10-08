@@ -155,7 +155,7 @@ export const CellarItemHeader = ({
         <ModalDialog variant="outlined" role="alertdialog">
           <DialogTitle>
             <MdWarning />
-            Confirmation
+            Delete this bottle?
           </DialogTitle>
           <Divider />
           <DialogContent>
@@ -166,26 +166,21 @@ export const CellarItemHeader = ({
               </Typography>
             )}
           </DialogContent>
-          {/* Three buttons do not fit side by side at 390px: stack them. */}
+          {/*
+            Three buttons do not fit side by side at 390px: stack them. When
+            finishing is offered it is the emphasised, first action and Delete
+            the outlined one, so the visual weight points away from data loss.
+          */}
           <DialogActions
             sx={{
               flexDirection: { xs: "column", sm: "row-reverse" },
               alignItems: { xs: "stretch", sm: "center" },
             }}
           >
-            <Button
-              variant="solid"
-              color="danger"
-              disabled={isDisabled}
-              loading={isPending}
-              onClick={handleDeleteClick}
-            >
-              Delete {formatItemType(itemType)}
-            </Button>
             {warning.suggestFinish && (
               <Button
-                variant="outlined"
-                color="neutral"
+                variant="solid"
+                color="primary"
                 disabled={isDisabled}
                 loading={isFinishing}
                 onClick={handleFinishInstead}
@@ -193,6 +188,15 @@ export const CellarItemHeader = ({
                 Mark finished instead
               </Button>
             )}
+            <Button
+              variant={warning.suggestFinish ? "outlined" : "solid"}
+              color="danger"
+              disabled={isDisabled}
+              loading={isPending}
+              onClick={handleDeleteClick}
+            >
+              Delete {formatItemType(itemType)}
+            </Button>
             <Button
               variant="plain"
               color="neutral"

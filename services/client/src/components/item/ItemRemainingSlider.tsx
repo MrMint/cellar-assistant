@@ -36,7 +36,9 @@ export type ItemRemainingSliderProps = {
  *   debounced 400 ms (a local hook instead of `@uidotdev/usehooks`). The old
  *   action stamped `empty_at` the moment the slider reached 0. Now 0% asks
  *   "Finished it?" first and offers Undo after (N13a, `useFinishBottle`):
- *   "Not yet" puts the slider back on the last saved level.
+ *   "Not yet" puts the slider back on the last saved level. A finished
+ *   bottle keeps a "Restore to cellar" button for its owner, so putting it
+ *   back is not limited to the Undo toast's six seconds.
  * - "Opened … ago" no longer seeds `now` with `new Date()` during render (the
  *   hydration rule): `now` is set in an effect, so the server and the first
  *   client render both show no distance, and the 10 s tick takes over.
@@ -154,9 +156,22 @@ export const ItemRemainingSlider = ({
         </Stack>
       )}
       {isEmptied && (
-        <Typography textAlign="center">
-          Empty {now === null ? "" : formatDistance(emptied, now)} ago
-        </Typography>
+        <Stack spacing={1}>
+          <Typography textAlign="center">
+            Empty {now === null ? "" : formatDistance(emptied, now)} ago
+          </Typography>
+          {/* Undo outlives its toast: put a finished bottle back (N13a). */}
+          {isCellarOwner && (
+            <Button
+              variant="outlined"
+              color="neutral"
+              loading={finishPhase === "restoring"}
+              onClick={() => finish.restore(percentageRemaining)}
+            >
+              Restore to cellar
+            </Button>
+          )}
+        </Stack>
       )}
       {shownError !== null && (
         <Typography level="body-sm" color="danger">

@@ -104,34 +104,46 @@ export const enumOptionsFor = (
 };
 
 /**
+ * `options` with the field's current `value` guaranteed among them.
+ *
+ * Joy's `Select` (MUI Base `useList`) drops a selected value that is not one
+ * of its options whenever the options change, and reports the drop through
+ * `onChange(null)` — so a form bound to it *clears the field by itself*. The
+ * country list arrives in two pages (`useReferenceOptions`: the API caps
+ * `first` at 100), so an edit form for a United States or United Kingdom item
+ * mounted with options A–L, Joy dropped the stored value, and Save sent
+ * `country: null` (measured on the UX lane, 2026-10-08), and a label read of
+ * SPAIN pre-filled nothing.
+ *
+ * Keeping the value as an option until the list contains it means the select
+ * never sees its value disappear. Blank (`""`, `null`, `undefined`) adds
+ * nothing: there is no selection to keep. `EnumSelect` goes through
+ * `optionsHolding`, which applies this only while the list is loading.
+ */
+export const withCurrentValue = (
+  key: EnumKey,
+  options: readonly EnumOption[],
+  value: unknown,
+): EnumOption[] => {
+  if (typeof value !== "string" || value === "") return [...options];
+  if (options.some((option) => option.value === value)) return [...options];
+  return [...options, { value, label: formatEnumValue(key, value) }];
+};
+
+/**
  * The options a select renders for a field that already holds `value`.
  *
- * Joy's `Select` drops a selected value that is missing from its current
- * options — its list reducer filters it out on every `itemsChange` and calls
- * `onChange(null)` — so a stored or label-read value that arrives before its
- * option does (the countries past the first page of 100, say) used to be
- * erased: the edit form saved `country: null` over a stored SPAIN, and a
- * label read of SPAIN pre-filled nothing.
- *
- * While the options are still `loading`, the held value is kept as an option
- * of its own so the select has nothing to drop. Once they have loaded, a
- * value that is still not among them is **not** kept: every reference column
- * is a foreign key, and a value that is not a row would fail in the outbox
- * where nobody sees it.
+ * While the options are still `loading` (`useReferenceOptions` counts a
+ * second page that is owed and not yet arrived), the held value is kept as an
+ * option of its own (`withCurrentValue`) so the select has nothing to drop.
+ * Once they have loaded, a value that is still not among them is **not**
+ * kept: every reference column is a foreign key, and a value that is not a
+ * row would fail in the outbox where nobody sees it.
  */
 export const optionsHolding = (
   key: EnumKey,
   options: readonly EnumOption[],
   value: unknown,
   loading: boolean,
-): EnumOption[] => {
-  if (
-    !loading ||
-    typeof value !== "string" ||
-    value === "" ||
-    options.some((option) => option.value === value)
-  ) {
-    return [...options];
-  }
-  return [...options, { value, label: formatEnumValue(key, value) }];
-};
+): EnumOption[] =>
+  loading ? withCurrentValue(key, options, value) : [...options];

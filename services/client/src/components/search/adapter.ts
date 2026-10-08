@@ -52,6 +52,11 @@ export const searchResultsFromNodes = (
  * (`me.collectionStats` counts unfinished bottles, as every cellar card does),
  * so the line says "bottles" — the old "items" counted distinct items, which
  * read 34 for a collection of 53 bottles.
+ *
+ * "in your N cellars", not "across N cellars": the stats count only cellars
+ * the viewer created or co-owns, while /cellars also lists friends' cellars,
+ * so a user adding up those cards got a different number (UX lane,
+ * 2026-10-08: 46 here, 54 on the cards with a friend's cellar of 8).
  */
 export const collectionStatsLine = (stats: {
   cellarCount: number;
@@ -66,13 +71,14 @@ export const collectionStatsLine = (stats: {
 }): string => {
   const { itemCounts: c, cellarCount } = stats;
   const totalItems = c.beer + c.wine + c.spirit + c.coffee + c.sake + c.tea;
-  const cellars = `${cellarCount} ${cellarCount === 1 ? "cellar" : "cellars"}`;
+  const cellars =
+    cellarCount === 1 ? "your cellar" : `your ${cellarCount} cellars`;
   if (totalItems === 0) {
     return "Your collection awaits. Start by adding your first item.";
   }
   return totalItems === 1
-    ? `1 bottle across ${cellars}`
-    : `${totalItems} bottles across ${cellars}`;
+    ? `1 bottle in ${cellars}`
+    : `${totalItems} bottles in ${cellars}`;
 };
 
 /** The longest code `?barcode=` accepts; real symbologies stop well short. */

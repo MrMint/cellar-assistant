@@ -158,11 +158,14 @@ test("the collection line counts only cellars you own or co-own (G36)", async ({
     const total = Object.values(
       after.itemCounts as Record<string, number>,
     ).reduce((a, b) => a + b, 0);
-    const cellars = `${after.cellarCount} ${after.cellarCount === 1 ? "cellar" : "cellars"}`;
+    const cellars =
+      after.cellarCount === 1
+        ? "your cellar"
+        : `your ${after.cellarCount} cellars`;
     const line =
       total === 0
         ? "Your collection awaits. Start by adding your first item."
-        : `${total} ${total === 1 ? "bottle" : "bottles"} across ${cellars}`;
+        : `${total} ${total === 1 ? "bottle" : "bottles"} in ${cellars}`;
     await expect(primary.getByText(line, { exact: true })).toBeVisible();
   } finally {
     await deleteCellars("primary", [mine]);

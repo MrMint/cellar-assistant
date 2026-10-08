@@ -121,20 +121,27 @@ const ownedBy = (viewer: string): SQL => sql`(
 
 /**
  * The newest thing that happened in cellar `c`: its creation, a bottle added
- * or changed, or a check-in on one of its bottles. Grouped joins rather than
- * correlated subqueries, because `check_ins.cellar_item_id` has no index and a
- * per-cellar probe of it would scan the table once per row.
+ * or changed, or a check-in on one of its bottles.
+ *
+ * A LATERAL probe per visible cellar, so the cost follows the cellars the
+ * viewer can see rather than every bottle and check-in in the database (the
+ * first version grouped both tables whole on every read). Each probe is
+ * `idx_cellar_items_cellar_id` for the bottles, then an index-only scan of
+ * `idx_check_ins_cellar_item_id_created_at` per bottle — that index exists
+ * for this (migration `20261008151737_check_ins_cellar_item_activity`, which
+ * has the measurements); without it every probe would scan `check_ins` whole.
+ * It still computes the activity of every visible cellar to sort them, so a
+ * world of many PUBLIC cellars would want a maintained `last_activity_at`.
  */
 const ACTIVITY = sql`greatest(c.created_at, a.bottle_at, a.check_in_at)`;
 const ACTIVITY_JOIN = sql`
-  left join (
-    select ci.cellar_id,
-           max(ci.updated_at) as bottle_at,
+  left join lateral (
+    select max(ci.updated_at) as bottle_at,
            max(k.created_at) as check_in_at
     from public.cellar_items ci
     left join public.check_ins k on k.cellar_item_id = ci.id
-    group by ci.cellar_id
-  ) a on a.cellar_id = c.id`;
+    where ci.cellar_id = c.id
+  ) a on true`;
 
 /**
  * `1|2026-10-07T18:04:05.123456` for one of yours, `0|…` for anyone else's:

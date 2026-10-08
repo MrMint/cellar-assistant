@@ -53,6 +53,11 @@ export function EnumSelect<
 
   // N03: the error is drawn here, under the select — a required pick that is
   // missing says so instead of only scrolling to it.
+  //
+  // While the options load, the stored value is one of them
+  // (`optionsHolding`): Joy's Select clears a value its options lack whenever
+  // they change, which wiped the country of every item past the first page of
+  // countries on Save.
   return (
     <Controller
       name={name}
