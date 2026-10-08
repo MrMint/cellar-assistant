@@ -4,11 +4,12 @@ import { execFileSync } from "node:child_process";
  * Direct Postgres access, for fixture teardown that has no API path.
  *
  * A place is created through `createPlace` — "the only place-creation path a
- * client has" (`place-creation-actor.ts`'s module doc) — and there is
- * deliberately no `deletePlace` mutation in `schema.graphql`. Unlike a cellar
- * (`deleteCellar`) or a tier list (`deleteTierList`), a place is a shared
- * reference entity with no per-viewer lifecycle a mutation could authorize, so
- * a spec that creates one has nothing to call to undo it.
+ * client has" (`place-creation-actor.ts`'s module doc). Since X27 there *is* a
+ * `deletePlace` mutation, but only for a place still under review (pending
+ * or rejected, its creator's alone): once the review shares it, a place is a
+ * shared reference entity with no per-viewer lifecycle a mutation could
+ * authorize, so a spec that cannot be sure where the review left its place
+ * still needs this.
  *
  * That matters for `PLACE_RATE_LIMIT_PER_DAY` (25/day,
  * `place-creation-actor.ts#enforceRateLimit`), because the limit counts rows
@@ -89,9 +90,10 @@ function psql(sql: string): string {
  *
  * ## `waitForRowMs`: when the row may not exist *yet*
  *
- * `createPlace` runs its AI review **before** it inserts
- * (`place-creation-actor.ts`), under a 120s invocation timeout. A spec that
- * gave up on a slow create can reach its teardown while that turn is still
+ * `createPlace` used to run its AI review **before** it inserts, under a
+ * 120s invocation timeout; since X27 it inserts at once (pending) and the
+ * review runs afterwards from the outbox, under a 30s bound. A spec that gave
+ * up on a slow create can still reach its teardown while that turn is
  * running and commits afterwards — so "no row" can mean "not yet". A caller
  * that does not know whether the create committed passes a window, and this
  * retries until the row appears and is deleted, or the window closes and it
@@ -212,4 +214,62 @@ export function insertPlace(input: {
       `st_setsrid(st_makepoint(${lng}, ${lat}), 4326)::geography, ` +
       `array['${input.category}']::text[], 0.9, 4.2, true, 'user')`,
   );
+}
+
+/**
+ * X27 / D28: pin a place's review where a spec needs it, whatever the stack's
+ * AI is doing.
+ *
+ * A new place is saved `pending` and an outbox row queues its AI review. On a
+ * lane with a working model that review can land within seconds — approving
+ * the place (now everyone's) or rejecting it — and on one without, never. A
+ * spec about the *pending* or *rejected* experience therefore cannot just wait;
+ * it holds the state instead, in one transaction:
+ *
+ *  - the place's queued review rows that have not been delivered are deleted,
+ *    so none is drawn again;
+ *  - `review_requested_at` is re-stamped, so a review already in flight finds
+ *    its verdict stale (`PlaceActor.applyReview` compares the stamp) and
+ *    writes nothing;
+ *  - the status — and for `rejected` the reason — is set.
+ *
+ * The edit-and-resubmit flow queues a fresh review row of its own afterwards,
+ * which this does not touch; call it again after a resubmit to hold the new
+ * submission too.
+ */
+export function holdPlaceInReview(
+  placeId: string,
+  status: "pending" | "rejected",
+  rejectionReason: string | null = null,
+): void {
+  if (!UUID_PATTERN.test(placeId)) {
+    throw new Error(`holdPlaceInReview: not a uuid: ${placeId}`);
+  }
+  if (
+    rejectionReason !== null &&
+    !/^[A-Za-z0-9 .,'-]+$/.test(rejectionReason)
+  ) {
+    throw new Error(
+      `holdPlaceInReview: unsafe reason ${JSON.stringify(rejectionReason)}`,
+    );
+  }
+  const reason =
+    rejectionReason === null
+      ? "null"
+      : `'${rejectionReason.replace(/'/g, "''")}'`;
+  const output = psql(
+    "delete from outbox where target_actor = 'PlaceReviewActor' " +
+      `and target_id = '${placeId}' and status in ('pending', 'delivering'); ` +
+      "with held as (update places set " +
+      `review_status = '${status}', rejection_reason = ${reason}, ` +
+      "review_requested_at = clock_timestamp(), " +
+      `reviewed_at = ${status === "rejected" ? "now()" : "null"} ` +
+      `where id = '${placeId}' returning 1) select count(*) from held`,
+  );
+  if (output !== "1") {
+    throw new Error(
+      `holdPlaceInReview: expected to hold place ${placeId} in ` +
+        `${CONTAINER}/${DB_NAME}, psql said ${JSON.stringify(output)}`,
+    );
+  }
 }

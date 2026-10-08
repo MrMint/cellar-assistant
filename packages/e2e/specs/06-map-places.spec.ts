@@ -31,11 +31,14 @@ import {
  * either.
  *
  * The id is taken from the `createPlace` **request**, not from the page the
- * form navigates to afterwards (the map, `?placeId=`, as in production). `createPlace` runs a synchronous AI review
- * before it inserts, so a slow review used to fail the first test at its URL
- * wait, the row committed a moment later, and the `afterAll` — with no id —
- * skipped the delete: the very leak it exists to close. The form mints the
- * id client-side, so it is known before the server has done anything.
+ * form navigates to afterwards (the map, `?placeId=`, as in production).
+ * `createPlace` used to run a synchronous AI review before it inserted, so a
+ * slow review failed the first test at its URL wait, the row committed a
+ * moment later, and the `afterAll` — with no id — skipped the delete: the
+ * very leak it exists to close. (Since X27 the place is inserted pending at
+ * once and reviewed afterwards, and it is on its creator's map either way,
+ * which is all the tests below need.) The form mints the id client-side, so
+ * it is known before the server has done anything.
  */
 test.describe.configure({ mode: "serial" });
 
