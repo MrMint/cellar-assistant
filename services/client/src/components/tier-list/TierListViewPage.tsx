@@ -191,105 +191,109 @@ export function TierListViewPage({
 
   return (
     <div className="mx-auto flex w-full max-w-[800px] flex-col gap-4 sm:px-4">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h3 className="type-title-2 break-words text-ink-1">{data.name}</h3>
-          {data.description && (
-            <p className="type-callout text-ink-2">{data.description}</p>
-          )}
-          <div className="mt-2 flex items-center gap-2">
-            <Badge variant="secondary" className="text-ink-2">
-              <PrivacyIcon aria-hidden strokeWidth={ICON_STROKE} />
-              {privacyInfo.label}
-            </Badge>
-            <span className="type-footnote tabular">
-              {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
-            </span>
+      {/* Header. Only the title shares its row with the actions: at 390 an
+          owner of a place list has five of them, and a description in the
+          title's column wrapped every two or three words. */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
+            {data.name}
+          </h1>
+          <div className="flex shrink-0 gap-1">
+            {data.isOwner && !isEditingLocked && (
+              <Hint label="Add entry">
+                <IconButton
+                  variant="outline"
+                  size="sm"
+                  aria-label="Add entry"
+                  onClick={() => {
+                    setAddError(null);
+                    setAddSession((session) => session + 1);
+                    setAddOpen(true);
+                  }}
+                >
+                  <Add />
+                </IconButton>
+              </Hint>
+            )}
+            {data.listType === "place" && (
+              <Hint label="View on map">
+                <IconButton
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  aria-label="View on map"
+                >
+                  <Link
+                    href={`/map?tierLists=${data.id}`}
+                    underline="none"
+                    className="rounded-full"
+                  >
+                    <MapIcon />
+                  </Link>
+                </IconButton>
+              </Hint>
+            )}
+            {data.privacy !== "PRIVATE" && (
+              <Hint label="Share">
+                <IconButton
+                  variant="outline"
+                  size="sm"
+                  aria-label="Share"
+                  onClick={handleShare}
+                >
+                  <Share />
+                </IconButton>
+              </Hint>
+            )}
+            {data.isOwner && (
+              <Hint label={lockLabel}>
+                <IconButton
+                  variant={isEditingLocked ? "secondary" : "outline"}
+                  size="sm"
+                  // The name says what a press does ("Unlock editing"), as the
+                  // tooltip does; no aria-pressed beside it, or a screen reader
+                  // hears "Unlock editing, pressed" and the two contradict.
+                  aria-label={lockLabel}
+                  className={cn(isEditingLocked && "text-ink-1")}
+                  onClick={handleToggleEditingLock}
+                  disabled={isSavingEditingLock}
+                >
+                  {isEditingLocked ? <Lock /> : <Unlock />}
+                </IconButton>
+              </Hint>
+            )}
+            {data.isOwner && (
+              <Hint label="Edit list">
+                <IconButton
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  aria-label="Edit list"
+                >
+                  <Link
+                    href={`/tier-lists/${data.id}/edit`}
+                    underline="none"
+                    className="rounded-full"
+                  >
+                    <Edit />
+                  </Link>
+                </IconButton>
+              </Hint>
+            )}
           </div>
         </div>
-        <div className="flex shrink-0 gap-1">
-          {data.isOwner && !isEditingLocked && (
-            <Hint label="Add entry">
-              <IconButton
-                variant="outline"
-                size="sm"
-                aria-label="Add entry"
-                onClick={() => {
-                  setAddError(null);
-                  setAddSession((session) => session + 1);
-                  setAddOpen(true);
-                }}
-              >
-                <Add />
-              </IconButton>
-            </Hint>
-          )}
-          {data.listType === "place" && (
-            <Hint label="View on map">
-              <IconButton
-                asChild
-                variant="outline"
-                size="sm"
-                aria-label="View on map"
-              >
-                <Link
-                  href={`/map?tierLists=${data.id}`}
-                  underline="none"
-                  className="rounded-full"
-                >
-                  <MapIcon />
-                </Link>
-              </IconButton>
-            </Hint>
-          )}
-          {data.privacy !== "PRIVATE" && (
-            <Hint label="Share">
-              <IconButton
-                variant="outline"
-                size="sm"
-                aria-label="Share"
-                onClick={handleShare}
-              >
-                <Share />
-              </IconButton>
-            </Hint>
-          )}
-          {data.isOwner && (
-            <Hint label={lockLabel}>
-              <IconButton
-                variant={isEditingLocked ? "secondary" : "outline"}
-                size="sm"
-                // The name says what a press does ("Unlock editing"), as the
-                // tooltip does; no aria-pressed beside it, or a screen reader
-                // hears "Unlock editing, pressed" and the two contradict.
-                aria-label={lockLabel}
-                className={cn(isEditingLocked && "text-ink-1")}
-                onClick={handleToggleEditingLock}
-                disabled={isSavingEditingLock}
-              >
-                {isEditingLocked ? <Lock /> : <Unlock />}
-              </IconButton>
-            </Hint>
-          )}
-          {data.isOwner && (
-            <Hint label="Edit list">
-              <IconButton
-                asChild
-                variant="outline"
-                size="sm"
-                aria-label="Edit list"
-              >
-                <Link
-                  href={`/tier-lists/${data.id}/edit`}
-                  underline="none"
-                  className="rounded-full"
-                >
-                  <Edit />
-                </Link>
-              </IconButton>
-            </Hint>
-          )}
+        {data.description && (
+          <p className="type-callout text-ink-2">{data.description}</p>
+        )}
+        <div className="mt-1 flex items-center gap-2">
+          <Badge variant="secondary" className="text-ink-2">
+            <PrivacyIcon aria-hidden strokeWidth={ICON_STROKE} />
+            {privacyInfo.label}
+          </Badge>
+          <span className="type-footnote tabular">
+            {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
+          </span>
         </div>
       </div>
 

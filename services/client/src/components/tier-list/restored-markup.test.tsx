@@ -167,7 +167,7 @@ describe("TierListViewPage (restored header and tabs)", () => {
     const html = render(
       <TierListViewPage data={data} insightsData={insights} />,
     );
-    assert.match(html, /<h3[^>]*>Best Bars</);
+    assert.match(html, /<h1[^>]*>Best Bars</);
     assert.match(html, />Friends</);
     assert.match(html, /aria-label="Add entry"/);
     assert.match(html, /href="\/map\?tierLists=tl-1"/);
