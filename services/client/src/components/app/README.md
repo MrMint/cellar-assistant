@@ -77,6 +77,7 @@ No ALL CAPS except `type-overline`.
 | item types | `itemTypeTokens[type]` (`TypeChip`, `TypeGlyph`) |
 | tier bands | `bg-band-5` … `bg-band-1`, Unrated `bg-surface-3`; always print the band word |
 | hex / `rgb(` | not allowed in `.ts(x)` (the guard); add a token to `globals.css` + `lib/tokens.ts` |
+| Tailwind palette (`text-red-500`, `bg-zinc-800`) | not allowed anywhere (the guard): use the roles above |
 
 Naming trap: shadcn's `accent` (`bg-accent`) is the **hover/pressed surface**,
 not the brass accent. Brass is `primary` (or `brass`).

@@ -293,8 +293,10 @@ The client is **shadcn/ui on Radix + Tailwind CSS v4 + `motion`** (decision D20,
   the #1 crown and hero washes. Danger is text and outline; solid danger only inside
   `ConfirmSheet`. Shadcn's `accent` token is the pressed surface, **not** the brass accent.
 - **No raw values:** no hex/rgb in `.ts(x)` outside the allowlist, no arbitrary colour classes
-  (`bg-[#…]`), no literal springs or durations outside `lib/motion.ts`. The
-  `src/lib/dev-checks/ui-platform.test.ts` guard enforces this.
+  (`bg-[#…]`) and no Tailwind default-palette classes (`text-red-500`), no literal springs,
+  durations or bézier curves outside `lib/motion.ts`. The
+  `src/lib/dev-checks/ui-platform.test.ts` guard enforces this, and
+  `palette-contrast.test.ts` holds every text colour at 4.5:1 on the surfaces it sits on.
 - **Type:** use the `type-*` utilities (large-title, title-1, title-2, headline, body, callout,
   footnote, overline, numeral-xl). Fraunces is for names on heroes, vintages and rank numerals;
   everything else is Inter. Use `tabular` for numbers. No ALL CAPS except `type-overline`.
@@ -361,8 +363,8 @@ has one owning slice in the migration plan; don't edit another slice's files,
   introspection with `agent-browser`. It needs a running `next dev`, so it applies **only when the
   user already has `bun run dev` up** — you may not start one. With no dev server, verify against
   the containerised client on 3003 instead; that gives you the browser half but not `/_next/mcp`,
-  since the image runs `next start`. (There is no committed design-principles or style-guide doc
-  in this repo to check against.)
+  since the image runs `next start`. Check UI against "UI and styling" above,
+  `services/client/src/components/app/README.md` and `docs/product/design-direction.md`.
 - Use the IDE `getDiagnostics` tool to check for problems in code.
 
 ### Three ways a suite result lies here
