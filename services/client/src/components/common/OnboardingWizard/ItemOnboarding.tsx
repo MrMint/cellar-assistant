@@ -42,7 +42,7 @@ import {
   readCapturePrefs,
   rememberCapturePrefs,
 } from "@/lib/capture/capture-prefs";
-import { BACKGROUND_AFTER_MS } from "@/lib/capture/draft-store";
+import { BACKGROUND_AFTER_MS, draftIdFrom } from "@/lib/capture/draft-store";
 import { AiStatus } from "../AiStatus";
 import { AnimationShowcase, type ShowcaseStage } from "../AnimationShowcase";
 import { QuickAddCard } from "../QuickAddCard";
@@ -87,7 +87,7 @@ export const ItemOnboarding = (props: ItemOnboardingProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const [run, setRun] = useState(0);
-  const [resumeId, setResumeId] = useState(props.resumeId);
+  const [resumeId, setResumeId] = useState(() => draftIdFrom(props.resumeId));
   const restart = useCallback(() => {
     // Drop `?draft=`: the next run is a new bottle.
     if (resumeId !== undefined) router.replace(pathname);
@@ -232,9 +232,27 @@ const ItemOnboardingRun = ({
     const label = itemTypeLabel(itemType).toLowerCase();
     const href = resumeHref(id, itemType);
     const tracked = captureDrafts.background(id, (draft) => {
-      if (draft.settled.state === "ready") {
+      // A typed refusal (nothing read, a menu, a spent allowance) settles
+      // "ready" too — with an outcome instead of a reading. Only a reading
+      // is "read".
+      const refusal =
+        draft.settled.state === "ready"
+          ? draft.settled.value.extractionError
+          : undefined;
+      if (draft.settled.state === "ready" && refusal === undefined) {
         notify(`Your ${label} is read`, {
           description: "The draft is waiting for you to check it.",
+          undo: () => router.push(href),
+          actionLabel: "Review",
+          durationMs: 15_000,
+        });
+      } else if (refusal !== undefined) {
+        notify(refusal.title, {
+          description: `Your ${label} draft is waiting — ${
+            refusal.kind === "looks-like-menu"
+              ? "scan it as a menu, or retake it."
+              : "fill the details in yourself."
+          }`,
           undo: () => router.push(href),
           actionLabel: "Review",
           durationMs: 15_000,

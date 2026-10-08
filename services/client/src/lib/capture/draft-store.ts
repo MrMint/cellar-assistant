@@ -24,6 +24,20 @@
  * Plain module, no React — `draft-store.test.ts`.
  */
 
+const SESSION_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `?draft=` as a session id to resume, or `undefined`. The id is minted by
+ * `crypto.randomUUID()`, so anything else in the URL is not a draft — a
+ * hand-edited or truncated link opens a fresh capture rather than a draft
+ * card that can only fail to read and fail to save.
+ */
+export const draftIdFrom = (value: string | undefined): string | undefined =>
+  value !== undefined && SESSION_ID.test(value)
+    ? value.toLowerCase()
+    : undefined;
+
 /** When the progress screen offers to carry on without you. */
 export const BACKGROUND_AFTER_MS = 8000;
 

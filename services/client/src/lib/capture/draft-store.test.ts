@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { createDraftStore, DRAFT_TTL_MS } from "./draft-store.ts";
+import { createDraftStore, DRAFT_TTL_MS, draftIdFrom } from "./draft-store.ts";
 
 const meta = { label: "wine", resumeHref: "/add/wines?draft=a" };
 
@@ -96,5 +96,17 @@ describe("draft store (X05 background continuation)", () => {
     store.track("new", meta, () => Promise.resolve("y"));
     assert.equal(store.get("old"), null);
     assert.notEqual(store.get("new"), null);
+  });
+});
+
+describe("?draft= (X05 resume link)", () => {
+  test("only a session id resumes; anything else opens a fresh capture", () => {
+    const id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    assert.equal(draftIdFrom(id), id);
+    assert.equal(draftIdFrom(id.toUpperCase()), id);
+    assert.equal(draftIdFrom(undefined), undefined);
+    assert.equal(draftIdFrom(""), undefined);
+    assert.equal(draftIdFrom("abc"), undefined);
+    assert.equal(draftIdFrom(`${id}x`), undefined);
   });
 });
