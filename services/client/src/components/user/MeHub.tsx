@@ -9,6 +9,7 @@ import {
   Recipe,
   Scan,
   Store,
+  WantToTry,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { InsetSection, ListRow, Page } from "@/components/app/Page";
@@ -34,6 +35,7 @@ export const ME_SECTIONS: readonly {
       { label: "Tier lists", href: "/tier-lists", icon: Ranked },
       { label: "Top rated", href: "/rankings", icon: Leaderboard },
       { label: "Loved", href: "/favorites", icon: Love },
+      { label: "Want to try", href: "/want-to-try", icon: WantToTry },
     ],
   },
   {

@@ -121,7 +121,7 @@ describe("generateBreadcrumbs — the old ServerBreadcrumbs rule", () => {
   test("a leading (authenticated) group segment is skipped", () => {
     assert.deepEqual(
       generateBreadcrumbs("/(authenticated)/favorites").map((b) => b.label),
-      ["Home", "Favorites"],
+      ["Home", "Loved"],
     );
   });
 });

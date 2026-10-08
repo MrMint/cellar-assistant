@@ -34,11 +34,12 @@ describe("MeHub", () => {
     assert.ok(html.includes("pat@example.test"));
   });
 
-  test("Lists (Tier lists, Top rated, Loved), Friends, Recipes, Brands, Scans, Edit profile — in that order", () => {
+  test("Lists (Tier lists, Top rated, Loved, Want to try), Friends, Recipes, Brands, Scans, Edit profile — in that order", () => {
     assert.deepEqual(links, [
       "Tier lists -> /tier-lists",
       "Top rated -> /rankings",
       "Loved -> /favorites",
+      "Want to try -> /want-to-try",
       "Friends -> /friends",
       "Recipes -> /recipes",
       "Brands -> /brands",

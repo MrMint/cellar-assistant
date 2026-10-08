@@ -5,7 +5,7 @@ import { getServerUser } from "@/utilities/auth-server";
 export const metadata: Metadata = { title: "Me · Cellar Assistant" };
 
 /**
- * `/me` — the Me tab's hub (D1): Lists (Tier lists, Top rated, Loved),
+ * `/me` — the Me tab's hub (D1): Lists (Tier lists, Top rated, Loved, Want to try),
  * Friends, Recipes, Brands, Scans, Edit profile and Sign out. Links only; the
  * viewer comes from the session the group's layout has already checked.
  */
