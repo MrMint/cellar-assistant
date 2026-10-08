@@ -101,7 +101,12 @@ describe("RecipeDetails (restored)", () => {
 
   test("the details card: title, subtitle phrases joined with ' • ', chips", () => {
     assert.match(html, /<h3[^>]*>Negroni</);
-    assert.match(html, /cocktail • Easy • 5 minutes • Serves 1 • Version 2/);
+    assert.match(
+      html.replace(/<[^>]+>/g, ""),
+      /cocktail • Easy • 5 minutes • Serves 1 • Version 2/,
+    );
+    // each phrase is an unbreakable run, so "Serves" never wraps away from "1"
+    assert.match(html, /<span class="whitespace-nowrap">Serves 1<\/span>/);
     assert.match(html, />Easy</);
     assert.match(html, />5 min</);
     assert.match(html, />Serves 1</);

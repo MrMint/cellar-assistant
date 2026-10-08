@@ -67,8 +67,15 @@ export function RecipeDetailsCard({
     <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
       <h3 className="type-title-2">{title}</h3>
 
+      {/* Each phrase is one unbreakable run, so a wrap falls between phrases
+          ("… • 3 Minutes •" / "Serves 1"), never inside one ("Serves" / "1"). */}
       <p className="type-body text-ink-2 capitalize">
-        {without([null, undefined], subTitlePhrases).join(" • ")}
+        {without([null, undefined], subTitlePhrases).map((phrase, index) => (
+          <span key={phrase}>
+            {index > 0 && " • "}
+            <span className="whitespace-nowrap">{phrase}</span>
+          </span>
+        ))}
       </p>
 
       <div className="flex flex-wrap gap-2">
