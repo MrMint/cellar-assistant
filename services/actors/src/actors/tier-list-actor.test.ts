@@ -25,8 +25,10 @@ import type { Ctx, PermissionType } from "@cellar-assistant/contracts";
 import {
   adminCtx,
   anonymousCtx,
+  BudgetExceededError,
   ConflictError,
   ForbiddenError,
+  NO_AI_CAPABILITIES,
   NotFoundError,
   pageArgs,
   systemCtx,
@@ -37,6 +39,7 @@ import { outbox, tierListItems, tierLists } from "@cellar-assistant/db";
 import { and, eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
+import { setAiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import {
   activate,
@@ -1059,6 +1062,219 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
           actor.generateInsights(systemCtx("r")),
         ).rejects.toBeInstanceOf(ConflictError);
       });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* N07: insightsStatus                                                  */
+  /* ------------------------------------------------------------------ */
+
+  describe("insightsStatus (N07)", () => {
+    const withInsightsAvailable = async <T>(
+      available: boolean,
+      run: () => Promise<T>,
+    ): Promise<T> => {
+      setAiCapabilities({
+        ...NO_AI_CAPABILITIES,
+        tierListInsights: available,
+      });
+      try {
+        return await run();
+      } finally {
+        setAiCapabilities(NO_AI_CAPABILITIES);
+      }
+    };
+
+    const seedThree = async (
+      db: DbOrTx,
+      actor: TierListActor,
+      owner: string,
+    ): Promise<void> => {
+      const wines = await Promise.all(
+        ["A", "B", "C"].map((n) => seedWine(db, owner, n)),
+      );
+      for (const wineId of wines) {
+        await actor.addItem(userCtx(owner, `add-${wineId}`), {
+          entry: { type: "WINE", id: wineId },
+        });
+      }
+    };
+
+    it("goes NOT_ENOUGH_ENTRIES → PENDING → READY, never a guess", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const id = await seedTierList(db, { createdById: owner });
+          const actor = await activate(
+            newTierListActor(id, db, async () => ({ summary: "ok" })),
+          );
+          const viewer = userCtx(owner, "read");
+          expect((await actor.get(viewer)).insightsStatus).toBe(
+            "NOT_ENOUGH_ENTRIES",
+          );
+
+          await seedThree(db, actor, owner);
+          expect(await actor.get(viewer)).toMatchObject({
+            insightsStatus: "PENDING",
+            insightsFailureReason: null,
+          });
+
+          await actor.generateInsights(systemCtx("deliver"));
+          expect((await actor.get(viewer)).insightsStatus).toBe("READY");
+        }),
+      );
+    });
+
+    it("is UNAVAILABLE, not PENDING, when no AI provider is installed", async () => {
+      await withInsightsAvailable(false, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const id = await seedTierList(db, { createdById: owner });
+          const actor = await activate(newTierListActor(id, db));
+          await seedThree(db, actor, owner);
+          expect((await actor.get(userCtx(owner, "r"))).insightsStatus).toBe(
+            "UNAVAILABLE",
+          );
+        }),
+      );
+    });
+
+    it("records a failed attempt with its reason and retry time, and still fails the delivery", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const id = await seedTierList(db, { createdById: owner });
+          const refusal = new BudgetExceededError(
+            "per-user cap reached",
+            "USER_CAP",
+            new Date(Date.now() + 30 * 60_000).toISOString(),
+          );
+          const actor = await activate(
+            newTierListActor(id, db, async () => {
+              throw refusal;
+            }),
+          );
+          await seedThree(db, actor, owner);
+
+          await expect(
+            actor.generateInsights(systemCtx("deliver")),
+          ).rejects.toBe(refusal);
+          expect(await actor.get(userCtx(owner, "r"))).toMatchObject({
+            insightsStatus: "FAILED",
+            insightsFailureReason: "USER_CAP",
+            insightsRetryAt: refusal.retryAt,
+          });
+
+          const [row] = await db
+            .select({ failure: tierLists.insightsFailure })
+            .from(tierLists)
+            .where(eq(tierLists.id, id));
+          expect(row?.failure).toMatch(/^BUDGET_EXCEEDED\[USER_CAP\]: /);
+        }),
+      );
+    });
+
+    it("tells only the creator that their own allowance ran out", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const stranger = await seedUser(db);
+          const id = await seedTierList(db, {
+            createdById: owner,
+            privacy: "PUBLIC",
+          });
+          const actor = await activate(
+            newTierListActor(id, db, async () => {
+              throw new BudgetExceededError(
+                "per-user cap reached",
+                "USER_CAP",
+                new Date(Date.now() + 30 * 60_000).toISOString(),
+              );
+            }),
+          );
+          await seedThree(db, actor, owner);
+          await expect(
+            actor.generateInsights(systemCtx("deliver")),
+          ).rejects.toBeInstanceOf(BudgetExceededError);
+
+          // The creator's usage window is theirs: another viewer sees a
+          // failure, with no reason and no time read off it.
+          expect(await actor.get(userCtx(stranger, "r"))).toMatchObject({
+            insightsStatus: "FAILED",
+            insightsFailureReason: null,
+            insightsRetryAt: null,
+          });
+          expect(
+            (await actor.get(userCtx(owner, "r"))).insightsFailureReason,
+          ).toBe("USER_CAP");
+        }),
+      );
+    });
+
+    it("clears the failure when a later attempt succeeds", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const id = await seedTierList(db, { createdById: owner });
+          let fail = true;
+          const actor = await activate(
+            newTierListActor(id, db, async () => {
+              if (fail) throw new ConflictError("unreachable");
+              return { summary: "ok" };
+            }),
+          );
+          await seedThree(db, actor, owner);
+          await expect(
+            actor.generateInsights(systemCtx("one")),
+          ).rejects.toBeInstanceOf(ConflictError);
+          fail = false;
+          await actor.generateInsights(systemCtx("two"));
+          expect(await actor.get(userCtx(owner, "r"))).toMatchObject({
+            insightsStatus: "READY",
+            insightsFailureReason: null,
+            insightsRetryAt: null,
+          });
+        }),
+      );
+    });
+
+    it("a change inside the 24h throttle queues the refresh for when it lifts", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const generatedAt = new Date(Date.now() - 60 * 60_000); // an hour ago
+          const id = await seedTierList(db, {
+            createdById: owner,
+            insightsGeneratedAt: generatedAt,
+          });
+          const actor = await activate(
+            newTierListActor(id, db, async () => ({ summary: "ok" })),
+          );
+          await seedThree(db, actor, owner);
+          // The rows the adds queued have been delivered: this is that
+          // delivery, arriving inside the throttle.
+          await db
+            .update(outbox)
+            .set({ status: "delivered" })
+            .where(eq(outbox.targetId, id));
+
+          const result = await actor.generateInsights(systemCtx("deliver"));
+          expect(result.reason).toBe("throttled");
+
+          const [deferred] = await db
+            .select({ runAfter: outbox.runAfter })
+            .from(outbox)
+            .where(and(eq(outbox.targetId, id), eq(outbox.status, "pending")));
+          const lifts = generatedAt.getTime() + 24 * 60 * 60_000;
+          expect(
+            Math.abs((deferred?.runAfter.getTime() ?? 0) - lifts),
+          ).toBeLessThan(60_000);
+
+          const dto = await actor.get(userCtx(owner, "r"));
+          expect(dto.insightsStatus).toBe("PENDING");
+          expect(Date.parse(dto.insightsRetryAt ?? "")).toBe(lifts);
+        }),
+      );
     });
   });
 

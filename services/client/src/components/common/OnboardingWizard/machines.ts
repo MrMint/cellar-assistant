@@ -3,6 +3,7 @@ import type { Client } from "urql";
 import { assign, createMachine, type PromiseActorLogic } from "xstate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { Barcode } from "@/constants";
+import type { AiOutcome } from "@/lib/ai/outcome";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
 import { searchByBarcode } from "./actors/searchByBarcode";
@@ -77,8 +78,11 @@ export const OnboardingMachine = createMachine(
         displayImageDataUrl?: string;
         itemOnboardingId: string;
         defaults?: OnboardingDefaults;
-        /** The server's reason nothing was read, shown above the form. */
-        extractionError?: string;
+        /**
+         * Why nothing was read, as words for a person (N07: chosen by
+         * `aiOutcome`, never the server's message). Shown above the form.
+         */
+        extractionError?: AiOutcome;
         existingItemId?: string;
         /** The cellar_items ID after adding item to cellar (used for redirect) */
         cellarItemId?: string;

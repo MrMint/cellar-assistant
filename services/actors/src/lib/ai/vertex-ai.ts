@@ -47,6 +47,7 @@ import {
   requireVector,
   withImageContext,
 } from "./http.ts";
+import { beforeModelCall } from "./no-response.ts";
 import type {
   AIProvider,
   EmbeddingRequest,
@@ -181,7 +182,11 @@ export const createVertexAIProvider = (
     await postJson({
       url,
       body,
-      headers: { authorization: `Bearer ${await accessToken()}` },
+      // The token exchange precedes the model call, so however it fails, no
+      // model answered (D17).
+      headers: {
+        authorization: `Bearer ${await beforeModelCall(accessToken)}`,
+      },
       timeoutMs: config.timeoutMs,
       provider: "vertex-ai",
       what,

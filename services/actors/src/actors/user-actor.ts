@@ -118,6 +118,7 @@
 import type {
   AcceptFriendRequestResult,
   ActorCategory,
+  AiCapabilities,
   ConfirmFriendshipPayload,
   ConfirmFriendshipResult,
   Ctx,
@@ -159,6 +160,7 @@ import { type Friendship, isFriend, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { isEmailShaped } from "../auth/display-name.ts";
 import { EntityActorBase } from "../lib/actor-base.ts";
+import { aiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import { deliveryOf } from "../lib/delivery.ts";
@@ -381,6 +383,18 @@ export class UserActor
     this.requireAggregate();
     requireSignedIn(ctx, "view a profile");
     return this.#toProfile(ctx, await this.#profileFields(this.key));
+  }
+
+  /**
+   * N07/D25: the process's AI capabilities (`lib/ai/capabilities.ts`), for
+   * `viewer.aiCapabilities`. Not secret, but asked only of one's own actor —
+   * `viewer` is the only place a client reads it, and refusing everyone else
+   * keeps this from activating a stranger's actor for no reason.
+   */
+  async aiCapabilities(ctx: Ctx): Promise<AiCapabilities> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "read these capabilities");
+    return aiCapabilities();
   }
 
   /** Owner (or admin) only. Proxies to better-auth's `user` table. */

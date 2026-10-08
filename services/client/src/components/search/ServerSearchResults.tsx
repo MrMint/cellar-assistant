@@ -1,7 +1,7 @@
 import { Button, Stack, Typography } from "@mui/joy";
 import Link from "next/link";
 import { MdAdd } from "react-icons/md";
-import { ApiError } from "@/components/cellar-api/ApiError";
+import { AiFailureStatus } from "@/components/common/AiStatus";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { searchResultsFromNodes } from "./adapter";
@@ -35,8 +35,19 @@ export async function ServerSearchResults({ query }: ServerSearchResultsProps) {
   const result = unwrapResult(data.itemSearch, "ItemSearchConnection");
 
   if (!result.ok) {
+    // N07: most often "no embedding provider" or a spent allowance — said in
+    // words chosen from the reason, never the server's message.
     return (
-      <ApiError error={result.error} title="Search is unavailable right now" />
+      <AiFailureStatus
+        failure={{
+          code: result.error.code,
+          reason: result.error.reason,
+          retryAt: result.error.retryAt,
+        }}
+        title="Search is unavailable right now"
+        fallback="scan a barcode or browse your cellars"
+        subject="search"
+      />
     );
   }
 

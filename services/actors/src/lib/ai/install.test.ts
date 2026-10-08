@@ -29,6 +29,7 @@ import type { Ctx } from "@cellar-assistant/contracts";
 import {
   BudgetExceededError,
   formatStoredFailure,
+  NO_AI_CAPABILITIES,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,6 +47,7 @@ import { menuExtractionProvider, menuMatchVerifier } from "../menu-ai.ts";
 import { recipePhotoExtractor } from "../recipe-photo-ai.ts";
 import { embeddingModel, setEmbeddingModel } from "../vectors.ts";
 import type { ModelBudget } from "./budget.ts";
+import { aiCapabilities, setAiCapabilities } from "./capabilities.ts";
 import { readAIProviderConfig } from "./config.ts";
 import type { ImageLoader } from "./images.ts";
 import { embeddingModelIdentity, installAI } from "./install.ts";
@@ -173,6 +175,7 @@ const budgetThat = (
         };
       },
       settle: async () => {},
+      release: async () => {},
     },
   };
 };
@@ -319,6 +322,47 @@ describe("installSeams records which embedding every vector is made by", () => {
       embeddingModelIdentity("openai-compatible", "gemini-embedding-2")
         .acceptsImages,
     ).toBe(false);
+  });
+});
+
+describe("installSeams records what a client may offer (N07, D25)", () => {
+  afterEach(() => {
+    setEmbeddingModel(null);
+    setAiCapabilities(NO_AI_CAPABILITIES);
+  });
+
+  it("reports every chat feature, and photo search only for an image-capable embedder", () => {
+    installAI({ env: ENV, provider, loadImages });
+    expect(aiCapabilities()).toEqual({
+      semanticSearch: true,
+      imageSearch: false,
+      labelRead: true,
+      menuScan: true,
+      recipePhoto: true,
+      tierListInsights: true,
+    });
+  });
+
+  it("reports photo search on the local llama.cpp multimodal path too (D25 parity)", () => {
+    installAI({
+      env: {
+        AI_PROVIDER: "openai-compatible",
+        OPENAI_COMPAT_EMBEDDING_ENDPOINT: "http://localhost:8091",
+        OPENAI_COMPAT_EMBEDDING_INPUT: "llamacpp-multimodal",
+      },
+      loadImages,
+    });
+    expect(aiCapabilities().imageSearch).toBe(true);
+  });
+
+  it("reports nothing when AI_PROVIDER is unset", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(installAI({ env: {} }).installed).toBe(false);
+      expect(aiCapabilities()).toEqual(NO_AI_CAPABILITIES);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
@@ -505,7 +549,9 @@ describe("a refusal is a refusal, on every seam", () => {
     installAI({ env: ENV, provider, loadImages, budget });
 
     const error = await drive.menu_extraction?.(ctx).catch((e: unknown) => e);
-    expect(formatStoredFailure(error)).toMatch(/^BUDGET_EXCEEDED: /);
+    expect(formatStoredFailure(error)).toMatch(
+      /^BUDGET_EXCEEDED\[SERVICE_BUDGET\]: /,
+    );
     // Not CONFLICT ("being retried automatically") and not VALIDATION ("the
     // photo was rejected"): both would describe a refusal as a defect in the
     // photograph the person took.

@@ -224,12 +224,22 @@ const GUARDED: readonly Guarded[] = [
     sidecarTargets: [],
   },
   {
+    // N07: the boot-time answer to "what can this deployment's AI do", read
+    // by `UserActor.aiCapabilities`. A registry, not a seam — it holds a
+    // record of booleans, never a provider — guarded so it stays that way.
+    file: "../lib/ai/capabilities.ts",
+    imports: ["@cellar-assistant/contracts"],
+    sidecarTargets: [],
+  },
+  {
     file: "user-actor.ts",
     // No `sidecar.ts` or actor client at all: §2.1 is absolute for this one,
     // and B4's own test says the same thing from the other direction.
     imports: [
       ...SHARED_IMPORTS,
       "../lib/profile-store.ts",
+      // `aiCapabilities()` — a registry of booleans, guarded above.
+      "../lib/ai/capabilities.ts",
       // `isEmailShaped` — pure, and guarded above.
       "../auth/display-name.ts",
     ],

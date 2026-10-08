@@ -132,6 +132,7 @@ import type {
   BudgetKind,
   Ctx,
   InternalBudgetActorInterface,
+  ModelReleaseInput,
   ModelReserveInput,
   ModelSettleInput,
   ReserveInput,
@@ -270,6 +271,22 @@ const requireUuidOrNull = (
 /** `getMonthStart()` from the helper this replaces, in UTC. */
 export const monthStart = (now: Date = new Date()): Date =>
   new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+/**
+ * The first instant of the UTC month after `now`'s — when every monthly cap
+ * this actor keeps (request count, free tier, money) starts again from zero.
+ * A refusal's `retryAt` for a monthly limit; a hint for a person, so the host
+ * clock is good enough here where it is not for a cap (`inMonthOf`).
+ */
+export const nextMonthStart = (now: Date = new Date()): Date =>
+  new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+/**
+ * The rows that count against a cap: every row but a model reservation
+ * `releaseForModel` gave back because its call never got an answer (D17).
+ * Applied to the month's request count, the per-user windows and `usage`.
+ */
+const countsAgainstCaps: SQL = sql`coalesce(${apiUsageLog.metadata} ->> 'released', 'false') <> 'true'`;
 
 /** "The month this transaction is in", by the database's clock. */
 const CURRENT_MONTH = "current" as const;
@@ -946,7 +963,7 @@ export const modelCallNanoCents = (
  * `InternalBudgetActorInterface` whose arguments they are; re-exported here so
  * this module's existing importers keep working.
  */
-export type { ModelReserveInput, ModelSettleInput };
+export type { ModelReleaseInput, ModelReserveInput, ModelSettleInput };
 
 /**
  * The `api_budget_config` row a model seam gets when nobody has written one.
@@ -1239,6 +1256,8 @@ export class BudgetActor
         isEnabled: false,
         reason: `no budget is configured for ${budgetKind(kind)}; configure one with setBudget before spending against it`,
         usageId: null,
+        refusal: "SERVICE_BUDGET",
+        retryAt: null,
       };
     }
 
@@ -1253,6 +1272,8 @@ export class BudgetActor
         isEnabled: false,
         reason: `${budgetKind(kind)} is disabled`,
         usageId: null,
+        refusal: "SERVICE_BUDGET",
+        retryAt: null,
       };
     }
 
@@ -1326,8 +1347,10 @@ export class BudgetActor
             requestCount: 0,
             freeTierLimit: config.freeTierMonthlyRequests,
             isEnabled: true,
-            reason: refusal,
+            reason: refusal.reason,
             usageId: null,
+            refusal: "USER_CAP",
+            retryAt: refusal.retryAt,
           };
         }
       }
@@ -1356,6 +1379,8 @@ export class BudgetActor
           effectiveCostCents: 0,
           reason: `${budgetKind(kind)} has made ${totals.requestCount} of its ${model.maxRequests} model calls allowed this month; raise it with AI_BUDGET_MAX_REQUESTS=${kind.endpoint}=<count> once you know why it ran that many`,
           usageId: null,
+          refusal: "SERVICE_BUDGET",
+          retryAt: nextMonthStart().toISOString(),
         };
       }
 
@@ -1389,6 +1414,8 @@ export class BudgetActor
             effectiveCostCents: 0,
             reason: `${budgetKind(kind)} free tier exhausted (${totals.requestCount}/${config.freeTierMonthlyRequests} requests) and no paid budget is configured`,
             usageId: null,
+            refusal: "SERVICE_BUDGET",
+            retryAt: nextMonthStart().toISOString(),
           };
         }
         // 3. Paid, but this call would cross the cap.
@@ -1399,6 +1426,8 @@ export class BudgetActor
             effectiveCostCents: 0,
             reason: `${budgetKind(kind)} monthly budget exhausted: ${totals.spendCents} of ${config.monthlyBudgetCents} cents spent, ${cost} more requested`,
             usageId: null,
+            refusal: "SERVICE_BUDGET",
+            retryAt: nextMonthStart().toISOString(),
           };
         }
       }
@@ -1600,11 +1629,131 @@ export class BudgetActor
   }
 
   /**
+   * Give back a model reservation whose call never got an answer — D17,
+   * "only calls that got a model response count against the allowance".
+   *
+   * `lib/ai/budget.ts` calls this when the provider could not be reached,
+   * timed out, or answered with an HTTP error before generating anything
+   * (`isNoModelResponse`). Nothing was generated, so nothing should be used
+   * up: the row stops counting against the month's request cap, the free
+   * tier and the caller's per-user window (`countsAgainstCaps`), which is
+   * what makes a retry free. A call that got *any* response — even one that
+   * then fails to parse — is settled, never released.
+   *
+   * ## Why the row is marked rather than deleted
+   *
+   * The nanocent carry (`MODEL_RATES`). A row books the whole cents its
+   * nanocents pushed the month's exact total past; deleting the row that
+   * crossed a cent boundary would leave the month's booked cents *below*
+   * `floor(sum(nanoCents) / 1e9)` — the one direction the ledger must never
+   * err in. So the row stays, its nanocents go to zero, and its cents are
+   * re-derived from the other rows exactly as `settleForModel` does for a
+   * measurement of zero, clamped at zero. It also keeps the trail: an
+   * operator can still see that a call was attempted and released.
+   *
+   * `keepCost` (a timeout or reset connection, which the provider may have
+   * run and billed) marks the row released for the allowance and leaves its
+   * nanocents and cents exactly as booked.
+   *
+   * Idempotent: releasing a released row is a no-op, and so is releasing a
+   * settled one — a settlement means a response arrived, and that call counts.
+   */
+  async releaseForModel(ctx: Ctx, input: ModelReleaseInput): Promise<void> {
+    this.requireAggregate();
+    requireSignedIn(ctx, "spend against the budget");
+    const seam = input.seam?.trim() ?? "";
+    if (!isModelSeam(seam)) {
+      throw new ForbiddenError(`${seam} is not a model seam`);
+    }
+    const usageId = requireUuidOrNull(input.usageId, "usageId");
+    if (usageId === null) {
+      throw new ValidationError("releaseForModel needs the usage row's id");
+    }
+
+    await this.tx(async (tx) => {
+      await lockBudgetKind(tx, { service: AI_MODEL_SERVICE, endpoint: seam });
+      const [row] = await tx
+        .select({
+          service: apiUsageLog.service,
+          endpoint: apiUsageLog.endpoint,
+          cost: apiUsageLog.estimatedCostCents,
+          metadata: apiUsageLog.metadata,
+          createdAt: apiUsageLog.createdAt,
+        })
+        .from(apiUsageLog)
+        .where(eq(apiUsageLog.id, usageId))
+        .limit(1);
+      if (row === undefined) {
+        throw new NotFoundError(`api_usage_log row ${usageId} does not exist`);
+      }
+      if (row.service !== AI_MODEL_SERVICE || row.endpoint !== seam) {
+        throw new ForbiddenError(
+          `api_usage_log row ${usageId} is ${row.service}/${row.endpoint}, ` +
+            `not ${AI_MODEL_SERVICE}/${seam}; a release may only give back ` +
+            "the reservation it belongs to",
+        );
+      }
+      const metadata =
+        typeof row.metadata === "object" && row.metadata !== null
+          ? (row.metadata as Record<string, unknown>)
+          : {};
+      if (metadata.released === true || metadata.settled === true) return;
+
+      // A call that may have been billed keeps its money booked; only the
+      // allowance is given back (`ModelReleaseInput.keepCost`).
+      if (input.keepCost === true) {
+        await tx
+          .update(apiUsageLog)
+          .set({ metadata: { ...metadata, released: true, costKept: true } })
+          .where(eq(apiUsageLog.id, usageId));
+        return;
+      }
+
+      const ownNano = int(metadata.nanoCents);
+      let cost = row.cost;
+      if (ownNano > 0) {
+        // `settleForModel`'s carry, for a measurement of zero.
+        const totals = await this.#monthToDate(
+          tx,
+          { service: row.service, endpoint: row.endpoint },
+          true,
+          row.createdAt,
+        );
+        const othersNano = Math.max(0, totals.nanoCents - ownNano);
+        const othersCents = Math.max(0, totals.spendCents - row.cost);
+        cost = Math.max(
+          0,
+          Math.floor(othersNano / NANOCENTS_PER_CENT) - othersCents,
+        );
+      }
+
+      await tx
+        .update(apiUsageLog)
+        .set({
+          estimatedCostCents: cost,
+          metadata: {
+            ...metadata,
+            nanoCents: 0,
+            released: true,
+          },
+        })
+        .where(eq(apiUsageLog.id, usageId));
+    });
+  }
+
+  /**
    * The per-user refusal for one more call to `kind` by `userId`, or `null`.
    * Counts that user's rows for that kind over the last hour and the last 24
    * hours in one scan of the day, served by
    * `idx_api_usage_log_service_created`; a day of one service's rows is
-   * bounded by the global caps, so the scan is too.
+   * bounded by the global caps, so the scan is too. A released reservation
+   * (`releaseForModel`, D17) is not one of them: a call that got no answer
+   * does not use up anybody's window.
+   *
+   * N07: a refusal also says **when the window frees a slot** (`retryAt`):
+   * the moment the oldest row that has to roll off for the count to drop
+   * below the cap is an hour (or a day) old. Only computed on a refusal, which
+   * is rare, so the extra statement costs nothing on the allow path.
    *
    * `#private` for the reason `#deliveryAttribution` gives: it would
    * otherwise be a sidecar-callable "how much has user X used" oracle.
@@ -1614,7 +1763,13 @@ export class BudgetActor
     kind: BudgetKind,
     userId: string,
     cap: UserCap,
-  ): Promise<string | null> {
+  ): Promise<{ reason: string; retryAt: string | null } | null> {
+    const mine = and(
+      eq(apiUsageLog.service, kind.service),
+      eq(apiUsageLog.endpoint, kind.endpoint),
+      eq(apiUsageLog.triggeredBy, userId),
+      countsAgainstCaps,
+    );
     const [row] = await tx
       .select({
         hour: sql<string>`count(*) filter (where ${apiUsageLog.createdAt} > now() - interval '1 hour')`,
@@ -1622,25 +1777,61 @@ export class BudgetActor
       })
       .from(apiUsageLog)
       .where(
-        and(
-          eq(apiUsageLog.service, kind.service),
-          eq(apiUsageLog.endpoint, kind.endpoint),
-          eq(apiUsageLog.triggeredBy, userId),
-          sql`${apiUsageLog.createdAt} > now() - interval '1 day'`,
-        ),
+        and(mine, sql`${apiUsageLog.createdAt} > now() - interval '1 day'`),
       );
     const hour = int(row?.hour);
     const day = int(row?.day);
-    const which =
-      hour >= cap.hourly
-        ? `${hour} of its ${cap.hourly} calls in the last hour`
-        : day >= cap.daily
-          ? `${day} of its ${cap.daily} calls in the last 24 hours`
-          : null;
-    return which === null
-      ? null
-      : `${USER_CAP_REASON}: this account has made ${which} to ${budgetKind(kind)}. ` +
-          "It frees up as the window rolls; the caps are BUDGET_USER_CAPS.";
+    const full = [
+      ...(hour >= cap.hourly
+        ? [{ count: hour, cap: cap.hourly, span: "1 hour", label: "hour" }]
+        : []),
+      ...(day >= cap.daily
+        ? [{ count: day, cap: cap.daily, span: "1 day", label: "24 hours" }]
+        : []),
+    ];
+    const window = full[0];
+    if (window === undefined) return null;
+
+    // For each full window, the (count - cap + 1)th oldest row in it is the
+    // one whose expiry brings that count back under its cap; `offset count -
+    // cap` because the cap may have been lowered below a count already
+    // reached. When both windows are full the call fits only once *both* have
+    // a slot, so the later of the two times is the answer — the hour freeing
+    // up first would otherwise promise a retry the day still refuses.
+    const freedAt = async (
+      w: (typeof full)[number],
+    ): Promise<string | null> => {
+      const span = sql.raw(`interval '${w.span}'`);
+      const [freed] = await tx
+        .select({
+          at: sql<string>`to_char((${apiUsageLog.createdAt} + ${span}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+        })
+        .from(apiUsageLog)
+        .where(and(mine, sql`${apiUsageLog.createdAt} > now() - ${span}`))
+        .orderBy(sql`${apiUsageLog.createdAt} asc`)
+        .offset(w.count - w.cap)
+        .limit(1);
+      return freed?.at ?? null;
+    };
+    // One statement at a time: they share this transaction's connection.
+    let retryAt: string | null = null;
+    for (const w of full) {
+      const at = await freedAt(w);
+      if (at === null) {
+        retryAt = null;
+        break;
+      }
+      // Same fixed-width UTC format, so the string order is the time order.
+      if (retryAt === null || at > retryAt) retryAt = at;
+    }
+
+    return {
+      reason:
+        `${USER_CAP_REASON}: this account has made ${window.count} of its ` +
+        `${window.cap} calls in the last ${window.label} to ${budgetKind(kind)}. ` +
+        "It frees up as the window rolls; the caps are BUDGET_USER_CAPS.",
+      retryAt,
+    };
   }
 
   /**
@@ -1680,6 +1871,8 @@ export class BudgetActor
     if (!result.allowed) {
       throw new BudgetExceededError(
         `${budgetKind(requireKind(input.kind))} refused: ${result.reason}`,
+        result.refusal ?? null,
+        result.retryAt ?? null,
       );
     }
     return result;
@@ -1703,7 +1896,7 @@ export class BudgetActor
       .select({
         service: apiUsageLog.service,
         endpoint: apiUsageLog.endpoint,
-        requestCount: sql<string>`count(*)`,
+        requestCount: sql<string>`count(*) filter (where ${countsAgainstCaps})`,
         spendCents: sql<string>`coalesce(sum(${apiUsageLog.estimatedCostCents}), 0)`,
       })
       .from(apiUsageLog)
@@ -1830,7 +2023,7 @@ export class BudgetActor
   }> {
     const [row] = await tx
       .select({
-        requestCount: sql<string>`count(*)`,
+        requestCount: sql<string>`count(*) filter (where ${countsAgainstCaps})`,
         spendCents: sql<string>`coalesce(sum(${apiUsageLog.estimatedCostCents}), 0)`,
         nanoCents: withNanoCents
           ? sql<string>`coalesce(sum(case when ${apiUsageLog.metadata} ->> 'nanoCents' ~ '^[0-9]+$' then (${apiUsageLog.metadata} ->> 'nanoCents')::numeric else 0 end), 0)`

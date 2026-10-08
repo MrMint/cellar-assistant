@@ -2,6 +2,7 @@ import { isNil } from "ramda";
 import { fromPromise } from "xstate";
 import { itemCardFromFragment } from "@/components/item/ItemCard/adapter";
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
+import { offeredBy } from "@/lib/ai/capabilities";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import {
@@ -35,6 +36,9 @@ export const searchByImage = fromPromise(
     input: SearchByImageInput;
   }): Promise<ExistingItem[]> => {
     if (isNil(displayImage)) return [];
+    // N07/D25: a deployment that cannot embed a photo is not asked to — no
+    // upload, no refusal; the wizard simply has nothing to offer.
+    if (!(await offeredBy(urqlClient, "imageSearch"))) return [];
     const imageFileId = await uploadSearchPhoto(urqlClient, displayImage);
     const response = await urqlClient
       .query(

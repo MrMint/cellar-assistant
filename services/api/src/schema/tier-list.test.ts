@@ -31,6 +31,9 @@ const tierListDto = {
   aiInsights: null,
   insightsGeneratedAt: null,
   contentUpdatedAt: "2026-09-08T00:00:00.000Z",
+  insightsStatus: "PENDING" as const,
+  insightsFailureReason: null,
+  insightsRetryAt: null,
   createdAt: "2026-09-08T00:00:00.000Z",
   updatedAt: "2026-09-08T00:00:00.000Z",
 };
@@ -56,6 +59,28 @@ describe("tierList query", () => {
       actorType: "TierListActor",
       actorId: tierListDto.id,
       method: "get",
+    });
+  });
+
+  it("serves the actor's insightsStatus, reason and retry time (N07)", async () => {
+    const { invoke } = stubSidecar({
+      "TierListActor.get": () => ({
+        ...tierListDto,
+        insightsStatus: "FAILED",
+        insightsFailureReason: "USER_CAP",
+        insightsRetryAt: "2026-10-07T15:40:00.000Z",
+      }),
+    });
+    const result = await run(
+      `{ tierList(id: "${tierListDto.id}") { ... on TierList {
+           insightsStatus insightsFailureReason insightsRetryAt } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.tierList).toEqual({
+      insightsStatus: "FAILED",
+      insightsFailureReason: "USER_CAP",
+      insightsRetryAt: "2026-10-07T15:40:00.000Z",
     });
   });
 

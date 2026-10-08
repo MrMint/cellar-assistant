@@ -1,6 +1,7 @@
 import type { Client } from "urql";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { Barcode } from "@/constants";
+import type { AiOutcome } from "@/lib/ai/outcome";
 import type { OnboardingDefaults } from "../adapter";
 
 /**
@@ -64,11 +65,12 @@ export interface DefaultValuesResult {
   itemOnboardingId: string;
   confidence: number;
   /**
-   * The server's refusal when nothing was read — no label, a photograph that
-   * is not one, no provider. Not fatal: the session row exists and confirm
-   * works, which is what makes typing it in by hand a real path.
+   * Why nothing was read — no label, a photograph that is not one, no
+   * provider, a spent allowance — as `aiOutcome`'s words (N07), never the
+   * server's message. Not fatal: the session row exists and confirm works,
+   * which is what makes typing it in by hand a real path.
    */
-  extractionError?: string;
+  extractionError?: AiOutcome;
 }
 
 export type UploadItemImageInput = {

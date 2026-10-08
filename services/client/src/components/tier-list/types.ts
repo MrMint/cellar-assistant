@@ -4,6 +4,9 @@
  * Client components receive these plain types — no GraphQL imports needed.
  */
 
+import type { ActorErrorReason } from "@/lib/api/errors";
+import type { InsightsStatus } from "./insights/insights-view";
+
 export interface TierListItemDisplay {
   id: string;
   band: number;
@@ -55,6 +58,14 @@ export interface TierListInsightsData {
   items: TierListInsightsItem[];
   aiInsights: TierListAIInsights | null;
   contentUpdatedAt: string | null;
+  /**
+   * N07: where generation stands, from the server (`TierList.insightsStatus`).
+   * Optional so an older fixture (or API) without it still renders; the
+   * panel then falls back to the old inference (`insights-view.ts`).
+   */
+  status?: InsightsStatus | null;
+  failureReason?: ActorErrorReason | null;
+  retryAt?: string | null;
   /**
    * Passport, heatmap and category donut read place fields only. The old page
    * fed insights from places alone, so for an item list they never showed.

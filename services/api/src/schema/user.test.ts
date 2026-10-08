@@ -88,6 +88,31 @@ describe("user profile", () => {
     expect(calls[0]?.actorId).toBe(alice.id);
   });
 
+  it("serves viewer.aiCapabilities from the viewer's own UserActor (N07)", async () => {
+    const capabilities = {
+      semanticSearch: true,
+      imageSearch: false,
+      labelRead: true,
+      menuScan: true,
+      recipePhoto: true,
+      tierListInsights: true,
+    };
+    const { invoke, calls } = stubSidecar({
+      "UserActor.aiCapabilities": () => capabilities,
+    });
+    const result = await run(
+      `{ me { aiCapabilities { semanticSearch imageSearch labelRead menuScan recipePhoto tierListInsights } } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.me).toEqual({ aiCapabilities: capabilities });
+    expect(calls[0]).toMatchObject({
+      actorType: "UserActor",
+      actorId: alice.id,
+      method: "aiCapabilities",
+    });
+  });
+
   it("maps a typed actor error onto the field's result union", async () => {
     const { invoke } = stubSidecar({
       "UserActor.getProfile": () => {

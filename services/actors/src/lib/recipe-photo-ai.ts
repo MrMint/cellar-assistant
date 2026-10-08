@@ -60,6 +60,7 @@ export const unconfiguredRecipePhotoExtractor: RecipePhotoExtractor =
         "`RecipePhotoJobActor` cannot run its `extract` stage until AI_PROVIDER " +
         "is set — `installAI()` installed nothing at boot. Set AI_PROVIDER=ollama " +
         `for a local model that needs no credentials. See services/actors/README.md · Local AI.`,
+      "AI_UNCONFIGURED",
     );
   };
 

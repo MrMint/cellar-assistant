@@ -37,6 +37,7 @@ import { ConflictError } from "@cellar-assistant/contracts";
 import type { OpenAICompatibleConfig } from "./config.ts";
 import { isRecord, postJson, requireVector, withImageContext } from "./http.ts";
 import { OPENAI_IMAGE_MIMES, requireImageMime } from "./image-mime.ts";
+import { beforeModelCall } from "./no-response.ts";
 import type {
   AIProvider,
   EmbeddingRequest,
@@ -570,7 +571,9 @@ const createLlamacppEmbedder = (
   /** Cached per provider; `refresh` re-reads it, once, after a restart. */
   const mediaMarker = (refresh = false): Promise<string> => {
     if (marker === null || refresh) {
-      const next = readMarker();
+      // Read before the embedding call, so a failure here means no model
+      // answered (D17).
+      const next = beforeModelCall(readMarker);
       // A failed read is not cached: the next call asks again.
       next.catch(() => {
         if (marker === next) marker = null;

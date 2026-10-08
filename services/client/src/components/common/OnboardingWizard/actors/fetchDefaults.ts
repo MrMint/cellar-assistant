@@ -1,4 +1,5 @@
 import { fromPromise } from "xstate";
+import { aiOutcome } from "@/lib/ai/outcome";
 import { readFragment } from "@/lib/api/graphql";
 import {
   ItemOnboardingFragment,
@@ -17,9 +18,17 @@ import type { DefaultValuesResult, FetchDefaultsInput } from "./types";
  * - `ItemOnboarding` — the model read a label. Its `defaults` go through the
  *   E2c merge into the restored form's values (`formDefaultsFromOnboarding`).
  * - A typed refusal — no label photographed, a photograph that is not a label,
- *   no AI provider. The session row still exists and confirm works against
- *   it, so this resolves with empty defaults and the server's message rather
- *   than throwing: retrying cannot change it.
+ *   no AI provider, a spent allowance. The session row still exists and
+ *   confirm works against it, so this resolves with empty defaults and
+ *   `aiOutcome`'s words for the refusal (N07 — never the server's message,
+ *   which is an operator's) rather than throwing: retrying cannot change it.
+ * - No AI provider here at all (`AI_UNCONFIGURED`, the deployment
+ *   `viewer.aiCapabilities.labelRead` reports false for, D25) — the form opens
+ *   empty with nothing to apologise for: there was never anything to read
+ *   with, so there is nothing to explain. `startItemOnboarding` is still
+ *   called, and has to be: it is what writes the session row `confirm`
+ *   reads (`ItemOnboardingActor.confirm` → `requireAggregate`), so skipping it
+ *   would make every bottle on an AI-less deployment unsaveable.
  * - No answer at all (transport) — throws, and the machine's old
  *   `retryAnalyze` tries twice more before falling back to an empty form.
  *   `itemOnboardingId` is minted once, so a retry reuses the session rather
@@ -67,7 +76,14 @@ export const fetchDefaults = fromPromise(
         defaults: emptyDefaults(),
         itemOnboardingId,
         confidence: 0,
-        extractionError: result.error.message,
+        // N07/D25: no provider is not news to the person adding a bottle.
+        ...(result.error.reason === "AI_UNCONFIGURED"
+          ? {}
+          : {
+              extractionError: aiOutcome(result.error, {
+                fallback: "fill in the details yourself below",
+              }),
+            }),
       };
     }
     const onboarding = readFragment(ItemOnboardingFragment, result.data);

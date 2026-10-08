@@ -215,6 +215,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [{ kind: "INTERFACE", name: "Error" }],
       },
@@ -265,6 +266,55 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "TierListItem" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiCapabilities",
+        fields: [
+          {
+            name: "imageSearch",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "labelRead",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "menuScan",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "recipePhoto",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "semanticSearch",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "tierListInsights",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "UNION",
@@ -637,6 +687,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -1295,6 +1346,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -1884,6 +1936,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -4147,6 +4200,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -7581,8 +7635,23 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
           {
+            name: "insightsFailureReason",
+            type: { kind: "ENUM", name: "ActorErrorReason" },
+          },
+          {
             name: "insightsGeneratedAt",
             type: { kind: "SCALAR", name: "DateTime" },
+          },
+          {
+            name: "insightsRetryAt",
+            type: { kind: "SCALAR", name: "DateTime" },
+          },
+          {
+            name: "insightsStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListInsightsStatus" },
+            },
           },
           {
             name: "isEditingLocked",
@@ -8156,6 +8225,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -8190,6 +8260,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "Viewer",
         fields: [
+          {
+            name: "aiCapabilities",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiCapabilities" },
+            },
+          },
           {
             name: "collectionStats",
             type: {

@@ -392,5 +392,6 @@ export const requireGroundedEntries = (
       "stripped out, a model invents a list rather than abstaining (see " +
       "requireExtractableInput in lib/item-defaults.ts for the measurement " +
       "that established this). Nothing was written and nothing was consumed.",
+    "NOTHING_READ",
   );
 };

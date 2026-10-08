@@ -155,6 +155,7 @@ export const requireExtractableInput = (request: ItemDefaultsRequest): void => {
         ? ""
         : " The barcode is registered through `BarcodeActor` on confirm; it " +
           "is a lookup key, not something a vision model can read a label off."),
+    "NOTHING_READ",
   );
 };
 
@@ -281,6 +282,7 @@ export const requireLegibleLabel = (answer: {
       "Nothing has been stored: a plausible bottle nobody photographed is " +
       `worse than an empty form. Photograph the ${noun}'s own label, or fill ` +
       "the form in by hand — the onboarding session is open either way.",
+    "NOTHING_READ",
   );
 };
 
@@ -303,6 +305,7 @@ export const unconfiguredItemDefaults: ItemDefaultsProvider = async () => {
       "label defaults until AI_PROVIDER is set — `installAI()` installed nothing " +
       "at boot. Set AI_PROVIDER=ollama for a local model that needs no " +
       `credentials. See services/actors/README.md · Local AI.`,
+    "AI_UNCONFIGURED",
   );
 };
 

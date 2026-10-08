@@ -21,6 +21,7 @@ import {
   MdPhotoCamera,
 } from "react-icons/md";
 import { useClient, useMutation, useQuery } from "urql";
+import { aiOutcome } from "@/lib/ai/outcome";
 import {
   describeUploadBlockers,
   UploadRejectedError,
@@ -212,7 +213,9 @@ export function RecipePhotoProcessor({
         "RecipePhotoJob",
       );
       if (!result.ok) {
-        setPhase({ kind: "failed", reason: result.error.message });
+        // N07: starting the job is where a spent allowance or a missing
+        // provider is refused; say it in words, never the server's message.
+        setPhase({ kind: "failed", reason: aiOutcome(result.error).message });
         return;
       }
       setPhase({

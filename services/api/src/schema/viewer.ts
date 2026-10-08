@@ -6,10 +6,12 @@
  * locale) by calling `UserActor.getProfile`; the token deliberately carries a
  * closed claim set (A6) and is not the place to put them.
  */
+import type { AiCapabilities } from "@cellar-assistant/contracts";
 import {
   FavoritesCollectionActorDescriptor,
   itemActorId,
   mapPage,
+  UserActorDescriptor,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
 import type { ViewerClaims } from "../auth/jwt.ts";
@@ -25,6 +27,40 @@ const ViewerRole = builder.enumType("ViewerRole", {
   values: ["USER", "ADMIN"] as const,
 });
 
+/**
+ * N07/D25: what this deployment's AI can do. Decided by the actor host at
+ * boot from the installed provider; a client hides what is `false` rather
+ * than offering it and refusing.
+ */
+const AiCapabilitiesType = builder
+  .objectRef<AiCapabilities>("AiCapabilities")
+  .implement({
+    description:
+      "Which AI-backed features this deployment can serve. False only when " +
+      "the configured provider genuinely cannot (no provider at all, or an " +
+      "embedding model that cannot embed a photo); hide those features.",
+    fields: (t) => ({
+      semanticSearch: t.exposeBoolean("semanticSearch", {
+        description: "Search by meaning.",
+      }),
+      imageSearch: t.exposeBoolean("imageSearch", {
+        description: "Search by photo (`itemSearch(imageFileId:)`).",
+      }),
+      labelRead: t.exposeBoolean("labelRead", {
+        description: "Reading a label into the add-item form.",
+      }),
+      menuScan: t.exposeBoolean("menuScan", {
+        description: "Reading a photographed menu.",
+      }),
+      recipePhoto: t.exposeBoolean("recipePhoto", {
+        description: "Reading a photographed recipe.",
+      }),
+      tierListInsights: t.exposeBoolean("tierListInsights", {
+        description: "Generated tier-list insights.",
+      }),
+    }),
+  });
+
 export const Viewer = builder.objectRef<ViewerClaims>("Viewer").implement({
   description: "The signed-in user, as their token describes them.",
   fields: (t) => ({
@@ -34,6 +70,15 @@ export const Viewer = builder.objectRef<ViewerClaims>("Viewer").implement({
     role: t.field({
       type: ViewerRole,
       resolve: (viewer) => (viewer.role === "admin" ? "ADMIN" : "USER"),
+    }),
+
+    aiCapabilities: t.field({
+      type: AiCapabilitiesType,
+      description:
+        "Which AI-backed features this deployment can serve (N07). Hide a " +
+        "feature that is false instead of offering it.",
+      resolve: (viewer, _args, context) =>
+        context.actor(UserActorDescriptor, viewer.id).aiCapabilities(),
     }),
 
     /**

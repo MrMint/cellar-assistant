@@ -22,6 +22,7 @@ export const KEYLESS_TYPES = [
   "AcceptFriendRequestPayload",
   "ActivityEntryConnection",
   "ActivityEntryEdge",
+  "AiCapabilities",
   "Barcode",
   "BrandConnection",
   "BrandEdge",

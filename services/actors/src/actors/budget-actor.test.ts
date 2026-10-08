@@ -15,6 +15,7 @@ import {
   BudgetExceededError,
   ConflictError,
   ForbiddenError,
+  NotFoundError,
   type ReserveInput,
   systemCtx,
   userCtx,
@@ -48,6 +49,7 @@ import {
   modelCallNanoCents,
   monthStart,
   NANOCENTS_PER_CENT,
+  nextMonthStart,
   parseModelPrices,
   parseRequestCaps,
   parseUserCaps,
@@ -1929,5 +1931,322 @@ describe.skipIf(skip)(
       ).toBe(true);
       expect(rows).toHaveLength(1);
     }, 30_000);
+  },
+);
+
+/*
+ * N07 / D17: a refusal says whose limit it was and when it clears, and a
+ * reservation whose call got no model response stops counting.
+ */
+describe.skipIf(skip)(
+  "typed refusals and released reservations (N07, D17)",
+  () => {
+    afterAll(closeTestDb);
+
+    const call = (
+      over: Partial<ModelReserveInput> = {},
+    ): ModelReserveInput => ({
+      seam: "menu_match",
+      provider: "vertex-ai",
+      model: "gemini-2.5-flash",
+      inputTokens: 1000,
+      outputTokens: 1000,
+      reservationId: `n07-${crypto.randomUUID()}`,
+      ...over,
+    });
+
+    const rowOf = async (db: DbOrTx, id: string | null) => {
+      const [row] = await db
+        .select()
+        .from(apiUsageLog)
+        .where(eq(apiUsageLog.id, id ?? ""));
+      return row;
+    };
+
+    it("nextMonthStart is the first instant of the following UTC month", () => {
+      expect(
+        nextMonthStart(new Date("2026-12-31T23:59:59.999Z")).toISOString(),
+      ).toBe("2027-01-01T00:00:00.000Z");
+      expect(
+        nextMonthStart(new Date("2026-10-07T12:00:00.000Z")).toISOString(),
+      ).toBe("2026-11-01T00:00:00.000Z");
+    });
+
+    it("a per-user refusal is USER_CAP, with when the window frees a slot", async () => {
+      await withTestDb(async (db) => {
+        const actor = await withEnv(
+          { BUDGET_USER_CAPS: "ai_model/menu_match=2/10" },
+          () => reactivate(db),
+        );
+        const first = await actor.reserveForModel(user, call());
+        await actor.reserveForModel(user, call());
+        const refused = await actor.reserveForModel(user, call());
+        expect(refused.allowed).toBe(false);
+        expect(refused.refusal).toBe("USER_CAP");
+
+        // The oldest of the two rows in the hour rolls off an hour after it
+        // was written; that is when the third call fits.
+        const oldest = await rowOf(db, first.usageId);
+        expect(Date.parse(refused.retryAt ?? "")).toBe(
+          (oldest?.createdAt?.getTime() ?? 0) + 3_600_000,
+        );
+
+        // `reserveForModel` itself never throws for a denial; the seam does,
+        // and an allow carries no refusal.
+        expect(first.refusal ?? null).toBeNull();
+      });
+    });
+
+    it("when the hour and the day are both full, retryAt waits for the day", async () => {
+      await withTestDb(async (db) => {
+        const actor = await withEnv(
+          { BUDGET_USER_CAPS: "ai_model/menu_match=2/2" },
+          () => reactivate(db),
+        );
+        const first = await actor.reserveForModel(user, call());
+        await actor.reserveForModel(user, call());
+        const refused = await actor.reserveForModel(user, call());
+        expect(refused.refusal).toBe("USER_CAP");
+        // The hour frees a slot an hour after the oldest row, but the day is
+        // still full then: the call fits only a day after it.
+        const oldest = await rowOf(db, first.usageId);
+        expect(Date.parse(refused.retryAt ?? "")).toBe(
+          (oldest?.createdAt?.getTime() ?? 0) + 86_400_000,
+        );
+      });
+    });
+
+    it("a monthly request cap is SERVICE_BUDGET, clearing when the month turns", async () => {
+      await withEnv({ AI_BUDGET_MAX_REQUESTS: "menu_match=1" }, async () => {
+        await withTestDb(async (db) => {
+          const actor = await activate(newBudgetActor(db));
+          await actor.reserveForModel(system, call());
+          const refused = await actor.reserveForModel(system, call());
+          expect(refused.allowed).toBe(false);
+          expect(refused.refusal).toBe("SERVICE_BUDGET");
+          expect(refused.retryAt).toBe(nextMonthStart().toISOString());
+        });
+      });
+    });
+
+    it("a disabled kind is SERVICE_BUDGET with no time that clears it", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        await actor.setBudget(admin, {
+          kind: { service: AI_MODEL_SERVICE, endpoint: "menu_match" },
+          monthlyBudgetCents: 100,
+          freeTierMonthlyRequests: 0,
+          isEnabled: false,
+        });
+        const refused = await actor.reserveForModel(system, call());
+        expect(refused).toMatchObject({
+          allowed: false,
+          refusal: "SERVICE_BUDGET",
+          retryAt: null,
+        });
+      });
+    });
+
+    it("reserveOrThrow carries the refusal onto BudgetExceededError", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        const error = await actor
+          .reserveOrThrow(system, {
+            kind: { service: fixtureService(), endpoint: "call" },
+            estimatedCostCents: 1,
+            reservationId: key(),
+          })
+          .catch((caught: unknown) => caught);
+        expect(error).toBeInstanceOf(BudgetExceededError);
+        expect(error).toMatchObject({
+          reason: "SERVICE_BUDGET",
+          retryAt: null,
+        });
+      });
+    });
+
+    it("a released reservation stops counting against the request cap", async () => {
+      await withEnv({ AI_BUDGET_MAX_REQUESTS: "menu_match=1" }, async () => {
+        await withTestDb(async (db) => {
+          const actor = await activate(newBudgetActor(db));
+          const unanswered = await actor.reserveForModel(system, call());
+          expect(unanswered.allowed).toBe(true);
+          await actor.releaseForModel(system, {
+            usageId: unanswered.usageId ?? "",
+            seam: "menu_match",
+          });
+          // The retry is free: the cap of one has not been used.
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            true,
+          );
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            false,
+          );
+
+          const row = await rowOf(db, unanswered.usageId);
+          expect(
+            (row?.metadata as Record<string, unknown> | undefined)?.released,
+          ).toBe(true);
+          const usage = await actor.usage(admin, {
+            from: monthStart().toISOString(),
+            to: new Date(Date.now() + 86_400_000).toISOString(),
+            service: AI_MODEL_SERVICE,
+            endpoint: "menu_match",
+          });
+          expect(usage.totalRequestCount).toBe(1);
+        });
+      });
+    });
+
+    it("a released reservation gives the caller's per-user slot back", async () => {
+      await withTestDb(async (db) => {
+        const actor = await withEnv(
+          { BUDGET_USER_CAPS: "ai_model/menu_match=1/10" },
+          () => reactivate(db),
+        );
+        const unanswered = await actor.reserveForModel(user, call());
+        await actor.releaseForModel(user, {
+          usageId: unanswered.usageId ?? "",
+          seam: "menu_match",
+        });
+        expect((await actor.reserveForModel(user, call())).allowed).toBe(true);
+        expect((await actor.reserveForModel(user, call())).refusal).toBe(
+          "USER_CAP",
+        );
+      });
+    });
+
+    it("re-derives a released paid row's cents so the carry never under-books", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        // 0.28 cents each (see "carries sub-cent prices"): the fourth books the
+        // cent all four crossed. Releasing that fourth one leaves 0.84 cents of
+        // real calls, so the month's booked cents may drop to zero — and must
+        // never drop below floor(sum(nanoCents) / 1e9).
+        const reserved = [];
+        for (let i = 0; i < 4; i += 1) {
+          reserved.push(await actor.reserveForModel(system, call()));
+        }
+        expect(reserved.map((r) => r.effectiveCostCents)).toEqual([0, 0, 0, 1]);
+        await actor.releaseForModel(system, {
+          usageId: reserved[3]?.usageId ?? "",
+          seam: "menu_match",
+        });
+        const [totals] = await db
+          .select({
+            cents: sql<string>`sum(${apiUsageLog.estimatedCostCents})`,
+            nano: sql<string>`sum((${apiUsageLog.metadata} ->> 'nanoCents')::numeric)`,
+          })
+          .from(apiUsageLog)
+          .where(
+            and(
+              eq(apiUsageLog.service, AI_MODEL_SERVICE),
+              eq(apiUsageLog.endpoint, "menu_match"),
+            ),
+          );
+        expect(Number(totals?.cents)).toBeGreaterThanOrEqual(
+          Math.floor(Number(totals?.nano) / NANOCENTS_PER_CENT),
+        );
+        expect(Number(totals?.nano)).toBe(3 * 280_000_000);
+      });
+    });
+
+    it("keepCost gives back the allowance but leaves the money booked", async () => {
+      await withEnv({ AI_BUDGET_MAX_REQUESTS: "menu_match=4" }, async () => {
+        await withTestDb(async (db) => {
+          const actor = await activate(newBudgetActor(db));
+          const reserved = [];
+          for (let i = 0; i < 4; i += 1) {
+            reserved.push(await actor.reserveForModel(system, call()));
+          }
+          // A timeout: the provider may have run (and billed) it.
+          await actor.releaseForModel(system, {
+            usageId: reserved[3]?.usageId ?? "",
+            seam: "menu_match",
+            keepCost: true,
+          });
+          const row = await rowOf(db, reserved[3]?.usageId ?? null);
+          expect(row?.metadata).toMatchObject({
+            released: true,
+            nanoCents: 280_000_000,
+          });
+          expect(row?.estimatedCostCents).toBe(1);
+          // The request cap of four has a slot again.
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            true,
+          );
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            false,
+          );
+        });
+      });
+    });
+
+    it("is idempotent, and never releases a call that was settled", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        const answered = await actor.reserveForModel(system, call());
+        await actor.settleForModel(system, {
+          usageId: answered.usageId ?? "",
+          seam: "menu_match",
+          provider: "vertex-ai",
+          model: "gemini-2.5-flash",
+          inputTokens: 10,
+          outputTokens: 10,
+        });
+        await actor.releaseForModel(system, {
+          usageId: answered.usageId ?? "",
+          seam: "menu_match",
+        });
+        const settled = await rowOf(db, answered.usageId);
+        expect(
+          (settled?.metadata as Record<string, unknown> | undefined)?.released,
+        ).toBeUndefined();
+
+        const unanswered = await actor.reserveForModel(system, call());
+        const release = () =>
+          actor.releaseForModel(system, {
+            usageId: unanswered.usageId ?? "",
+            seam: "menu_match",
+          });
+        await release();
+        await release();
+        const released = await rowOf(db, unanswered.usageId);
+        expect(
+          (released?.metadata as Record<string, unknown> | undefined)?.released,
+        ).toBe(true);
+      });
+    });
+
+    it("refuses another endpoint's row, a missing row and a non-seam", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        const reserved = await actor.reserveForModel(system, call());
+        await expect(
+          actor.releaseForModel(system, {
+            usageId: reserved.usageId ?? "",
+            seam: "embedding",
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.releaseForModel(system, {
+            usageId: crypto.randomUUID(),
+            seam: "menu_match",
+          }),
+        ).rejects.toBeInstanceOf(NotFoundError);
+        await expect(
+          actor.releaseForModel(system, {
+            usageId: reserved.usageId ?? "",
+            seam: "summarise_everything",
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.releaseForModel(anonymous, {
+            usageId: reserved.usageId ?? "",
+            seam: "menu_match",
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+      });
+    });
   },
 );

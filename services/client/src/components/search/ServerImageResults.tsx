@@ -1,7 +1,7 @@
 import { Button, Stack, Typography } from "@mui/joy";
 import Link from "next/link";
 import { MdAdd } from "react-icons/md";
-import { ApiError } from "@/components/cellar-api/ApiError";
+import { AiFailureStatus } from "@/components/common/AiStatus";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import {
@@ -68,7 +68,18 @@ export async function ServerImageResults({
       );
     }
     if (result.error.code === "NOT_FOUND") return <ExpiredImageSearch />;
-    return <ApiError error={result.error} title="Image search failed" />;
+    // N07: a limit or any other refusal, in words chosen from the reason —
+    // never the server's message; `retryAt` in the viewer's own zone.
+    return (
+      <AiFailureStatus
+        failure={{
+          code: result.error.code,
+          reason: result.error.reason,
+          retryAt: result.error.retryAt,
+        }}
+        fallback="search by name or scan a barcode"
+      />
+    );
   }
 
   const results = searchResultsFromNodes(

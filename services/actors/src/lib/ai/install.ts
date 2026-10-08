@@ -42,6 +42,10 @@ import type { EmbeddingModelIdentity } from "../vectors.ts";
 import { embeddingModelKey, setEmbeddingModel } from "../vectors.ts";
 import type { ModelBudget, SeamModels } from "./budget.ts";
 import { meteredProviderFor } from "./budget.ts";
+import {
+  capabilitiesForInstalledProvider,
+  setAiCapabilities,
+} from "./capabilities.ts";
 import type { EmbeddingInputDialect, Env } from "./config.ts";
 import { readAIProviderConfig, selectProvider } from "./config.ts";
 import { createAIProvider } from "./factory.ts";
@@ -210,8 +214,17 @@ export const installSeams = (
   // Not a seam, but installed with the embedder and from the same answer:
   // which embedding every vector this process writes is recorded as, and what
   // `regenerateVector` compares a stored vector's `embedding_model` against.
-  setEmbeddingModel(
-    embeddingModelIdentity(provider.name, models.embedding, embeddingInput),
+  const identity = embeddingModelIdentity(
+    provider.name,
+    models.embedding,
+    embeddingInput,
+  );
+  setEmbeddingModel(identity);
+  // N07/D25: what a client may offer, decided from the same answer.
+  setAiCapabilities(
+    capabilitiesForInstalledProvider({
+      embeddingAcceptsImages: identity.acceptsImages,
+    }),
   );
   for (const seam of MODEL_SEAMS) {
     const spec: SeamSpec = SEAMS[seam];

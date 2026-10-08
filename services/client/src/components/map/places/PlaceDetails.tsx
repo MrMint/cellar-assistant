@@ -61,6 +61,7 @@ import {
 } from "react-icons/md";
 import { Timestamp } from "@/components/common/Timestamp";
 import { ItemTierLists } from "@/components/item/ItemTierLists";
+import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
 import { AddToTierListModal } from "../../tier-list/AddToTierListModal";
 import { usePlaceDetails } from "../hooks/usePlaceDetails";
 import { MenuScanner } from "../scanning/MenuScanner";
@@ -232,6 +233,9 @@ interface PlaceDetailsProps {
 
 export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
   const [activeTab, setActiveTab] = useState(0);
+  // N07/D25: menu scanning is hidden, not refused, where no AI can read one.
+  // A tab picked before the answer arrived falls back to Menu if it hides.
+  const menuScanOffered = isOffered(useAiCapabilities(), "menuScan");
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
   const [isMarkingVisited, setIsMarkingVisited] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -786,11 +790,11 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
       {/* Content tabs */}
       <Card>
         <Tabs
-          value={activeTab}
+          value={!menuScanOffered && activeTab === 1 ? 0 : activeTab}
           onChange={(_, value) => setActiveTab(value as number)}
         >
           <TabList>
-            <Tab>
+            <Tab value={0}>
               Menu
               {menuItems.length > 0 && (
                 <Chip size="sm" variant="soft" color="primary" sx={{ ml: 1 }}>
@@ -798,8 +802,8 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
                 </Chip>
               )}
             </Tab>
-            <Tab>Camera Scan</Tab>
-            <Tab>Info</Tab>
+            {menuScanOffered && <Tab value={1}>Camera Scan</Tab>}
+            <Tab value={2}>Info</Tab>
           </TabList>
 
           <TabPanel value={0}>
@@ -825,21 +829,25 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
                 <Typography level="title-lg" sx={{ mb: 1 }}>
                   No menu discovered yet
                 </Typography>
-                <Typography level="body-md" sx={{ color: "text.secondary" }}>
-                  Scan a menu at this location using the &quot;Camera Scan&quot;
-                  tab above.
-                </Typography>
+                {menuScanOffered && (
+                  <Typography level="body-md" sx={{ color: "text.secondary" }}>
+                    Scan a menu at this location using the &quot;Camera
+                    Scan&quot; tab above.
+                  </Typography>
+                )}
               </Box>
             )}
           </TabPanel>
 
-          <TabPanel value={1}>
-            <MenuScanner
-              placeId={placeData.id}
-              userId={userId}
-              onScanComplete={() => refetch()}
-            />
-          </TabPanel>
+          {menuScanOffered && (
+            <TabPanel value={1}>
+              <MenuScanner
+                placeId={placeData.id}
+                userId={userId}
+                onScanComplete={() => refetch()}
+              />
+            </TabPanel>
+          )}
 
           <TabPanel value={2}>
             <Stack spacing={2}>

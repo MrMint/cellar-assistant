@@ -51,6 +51,7 @@ import {
   itemActorId,
   offsetPage,
   TIER_LIST_ENTRY_TYPES,
+  TIER_LIST_INSIGHTS_STATUSES,
   TierListActorDescriptor,
   TierListsCollectionActorDescriptor,
   viewerCollectionActorId,
@@ -58,6 +59,7 @@ import {
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { PermissionTypeEnum } from "./enums.ts";
+import { ActorErrorReasonEnum } from "./errors.ts";
 import { ItemInterface } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { type PatchPolicy, patch, present } from "./patch.ts";
@@ -157,6 +159,18 @@ const loadTierLists = async (
     }),
   );
 
+/** N07: `TierListDto.insightsStatus`, as an enum. */
+const TierListInsightsStatusEnum = builder.enumType("TierListInsightsStatus", {
+  description:
+    "Where a tier list's generated insights stand. NOT_ENOUGH_ENTRIES: too " +
+    "few entries to describe. UNAVAILABLE: this deployment has no AI for " +
+    "insights. PENDING: asked for, not yet answered (see insightsRetryAt for " +
+    "a scheduled refresh). FAILED: the latest attempt failed (see " +
+    "insightsFailureReason). READY: aiInsights is current. IDLE: nothing " +
+    "generated or asked for yet; the next change asks.",
+  values: TIER_LIST_INSIGHTS_STATUSES,
+});
+
 export const TierListType = builder
   .loadableObjectRef<TierListDto, string>("TierList", {
     load: loadTierLists,
@@ -191,6 +205,28 @@ export const TierListType = builder
       insightsGeneratedAt: t.expose("insightsGeneratedAt", {
         type: "DateTime",
         nullable: true,
+      }),
+      insightsStatus: t.field({
+        type: TierListInsightsStatusEnum,
+        description:
+          "Where the generated insights stand (N07). Render this; do not " +
+          'infer "generating" from a null `aiInsights`.',
+        resolve: (tierList) => tierList.insightsStatus,
+      }),
+      insightsFailureReason: t.field({
+        type: ActorErrorReasonEnum,
+        nullable: true,
+        description:
+          "Why the latest attempt failed, when `insightsStatus` is FAILED " +
+          "and the failure carried a reason.",
+        resolve: (tierList) => tierList.insightsFailureReason,
+      }),
+      insightsRetryAt: t.expose("insightsRetryAt", {
+        type: "DateTime",
+        nullable: true,
+        description:
+          "When the next attempt can or will happen: a budget window on " +
+          "FAILED, or the end of the once-a-day refresh limit on PENDING.",
       }),
       contentUpdatedAt: t.expose("contentUpdatedAt", { type: "DateTime" }),
       createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),

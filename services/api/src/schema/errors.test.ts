@@ -108,6 +108,52 @@ describe("ActorErrorCode", () => {
   );
 });
 
+describe("ActorError.retryAt (N07)", () => {
+  it("serialises a budget refusal's reason and retry time, and null otherwise", async () => {
+    const { invoke } = stubSidecar({
+      "PingActor.ping": () => {
+        throw actorErrorForCode(
+          "BUDGET_EXCEEDED",
+          "per-user cap reached",
+          "USER_CAP",
+          "2026-10-07T15:40:00.000Z",
+        );
+      },
+    });
+    const result = await execute({
+      schema,
+      document: parse(
+        `mutation { ping { __typename ... on ActorError { code reason retryAt } } }`,
+      ),
+      contextValue: testContext(invoke, viewer),
+    });
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.ping).toEqual({
+      __typename: "BudgetExceededError",
+      code: "BUDGET_EXCEEDED",
+      reason: "USER_CAP",
+      retryAt: "2026-10-07T15:40:00.000Z",
+    });
+
+    const plain = stubSidecar({
+      "PingActor.ping": () => {
+        throw actorErrorForCode("CONFLICT", "nope", "AI_UNCONFIGURED");
+      },
+    });
+    const conflict = await execute({
+      schema,
+      document: parse(
+        `mutation { ping { ... on ActorError { reason retryAt } } }`,
+      ),
+      contextValue: testContext(plain.invoke, viewer),
+    });
+    expect(conflict.data?.ping).toEqual({
+      reason: "AI_UNCONFIGURED",
+      retryAt: null,
+    });
+  });
+});
+
 describe("the one document shape the enum makes invalid", () => {
   const barcodeTypes = ["Barcode", "LinkedBarcodeItem"] as const;
 

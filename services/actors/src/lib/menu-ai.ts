@@ -134,6 +134,7 @@ export const unconfiguredMenuExtraction: MenuExtractionProvider = async () => {
       "cannot extract menu lines until AI_PROVIDER is set — `installAI()` " +
       "installed nothing at boot. Set AI_PROVIDER=ollama for a local model that " +
       `needs no credentials. See services/actors/README.md · Local AI.`,
+    "AI_UNCONFIGURED",
   );
 };
 
@@ -189,6 +190,7 @@ export const unconfiguredMenuMatchVerifier: MenuMatchVerifier = async () => {
       "(migration plan §2.1: the 0.4–0.9 confidence band). AI_PROVIDER is unset, " +
       "so `installAI()` installed nothing at boot. Confident matches (>= 0.9) " +
       `and clear misses (< 0.4) are still decided without it. See services/actors/README.md · Local AI.`,
+    "AI_UNCONFIGURED",
   );
 };
 

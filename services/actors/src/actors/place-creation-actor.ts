@@ -271,6 +271,7 @@ export const unconfiguredPlaceReviewer: PlaceReviewer = async () => {
       "services/actors/README.md · Local AI. Until then each creation is recorded " +
       "with `review: null` and the neutral confidence, which is what the old " +
       "server action did whenever the review failed.",
+    "AI_UNCONFIGURED",
   );
 };
 
