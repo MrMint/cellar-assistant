@@ -95,6 +95,41 @@ export const ACTOR_ERROR_REASONS = [
    * available here", not a retry.
    */
   "IMAGE_SEARCH_UNAVAILABLE",
+
+  /* -- AI outcomes (N07) -------------------------------------------------- */
+
+  /**
+   * A per-user budget window (`BudgetActor`'s `USER_CAPS`, the rolling hour
+   * or day) refused a paid or metered call for *this account*. Everyone else
+   * is unaffected and the window rolls on its own: `retryAt` is when this
+   * account's next call fits. `BUDGET_EXCEEDED`.
+   */
+  "USER_CAP",
+  /**
+   * The service-wide allowance refused the call: a seam's monthly request
+   * cap, its free tier with no paid budget behind it, its monthly money, or a
+   * kind an operator disabled or never configured. Not this account's doing;
+   * `retryAt` is the start of the next month when the month is what binds,
+   * `null` when only an operator can clear it. `BUDGET_EXCEEDED`.
+   */
+  "SERVICE_BUDGET",
+  /**
+   * This deployment has no AI provider for the feature at all (`AI_PROVIDER`
+   * unset, so the seam kept its `unconfigured*` default). Nothing about the
+   * request is wrong and no retry helps; a client hides or explains the
+   * feature rather than offering "try again". `CONFLICT`, so an outbox
+   * delivery still retries (a redeploy can install a provider) — the reason is
+   * what tells a person not to wait for it.
+   */
+  "AI_UNCONFIGURED",
+  /**
+   * The model ran (or the input was refused before it could) and there was
+   * nothing to read: no label photograph was attached, or the model's own
+   * verdict was that the image shows no label. The answer to this is a better
+   * photograph or the form by hand, never a retry of the same input.
+   * `VALIDATION` when the model abstained, `CONFLICT` when no image was sent.
+   */
+  "NOTHING_READ",
 ] as const;
 
 export type ActorErrorReason = (typeof ACTOR_ERROR_REASONS)[number];
@@ -102,6 +137,17 @@ export type ActorErrorReason = (typeof ACTOR_ERROR_REASONS)[number];
 export const isActorErrorReason = (value: unknown): value is ActorErrorReason =>
   typeof value === "string" &&
   (ACTOR_ERROR_REASONS as readonly string[]).includes(value);
+
+/**
+ * An ISO-8601 instant, or `null` — what {@link ActorError.retryAt} accepts.
+ * Anything that does not parse as a date is dropped rather than carried, the
+ * same rule `parseActorErrorPayload` applies to an unknown `reason`.
+ */
+const isoOrNull = (value: unknown): string | null => {
+  if (typeof value !== "string" || value === "") return null;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? null : new Date(at).toISOString();
+};
 
 export class ActorError extends Error {
   readonly code: ActorErrorCode;
@@ -113,22 +159,38 @@ export class ActorError extends Error {
    */
   readonly reason: ActorErrorReason | null;
 
+  /**
+   * When asking again can first succeed, as an ISO-8601 instant, or `null`
+   * when there is no such time — most errors, and every refusal only an
+   * operator can clear. Set by the budget refusals (`USER_CAP`: when the
+   * rolling window frees a slot; `SERVICE_BUDGET`: when the month turns), so a
+   * client can say "try again after 3:40 PM" instead of "try again later".
+   * Additive and optional on the wire, like `reason`.
+   */
+  readonly retryAt: string | null;
+
   constructor(
     code: ActorErrorCode,
     message: string,
     reason: ActorErrorReason | null = null,
+    retryAt: string | null = null,
   ) {
     super(message);
     this.code = code;
     this.reason = reason;
+    this.retryAt = isoOrNull(retryAt);
     this.name = new.target.name;
   }
 }
 
 /** The aggregate does not exist, or the viewer may not learn that it does. */
 export class NotFoundError extends ActorError {
-  constructor(message: string, reason?: ActorErrorReason) {
-    super("NOT_FOUND", message, reason ?? null);
+  constructor(
+    message: string,
+    reason?: ActorErrorReason | null,
+    retryAt?: string | null,
+  ) {
+    super("NOT_FOUND", message, reason ?? null, retryAt ?? null);
   }
 }
 
@@ -140,29 +202,45 @@ export class NotFoundError extends ActorError {
  * can already see the thing but may not perform this operation on it.
  */
 export class ForbiddenError extends ActorError {
-  constructor(message: string, reason?: ActorErrorReason) {
-    super("FORBIDDEN", message, reason ?? null);
+  constructor(
+    message: string,
+    reason?: ActorErrorReason | null,
+    retryAt?: string | null,
+  ) {
+    super("FORBIDDEN", message, reason ?? null, retryAt ?? null);
   }
 }
 
 /** A unique constraint, an optimistic-concurrency check, or a state machine. */
 export class ConflictError extends ActorError {
-  constructor(message: string, reason?: ActorErrorReason) {
-    super("CONFLICT", message, reason ?? null);
+  constructor(
+    message: string,
+    reason?: ActorErrorReason | null,
+    retryAt?: string | null,
+  ) {
+    super("CONFLICT", message, reason ?? null, retryAt ?? null);
   }
 }
 
 /** Input the actor rejected before touching the database. */
 export class ValidationError extends ActorError {
-  constructor(message: string, reason?: ActorErrorReason) {
-    super("VALIDATION", message, reason ?? null);
+  constructor(
+    message: string,
+    reason?: ActorErrorReason | null,
+    retryAt?: string | null,
+  ) {
+    super("VALIDATION", message, reason ?? null, retryAt ?? null);
   }
 }
 
 /** `BudgetActor.reserve` denied a paid external call. */
 export class BudgetExceededError extends ActorError {
-  constructor(message: string, reason?: ActorErrorReason) {
-    super("BUDGET_EXCEEDED", message, reason ?? null);
+  constructor(
+    message: string,
+    reason?: ActorErrorReason | null,
+    retryAt?: string | null,
+  ) {
+    super("BUDGET_EXCEEDED", message, reason ?? null, retryAt ?? null);
   }
 }
 
@@ -189,6 +267,8 @@ export type ActorErrorPayload = {
   readonly code: ActorErrorCode;
   readonly message: string;
   readonly reason?: ActorErrorReason;
+  /** ISO-8601; present only when the error carries one ({@link ActorError.retryAt}). */
+  readonly retryAt?: string;
 };
 
 /**
@@ -222,7 +302,8 @@ const CONSTRUCTORS: Record<
   ActorErrorCode,
   new (
     message: string,
-    reason?: ActorErrorReason,
+    reason?: ActorErrorReason | null,
+    retryAt?: string | null,
   ) => ActorError
 > = {
   NOT_FOUND: NotFoundError,
@@ -235,8 +316,9 @@ const CONSTRUCTORS: Record<
 export const actorErrorForCode = (
   code: ActorErrorCode,
   message: string,
-  reason?: ActorErrorReason,
-): ActorError => new CONSTRUCTORS[code](message, reason);
+  reason?: ActorErrorReason | null,
+  retryAt?: string | null,
+): ActorError => new CONSTRUCTORS[code](message, reason, retryAt);
 
 /**
  * Reconstructs a typed error from a response body, or returns `null` when the
@@ -254,6 +336,7 @@ export const parseActorErrorPayload = (body: string): ActorError | null => {
     code?: unknown;
     message?: unknown;
     reason?: unknown;
+    retryAt?: unknown;
   };
   if (!isActorErrorCode(candidate.code)) return null;
   return actorErrorForCode(
@@ -263,5 +346,7 @@ export const parseActorErrorPayload = (body: string): ActorError | null => {
     // switches on it must never be handed a value outside the union, and the
     // `code` is still exactly as informative as it was before `reason` existed.
     isActorErrorReason(candidate.reason) ? candidate.reason : undefined,
+    // Likewise a `retryAt` that is not an instant: `ActorError` drops it.
+    typeof candidate.retryAt === "string" ? candidate.retryAt : undefined,
   );
 };
