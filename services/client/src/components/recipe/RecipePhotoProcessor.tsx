@@ -271,7 +271,10 @@ export function RecipePhotoProcessor({
       {blockers.length > 0 ? (
         <Alert>
           <Info aria-hidden />
-          <AlertTitle>Uploads are not possible from this build</AlertTitle>
+          {/* AlertTitle clamps to one line; at 390 this one is wider. */}
+          <AlertTitle className="line-clamp-none">
+            Uploads are not possible from this build
+          </AlertTitle>
           <AlertDescription>{blockers.join(" ")}</AlertDescription>
         </Alert>
       ) : (
@@ -338,7 +341,6 @@ export function RecipePhotoProcessor({
           )}
           {phase.kind === "running" && (
             <Button
-              size="sm"
               variant="ghost"
               disabled={phase.cancelRequested}
               onClick={() => void handleStop()}

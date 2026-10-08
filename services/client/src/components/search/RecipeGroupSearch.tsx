@@ -109,6 +109,7 @@ export const RecipeGroupSearch = ({
   initialTotalCount = null,
 }: RecipeGroupSearchProps) => {
   const searchId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<RecipeGroupSearchFilters>({
     ...DEFAULT_FILTERS,
     searchTerm: initialQuery,
@@ -213,6 +214,7 @@ export const RecipeGroupSearch = ({
               <Search aria-hidden />
             </InputGroupAddon>
             <InputGroupInput
+              ref={searchInputRef}
               id={searchId}
               placeholder="Search by recipe name, description, or tags..."
               value={filters.searchTerm}
@@ -222,10 +224,17 @@ export const RecipeGroupSearch = ({
             />
             {filters.searchTerm && (
               <InputGroupAddon align="inline-end">
+                {/* 32 px drawn inside the 44 px field; the pseudo-element
+                    keeps the target at 44. The button unmounts once the term
+                    is empty, so focus goes back to the field, not <body>. */}
                 <InputGroupButton
                   size="icon-sm"
                   aria-label="Clear search"
-                  onClick={() => handleUpdateFilters({ searchTerm: "" })}
+                  className="relative after:absolute after:-inset-1.5 after:content-['']"
+                  onClick={() => {
+                    handleUpdateFilters({ searchTerm: "" });
+                    searchInputRef.current?.focus();
+                  }}
                 >
                   <Close aria-hidden />
                 </InputGroupButton>
@@ -280,7 +289,7 @@ export const RecipeGroupSearch = ({
           {(filters.searchTerm ||
             filters.category !== "all" ||
             filters.baseSpirit) && (
-            <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+            <Button variant="ghost" onClick={handleClearFilters}>
               Clear All
             </Button>
           )}
@@ -306,7 +315,6 @@ export const RecipeGroupSearch = ({
         {hasMore && (
           <Button
             variant="ghost"
-            size="sm"
             onClick={() => void reset(undefined, { fresh: true })}
           >
             Refresh

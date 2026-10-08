@@ -148,17 +148,22 @@ export const RecipeDetails = ({
                     <p className="mb-2 type-callout text-ink-2">
                       Other variations:
                     </p>
-                    <div className="flex flex-wrap gap-2">
+                    {/* A 28 px chip with a 44 px target: the pseudo-element
+                        reaches 8 px above and below, and the 16 px row gap
+                        keeps neighbouring rows' targets from overlapping. */}
+                    <div className="flex flex-wrap gap-x-2 gap-y-4">
                       {variations.map((variation) => (
                         <Badge key={variation.id} variant="outline" asChild>
                           <Link
                             href={`/recipes/${variation.id}`}
                             underline="none"
-                            className="h-7 px-3 text-sm"
+                            className="relative h-7 max-w-full overflow-visible px-3 text-sm after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
                           >
-                            {variation.name}
-                            {isNotNil(variation.version) &&
-                              ` v${variation.version}`}
+                            <span className="min-w-0 truncate">
+                              {variation.name}
+                              {isNotNil(variation.version) &&
+                                ` v${variation.version}`}
+                            </span>
                           </Link>
                         </Badge>
                       ))}
