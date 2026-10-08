@@ -123,10 +123,10 @@ export type MenuMatchCandidate = {
   /**
    * N08: how well the line's search text matched the candidate's **name**
    * (`ItemSearchHit.lexicalSimilarity`, on every item candidate; `null` for
-   * a recipe). Evidence for the order, for the record and for telling an
-   * auto-band winner from its siblings (`AUTO_LEXICAL_MARGIN`), never for the
-   * band itself: `similarity` alone decides auto versus verify, so a name
-   * match can bring a candidate to the verifier but never past it.
+   * a recipe). Evidence for the order, for the record and for telling a
+   * winner from its siblings (`AUTO_LEXICAL_MARGIN`). On its own it never
+   * lifts a candidate past the verifier; only a name *identical* to the
+   * line's does that, with the vector agreeing (`planCandidates`).
    */
   readonly lexicalSimilarity?: number | null;
   readonly target: MatchSuggestionTarget;
@@ -160,15 +160,45 @@ export const itemHitToCandidate = (hit: ItemSearchHit): MenuMatchCandidate => {
 
 /**
  * What a line's candidates are for: suggesting as-is, or asking the verifier
- * about. `auto` is non-empty exactly when some candidate's vector similarity
- * is in the auto band, and then `verify` is empty.
+ * about. `auto` is non-empty exactly when one candidate is a clear winner —
+ * by vector similarity in the auto band, or by an identical name the vector
+ * agrees with — and then `verify` is empty.
  */
 export type CandidatePlan = {
-  /** The one clear auto-band winner, or nothing. */
+  /** The one clear winner, or nothing. */
   readonly auto: readonly MenuMatchCandidate[];
+  /** What made `auto` a winner; `null` when it is empty. */
+  readonly autoBy: "vector" | "name" | null;
   /** Otherwise the first few in the search's order, for the verifier. */
   readonly verify: readonly MenuMatchCandidate[];
 };
+
+/**
+ * The fewest vector similarity an identical name is auto-suggested with:
+ * enough that the embedding agrees the line and the item are the same kind
+ * of thing, not proof that they are the same bottle — the name is that.
+ *
+ * Measured on the local lane (nomic-embed-text, 2026-10-08), the catalog's
+ * own "Guinness Draught", "Pilsner Urquell" and "Lagavulin 16 Year Old"
+ * scored 0.888, 0.829 and 0.853 against menu lines with exactly those names
+ * — every one under `MATCH_AUTO_CONFIDENCE`, so every one went to a verifier
+ * that, on gemma3:4b, accepted none of them. A scanned menu matched nothing
+ * at all. The nearest *other* beer was 0.807, 0.741 and 0.692.
+ */
+export const NAME_AUTO_MIN_SIMILARITY = 0.75;
+
+/**
+ * A name reduced to what a menu and a catalog both spell the same way: case,
+ * accents, punctuation and spacing folded. "Château Margaux" and "chateau
+ * margaux" are one name; "Lagavulin 16" and "Lagavulin 16 Year Old" are not.
+ */
+export const foldName = (name: string): string =>
+  name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
 
 /**
  * Splits a line's search hits by band.
@@ -180,6 +210,10 @@ export type CandidatePlan = {
  * a clear winner ({@link AUTO_MARGIN}) and then it is the one suggestion;
  * two candidates neither the vector nor the name can separate are siblings,
  * which is the verifier's job.
+ *
+ * **Auto by name** is the one way past the verifier from below the auto
+ * band: a candidate whose name is identical to the line's, unambiguously
+ * (`identicallyNamed`). A partial name match never does that.
  *
  * **Verify** keeps the search's own order rather than re-sorting by vector
  * similarity — `ItemSearchActor` ranked a phrase by vector and name together
@@ -193,6 +227,7 @@ export type CandidatePlan = {
  */
 export const planCandidates = (
   candidates: readonly MenuMatchCandidate[],
+  lineNames: readonly string[] = [],
 ): CandidatePlan => {
   const kept = candidates.filter(
     (candidate) => bandOf(candidate.similarity) !== "drop",
@@ -202,9 +237,45 @@ export const planCandidates = (
     best !== undefined &&
     bandOf(best.similarity) === "auto" &&
     rest.every((other) => separated(best, other));
-  return clear
-    ? { auto: [best], verify: [] }
-    : { auto: [], verify: kept.slice(0, MENU_MATCH_MAX_CANDIDATES) };
+  if (clear) return { auto: [best], autoBy: "vector", verify: [] };
+
+  const named = identicallyNamed(kept, lineNames);
+  if (named !== null) return { auto: [named], autoBy: "name", verify: [] };
+
+  return {
+    auto: [],
+    autoBy: null,
+    verify: kept.slice(0, MENU_MATCH_MAX_CANDIDATES),
+  };
+};
+
+/**
+ * The verify-band candidate whose name **is** the line's — printed or
+ * normalised — when that is unambiguous: the only candidate with that name,
+ * at least {@link NAME_AUTO_MIN_SIMILARITY} by vector, and separated from
+ * every other candidate as an auto-band winner must be (`separated`). Then
+ * the verifier has nothing to decide: the menu names this product and the
+ * catalog has one product by that name.
+ *
+ * What it does not admit, deliberately: a name that merely *contains* the
+ * line ("Pilsner" for "Pilsner Urquell" — a house pilsner is not that), a
+ * line naming a product the catalog has twice, and a sibling the vector puts
+ * level with it and whose name matches the line as well (both "contain" it).
+ * Those stay the verifier's.
+ */
+const identicallyNamed = (
+  kept: readonly MenuMatchCandidate[],
+  lineNames: readonly string[],
+): MenuMatchCandidate | null => {
+  const folded = new Set(lineNames.map(foldName).filter((name) => name !== ""));
+  if (folded.size === 0) return null;
+  const same = kept.filter((candidate) => folded.has(foldName(candidate.name)));
+  const [only] = same;
+  if (only === undefined || same.length > 1) return null;
+  if (only.similarity < NAME_AUTO_MIN_SIMILARITY) return null;
+  return kept.every((other) => other === only || separated(only, other))
+    ? only
+    : null;
 };
 
 /**

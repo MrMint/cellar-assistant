@@ -941,6 +941,33 @@ export const MENU_MATCH_SCHEMA: JsonSchema = {
   required: ["acceptedKey", "confidence", "reasoning"],
 };
 
+/**
+ * {@link MENU_MATCH_SCHEMA} for one request: `acceptedKey` is an `enum` of
+ * the keys actually offered, plus "none".
+ *
+ * Measured on the local lane (gemma3:4b, 2026-10-08): with a free-text
+ * `acceptedKey` the model answered a candidate's *name* ("Ridge Lytton
+ * Springs") instead of its key, the seam refused it as invented, and the
+ * outbox retried a batch that would answer the same way. An `enum` puts the
+ * legal answers into a schema-honouring provider's sampler, so a name is
+ * unsayable; the seam still checks, for a provider that does not honour it.
+ * At most `MENU_MATCH_MAX_CANDIDATES` + 1 values, far under any provider's
+ * enum limit.
+ */
+export const menuMatchSchema = (keys: readonly string[]): JsonSchema => ({
+  ...MENU_MATCH_SCHEMA,
+  properties: {
+    ...MENU_MATCH_SCHEMA.properties,
+    acceptedKey: {
+      type: "string",
+      enum: [...keys, "none"],
+      description:
+        "The `key` of the candidate that is the same product, or the exact " +
+        'string "none" if none of them is.',
+    },
+  },
+});
+
 export const buildMenuMatchPrompt = (
   request: MenuMatchVerificationRequest,
 ): string => {

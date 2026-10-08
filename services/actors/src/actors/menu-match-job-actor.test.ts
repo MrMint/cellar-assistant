@@ -535,10 +535,12 @@ describe.skipIf(skip)("MenuMatchJobActor (B8)", () => {
       const scanId = await seedScan(db, owner, placeId);
       const named = await seedWine(db, owner, "Dassai 23");
       const nearer = await seedWine(db, owner, "Dassai 45");
+      // Not the catalog's name exactly — that would be auto-suggested by
+      // name and never reach the verifier (next test).
       await seedMenuItem(db, {
         placeId,
         menuScanId: scanId,
-        name: "Dassai 23",
+        name: "Dassai 23 Junmai Daiginjo",
         scanItemType: "wine",
       });
       const search = recordingSearcher({
@@ -578,6 +580,75 @@ describe.skipIf(skip)("MenuMatchJobActor (B8)", () => {
       expect(suggestion?.similarityMetrics).toMatchObject({
         vectorSimilarity: 0.8,
         lexicalSimilarity: 1,
+      });
+    });
+  });
+
+  /**
+   * The local-lane failure: exact catalog names under the vector auto band
+   * went to a verifier that accepted none of them, so a scanned menu matched
+   * nothing. A line that names one catalog item exactly, with the vector
+   * agreeing and no sibling level with it, is suggested without asking.
+   */
+  it("suggests an exactly named item below the auto band without the verifier", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Pub", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, owner, placeId);
+      const draught = await seedWine(db, owner, "Guinness Draught");
+      const stout = await seedWine(db, owner, "Guinness Extra Stout");
+      await seedMenuItem(db, {
+        placeId,
+        menuScanId: scanId,
+        name: "Guinness Draught",
+        scanItemType: "wine",
+      });
+      const search = recordingSearcher({
+        items: [
+          {
+            type: "WINE",
+            id: draught.id,
+            name: "Guinness Draught",
+            distance: 0.224,
+            lexicalSimilarity: 1,
+          },
+          {
+            type: "WINE",
+            id: stout.id,
+            name: "Guinness Extra Stout",
+            distance: 0.386,
+            lexicalSimilarity: 0.47,
+          },
+        ],
+      });
+      let asked = 0;
+      const verify: MenuMatchVerifier = async () => {
+        asked += 1;
+        return {
+          acceptedKey: null,
+          confidence: 0.5,
+          reasoning: "",
+          model: "fake-verifier-1",
+        };
+      };
+      const job = await activate(
+        newJobActor(crypto.randomUUID(), db, search, verify),
+      );
+      await startJob(job, scanId);
+      await job.runBatch(testDelivery("b0"), { batch: 0 });
+
+      expect(asked).toBe(0);
+      const suggestions = await suggestionsOf(db, scanId);
+      expect(suggestions).toHaveLength(1);
+      expect(suggestions[0]?.target).toEqual({
+        kind: "ITEM",
+        item: { type: "WINE", id: draught.id },
+      });
+      expect(suggestions[0]?.confidenceScore).toBeCloseTo(0.89, 2);
+      expect(suggestions[0]?.matchReasoning).toMatch(/names it exactly/);
+      expect(suggestions[0]?.similarityMetrics).toMatchObject({
+        lexicalSimilarity: 1,
+        exactName: true,
       });
     });
   });

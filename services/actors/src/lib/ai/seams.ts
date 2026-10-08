@@ -66,6 +66,7 @@ import {
 import type {
   ExtractedMenuLine,
   MenuExtractionProvider,
+  MenuMatchVerificationRequest,
   MenuMatchVerifier,
 } from "../menu-ai.ts";
 import type { RecipePhotoExtractor } from "../recipe-photo-ai.ts";
@@ -96,7 +97,7 @@ import {
   isScannedType,
   itemDefaultsSchema,
   MENU_EXTRACTION_SCHEMA,
-  MENU_MATCH_SCHEMA,
+  menuMatchSchema,
   PLACE_REVIEW_SCHEMA,
   RECIPE_PHOTO_SCHEMA,
 } from "./prompts.ts";
@@ -543,15 +544,41 @@ export const providerMenuExtraction =
 /** The model says "none" for "no candidate matches"; the seam wants `null`. */
 const NONE = "none";
 
+/**
+ * The model's `acceptedKey`, with one forgiven slip: the *name* of exactly
+ * one offered candidate, which a small local model answers instead of its
+ * key (measured on gemma3:4b, where `menuMatchSchema`'s `enum` is what
+ * normally prevents it). A name shared by two candidates, or matching none,
+ * is passed through unchanged, and the check below refuses it.
+ */
+const keyFromAnswer = (
+  answer: string | null,
+  candidates: MenuMatchVerificationRequest["candidates"],
+): string | null => {
+  if (answer === null || candidates.some((c) => c.key === answer)) {
+    return answer;
+  }
+  const folded = answer.trim().toLowerCase();
+  const named = candidates.filter(
+    (candidate) => candidate.name.trim().toLowerCase() === folded,
+  );
+  return named.length === 1 ? (named[0]?.key ?? answer) : answer;
+};
+
 export const providerMenuMatchVerifier =
   (provider: ProviderFor): MenuMatchVerifier =>
   async (ctx, request) => {
     const { content, metadata } = await provider(ctx).generateContent(
-      { prompt: buildMenuMatchPrompt(request), schema: MENU_MATCH_SCHEMA },
+      {
+        prompt: buildMenuMatchPrompt(request),
+        schema: menuMatchSchema(
+          request.candidates.map((candidate) => candidate.key),
+        ),
+      },
       "medium",
     );
     const parsed = parseModelJson(content, "menu match verification");
-    const accepted = str(parsed.acceptedKey);
+    const accepted = keyFromAnswer(str(parsed.acceptedKey), request.candidates);
     const known = new Set(request.candidates.map((candidate) => candidate.key));
 
     // A key the model invented is not a match — but it is also not a silent
