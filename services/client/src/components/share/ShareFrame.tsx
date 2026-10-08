@@ -47,7 +47,7 @@ export function ShareFrame({
         <Page withActionBar className="flex-1">
           {children}
         </Page>
-        <ActionBar className="mb-[env(safe-area-inset-bottom)] flex-col items-stretch gap-1 px-3 pt-2 pb-3">
+        <ActionBar className="flex-col items-stretch gap-1 px-3 pt-2 pb-3">
           {pitch !== undefined && (
             <p className="type-footnote px-1 text-center">{pitch}</p>
           )}
