@@ -69,6 +69,20 @@ describe("ItemFormField errors (N03)", () => {
       /^<input[^>]*>[\s\S]*>Vintage is required\.</,
       "the message sits under the control",
     );
+    // …and is the control's description, as Joy's FormControl wired it.
+    const describedBy = /aria-describedby="([^"]+)"/.exec(input)?.[1];
+    assert.ok(describedBy, "the control names its error line");
+    assert.match(
+      html,
+      new RegExp(`id="${describedBy}"[^>]*>Vintage is required\\.<`),
+    );
+  });
+
+  test("a valid field points at no error line", () => {
+    assert.doesNotMatch(
+      openTag(render("Vintage"), 'name="attributes.vintage"'),
+      /aria-describedby/,
+    );
   });
 
   test("the name, and a missing picker, too", () => {

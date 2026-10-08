@@ -1,4 +1,3 @@
-import { Grid, Stack } from "@mui/joy";
 import { AddReview } from "@/components/review/AddReview";
 import type { CheckInRow, ItemView } from "./adapter";
 import { CellarItemHeader } from "./CellarItemHeader";
@@ -11,7 +10,6 @@ import { ItemImageWithCaptureClient } from "./ItemImageWithCaptureClient";
 import { type ItemRecipeIngredient, ItemRecipes } from "./ItemRecipes";
 import { ItemRemainingSlider } from "./ItemRemainingSlider";
 import { ItemReviews } from "./ItemReviews";
-import { ItemShare } from "./ItemShare";
 import { ITEM_VIEW_CONFIG } from "./itemViewConfig";
 
 export type CellarItemPageViewProps = {
@@ -40,9 +38,10 @@ export type CellarItemPageViewProps = {
  * The six `82450ad1:src/components/{wine,…}/Cellar{T}Details.tsx`, as one view
  * over `ITEM_VIEW_CONFIG` — one **bottle** (decision 1). Same grid: the
  * bottle's display photo (tap to set one) on the left; details,
- * characteristics, check-ins (once opened), the remaining slider, Share,
- * brands (wine, coffee, sake, tea) and, for sake and tea, recipes in the
- * middle; the review form and reviews on the right, then beer's and spirit's
+ * characteristics, check-ins (once opened), the remaining slider, brands
+ * (wine, coffee, sake, tea) and, for sake and tea, recipes in the middle
+ * (Share, which sat under the slider, is the header bar's action now —
+ * N26); the review form and reviews on the right, then beer's and spirit's
  * brands (`cellarBrandsColumn`).
  */
 export function CellarItemPageView({
@@ -64,7 +63,7 @@ export function CellarItemPageView({
   );
 
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-4">
       <CellarItemHeader
         itemType={item.type}
         itemId={bottle.id}
@@ -81,8 +80,8 @@ export function CellarItemPageView({
           percentageRemaining: bottle.percentageRemaining,
         }}
       />
-      <Grid container spacing={2}>
-        <Grid xs={12} sm={4}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="min-w-0">
           <ItemImageWithCaptureClient
             url={bottle.displayImage?.url}
             placeholder={bottle.displayImage?.placeholder}
@@ -92,75 +91,70 @@ export function CellarItemPageView({
             cellarId={cellar.id}
             cellarItemId={bottle.id}
           />
-        </Grid>
-        <Grid container xs={12} sm={8}>
-          <Grid xs={12} sm={12} lg={6}>
-            <Stack spacing={2}>
-              <ItemDetails
-                itemId={item.itemId}
-                type={item.type}
-                isFavorite={item.isFavorite}
-                title={item.name}
-                subTitlePhrases={item.subTitlePhrases}
-                description={item.description}
-              />
-              <ItemCharacteristics
-                title={config.characteristicsTitle}
-                characteristics={item.characteristics}
-                flavorProfile={item.flavorProfile}
-                ingredients={item.ingredients}
-              />
-              {bottle.openAt !== null && (
-                <ItemCheckIns
-                  checkIns={checkIns}
-                  itemId={bottle.id}
-                  cellarId={cellar.id}
-                  friends={friends}
-                  user={viewer}
-                  total={checkInsTotal}
-                  finished={bottle.emptyAt !== null}
-                />
-              )}
-              <ItemRemainingSlider
+        </div>
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:col-span-2 lg:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-4">
+            <ItemDetails
+              itemId={item.itemId}
+              type={item.type}
+              isFavorite={item.isFavorite}
+              title={item.name}
+              subTitlePhrases={item.subTitlePhrases}
+              description={item.description}
+            />
+            <ItemCharacteristics
+              title={config.characteristicsTitle}
+              characteristics={item.characteristics}
+              flavorProfile={item.flavorProfile}
+              ingredients={item.ingredients}
+            />
+            {bottle.openAt !== null && (
+              <ItemCheckIns
+                checkIns={checkIns}
                 itemId={bottle.id}
                 cellarId={cellar.id}
-                isCellarOwner={isOwner}
-                percentageRemaining={bottle.percentageRemaining}
-                opened={bottle.openAt}
-                emptied={bottle.emptyAt}
+                friends={friends}
+                user={viewer}
+                total={checkInsTotal}
+                finished={bottle.emptyAt !== null}
+              />
+            )}
+            <ItemRemainingSlider
+              itemId={bottle.id}
+              cellarId={cellar.id}
+              isCellarOwner={isOwner}
+              percentageRemaining={bottle.percentageRemaining}
+              opened={bottle.openAt}
+              emptied={bottle.emptyAt}
+              itemName={item.name}
+            />
+            {config.cellarBrandsColumn === "left" && brands}
+            {config.cellarRecipes && (
+              <ItemRecipes
+                recipeIngredients={recipes}
+                title="Used in Recipes"
                 itemName={item.name}
+                total={recipesTotal}
               />
-              <ItemShare itemId={item.itemId} itemType={item.type} />
-              {config.cellarBrandsColumn === "left" && brands}
-              {config.cellarRecipes && (
-                <ItemRecipes
-                  recipeIngredients={recipes}
-                  title="Used in Recipes"
-                  itemName={item.name}
-                  total={recipesTotal}
-                />
-              )}
-            </Stack>
-          </Grid>
-          <Grid xs={12} sm={12} lg={6}>
-            <Stack spacing={2}>
-              <AddReview
-                itemId={item.itemId}
-                type={item.type}
-                myReview={item.myReview}
-              />
-              <ItemReviews
-                reviews={item.reviews}
-                itemId={item.itemId}
-                type={item.type}
-                endCursor={item.reviewsEndCursor}
-                hasNextPage={item.reviewsHasNextPage}
-              />
-              {config.cellarBrandsColumn === "right" && brands}
-            </Stack>
-          </Grid>
-        </Grid>
-      </Grid>
-    </Stack>
+            )}
+          </div>
+          <div className="flex min-w-0 flex-col gap-4">
+            <AddReview
+              itemId={item.itemId}
+              type={item.type}
+              myReview={item.myReview}
+            />
+            <ItemReviews
+              reviews={item.reviews}
+              itemId={item.itemId}
+              type={item.type}
+              endCursor={item.reviewsEndCursor}
+              hasNextPage={item.reviewsHasNextPage}
+            />
+            {config.cellarBrandsColumn === "right" && brands}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, Card, Slider, Stack, Typography } from "@mui/joy";
 import { useRouter } from "next/navigation";
+import { Slider as SliderPrimitive } from "radix-ui";
 import { useEffect, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
@@ -13,6 +13,8 @@ import { unwrapResult } from "@/lib/api/result";
 import { formatDistance } from "@/lib/items/distance";
 import { useInterval } from "@/utilities/hooks";
 import { FinishBottleDialogs } from "./FinishBottleDialogs";
+import { ItemSection } from "./ItemSection";
+import { LoadingButton } from "./LoadingButton";
 import { useFinishBottle } from "./useFinishBottle";
 
 export type ItemRemainingSliderProps = {
@@ -38,12 +40,17 @@ export type ItemRemainingSliderProps = {
  *   "Finished it?" first and offers Undo after (N13a, `useFinishBottle`):
  *   "Not yet" puts the slider back on the last saved level. A finished
  *   bottle keeps a "Restore to cellar" button for its owner, so putting it
- *   back is not limited to the Undo toast's six seconds.
+ *   back is not limited to the Undo toast's five seconds.
  * - "Opened … ago" no longer seeds `now` with `new Date()` during render (the
  *   hydration rule): `now` is set in an effect, so the server and the first
  *   client render both show no distance, and the 10 s tick takes over.
  *   `formatDistance` is a local copy of date-fns' wording.
  * - A refused write is shown instead of being swallowed.
+ *
+ * The slider is Radix's primitive composed here rather than `ui/slider`: the
+ * old one was a tall "level" bar (a 3 rem track), and `ui/slider` neither
+ * draws that nor lets the thumb — the element with `role="slider"` — carry
+ * its accessible name ("Remaining").
  */
 export const ItemRemainingSlider = ({
   itemId,
@@ -124,61 +131,72 @@ export const ItemRemainingSlider = ({
   const shownError = error ?? finishError;
 
   return (
-    <Card>
+    <ItemSection>
       {isCellarOwner && !isOpened && (
-        <Button loading={isPending} onClick={handleOpen}>
+        <LoadingButton loading={isPending} onClick={handleOpen}>
           Open it!
-        </Button>
+        </LoadingButton>
       )}
       {isOpened && !isEmptied && (
-        <Stack spacing={2}>
-          <Typography>Remaining: {percent}%</Typography>
-          <Slider
-            value={percent}
+        <div className="flex flex-col gap-4">
+          <p className="type-body tabular text-ink-1">Remaining: {percent}%</p>
+          <SliderPrimitive.Root
+            data-slot="slider"
+            value={[percent]}
             max={100}
             min={0}
             step={1}
             disabled={!isCellarOwner}
-            onChange={(_, value) => {
-              const next = Array.isArray(value) ? (value[0] ?? 0) : value;
+            onValueChange={(value) => {
+              const next = value[0] ?? 0;
               setPercent(next);
               save(next);
             }}
-            slotProps={{ input: { "aria-label": "Remaining" } }}
-            sx={{
-              "--Slider-trackSize": "3rem",
-              "--Slider-trackRadius": ".5rem",
-            }}
-          />
-          <Typography textAlign="center">
+            className="relative flex h-12 w-full touch-none select-none items-center data-[disabled]:opacity-50"
+          >
+            <SliderPrimitive.Track
+              data-slot="slider-track"
+              className="relative h-12 grow overflow-hidden rounded-md bg-surface-3"
+            >
+              <SliderPrimitive.Range
+                data-slot="slider-range"
+                className="absolute h-full bg-primary"
+              />
+            </SliderPrimitive.Track>
+            <SliderPrimitive.Thumb
+              data-slot="slider-thumb"
+              aria-label="Remaining"
+              className="block h-10 w-3 rounded-full bg-ink-1 shadow-sm outline-none ring-ring/50 transition-shadow focus-visible:ring-4 disabled:pointer-events-none"
+            />
+          </SliderPrimitive.Root>
+          <p className="type-body text-center text-ink-2">
             Opened {now === null ? "" : formatDistance(opened, now)} ago
-          </Typography>
-        </Stack>
+          </p>
+        </div>
       )}
       {isEmptied && (
-        <Stack spacing={1}>
-          <Typography textAlign="center">
+        <div className="flex flex-col gap-2">
+          <p className="type-body text-center text-ink-2">
             Empty {now === null ? "" : formatDistance(emptied, now)} ago
-          </Typography>
+          </p>
           {/* Undo outlives its toast: put a finished bottle back (N13a). */}
           {isCellarOwner && (
-            <Button
-              variant="outlined"
-              color="neutral"
+            <LoadingButton
+              variant="outline"
               loading={finishPhase === "restoring"}
               onClick={() => finish.restore(percentageRemaining)}
             >
               Restore to cellar
-            </Button>
+            </LoadingButton>
           )}
-        </Stack>
+        </div>
       )}
       {shownError !== null && (
-        <Typography level="body-sm" color="danger">
+        <p role="alert" className="type-callout text-destructive">
           {shownError}
-        </Typography>
+        </p>
       )}
       <FinishBottleDialogs finish={finish} itemName={itemName} />
-    </Card>
+    </ItemSection>
   );
 };

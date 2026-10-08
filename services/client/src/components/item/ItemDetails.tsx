@@ -1,13 +1,15 @@
 "use client";
 
-import { Card, IconButton, Stack, Typography } from "@mui/joy";
 import type { MouseEvent } from "react";
 import { useState, useTransition } from "react";
-import { MdFavorite, MdFavoriteBorder } from "react-icons/md";
 import { useMutation } from "urql";
+import { IconButton } from "@/components/app/IconButton";
+import { Love } from "@/components/app/icons";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { ToggleFavoriteMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
+import { cn } from "@/lib/utils";
+import { ItemSection } from "./ItemSection";
 
 export type ItemDetailsProp = {
   itemId: string;
@@ -25,6 +27,9 @@ export type ItemDetailsProp = {
  * `addFavoriteAction` / `deleteFavoriteAction(favoriteId)` →
  * `toggleFavorite(itemId, type)`, which reports the state after the toggle;
  * the heart trusts that over its own guess, as `ItemCard` does.
+ *
+ * The heart is the brand claret when set (design §3.1: never a pure red
+ * heart), an outline otherwise.
  */
 const ItemDetails = ({
   itemId,
@@ -54,46 +59,42 @@ const ItemDetails = ({
     });
   };
 
-  const favoriteButton = (
-    <IconButton
-      disabled={isPending}
-      onClick={handleFavoriteClick}
-      aria-label={localFavorite ? "Remove from favorites" : "Add to favorites"}
-      aria-pressed={localFavorite}
-    >
-      {localFavorite ? (
-        <MdFavorite
-          style={{
-            color: "red",
-            fontSize: "2rem",
-          }}
-        />
-      ) : (
-        <MdFavoriteBorder
-          style={{
-            fontSize: "2rem",
-          }}
-        />
-      )}
-    </IconButton>
-  );
+  const phrases = subTitlePhrases
+    .filter(
+      (phrase): phrase is string => phrase !== null && phrase !== undefined,
+    )
+    .join(" - ");
+
   return (
-    <Card>
-      <Stack spacing={1}>
-        <Typography level="h3" endDecorator={favoriteButton}>
-          {title}
-        </Typography>
-        <Typography level="body-md">
-          {subTitlePhrases
-            .filter(
-              (phrase): phrase is string =>
-                phrase !== null && phrase !== undefined,
-            )
-            .join(" - ")}
-        </Typography>
-        <Typography level="body-sm">{description}</Typography>
-      </Stack>
-    </Card>
+    <ItemSection>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start gap-2">
+          {/* The page's heading: the AppBar above leaves its title to this. */}
+          <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
+            {title}
+          </h1>
+          <IconButton
+            disabled={isPending}
+            onClick={handleFavoriteClick}
+            aria-label={
+              localFavorite ? "Remove from favorites" : "Add to favorites"
+            }
+            aria-pressed={localFavorite}
+            className="-mr-2 shrink-0"
+          >
+            <Love
+              aria-hidden
+              className={cn(
+                "size-7",
+                localFavorite ? "fill-brand text-brand" : "text-ink-2",
+              )}
+            />
+          </IconButton>
+        </div>
+        <p className="type-body text-ink-2">{phrases}</p>
+        <p className="type-callout text-ink-2">{description}</p>
+      </div>
+    </ItemSection>
   );
 };
 export default ItemDetails;

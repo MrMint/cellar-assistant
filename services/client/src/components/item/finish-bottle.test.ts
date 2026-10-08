@@ -7,6 +7,7 @@ import {
   type FinishSnapshot,
   type FinishState,
   finishReducer,
+  finishToastCopy,
   initialFinishState,
   performFinish,
   performRestore,
@@ -321,6 +322,32 @@ describe("deleteBottleWarning", () => {
         isFinished: false,
       }).body,
       /^Delete this bottle from your cellar\?/,
+    );
+  });
+});
+
+describe("finishToastCopy", () => {
+  test("the Undo toast's line follows the phase, and is gone when idle", () => {
+    assert.equal(
+      finishToastCopy({ phase: "finished", snapshot: opened }),
+      "Finished. Moved out of the cellar.",
+    );
+    assert.equal(
+      finishToastCopy({ phase: "undoing", snapshot: opened }),
+      "Putting it back…",
+    );
+    assert.equal(
+      finishToastCopy({
+        phase: "undoFailed",
+        snapshot: opened,
+        error: "Offline",
+      }),
+      "Couldn't undo: Offline",
+    );
+    assert.equal(finishToastCopy(initialFinishState), null);
+    assert.equal(
+      finishToastCopy({ phase: "confirming", snapshot: opened }),
+      null,
     );
   });
 });

@@ -1,25 +1,26 @@
 "use client";
 
-import {
-  Button,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Modal,
-  ModalDialog,
-  Snackbar,
-  Typography,
-} from "@mui/joy";
-import { UNDO_WINDOW_MS } from "./finish-bottle";
+import { useEffect, useId, useRef } from "react";
+import { toast } from "sonner";
+import { UNDO_TOAST_MS } from "@/components/app/notify";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { Button } from "@/components/ui/button";
+import { finishToastCopy } from "./finish-bottle";
+import { LoadingButton } from "./LoadingButton";
 import type { FinishBottle } from "./useFinishBottle";
 
 /**
- * N13a's markup: the "Finished it?" question and the Undo toast. Minimal Joy
- * on purpose — the shadcn migration (D20) replaces this file with a Drawer
- * and a Sonner toast over the same `useFinishBottle` API.
+ * N13a's markup over `useFinishBottle`: the "Finished it?" question as an
+ * N27 sheet (`ResponsiveDialog` — a bottom sheet on phones, a dialog from
+ * `md`) and the Undo toast through the app's one Sonner `<Toaster/>`, which
+ * already sits above the tab bar (obs 41).
  *
- * The toast sits above the phone tab bar (the review's observation 41: the
- * old toasts covered the navigation).
+ * The toast is raised with Sonner's `toast` rather than `notify()`, because
+ * the reducer must hear when it closes on its own (`onAutoClose` → DISMISS:
+ * the Undo window is over) and `notify` passes no close callback; its copy,
+ * duration (`UNDO_TOAST_MS`) and Undo action are `notify`'s. The same toast
+ * (one id per bottle) turns into "Putting it back…" while Undo runs, into
+ * the refusal with "Try again" if Undo fails, and goes away once it worked.
  */
 export function FinishBottleDialogs({
   finish,
@@ -32,87 +33,92 @@ export function FinishBottleDialogs({
   const asking =
     state.phase === "confirming" ||
     (state.phase === "finishing" && state.asked);
-  const undoFailed = state.phase === "undoFailed";
-  const toastOpen =
-    state.phase === "finished" || state.phase === "undoing" || undoFailed;
   const name =
     itemName === undefined || itemName === "" ? "This bottle" : itemName;
 
-  return (
-    <>
-      <Modal
-        open={asking}
-        onClose={() => {
-          if (state.phase === "confirming") finish.cancel();
-        }}
-      >
-        <ModalDialog
-          role="alertdialog"
-          aria-labelledby="finish-bottle-title"
-          aria-describedby="finish-bottle-body"
-          layout="center"
-          sx={{ maxWidth: 400, width: "calc(100% - 32px)" }}
-        >
-          <DialogTitle id="finish-bottle-title">Finished it?</DialogTitle>
-          <DialogContent id="finish-bottle-body">
-            {`${name} leaves the cellar. Its check-ins stay, and you can undo this.`}
-          </DialogContent>
-          <DialogActions>
-            <Button
-              loading={state.phase === "finishing"}
-              onClick={finish.confirm}
-            >
-              Finished
-            </Button>
-            <Button
-              variant="plain"
-              color="neutral"
-              disabled={state.phase === "finishing"}
-              onClick={finish.cancel}
-            >
-              Not yet
-            </Button>
-          </DialogActions>
-        </ModalDialog>
-      </Modal>
-      <Snackbar
-        open={toastOpen}
-        // Announced, not just shown: Joy's root is role="presentation".
-        role="status"
-        aria-live="polite"
-        autoHideDuration={state.phase === "undoing" ? null : UNDO_WINDOW_MS}
-        onClose={(_event, reason) => {
-          // A tap elsewhere is not a decision; only the timer closes it.
-          if (reason === "clickaway") return;
-          finish.dismiss();
-        }}
-        variant="soft"
-        color={undoFailed ? "danger" : "neutral"}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        sx={{
-          bottom: {
-            xs: "calc(72px + env(safe-area-inset-bottom))",
-            sm: "16px",
+  const toastId = useId();
+  // The toast's callbacks outlive the render that raised them: read the
+  // hook's current commands, whose phase checks are then up to date.
+  const latest = useRef(finish);
+  useEffect(() => {
+    latest.current = finish;
+  });
+  const previous = useRef(state.phase);
+
+  useEffect(() => {
+    const was = previous.current;
+    previous.current = state.phase;
+    const message = finishToastCopy(state);
+    const closed = {
+      // The window passed, or the toast was swiped away: no Undo any more.
+      onAutoClose: () => latest.current.dismiss(),
+      onDismiss: () => latest.current.dismiss(),
+    };
+    if (state.phase === "finished" && message !== null) {
+      toast(message, {
+        id: toastId,
+        duration: UNDO_TOAST_MS,
+        ...closed,
+        action: {
+          label: "Undo",
+          onClick: (event) => {
+            // Keep the toast: it shows the Undo running, then its outcome.
+            event.preventDefault();
+            latest.current.undo();
           },
-        }}
-        endDecorator={
-          <Button
-            size="sm"
-            variant="plain"
-            color={undoFailed ? "danger" : "primary"}
-            loading={state.phase === "undoing"}
-            onClick={finish.undo}
+        },
+      });
+    } else if (state.phase === "undoing" && message !== null) {
+      toast.loading(message, { id: toastId, action: undefined });
+    } else if (state.phase === "undoFailed" && message !== null) {
+      toast.error(message, {
+        id: toastId,
+        duration: UNDO_TOAST_MS,
+        ...closed,
+        action: {
+          label: "Try again",
+          onClick: (event) => {
+            event.preventDefault();
+            latest.current.undo();
+          },
+        },
+      });
+    } else if (state.phase === "idle" && was === "undoing") {
+      toast.dismiss(toastId);
+    }
+  }, [state, toastId]);
+
+  // Leaving the page takes the toast with it: its Undo would act on a bottle
+  // no longer on screen.
+  useEffect(() => () => void toast.dismiss(toastId), [toastId]);
+
+  return (
+    <ResponsiveDialog
+      role="alertdialog"
+      open={asking}
+      onOpenChange={(open) => {
+        if (!open && state.phase === "confirming") finish.cancel();
+      }}
+      title="Finished it?"
+      description={`${name} leaves the cellar. Its check-ins stay, and you can undo this.`}
+      dismissible={state.phase === "confirming"}
+      footer={
+        <div className="flex w-full flex-col gap-2 md:flex-row-reverse md:justify-start">
+          <LoadingButton
+            loading={state.phase === "finishing"}
+            onClick={finish.confirm}
           >
-            {undoFailed ? "Try again" : "Undo"}
+            Finished
+          </LoadingButton>
+          <Button
+            variant="ghost"
+            disabled={state.phase === "finishing"}
+            onClick={finish.cancel}
+          >
+            Not yet
           </Button>
-        }
-      >
-        <Typography level="body-sm">
-          {state.phase === "undoFailed"
-            ? `Couldn't undo: ${state.error}`
-            : "Finished. Moved out of the cellar."}
-        </Typography>
-      </Snackbar>
-    </>
+        </div>
+      }
+    />
   );
 }

@@ -1,10 +1,8 @@
-import { Stack } from "@mui/joy";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import { HeaderBar } from "@/components/common/HeaderBar";
 import { AddToTierListButton } from "@/components/tier-list/AddToTierListButton";
 import type { TierListEntityType } from "@/components/tier-list/constants";
 import { AddToCellarActions } from "./AddToCellarActions";
-import { EditItemButton } from "./EditItemButton";
+import { ItemAppBar } from "./ItemAppBar";
 
 type ItemHeaderServerProps = {
   itemId: string;
@@ -21,10 +19,12 @@ type ItemHeaderServerProps = {
 /**
  * `82450ad1:src/components/item/ItemHeaderServer.tsx`, restored.
  *
- * Breadcrumbs ("Home / Wines / <name>"), "Add to Tier List" (the tier-lists
- * wave's restored button) and "Add to Cellar" as before. The old `userId`
- * gate goes: the `(authenticated)` layout guarantees a viewer. Added: the creator-only "Edit item" (decision 2 keeps the edit
- * page; the old header had no way to reach it).
+ * The header is now `ItemAppBar` (N26): Back, the old breadcrumbs ("Home /
+ * Wines / <name>") from `md` up, Share, and the creator-only "Edit item" in
+ * `⋯` (D7; decision 2 keeps the edit page, which the old header could not
+ * reach). Under it, "Add to Tier List" (the tier-lists wave's restored
+ * button) and "Add to Cellar" as before. The old `userId` gate goes: the
+ * `(authenticated)` layout guarantees a viewer.
  */
 export const ItemHeaderServer = ({
   itemType,
@@ -34,25 +34,25 @@ export const ItemHeaderServer = ({
   editHref = null,
 }: ItemHeaderServerProps) => {
   return (
-    <HeaderBar
-      serverBreadcrumbs={{
-        itemName: itemName ?? "loading...",
-      }}
-      endComponent={
-        <Stack spacing={2} direction="row">
-          <AddToTierListButton
-            entityId={itemId}
-            entityType={itemType.toLowerCase() as TierListEntityType}
-            entityName={itemName ?? "this item"}
-          />
-          <AddToCellarActions
-            itemType={itemType}
-            itemId={itemId}
-            cellars={cellars}
-          />
-          {editHref !== null && <EditItemButton href={editHref} enabled />}
-        </Stack>
-      }
-    />
+    <div className="flex flex-col gap-3">
+      <ItemAppBar
+        parent="/"
+        itemName={itemName ?? "loading..."}
+        share={{ itemId, itemType }}
+        editHref={editHref}
+      />
+      <div className="flex flex-wrap items-start gap-2">
+        <AddToTierListButton
+          entityId={itemId}
+          entityType={itemType.toLowerCase() as TierListEntityType}
+          entityName={itemName ?? "this item"}
+        />
+        <AddToCellarActions
+          itemType={itemType}
+          itemId={itemId}
+          cellars={cellars}
+        />
+      </div>
+    </div>
   );
 };

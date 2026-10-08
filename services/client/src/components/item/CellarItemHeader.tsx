@@ -1,30 +1,20 @@
 "use client";
 
-import {
-  Button,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Modal,
-  ModalDialog,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { MdDelete, MdWarning } from "react-icons/md";
 import { useMutation } from "urql";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import { HeaderBar } from "@/components/common/HeaderBar";
 import { AddToTierListButton } from "@/components/tier-list/AddToTierListButton";
 import type { TierListEntityType } from "@/components/tier-list/constants";
+import { Button } from "@/components/ui/button";
 import { RemoveItemFromCellarMutation } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 import { formatItemType } from "@/utilities";
-import { EditItemButton } from "./EditItemButton";
 import { FinishBottleDialogs } from "./FinishBottleDialogs";
 import { deleteBottleWarning } from "./finish-bottle";
+import { ItemAppBar } from "./ItemAppBar";
+import { LoadingButton } from "./LoadingButton";
 import { useFinishBottle } from "./useFinishBottle";
 
 type CellarItemHeaderProps = {
@@ -37,7 +27,7 @@ type CellarItemHeaderProps = {
   cellarId: string;
   cellarName: string | undefined;
   isOwner: boolean;
-  /** The edit page, for the item's creator; `null` keeps the old disabled button. */
+  /** The edit page, for the item's creator; `null` leaves "Edit item" out. */
   editHref: string | null;
   /** Every check-in on this bottle — the ones a delete takes with it. */
   checkInCount: number;
@@ -55,9 +45,14 @@ type CellarItemHeaderProps = {
  * `deleteCellarItemAction` → `removeItemFromCellar` (which also removes the
  * bottle's check-ins — `check_ins` is `ON DELETE RESTRICT`), then the old
  * `router.replace` to the cellar's items. A refusal is shown in the dialog
- * rather than leaving the spinner to stop silently. "Edit item" works now
- * (see `EditItemButton`). "Add to Tier List" is the tier-lists wave's
- * restored button, keyed on the catalog item.
+ * rather than leaving the spinner to stop silently. "Add to Tier List" is the
+ * tier-lists wave's restored button, keyed on the catalog item.
+ *
+ * The header is `ItemAppBar` (N26, D7): Back to the cellar, the old crumbs
+ * from `md` up, Share, and `⋯` with "Edit item" (the item's creator) and
+ * "Delete item" last (the cellar's owner). The Joy header showed both as
+ * buttons, disabled for anyone they did not apply to; the overflow leaves
+ * them out instead. Delete opens the sheet below — a bottom sheet on phones.
  *
  * N13a: the dialog says how many check-ins the delete takes with it and, for
  * a bottle still in the cellar, offers "Mark finished instead" — which keeps
@@ -126,88 +121,84 @@ export const CellarItemHeader = ({
 
   return (
     <>
-      <HeaderBar
-        serverBreadcrumbs={{
-          cellarName,
-          itemName,
+      <div className="flex flex-col gap-3">
+        <ItemAppBar
+          parent={`/cellars/${cellarId}/items`}
+          cellarName={cellarName}
+          itemName={itemName}
+          share={{ itemId: entityId, itemType }}
+          editHref={editHref}
+          onDelete={isOwner ? () => setOpen(true) : undefined}
+        />
+        <div className="flex flex-wrap items-start gap-2">
+          <AddToTierListButton
+            entityId={entityId}
+            entityType={itemType.toLowerCase() as TierListEntityType}
+            entityName={itemName ?? "this item"}
+          />
+        </div>
+      </div>
+      <ResponsiveDialog
+        role="alertdialog"
+        open={open}
+        onOpenChange={(next) => {
+          if (!isDisabled) setOpen(next);
         }}
-        endComponent={
-          <Stack spacing={2} direction="row">
-            <AddToTierListButton
-              entityId={entityId}
-              entityType={itemType.toLowerCase() as TierListEntityType}
-              entityName={itemName ?? "this item"}
-            />
-            <EditItemButton href={editHref ?? ""} enabled={editHref !== null} />
-            <Button
-              variant="outlined"
-              color="danger"
-              disabled={!isOwner}
-              onClick={() => setOpen(true)}
-              startDecorator={<MdDelete />}
-            >
-              Delete item
-            </Button>
-          </Stack>
-        }
-      />
-      <Modal open={open} onClose={() => setOpen(false)}>
-        <ModalDialog variant="outlined" role="alertdialog">
-          <DialogTitle>
-            <MdWarning />
-            Delete this bottle?
-          </DialogTitle>
-          <Divider />
-          <DialogContent>
-            {warning.body}
-            {shownError !== null && (
-              <Typography level="body-sm" color="danger">
-                {shownError}
-              </Typography>
-            )}
-          </DialogContent>
-          {/*
-            Three buttons do not fit side by side at 390px: stack them. When
-            finishing is offered it is the emphasised, first action and Delete
-            the outlined one, so the visual weight points away from data loss.
-          */}
-          <DialogActions
-            sx={{
-              flexDirection: { xs: "column", sm: "row-reverse" },
-              alignItems: { xs: "stretch", sm: "center" },
-            }}
-          >
+        dismissible={!isDisabled}
+        title="Delete this bottle?"
+        description={warning.body}
+        footer={
+          // Three buttons do not fit side by side at 390px: they stack. When
+          // finishing is offered it is the emphasised, first action and Delete
+          // the outlined one, so the visual weight points away from data loss.
+          <div className="flex w-full flex-col gap-2 md:flex-row-reverse md:justify-start">
             {warning.suggestFinish && (
-              <Button
-                variant="solid"
-                color="primary"
+              <LoadingButton
                 disabled={isDisabled}
                 loading={isFinishing}
                 onClick={handleFinishInstead}
               >
                 Mark finished instead
-              </Button>
+              </LoadingButton>
+            )}
+            {warning.suggestFinish ? (
+              <LoadingButton
+                variant="destructive"
+                disabled={isDisabled}
+                loading={isPending}
+                onClick={handleDeleteClick}
+              >
+                Delete {formatItemType(itemType)}
+              </LoadingButton>
+            ) : (
+              // Nothing safer to offer: the solid danger confirm (design §3.1
+              // allows it only in a confirm sheet, which this is).
+              <LoadingButton
+                data-tone="danger"
+                disabled={isDisabled}
+                loading={isPending}
+                onClick={handleDeleteClick}
+                className="bg-destructive text-background hover:bg-destructive/90 focus-visible:ring-destructive/40"
+              >
+                Delete {formatItemType(itemType)}
+              </LoadingButton>
             )}
             <Button
-              variant={warning.suggestFinish ? "outlined" : "solid"}
-              color="danger"
-              disabled={isDisabled}
-              loading={isPending}
-              onClick={handleDeleteClick}
-            >
-              Delete {formatItemType(itemType)}
-            </Button>
-            <Button
-              variant="plain"
-              color="neutral"
+              variant="ghost"
               disabled={isDisabled}
               onClick={() => setOpen(false)}
             >
               Cancel
             </Button>
-          </DialogActions>
-        </ModalDialog>
-      </Modal>
+          </div>
+        }
+      >
+        {shownError !== null && (
+          <p role="alert" className="type-callout text-destructive">
+            {shownError}
+          </p>
+        )}
+      </ResponsiveDialog>
       <FinishBottleDialogs finish={finish} itemName={itemName} />
     </>
   );

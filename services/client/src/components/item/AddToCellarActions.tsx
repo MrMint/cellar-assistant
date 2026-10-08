@@ -1,21 +1,19 @@
 "use client";
 
-import {
-  Button,
-  ButtonGroup,
-  Dropdown,
-  Menu,
-  MenuButton,
-  MenuItem,
-  Typography,
-} from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { MdAdd, MdArrowDownward } from "react-icons/md";
 import { useMutation } from "urql";
+import { Add, ChevronDown } from "@/components/app/icons";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { AddItemToCellarFromItemMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
+import { LoadingButton } from "./LoadingButton";
 
 type AddToCellarActionsProps = {
   itemId: string;
@@ -73,52 +71,53 @@ export const AddToCellarActions = ({
   }
 
   const errorText = error !== null && (
-    <Typography level="body-xs" color="danger">
+    <p role="alert" className="type-footnote text-destructive">
       {error}
-    </Typography>
+    </p>
   );
 
   // Single cellar - show simple button
   if (cellars.length === 1) {
     return (
-      <>
-        <Button
+      <div className="flex flex-col gap-1">
+        <LoadingButton
           onClick={() => handleAddClick(cellars[0].id)}
-          startDecorator={<MdAdd />}
           disabled={isDisabled}
           loading={isLoading}
         >
+          {!isLoading && <Add aria-hidden />}
           Add to Cellar
-        </Button>
+        </LoadingButton>
         {errorText}
-      </>
+      </div>
     );
   }
 
-  // Multiple cellars - show dropdown
+  // Multiple cellars - a menu of them (Joy's ButtonGroup + Menu).
   if (cellars.length > 1) {
     return (
-      <>
-        <ButtonGroup>
-          <Dropdown>
-            <MenuButton
-              disabled={isDisabled}
-              loading={isLoading}
-              endDecorator={<MdArrowDownward />}
-            >
+      <div className="flex flex-col gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={isDisabled || isLoading}>
+            <LoadingButton loading={isLoading} disabled={isDisabled}>
               Add to Cellar
-            </MenuButton>
-            <Menu>
-              {cellars.map((x) => (
-                <MenuItem key={x.id} onClick={() => handleAddClick(x.id)}>
-                  {x.name}
-                </MenuItem>
-              ))}
-            </Menu>
-          </Dropdown>
-        </ButtonGroup>
+              {!isLoading && <ChevronDown aria-hidden />}
+            </LoadingButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {cellars.map((x) => (
+              <DropdownMenuItem
+                key={x.id}
+                className="min-h-11 text-base"
+                onSelect={() => handleAddClick(x.id)}
+              >
+                {x.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {errorText}
-      </>
+      </div>
     );
   }
 

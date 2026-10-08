@@ -36,8 +36,8 @@ export type FinishBottle = {
 
 /**
  * N13a's state and writes for one bottle, over `finish-bottle.ts`. Markup
- * lives in `FinishBottleDialogs.tsx`; this hook is what the shadcn migration
- * keeps.
+ * lives in `FinishBottleDialogs.tsx` (the N27 sheet and the Undo toast); the
+ * shadcn migration kept this hook as it was.
  */
 export function useFinishBottle({
   cellarId,
