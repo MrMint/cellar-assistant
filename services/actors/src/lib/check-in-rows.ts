@@ -11,6 +11,8 @@ import type { ItemCheckInDto } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
 import { toIso } from "./collection-sql.ts";
 import { ARCS, type ArcSqlRow } from "./item-arcs.ts";
+import { placeRefVisibleToSql } from "./unshared-places.ts";
+import type { VisibilityScope } from "./visibility-sql.ts";
 
 export type CheckInSqlRow = ArcSqlRow & {
   readonly id: string;
@@ -33,13 +35,32 @@ export type CheckInSqlRow = ArcSqlRow & {
  * The select list for one entry, `alias` being the `check_ins` row. The
  * companions are the other rows of the same occasion, oldest first.
  * `details` is `canSeeCheckInDetailsSql` for the same viewer and alias.
+ *
+ * `place_id` comes back null when it names a place `scope` may not see — a
+ * place still under review is its creator's alone (X27 / D28), so a friend's
+ * "at <place>" must not name it, nor hand out its id
+ * (`placeRefVisibleToSql`, the rule tier-list entries use).
  */
-export const checkInColumns = (alias: string, details: SQL): SQL => {
+export const checkInColumns = (
+  alias: string,
+  details: SQL,
+  scope: VisibilityScope,
+): SQL => {
   const row = sql.identifier(alias);
+  const placeId = sql`${row}.place_id`;
+  const placeVisible = placeRefVisibleToSql(
+    scope.kind === "everything"
+      ? "everything"
+      : scope.kind === "viewer"
+        ? scope.viewer
+        : null,
+    placeId,
+  );
   return sql`${row}.id, ${row}.user_id, ${row}.created_by_id,
     (${details}) as details_visible,
     ${row}.cellar_item_id, ${row}.score, ${row}.note, ${row}.tags,
-    ${row}.place_id, ${row}.photo_file_id, ${row}.created_at, ${row}.updated_at,
+    (case when ${placeVisible} then ${placeId} end) as place_id,
+    ${row}.photo_file_id, ${row}.created_at, ${row}.updated_at,
     ${ARCS.checkIns.columnList(alias)},
     coalesce((
       select array_agg(other.user_id order by other.created_at, other.id)

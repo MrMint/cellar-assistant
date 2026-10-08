@@ -325,7 +325,7 @@ Method lists are the *minimum* the frontend needs; add methods, don't move table
 - Visibility: owner only.
 
 **`CellarActor(cellarId)`**
-- Owns: `cellars`, `cellar_owners`, `cellar_items`, `check_ins`.
+- Owns: `cellars`, `cellar_owners`, `cellar_items` (`check_ins` moved to `CheckInActor` with X02; see §3).
 - Loads: the cellar row, owners, all `cellar_items` (a cellar is small enough to hold), and
   `check_ins` for those items.
 - Methods: `get`, `create`, `update` (replaces the delete-all/re-insert owner pattern with a set
@@ -521,7 +521,8 @@ the same actor. Cancellation is a status flip checked at the top of each batch.
 
 | Table | Writer | Notes |
 |---|---|---|
-| `cellars`, `cellar_owners`, `cellar_items`, `check_ins` | `CellarActor` | |
+| `cellars`, `cellar_owners`, `cellar_items` | `CellarActor` | |
+| `check_ins` | `CheckInActor` | since X02 (`20261008214015_drink_log`): a drink log needs no bottle; `CellarActor` only reads them. `packages/db/src/writers.ts` is authoritative |
 | `wines`, `beers`, `spirits`, `coffees`, `sakes`, `teas`, `generic_items` | `ItemActor` | |
 | `item_image`, `item_vectors`, `item_reviews`, `item_brands` | `ItemActor` | |
 | `item_favorites`, `user_place_interactions` | `UserActor` | |

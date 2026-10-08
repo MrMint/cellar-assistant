@@ -504,7 +504,7 @@ export class FriendsCollectionActor
     const { rows } = await this.db.execute<CheckInSqlRow>(sql`
       select * from (
         select distinct on (ci.group_id)
-          ${checkInColumns("ci", canSeeCheckInDetailsSql(scope, "ci"))}
+          ${checkInColumns("ci", canSeeCheckInDetailsSql(scope, "ci"), scope)}
         from public.check_ins ci
         where ci.user_id = any(${authors})
           and ${visible}

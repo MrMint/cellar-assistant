@@ -254,6 +254,41 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
       });
     });
 
+    it("CHECKED_IN (X02 x X27): a friend's log at their own place under review names no place", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const wine = await seedWine(db, friend, "Logged at a pending bar");
+        const pending = await seedPlace(db, {
+          name: "Friend's pending bar",
+          lng: 0,
+          lat: 0,
+          reviewStatus: "pending",
+          createdBy: friend,
+        });
+        const id = await seedCheckIn(db, { userId: friend, item: wine });
+        await db.execute(
+          sql`update public.check_ins set place_id = ${pending}::uuid where id = ${id}::uuid`,
+        );
+
+        const { entries } = await activityOf(db, viewer, {
+          kinds: ["CHECKED_IN"],
+          limit: 6,
+        });
+        const entry = entries.find((e) => e.id === id);
+        expect(entry?.checkIn).toBeDefined();
+        expect(entry?.checkIn?.placeId).toBeNull();
+        const own = await activityOf(db, friend, {
+          kinds: ["CHECKED_IN"],
+          limit: 6,
+        });
+        expect(own.entries.find((e) => e.id === id)?.checkIn?.placeId).toBe(
+          pending,
+        );
+      });
+    });
+
     it("tier-list entries: the viewer's and friends' lists exactly as canSeeTierList admits them", async () => {
       await withTestDb(async (db) => {
         const viewer = await seedUser(db);

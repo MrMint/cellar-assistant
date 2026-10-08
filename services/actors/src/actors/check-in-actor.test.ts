@@ -269,6 +269,70 @@ describe.skipIf(skip)("CheckInActor (X02)", () => {
     });
   });
 
+  describe("places under review (X27 / D28)", () => {
+    it("refuses somebody else's unshared place exactly like a missing one", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, friend, wine } = await scenario(db);
+        const theirs = await seedPlace(db, {
+          name: "Friend's pending bar",
+          lat: 0,
+          lng: 0,
+          reviewStatus: "pending",
+          createdBy: friend,
+        });
+        await expect(
+          (await actorFor(db)).log(userCtx(drinker, "r"), {
+            item: wine,
+            placeId: theirs,
+          }),
+        ).rejects.toBeInstanceOf(NotFoundError);
+        const logged = await (await actorFor(db)).log(userCtx(drinker, "r"), {
+          item: wine,
+        });
+        await expect(
+          (await actorFor(db, logged.entry.id)).update(userCtx(drinker, "r"), {
+            placeId: theirs,
+          }),
+        ).rejects.toBeInstanceOf(NotFoundError);
+      });
+    });
+
+    it("takes the writer's own pending place, and names it to nobody else", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, friend, wine } = await scenario(db);
+        const mine = await seedPlace(db, {
+          name: "My pending bar",
+          lat: 0,
+          lng: 0,
+          reviewStatus: "pending",
+          createdBy: drinker,
+        });
+        const id = randomUUID();
+        const logged = await (await actorFor(db, id)).log(
+          userCtx(drinker, "r"),
+          { item: wine, note: "here", placeId: mine, companionIds: [friend] },
+        );
+        expect(logged.entry.placeId).toBe(mine);
+        expect(
+          (await (await actorFor(db, id)).get(userCtx(drinker, "r"))).placeId,
+        ).toBe(mine);
+
+        // The friend sees the log's details — but not a place they may not see,
+        // on the logger's row or on their own companion row.
+        const asFriend = await (await actorFor(db, id)).get(
+          userCtx(friend, "r"),
+        );
+        expect(asFriend.note).toBe("here");
+        expect(asFriend.placeId).toBeNull();
+        const companionRow = logged.rows[1]?.id ?? "";
+        expect(
+          (await (await actorFor(db, companionRow)).get(userCtx(friend, "r")))
+            .placeId,
+        ).toBeNull();
+      });
+    });
+  });
+
   describe("companions — the bulkCheckIn rule, kept", () => {
     it("writes one row per drinker in one occasion; only the logger's carries the opinion", async () => {
       await withTestDb(async (db) => {

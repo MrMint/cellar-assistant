@@ -166,12 +166,10 @@ export class CheckInsCollectionActor
     limit: number,
   ): Promise<readonly CheckInRow[]> {
     const { from, where } = await this.#scope(ctx, item, which);
-    const details = canSeeCheckInDetailsSql(
-      await visibilityScope(this.db, ctx),
-      "ci",
-    );
+    const scope = await visibilityScope(this.db, ctx);
+    const details = canSeeCheckInDetailsSql(scope, "ci");
     const { rows } = await this.db.execute<CheckInRow>(sql`
-      select ${checkInColumns("ci", details)},
+      select ${checkInColumns("ci", details, scope)},
              (ci.created_at)::text as sort_key
       from ${from}
       where ${where}

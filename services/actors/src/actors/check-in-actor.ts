@@ -72,7 +72,7 @@ import {
   normaliseCheckInTags,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { cellarItems, checkIns, files, places } from "@cellar-assistant/db";
+import { cellarItems, checkIns, files } from "@cellar-assistant/db";
 import { and, asc, eq, inArray } from "@cellar-assistant/db/orm";
 import {
   canEditCheckIn,
@@ -88,6 +88,7 @@ import { withoutDetails } from "../lib/check-in-rows.ts";
 import { flavourTagSuggester } from "../lib/flavour-tags.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { itemNames } from "../lib/item-names.ts";
+import { placeIsVisible } from "../lib/unshared-places.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import {
   cellarVisibility,
@@ -154,10 +155,25 @@ export class CheckInActor
 
   async get(ctx: Ctx): Promise<ItemCheckInDto> {
     const aggregate = await this.requireVisible(ctx);
-    const entry = toEntryDto(aggregate, ctx.viewerId);
+    const entry = await this.#placeSeenBy(
+      ctx,
+      toEntryDto(aggregate, ctx.viewerId),
+    );
     return canSeeCheckInDetails(ctx, await this.#personal(ctx, aggregate))
       ? entry
       : withoutDetails(entry);
+  }
+
+  /**
+   * The entry with its place dropped when `ctx` may not see that place: a
+   * place under review is its creator's alone (X27 / D28), and a companion's
+   * row carries the logger's place. Same rule as `checkInColumns`.
+   */
+  async #placeSeenBy(ctx: Ctx, entry: ItemCheckInDto): Promise<ItemCheckInDto> {
+    if (entry.placeId === null) return entry;
+    return (await placeIsVisible(this.db, ctx, entry.placeId))
+      ? entry
+      : { ...entry, placeId: null };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -218,7 +234,7 @@ export class CheckInActor
       );
     }
 
-    const placeId = await this.#requirePlace(input.placeId);
+    const placeId = await this.#requirePlace(ctx, input.placeId);
     const { item, cellarItemId } = await this.#requireSubject(ctx, input);
 
     const groupId = this.key;
@@ -270,14 +286,14 @@ export class CheckInActor
       patch.tags = normaliseCheckInTags(input.tags ?? []);
     }
     if (input.placeId !== undefined) {
-      patch.placeId = await this.#requirePlace(input.placeId);
+      patch.placeId = await this.#requirePlace(ctx, input.placeId);
     }
     if (input.photoFileId !== undefined) {
       if (viewer === null) throw new ForbiddenError("sign in to add a photo");
       patch.photoFileId = await this.#requirePhoto(viewer, input.photoFileId);
     }
     if (Object.keys(patch).length === 0) {
-      return toEntryDto(aggregate, viewer);
+      return await this.#placeSeenBy(ctx, toEntryDto(aggregate, viewer));
     }
 
     await this.tx(async (tx) => {
@@ -287,7 +303,10 @@ export class CheckInActor
         .where(eq(checkIns.id, this.key));
     });
     await this.reload();
-    return toEntryDto(this.requireAggregate(), viewer);
+    return await this.#placeSeenBy(
+      ctx,
+      toEntryDto(this.requireAggregate(), viewer),
+    );
   }
 
   async remove(ctx: Ctx): Promise<RemovedCheckIns> {
@@ -512,17 +531,21 @@ export class CheckInActor
     return { item: ARCS.cellarItems.requireRefOf(row), cellarItemId: row.id };
   }
 
+  /**
+   * A place the writer may see: shared, or their own still under review
+   * (X27 / D28). Somebody else's unshared place is answered exactly like a
+   * missing one, so `placeId` is no existence oracle.
+   */
   async #requirePlace(
+    ctx: Ctx,
     placeId: string | null | undefined,
   ): Promise<string | null> {
     if (placeId === null || placeId === undefined) return null;
     const id = requireUuid(placeId, "placeId");
-    const [place] = await this.db
-      .select({ id: places.id })
-      .from(places)
-      .where(eq(places.id, id));
-    if (place === undefined) throw new NotFoundError(`place ${id} not found`);
-    return place.id;
+    if (!(await placeIsVisible(this.db, ctx, id))) {
+      throw new NotFoundError(`place ${id} not found`);
+    }
+    return id;
   }
 
   /**
