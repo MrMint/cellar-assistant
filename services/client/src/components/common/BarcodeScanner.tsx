@@ -57,7 +57,6 @@ export const BarcodeScanner = ({
     toggleTorch,
     torchSupported,
     torchEnabled,
-    usingNativeAPI,
   } = useBarcodeScanner({
     onDetect: handleDetection,
     constraints: videoConstraints,
@@ -170,9 +169,6 @@ export const BarcodeScanner = ({
               {torchEnabled ? "Turn off light" : "Turn on light"}
             </Button>
           )}
-          <p className="type-body font-semibold text-shadow-black/80 text-shadow-sm">
-            Scanning{usingNativeAPI ? " (Native API)" : " (ZXing)"}...
-          </p>
           {error && <p className="type-callout text-destructive">{error}</p>}
         </div>
       )}
