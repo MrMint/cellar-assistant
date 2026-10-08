@@ -11,35 +11,43 @@
  * `AddEntryModal` — the old page had no in-page add (entries came from the
  * item and place pages' "Add to Tier List"). A new entry lands in Unrated,
  * as the old modal's did.
+ *
+ * On the app's primitives (D20): `IconButton`s named by their old tooltips,
+ * Radix tabs, `notify` toasts in place of the Snackbar.
  */
 
-import {
-  Box,
-  Chip,
-  IconButton,
-  Snackbar,
-  Stack,
-  Tab,
-  TabList,
-  TabPanel,
-  Tabs,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  MdAdd,
-  MdEdit,
-  MdGroup,
-  MdLock,
-  MdLockOpen,
-  MdMap,
-  MdPublic,
-  MdShare,
-} from "react-icons/md";
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { IconButton } from "@/components/app/IconButton";
+import {
+  Add,
+  type AppIcon,
+  Edit,
+  ICON_STROKE,
+  Lock,
+  MapIcon,
+  People,
+  Public,
+  Share,
+  Unlock,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { notify } from "@/components/app/notify";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
 import { onListHrefs } from "./adapter";
@@ -52,11 +60,24 @@ interface TierListViewPageProps {
   insightsData: TierListInsightsData;
 }
 
-const privacyLabels: Record<string, { icon: typeof MdLock; label: string }> = {
-  PRIVATE: { icon: MdLock, label: "Private" },
-  FRIENDS: { icon: MdGroup, label: "Friends" },
-  PUBLIC: { icon: MdPublic, label: "Public" },
+const privacyLabels: Record<string, { icon: AppIcon; label: string }> = {
+  PRIVATE: { icon: Lock, label: "Private" },
+  FRIENDS: { icon: People, label: "Friends" },
+  PUBLIC: { icon: Public, label: "Public" },
 };
+
+/** A header action's hover hint; on touch its `aria-label` names it. */
+function Hint({ label, children }: { label: string; children: ReactElement }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+const TRIGGER =
+  "h-full rounded-sm font-medium text-ink-2 data-[state=active]:bg-surface-3 data-[state=active]:text-ink-1 dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-surface-3";
 
 export function TierListViewPage({
   data,
@@ -75,7 +96,6 @@ export function TierListViewPage({
   const router = useRouter();
   const { setTierListEditingLockAction, addItemToTierListAction } =
     useTierListActions();
-  const [feedback, setFeedback] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   /**
    * Bumped on every open and used as the picker's `key`, so each open starts
@@ -106,7 +126,7 @@ export function TierListViewPage({
         await navigator.share(shareData);
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(url);
-        setFeedback("Link copied to clipboard");
+        notify("Link copied to clipboard", { tone: "success" });
       }
     } catch {
       // User cancelled share
@@ -127,12 +147,16 @@ export function TierListViewPage({
 
     if (!result.success) {
       setIsEditingLocked(previousLocked);
-      setFeedback(result.error ?? "Failed to update editing lock");
+      notify(result.error ?? "Failed to update editing lock", {
+        tone: "error",
+      });
       return;
     }
 
     setIsEditingLocked(result.isEditingLocked ?? nextLocked);
-    setFeedback(nextLocked ? "Editing locked" : "Editing unlocked");
+    notify(nextLocked ? "Editing locked" : "Editing unlocked", {
+      tone: "success",
+    });
   }, [
     data.id,
     data.isOwner,
@@ -157,180 +181,143 @@ export function TierListViewPage({
         return;
       }
       setAddOpen(false);
-      setFeedback(`Added ${candidate.name} to Unrated`);
+      notify(`Added ${candidate.name} to Unrated`, { tone: "success" });
       router.refresh();
     },
     [addItemToTierListAction, data.id, router],
   );
 
-  return (
-    <Box sx={{ maxWidth: 800, mx: "auto", px: { xs: 1, sm: 2 } }}>
-      <Stack spacing={2}>
-        {/* Header */}
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          spacing={2}
-        >
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography level="h3">{data.name}</Typography>
-            {data.description && (
-              <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-                {data.description}
-              </Typography>
-            )}
-            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              <Chip
-                variant="soft"
-                color="neutral"
-                size="sm"
-                startDecorator={<PrivacyIcon />}
-              >
-                {privacyInfo.label}
-              </Chip>
-              <Typography
-                level="body-xs"
-                sx={{ color: "text.tertiary", alignSelf: "center" }}
-              >
-                {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
-              </Typography>
-            </Stack>
-          </Box>
-          <Stack direction="row" spacing={0.5}>
-            {data.isOwner && !isEditingLocked && (
-              <Tooltip title="Add entry">
-                <IconButton
-                  variant="outlined"
-                  color="neutral"
-                  size="sm"
-                  aria-label="Add entry"
-                  onClick={() => {
-                    setAddError(null);
-                    setAddSession((session) => session + 1);
-                    setAddOpen(true);
-                  }}
-                >
-                  <MdAdd />
-                </IconButton>
-              </Tooltip>
-            )}
-            {data.listType === "place" && (
-              <Tooltip title="View on map">
-                <IconButton
-                  component={Link}
-                  href={`/map?tierLists=${data.id}`}
-                  variant="outlined"
-                  color="neutral"
-                  size="sm"
-                >
-                  <MdMap />
-                </IconButton>
-              </Tooltip>
-            )}
-            {data.privacy !== "PRIVATE" && (
-              <Tooltip title="Share">
-                <IconButton
-                  variant="outlined"
-                  color="neutral"
-                  size="sm"
-                  onClick={handleShare}
-                >
-                  <MdShare />
-                </IconButton>
-              </Tooltip>
-            )}
-            {data.isOwner && (
-              <Tooltip
-                title={isEditingLocked ? "Unlock editing" : "Lock editing"}
-              >
-                <IconButton
-                  variant={isEditingLocked ? "solid" : "outlined"}
-                  color={isEditingLocked ? "warning" : "neutral"}
-                  size="sm"
-                  onClick={handleToggleEditingLock}
-                  disabled={isSavingEditingLock}
-                >
-                  {isEditingLocked ? <MdLock /> : <MdLockOpen />}
-                </IconButton>
-              </Tooltip>
-            )}
-            {data.isOwner && (
-              <Tooltip title="Edit list">
-                <IconButton
-                  component={Link}
-                  href={`/tier-lists/${data.id}/edit`}
-                  variant="outlined"
-                  color="neutral"
-                  size="sm"
-                >
-                  <MdEdit />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
-        </Stack>
+  const lockLabel = isEditingLocked ? "Unlock editing" : "Lock editing";
 
-        {/* Tabs: Rankings + Insights */}
-        <Tabs
-          value={tab}
-          onChange={(_e, v) => setTab(v as typeof tab)}
-          sx={{ backgroundColor: "transparent" }}
-        >
-          <TabList
-            disableUnderline
-            sx={{
-              gap: 1,
-              borderRadius: "md",
-              backgroundColor: "background.level1",
-              p: 0.5,
-            }}
-          >
-            <Tab
-              value="rankings"
-              disableIndicator
-              sx={{
-                flex: 1,
-                borderRadius: "sm",
-                fontWeight: "md",
-                "&[aria-selected='true']": {
-                  backgroundColor: "background.surface",
-                  boxShadow: "sm",
-                },
-              }}
-            >
-              Rankings
-            </Tab>
-            <Tab
-              value="insights"
-              disableIndicator
-              sx={{
-                flex: 1,
-                borderRadius: "sm",
-                fontWeight: "md",
-                "&[aria-selected='true']": {
-                  backgroundColor: "background.surface",
-                  boxShadow: "sm",
-                },
-              }}
-            >
-              Insights
-            </Tab>
-          </TabList>
-          <TabPanel value="rankings" sx={{ px: 0 }}>
-            <TierListView
-              tierListId={data.id}
-              items={data.items}
-              isOwner={data.isOwner}
-              isEditingLocked={isEditingLocked}
-              selectedItemId={selectedItemId ?? undefined}
-            />
-          </TabPanel>
-          <TabPanel value="insights" sx={{ px: 0 }}>
-            <TierListInsightsPanel insights={insightsData} />
-          </TabPanel>
-        </Tabs>
-      </Stack>
+  return (
+    <div className="mx-auto flex w-full max-w-[800px] flex-col gap-4 sm:px-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h3 className="type-title-2 break-words text-ink-1">{data.name}</h3>
+          {data.description && (
+            <p className="type-callout text-ink-2">{data.description}</p>
+          )}
+          <div className="mt-2 flex items-center gap-2">
+            <Badge variant="secondary" className="text-ink-2">
+              <PrivacyIcon aria-hidden strokeWidth={ICON_STROKE} />
+              {privacyInfo.label}
+            </Badge>
+            <span className="type-footnote tabular">
+              {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
+            </span>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          {data.isOwner && !isEditingLocked && (
+            <Hint label="Add entry">
+              <IconButton
+                variant="outline"
+                size="sm"
+                aria-label="Add entry"
+                onClick={() => {
+                  setAddError(null);
+                  setAddSession((session) => session + 1);
+                  setAddOpen(true);
+                }}
+              >
+                <Add />
+              </IconButton>
+            </Hint>
+          )}
+          {data.listType === "place" && (
+            <Hint label="View on map">
+              <IconButton
+                asChild
+                variant="outline"
+                size="sm"
+                aria-label="View on map"
+              >
+                <Link
+                  href={`/map?tierLists=${data.id}`}
+                  underline="none"
+                  className="rounded-full"
+                >
+                  <MapIcon />
+                </Link>
+              </IconButton>
+            </Hint>
+          )}
+          {data.privacy !== "PRIVATE" && (
+            <Hint label="Share">
+              <IconButton
+                variant="outline"
+                size="sm"
+                aria-label="Share"
+                onClick={handleShare}
+              >
+                <Share />
+              </IconButton>
+            </Hint>
+          )}
+          {data.isOwner && (
+            <Hint label={lockLabel}>
+              <IconButton
+                variant={isEditingLocked ? "secondary" : "outline"}
+                size="sm"
+                aria-label={lockLabel}
+                aria-pressed={isEditingLocked}
+                className={cn(isEditingLocked && "text-ink-1")}
+                onClick={handleToggleEditingLock}
+                disabled={isSavingEditingLock}
+              >
+                {isEditingLocked ? <Lock /> : <Unlock />}
+              </IconButton>
+            </Hint>
+          )}
+          {data.isOwner && (
+            <Hint label="Edit list">
+              <IconButton
+                asChild
+                variant="outline"
+                size="sm"
+                aria-label="Edit list"
+              >
+                <Link
+                  href={`/tier-lists/${data.id}/edit`}
+                  underline="none"
+                  className="rounded-full"
+                >
+                  <Edit />
+                </Link>
+              </IconButton>
+            </Hint>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs: Rankings + Insights */}
+      <Tabs
+        value={tab}
+        onValueChange={(v) => void setTab(v as typeof tab)}
+        className="gap-3"
+      >
+        <TabsList className="h-11 w-full rounded-md bg-surface-2 p-1">
+          <TabsTrigger value="rankings" className={TRIGGER}>
+            Rankings
+          </TabsTrigger>
+          <TabsTrigger value="insights" className={TRIGGER}>
+            Insights
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="rankings">
+          <TierListView
+            tierListId={data.id}
+            items={data.items}
+            isOwner={data.isOwner}
+            isEditingLocked={isEditingLocked}
+            selectedItemId={selectedItemId ?? undefined}
+          />
+        </TabsContent>
+        <TabsContent value="insights">
+          <TierListInsightsPanel insights={insightsData} />
+        </TabsContent>
+      </Tabs>
 
       <AddEntryModal
         key={addSession}
@@ -342,17 +329,6 @@ export function TierListViewPage({
         listType={data.listType}
         onList={onList}
       />
-
-      <Snackbar
-        open={feedback !== null}
-        autoHideDuration={3000}
-        onClose={() => setFeedback(null)}
-        color="success"
-        variant="soft"
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        {feedback}
-      </Snackbar>
-    </Box>
+    </div>
   );
 }

@@ -1,12 +1,13 @@
 "use client";
 
-import { Box, Button, Link, Stack } from "@mui/joy";
 import { useMemo } from "react";
-import { MdAdd } from "react-icons/md";
+import { Add } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { virtualTotal } from "@/components/cellar/virtualTotal";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { HeaderBar } from "@/components/common/HeaderBar";
 import { VirtualGrid } from "@/components/common/VirtualGrid";
+import { Button } from "@/components/ui/button";
 import { unwrapResult } from "@/lib/api/result";
 import { type Page, pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
@@ -41,41 +42,40 @@ export function TierListsPage({ initialPage }: TierListsPageProps) {
   const tierListItems = useMemo(() => [...list.rows], [list.rows]);
 
   return (
-    <Box>
-      <Stack spacing={2}>
-        <HeaderBar
-          serverBreadcrumbs={{}}
-          endComponent={
-            <Button
-              component={Link}
+    <div className="flex flex-col gap-4">
+      <HeaderBar
+        serverBreadcrumbs={{}}
+        endComponent={
+          <Button asChild>
+            <Link
               href="/tier-lists/add"
-              startDecorator={<MdAdd />}
+              underline="none"
+              className="rounded-md"
             >
+              <Add />
               New tier list
-            </Button>
-          }
-        />
-        {list.failure !== null && (
-          <ApiError error={list.failure} title="Could not load tier lists" />
+            </Link>
+          </Button>
+        }
+      />
+      {list.failure !== null && (
+        <ApiError error={list.failure} title="Could not load tier lists" />
+      )}
+      <VirtualGrid
+        items={tierListItems}
+        totalCount={virtualTotal(list)}
+        cacheKey="tier-lists"
+        getItemKey={(data) => data.id}
+        gridBreakpoints={{ xs: 12, sm: 6, md: 4, lg: 3 }}
+        emptyMessage="No tier lists found"
+        onLoadMore={async () => {
+          await list.loadMore();
+        }}
+        isLoadingMore={list.status === "loadingMore"}
+        renderItem={(data, onBeforeNavigate) => (
+          <TierListCard tierList={data} onNavigate={onBeforeNavigate} />
         )}
-        <VirtualGrid
-          items={tierListItems}
-          totalCount={virtualTotal(list)}
-          cacheKey="tier-lists"
-          getItemKey={(data) => data.id}
-          gridBreakpoints={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-          emptyMessage="No tier lists found"
-          onLoadMore={async () => {
-            await list.loadMore();
-          }}
-          isLoadingMore={list.status === "loadingMore"}
-          renderItem={(data, onBeforeNavigate) => (
-            <Box onClick={onBeforeNavigate}>
-              <TierListCard tierList={data} />
-            </Box>
-          )}
-        />
-      </Stack>
-    </Box>
+      />
+    </div>
   );
 }
