@@ -64,6 +64,9 @@ export function PlaceMenuItems({
 }: PlaceMenuItemsProps) {
   const [selectedItem, setSelectedItem] =
     useState<MenuItemWithSuggestions | null>(null);
+  // Open is separate from the item so the sheet keeps its content while it
+  // animates out, instead of collapsing to an empty, untitled sheet.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const unmaskedItems = menuItems;
 
   const getMatchedItem = (item: MenuItemWithSuggestions) => item.matched_item;
@@ -72,6 +75,7 @@ export function PlaceMenuItems({
 
   const handleViewDetails = (item: MenuItemWithSuggestions) => {
     setSelectedItem(item);
+    setDetailsOpen(true);
   };
 
   if (unmaskedItems.length === 0) {
@@ -232,14 +236,13 @@ export function PlaceMenuItems({
       {/* Item details sheet (a dialog from md up). `z-[1200]`: on /map this
           list sits in the Joy-era PlaceDetailsDrawer (z-index 950 desktop,
           1100 phone), which would otherwise cover the sheet; drop it when
-          that drawer is converted. */}
+          that drawer is converted. The md: cap scrolls a long analysis
+          inside the dialog, as Joy's ModalDialog did. */}
       <ResponsiveDialog
-        open={!!selectedItem}
-        onOpenChange={(open) => {
-          if (!open) setSelectedItem(null);
-        }}
+        open={detailsOpen && !!selectedItem}
+        onOpenChange={setDetailsOpen}
         title={selectedItem?.menu_item_name ?? ""}
-        className="z-[1200] md:max-w-[600px]"
+        className="z-[1200] md:max-h-[85dvh] md:max-w-[600px] md:overflow-y-auto"
       >
         {selectedItem && (
           <div className="flex flex-col gap-6">
@@ -322,7 +325,7 @@ export function PlaceMenuItems({
                 <Link
                   href={addHref(selectedItem) ?? ""}
                   underline="none"
-                  onClick={() => setSelectedItem(null)}
+                  onClick={() => setDetailsOpen(false)}
                 >
                   <Add aria-hidden />
                   Add to Cellar
