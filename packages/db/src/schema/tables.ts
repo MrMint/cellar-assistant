@@ -102,6 +102,7 @@ export const beers = pgTable("beers", {
 	country: text().references(() => country.value),
 	itemOnboardingId: uuid("item_onboarding_id").notNull().references(() => itemOnboardings.id, { onDelete: "restrict", onUpdate: "restrict" } ),
 }, (table) => [
+	index("idx_beers_name_trgm").using("gin", table.name.asc().nullsLast().op("gin_trgm_ops")),
 check("Alcohol content percentage greater than 0 and less than 100", sql`((alcohol_content_percentage >= (0)::numeric) AND (alcohol_content_percentage <= (100)::numeric))`),]);
 
 export const brands = pgTable("brands", {
@@ -223,7 +224,9 @@ export const coffees = pgTable("coffees", {
 	itemOnboardingId: uuid("item_onboarding_id").notNull().references(() => itemOnboardings.id, { onDelete: "restrict", onUpdate: "restrict" } ),
 	species: coffeeSpecies(),
 	cultivar: text().references(() => coffeeCultivar.value),
-});
+}, (table) => [
+	index("idx_coffees_name_trgm").using("gin", table.name.asc().nullsLast().op("gin_trgm_ops")),
+]);
 
 export const country = pgTable("country", {
 	value: text().primaryKey(),
@@ -418,6 +421,7 @@ export const itemVectors = pgTable("item_vectors", {
 	teaId: uuid("tea_id").references(() => teas.id),
 	embeddingModel: text("embedding_model"),
 	embeddingImages: text("embedding_images"),
+	embeddingText: text("embedding_text"),
 }, (table) => [
 	uniqueIndex("idx_item_vectors_beer_id").using("btree", table.beerId.asc().nullsLast()),
 	uniqueIndex("idx_item_vectors_coffee_id").using("btree", table.coffeeId.asc().nullsLast()),
@@ -926,6 +930,7 @@ export const sakes = pgTable("sakes", {
 	barcodeCode: text("barcode_code").references(() => barcodes.code),
 	itemOnboardingId: uuid("item_onboarding_id"),
 }, (table) => [
+	index("idx_sakes_name_trgm").using("gin", table.name.asc().nullsLast().op("gin_trgm_ops")),
 	index("idx_sakes_category").using("btree", table.category.asc().nullsLast()),
 	index("idx_sakes_created_by").using("btree", table.createdById.asc().nullsLast()),
 	index("idx_sakes_name").using("btree", table.name.asc().nullsLast()),
@@ -969,6 +974,7 @@ export const spirits = pgTable("spirits", {
 	country: text().references(() => country.value),
 	itemOnboardingId: uuid("item_onboarding_id").notNull().references(() => itemOnboardings.id, { onDelete: "restrict", onUpdate: "restrict" } ),
 }, (table) => [
+	index("idx_spirits_name_trgm").using("gin", table.name.asc().nullsLast().op("gin_trgm_ops")),
 check("Alcohol content percentage greater than 0 and less than 100", sql`((alcohol_content_percentage >= (0)::numeric) AND (alcohol_content_percentage <= (100)::numeric))`),]);
 
 export const teaCategory = pgTable("tea_category", {
@@ -1001,6 +1007,7 @@ export const teas = pgTable("teas", {
 	barcodeCode: text("barcode_code").references(() => barcodes.code),
 	itemOnboardingId: uuid("item_onboarding_id"),
 }, (table) => [
+	index("idx_teas_name_trgm").using("gin", table.name.asc().nullsLast().op("gin_trgm_ops")),
 	index("idx_teas_category").using("btree", table.category.asc().nullsLast()),
 	index("idx_teas_created_by").using("btree", table.createdById.asc().nullsLast()),
 	index("idx_teas_name").using("btree", table.name.asc().nullsLast()),
@@ -1141,4 +1148,5 @@ export const wines = pgTable("wines", {
 	country: text().references(() => country.value),
 	itemOnboardingId: uuid("item_onboarding_id").notNull().references(() => itemOnboardings.id, { onDelete: "restrict", onUpdate: "restrict" } ),
 }, (table) => [
+	index("idx_wines_name_trgm").using("gin", table.name.asc().nullsLast().op("gin_trgm_ops")),
 check("Alcohol content percentage greater than 0 and less than 100", sql`((alcohol_content_percentage >= (0)::numeric) AND (alcohol_content_percentage <= (100)::numeric))`),]);
