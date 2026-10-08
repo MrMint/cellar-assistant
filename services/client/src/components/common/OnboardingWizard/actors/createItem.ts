@@ -109,6 +109,12 @@ export const createOnboardedItem = async ({
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 
+  // The item exists: that is the save the install prompt waits for (N15) —
+  // announced here, before the barcode, so a barcode that fails to link
+  // (reported below as "the item was saved; the barcode was not") still
+  // counts.
+  announceSave();
+
   if (typed !== "" && typed !== normalizeBarcode(sessionBarcode ?? "")) {
     const ensured = unwrapResult(
       (
@@ -142,7 +148,5 @@ export const createOnboardedItem = async ({
     }
   }
 
-  // The first save is what the install prompt waits for (N15).
-  announceSave();
   return itemId;
 };
