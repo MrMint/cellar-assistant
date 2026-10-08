@@ -29,7 +29,10 @@ import {
   seedUser,
   withTestDb,
 } from "../lib/testing.ts";
-import { RecipeGroupsCollectionActor } from "./recipe-groups-collection-actor.ts";
+import {
+  baseSpiritMatches,
+  RecipeGroupsCollectionActor,
+} from "./recipe-groups-collection-actor.ts";
 
 const { skip } = await resolveTestDatabase();
 
@@ -78,6 +81,20 @@ const walk = async (
   }
   return found;
 };
+
+describe("baseSpiritMatches (X14)", () => {
+  it("a bar kind matches itself and the kinds under it", () => {
+    expect([...baseSpiritMatches("whiskey")].sort()).toEqual(
+      ["bourbon", "irish_whiskey", "rye", "scotch", "whiskey"].sort(),
+    );
+    expect(baseSpiritMatches("gin")).toEqual(["gin"]);
+    expect(baseSpiritMatches("rye")).toEqual(["rye"]);
+  });
+
+  it("a pre-X14 free-text value matches only itself", () => {
+    expect(baseSpiritMatches("BRANDY_COGNAC")).toEqual(["BRANDY_COGNAC"]);
+  });
+});
 
 describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
   afterAll(closeTestDb);

@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  BASE_SPIRIT_KINDS,
+  barKindLabel,
+} from "@cellar-assistant/contracts/bar";
 import { useCallback, useId, useRef, useState } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
 import { Close, Restaurant, Search } from "@/components/app/icons";
@@ -29,7 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
-import { useEnum } from "@/hooks/useEnum";
 import type { FragmentOf } from "@/lib/api/graphql";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
@@ -96,10 +99,18 @@ export type RecipeGroupSearchProps = {
  * hook dropped it) and every category (it hard-coded `cocktail`). The term
  * is G26: the old box's name / description / version-name substring.
  *
- * Spirit options are `referenceData(SPIRIT_TYPE)` (`useEnum("spiritType")`),
- * the successor of the old `spirit_type_enum` introspection; their values are
- * the same upper-case names it listed.
+ * Spirit options are the bar vocabulary's spirits (`BASE_SPIRIT_KINDS`, X14):
+ * `recipe_groups.base_spirit` holds a bar kind ("rye", "gin") — what the
+ * recipe-photo job and `backfill-recipes` write — and the filter matches it
+ * (a "Whiskey" filter includes bourbon, rye, Scotch and Irish). The
+ * `referenceData(SPIRIT_TYPE)` names this used to offer ("GIN", "BOURBON")
+ * are a bottle's type, and never matched a stored value.
  */
+const SPIRIT_OPTIONS = BASE_SPIRIT_KINDS.map((kind) => ({
+  value: kind,
+  label: barKindLabel(kind) ?? kind,
+}));
+
 export const RecipeGroupSearch = ({
   initialQuery = "",
   onRecipeGroupSelect,
@@ -151,9 +162,6 @@ export const RecipeGroupSearch = ({
       baseSpirit: null,
     } satisfies Args,
   });
-
-  // Get base spirit options
-  const { options: spiritOptions } = useEnum("spiritType");
 
   const { reset } = list;
   const search = useCallback(
@@ -277,7 +285,7 @@ export const RecipeGroupSearch = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY_SPIRIT}>Any Spirit</SelectItem>
-              {spiritOptions.map((option) => (
+              {SPIRIT_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
                 </SelectItem>
