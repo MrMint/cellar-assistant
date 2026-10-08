@@ -19,7 +19,7 @@ union AcceptFriendRequestResult = AcceptFriendRequestPayload | BudgetExceededErr
 union ActOnMenuScanSuggestionResult = BudgetExceededError | ConflictError | ForbiddenError | MatchSuggestionActionPayload | NotFoundError | ValidationError
 
 """
-One row of the viewer's discovery feed — something the viewer or one of their friends did. Exactly one of `review`, `tierListItem` and `cellar` is set, by `kind`.
+One row of the viewer's discovery feed — something the viewer or one of their friends did. Exactly one of `review`, `tierListItem`, `cellar` and `checkIn` is set, by `kind`.
 """
 type ActivityEntry {
   """
@@ -27,6 +27,11 @@ type ActivityEntry {
   """
   cellar: Cellar
   cellarItemId: ID
+
+  """
+  The drink-log entry, for CHECKED_IN (X02) — its score, note, tags, place and companions. `canSeeCheckIn` already admitted it.
+  """
+  checkIn: ItemCheckIn
 
   """`<kind>:<source row id>` — unique across kinds."""
   id: ID!
@@ -73,10 +78,11 @@ type ActivityEntryEdge {
 }
 
 """
-What happened: a bottle ADDED to a cellar, an item REVIEWED, an entry TIER_LISTED.
+What happened: a bottle ADDED to a cellar, an item REVIEWED, an entry TIER_LISTED, a drink CHECKED_IN (logged — one entry per occasion).
 """
 enum ActivityKind {
   ADDED
+  CHECKED_IN
   REVIEWED
   TIER_LISTED
 }
@@ -297,7 +303,7 @@ type Beer implements Item {
   ): CellarConnection!
 
   """
-  Who drank this, and when — yours plus your friends', across every cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which cellar the bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead.
+  Who drank this, and when — the drink log (X02): yours, your companions' and your friends', with or without a bottle (`canSeeCheckIn`). Deliberately does not say which cellar a bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead. `scope: MINE` is "Your log" (D8).
   """
   checkIns(
     """
@@ -317,6 +323,9 @@ type Beer implements Item {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """Defaults to ALL."""
+    scope: ItemCheckInScope
   ): ItemCheckInConnection!
   country: String
   createdAt: DateTime!
@@ -917,7 +926,7 @@ enum CellarItemStatus {
 }
 
 """
-One drink from one cellar item. `userId` is who it is *about* — `bulkCheckIn` writes rows on behalf of friends.
+One drink from one cellar item, as the cellar sees it. `userId` is who it is *about* — `bulkCheckIn` writes rows on behalf of friends. The full log entry (score, note, tags, place, companions) is `ItemCheckIn`.
 """
 type CheckIn {
   cellarItemId: ID!
@@ -997,7 +1006,7 @@ type Coffee implements Item {
   ): CellarConnection!
 
   """
-  Who drank this, and when — yours plus your friends', across every cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which cellar the bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead.
+  Who drank this, and when — the drink log (X02): yours, your companions' and your friends', with or without a bottle (`canSeeCheckIn`). Deliberately does not say which cellar a bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead. `scope: MINE` is "Your log" (D8).
   """
   checkIns(
     """
@@ -1017,6 +1026,9 @@ type Coffee implements Item {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """Defaults to ALL."""
+    scope: ItemCheckInScope
   ): ItemCheckInConnection!
   country: String
   createdAt: DateTime!
@@ -1432,6 +1444,8 @@ scalar DateTime
 
 union DeleteCellarResult = BudgetExceededError | ConflictError | DeletedCellar | ForbiddenError | NotFoundError | ValidationError
 
+union DeleteDrinkLogResult = BudgetExceededError | ConflictError | DeletedDrinkLogPayload | ForbiddenError | NotFoundError | ValidationError
+
 union DeleteFileResult = BudgetExceededError | ConflictError | DeletedFile | ForbiddenError | NotFoundError | ValidationError
 
 union DeleteItemReviewResult = BudgetExceededError | ConflictError | DeletedItemReview | ForbiddenError | NotFoundError | ValidationError
@@ -1447,6 +1461,13 @@ union DeleteTierListResult = BudgetExceededError | ConflictError | DeletedTierLi
 """The id of a cellar that is gone."""
 type DeletedCellar {
   id: ID!
+}
+
+type DeletedDrinkLogPayload {
+  """
+  Every entry removed — the one you named first, then the companion entries you wrote with it.
+  """
+  ids: [ID!]!
 }
 
 type DeletedFile {
@@ -1481,6 +1502,20 @@ union DetachItemImageResult = BudgetExceededError | ConflictError | DetachedItem
 
 type DetachedItemImage {
   id: ID!
+}
+
+"""
+The cellar bottle it was poured from. The cellar must be visible to you; the item is read off the bottle.
+"""
+input DrinkLogBottleInput {
+  cellarId: ID!
+  cellarItemId: ID!
+}
+
+"""What was drunk: which item table, and which row."""
+input DrinkLogItemInput {
+  id: ID!
+  type: ItemType!
 }
 
 """
@@ -1597,6 +1632,54 @@ type File {
   When the object store confirmed the object exists. Null means the PUT has not completed — the row is provisional and `MaintenanceActor` reaps it after 24h. An unverified file cannot be attached to an item.
   """
   verifiedAt: DateTime
+}
+
+"""
+A flavour word lifted from your note. A suggestion: nothing is applied until you confirm it.
+"""
+type FlavourTagSuggestion {
+  """The words in your note it was read from, verbatim."""
+  evidence: String!
+  tag: String!
+}
+
+type FlavourTagSuggestionConnection {
+  edges: [FlavourTagSuggestionEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type FlavourTagSuggestionEdge {
+  cursor: String!
+  node: FlavourTagSuggestion!
+}
+
+"""
+The model's answer to "which flavours does this note name?". `abstained` is a real answer — the note names none — not a failure.
+"""
+type FlavourTagSuggestionsPayload {
+  abstained: Boolean!
+  suggestions(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): FlavourTagSuggestionConnection!
 }
 
 """A policy function in packages/policy said no."""
@@ -1878,7 +1961,7 @@ interface Item {
   ): CellarConnection!
 
   """
-  Who drank this, and when — yours plus your friends', across every cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which cellar the bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead.
+  Who drank this, and when — the drink log (X02): yours, your companions' and your friends', with or without a bottle (`canSeeCheckIn`). Deliberately does not say which cellar a bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead. `scope: MINE` is "Your log" (D8).
   """
   checkIns(
     """
@@ -1898,6 +1981,9 @@ interface Item {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """Defaults to ALL."""
+    scope: ItemCheckInScope
   ): ItemCheckInConnection!
   country: String
   createdAt: DateTime!
@@ -2051,14 +2137,68 @@ type ItemBrandEdge {
 }
 
 """
-A check-in on this item. `cellarItemId` is deliberately absent — see `Item.checkIns`.
+One drink-log entry on this item (X02): when, and optionally how it scored, what the drinker noticed, where, and who with. Its score is not the review — one rating per item, many logs (D5). `cellarItemId` is deliberately absent — see `Item.checkIns`.
 """
 type ItemCheckIn {
+  """You may remove it: it is about you, or you wrote it."""
+  canRemove: Boolean!
+
+  """The other drinkers in the same occasion. `companions` resolves them."""
+  companionIds: [ID!]!
+
+  """
+  Who else drank with them (X02) — the other rows of the same occasion, in `companionIds` order. Empty for an anonymous viewer.
+  """
+  companions(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): UserProfileConnection!
   createdAt: DateTime!
+
+  """Who wrote it — a friend, for a companion's entry."""
+  createdById: ID!
+
+  """
+  Poured from a cellar bottle. Only ever true to the drinker themself — to anyone else it says nothing about a cellar.
+  """
+  fromCellar: Boolean!
   id: ID!
+
+  """The entry is about you: you may edit it."""
+  isMine: Boolean!
 
   """The item, echoed back. Resolved through its DataLoader."""
   item: Item!
+  note: String
+
+  """
+  The drinker's photo of it. Readable by whoever may see the log (`FileActor` derives that from the log). Select `photo { url }` only where you draw it — one presign per photo.
+  """
+  photo: File
+
+  """Where it was drunk, when the drinker said."""
+  place: Place
+
+  """Half stars, 0.5–5, or null. Never the review."""
+  score: Float
+
+  """Flavour words the drinker confirmed, lower case."""
+  tags: [String!]!
   updatedAt: DateTime!
 
   """Who the check-in is about."""
@@ -2081,6 +2221,14 @@ type ItemCheckInConnection {
 type ItemCheckInEdge {
   cursor: String!
   node: ItemCheckIn!
+}
+
+"""
+Whose entries `Item.checkIns` lists. ALL: yours, your companions', your friends', and any from a cellar you can see. MINE: the item page's "Your log" — entries about you only.
+"""
+enum ItemCheckInScope {
+  ALL
+  MINE
 }
 
 type ItemConnection {
@@ -2308,6 +2456,55 @@ type LngLat {
 input LngLatInput {
   lat: Float!
   lng: Float!
+}
+
+"""
+A drink you had. `item` or `bottle` (or both, agreeing). Everything else is optional; a score here is this glass's, not the item's review.
+"""
+input LogDrinkInput {
+  bottle: DrinkLogBottleInput
+
+  """
+  Friends who drank it with you. Each gets an entry of their own, about them; one who is not your friend rejects the call.
+  """
+  companionIds: [ID!]
+
+  """
+  Defaults to true. False logs a round for your companions only, and then takes no score, note, tags or photo.
+  """
+  includeSelf: Boolean
+  item: DrinkLogItemInput
+
+  """Up to 2000 characters."""
+  note: String
+
+  """A verified upload of your own (`createUploadTarget`)."""
+  photoFileId: ID
+  placeId: ID
+
+  """Half stars, 0.5 to 5."""
+  score: Float
+
+  """
+  Flavour words you confirmed — at most 12, each 32 characters or less; stored lower case.
+  """
+  tags: [String!]
+}
+
+union LogDrinkResult = BudgetExceededError | ConflictError | ForbiddenError | LoggedDrinkPayload | NotFoundError | ValidationError
+
+"""What `logDrink` wrote."""
+type LoggedDrinkPayload {
+  """How many entries were written: one per drinker."""
+  drinkerCount: Int!
+
+  """
+  Your entry — or, for a round you logged for friends, the first of theirs.
+  """
+  entry: ItemCheckIn!
+
+  """Every entry written, `entry` first."""
+  entryIds: [ID!]!
 }
 
 """A WGS-84 viewport. All four corners or none."""
@@ -2680,7 +2877,7 @@ type Mutation {
   attachItemImage(input: AttachItemImageInput!, itemId: ID!, type: ItemType!): AttachItemImageResult!
 
   """
-  Records the drink for you and your friends at the table. Every id must be you or a friend of yours; one that is not rejects the call.
+  Records the drink for you and your friends at the table. Every id must be you or a friend of yours; one that is not rejects the call. The rows share one occasion, so each entry says who else was there.
   """
   bulkCheckIn(cellarId: ID!, cellarItemId: ID!, userIds: [ID!]!): BulkCheckInResult!
 
@@ -2690,7 +2887,7 @@ type Mutation {
   cancelRecipePhotoJob(jobId: ID!): CancelRecipePhotoJobResult!
 
   """
-  Records that you drank from this bottle. Requires the cellar to be visible to you.
+  Records that you drank from this bottle. Requires the cellar to be visible to you. The quick form of `logDrink`.
   """
   checkIn(
     cellarId: ID!
@@ -2757,6 +2954,11 @@ type Mutation {
   deleteCellar(cellarId: ID!): DeleteCellarResult!
 
   """
+  Remove an entry about you, or one you wrote. Removing the entry you logged for a table removes the companions' entries you wrote with it (Undo).
+  """
+  deleteDrinkLog(id: ID!): DeleteDrinkLogResult!
+
+  """
   Uploader only. Removes the row, then best-effort removes the object — the row is the truth (§1.3), so an orphaned object is inert. Detach the image first; the foreign key from `item_image` is `RESTRICT`.
   """
   deleteFile(fileId: ID!): DeleteFileResult!
@@ -2816,6 +3018,17 @@ type Mutation {
   """
   linkPlaceBrand(input: LinkPlaceBrandInput!, placeId: ID!): LinkPlaceBrandResult!
 
+  """
+  Log a drink — with or without a bottle (X02). Your score here never changes your review of the item.
+  """
+  logDrink(
+    """
+    Mint it yourself: a retry with the same id is the same log (§8.4), and it is what `deleteDrinkLog` takes to undo it.
+    """
+    id: ID
+    input: LogDrinkInput!
+  ): LogDrinkResult!
+
   """Idempotent: an already-open bottle keeps its `openAt`."""
   openCellarItem(cellarId: ID!, cellarItemId: ID!): OpenCellarItemResult!
 
@@ -2844,7 +3057,9 @@ type Mutation {
   """
   removeFriend(userId: ID!): RemoveFriendResult!
 
-  """Removes the bottle and the check-ins that point at it."""
+  """
+  Removes the bottle. Its check-ins are kept, detached from it: they are the drinkers' history, not the bottle's (X02).
+  """
   removeItemFromCellar(cellarId: ID!, cellarItemId: ID!): RemoveItemFromCellarResult!
 
   """
@@ -2905,6 +3120,19 @@ type Mutation {
     jobId: ID
   ): StartRecipePhotoJobResult!
 
+  """
+  Flavour words from a typed note, for the drinker to confirm. Returns only words the note contains; abstains when it names no flavour. Writes nothing. A model call (`ai_model/flavour_tags`).
+  """
+  suggestFlavourTags(
+    """Tags already chosen; never suggested again."""
+    existing: [String!]
+    itemType: ItemType!
+
+    """The id the log sheet minted for `logDrink`."""
+    logId: ID!
+    note: String!
+  ): SuggestFlavourTagsResult!
+
   """Add or remove one item from the viewer's favourites."""
   toggleFavorite(itemId: ID!, type: ItemType!): ToggleFavoriteResult!
   unlinkItemBrand(brandId: ID!, itemId: ID!, type: ItemType!): UnlinkItemBrandResult!
@@ -2915,6 +3143,9 @@ type Mutation {
   """Renames, re-privacies and re-owners a cellar in one transaction."""
   updateCellar(cellarId: ID!, input: UpdateCellarInput!): UpdateCellarResult!
   updateCellarItem(cellarId: ID!, cellarItemId: ID!, input: UpdateCellarItemInput!): UpdateCellarItemResult!
+
+  """Change your own entry. Only the drinker may."""
+  updateDrinkLog(id: ID!, input: UpdateDrinkLogInput!): UpdateDrinkLogResult!
 
   """The creator's alone; an ownerless row is admin-only."""
   updateGenericItem(genericItemId: ID!, input: UpdateGenericItemInput!): UpdateGenericItemResult!
@@ -5016,7 +5247,7 @@ type Sake implements Item {
   ): CellarConnection!
 
   """
-  Who drank this, and when — yours plus your friends', across every cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which cellar the bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead.
+  Who drank this, and when — the drink log (X02): yours, your companions' and your friends', with or without a bottle (`canSeeCheckIn`). Deliberately does not say which cellar a bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead. `scope: MINE` is "Your log" (D8).
   """
   checkIns(
     """
@@ -5036,6 +5267,9 @@ type Sake implements Item {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """Defaults to ALL."""
+    scope: ItemCheckInScope
   ): ItemCheckInConnection!
   country: String
   createdAt: DateTime!
@@ -5268,7 +5502,7 @@ type Spirit implements Item {
   ): CellarConnection!
 
   """
-  Who drank this, and when — yours plus your friends', across every cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which cellar the bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead.
+  Who drank this, and when — the drink log (X02): yours, your companions' and your friends', with or without a bottle (`canSeeCheckIn`). Deliberately does not say which cellar a bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead. `scope: MINE` is "Your log" (D8).
   """
   checkIns(
     """
@@ -5288,6 +5522,9 @@ type Spirit implements Item {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """Defaults to ALL."""
+    scope: ItemCheckInScope
   ): ItemCheckInConnection!
   country: String
   createdAt: DateTime!
@@ -5460,6 +5697,8 @@ input StartRecipePhotoJobInput {
 
 union StartRecipePhotoJobResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipePhotoJob | ValidationError
 
+union SuggestFlavourTagsResult = BudgetExceededError | ConflictError | FlavourTagSuggestionsPayload | ForbiddenError | NotFoundError | ValidationError
+
 type Tea implements Item {
   barcode: String
 
@@ -5510,7 +5749,7 @@ type Tea implements Item {
   ): CellarConnection!
 
   """
-  Who drank this, and when — yours plus your friends', across every cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which cellar the bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead.
+  Who drank this, and when — the drink log (X02): yours, your companions' and your friends', with or without a bottle (`canSeeCheckIn`). Deliberately does not say which cellar a bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead. `scope: MINE` is "Your log" (D8).
   """
   checkIns(
     """
@@ -5530,6 +5769,9 @@ type Tea implements Item {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """Defaults to ALL."""
+    scope: ItemCheckInScope
   ): ItemCheckInConnection!
   country: String
   createdAt: DateTime!
@@ -5902,6 +6144,19 @@ union UpdateCellarItemResult = BudgetExceededError | CellarItem | ConflictError 
 
 union UpdateCellarResult = BudgetExceededError | Cellar | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+"""
+Only the fields you pass are written; `null` clears one (`tags: []` clears the tags).
+"""
+input UpdateDrinkLogInput {
+  note: String
+  photoFileId: ID
+  placeId: ID
+  score: Float
+  tags: [String!]
+}
+
+union UpdateDrinkLogResult = BudgetExceededError | ConflictError | ForbiddenError | ItemCheckIn | NotFoundError | ValidationError
+
 input UpdateGenericItemInput {
   category: String
   description: String
@@ -6186,7 +6441,7 @@ type Viewer {
     """
     first: Int
 
-    """Only these kinds; omitted or empty means all three."""
+    """Only these kinds; omitted or empty means all of them."""
     kinds: [ActivityKind!]
 
     """
@@ -6269,7 +6524,7 @@ type Wine implements Item {
   ): CellarConnection!
 
   """
-  Who drank this, and when — yours plus your friends', across every cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which cellar the bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead.
+  Who drank this, and when — the drink log (X02): yours, your companions' and your friends', with or without a bottle (`canSeeCheckIn`). Deliberately does not say which cellar a bottle came from; `Cellar.checkIns` is the surface that does, and it is gated on the cellar instead. `scope: MINE` is "Your log" (D8).
   """
   checkIns(
     """
@@ -6289,6 +6544,9 @@ type Wine implements Item {
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
     """
     last: Int
+
+    """Defaults to ALL."""
+    scope: ItemCheckInScope
   ): ItemCheckInConnection!
   country: String
   createdAt: DateTime!

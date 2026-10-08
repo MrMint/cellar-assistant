@@ -109,6 +109,11 @@ const MUTATIONS = {
     doc: (i) =>
       `mutation { updateBrand(id: "${ID}", input: ${i}) { __typename } }`,
   },
+  updateDrinkLog: {
+    method: "update",
+    doc: (i) =>
+      `mutation { updateDrinkLog(id: "${ID}", input: ${i}) { __typename } }`,
+  },
   updateProfile: {
     method: "updateProfile",
     doc: (i) => `mutation { updateProfile(input: ${i}) { __typename } }`,
@@ -217,6 +222,14 @@ const FIELDS: ReadonlyArray<
   ["updateBrand", "description", "clearable", `"D"`, "D"],
   ["updateBrand", "logoUrl", "clearable", `"u"`, "u"],
   ["updateBrand", "brandType", "clearable", "brewery", "brewery"],
+
+  // X02: every field of a drink log may be cleared — a log is its date and
+  // item; score, note, tags, place and photo are all optional.
+  ["updateDrinkLog", "score", "clearable", "4.5", 4.5],
+  ["updateDrinkLog", "note", "clearable", `"N"`, "N"],
+  ["updateDrinkLog", "tags", "clearable", `["t"]`, ["t"]],
+  ["updateDrinkLog", "placeId", "clearable", `"${ID2}"`, ID2],
+  ["updateDrinkLog", "photoFileId", "clearable", `"${ID2}"`, ID2],
 
   ["updateProfile", "displayName", "reject", `"N"`, "N"],
   ["updateProfile", "avatarUrl", "clearable", `"u"`, "u"],
@@ -329,6 +342,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   createRecipeGroup: CREATES,
   createTierList: CREATES,
   createUploadTarget: STARTS,
+  logDrink: CREATES,
   setRecipeIngredients: REPLACES,
   setRecipeInstructions: REPLACES,
   startItemOnboarding: STARTS,

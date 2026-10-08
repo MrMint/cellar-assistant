@@ -63,6 +63,7 @@ const base = {
   rank: null,
   cellarId: null,
   cellarItemId: null,
+  checkIn: null,
 };
 
 /** One of each kind, plus a second review by the same friend of the same wine. */

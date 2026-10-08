@@ -48,6 +48,7 @@ import {
   ForbiddenError,
   GENERIC_ITEM_KINDS,
   genericItemActorId,
+  ITEM_CHECK_IN_SCOPES,
   ITEM_TYPES,
   ItemActorDescriptor,
   itemActorId,
@@ -224,6 +225,14 @@ export const ItemBrandConnection = builder.connectionObject(
  * `Recipe`/`RecipeGroup` for the same reason.
  */
 export const ItemCheckInType = builder.objectRef<ItemCheckInDto>("ItemCheckIn");
+
+const ItemCheckInScopeEnum = builder.enumType("ItemCheckInScope", {
+  description:
+    "Whose entries `Item.checkIns` lists. ALL: yours, your companions', your " +
+    "friends', and any from a cellar you can see. MINE: the item page's " +
+    '"Your log" — entries about you only.',
+  values: ITEM_CHECK_IN_SCOPES,
+});
 
 const ItemCheckInConnection = builder.connectionObject(
   { type: ItemCheckInType, name: "ItemCheckInConnection" },
@@ -409,11 +418,19 @@ export const ItemInterface = builder.loadableInterface("Item", {
     checkIns: t.field({
       type: ItemCheckInConnection,
       description:
-        "Who drank this, and when — yours plus your friends', across every " +
-        "cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which " +
-        "cellar the bottle came from; `Cellar.checkIns` is the surface that " +
-        "does, and it is gated on the cellar instead.",
-      args: t.arg.connectionArgs(),
+        "Who drank this, and when — the drink log (X02): yours, your " +
+        "companions' and your friends', with or without a bottle " +
+        "(`canSeeCheckIn`). Deliberately does not say which cellar a bottle " +
+        "came from; `Cellar.checkIns` is the surface that does, and it is " +
+        'gated on the cellar instead. `scope: MINE` is "Your log" (D8).',
+      args: {
+        ...t.arg.connectionArgs(),
+        scope: t.arg({
+          type: ItemCheckInScopeEnum,
+          required: false,
+          description: "Defaults to ALL.",
+        }),
+      },
       resolve: async (item, args, context) => {
         const viewerId = context.ctx.viewerId;
         if (viewerId === null) {
@@ -425,7 +442,11 @@ export const ItemInterface = builder.loadableInterface("Item", {
               CheckInsCollectionActorDescriptor,
               viewerCollectionActorId(viewerId),
             )
-            .list({ type: item.type, id: item.id }, toPageArgs(args)),
+            .list(
+              { type: item.type, id: item.id },
+              toPageArgs(args),
+              args.scope ?? "ALL",
+            ),
         );
       },
     }),
@@ -434,14 +455,49 @@ export const ItemInterface = builder.loadableInterface("Item", {
 
 ItemCheckInType.implement({
   description:
-    "A check-in on this item. `cellarItemId` is deliberately absent — see " +
-    "`Item.checkIns`.",
+    "One drink-log entry on this item (X02): when, and optionally how it " +
+    "scored, what the drinker noticed, where, and who with. Its score is not " +
+    "the review — one rating per item, many logs (D5). `cellarItemId` is " +
+    "deliberately absent — see `Item.checkIns`.",
   fields: (t) => ({
     id: t.exposeID("id"),
     userId: t.exposeID("userId", {
       description:
         "Who the check-in is *about*, which `bulkCheckIn` makes different " +
         "from who wrote it.",
+    }),
+    createdById: t.exposeID("createdById", {
+      description: "Who wrote it — a friend, for a companion's entry.",
+    }),
+    score: t.exposeFloat("score", {
+      nullable: true,
+      description: "Half stars, 0.5–5, or null. Never the review.",
+    }),
+    note: t.exposeString("note", { nullable: true }),
+    tags: t.exposeStringList("tags", {
+      description: "Flavour words the drinker confirmed, lower case.",
+    }),
+    companionIds: t.exposeIDList("companionIds", {
+      description:
+        "The other drinkers in the same occasion. `companions` resolves them.",
+    }),
+    fromCellar: t.exposeBoolean("fromCellar", {
+      description:
+        "Poured from a cellar bottle. Only ever true to the drinker " +
+        "themself — to anyone else it says nothing about a cellar.",
+    }),
+    isMine: t.boolean({
+      description: "The entry is about you: you may edit it.",
+      resolve: (checkIn, _args, context) =>
+        context.ctx.viewerId !== null &&
+        checkIn.userId === context.ctx.viewerId,
+    }),
+    canRemove: t.boolean({
+      description: "You may remove it: it is about you, or you wrote it.",
+      resolve: (checkIn, _args, context) =>
+        context.ctx.viewerId !== null &&
+        (checkIn.userId === context.ctx.viewerId ||
+          checkIn.createdById === context.ctx.viewerId),
     }),
     item: t.field({
       type: ItemInterface,
