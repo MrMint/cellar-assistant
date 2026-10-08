@@ -12,8 +12,13 @@ import { useEffect } from "react";
  * The record is a stack of pathnames in `sessionStorage`. A navigation to the
  * entry just below the top is treated as a pop (Back), anything else as a
  * push. It is a heuristic — it cannot see forward navigation or tell a link
- * to the previous page from Back — but both mistakes only change *which*
- * in-app page Back lands on, never whether it leaves the app.
+ * to the previous page from Back, and it records a `router.replace` as a
+ * push although the browser has no entry for the replaced page. That last
+ * one would strand the user: after a cold-opened form replaces itself with
+ * its result, the stack says "two pages", the browser has one, and
+ * `router.back()` leaves the app (or does nothing in the standalone PWA).
+ * So where the browser has the Navigation API (Chromium, Safari 26+), its
+ * `canGoBack` — the real session history — can veto the stack.
  */
 
 const KEY = "ca:nav-stack";
@@ -53,7 +58,11 @@ export function recordNavigation(path: string): void {
 
 /** Whether an in-app page sits behind the current one. */
 export function canGoBack(): boolean {
-  return typeof window !== "undefined" && read().length > 1;
+  if (typeof window === "undefined") return false;
+  const navigation = (window as { navigation?: { canGoBack?: unknown } })
+    .navigation;
+  if (navigation?.canGoBack === false) return false;
+  return read().length > 1;
 }
 
 /** Mount once inside the shell: records every pathname change. */

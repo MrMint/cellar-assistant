@@ -478,6 +478,23 @@ describe("AppBar", () => {
     assert.equal(backs, 1);
   });
 
+  test("the browser's real history vetoes the stack (router.replace)", async () => {
+    // A cold-opened form replaced itself with its result: the stack holds
+    // two pages, the browser one. Back must not call router.back().
+    recordNavigation("/cellars/1/add");
+    recordNavigation("/wines/9");
+    const w = window as { navigation?: unknown };
+    w.navigation = { canGoBack: false };
+    try {
+      await render(<AppBar title="Barolo" parent="/cellars/1" />);
+      await click(container.querySelector('button[aria-label="Back"]'));
+      assert.equal(backs, 0);
+      assert.deepEqual(pushes, ["/cellars/1"]);
+    } finally {
+      delete w.navigation;
+    }
+  });
+
   test("a tab root with no history draws no Back", async () => {
     await render(<AppBar title="Cellars" />);
     assert.equal(container.querySelector('button[aria-label="Back"]'), null);
