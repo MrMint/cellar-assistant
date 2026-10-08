@@ -41,6 +41,37 @@ test.afterAll(async () => {
   await deletePlace(placeId, { waitForRowMs: 30_000 });
 });
 
+/**
+ * `holdPlaceInReview`, then one write *through* `PlaceActor` so the page reads
+ * what was held.
+ *
+ * The fixture writes Postgres behind the actor's back, and `PlaceActor`
+ * serves the aggregate it cached at activation for as long as it stays active
+ * — and `createPlace` has just activated it. Without this the place page goes
+ * on reading the pre-hold row (an approval a fast model landed, or `pending`
+ * where the spec held `rejected`) until something happens to reload it.
+ * `recordPlaceAccess` is the creator's own write that re-reads the row after
+ * it, so it is the reload, with no test-only surface.
+ */
+const hold = async (
+  status: "pending" | "rejected",
+  reason: string | null = null,
+): Promise<void> => {
+  holdPlaceInReview(placeId ?? "", status, reason);
+  const mine = await Gql.forAccount("primary");
+  try {
+    const touched = await mine.query(
+      `mutation Touch($placeId: ID!) {
+        recordPlaceAccess(placeId: $placeId) { __typename }
+      }`,
+      { placeId },
+    );
+    expect(touched.recordPlaceAccess.__typename).toBe("RecordedPlaceAccess");
+  } finally {
+    await mine.dispose();
+  }
+};
+
 const PLACE_QUERY = `query P($id: ID!) { place(id: $id) {
   __typename
   ... on Place { id name reviewStatus rejectionReason }
@@ -90,7 +121,7 @@ test("a new place is saved at once, and only its creator can see it", async ({
   ).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(new RegExp(`/map\\?placeId=${placeId}`));
 
-  holdPlaceInReview(placeId ?? "", "pending");
+  await hold("pending");
 
   await page.goto(`/places/${placeId}`);
   await expect(page.getByRole("heading", { name: placeName })).toBeVisible({
@@ -162,7 +193,7 @@ test("rejected: the reason, then Edit & resubmit sends it back for review", asyn
 }) => {
   test.skip(placeId === undefined, "no place was created");
   test.setTimeout(60_000);
-  holdPlaceInReview(placeId ?? "", "rejected", "Looks like a private home.");
+  await hold("rejected", "Looks like a private home.");
 
   await page.goto(`/places/${placeId}`);
   const panel = page.getByTestId("place-review-panel");
@@ -188,7 +219,7 @@ test("rejected: the reason, then Edit & resubmit sends it back for review", asyn
   await page.getByRole("button", { name: "Send for review" }).click();
   const answer = await (await resubmitted).json();
   expect(answer?.data?.resubmitPlace?.reviewStatus).toBe("PENDING");
-  holdPlaceInReview(placeId ?? "", "pending");
+  await hold("pending");
 
   await expect(page).toHaveURL(new RegExp(`/places/${placeId}$`), {
     timeout: 15_000,
