@@ -685,6 +685,37 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
       });
     });
 
+    it("Undo after finishing: updateItem(emptyAt: null) puts the bottle back (N13a)", async () => {
+      await withTestDb(async (db) => {
+        const scenario = await seedScenario(db, "PRIVATE");
+        const ctx = userCtx(scenario.owner, "r");
+
+        // A never-opened bottle: emptyItem opens it too, so Undo clears both.
+        const emptied = await scenario.actor.emptyItem(ctx, scenario.itemId);
+        expect(emptied.openAt).not.toBeNull();
+        const undone = await scenario.actor.updateItem(ctx, scenario.itemId, {
+          emptyAt: null,
+          openAt: null,
+          percentageRemaining: 100,
+        });
+        expect(undone.emptyAt).toBeNull();
+        expect(undone.openAt).toBeNull();
+        expect(undone.percentageRemaining).toBe(100);
+
+        // An opened bottle keeps its date: Undo sends no openAt.
+        const opened = await scenario.actor.openItem(ctx, scenario.itemId);
+        await scenario.actor.setItemPercentage(ctx, scenario.itemId, 30);
+        await scenario.actor.emptyItem(ctx, scenario.itemId);
+        const back = await scenario.actor.updateItem(ctx, scenario.itemId, {
+          emptyAt: null,
+          percentageRemaining: 30,
+        });
+        expect(back.emptyAt).toBeNull();
+        expect(back.openAt).toBe(opened.openAt);
+        expect(back.percentageRemaining).toBe(30);
+      });
+    });
+
     it("removeItem takes the item's check-ins with it (FK is RESTRICT)", async () => {
       await withTestDb(async (db) => {
         const scenario = await seedScenario(db, "PRIVATE");
