@@ -25,9 +25,9 @@ export type SearchFieldProps = {
 
 /**
  * A debounced search box: magnifier (or a spinner while searching), an
- * uncontrolled input, and one callback after the typing pauses. What the
- * Joy-era `common/DebouncedInput` was used for on the shell's own screens
- * (`HeaderBar`, Friends); that component stays for its other callers.
+ * uncontrolled input, and one callback after the typing pauses (it replaced
+ * the Joy-era `common/DebouncedInput`). Give it an `aria-label` saying what
+ * is searched; without one the placeholder doubles as the name.
  */
 export function SearchField({
   onDebounced,

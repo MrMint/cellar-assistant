@@ -121,7 +121,20 @@ describe("HeaderBar", () => {
     assert.match(input, /^<input\b/);
     assert.match(html, /placeholder="Search"/);
     assert.match(input, /value="pinot"/);
+    assert.match(input, /aria-label="Search"/, "named even without a label");
     assert.doesNotMatch(html, LOADING);
+    assert.match(
+      openTag(
+        render(
+          <HeaderBar
+            onSearchChange={() => {}}
+            searchLabel="Search this cellar"
+          />,
+        ),
+        'placeholder="Search"',
+      ),
+      /aria-label="Search this cellar"/,
+    );
   });
 
   test("isSearching swaps the search icon for a spinner", () => {

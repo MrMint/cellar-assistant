@@ -20,6 +20,11 @@ type HeaderBarProps = {
   onSearchChange?: (value: string) => void;
   isSearching?: boolean;
   defaultSearchValue?: string;
+  /**
+   * The search field's accessible name. The visible placeholder is a terse
+   * "Search"; this says what is searched ("Search this cellar").
+   */
+  searchLabel?: string;
 };
 
 /**
@@ -43,6 +48,7 @@ export const HeaderBar = ({
   isSearching = false,
   onSearchChange,
   defaultSearchValue = "",
+  searchLabel = "Search",
 }: HeaderBarProps) => {
   const pathname = usePathname() ?? "/";
   const crumbs =
@@ -104,6 +110,7 @@ export const HeaderBar = ({
               debounceTimeout={300}
               searching={isSearching}
               placeholder="Search"
+              aria-label={searchLabel}
               onDebounced={onSearchChange}
               className="sm:w-60"
             />

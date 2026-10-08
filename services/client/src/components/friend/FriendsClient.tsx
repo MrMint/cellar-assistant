@@ -444,6 +444,7 @@ export const FriendsClient = () => {
       <Panel title="Add Friends">
         <SearchField
           placeholder="Search for users by name..."
+          aria-label="Find people to add as friends"
           debounceTimeout={500}
           onDebounced={setSearchTerm}
         />

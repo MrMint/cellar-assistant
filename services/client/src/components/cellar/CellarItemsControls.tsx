@@ -92,6 +92,7 @@ export function CellarItemsControls({
       defaultSearchValue={search || initialSearch}
       isSearching={isPending}
       onSearchChange={handleSearchChange}
+      searchLabel="Search this cellar"
       endComponent={
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
           <CellarItemsFilter
