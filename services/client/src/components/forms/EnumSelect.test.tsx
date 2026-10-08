@@ -89,11 +89,18 @@ describe("EnumSelect (restored)", () => {
   });
 
   test("the Controller binds the select to the form field's name", () => {
-    // Joy registers options in an effect, so a server render shows neither the
-    // selected label nor its value — only the binding. Labels are covered by
+    // Options register from an effect (Joy's did too, and Radix mounts its
+    // items into a fragment after hydration), so a server render shows
+    // neither the selected label nor its value — only the binding: the hidden
+    // native control named for the field. Labels are covered by
     // enum-options.test.ts.
     fetching = false;
     const html = render(<Harness enumKey="wineStyle" value="ROSE" />);
-    assert.match(html, /<input[^>]*aria-hidden="true"[^>]*name="field"/);
+    assert.match(
+      html,
+      /<(?:input|select)\b[^>]*aria-hidden="true"[^>]*name="field"/,
+    );
+    // A held value is not the placeholder.
+    assert.doesNotMatch(html, />Choose one…</);
   });
 });
