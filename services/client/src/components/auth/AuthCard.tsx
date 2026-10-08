@@ -98,6 +98,9 @@ export function AuthField({
         aria-invalid={invalid || undefined}
         aria-describedby={hasHint ? hint : undefined}
         {...input}
+        // A recessed well, as Joy's auth inputs were: the kit's tinted
+        // transparent field all but vanishes on the glass card over the pour.
+        className={cn("dark:bg-background", input.className)}
       />
       {hasHint && (
         <FieldDescription
