@@ -336,7 +336,40 @@ export type CellarActorInterface = {
   ): Promise<readonly CappedList<CheckInDto>[]>;
 };
 
-export const CellarActorDescriptor: ActorDescriptor<CellarActorInterface> = {
+/**
+ * The name a brand-new account's first cellar gets (N15: a designed first
+ * run). Shown on the cellar card and the cellar page; the owner can rename
+ * it like any other.
+ */
+export const STARTER_CELLAR_NAME = "My Cellar";
+
+/** {@link InternalCellarActorInterface.createStarter}'s payload. */
+export type StarterCellarInput = {
+  /** The account the cellar is made for — its creator. */
+  readonly ownerId: string;
+};
+
+/**
+ * Only the outbox calls these — never a resolver. `context.actor(…)` in
+ * `services/api` is typed over {@link CellarActorInterface} alone, so a
+ * resolver cannot name them, and the actor host's allowlist admits them only
+ * because they are declared below.
+ */
+export type InternalCellarActorInterface = {
+  /**
+   * N15: give a brand-new account a cellar to put its first bottle in.
+   * Enqueued once, by better-auth's `user.create` hook, at an id derived from
+   * the new user's id; `system` only, idempotent (a second delivery finds the
+   * cellar and does nothing), and refused at any other id, so a row cannot
+   * create a cellar for one user at an address chosen for another.
+   */
+  createStarter(ctx: Ctx, input: StarterCellarInput): Promise<void>;
+};
+
+export const CellarActorDescriptor: ActorDescriptor<
+  CellarActorInterface,
+  InternalCellarActorInterface
+> = {
   actorType: "CellarActor",
   category: "entity",
   methods: {
@@ -359,6 +392,9 @@ export const CellarActorDescriptor: ActorDescriptor<CellarActorInterface> = {
     item: {},
     bottleFor: {},
     checkInsOf: {},
+  },
+  internalMethods: {
+    createStarter: {},
   },
 };
 

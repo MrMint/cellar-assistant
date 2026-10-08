@@ -101,6 +101,7 @@ import type {
   CreateCellarInput,
   Ctx,
   DeletedCellar,
+  InternalCellarActorInterface,
   ItemRef,
   ItemType,
   ItemTypeCountsDto,
@@ -108,6 +109,7 @@ import type {
   PageArgs,
   PermissionType,
   RemovedCellarItem,
+  StarterCellarInput,
   UpdateCellarInput,
   UpdateCellarItemInput,
 } from "@cellar-assistant/contracts";
@@ -122,6 +124,7 @@ import {
   offsetPage,
   REVERSE_EDGE_CAP,
   requireReverseEdgeBatch,
+  STARTER_CELLAR_NAME,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
@@ -143,8 +146,10 @@ import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import { idempotencyKey } from "../lib/delivery.ts";
 import { daprEmbedQuery, type EmbedQuery } from "../lib/embedding-client.ts";
+import { requireSystem } from "../lib/guards.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { itemNames } from "../lib/item-names.ts";
+import { starterCellarId } from "../lib/starter-cellar.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import { vectorDistances } from "../lib/vectors.ts";
 import {
@@ -197,7 +202,7 @@ const sourceTypeOf = (value: string | null): CellarItemSource | null =>
 
 export class CellarActor
   extends EntityActorBase<CellarAggregate>
-  implements CellarActorInterface
+  implements CellarActorInterface, InternalCellarActorInterface
 {
   static readonly category: ActorCategory = CellarActorDescriptor.category;
 
@@ -387,6 +392,47 @@ export class CellarActor
     });
     await this.reload();
     return this.#toDto(this.requireAggregate());
+  }
+
+  /**
+   * N15 — a brand-new account's first cellar, "My Cellar", PRIVATE.
+   *
+   * Reached only through the outbox (`InternalCellarActorInterface`):
+   * better-auth's `user.create` hook enqueues it at
+   * `starterCellarId(ownerId)`. The row runs as `system`, so the guards are
+   * here rather than in a policy check that would open on it:
+   *
+   *   - `system` only — no request, not even an admin's, makes a cellar for
+   *     someone else this way;
+   *   - this actor's key must be the one derived from `ownerId`, so a row
+   *     cannot plant a cellar for one user at an id chosen for another;
+   *   - idempotent: delivery is at least once, and a second run finds the
+   *     cellar (in the aggregate, or as a conflicting insert) and stops.
+   *
+   * A user who later deletes it is not given another: the hook runs on
+   * account creation and nowhere else.
+   */
+  async createStarter(ctx: Ctx, input: StarterCellarInput): Promise<void> {
+    requireSystem(ctx, "only the outbox makes a starter cellar");
+    const ownerId = requireUuid(input.ownerId, "ownerId");
+    if (this.key !== starterCellarId(ownerId)) {
+      throw new ValidationError(
+        `cellar ${this.key} is not ${ownerId}'s starter cellar`,
+      );
+    }
+    if (this.aggregate !== null) return;
+    await this.tx(async (tx) => {
+      await tx
+        .insert(cellars)
+        .values({
+          id: this.key,
+          name: STARTER_CELLAR_NAME,
+          createdById: ownerId,
+          privacy: "PRIVATE",
+        })
+        .onConflictDoNothing({ target: cellars.id });
+    });
+    await this.reload();
   }
 
   /**

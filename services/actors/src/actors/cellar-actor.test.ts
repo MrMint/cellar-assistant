@@ -26,6 +26,7 @@ import {
   NotFoundError,
   type PermissionType,
   pageArgs,
+  STARTER_CELLAR_NAME,
   systemCtx,
   userCtx,
   ValidationError,
@@ -37,6 +38,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
 import { idempotencyKey } from "../lib/delivery.ts";
 import type { EmbedQuery } from "../lib/embedding-client.ts";
+import { starterCellarId } from "../lib/starter-cellar.ts";
 import {
   activate,
   claimingDelivery,
@@ -1411,6 +1413,68 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
  * go through `requireVisible`, writes through `requireAllowed`, and both land
  * on the base class's one spelling of absence.
  */
+describe.skipIf(skip)("CellarActor.createStarter (N15)", () => {
+  afterAll(closeTestDb);
+
+  it('makes one private "My Cellar" for the owner, however often it is delivered', async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const id = starterCellarId(owner);
+
+      await activate(newCellarActor(id, db)).then((actor) =>
+        actor.createStarter(systemCtx("r1"), { ownerId: owner }),
+      );
+      // A redelivery addresses a fresh activation, which must converge too.
+      await activate(newCellarActor(id, db)).then((actor) =>
+        actor.createStarter(systemCtx("r2"), { ownerId: owner }),
+      );
+
+      const rows = await db
+        .select()
+        .from(cellars)
+        .where(eq(cellars.createdById, owner));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        id,
+        name: STARTER_CELLAR_NAME,
+        privacy: "PRIVATE",
+      });
+
+      const actor = await activate(newCellarActor(id, db));
+      expect((await actor.get(userCtx(owner, "r3"))).name).toBe("My Cellar");
+    });
+  });
+
+  it("is refused to every caller but the outbox", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const id = starterCellarId(owner);
+      for (const ctx of [userCtx(owner, "r"), adminCtx(owner, "r")]) {
+        const actor = await activate(newCellarActor(id, db));
+        await expect(
+          actor.createStarter(ctx, { ownerId: owner }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+      }
+      const rows = await db
+        .select()
+        .from(cellars)
+        .where(eq(cellars.createdById, owner));
+      expect(rows).toEqual([]);
+    });
+  });
+
+  it("refuses an id that was not derived from the owner it names", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const other = await seedUser(db);
+      const actor = await activate(newCellarActor(starterCellarId(other), db));
+      await expect(
+        actor.createStarter(systemCtx("r"), { ownerId: owner }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+});
+
 describe.skipIf(skip)("CellarActor concealment", () => {
   afterAll(closeTestDb);
 

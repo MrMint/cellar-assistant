@@ -18,6 +18,10 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { jwt } from "better-auth/plugins";
 import type { Pool } from "pg";
+import type { DbOrTx } from "../lib/db.ts";
+import { enqueueOutbox } from "../lib/outbox.ts";
+import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
+import { starterCellarId } from "../lib/starter-cellar.ts";
 import { CLIENT_IP_HEADER, isVerifiedProxy } from "./client-ip.ts";
 import type { AuthConfig } from "./config.ts";
 import { type AuthDb, makeAuthDb } from "./db.ts";
@@ -89,6 +93,31 @@ export const PASSWORD_PATHS = [
 ] as const;
 
 export type AuthInstance = ReturnType<typeof createAuth>["auth"];
+
+/**
+ * N15: a brand-new account gets a cellar to put its first bottle in.
+ *
+ * Not a cellar write — the auth module may not write `cellars`
+ * (`packages/db/src/writers.ts`), and the user row is not committed until
+ * better-auth's own statement returns — but an outbox row asking
+ * `CellarActor.createStarter` for one, at the id derived from the new user.
+ * Delivery is at least once and the far end is idempotent, so a retried row
+ * converges on one cellar.
+ *
+ * Best effort by design: a failure is logged and the sign-up goes on. An
+ * account with no starter cellar still works — `/cellars` offers "New cellar"
+ * — and refusing someone an account because a convenience could not be queued
+ * would be the worse outcome.
+ */
+export const enqueueStarterCellar = async (
+  db: DbOrTx,
+  userId: string,
+): Promise<void> => {
+  await enqueueOutbox(db, OUTBOX_TARGETS["CellarActor.createStarter"], {
+    targetId: starterCellarId(userId),
+    payload: { ownerId: userId },
+  });
+};
 
 /**
  * `shared` is the actor host's own Drizzle handle (X2). Passing it makes
@@ -268,6 +297,22 @@ export const createAuth = (config: AuthConfig, shared?: AuthDb) => {
           before: async (user) => ({
             data: { ...user, name: displayNameForNewUser(user.name) },
           }),
+          // N15: queue the new account's "My Cellar". Only on the actor host's
+          // own database (`shared`): the tests' scratch databases hold the
+          // auth tables alone, with no `outbox` to write to.
+          after:
+            shared === undefined
+              ? undefined
+              : async (user) => {
+                  try {
+                    await enqueueStarterCellar(db, user.id);
+                  } catch (error) {
+                    console.error(
+                      "[auth] could not queue the starter cellar",
+                      error,
+                    );
+                  }
+                },
         },
         update: {
           // `/update-user` takes `name` from the client. Refused rather than
