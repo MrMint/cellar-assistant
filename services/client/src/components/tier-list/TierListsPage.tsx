@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
-import { Add } from "@/components/app/icons";
+import { EmptyState } from "@/components/app/EmptyState";
+import { Add, Ranked } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import { virtualTotal } from "@/components/cellar/virtualTotal";
-import { ApiError } from "@/components/cellar-api/ApiError";
+import { DISCOVER_PAGE_SIZE } from "@/components/cellar-api/pagination";
+import {
+  CollectionSection,
+  type SectionKey,
+} from "@/components/common/CollectionSection";
 import { HeaderBar } from "@/components/common/HeaderBar";
-import { VirtualGrid } from "@/components/common/VirtualGrid";
 import { Button } from "@/components/ui/button";
+import type { ApiFailure } from "@/lib/api/result";
 import { unwrapResult } from "@/lib/api/result";
 import { type Page, pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
@@ -15,34 +18,90 @@ import { GetTierListsQuery, TIER_LISTS_PAGE_SIZE } from "./queries";
 import type { TierListCardData } from "./TierListCard";
 import { TierListCard } from "./TierListCard";
 
-interface TierListsPageProps {
-  initialPage: Page<TierListCardData>;
+/** One section's server-rendered first page, or why there is none. */
+export type TierListSectionSeed = {
+  page: Page<TierListCardData>;
+  failure: ApiFailure | null;
+};
+
+/** How many cards one page of a section holds. */
+export const tierListPageSize = (section: SectionKey): number =>
+  section === "DISCOVER" ? DISCOVER_PAGE_SIZE : TIER_LISTS_PAGE_SIZE;
+
+/** Yours, with nothing in it yet (N15). */
+function NoTierListsYet() {
+  return (
+    <EmptyState
+      illustration={<Ranked aria-hidden strokeWidth={1.5} />}
+      title="Nothing ranked yet."
+      description="Rank wines, beers or places, best to worst."
+      action={
+        <Button asChild>
+          <Link href="/tier-lists/add" underline="none">
+            <Add aria-hidden />
+            New tier list
+          </Link>
+        </Button>
+      }
+      className="rounded-lg bg-surface-1"
+    />
+  );
 }
 
-/**
- * `82450ad1:src/components/tier-list/TierListsPage.tsx`, restored: the
- * `HeaderBar` with "New tier list", a `VirtualGrid` of `TierListCard`s.
- *
- * The old page held every visible list from one unpaged query; `myTierLists`
- * is a cursor connection (100 a page), so the server's first page seeds the
- * grid and `VirtualGrid`'s eager load-more walks the rest.
- */
-export function TierListsPage({ initialPage }: TierListsPageProps) {
+function TierListSectionList({
+  section,
+  seed,
+}: {
+  section: SectionKey;
+  seed: TierListSectionSeed;
+}) {
   const list = usePagedConnection({
     query: GetTierListsQuery,
-    variables: (_args: null, after) => ({ first: TIER_LISTS_PAGE_SIZE, after }),
+    variables: (args: SectionKey, after) => ({
+      first: tierListPageSize(args),
+      after,
+      section: args,
+    }),
     select: (data) =>
       pageOf(
         unwrapResult(data?.myTierLists, "TierListConnection"),
         (edge) => edge.node,
       ),
-    initial: initialPage,
-    initialArgs: null,
+    initial: seed.page,
+    initialFailure: seed.failure,
+    initialArgs: section,
   });
-  const tierListItems = useMemo(() => [...list.rows], [list.rows]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <CollectionSection
+      section={section}
+      rows={list.rows}
+      getKey={(tierList) => tierList.id}
+      renderItem={(tierList) => <TierListCard tierList={tierList} />}
+      totalCount={list.totalCount}
+      canLoadMore={list.canLoadMore}
+      loadingMore={list.status === "loadingMore"}
+      onLoadMore={() => void list.loadMore()}
+      failure={list.failure}
+      empty={section === "MINE" ? <NoTierListsYet /> : undefined}
+    />
+  );
+}
+
+/**
+ * `/tier-lists` — Yours, From friends and Discover (decision D2, X11), each a
+ * server-side section of `myTierLists`: yours by when their contents last
+ * moved, friends' visible lists, then strangers' PUBLIC ones. A stranger's
+ * list never sits among yours. Reached from Me › Lists, where your own are
+ * also pinned (D1).
+ */
+export function TierListsPage({
+  sections,
+}: {
+  sections: Record<SectionKey, TierListSectionSeed>;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
       <HeaderBar
         serverBreadcrumbs={{}}
         endComponent={
@@ -58,24 +117,13 @@ export function TierListsPage({ initialPage }: TierListsPageProps) {
           </Button>
         }
       />
-      {list.failure !== null && (
-        <ApiError error={list.failure} title="Could not load tier lists" />
-      )}
-      <VirtualGrid
-        items={tierListItems}
-        totalCount={virtualTotal(list)}
-        cacheKey="tier-lists"
-        getItemKey={(data) => data.id}
-        gridBreakpoints={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-        emptyMessage="No tier lists found"
-        onLoadMore={async () => {
-          await list.loadMore();
-        }}
-        isLoadingMore={list.status === "loadingMore"}
-        renderItem={(data, onBeforeNavigate) => (
-          <TierListCard tierList={data} onNavigate={onBeforeNavigate} />
-        )}
-      />
+      {(["MINE", "FRIENDS", "DISCOVER"] as const).map((section) => (
+        <TierListSectionList
+          key={section}
+          section={section}
+          seed={sections[section]}
+        />
+      ))}
     </div>
   );
 }

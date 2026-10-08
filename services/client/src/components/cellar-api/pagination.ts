@@ -16,6 +16,13 @@
 export const CELLARS_PAGE_SIZE = 24;
 
 /**
+ * A Discover section's page (X11): strangers' public cellars and tier lists
+ * are a taste of what is out there, not a catalog, so a short first page and
+ * "Show more" for the rest.
+ */
+export const DISCOVER_PAGE_SIZE = 6;
+
+/**
  * The cellar overview's "Open and recent" preview: a fixed handful, never
  * paged. (The items page's own size is `ITEMS_PAGE_SIZE` in
  * `components/cellar/cellarItemsQuery.ts`, the old 50.)

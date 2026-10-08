@@ -37,11 +37,18 @@ export const TIER_LIST_ITEMS_PAGE_SIZE = 100;
 /** `Item/Place.tierListEntries` reaches at most 100 rows. */
 export const ENTITY_ENTRIES_PAGE_SIZE = 100;
 
-/** Every tier list the viewer may see, for the index page. */
+/**
+ * One page of one `/tier-lists` section — Yours, From friends or Discover
+ * (`section`, decision D2); without one, every list the viewer may see.
+ */
 export const GetTierListsQuery = graphql(
   `
-    query GetTierLists($first: Int!, $after: String) {
-      myTierLists(first: $first, after: $after) {
+    query GetTierLists(
+      $first: Int!
+      $after: String
+      $section: CollectionSection
+    ) {
+      myTierLists(first: $first, after: $after, section: $section) {
         __typename
         ... on TierListConnection {
           totalCount
