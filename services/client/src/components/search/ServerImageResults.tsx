@@ -1,7 +1,8 @@
 import { Button, Stack, Typography } from "@mui/joy";
 import Link from "next/link";
 import { MdAdd } from "react-icons/md";
-import { ApiError } from "@/components/cellar-api/ApiError";
+import { AiStatus } from "@/components/common/AiStatus";
+import { aiOutcome } from "@/lib/ai/outcome";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import {
@@ -68,7 +69,16 @@ export async function ServerImageResults({
       );
     }
     if (result.error.code === "NOT_FOUND") return <ExpiredImageSearch />;
-    return <ApiError error={result.error} title="Image search failed" />;
+    // N07: a limit or any other refusal, in words chosen from the reason —
+    // never the server's message. `retryAt` is phrased in the server's zone
+    // here; the status is short-lived, so that is good enough.
+    return (
+      <AiStatus
+        outcome={aiOutcome(result.error, {
+          fallback: "search by name or scan a barcode",
+        })}
+      />
+    );
   }
 
   const results = searchResultsFromNodes(

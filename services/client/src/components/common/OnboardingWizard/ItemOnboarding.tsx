@@ -10,6 +10,7 @@ import {
   type ApiItemType,
   itemTypeLabel,
 } from "@/components/cellar-api/itemTypes";
+import { AiStatus } from "../AiStatus";
 import { AnimationShowcase } from "../AnimationShowcase";
 import { QuickAddCard } from "../QuickAddCard";
 import { createOnboardedItem } from "./actors/createItem";
@@ -182,10 +183,7 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
                 </Alert>
               )}
               {labelSent && isNotNil(state.context.extractionError) && (
-                <Alert color="neutral" variant="soft">
-                  Nothing was read from the label:{" "}
-                  {state.context.extractionError}
-                </Alert>
+                <AiStatus outcome={state.context.extractionError} />
               )}
               <OnboardingItemForm
                 type={type}

@@ -19,6 +19,9 @@ import {
 } from "react-icons/md";
 import { useQuery } from "urql";
 import { ApiError } from "@/components/cellar-api/ApiError";
+import { AiStatus } from "@/components/common/AiStatus";
+import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
+import { aiOutcome } from "@/lib/ai/outcome";
 import { readFragment } from "@/lib/api/graphql";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { recipeDetailsFromNode } from "./adapter";
@@ -139,6 +142,7 @@ const STEPS = [
  */
 export function AIRecipeGenerator() {
   const [createdRecipeIds, setCreatedRecipeIds] = useState<string[]>([]);
+  const recipePhotoOffered = isOffered(useAiCapabilities(), "recipePhoto");
 
   const handleRecipesCreated = (recipeIds: string[]) => {
     setCreatedRecipeIds((prev) => [
@@ -167,7 +171,20 @@ export function AIRecipeGenerator() {
       {/* Main Generator */}
       <Grid container spacing={4}>
         <Grid xs={12} lg={8}>
-          <RecipePhotoProcessor onRecipesCreated={handleRecipesCreated} />
+          {recipePhotoOffered ? (
+            <RecipePhotoProcessor onRecipesCreated={handleRecipesCreated} />
+          ) : (
+            // N07/D25: say so up front rather than offer a photo the server
+            // will refuse.
+            <AiStatus
+              outcome={{
+                ...aiOutcome({ code: "CONFLICT", reason: "AI_UNCONFIGURED" }),
+                title: "Reading recipe photos isn't available here",
+                message:
+                  "You can still browse and search the recipes already here.",
+              }}
+            />
+          )}
         </Grid>
 
         <Grid xs={12} lg={4}>

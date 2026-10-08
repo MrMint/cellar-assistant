@@ -20,6 +20,7 @@ import { MdCamera, MdClose, MdScanner, MdSearch } from "react-icons/md";
 import { useClient } from "urql";
 import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
 import { uploadSearchPhoto } from "@/lib/items/image-search";
 import { BarcodeScanner } from "../common/BarcodeScanner";
 import { CameraCapture } from "../common/CameraCapture";
@@ -95,6 +96,9 @@ export const ClientSearchInterface = ({
   });
   const [isNavigating, startNavigation] = useTransition();
   const urqlClient = useClient();
+  // N07/D25: photo search is hidden, not refused, where the deployment's
+  // embedding model cannot embed a photo.
+  const photoOffered = isOffered(useAiCapabilities(), "imageSearch");
   const [photoError, setPhotoError] = useState<string | null>(null);
 
   // The old action resolved after its redirect; a transition's end is the
@@ -223,19 +227,21 @@ export const ClientSearchInterface = ({
                         >
                           <MdScanner style={{ fontSize: "1.1rem" }} />
                         </IconButton>
-                        <IconButton
-                          variant="soft"
-                          color="neutral"
-                          size="sm"
-                          aria-label="Search by photo"
-                          onClick={() => send({ type: "SEARCH_IMAGE" })}
-                          sx={{
-                            borderRadius: "50%",
-                            "--IconButton-size": "30px",
-                          }}
-                        >
-                          <MdCamera style={{ fontSize: "1.1rem" }} />
-                        </IconButton>
+                        {photoOffered && (
+                          <IconButton
+                            variant="soft"
+                            color="neutral"
+                            size="sm"
+                            aria-label="Search by photo"
+                            onClick={() => send({ type: "SEARCH_IMAGE" })}
+                            sx={{
+                              borderRadius: "50%",
+                              "--IconButton-size": "30px",
+                            }}
+                          >
+                            <MdCamera style={{ fontSize: "1.1rem" }} />
+                          </IconButton>
+                        )}
                       </>
                     ) : (
                       <>
@@ -257,24 +263,26 @@ export const ClientSearchInterface = ({
                         >
                           Scan
                         </Button>
-                        <Button
-                          variant="soft"
-                          color="neutral"
-                          size="sm"
-                          startDecorator={
-                            <MdCamera style={{ fontSize: "1rem" }} />
-                          }
-                          onClick={() => send({ type: "SEARCH_IMAGE" })}
-                          sx={{
-                            borderRadius: "lg",
-                            fontSize: "xs",
-                            fontWeight: "md",
-                            px: 1.5,
-                            "--Button-minHeight": "30px",
-                          }}
-                        >
-                          Photo
-                        </Button>
+                        {photoOffered && (
+                          <Button
+                            variant="soft"
+                            color="neutral"
+                            size="sm"
+                            startDecorator={
+                              <MdCamera style={{ fontSize: "1rem" }} />
+                            }
+                            onClick={() => send({ type: "SEARCH_IMAGE" })}
+                            sx={{
+                              borderRadius: "lg",
+                              fontSize: "xs",
+                              fontWeight: "md",
+                              px: 1.5,
+                              "--Button-minHeight": "30px",
+                            }}
+                          >
+                            Photo
+                          </Button>
+                        )}
                       </>
                     )}
                   </Stack>

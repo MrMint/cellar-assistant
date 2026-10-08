@@ -128,10 +128,25 @@ describe("ServerImageResults (restored, G32)", () => {
       __typename: "BudgetExceededError",
       code: "BUDGET_EXCEEDED",
       reason: null,
+      retryAt: null,
       message: "per-user cap reached",
     };
     const html = text(await render());
-    assert.match(html, /Image search failed/);
+    assert.match(html, /Taking a break/);
     assert.doesNotMatch(html, /No items found/);
+  });
+
+  // N07: the words come from the reason, never from the server's message.
+  test("a per-user limit says so, without the server's message", async () => {
+    answer = {
+      __typename: "BudgetExceededError",
+      code: "BUDGET_EXCEEDED",
+      reason: "USER_CAP",
+      retryAt: null,
+      message: "ai_model/image_search refused: per-user cap reached: …",
+    };
+    const html = text(await render());
+    assert.match(html, /reached your limit for now/);
+    assert.doesNotMatch(html, /per-user cap|ai_model/);
   });
 });

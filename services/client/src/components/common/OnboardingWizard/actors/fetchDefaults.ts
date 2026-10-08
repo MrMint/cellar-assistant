@@ -1,4 +1,6 @@
 import { fromPromise } from "xstate";
+import { offeredBy } from "@/lib/ai/capabilities";
+import { aiOutcome } from "@/lib/ai/outcome";
 import { readFragment } from "@/lib/api/graphql";
 import {
   ItemOnboardingFragment,
@@ -17,9 +19,13 @@ import type { DefaultValuesResult, FetchDefaultsInput } from "./types";
  * - `ItemOnboarding` — the model read a label. Its `defaults` go through the
  *   E2c merge into the restored form's values (`formDefaultsFromOnboarding`).
  * - A typed refusal — no label photographed, a photograph that is not a label,
- *   no AI provider. The session row still exists and confirm works against
- *   it, so this resolves with empty defaults and the server's message rather
- *   than throwing: retrying cannot change it.
+ *   no AI provider, a spent allowance. The session row still exists and
+ *   confirm works against it, so this resolves with empty defaults and
+ *   `aiOutcome`'s words for the refusal (N07 — never the server's message,
+ *   which is an operator's) rather than throwing: retrying cannot change it.
+ * - Label reading not offered here at all (`viewer.aiCapabilities.labelRead`
+ *   is false, D25) — not asked: the form opens empty, with nothing to
+ *   apologise for, because nothing was attempted.
  * - No answer at all (transport) — throws, and the machine's old
  *   `retryAnalyze` tries twice more before falling back to an empty form.
  *   `itemOnboardingId` is minted once, so a retry reuses the session rather
@@ -44,6 +50,11 @@ export const fetchDefaults = fromPromise(
   }: {
     input: FetchDefaultsInput;
   }): Promise<DefaultValuesResult> => {
+    // N07/D25: hide rather than refuse. The photos are still uploaded and
+    // kept (display image); only the reading is skipped.
+    if (!(await offeredBy(urqlClient, "labelRead"))) {
+      return { defaults: emptyDefaults(), itemOnboardingId, confidence: 0 };
+    }
     const response = await urqlClient
       .mutation(StartItemOnboardingMutation, {
         onboardingId: itemOnboardingId,
@@ -67,7 +78,9 @@ export const fetchDefaults = fromPromise(
         defaults: emptyDefaults(),
         itemOnboardingId,
         confidence: 0,
-        extractionError: result.error.message,
+        extractionError: aiOutcome(result.error, {
+          fallback: "fill in the details yourself below",
+        }),
       };
     }
     const onboarding = readFragment(ItemOnboardingFragment, result.data);
