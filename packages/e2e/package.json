@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "test:ui": "node ../../scripts/check-node-version.mjs && playwright test --ui",
-    "report": "playwright show-report artifacts/report"
+    "report": "playwright show-report artifacts/report",
+    "visual": "node ../../scripts/check-node-version.mjs && playwright test -c playwright.visual.config.ts",
+    "visual:compare": "node ../../scripts/check-node-version.mjs && node visual/compare.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
