@@ -32,6 +32,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { TogglePop } from "@/components/app/TogglePop";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { MenuItemView } from "../adapter";
+import { usePlaceToggles } from "../hooks/usePlaceToggles";
 import type { PlaceEnrichment, PlaceGooglePhoto } from "../types/places";
 import { GoogleAttribution } from "./GoogleAttribution";
 import {
@@ -215,8 +217,12 @@ export function PlaceDetailsContent({
     phone: mergedPhone,
     website: mergedWebsite,
   };
-  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
-  const [isMarkingVisited, setIsMarkingVisited] = useState(false);
+  // Save / Mark Visited flip on the tap (X24); a refusal puts them back.
+  const { save, visit } = usePlaceToggles({
+    saved: !!userInteraction?.is_favorite,
+    visited: !!userInteraction?.is_visited,
+    setInteraction,
+  });
 
   const [tierListModalOpen, setTierListModalOpen] = useState(false);
 
@@ -281,47 +287,17 @@ export function PlaceDetailsContent({
     }
   };
 
-  const handleToggleFavorite = async (e: React.MouseEvent) => {
+  // Inside the drawer a tap must not reach the drawer's own handlers.
+  const handleToggleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!place.id) return;
-    setIsTogglingFavorite(true);
-    try {
-      const error = await setInteraction({
-        isFavorite: !userInteraction?.is_favorite,
-      });
-      if (error) {
-        notify("Failed to update favorite", { tone: "error" });
-      } else {
-        notify(userInteraction?.is_favorite ? "Removed from saved" : "Saved", {
-          tone: "success",
-        });
-      }
-    } catch {
-      notify("Failed to update favorite", { tone: "error" });
-    } finally {
-      setIsTogglingFavorite(false);
-    }
+    save.toggle();
   };
 
-  const handleMarkVisited = async (e: React.MouseEvent) => {
+  const handleMarkVisited = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!place.id) return;
-    setIsMarkingVisited(true);
-    const willBeVisited = !userInteraction?.is_visited;
-    try {
-      const error = await setInteraction({ isVisited: willBeVisited });
-      if (error) {
-        notify("Failed to update visited status", { tone: "error" });
-      } else {
-        notify(willBeVisited ? "Marked as visited" : "Unmarked", {
-          tone: "success",
-        });
-      }
-    } catch {
-      notify("Failed to update visited status", { tone: "error" });
-    } finally {
-      setIsMarkingVisited(false);
-    }
+    visit.toggle();
   };
 
   // ── Derived Values ─────────────────────────────────────────────────
@@ -472,9 +448,10 @@ export function PlaceDetailsContent({
         {isDesktop ? (
           <DesktopActions
             place={mergedPlace}
-            userInteraction={userInteraction}
-            isTogglingFavorite={isTogglingFavorite}
-            isMarkingVisited={isMarkingVisited}
+            saved={save.on}
+            visited={visit.on}
+            isTogglingFavorite={save.pending}
+            isMarkingVisited={visit.pending}
             onDirections={handleDirections}
             onCall={handleCall}
             onWebsite={handleWebsite}
@@ -486,10 +463,11 @@ export function PlaceDetailsContent({
         ) : (
           <MobileActions
             place={mergedPlace}
-            userInteraction={userInteraction}
+            saved={save.on}
+            visited={visit.on}
             isCompact={isCompact}
-            isTogglingFavorite={isTogglingFavorite}
-            isMarkingVisited={isMarkingVisited}
+            isTogglingFavorite={save.pending}
+            isMarkingVisited={visit.pending}
             onDirections={handleDirections}
             onCall={handleCall}
             onWebsite={handleWebsite}
@@ -654,7 +632,10 @@ function ContactRow({
 
 interface ActionProps {
   place: Place;
-  userInteraction?: UserInteraction;
+  /** The drawn (optimistic) Save and Visited states (X24). */
+  saved: boolean;
+  visited: boolean;
+  /** A write in flight: `aria-busy` only, never disabled, never a spinner. */
   isTogglingFavorite: boolean;
   isMarkingVisited: boolean;
   onDirections: (e: React.MouseEvent) => void;
@@ -668,7 +649,8 @@ interface ActionProps {
 
 function DesktopActions({
   place,
-  userInteraction,
+  saved,
+  visited,
   isTogglingFavorite,
   isMarkingVisited,
   onDirections,
@@ -709,13 +691,13 @@ function DesktopActions({
 
       <div className="flex flex-row gap-2">
         <SaveToggleButton
-          on={!!userInteraction?.is_favorite}
+          on={saved}
           pending={isTogglingFavorite}
           onClick={onToggleFavorite}
           className="flex-1"
         />
         <VisitedToggleButton
-          on={!!userInteraction?.is_visited}
+          on={visited}
           pending={isMarkingVisited}
           onClick={onMarkVisited}
           className="flex-1"
@@ -760,7 +742,8 @@ function TipIconButton({
 
 function MobileActions({
   place,
-  userInteraction,
+  saved,
+  visited,
   isCompact,
   isTogglingFavorite,
   isMarkingVisited,
@@ -772,8 +755,6 @@ function MobileActions({
   onMarkVisited,
   onAddToTierList,
 }: MobileActionProps) {
-  const saved = !!userInteraction?.is_favorite;
-  const visited = !!userInteraction?.is_visited;
   return (
     <div className="flex flex-row flex-wrap gap-2">
       <Button className="min-w-fit flex-auto" onClick={onDirections}>
@@ -800,30 +781,22 @@ function MobileActions({
             label={saved ? "Remove from saved" : "Save"}
             variant={saved ? "secondary" : "outline"}
             onClick={onToggleFavorite}
-            disabled={isTogglingFavorite}
             aria-busy={isTogglingFavorite || undefined}
           >
-            {isTogglingFavorite ? (
-              <Spinner />
-            ) : (
+            <TogglePop on={saved}>
               <Love className={saved ? "fill-brand text-brand" : undefined} />
-            )}
+            </TogglePop>
           </TipIconButton>
 
           <TipIconButton
             label={visited ? "Mark as not visited" : "Mark as visited"}
             variant={visited ? "secondary" : "outline"}
             onClick={onMarkVisited}
-            disabled={isMarkingVisited}
             aria-busy={isMarkingVisited || undefined}
           >
-            {isMarkingVisited ? (
-              <Spinner />
-            ) : visited ? (
-              <Success className="text-success" />
-            ) : (
-              <Unrated />
-            )}
+            <TogglePop on={visited}>
+              {visited ? <Success className="text-success" /> : <Unrated />}
+            </TogglePop>
           </TipIconButton>
 
           <TipIconButton label="Share" variant="outline" onClick={onShare}>
