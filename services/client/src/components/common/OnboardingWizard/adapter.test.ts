@@ -154,8 +154,7 @@ describe("saveBlocker", () => {
       saveBlocker("SAKE", emptyDefaults().values),
       "Name cannot be empty.",
     );
-    // N03: every missing column at once — it is also the line the form shows
-    // when validation stops the submit.
+    // N03: every missing column at once, never one at a time.
     assert.equal(
       saveBlocker("WINE", emptyDefaults().values),
       "Name, Vintage, Style cannot be empty.",

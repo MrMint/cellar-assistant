@@ -101,15 +101,18 @@ export const OnboardingItemForm = ({
   };
 
   // N03: validation stopped the submit — say which fields, beside the button,
-  // as well as under each one. `saveBlocker` names the database's columns;
-  // the layout's summary covers the create form's own stars (sake, tea).
+  // as well as under each one. The layout's summary names every starred field
+  // still blank, which includes every column `saveBlocker` checks plus the
+  // create form's own stars (sake, tea) — so it leads, and `saveBlocker` only
+  // speaks when the stars are all filled (a whitespace-only value, which
+  // `required` lets through, is caught by it here and again in `onSubmit`).
   const onInvalid = () => {
     const values = getValues();
     setError("root", {
       type: "custom",
       message:
-        saveBlocker(type, values) ??
         requiredSummary(layout, values) ??
+        saveBlocker(type, values) ??
         "Check the highlighted fields.",
     });
   };

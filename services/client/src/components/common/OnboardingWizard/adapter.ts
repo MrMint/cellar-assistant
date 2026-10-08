@@ -156,9 +156,10 @@ export const confirmInputFrom = (
  * would not. `wines.style`/`vintage`, `spirits.type` and `coffees.description`
  * are NOT NULL behind nullable GraphQL inputs (`itemFormRules.ts`).
  *
- * Names **every** missing column at once (N03): it is also the line the form
- * shows when validation stops a submit, so it must not make the person fix
- * one field to be told about the next.
+ * Names **every** missing column at once (N03), so it never makes the person
+ * fix one field to be told about the next. The form shows it beside Add when
+ * the starred fields are filled but a column still is not — a whitespace-only
+ * value, which `required` lets through.
  */
 export const saveBlocker = (
   type: ApiItemType,
