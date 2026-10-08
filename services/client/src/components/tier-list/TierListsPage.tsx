@@ -13,6 +13,7 @@ import type { ApiFailure } from "@/lib/api/result";
 import { unwrapResult } from "@/lib/api/result";
 import { type Page, pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
+import { useScrollPositionRestore } from "@/utilities/hooks";
 import { GetTierListsQuery, tierListPageSize } from "./queries";
 import type { TierListCardData } from "./TierListCard";
 import { TierListCard } from "./TierListCard";
@@ -46,9 +47,11 @@ function NoTierListsYet() {
 function TierListSectionList({
   section,
   seed,
+  onBeforeNavigate,
 }: {
   section: SectionKey;
   seed: TierListSectionSeed;
+  onBeforeNavigate: () => void;
 }) {
   const list = usePagedConnection({
     query: GetTierListsQuery,
@@ -72,7 +75,9 @@ function TierListSectionList({
       section={section}
       rows={list.rows}
       getKey={(tierList) => tierList.id}
-      renderItem={(tierList) => <TierListCard tierList={tierList} />}
+      renderItem={(tierList) => (
+        <TierListCard tierList={tierList} onNavigate={onBeforeNavigate} />
+      )}
       totalCount={list.totalCount}
       canLoadMore={list.canLoadMore}
       loadingMore={list.status === "loadingMore"}
@@ -95,8 +100,11 @@ export function TierListsPage({
 }: {
   sections: Record<SectionKey, TierListSectionSeed>;
 }) {
+  // Back from a list lands where the index was, as VirtualGrid did.
+  const { sentinelRef, saveScrollPosition } = useScrollPositionRestore();
   return (
     <div className="flex flex-col gap-6">
+      <div ref={sentinelRef} hidden />
       <HeaderBar
         serverBreadcrumbs={{}}
         endComponent={
@@ -117,6 +125,7 @@ export function TierListsPage({
           key={section}
           section={section}
           seed={sections[section]}
+          onBeforeNavigate={saveScrollPosition}
         />
       ))}
     </div>

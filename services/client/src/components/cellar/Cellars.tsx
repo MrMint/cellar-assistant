@@ -17,6 +17,7 @@ import type { ApiFailure } from "@/lib/api/result";
 import { unwrapResult } from "@/lib/api/result";
 import { type Page, pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
+import { useScrollPositionRestore } from "@/utilities/hooks";
 import { cellarCardFromFragment } from "./adapter";
 import { CellarSegments } from "./CellarSegments";
 import { type CellarCardFragment, GetCellarsQuery } from "./fragments";
@@ -77,10 +78,12 @@ function CellarSectionList({
   section,
   seed,
   userId,
+  onBeforeNavigate,
 }: {
   section: SectionKey;
   seed: CellarSectionSeed;
   userId: string;
+  onBeforeNavigate: () => void;
 }) {
   const list = usePagedConnection({
     query: GetCellarsQuery,
@@ -102,7 +105,11 @@ function CellarSectionList({
       rows={cards}
       getKey={(cellar) => cellar.id}
       renderItem={(cellar) => (
-        <CellarCardClient userId={userId} cellar={cellar} />
+        <CellarCardClient
+          userId={userId}
+          cellar={cellar}
+          onBeforeNavigate={onBeforeNavigate}
+        />
       )}
       totalCount={list.totalCount}
       canLoadMore={list.canLoadMore}
@@ -126,8 +133,11 @@ function CellarSectionList({
  * Discover appear once they have something.
  */
 export function Cellars({ userId, sections }: CellarsProps) {
+  // Back from a cellar lands where the list was, as VirtualGrid did.
+  const { sentinelRef, saveScrollPosition } = useScrollPositionRestore();
   return (
     <div className="flex flex-col gap-6">
+      <div ref={sentinelRef} hidden />
       <HeaderBar
         serverBreadcrumbs={{}}
         endComponent={
@@ -146,6 +156,7 @@ export function Cellars({ userId, sections }: CellarsProps) {
           section={section}
           seed={sections[section]}
           userId={userId}
+          onBeforeNavigate={saveScrollPosition}
         />
       ))}
     </div>
