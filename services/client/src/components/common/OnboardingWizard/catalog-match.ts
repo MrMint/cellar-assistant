@@ -78,8 +78,10 @@ export const sameVintage = (
 
 // Built with `new RegExp` because the client's tsconfig target predates the
 // `u` flag in literals (TS1501); every browser the app supports has it.
-const MARKS = /\p{M}/gu;
-const NOT_LETTER_OR_DIGIT = /[^\p{L}\p{N}]+/gu;
+// biome-ignore lint/complexity/useRegexLiterals: a literal is TS1501 here
+const MARKS = new RegExp("\\p{M}", "gu");
+// biome-ignore lint/complexity/useRegexLiterals: a literal is TS1501 here
+const NOT_LETTER_OR_DIGIT = new RegExp("[^\\p{L}\\p{N}]+", "gu");
 
 /**
  * A name with case, accents, punctuation and spacing set aside. Letters are
