@@ -1728,6 +1728,35 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       });
     });
 
+    it("the list drops a recipe its author deleted under a live activation", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const kept = await seedRecipe(db, bob);
+        const doomed = await seedRecipe(db, bob);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        await actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: kept }, true);
+        await actor.setWantToTry(
+          ctx,
+          { kind: "RECIPE", recipeId: doomed },
+          true,
+        );
+
+        // `RecipeActor.delete`'s statement: the wish goes by cascade, behind
+        // this activation's back — nothing reloads Alice's actor.
+        await db.delete(recipes).where(eq(recipes.id, doomed));
+
+        expect(nodes(await actor.wantToTry(ctx, firstPage))).toEqual([
+          {
+            target: { kind: "RECIPE", recipeId: kept },
+            savedAt: expect.any(String),
+          },
+        ]);
+        expect((await actor.wantToTry(ctx, firstPage)).totalCount).toBe(1);
+      });
+    });
+
     it("wantToTryStates answers a page in one call, in canonical spelling", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");

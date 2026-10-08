@@ -1358,15 +1358,23 @@ export class UserActor
 
   /**
    * The list, newest first: `want_to_try` rows and the places marked
-   * `want_to_visit`, merged from rows this actor already holds (§1.3) — one
-   * call and no query, like `favorites`. Owner (or admin) only.
+   * `want_to_visit`. Owner (or admin) only.
+   *
+   * Read fresh, not from the activation's rows. This key is the only writer
+   * of those rows, but not the only thing that removes them: a recipe's
+   * author deleting it (`RecipeActor.delete`) cascades every user's wish for
+   * it away underneath their activations. A cached row would then be listed
+   * as an entry whose recipe no longer resolves — a field error, which fails
+   * the whole `/want-to-try` read (`runApiOperation` throws on any error).
+   * Two indexed reads of one user's rows; `wantToTryStates` keeps answering
+   * from the cache, where a stale key is harmless.
    */
   async wantToTry(
     ctx: Ctx,
     page: PageArgs,
     kinds?: readonly WantToTryKind[] | null,
   ): Promise<Page<WantToTryEntryDto>> {
-    const aggregate = this.requireAggregate();
+    this.requireAggregate();
     this.#requireSelf(ctx, "view this want-to-try list");
     if (kinds !== null && kinds !== undefined && !Array.isArray(kinds)) {
       throw new ValidationError("kinds must be a list");
@@ -1382,8 +1390,25 @@ export class UserActor
         : kinds,
     );
 
+    const [wishRows, placeRows] = await Promise.all([
+      only.has("ITEM") || only.has("RECIPE")
+        ? this.db.select().from(wantToTry).where(eq(wantToTry.userId, this.key))
+        : Promise.resolve([]),
+      only.has("PLACE")
+        ? this.db
+            .select()
+            .from(userPlaceInteractions)
+            .where(
+              and(
+                eq(userPlaceInteractions.userId, this.key),
+                eq(userPlaceInteractions.wantToVisit, true),
+              ),
+            )
+        : Promise.resolve([]),
+    ]);
+
     const entries: { entry: WantToTryEntryDto; at: number; id: string }[] = [];
-    for (const row of aggregate.wishes) {
+    for (const row of wishRows) {
       const target = wishTarget(row);
       if (target === null || !only.has(target.kind)) continue;
       entries.push({
@@ -1392,19 +1417,16 @@ export class UserActor
         id: row.id,
       });
     }
-    if (only.has("PLACE")) {
-      for (const row of aggregate.interactions) {
-        if (row.wantToVisit !== true) continue;
-        const at = row.updatedAt ?? row.createdAt;
-        entries.push({
-          entry: {
-            target: { kind: "PLACE", placeId: row.placeId },
-            savedAt: requiredIso(at),
-          },
-          at: at?.getTime() ?? 0,
-          id: row.id,
-        });
-      }
+    for (const row of placeRows) {
+      const at = row.updatedAt ?? row.createdAt;
+      entries.push({
+        entry: {
+          target: { kind: "PLACE", placeId: row.placeId },
+          savedAt: requiredIso(at),
+        },
+        at: at?.getTime() ?? 0,
+        id: row.id,
+      });
     }
     // Newest first; the row id breaks ties so paging is stable.
     entries.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
