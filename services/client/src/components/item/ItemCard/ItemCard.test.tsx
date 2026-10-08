@@ -199,6 +199,34 @@ describe("ItemCard", () => {
     assert.match(openTag(html, 'aria-label="Barolo"'), /^<button\b/);
   });
 
+  test("every target in the clipped card rings inside it, and a pending heart keeps the tap", () => {
+    // The card is overflow-hidden, so an outset focus ring on the stretched
+    // link or button (exactly the card's box) would be clipped to nothing.
+    const linked = render(
+      <ItemCard
+        type="WINE"
+        href="/wines/i"
+        item={{ ...base, favoriteCount: 1 }}
+      />,
+    );
+    assert.match(
+      openTag(linked, 'href="/wines/i"'),
+      /focus-visible:after:ring-inset/,
+    );
+    const heart = openTag(linked, "aria-pressed=");
+    assert.match(heart, /focus-visible:ring-inset/);
+    // Disabled while pending, but not click-through: the stretched link
+    // sits underneath it.
+    assert.match(heart, /disabled:pointer-events-auto/);
+    const bare = render(
+      <ItemCard type="SPIRIT" onClick={() => {}} item={base} />,
+    );
+    assert.match(
+      openTag(bare, 'aria-label="Barolo"'),
+      /focus-visible:ring-inset/,
+    );
+  });
+
   test("neither href nor onClick: image and footer only", () => {
     const html = render(<ItemCard type="WINE" item={base} />);
     assert.deepEqual(skeleton(html), ["image", "separator", "separator"]);

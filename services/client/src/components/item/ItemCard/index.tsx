@@ -52,6 +52,15 @@ const FOOTER_CELL =
   "flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 text-ink-1";
 
 /**
+ * The card clips its children (`overflow-hidden`, for the image's corners),
+ * and a focus ring is a shadow drawn *outside* its element — so a ring on
+ * anything flush with the card's edge is clipped away, and the stretched
+ * target (exactly the card's box) would show none at all. Every focusable
+ * thing in the card draws its ring inside instead.
+ */
+const RING_INSIDE = "focus-visible:ring-inset";
+
+/**
  * `82450ad1:src/components/item/ItemCard/index.tsx`, restored, then moved off
  * Joy onto the app's tokens: a surface-2 tile (radius 12, no border), the
  * image, the title block, and the footer of favourite · reviews · score —
@@ -168,7 +177,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             underline="none"
             href={href}
             onClick={handleClick}
-            className="type-headline truncate text-ink-1"
+            className="type-headline truncate text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
           >
             {title}
           </Link>
@@ -183,7 +192,10 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             type="button"
             aria-label={title}
             onClick={handleClick}
-            className="absolute inset-0 rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className={cn(
+              "absolute inset-0 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              RING_INSIDE,
+            )}
           />
         </div>
       )}
@@ -191,7 +203,15 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         {isNotNil(item.favoriteCount) && (
           <Button
             variant="ghost"
-            className={cn(FOOTER_CELL, "relative z-10 rounded-none px-2")}
+            // `disabled:pointer-events-auto`: while the toggle is pending it
+            // still takes the tap (a disabled button swallows it) — with the
+            // vendored `pointer-events-none`, a quick second tap on the heart
+            // fell through to the stretched link and left the page.
+            className={cn(
+              FOOTER_CELL,
+              "relative z-10 rounded-none px-2 disabled:pointer-events-auto",
+              RING_INSIDE,
+            )}
             onClick={handleFavoriteClick}
             disabled={isPending}
             aria-busy={isPending || undefined}
