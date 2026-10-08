@@ -62,6 +62,7 @@ import {
   googlePrefillFields,
   type PinAddressField,
   pinAddressDraft,
+  pinAddressNotFound,
 } from "../adapter";
 import { DuplicatePlaceCheck } from "./DuplicatePlaceCheck";
 import { GooglePlaceSearch } from "./GooglePlaceSearch";
@@ -583,6 +584,11 @@ export function CreatePlaceForm({
             </Chip>
           )}
         </Stack>
+        {pinAddressNotFound(addressLoading, pinDraft) && (
+          <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
+            Couldn't find an address for this pin. Add it below if you know it.
+          </Typography>
+        )}
 
         <Box
           sx={{

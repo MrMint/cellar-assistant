@@ -115,14 +115,25 @@ test("creates a place through the form", async ({ primary }) => {
   // jitter keeps every run off one shared point.
   const lat = 43.0731 + Math.random() * 0.01;
   const lng = -89.4012 + Math.random() * 0.01;
+  // The reverse geocode fills the address fields when it lands; wait for it
+  // so it cannot overwrite what this test types. Wait on the request itself
+  // and the section's "Loading address..." chip (shown from first paint until
+  // the answer is applied), never on what it filled: N19 marks only the
+  // fields the geocode actually filled ("From pin"), and a pin it has no
+  // address for — every pin on a lane without a geocoder — fills nothing, so
+  // a wait on a mark would hang on a correct page.
+  const geocoded = primary.waitForResponse(
+    (response) =>
+      response.url().includes("/api/graphql") &&
+      /query MapReverseGeocode\b/.test(response.request().postData() ?? ""),
+    { timeout: 30_000 },
+  );
   await primary.goto(`/map/create-place?lat=${lat}&lng=${lng}`);
   await expect(
     primary.getByRole("heading", { name: "Add a new place" }),
   ).toBeVisible();
-
-  // The reverse geocode fills the address fields when it lands; wait for it
-  // so it cannot overwrite what this test types.
-  await expect(primary.getByText("Auto-filled from pin")).toBeVisible({
+  await geocoded;
+  await expect(primary.getByText("Loading address...")).toBeHidden({
     timeout: 30_000,
   });
 

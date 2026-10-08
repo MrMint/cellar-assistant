@@ -6,12 +6,16 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { validateTierListInput } from "./actions";
 import {
+  addEntryFailureMessage,
   aiInsightsFromJson,
   bandMapOf,
+  candidateHref,
+  entryHref,
   entryTypeOf,
   insightsItemsFromNodes,
   itemDisplayFromNode,
   itemEntrySubtitle,
+  onListHrefs,
   placeEntrySubtitle,
   reorderCallFor,
   type TierListItemNode,
@@ -351,5 +355,57 @@ describe("validateTierListInput (the old server-action validation)", () => {
       "Invalid privacy setting",
     );
     assert.equal(validateTierListInput("ok", undefined, "PUBLIC"), null);
+  });
+});
+
+describe("the in-page add picker (already on the list, refusals in words)", () => {
+  test("a candidate's href is the one its board row will have", () => {
+    const wine = itemNode({ type: "WINE" });
+    const place = placeNode();
+    assert.equal(
+      candidateHref({ id: wine.item?.id ?? "", entityType: "wine" }),
+      entryHref(wine),
+    );
+    assert.equal(
+      candidateHref({ id: place.place?.id ?? "", entityType: "place" }),
+      entryHref(place),
+    );
+    const sake = itemNode({ type: "SAKE" });
+    assert.equal(
+      candidateHref({ id: sake.item?.id ?? "", entityType: "sake" }),
+      entryHref(sake),
+    );
+  });
+
+  test("what is on the board is known by href", () => {
+    const onList = onListHrefs([
+      itemDisplayFromNode(itemNode({ type: "WINE" })),
+    ]);
+    const wineId = itemNode({ type: "WINE" }).item?.id ?? "";
+    assert.equal(
+      onList.has(candidateHref({ id: wineId, entityType: "wine" })),
+      true,
+    );
+    assert.equal(
+      onList.has(candidateHref({ id: "someone-else", entityType: "wine" })),
+      false,
+    );
+  });
+
+  test("an add the actor refuses never shows its log-shaped message", () => {
+    const raw =
+      "WINE 9326b6bd-0000-0000-0000-000000000000 is already in tier list 02303bbf-0000-0000-0000-000000000000";
+    assert.equal(
+      addEntryFailureMessage({ code: "CONFLICT", message: raw }),
+      "That's already on this list.",
+    );
+    for (const code of ["FORBIDDEN", "NOT_FOUND", "VALIDATION", "UNKNOWN"]) {
+      const said = addEntryFailureMessage({ code, message: raw });
+      assert.doesNotMatch(said, /[0-9a-f]{8}-/, code);
+    }
+    assert.equal(
+      addEntryFailureMessage({ code: "TRANSPORT", message: "No answer." }),
+      "No answer.",
+    );
   });
 });

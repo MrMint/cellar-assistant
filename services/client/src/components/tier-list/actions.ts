@@ -29,7 +29,7 @@
 import { useCallback, useMemo } from "react";
 import { useMutation } from "urql";
 import { unwrapResult } from "@/lib/api/result";
-import { entryTypeOf } from "./adapter";
+import { addEntryFailureMessage, entryTypeOf } from "./adapter";
 import type { TierListEntityType } from "./constants";
 import {
   AddItemToTierListMutation,
@@ -240,7 +240,7 @@ export function useTierListActions() {
       );
       return result.ok
         ? { success: true, tierListItemId: result.data.id }
-        : { success: false, error: result.error.message };
+        : { success: false, error: addEntryFailureMessage(result.error) };
     },
     [addItem],
   );

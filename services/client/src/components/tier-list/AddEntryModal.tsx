@@ -3,6 +3,7 @@
 import {
   Box,
   Button,
+  Chip,
   CircularProgress,
   DialogContent,
   DialogTitle,
@@ -26,7 +27,12 @@ import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { createLatestOnly } from "@/lib/latest-only";
 import { displayItemName } from "@/utilities/smart-title-case";
 import { isValidListType } from "./actions";
-import { entryTypeOf, itemEntrySubtitle, placeEntrySubtitle } from "./adapter";
+import {
+  candidateHref,
+  entryTypeOf,
+  itemEntrySubtitle,
+  placeEntrySubtitle,
+} from "./adapter";
 import type { TierListEntityType } from "./constants";
 import {
   PICKER_PAGE_SIZE,
@@ -61,6 +67,11 @@ const ENTITY_LABELS: Record<TierListEntityType, string> = {
  * one searches the list's type alone: `placeSearch` for a place list,
  * `itemSearch` narrowed to the one item type otherwise. Both embed the phrase,
  * so the search is a submitted form, not search-as-you-type.
+ *
+ * The parent remounts it on every open (`key`), so a reopened picker starts
+ * empty rather than showing the last query's rows as if they were fresh, and
+ * `onList` marks what is already on the board instead of offering "Add" for
+ * it — an add the actor would only refuse.
  */
 export function AddEntryModal({
   open,
@@ -69,6 +80,7 @@ export function AddEntryModal({
   busy,
   error,
   listType,
+  onList,
 }: {
   open: boolean;
   onClose: () => void;
@@ -76,6 +88,8 @@ export function AddEntryModal({
   busy: boolean;
   error: string | null;
   listType: string;
+  /** Board hrefs of the entries already on the list (`onListHrefs`). */
+  onList: ReadonlySet<string>;
 }) {
   const client = useClient();
   const entityType: TierListEntityType = isValidListType(listType)
@@ -255,14 +269,20 @@ export function AddEntryModal({
                   <ListItem
                     key={`${row.entityType}-${row.id}`}
                     endAction={
-                      <Button
-                        size="sm"
-                        variant="soft"
-                        disabled={busy}
-                        onClick={() => onPick(row)}
-                      >
-                        Add
-                      </Button>
+                      onList.has(candidateHref(row)) ? (
+                        <Chip size="sm" variant="soft" color="neutral">
+                          On list
+                        </Chip>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="soft"
+                          disabled={busy}
+                          onClick={() => onPick(row)}
+                        >
+                          Add
+                        </Button>
+                      )
                     }
                   >
                     <ListItemDecorator>
