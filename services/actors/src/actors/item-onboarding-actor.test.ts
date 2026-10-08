@@ -388,10 +388,9 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
         expect(again.status).toBe("CONFIRMED");
         expect(
           (
-            await (await activate(newOnboardingActor(matched, db, ai))).start(
-              userCtx(user, "r2"),
-              { itemType: "WINE" },
-            )
+            await (
+              await activate(newOnboardingActor(matched, db, ai))
+            ).start(userCtx(user, "r2"), { itemType: "WINE" })
           ).status,
         ).toBe("MATCHED");
         expect(ai.calls).toBe(2);
