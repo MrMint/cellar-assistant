@@ -2,28 +2,30 @@
 
 import {
   Box,
+  Button,
   Card,
   CardCover,
   CircularProgress,
   IconButton,
+  Stack,
   styled,
+  Typography,
 } from "@mui/joy";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BsCamera, BsLightbulb, BsLightbulbFill } from "react-icons/bs";
+import {
+  BsCamera,
+  BsImages,
+  BsLightbulb,
+  BsLightbulbFill,
+} from "react-icons/bs";
 import Webcam from "react-webcam";
+import { useCameraStatus } from "@/hooks/useCameraStatus";
+import { CAMERA_CAPTURE_CONSTRAINTS } from "@/lib/camera/camera-status";
+import { libraryImageToDataUrl } from "@/lib/camera/library-image";
 
-// Video constraints for quality capture - square aspect ratio
-// Note: colorTemperature and iso removed - poorly supported on Android and cause white balance issues
-const getVideoConstraints = () => ({
-  width: { ideal: 1920, min: 1080 },
-  height: { ideal: 1920, min: 1080 },
-  aspectRatio: 1,
-  facingMode: "environment",
-  // These are well-supported across devices
-  focusMode: "continuous",
-  exposureMode: "continuous",
-  whiteBalanceMode: "continuous",
-});
+// N04: every constraint is `ideal` (`CAMERA_CAPTURE_CONSTRAINTS`). The old
+// `min: 1080` made getUserMedia refuse outright on cameras that could not meet
+// it, and the non-standard focus/exposure/white-balance modes are gone with it.
 
 const CameraContainer = styled(Box)(() => ({
   position: "relative",
@@ -91,12 +93,22 @@ const ControlsContainer = styled(Box)(() => ({
 
 export const CameraCapture = ({
   onCapture,
+  showLibrary = true,
 }: {
   onCapture: (image: string) => void;
+  /**
+   * The library button beside the shutter. Hosts with their own full-size
+   * picker under the viewfinder (AddPhoto, MenuScanner) turn it off; the
+   * failure panel offers the library either way, so nobody is stranded.
+   */
+  showLibrary?: boolean;
 }) => {
   const webcamRef = useRef<Webcam | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const libraryRef = useRef<HTMLInputElement | null>(null);
+  const camera = useCameraStatus();
+  const isVideoLoaded = camera.status.kind === "ready";
+  const [libraryError, setLibraryError] = useState<string | null>(null);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -106,19 +118,46 @@ export const CameraCapture = ({
   const [showFocusIndicator, setShowFocusIndicator] = useState(false);
 
   // Check for torch support when video loads
-  const handleUserMedia = useCallback((stream: MediaStream) => {
-    streamRef.current = stream;
-    setIsVideoLoaded(true);
+  const { onStream } = camera;
+  const handleUserMedia = useCallback(
+    (stream: MediaStream) => {
+      streamRef.current = stream;
+      onStream();
 
-    // Check for torch capability
-    const videoTrack = stream.getVideoTracks()[0];
-    if (videoTrack) {
-      const capabilities = videoTrack.getCapabilities?.();
-      setTorchSupported(
-        !!(capabilities as MediaTrackCapabilities & { torch?: boolean })?.torch,
-      );
-    }
-  }, []);
+      // Check for torch capability
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        const capabilities = videoTrack.getCapabilities?.();
+        setTorchSupported(
+          !!(capabilities as MediaTrackCapabilities & { torch?: boolean })
+            ?.torch,
+        );
+      }
+    },
+    [onStream],
+  );
+
+  // N04: "Choose from library" — a picked photo is handed on exactly like a
+  // capture, so a camera that never starts is not the end of the flow.
+  const handleLibraryPick = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (file === undefined) return;
+      setLibraryError(null);
+      try {
+        onCapture(await libraryImageToDataUrl(file));
+      } catch (cause) {
+        setLibraryError(
+          cause instanceof Error
+            ? cause.message
+            : "The photo could not be read.",
+        );
+      }
+    },
+    [onCapture],
+  );
+  const openLibrary = useCallback(() => libraryRef.current?.click(), []);
 
   // Toggle torch/flashlight
   const toggleTorch = useCallback(async () => {
@@ -239,29 +278,68 @@ export const CameraCapture = ({
     };
   }, [torchEnabled]);
 
+  const failed = camera.status.kind === "failed" ? camera.status : null;
+
   return (
     <Card sx={{ aspectRatio: "1", maxHeight: "600px" }}>
-      {!isVideoLoaded && (
+      <input
+        ref={libraryRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={handleLibraryPick}
+      />
+      {camera.status.kind === "starting" && (
         <CardCover>
           <CircularProgress />
         </CardCover>
       )}
+      {failed !== null && (
+        <CardCover sx={{ zIndex: 1 }}>
+          <Stack
+            spacing={2}
+            alignItems="center"
+            justifyContent="center"
+            sx={{ p: 3, textAlign: "center" }}
+            role="alert"
+          >
+            <Typography level="body-md">{failed.message}</Typography>
+            {libraryError !== null && (
+              <Typography level="body-sm" color="danger">
+                {libraryError}
+              </Typography>
+            )}
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Button startDecorator={<BsImages />} onClick={openLibrary}>
+                Choose from library
+              </Button>
+              <Button variant="outlined" color="neutral" onClick={camera.retry}>
+                Try again
+              </Button>
+            </Stack>
+          </Stack>
+        </CardCover>
+      )}
       <CardCover>
         <CameraContainer>
-          <Webcam
-            ref={webcamRef}
-            audio={false}
-            forceScreenshotSourceSize={true}
-            screenshotQuality={1}
-            screenshotFormat="image/jpeg"
-            videoConstraints={getVideoConstraints()}
-            onUserMedia={handleUserMedia}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
+          {failed === null && (
+            <Webcam
+              key={camera.attempt}
+              ref={webcamRef}
+              audio={false}
+              forceScreenshotSourceSize={true}
+              screenshotQuality={1}
+              screenshotFormat="image/jpeg"
+              videoConstraints={CAMERA_CAPTURE_CONSTRAINTS}
+              onUserMedia={handleUserMedia}
+              onUserMediaError={camera.onError}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          )}
           {isVideoLoaded && <TapToFocusOverlay onClick={handleTapToFocus} />}
           {focusPoint && (
             <FocusIndicator
@@ -270,41 +348,55 @@ export const CameraCapture = ({
               visible={showFocusIndicator}
             />
           )}
-          <ControlsContainer>
-            {/* Torch control */}
-            {torchSupported && (
+          {failed === null && (
+            <ControlsContainer>
+              {/* Torch control */}
+              {torchSupported && (
+                <IconButton
+                  onClick={toggleTorch}
+                  variant={torchEnabled ? "solid" : "outlined"}
+                  color={torchEnabled ? "warning" : "neutral"}
+                  size="md"
+                >
+                  {torchEnabled ? <BsLightbulbFill /> : <BsLightbulb />}
+                </IconButton>
+              )}
+
+              {/* Spacer when torch not available */}
+              {!torchSupported && <Box />}
+
+              {/* Capture button */}
               <IconButton
-                onClick={toggleTorch}
-                variant={torchEnabled ? "solid" : "outlined"}
-                color={torchEnabled ? "warning" : "neutral"}
-                size="md"
+                aria-label="Take photo"
+                onClick={capture}
+                size="lg"
+                variant="solid"
+                color="primary"
+                disabled={isCapturing || !isVideoLoaded}
+                sx={{
+                  transform: isCapturing ? "scale(0.95)" : "scale(1)",
+                  transition: "transform 0.1s ease",
+                }}
               >
-                {torchEnabled ? <BsLightbulbFill /> : <BsLightbulb />}
+                <BsCamera />
               </IconButton>
-            )}
 
-            {/* Spacer when torch not available */}
-            {!torchSupported && <Box />}
-
-            {/* Capture button */}
-            <IconButton
-              aria-label="Take photo"
-              onClick={capture}
-              size="lg"
-              variant="solid"
-              color="primary"
-              disabled={isCapturing}
-              sx={{
-                transform: isCapturing ? "scale(0.95)" : "scale(1)",
-                transition: "transform 0.1s ease",
-              }}
-            >
-              <BsCamera />
-            </IconButton>
-
-            {/* Empty spacer for balance */}
-            <Box sx={{ width: 40 }} />
-          </ControlsContainer>
+              {/* N04: the photo library, beside the shutter */}
+              {showLibrary ? (
+                <IconButton
+                  aria-label="Choose from library"
+                  onClick={openLibrary}
+                  size="md"
+                  variant="outlined"
+                  color="neutral"
+                >
+                  <BsImages />
+                </IconButton>
+              ) : (
+                <Box sx={{ width: 40 }} />
+              )}
+            </ControlsContainer>
+          )}
         </CameraContainer>
       </CardCover>
     </Card>

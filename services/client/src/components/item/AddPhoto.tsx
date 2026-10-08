@@ -74,7 +74,7 @@ export const AddPhotoModal = ({ open, onClose, onCapture }: AddPhotoProps) => {
         <DialogContent>
           <Stack spacing={2}>
             {blockers.length === 0 && (
-              <CameraCapture onCapture={onCameraCapture} />
+              <CameraCapture onCapture={onCameraCapture} showLibrary={false} />
             )}
             {busy && <LinearProgress />}
             <Button

@@ -66,6 +66,8 @@ interface UseBarcodeScannerReturn {
   isSupported: boolean;
   isStreaming: boolean;
   error: string | null;
+  /** The `getUserMedia` failure itself (its `name` says why) — N04. */
+  failure: unknown;
   startScanning: () => Promise<void>;
   stopScanning: () => void;
   toggleTorch: () => Promise<void>;
@@ -89,6 +91,7 @@ export const useBarcodeScanner = ({
   const [usingNativeAPI, setUsingNativeAPI] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
 
@@ -276,6 +279,7 @@ export const useBarcodeScanner = ({
 
     try {
       setError(null);
+      setFailure(null);
       isInitializedRef.current = true;
 
       const stream =
@@ -309,6 +313,7 @@ export const useBarcodeScanner = ({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start camera");
+      setFailure(err ?? new Error("Failed to start camera"));
       setIsStreaming(false);
       isInitializedRef.current = false; // Reset initialization state on error
     }
@@ -345,6 +350,7 @@ export const useBarcodeScanner = ({
     isSupported: isReady,
     isStreaming,
     error,
+    failure,
     startScanning,
     stopScanning,
     toggleTorch,
