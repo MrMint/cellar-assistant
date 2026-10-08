@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { ICON_STROKE, Search } from "@/components/app/icons";
 import { LoadingShell, ShellBlocks } from "@/components/app/LoadingShell";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,13 +20,18 @@ export function MapShell({
   status,
   className,
 }: {
-  /** A visible line over the canvas ("Getting your location..."). */
-  status?: ReactNode;
+  /**
+   * A visible line over the canvas ("Getting your location..."), which is
+   * also what the shell's status line announces — the wait it names, not
+   * "Loading the map…".
+   */
+  status?: string;
   className?: string;
 }) {
   return (
     <LoadingShell
       label="the map"
+      announce={status}
       data-slot="map-shell"
       className={cn(
         "relative flex h-full min-h-0 w-full flex-auto flex-col overflow-hidden bg-surface-1",
@@ -63,7 +67,10 @@ export function MapShell({
       </div>
       {status !== undefined && (
         <div className="flex flex-1 items-center justify-center">
-          <p className="type-callout rounded-md bg-surface-2 px-4 py-3 text-ink-1">
+          <p
+            aria-hidden
+            className="type-callout rounded-md bg-surface-2 px-4 py-3 text-ink-1"
+          >
             {status}
           </p>
         </div>

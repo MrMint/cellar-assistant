@@ -24,12 +24,20 @@ import { cn } from "@/lib/utils";
  */
 export function LoadingShell({
   label,
+  announce,
   className,
   children,
   ...props
 }: ComponentProps<"div"> & {
   /** What is loading, for the status line: "cellars", "the map". */
   label: string;
+  /**
+   * The status line's words when the wait is for something more specific
+   * than the route ("Getting your location..."), in place of "Loading
+   * <label>…". A shell that also shows it on screen hides that copy from
+   * assistive tech, so it is announced once.
+   */
+  announce?: string;
 }) {
   return (
     <div
@@ -39,7 +47,7 @@ export function LoadingShell({
       {...props}
     >
       <p role="status" className="sr-only">
-        Loading {label}…
+        {announce ?? `Loading ${label}…`}
       </p>
       {children}
     </div>

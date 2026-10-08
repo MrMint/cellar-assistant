@@ -96,6 +96,14 @@ describe("the route shells", () => {
     assert.doesNotMatch(out, /Loading map/);
     const waiting = html(<MapShell status="Getting your location..." />);
     assert.match(waiting, />Getting your location\.\.\.</);
+    // The location wait is what the status line says (it used to be the
+    // pill's own role="status"), and the pill is not read a second time.
+    assert.match(
+      waiting,
+      /<p role="status" class="sr-only">Getting your location\.\.\.<\/p>/,
+    );
+    assert.doesNotMatch(waiting, /Loading the map/);
+    assert.match(waiting, /<p aria-hidden="true"[^>]*>Getting your location/);
   });
 
   test("Me: the hub's fixed rows are real links; the header is a placeholder", () => {
