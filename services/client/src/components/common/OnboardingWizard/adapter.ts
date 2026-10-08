@@ -42,6 +42,7 @@ import {
   mergeExtractedDefaults,
   type SkippedProposal,
 } from "@/lib/items/extraction-merge";
+import { smartTitleCase } from "@/utilities/smart-title-case";
 import type { QuickAddItemDefaults } from "../QuickAddCard";
 import type { CatalogMatch } from "./catalog-match";
 
@@ -88,6 +89,8 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
  * is asked for — and usually answered even when told `YYYY-MM-DD` — fills
  * the field, and a full `2015-06-01` is read as `2015`. Anything else
  * ("June 2015", "NV") is still reported, not guessed at.
+ *
+ * An all-caps name or brand is smart-title-cased (N17).
  */
 export const formDefaultsFromOnboarding = (
   type: ApiItemType,
@@ -110,12 +113,15 @@ export const formDefaultsFromOnboarding = (
   });
   return {
     values: {
-      name: merged.values.name,
+      // N17: a label read comes back in capitals; the form is pre-filled with
+      // it smart-title-cased, so that is what the user confirms and what is
+      // stored. A name the user types is stored as typed.
+      name: smartTitleCase(merged.values.name),
       description: merged.values.description,
       country: merged.values.country,
       attributes: { ...merged.values.attributes },
     },
-    brandName: merged.values.brandName,
+    brandName: smartTitleCase(merged.values.brandName),
     skipped: merged.skipped,
   };
 };

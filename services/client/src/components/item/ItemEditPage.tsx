@@ -13,6 +13,7 @@ import {
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { formatItemType } from "@/utilities";
+import { displayItemName } from "@/utilities/smart-title-case";
 import { ItemForm } from "./ItemForm";
 
 /**
@@ -51,7 +52,9 @@ export async function ItemEditPage({
 
   return (
     <Stack spacing={2}>
-      <HeaderBar serverBreadcrumbs={{ cellarName, itemName: core.name }} />
+      <HeaderBar
+        serverBreadcrumbs={{ cellarName, itemName: displayItemName(core.name) }}
+      />
       {isCreator ? (
         <ItemForm
           id={core.id}

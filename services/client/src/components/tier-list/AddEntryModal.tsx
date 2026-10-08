@@ -24,15 +24,15 @@ import { useClient } from "urql";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { createLatestOnly } from "@/lib/latest-only";
+import { displayItemName } from "@/utilities/smart-title-case";
 import { isValidListType } from "./actions";
-import { entryTypeOf } from "./adapter";
+import { entryTypeOf, itemEntrySubtitle, placeEntrySubtitle } from "./adapter";
 import type { TierListEntityType } from "./constants";
 import {
   PICKER_PAGE_SIZE,
   TierListItemPickerQuery,
   TierListPlacePickerQuery,
 } from "./queries";
-import { formatCategoryName } from "./utils";
 
 export type AddEntryCandidate = {
   id: string;
@@ -131,15 +131,7 @@ export function AddEntryModal({
               id: edge.node.id,
               entityType: "place" as const,
               name: place.displayName ?? place.name,
-              subtitle: [
-                place.primaryCategory
-                  ? formatCategoryName(place.primaryCategory)
-                  : null,
-                place.locality,
-                place.countryCode,
-              ]
-                .filter((part) => part !== null && part !== "")
-                .join(" · "),
+              subtitle: placeEntrySubtitle(place),
             };
           }),
         );
@@ -174,8 +166,8 @@ export function AddEntryModal({
         result.data.edges.map((edge) => ({
           id: edge.node.id,
           entityType,
-          name: edge.node.name,
-          subtitle: edge.node.item?.country ?? "",
+          name: displayItemName(edge.node.name),
+          subtitle: itemEntrySubtitle(edge.node.item),
         })),
       );
     },

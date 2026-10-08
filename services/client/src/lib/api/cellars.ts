@@ -307,6 +307,33 @@ export const EmptyCellarItemMutation = graphql(
   [CellarItemRowFragment, ActorErrorFieldsFragment],
 );
 
+/**
+ * A partial patch of one bottle. The client's one use is Undo after
+ * finishing (N13a): `emptyAt: null` puts the bottle back in the cellar.
+ */
+export const UpdateCellarItemMutation = graphql(
+  `
+  mutation UpdateCellarItem(
+    $cellarId: ID!
+    $cellarItemId: ID!
+    $input: UpdateCellarItemInput!
+  ) {
+    updateCellarItem(
+      cellarId: $cellarId
+      cellarItemId: $cellarItemId
+      input: $input
+    ) {
+      __typename
+      ... on CellarItem {
+        ...CellarItemRow
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [CellarItemRowFragment, ActorErrorFieldsFragment],
+);
+
 export const SetCellarItemPercentageMutation = graphql(
   `
   mutation SetCellarItemPercentage(

@@ -186,3 +186,14 @@ export const formatTeaForm = (type: string | null | undefined) =>
 
 export const formatTeaCaffeineLevel = (type: string | null | undefined) =>
   isNil(type) ? undefined : formatEnum(type);
+
+/**
+ * A Google place type (`fast_food_restaurant`, `wine_bar`) → `Fast Food
+ * Restaurant`. Was `tier-list/utils.ts`' `formatCategoryName`; the tier-list
+ * board, its insights and the Add entry picker now share this one (N17).
+ */
+export const formatPlaceCategory = (category: string | null | undefined) => {
+  if (isNil(category)) return undefined;
+  const label = formatEnum(category.trim().replace(/\s+/g, "_"));
+  return label === "" ? undefined : label;
+};

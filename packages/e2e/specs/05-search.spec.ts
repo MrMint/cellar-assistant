@@ -162,7 +162,7 @@ test("the collection line counts only cellars you own or co-own (G36)", async ({
     const line =
       total === 0
         ? "Your collection awaits. Start by adding your first item."
-        : `${total} ${total === 1 ? "item" : "items"} across ${cellars}`;
+        : `${total} ${total === 1 ? "bottle" : "bottles"} across ${cellars}`;
     await expect(primary.getByText(line, { exact: true })).toBeVisible();
   } finally {
     await deleteCellars("primary", [mine]);

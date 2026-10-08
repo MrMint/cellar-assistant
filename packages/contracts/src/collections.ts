@@ -142,10 +142,14 @@ export const viewerCollectionActorId = (viewerId: string): string => viewerId;
  * one; dropping cellars a user can see today would read as a bug.
  */
 export type CellarsCollectionActorInterface = {
-  /** **ids** — `cellars.id`, newest first. Hydrated through `CellarActor.get`. */
+  /**
+   * **ids** — `cellars.id`: the viewer's own (created or co-owned) first, then
+   * everyone else's, each by most recent activity (decision D13). Hydrated
+   * through `CellarActor.get`.
+   */
   list(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
   /**
-   * The `/search` landing line ("N items across M cellars"), UI parity G36.
+   * The `/search` landing line ("N bottles across M cellars"), UI parity G36.
    *
    * **Not** `list`'s set. `list` is every cellar the viewer may *see*, which
    * includes strangers' PUBLIC cellars and friends' FRIENDS ones; summing it
@@ -173,9 +177,9 @@ export type CollectionStatsDto = {
   /** Cellars the viewer created or co-owns. */
   readonly cellarCount: number;
   /**
-   * Distinct catalog items with at least one bottle in those cellars, per
-   * type — the old `<type>s_aggregate(where: {cellar_items: {cellar: …}})`,
-   * which counted items whatever their bottles' state, emptied ones included.
+   * Bottles still in those cellars (`empty_at is null`), per type — decision
+   * D13: the same count every cellar card shows. Two bottles of one wine are
+   * 2; a finished bottle is 0.
    */
   readonly itemCounts: ItemTypeCountsDto;
 };

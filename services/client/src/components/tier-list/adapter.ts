@@ -10,6 +10,16 @@
 
 import type { ActorErrorReason } from "@/lib/api/errors";
 import { formatVintage } from "@/utilities";
+import {
+  formatBeerStyle,
+  formatCountry,
+  formatPlaceCategory,
+  formatSakeCategory,
+  formatSpiritType,
+  formatTeaCategory,
+  formatWineVariety,
+} from "@/utilities/formatters";
+import { displayItemName } from "@/utilities/smart-title-case";
 import { BANDS, type TierListEntityType } from "./constants";
 import type { InsightsStatus } from "./insights/insights-view";
 import type {
@@ -19,7 +29,6 @@ import type {
   TierListInsightsItem,
   TierListItemDisplay,
 } from "./types";
-import { formatCategoryName } from "./utils";
 
 /** The unmasked `TierListItem` fragment, as the page reads it. */
 export type TierListItemNode = {
@@ -84,6 +93,69 @@ const joinParts = (parts: ReadonlyArray<string | number | null | undefined>) =>
     )
     .join(" · ");
 
+/** The place fields a board row or a picker row describes a place with. */
+export type EntryPlaceFields = {
+  primaryCategory: string | null;
+  locality: string | null;
+  countryCode: string | null;
+};
+
+/** The item fields a board row or a picker row describes an item with. */
+export type EntryItemFields = Pick<
+  NonNullable<TierListItemNode["item"]>,
+  | "type"
+  | "country"
+  | "wineVariety"
+  | "wineVintage"
+  | "beerStyle"
+  | "spiritKind"
+  | "sakeCategory"
+  | "sakeRegion"
+  | "teaCategory"
+  | "teaRegion"
+>;
+
+/** `Wine Bar · Austin · US`. */
+export function placeEntrySubtitle(place: EntryPlaceFields): string {
+  return joinParts([
+    formatPlaceCategory(place.primaryCategory),
+    place.locality,
+    place.countryCode,
+  ]);
+}
+
+/**
+ * The per-type line under an item's name, the old board's fields — formatted
+ * through `utilities/formatters.ts` (N17), so `PINOT_NOIR` reads `Pinot Noir`
+ * and `UNITED_STATES` reads `United States`, as on the item page. The board
+ * and the Add entry picker both call this, so they cannot disagree.
+ */
+export function itemEntrySubtitle(item: EntryItemFields): string {
+  switch (item.type) {
+    case "WINE":
+      return joinParts([
+        formatWineVariety(item.wineVariety),
+        item.wineVintage ? formatVintage(item.wineVintage) : null,
+        formatCountry(item.country),
+      ]);
+    case "BEER":
+      return formatBeerStyle(item.beerStyle) ?? "";
+    case "SPIRIT":
+      return formatSpiritType(item.spiritKind) ?? "";
+    case "COFFEE":
+      return formatCountry(item.country) ?? "";
+    case "SAKE":
+      return joinParts([
+        formatSakeCategory(item.sakeCategory),
+        item.sakeRegion,
+      ]);
+    case "TEA":
+      return joinParts([formatTeaCategory(item.teaCategory), item.teaRegion]);
+    default:
+      return "";
+  }
+}
+
 /** `/wines/<id>`, `/places/<id>`, … — the old `getItemHref`. */
 export function entryHref(node: TierListItemNode): string {
   if (node.place !== null) return `/places/${node.place.id}`;
@@ -109,41 +181,14 @@ export function itemDisplayFromNode(
   const { place, item } = node;
   if (place !== null) {
     name = place.displayName ?? place.name;
-    subtitle = joinParts([
-      place.primaryCategory ? formatCategoryName(place.primaryCategory) : null,
-      place.locality,
-      place.countryCode,
-    ]);
+    subtitle = placeEntrySubtitle(place);
     reviewScore = place.myInteraction?.rating ?? null;
     publicRating = place.enrichment?.googleRating ?? null;
     publicRatingCount = place.enrichment?.googleUserRatingsTotal ?? null;
   } else if (item !== null) {
-    name = item.name;
+    name = displayItemName(item.name);
     reviewScore = item.myReview?.score ?? null;
-    switch (item.type) {
-      case "WINE":
-        subtitle = joinParts([
-          item.wineVariety,
-          item.wineVintage ? formatVintage(item.wineVintage) : null,
-          item.country,
-        ]);
-        break;
-      case "BEER":
-        subtitle = item.beerStyle ?? "";
-        break;
-      case "SPIRIT":
-        subtitle = item.spiritKind ?? "";
-        break;
-      case "COFFEE":
-        subtitle = item.country ?? "";
-        break;
-      case "SAKE":
-        subtitle = joinParts([item.sakeCategory, item.sakeRegion]);
-        break;
-      case "TEA":
-        subtitle = joinParts([item.teaCategory, item.teaRegion]);
-        break;
-    }
+    subtitle = itemEntrySubtitle(item);
   }
 
   return {
@@ -183,7 +228,7 @@ export function insightsItemsFromNodes(
       : {
           id: node.id,
           band: node.band,
-          name: node.item?.name ?? "Unknown",
+          name: displayItemName(node.item?.name) ?? "Unknown",
           countryCode: null,
           region: null,
           primaryCategory: null,

@@ -11,6 +11,8 @@ import {
   entryTypeOf,
   insightsItemsFromNodes,
   itemDisplayFromNode,
+  itemEntrySubtitle,
+  placeEntrySubtitle,
   reorderCallFor,
   type TierListItemNode,
   tierListDataFrom,
@@ -94,8 +96,8 @@ describe("itemDisplayFromNode (the old page's per-row resolution)", () => {
     const row = itemDisplayFromNode(
       itemNode({
         name: "Chateau X",
-        country: "France",
-        wineVariety: "Merlot",
+        country: "FRANCE",
+        wineVariety: "MERLOT",
         wineVintage: "2015-01-01",
         myReview: { score: 4.5 },
       }),
@@ -110,15 +112,52 @@ describe("itemDisplayFromNode (the old page's per-row resolution)", () => {
   test("each item type's old subtitle field", () => {
     const sub = (item: Partial<NonNullable<TierListItemNode["item"]>>) =>
       itemDisplayFromNode(itemNode(item)).subtitle;
-    assert.equal(sub({ type: "BEER", beerStyle: "IPA" }), "IPA");
-    assert.equal(sub({ type: "SPIRIT", spiritKind: "Bourbon" }), "Bourbon");
-    assert.equal(sub({ type: "COFFEE", country: "Ethiopia" }), "Ethiopia");
     assert.equal(
-      sub({ type: "SAKE", sakeCategory: "Junmai", sakeRegion: "Niigata" }),
-      "Junmai · Niigata",
+      sub({ type: "BEER", beerStyle: "WOOD_AGED_BEER" }),
+      "Wood-Aged Beer",
     );
-    assert.equal(sub({ type: "TEA", teaCategory: "Oolong" }), "Oolong");
+    assert.equal(
+      sub({ type: "SPIRIT", spiritKind: "BRANDY_COGNAC" }),
+      "Brandy & Cognac",
+    );
+    assert.equal(sub({ type: "COFFEE", country: "ETHIOPIA" }), "Ethiopia");
+    assert.equal(
+      sub({
+        type: "SAKE",
+        sakeCategory: "junmai_ginjo",
+        sakeRegion: "Niigata",
+      }),
+      "Junmai Ginjo · Niigata",
+    );
+    assert.equal(sub({ type: "TEA", teaCategory: "pu_erh" }), "Pu-erh");
     assert.equal(sub({ type: "BEER" }), "");
+  });
+
+  test("enum values go through utilities/formatters.ts, as on the item page (N17)", () => {
+    assert.equal(
+      itemEntrySubtitle({
+        type: "WINE",
+        country: "UNITED_STATES",
+        wineVariety: "PINOT_GRIGIO_PINOT_GRIS",
+        wineVintage: "2019-01-01",
+      }),
+      "Pinot Grigio · 2019 · United States",
+    );
+    assert.equal(
+      placeEntrySubtitle({
+        primaryCategory: "fast_food_restaurant",
+        locality: null,
+        countryCode: "US",
+      }),
+      "Fast Food Restaurant · US",
+    );
+  });
+
+  test("an all-caps item name is shown smart-title-cased (N17)", () => {
+    assert.equal(
+      itemDisplayFromNode(itemNode({ name: "CASTELLO DI MONTEROSSO" })).name,
+      "Castello di Monterosso",
+    );
   });
 
   test("sake and tea link to their own routes", () => {

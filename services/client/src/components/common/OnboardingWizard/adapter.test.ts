@@ -94,6 +94,16 @@ describe("formDefaultsFromOnboarding", () => {
     assert.equal(skipped[0]?.path, "attributes.caffeineLevel");
   });
 
+  test("an all-caps label read is pre-filled smart-title-cased (N17)", () => {
+    const { values, brandName } = formDefaultsFromOnboarding("WINE", {
+      name: "CASTELLO DI MONTEROSSO",
+      brandName: "CASTELLO DI MONTEROSSO",
+      wine: { vintage: "2019-01-01" },
+    });
+    assert.equal(values.name, "Castello di Monterosso");
+    assert.equal(brandName, "Castello di Monterosso");
+  });
+
   test("anything that is not an object reads as nothing", () => {
     assert.deepEqual(
       formDefaultsFromOnboarding("BEER", "nonsense"),

@@ -12,7 +12,7 @@ import {
   Typography,
 } from "@mui/joy";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { MdDelete, MdWarning } from "react-icons/md";
 import { useMutation } from "urql";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -23,6 +23,9 @@ import { RemoveItemFromCellarMutation } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 import { formatItemType } from "@/utilities";
 import { EditItemButton } from "./EditItemButton";
+import { FinishBottleDialogs } from "./FinishBottleDialogs";
+import { deleteBottleWarning } from "./finish-bottle";
+import { useFinishBottle } from "./useFinishBottle";
 
 type CellarItemHeaderProps = {
   /** The bottle (`cellar_items.id`). */
@@ -36,6 +39,14 @@ type CellarItemHeaderProps = {
   isOwner: boolean;
   /** The edit page, for the item's creator; `null` keeps the old disabled button. */
   editHref: string | null;
+  /** Every check-in on this bottle — the ones a delete takes with it. */
+  checkInCount: number;
+  /** The bottle's state, for "Mark finished instead" and its Undo (N13a). */
+  bottle: {
+    openAt: string | null;
+    emptyAt: string | null;
+    percentageRemaining: number;
+  };
 };
 
 /**
@@ -47,6 +58,10 @@ type CellarItemHeaderProps = {
  * rather than leaving the spinner to stop silently. "Edit item" works now
  * (see `EditItemButton`). "Add to Tier List" is the tier-lists wave's
  * restored button, keyed on the catalog item.
+ *
+ * N13a: the dialog says how many check-ins the delete takes with it and, for
+ * a bottle still in the cellar, offers "Mark finished instead" — which keeps
+ * them and comes with the same Undo as finishing from the slider.
  */
 export const CellarItemHeader = ({
   itemType,
@@ -57,6 +72,8 @@ export const CellarItemHeader = ({
   cellarName,
   isOwner,
   editHref,
+  checkInCount,
+  bottle,
 }: CellarItemHeaderProps) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -64,8 +81,31 @@ export const CellarItemHeader = ({
   const [hasDeleted, setHasDeleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, removeItem] = useMutation(RemoveItemFromCellarMutation);
+  const finish = useFinishBottle({ cellarId, cellarItemId: itemId });
+  const isFinishing = finish.state.phase === "finishing";
 
-  const isDisabled = isPending || hasDeleted;
+  const isDisabled = isPending || hasDeleted || isFinishing;
+  const warning = deleteBottleWarning({
+    itemName,
+    checkInCount,
+    isFinished: bottle.emptyAt !== null,
+  });
+
+  const handleFinishInstead = () => {
+    setError(null);
+    finish.finishNow({
+      percentageRemaining: bottle.percentageRemaining,
+      openAt: bottle.openAt,
+    });
+  };
+
+  // The dialog closes once the bottle is finished; a refusal stays in it.
+  const finishPhase = finish.state.phase;
+  const finishError = finish.state.phase === "idle" ? finish.state.error : null;
+  const shownError = error ?? finishError;
+  useEffect(() => {
+    if (finishPhase === "finished") setOpen(false);
+  }, [finishPhase]);
 
   const handleDeleteClick = () => {
     startTransition(async () => {
@@ -119,14 +159,20 @@ export const CellarItemHeader = ({
           </DialogTitle>
           <Divider />
           <DialogContent>
-            Are you sure you want to delete {itemName} from your cellar?
-            {error !== null && (
+            {warning.body}
+            {shownError !== null && (
               <Typography level="body-sm" color="danger">
-                {error}
+                {shownError}
               </Typography>
             )}
           </DialogContent>
-          <DialogActions>
+          {/* Three buttons do not fit side by side at 390px: stack them. */}
+          <DialogActions
+            sx={{
+              flexDirection: { xs: "column", sm: "row-reverse" },
+              alignItems: { xs: "stretch", sm: "center" },
+            }}
+          >
             <Button
               variant="solid"
               color="danger"
@@ -136,6 +182,17 @@ export const CellarItemHeader = ({
             >
               Delete {formatItemType(itemType)}
             </Button>
+            {warning.suggestFinish && (
+              <Button
+                variant="outlined"
+                color="neutral"
+                disabled={isDisabled}
+                loading={isFinishing}
+                onClick={handleFinishInstead}
+              >
+                Mark finished instead
+              </Button>
+            )}
             <Button
               variant="plain"
               color="neutral"
@@ -147,6 +204,7 @@ export const CellarItemHeader = ({
           </DialogActions>
         </ModalDialog>
       </Modal>
+      <FinishBottleDialogs finish={finish} itemName={itemName} />
     </>
   );
 };

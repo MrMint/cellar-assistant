@@ -170,6 +170,86 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
     });
   });
 
+  /**
+   * Decision D13: yours first, then everyone else's, each by most recent
+   * activity — not by creation. Timestamps are written explicitly, because
+   * every row in one test transaction would otherwise share one `now()`.
+   */
+  it("orders your cellars first, each group by most recent activity (D13)", async () => {
+    await withTestDb(async (db) => {
+      const me = await seedUser(db);
+      const stranger = await seedUser(db);
+      const at = (day: number) =>
+        `2026-01-${String(day).padStart(2, "0")}T12:00:00Z`;
+      const created = async (
+        by: string,
+        privacy: PermissionType,
+        day: number,
+      ): Promise<string> => {
+        const id = await seedCellar(db, by, privacy);
+        await db.execute(sql`
+          update public.cellars set created_at = ${at(day)}::timestamptz
+          where id = ${id}::uuid
+        `);
+        return id;
+      };
+      const { rows: wineRows } = await db.execute<{ id: string }>(sql`
+        insert into public.item_onboardings (user_id, item_type)
+        values (${me}::uuid, 'WINE') returning id
+      `);
+      await db.execute(
+        sql`insert into public.wine_style (value) values ('RED') on conflict do nothing`,
+      );
+      const { rows: wines } = await db.execute<{ id: string }>(sql`
+        insert into public.wines (name, created_by_id, vintage, style, item_onboarding_id)
+        values ('w', ${me}::uuid, '2020-01-01', 'RED', ${wineRows[0]?.id}::uuid)
+        returning id
+      `);
+      const wine = wines[0]?.id ?? "";
+
+      // Created newest-first: c (day 5), b (day 3), a (day 1).
+      const a = await created(me, "PRIVATE", 1);
+      const b = await created(me, "PRIVATE", 3);
+      const c = await created(me, "PRIVATE", 5);
+      // A stranger's PUBLIC cellar with the newest activity of all.
+      const theirs = await created(stranger, "PUBLIC", 9);
+
+      // `a` got a bottle on day 7 — the newest activity of mine. The
+      // `updated_at` trigger is BEFORE UPDATE, so values given on insert stick.
+      const bottleOn = async (cellarId: string, day: number) => {
+        const { rows } = await db.execute<{ id: string }>(sql`
+          insert into public.cellar_items (cellar_id, created_by, wine_id, created_at, updated_at)
+          values (${cellarId}::uuid, ${me}::uuid, ${wine}::uuid,
+                  ${at(day)}::timestamptz, ${at(day)}::timestamptz)
+          returning id
+        `);
+        return rows[0]?.id ?? "";
+      };
+      await bottleOn(a, 7);
+      // `b`'s bottle is old (day 2), but it had a check-in on day 6.
+      const bBottle = await bottleOn(b, 2);
+      await db.execute(sql`
+        insert into public.check_ins (user_id, cellar_item_id, created_at)
+        values (${me}::uuid, ${bBottle}::uuid, ${at(6)}::timestamptz)
+      `);
+
+      // a (7) > b (6) > c (5, created), then the stranger's despite day 9.
+      expect(await listIds(db, me)).toEqual([a, b, c, theirs]);
+
+      // The keyset cursor walks the same order a page at a time.
+      const actor = await activate(createActor(CellarsCollectionActor, me, db));
+      const ctx = userCtx(me);
+      const walked: string[] = [];
+      let after: string | undefined;
+      for (let turn = 0; turn < 4; turn += 1) {
+        const page = await actor.list(ctx, pageArgs({ first: 1, after }));
+        walked.push(...page.entries.map((entry) => entry.node));
+        after = page.entries.at(-1)?.cursor;
+      }
+      expect(walked).toEqual([a, b, c, theirs]);
+    });
+  });
+
   it("authorizes on every turn of a warm activation (§1.5, C1)", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
@@ -269,7 +349,7 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
         userCtx(viewerId),
       );
 
-    it("counts own and co-owned cellars, and distinct items in them, only", async () => {
+    it("counts own and co-owned cellars, and the bottles still in them, only (D13)", async () => {
       await withTestDb(async (db) => {
         const me = await seedUser(db);
         const friend = await seedUser(db);
@@ -288,11 +368,11 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
         const wineA = await seedWine(db, me);
         const wineB = await seedWine(db, me);
         const beer = await seedBeer(db, me);
-        // wineA twice in one cellar and once in another: one item.
+        // wineA twice in one cellar and once in another: three bottles.
         await bottle(db, mine, me, "wine_id", wineA);
         await bottle(db, mine, me, "wine_id", wineA);
         await bottle(db, coOwned, friend, "wine_id", wineA);
-        // An emptied bottle still counts its item, as the old query did.
+        // A finished bottle is no longer in the cellar: it counts nothing.
         await bottle(db, coOwned, friend, "wine_id", wineB, true);
         await bottle(db, mine, me, "beer_id", beer);
         // Visible to me, but not mine: must not count.
@@ -312,8 +392,8 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
         expect(await statsOf(db, me)).toEqual({
           cellarCount: 2,
           itemCounts: {
-            total: 3,
-            byType: { WINE: 2, BEER: 1, SPIRIT: 0, COFFEE: 0, SAKE: 0, TEA: 0 },
+            total: 4,
+            byType: { WINE: 3, BEER: 1, SPIRIT: 0, COFFEE: 0, SAKE: 0, TEA: 0 },
           },
         });
 

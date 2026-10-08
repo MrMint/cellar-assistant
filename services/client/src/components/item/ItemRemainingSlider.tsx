@@ -6,13 +6,14 @@ import { useEffect, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import {
-  EmptyCellarItemMutation,
   OpenCellarItemMutation,
   SetCellarItemPercentageMutation,
 } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 import { formatDistance } from "@/lib/items/distance";
 import { useInterval } from "@/utilities/hooks";
+import { FinishBottleDialogs } from "./FinishBottleDialogs";
+import { useFinishBottle } from "./useFinishBottle";
 
 export type ItemRemainingSliderProps = {
   isCellarOwner: boolean;
@@ -23,6 +24,8 @@ export type ItemRemainingSliderProps = {
   opened?: string | null;
   emptied?: string | null;
   percentageRemaining: number;
+  /** For the "Finished it?" question. */
+  itemName?: string;
 };
 
 /**
@@ -31,8 +34,9 @@ export type ItemRemainingSliderProps = {
  * - `openCellarItemAction` → `openCellarItem`;
  *   `updateCellarItemPercentageAction` → `setCellarItemPercentage`, still
  *   debounced 400 ms (a local hook instead of `@uidotdev/usehooks`). The old
- *   action stamped `empty_at` when the slider reached 0; that is
- *   `emptyCellarItem` now, which also sets the percentage to 0.
+ *   action stamped `empty_at` the moment the slider reached 0. Now 0% asks
+ *   "Finished it?" first and offers Undo after (N13a, `useFinishBottle`):
+ *   "Not yet" puts the slider back on the last saved level.
  * - "Opened … ago" no longer seeds `now` with `new Date()` during render (the
  *   hydration rule): `now` is set in an effect, so the server and the first
  *   client render both show no distance, and the 10 s tick takes over.
@@ -46,6 +50,7 @@ export const ItemRemainingSlider = ({
   opened,
   emptied,
   isCellarOwner,
+  itemName,
 }: ItemRemainingSliderProps) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -53,8 +58,9 @@ export const ItemRemainingSlider = ({
   const [now, setNow] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, openItem] = useMutation(OpenCellarItemMutation);
-  const [, emptyItem] = useMutation(EmptyCellarItemMutation);
   const [, setPercentage] = useMutation(SetCellarItemPercentageMutation);
+  const finish = useFinishBottle({ cellarId, cellarItemId: itemId });
+  const finishPhase = finish.state.phase;
 
   useEffect(() => {
     setNow(Date.now());
@@ -63,25 +69,28 @@ export const ItemRemainingSlider = ({
     setNow(Date.now());
   }, 10000);
 
+  // Back to the saved level whenever the server's changes, and whenever a
+  // finish ends without one ("Not yet", a refused write, Undo).
   useEffect(() => {
-    setPercent(percentageRemaining);
-  }, [percentageRemaining]);
+    if (finishPhase === "idle") setPercent(percentageRemaining);
+  }, [percentageRemaining, finishPhase]);
 
   const save = useDebouncedCallback((value: number) => {
+    // 0% is a question, not a write — even for a bottle already saved at 0.
+    if (value === 0) {
+      finish.request({ percentageRemaining, openAt: opened ?? null });
+      return;
+    }
     if (value === percentageRemaining) return;
     startTransition(async () => {
       setError(null);
-      const response =
-        value === 0
-          ? (await emptyItem({ cellarId, cellarItemId: itemId })).data
-              ?.emptyCellarItem
-          : (
-              await setPercentage({
-                cellarId,
-                cellarItemId: itemId,
-                percentageRemaining: value,
-              })
-            ).data?.setCellarItemPercentage;
+      const response = (
+        await setPercentage({
+          cellarId,
+          cellarItemId: itemId,
+          percentageRemaining: value,
+        })
+      ).data?.setCellarItemPercentage;
       const result = unwrapResult(response, "CellarItem");
       if (!result.ok) {
         setError(result.error.message);
@@ -109,6 +118,8 @@ export const ItemRemainingSlider = ({
 
   const isOpened = opened !== null && opened !== undefined;
   const isEmptied = emptied !== null && emptied !== undefined;
+  const finishError = finish.state.phase === "idle" ? finish.state.error : null;
+  const shownError = error ?? finishError;
 
   return (
     <Card>
@@ -147,11 +158,12 @@ export const ItemRemainingSlider = ({
           Empty {now === null ? "" : formatDistance(emptied, now)} ago
         </Typography>
       )}
-      {error !== null && (
+      {shownError !== null && (
         <Typography level="body-sm" color="danger">
-          {error}
+          {shownError}
         </Typography>
       )}
+      <FinishBottleDialogs finish={finish} itemName={itemName} />
     </Card>
   );
 };

@@ -62,13 +62,19 @@ export function Cellars({
     initialArgs: null,
   });
 
-  const cellarItems = useMemo(
-    () =>
-      list.rows.map((edge) => ({
-        data: cellarCardFromFragment(edge.node),
-      })),
-    [list.rows],
-  );
+  // `myCellars` is ordered by activity (decision D13), which moves: a cellar
+  // whose newest bottle was removed between two page reads can sort below
+  // the cursor and come back on the next page. Keep the first sighting so the
+  // grid never holds one id twice.
+  const cellarItems = useMemo(() => {
+    const seen = new Set<string>();
+    return list.rows.flatMap((edge) => {
+      const data = cellarCardFromFragment(edge.node);
+      if (seen.has(data.id)) return [];
+      seen.add(data.id);
+      return [{ data }];
+    });
+  }, [list.rows]);
 
   return (
     <Box>
