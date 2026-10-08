@@ -20,7 +20,10 @@ import {
 } from "react-icons/bs";
 import Webcam from "react-webcam";
 import { useCameraStatus } from "@/hooks/useCameraStatus";
-import { CAMERA_CAPTURE_CONSTRAINTS } from "@/lib/camera/camera-status";
+import {
+  CAMERA_CAPTURE_CONSTRAINTS,
+  cameraKeepsListening,
+} from "@/lib/camera/camera-status";
 import { libraryImageToDataUrl } from "@/lib/camera/library-image";
 
 // N04: every constraint is `ideal` (`CAMERA_CAPTURE_CONSTRAINTS`). The old
@@ -322,7 +325,9 @@ export const CameraCapture = ({
       )}
       <CardCover>
         <CameraContainer>
-          {failed === null && (
+          {/* A timed-out camera stays mounted under its message, so a late
+              "Allow" still lands (`cameraKeepsListening`). */}
+          {cameraKeepsListening(camera.status) && (
             <Webcam
               key={camera.attempt}
               ref={webcamRef}

@@ -159,3 +159,14 @@ export const cameraStatusReducer = (
 };
 
 export const initialCameraStatus: CameraStatus = { kind: "starting" };
+
+/**
+ * Whether the camera element stays mounted — i.e. its `getUserMedia` request
+ * stays open. A **timed-out** camera keeps listening underneath its message:
+ * the usual cause is a permission prompt the person has not answered yet (iOS
+ * standalone, or just someone reading it), and unmounting would throw away the
+ * stream their "Allow" delivers — `react-webcam` stops a stream that resolves
+ * after unmount. A refusal (`error`) is final until "Try again" remounts it.
+ */
+export const cameraKeepsListening = (status: CameraStatus): boolean =>
+  status.kind !== "failed" || status.reason === "timeout";

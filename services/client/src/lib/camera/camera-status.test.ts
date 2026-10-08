@@ -4,6 +4,7 @@ import {
   BARCODE_SCAN_CONSTRAINTS,
   CAMERA_CAPTURE_CONSTRAINTS,
   type CameraStatus,
+  cameraKeepsListening,
   cameraStatusReducer,
   describeCameraError,
   hardConstraintPaths,
@@ -66,6 +67,26 @@ describe("cameraStatusReducer", () => {
     assert.deepEqual(cameraStatusReducer(timedOut, { type: "stream" }), {
       kind: "ready",
     });
+  });
+
+  test("a timed-out camera keeps its request open; a refused one does not", () => {
+    // The UI half of "a late stream still wins": unmounting the camera on the
+    // timeout would discard the stream a slow "Allow" delivers.
+    const timedOut = cameraStatusReducer(initialCameraStatus, {
+      type: "timeout",
+    });
+    assert.equal(cameraKeepsListening(timedOut), true);
+    assert.equal(cameraKeepsListening(initialCameraStatus), true);
+    assert.equal(cameraKeepsListening({ kind: "ready" }), true);
+    assert.equal(
+      cameraKeepsListening(
+        cameraStatusReducer(initialCameraStatus, {
+          type: "error",
+          error: new DOMException("denied", "NotAllowedError"),
+        }),
+      ),
+      false,
+    );
   });
 
   test("retry starts again", () => {
