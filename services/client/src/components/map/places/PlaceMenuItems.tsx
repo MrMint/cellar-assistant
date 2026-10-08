@@ -234,15 +234,14 @@ export function PlaceMenuItems({
       </div>
 
       {/* Item details sheet (a dialog from md up). `z-[1200]`: on /map this
-          list sits in the Joy-era PlaceDetailsDrawer (z-index 950 desktop,
-          1100 phone), which would otherwise cover the sheet; drop it when
-          that drawer is converted. The md: cap scrolls a long analysis
-          inside the dialog, as Joy's ModalDialog did. */}
+          list sits in PlaceDetailsDrawer (z-[950] desktop, z-[1100] phone),
+          which would otherwise cover the z-50 sheet. ResponsiveDialog caps
+          and scrolls the dialog itself. */}
       <ResponsiveDialog
         open={detailsOpen && !!selectedItem}
         onOpenChange={setDetailsOpen}
         title={selectedItem?.menu_item_name ?? ""}
-        className="z-[1200] md:max-h-[85dvh] md:max-w-[600px] md:overflow-y-auto"
+        className="z-[1200] md:max-w-[600px]"
       >
         {selectedItem && (
           <div className="flex flex-col gap-6">

@@ -85,7 +85,9 @@ export function ResponsiveDialog({
           if (!dismissible) e.preventDefault();
         }}
         className={cn(
-          "surface-glass gap-4 rounded-lg border-none p-6 text-foreground",
+          // Capped and scrolling, as Joy's ModalDialog was: ui/dialog has no
+          // height limit, so a long body ran off the viewport from md up.
+          "surface-glass max-h-[85dvh] gap-4 overflow-y-auto rounded-lg border-none p-6 text-foreground",
           className,
         )}
       >
