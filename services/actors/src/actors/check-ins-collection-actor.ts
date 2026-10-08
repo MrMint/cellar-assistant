@@ -68,7 +68,10 @@ import {
   checkInColumns,
   toItemCheckInDto,
 } from "../lib/check-in-rows.ts";
-import { canSeeCheckInSql } from "../lib/check-in-visibility.ts";
+import {
+  canSeeCheckInDetailsSql,
+  canSeeCheckInSql,
+} from "../lib/check-in-visibility.ts";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import {
@@ -163,8 +166,12 @@ export class CheckInsCollectionActor
     limit: number,
   ): Promise<readonly CheckInRow[]> {
     const { from, where } = await this.#scope(ctx, item, which);
+    const details = canSeeCheckInDetailsSql(
+      await visibilityScope(this.db, ctx),
+      "ci",
+    );
     const { rows } = await this.db.execute<CheckInRow>(sql`
-      select ${checkInColumns("ci")},
+      select ${checkInColumns("ci", details)},
              (ci.created_at)::text as sort_key
       from ${from}
       where ${where}

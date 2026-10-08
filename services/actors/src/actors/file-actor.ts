@@ -163,7 +163,7 @@ import { isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
 import { detectImageMime, type ImageMime } from "../lib/ai/image-mime.ts";
-import { canSeeCheckInSql } from "../lib/check-in-visibility.ts";
+import { canSeeCheckInDetailsSql } from "../lib/check-in-visibility.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import {
@@ -730,10 +730,12 @@ export class FileActor
    * and their owner is the uploader, so the first branch already covers them.
    *
    * **A drink log's photo (X02)** is the one viewer-dependent referent: it is
-   * readable by whoever may see the log it is attached to — `canSeeCheckIn`,
-   * as SQL (`../lib/check-in-visibility.ts`): the drinker, a companion, a
-   * friend of the drinker, or anyone who can see the bottle's cellar. A file
-   * attached to no log they may see stays as private as before.
+   * readable by whoever may see what the drinker said in the log it is
+   * attached to — `canSeeCheckInDetails`, as SQL
+   * (`../lib/check-in-visibility.ts`): the drinker, a companion, or a friend
+   * of the drinker. Seeing the bottle's cellar is not enough: a cellar viewer
+   * sees that a bottle was drunk, not the photo. A file attached to no log
+   * they may see that of stays as private as before.
    */
   protected override async canSee(
     ctx: Ctx,
@@ -750,7 +752,7 @@ export class FileActor
     const { rows } = await this.db.execute<{ id: string }>(sql`
       select ci.id from public.check_ins ci
       where ci.photo_file_id = ${this.key}::uuid
-        and ${canSeeCheckInSql(scope, "ci")}
+        and ${canSeeCheckInDetailsSql(scope, "ci")}
       limit 1
     `);
     return rows.length > 0;

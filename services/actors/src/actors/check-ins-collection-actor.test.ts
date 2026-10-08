@@ -17,6 +17,7 @@ import {
   pageArgs,
   userCtx,
 } from "@cellar-assistant/contracts";
+import { sql } from "@cellar-assistant/db/orm";
 import { canSeeCheckIn } from "@cellar-assistant/policy";
 import { afterAll, describe, expect, it } from "vitest";
 import {
@@ -258,6 +259,70 @@ describe.skipIf(skip)("CheckInsCollectionActor", () => {
       };
       expect(await fromCellarFor(drinker)).toBe(true);
       expect(await fromCellarFor(friend)).toBe(false);
+    });
+  });
+
+  it("X02: a PUBLIC cellar admits the entry, never what the drinker said", async () => {
+    await withTestDb(async (db) => {
+      const drinker = await seedUser(db);
+      const friend = await seedUser(db);
+      const companion = await seedUser(db);
+      const stranger = await seedUser(db);
+      await seedFriendship(db, drinker, friend);
+      const wine = await seedWine(db, drinker, "On Show");
+      const cellarId = await seedCellar(db, {
+        createdById: drinker,
+        privacy: "PUBLIC",
+      });
+      const cellarItemId = await seedCellarItem(db, cellarId, drinker, wine);
+      const id = await seedCheckIn(db, {
+        userId: drinker,
+        item: wine,
+        cellarItemId,
+      });
+      await seedCheckIn(db, {
+        userId: companion,
+        item: wine,
+        cellarItemId,
+        createdById: drinker,
+        groupId: id,
+      });
+      await db.execute(sql`
+        update public.check_ins
+        set score = 4, note = 'at the corner bar with Sam', tags = '{cherry}'
+        where id = ${id}::uuid
+      `);
+      const entryFor = async (viewerId: string) => {
+        const actor = await activate(
+          createActor(CheckInsCollectionActor, viewerId, db),
+        );
+        const page = await actor.list(
+          userCtx(viewerId, "r"),
+          wine,
+          pageArgs({ first: 5 }),
+        );
+        return page.entries.find((e) => e.node.id === id)?.node;
+      };
+
+      for (const viewerId of [drinker, friend, companion]) {
+        expect(await entryFor(viewerId)).toMatchObject({
+          score: 4,
+          note: "at the corner bar with Sam",
+          tags: ["cherry"],
+        });
+      }
+      const seen = await entryFor(stranger);
+      // The stranger sees that it was drunk, and when, and by whom…
+      expect(seen?.userId).toBe(drinker);
+      // …and none of what was said, nor who else was there.
+      expect(seen).toMatchObject({
+        score: null,
+        note: null,
+        tags: [],
+        placeId: null,
+        photoFileId: null,
+        companionIds: [],
+      });
     });
   });
 

@@ -1465,7 +1465,7 @@ type DeletedCellar {
 
 type DeletedDrinkLogPayload {
   """
-  Every entry removed — the one you named first, then the companion entries you wrote with it.
+  Every entry removed — the one you named first, then the companion entries you wrote with it that their drinkers had not added to.
   """
   ids: [ID!]!
 }
@@ -2137,10 +2137,12 @@ type ItemBrandEdge {
 }
 
 """
-One drink-log entry on this item (X02): when, and optionally how it scored, what the drinker noticed, where, and who with. Its score is not the review — one rating per item, many logs (D5). `cellarItemId` is deliberately absent — see `Item.checkIns`.
+One drink-log entry on this item (X02): when, and optionally how it scored, what the drinker noticed, where, and who with. Its score is not the review — one rating per item, many logs (D5). `cellarItemId` is deliberately absent — see `Item.checkIns`. What the drinker said — score, note, tags, place, photo, companions — is shown to the drinker, their companions and their friends only; an entry you see only because its bottle sits in a cellar you can see comes without them (`canSeeCheckInDetails`).
 """
 type ItemCheckIn {
-  """You may remove it: it is about you, or you wrote it."""
+  """
+  You may remove it: it is about you, or you wrote it and the drinker has not added a score, note, tags or photo of their own since.
+  """
   canRemove: Boolean!
 
   """The other drinkers in the same occasion. `companions` resolves them."""
@@ -2954,7 +2956,7 @@ type Mutation {
   deleteCellar(cellarId: ID!): DeleteCellarResult!
 
   """
-  Remove an entry about you, or one you wrote. Removing the entry you logged for a table removes the companions' entries you wrote with it (Undo).
+  Remove an entry about you, or one you wrote that its drinker has not added to. Removing the entry you logged for a table removes the companions' entries you wrote with it (Undo) — except any a friend has since scored, noted, tagged or photographed, which are theirs.
   """
   deleteDrinkLog(id: ID!): DeleteDrinkLogResult!
 

@@ -32,9 +32,13 @@
  *   drinker, or anyone who can see the cellar the bottle is still in. Anyone
  *   else gets `NotFound`, the same answer as a row that does not exist.
  * - **edit** — `canEditCheckIn`: the drinker only.
- * - **remove** — `canRemoveCheckIn`: the drinker, or whoever wrote the row.
- *   Removing the keyed row of an occasion you wrote removes the companion rows
- *   you wrote with it, which is what Undo after logging a table's round needs.
+ * - **see what was said** — `canSeeCheckInDetails`: the drinker, a
+ *   companion, a friend. A viewer admitted only by the bottle's cellar gets
+ *   the entry without its score, note, tags, place, photo or companions.
+ * - **remove** — `canRemoveCheckIn`: the drinker, or whoever wrote the row
+ *   while the drinker has not added to it. Removing the keyed row of an
+ *   occasion you wrote removes the companion rows you wrote with it — the
+ *   untouched ones — which is what Undo after logging a table's round needs.
  *
  * ## The log's score is not the review
  *
@@ -75,9 +79,12 @@ import {
   canRemoveCheckIn,
   canSeeCellar,
   canSeeCheckIn,
+  canSeeCheckInDetails,
+  checkInIsClaimed,
   isFriend,
 } from "@cellar-assistant/policy";
 import { EntityActorBase } from "../lib/actor-base.ts";
+import { withoutDetails } from "../lib/check-in-rows.ts";
 import { flavourTagSuggester } from "../lib/flavour-tags.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { itemNames } from "../lib/item-names.ts";
@@ -95,6 +102,8 @@ type RosterRow = {
   readonly id: string;
   readonly userId: string;
   readonly createdById: string;
+  /** `checkInIsClaimed`: the drinker has added a score, note, tags or photo. */
+  readonly claimed: boolean;
 };
 
 export type CheckInAggregate = {
@@ -117,15 +126,25 @@ export class CheckInActor
       .from(checkIns)
       .where(eq(checkIns.id, id));
     if (row === undefined) return null;
-    const roster = await this.db
+    const others = await this.db
       .select({
         id: checkIns.id,
         userId: checkIns.userId,
         createdById: checkIns.createdById,
+        score: checkIns.score,
+        note: checkIns.note,
+        tags: checkIns.tags,
+        photoFileId: checkIns.photoFileId,
       })
       .from(checkIns)
       .where(eq(checkIns.groupId, row.groupId))
       .orderBy(asc(checkIns.createdAt), asc(checkIns.id));
+    const roster = others.map((other) => ({
+      id: other.id,
+      userId: other.userId,
+      createdById: other.createdById,
+      claimed: checkInIsClaimed(other),
+    }));
     return { row, roster };
   }
 
@@ -135,7 +154,10 @@ export class CheckInActor
 
   async get(ctx: Ctx): Promise<ItemCheckInDto> {
     const aggregate = await this.requireVisible(ctx);
-    return toEntryDto(aggregate, ctx.viewerId);
+    const entry = toEntryDto(aggregate, ctx.viewerId);
+    return canSeeCheckInDetails(ctx, await this.#personal(ctx, aggregate))
+      ? entry
+      : withoutDetails(entry);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -273,19 +295,34 @@ export class CheckInActor
     const { row } = aggregate;
     await this.requireAllowed(
       ctx,
-      canRemoveCheckIn(ctx, row),
-      "only the drinker or whoever logged it can remove this",
+      canRemoveCheckIn(ctx, {
+        userId: row.userId,
+        createdById: row.createdById,
+        claimedByDrinker: checkInIsClaimed(row),
+      }),
+      row.createdById === ctx.viewerId
+        ? "this entry is the drinker's now — they added to it, so only they can remove it"
+        : "only the drinker or whoever logged it can remove this",
       aggregate,
     );
 
     // Undo of an occasion: its writer removing the keyed row takes the
-    // companion rows they wrote with it. A companion removing their own row
-    // ("I wasn't there") takes only theirs.
+    // companion rows they wrote with it — each one `canRemoveCheckIn` still
+    // allows, so a friend who has since scored or noted their glass keeps it.
+    // A companion removing their own row ("I wasn't there") takes only theirs.
     const viewer = ctx.viewerId;
     const ids =
       row.id === row.groupId && viewer !== null && row.createdById === viewer
         ? aggregate.roster
-            .filter((other) => other.createdById === viewer)
+            .filter(
+              (other) =>
+                other.createdById === viewer &&
+                canRemoveCheckIn(ctx, {
+                  userId: other.userId,
+                  createdById: other.createdById,
+                  claimedByDrinker: other.claimed,
+                }),
+            )
             .map((other) => other.id)
         : [row.id];
     const ordered = [row.id, ...ids.filter((id) => id !== row.id)];
@@ -329,16 +366,23 @@ export class CheckInActor
     ctx: Ctx,
     aggregate: CheckInAggregate,
   ): Promise<boolean> {
+    return canSeeCheckIn(ctx, {
+      ...(await this.#personal(ctx, aggregate)),
+      cellar: await this.#cellarOf(ctx, aggregate.row.cellarItemId),
+    });
+  }
+
+  /** The flags of `canSeeCheckIn`'s personal branches (and of its details). */
+  async #personal(ctx: Ctx, aggregate: CheckInAggregate) {
     const { row, roster } = aggregate;
     const viewer = ctx.viewerId;
     const friendships = await policyFriendships(this.db, ctx);
-    return canSeeCheckIn(ctx, {
+    return {
       userId: row.userId,
       viewerIsFriendOfCheckInUser: isFriend(ctx, row.userId, friendships),
       viewerIsCompanion:
         viewer !== null && roster.some((other) => other.userId === viewer),
-      cellar: await this.#cellarOf(ctx, row.cellarItemId),
-    });
+    };
   }
 
   async #cellarOf(ctx: Ctx, cellarItemId: string | null) {

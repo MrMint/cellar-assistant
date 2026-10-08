@@ -458,7 +458,11 @@ ItemCheckInType.implement({
     "One drink-log entry on this item (X02): when, and optionally how it " +
     "scored, what the drinker noticed, where, and who with. Its score is not " +
     "the review — one rating per item, many logs (D5). `cellarItemId` is " +
-    "deliberately absent — see `Item.checkIns`.",
+    "deliberately absent — see `Item.checkIns`. What the drinker said — " +
+    "score, note, tags, place, photo, companions — is shown to the drinker, " +
+    "their companions and their friends only; an entry you see only because " +
+    "its bottle sits in a cellar you can see comes without them " +
+    "(`canSeeCheckInDetails`).",
   fields: (t) => ({
     id: t.exposeID("id"),
     userId: t.exposeID("userId", {
@@ -493,11 +497,23 @@ ItemCheckInType.implement({
         checkIn.userId === context.ctx.viewerId,
     }),
     canRemove: t.boolean({
-      description: "You may remove it: it is about you, or you wrote it.",
-      resolve: (checkIn, _args, context) =>
-        context.ctx.viewerId !== null &&
-        (checkIn.userId === context.ctx.viewerId ||
-          checkIn.createdById === context.ctx.viewerId),
+      description:
+        "You may remove it: it is about you, or you wrote it and the drinker " +
+        "has not added a score, note, tags or photo of their own since.",
+      // A hint for the ⋯ menu only — `CheckInActor.remove` decides, with
+      // `canRemoveCheckIn` and `checkInIsClaimed` (`@cellar-assistant/policy`).
+      // This mirrors them; the api holds no policy of its own.
+      resolve: (checkIn, _args, context) => {
+        const viewer = context.ctx.viewerId;
+        if (viewer === null) return false;
+        if (checkIn.userId === viewer) return true;
+        const claimed =
+          checkIn.score !== null ||
+          (checkIn.note ?? "") !== "" ||
+          checkIn.tags.length > 0 ||
+          checkIn.photoFileId !== null;
+        return checkIn.createdById === viewer && !claimed;
+      },
     }),
     item: t.field({
       type: ItemInterface,

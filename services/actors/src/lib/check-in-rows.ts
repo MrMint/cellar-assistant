@@ -23,6 +23,8 @@ export type CheckInSqlRow = ArcSqlRow & {
   readonly place_id: string | null;
   readonly photo_file_id: string | null;
   readonly companion_ids: readonly string[] | null;
+  /** `canSeeCheckInDetailsSql` for this viewer — see `toItemCheckInDto`. */
+  readonly details_visible: boolean;
   readonly created_at: Date | string;
   readonly updated_at: Date | string;
 };
@@ -30,10 +32,12 @@ export type CheckInSqlRow = ArcSqlRow & {
 /**
  * The select list for one entry, `alias` being the `check_ins` row. The
  * companions are the other rows of the same occasion, oldest first.
+ * `details` is `canSeeCheckInDetailsSql` for the same viewer and alias.
  */
-export const checkInColumns = (alias: string): SQL => {
+export const checkInColumns = (alias: string, details: SQL): SQL => {
   const row = sql.identifier(alias);
   return sql`${row}.id, ${row}.user_id, ${row}.created_by_id,
+    (${details}) as details_visible,
     ${row}.cellar_item_id, ${row}.score, ${row}.note, ${row}.tags,
     ${row}.place_id, ${row}.photo_file_id, ${row}.created_at, ${row}.updated_at,
     ${ARCS.checkIns.columnList(alias)},
@@ -48,22 +52,40 @@ export const checkInColumns = (alias: string): SQL => {
  * `fromCellar` is the drinker's own view only (`ItemCheckInDto`'s doc): to
  * anyone else it reads `false`, so the entry says nothing about a cellar the
  * viewer may not be able to see.
+ *
+ * A viewer admitted only through the bottle's cellar (`details_visible`
+ * false) gets the bare entry — who, what, when — and none of what the drinker
+ * said about it (`canSeeCheckInDetails`).
  */
 export const toItemCheckInDto = (
   row: CheckInSqlRow,
   viewerId: string | null,
-): ItemCheckInDto => ({
-  id: row.id,
-  userId: row.user_id,
-  createdById: row.created_by_id,
-  item: ARCS.checkIns.requireRefOf(row, "column"),
-  score: row.score === null ? null : Number(row.score),
-  note: row.note,
-  tags: row.tags ?? [],
-  placeId: row.place_id,
-  photoFileId: row.photo_file_id,
-  companionIds: (row.companion_ids ?? []).filter((id) => id !== row.user_id),
-  fromCellar: row.cellar_item_id !== null && viewerId === row.user_id,
-  createdAt: toIso(row.created_at) ?? "",
-  updatedAt: toIso(row.updated_at) ?? "",
+): ItemCheckInDto => {
+  const entry: ItemCheckInDto = {
+    id: row.id,
+    userId: row.user_id,
+    createdById: row.created_by_id,
+    item: ARCS.checkIns.requireRefOf(row, "column"),
+    score: row.score === null ? null : Number(row.score),
+    note: row.note,
+    tags: row.tags ?? [],
+    placeId: row.place_id,
+    photoFileId: row.photo_file_id,
+    companionIds: (row.companion_ids ?? []).filter((id) => id !== row.user_id),
+    fromCellar: row.cellar_item_id !== null && viewerId === row.user_id,
+    createdAt: toIso(row.created_at) ?? "",
+    updatedAt: toIso(row.updated_at) ?? "",
+  };
+  return row.details_visible === true ? entry : withoutDetails(entry);
+};
+
+/** The entry as a cellar viewer sees it: that it happened, and nothing said. */
+export const withoutDetails = (entry: ItemCheckInDto): ItemCheckInDto => ({
+  ...entry,
+  score: null,
+  note: null,
+  tags: [],
+  placeId: null,
+  photoFileId: null,
+  companionIds: [],
 });

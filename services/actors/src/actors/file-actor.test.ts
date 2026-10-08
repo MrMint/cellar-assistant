@@ -34,6 +34,12 @@ import {
   stableReadWindow,
 } from "../lib/s3-presign.ts";
 import {
+  seedCellar,
+  seedCellarItem,
+  seedCheckIn,
+  seedFriendship,
+} from "../lib/search-testing.ts";
+import {
   activate,
   closeTestDb,
   refusalOf,
@@ -742,6 +748,48 @@ describe.skipIf(skip)("FileActor (A8)", () => {
         expect(read.url).toBe("https://example.test/signed-get");
         // …and the metadata too, which is what `ItemImage.url` needs.
         expect((await actor.get(userCtx(strangerId, "r4"))).id).toBe(fileId);
+      });
+    });
+
+    it("X02: a drink log's photo is for whoever sees what the drinker said — not for a cellar's visitors", async () => {
+      await withTestDb(async (db) => {
+        const drinkerId = await seedUser(db);
+        const friendId = await seedUser(db);
+        const strangerId = await seedUser(db);
+        await seedFriendship(db, drinkerId, friendId);
+        const { fileId, actor } = await verifiedFile(db, drinkerId);
+        const wine = {
+          type: "WINE" as const,
+          id: await seedWine(db, drinkerId),
+        };
+        // Poured from a bottle in a PUBLIC cellar: the stranger may see the
+        // entry through the cellar, and still not its photo.
+        const cellarId = await seedCellar(db, {
+          createdById: drinkerId,
+          privacy: "PUBLIC",
+        });
+        const cellarItemId = await seedCellarItem(
+          db,
+          cellarId,
+          drinkerId,
+          wine,
+        );
+        const logId = await seedCheckIn(db, {
+          userId: drinkerId,
+          item: wine,
+          cellarItemId,
+        });
+        await db.execute(sql`
+          update public.check_ins set photo_file_id = ${fileId}::uuid
+          where id = ${logId}::uuid
+        `);
+
+        expect((await actor.presignRead(userCtx(friendId, "r3"))).url).toBe(
+          "https://example.test/signed-get",
+        );
+        await expect(
+          actor.presignRead(userCtx(strangerId, "r4")),
+        ).rejects.toBeInstanceOf(NotFoundError);
       });
     });
 

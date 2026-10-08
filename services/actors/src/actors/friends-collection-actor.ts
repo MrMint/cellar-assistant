@@ -74,7 +74,10 @@ import {
   checkInColumns,
   toItemCheckInDto,
 } from "../lib/check-in-rows.ts";
-import { canSeeCheckInSql } from "../lib/check-in-visibility.ts";
+import {
+  canSeeCheckInDetailsSql,
+  canSeeCheckInSql,
+} from "../lib/check-in-visibility.ts";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import {
@@ -491,7 +494,8 @@ export class FriendsCollectionActor
     const visible = canSeeCheckInSql(scope, "ci");
     const { rows } = await this.db.execute<CheckInSqlRow>(sql`
       select * from (
-        select distinct on (ci.group_id) ${checkInColumns("ci")}
+        select distinct on (ci.group_id)
+          ${checkInColumns("ci", canSeeCheckInDetailsSql(scope, "ci"))}
         from public.check_ins ci
         where ci.user_id = any(${authors})
           and ${visible}

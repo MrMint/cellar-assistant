@@ -401,10 +401,11 @@ describe.skipIf(skip)("CheckInActor (X02)", () => {
           bottle: { cellarId, cellarItemId: bottle.id },
           note: "first glass",
         });
-        // Public cellar: a stranger sees it through the cellar.
+        // Public cellar: a stranger sees it through the cellar — that it was
+        // drunk, not what the drinker wrote about it.
         expect(
-          (await (await actorFor(db, id)).get(userCtx(stranger, "r"))).id,
-        ).toBe(id);
+          await (await actorFor(db, id)).get(userCtx(stranger, "r")),
+        ).toMatchObject({ id, userId: drinker, note: null });
 
         await cellar.removeItem(userCtx(drinker, "r"), bottle.id);
 
@@ -471,6 +472,39 @@ describe.skipIf(skip)("CheckInActor (X02)", () => {
           .from(checkIns)
           .where(eq(checkIns.groupId, id));
         expect(left).toEqual([]);
+      });
+    });
+
+    it("Undo leaves a companion row its drinker has made their own", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, friend, friendOfDrinker, wine } = await scenario(db);
+        const id = randomUUID();
+        const logged = await (await actorFor(db, id)).log(
+          userCtx(drinker, "r"),
+          { item: wine, companionIds: [friend, friendOfDrinker] },
+        );
+        const rowOf = (userId: string) =>
+          logged.rows.find((row) => row.userId === userId)?.id ?? "";
+        const friendRow = rowOf(friend);
+        const otherRow = rowOf(friendOfDrinker);
+        await (await actorFor(db, friendRow)).update(userCtx(friend, "r"), {
+          note: "mine now",
+        });
+
+        // The writer may not remove the row its drinker has added to…
+        await expect(
+          (await actorFor(db, friendRow)).remove(userCtx(drinker, "r")),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        // …and removing the occasion leaves it, taking only the untouched one.
+        const removed = await (await actorFor(db, id)).remove(
+          userCtx(drinker, "r"),
+        );
+        expect(removed.ids).toEqual([id, otherRow]);
+        const left = await db
+          .select({ id: checkIns.id, note: checkIns.note })
+          .from(checkIns)
+          .where(eq(checkIns.groupId, id));
+        expect(left).toEqual([{ id: friendRow, note: "mine now" }]);
       });
     });
 

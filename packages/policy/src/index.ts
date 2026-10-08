@@ -240,6 +240,31 @@ export const canSeeCheckIn = (
   return checkIn.cellar !== null && canSeeCellar(ctx, checkIn.cellar);
 };
 
+/**
+ * Whether a viewer who may see an entry (`canSeeCheckIn`) also sees what the
+ * drinker *said* about it — the score, note, tags, photo, place and who they
+ * were with.
+ *
+ * Only the personal branches admit that: the drinker, a companion, a friend of
+ * the drinker. The fourth branch — "the bottle sits in a cellar you can see"
+ * — exists so a cellar's history can say a bottle was drunk, and when, and by
+ * whom; that was everything a check-in held before X02, and it is everything a
+ * cellar viewer still gets. A PUBLIC cellar is a collection put on show, not
+ * consent to publish its owner's tasting notes, the bar they were sitting in,
+ * or the friends they were with to every signed-in stranger.
+ */
+export const canSeeCheckInDetails = (
+  ctx: Ctx,
+  checkIn: Omit<CheckInVisibility, "cellar">,
+): boolean => {
+  if (bypassesPolicy(ctx)) return true;
+  if (isOwner(ctx, checkIn.userId)) return true;
+  if (ctx.viewerId === null) return false;
+  return (
+    checkIn.viewerIsCompanion === true || checkIn.viewerIsFriendOfCheckInUser
+  );
+};
+
 /** Who may change a log entry's score, note, tags, place and photo. */
 export type CheckInOwnership = {
   /** `check_ins.user_id` — whose log it is. */
@@ -255,17 +280,44 @@ export type CheckInOwnership = {
 export const canEditCheckIn = (ctx: Ctx, checkIn: CheckInOwnership): boolean =>
   bypassesPolicy(ctx) || isOwner(ctx, checkIn.userId);
 
+/** What removing an entry depends on, beyond whose it is. */
+export type CheckInRemoval = CheckInOwnership & {
+  /**
+   * The drinker has put words of their own on it — a score, note, tags or a
+   * photo ({@link checkInIsClaimed}). A companion row is written without
+   * any, so this is false until the person it is about adds one.
+   */
+  readonly claimedByDrinker: boolean;
+};
+
+/**
+ * Whether a row carries the drinker's own opinion. Companion rows are written
+ * with none of these (`CheckInActor.log`), and only the drinker may add one
+ * (`canEditCheckIn`), so a claimed row about somebody else is theirs, not its
+ * writer's.
+ */
+export const checkInIsClaimed = (row: {
+  readonly score: number | null;
+  readonly note: string | null;
+  readonly tags: readonly string[] | null;
+  readonly photoFileId: string | null;
+}): boolean =>
+  row.score !== null ||
+  (row.note !== null && row.note !== "") ||
+  (row.tags?.length ?? 0) > 0 ||
+  row.photoFileId !== null;
+
 /**
  * The person it is about may delete it ("I wasn't there"), and so may whoever
- * wrote it — which is what makes Undo after logging a table's round possible.
+ * wrote it — which is what makes Undo after logging a table's round possible —
+ * but only while the drinker has not made it their own. Once Sam has scored
+ * the glass Ana logged for him, it is Sam's entry: Ana deleting her own log
+ * must not take Sam's note with it.
  */
-export const canRemoveCheckIn = (
-  ctx: Ctx,
-  checkIn: CheckInOwnership,
-): boolean =>
+export const canRemoveCheckIn = (ctx: Ctx, checkIn: CheckInRemoval): boolean =>
   bypassesPolicy(ctx) ||
   isOwner(ctx, checkIn.userId) ||
-  isOwner(ctx, checkIn.createdById);
+  (isOwner(ctx, checkIn.createdById) && !checkIn.claimedByDrinker);
 
 /**
  * An `item_image` row: `is_public`, or the viewer uploaded it (§2.1

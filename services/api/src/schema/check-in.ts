@@ -12,7 +12,8 @@
  *   retry after a dropped response the same log (§8.4) and is what Undo
  *   removes.
  * - `updateDrinkLog` / `deleteDrinkLog` — your own entry; deleting the one
- *   you logged for a table removes the companions' rows you wrote with it.
+ *   you logged for a table removes the companions' rows you wrote with it,
+ *   except those a companion has since made their own (`canRemoveCheckIn`).
  * - `suggestFlavourTags` — a typed note → flavour words the drinker may tap.
  *   An abstaining model seam (`services/actors/src/lib/ai/seams.ts`,
  *   `providerFlavourTags`): it returns only words the note itself contains,
@@ -215,7 +216,7 @@ const DeletedDrinkLogPayload = builder
       ids: t.exposeIDList("ids", {
         description:
           "Every entry removed — the one you named first, then the companion " +
-          "entries you wrote with it.",
+          "entries you wrote with it that their drinkers had not added to.",
       }),
     }),
   });
@@ -310,9 +311,10 @@ builder.mutationField("deleteDrinkLog", (t) =>
   t.field({
     type: DeletedDrinkLogPayload,
     description:
-      "Remove an entry about you, or one you wrote. Removing the entry you " +
-      "logged for a table removes the companions' entries you wrote with it " +
-      "(Undo).",
+      "Remove an entry about you, or one you wrote that its drinker has not " +
+      "added to. Removing the entry you logged for a table removes the " +
+      "companions' entries you wrote with it (Undo) — except any a friend " +
+      "has since scored, noted, tagged or photographed, which are theirs.",
     errors: {},
     args: { id: t.arg.id({ required: true }) },
     resolve: (_root, args, context) =>

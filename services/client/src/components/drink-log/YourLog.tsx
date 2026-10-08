@@ -307,7 +307,7 @@ export function YourLog({
           if (!open && !deleteState.fetching) setDeleting(null);
         }}
         title="Delete this log?"
-        description="It comes off your log, and off the logs of any friends you logged it for."
+        description="It comes off your log, and off the logs of friends you logged it for — unless they've added to theirs."
         confirmLabel="Delete"
         pending={deleteState.fetching}
         onConfirm={() => void confirmDelete()}
