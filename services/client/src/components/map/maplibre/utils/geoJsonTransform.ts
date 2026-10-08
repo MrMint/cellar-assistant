@@ -1,6 +1,7 @@
 import type * as GeoJSON from "geojson";
 import { MAP_CONFIG } from "../../config/constants";
 import { ITEM_TYPE_COLORS } from "../../constants/colors";
+import { reviewPinLabel } from "../../places/place-review";
 import type {
   ItemType,
   MapFilters,
@@ -94,6 +95,9 @@ export function getDominantItemType(
 // Visual property calculations
 // ============================================================================
 
+/** X27: a rejected place is the creator's alone and not "on the map". */
+export const REJECTED_PIN_OPACITY = 0.55;
+
 function computeOpacity(relevance: number, hasFilters: boolean): number {
   if (!hasFilters) return 1.0;
 
@@ -126,6 +130,11 @@ export interface POIFeatureProperties {
   address: string | null;
   phone: string | null;
   website: string | null;
+  /**
+   * X27: the pin's second label line for the creator's own place under
+   * review ("Under review" / "Not approved"); null for every shared pin.
+   */
+  reviewLabel: string | null;
 }
 
 export interface ClusterFeatureProperties {
@@ -195,7 +204,13 @@ function placesToGeoJSON(
 
   const poiFeatures: GeoJSON.Feature<GeoJSON.Point, POIFeatureProperties>[] =
     places.map((place) => {
-      const relevance = place.overallRelevance ?? 50;
+      // X27: a creator's own place under review is always drawn at full
+      // relevance — it is the one pin they are most likely looking for, and
+      // the filters that dim a shared pin say nothing about it — except a
+      // rejected one, which is dimmed to read as "not on the map".
+      const reviewLabel = reviewPinLabel(place.review_status);
+      const relevance =
+        reviewLabel === null ? (place.overallRelevance ?? 50) : 100;
       const dominant = getDominantItemType(place.itemTypeScores);
       const color = dominant
         ? ITEM_TYPE_COLORS[dominant]
@@ -223,13 +238,17 @@ function placesToGeoJSON(
           pinImageName,
           itemTypeColor: color,
           relevance,
-          opacity: computeOpacity(relevance, hasFilters),
+          opacity:
+            place.review_status === "REJECTED"
+              ? REJECTED_PIN_OPACITY
+              : computeOpacity(relevance, hasFilters),
           sortKey: relevance,
           isCluster: false as const,
           rating: place.rating ?? null,
           address: address || null,
           phone: place.phone ?? null,
           website: place.website ?? null,
+          reviewLabel,
         },
       };
     });

@@ -331,6 +331,7 @@ export const PlaceDetailsDrawer = forwardRef<
       website: detailedPlace?.website ?? place.website,
       price_level: detailedPlace?.price_level ?? place.price_level,
       rating: detailedPlace?.rating ?? place.rating,
+      review_status: detailedPlace?.review_status ?? place.review_status,
     },
     userInteraction,
     menuItems,

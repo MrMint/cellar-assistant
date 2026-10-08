@@ -31,8 +31,13 @@
  * constructed only by `OutboxActor` and job actors and is not derivable from a
  * request.
  */
+
 import type { Ctx } from "@cellar-assistant/contracts/ctx";
 import { isAdmin, isSystem } from "@cellar-assistant/contracts/ctx";
+import {
+  PLACE_REVIEW_STATUSES,
+  type PlaceReviewStatus,
+} from "@cellar-assistant/contracts/place-review-status";
 
 /** `public.permission_type`. */
 export const PRIVACY_VALUES = ["PUBLIC", "FRIENDS", "PRIVATE"] as const;
@@ -231,4 +236,45 @@ export const canSeeItemImage = (
 ): boolean => {
   if (image.isPublic) return true;
   return isOwner(ctx, image.userId);
+};
+
+/* -------------------------------------------------------------------------- */
+/* Places under review (X27 / D28)                                             */
+/* -------------------------------------------------------------------------- */
+
+/** `places.review_status` — declared with the wire shapes, re-exported here. */
+export { PLACE_REVIEW_STATUSES, type PlaceReviewStatus };
+
+/**
+ * A `places` row, as far as visibility goes.
+ *
+ * Places are catalog data — every signed-in viewer sees every *approved* one,
+ * whoever added it (`PlaceActor`'s class doc). D28 adds one rule on top: a
+ * user-created place is inserted `pending` and stays visible to its creator
+ * alone until the AI review approves it, and a `rejected` one stays
+ * creator-only for good. "Visible" is the whole of it — a stranger asking for
+ * an unshared place by id gets the same answer as for an id that does not
+ * exist (`EntityActorBase.requireVisible`), so a pending place has no
+ * existence oracle.
+ */
+export type PlaceVisibility = {
+  /** `places.created_by` — null for Overture rows. */
+  readonly createdById: string | null;
+  readonly reviewStatus: PlaceReviewStatus;
+};
+
+/** Shared with every signed-in viewer: the review approved it. */
+export const isPlaceShared = (place: PlaceVisibility): boolean =>
+  place.reviewStatus === "approved";
+
+/**
+ * Approved → anyone (the actor still requires a signed-in viewer, as it does
+ * for every place); pending or rejected → its creator only. `system`/`admin`
+ * bypass, as everywhere: the outbox delivers the review itself, and an admin
+ * is the manual repair path.
+ */
+export const canSeePlace = (ctx: Ctx, place: PlaceVisibility): boolean => {
+  if (bypassesPolicy(ctx)) return true;
+  if (isPlaceShared(place)) return true;
+  return ctx.viewerId !== null && place.createdById === ctx.viewerId;
 };

@@ -62,7 +62,12 @@ import {
 } from "@cellar-assistant/contracts";
 import { builder } from "./builder.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
-import { LngLatInput, LngLatType } from "./place.ts";
+import {
+  LngLatInput,
+  LngLatType,
+  PlaceReviewStatusEnum,
+  reviewStatusOut,
+} from "./place.ts";
 import { PlaceStubType } from "./tier-list.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -127,6 +132,13 @@ const PlaceSearchResult = builder
       categoryScore: t.exposeFloat("categoryScore"),
       combinedScore: t.exposeFloat("combinedScore", {
         description: "What the results are ordered by, descending.",
+      }),
+      reviewStatus: t.field({
+        type: PlaceReviewStatusEnum,
+        description:
+          "X27: APPROVED for every shared hit. A PENDING / REJECTED hit is " +
+          "the viewer's own place under review, matched on its name.",
+        resolve: (hit) => reviewStatusOut(hit.reviewStatus),
       }),
       place: t.field({
         type: PlaceStubType,

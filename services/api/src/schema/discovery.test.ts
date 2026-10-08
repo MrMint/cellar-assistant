@@ -359,6 +359,7 @@ const mapPlace = (id: string, location: { lng: number; lat: number } | null) =>
     rating: 4,
     confidence: 0.9,
     isVerified: true,
+    reviewStatus: "approved",
   }) satisfies MapEntry;
 
 const FAR = "p0000003-0000-4000-8000-000000000003";

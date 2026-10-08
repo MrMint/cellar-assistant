@@ -151,7 +151,6 @@ import {
   friendRequests,
   friends,
   itemFavorites,
-  places,
   userPlaceInteractions,
   user as userTable,
 } from "@cellar-assistant/db";
@@ -171,6 +170,7 @@ import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import type { ProfileFields, ProfileStore } from "../lib/profile-store.ts";
 import { betterAuthProfileStore } from "../lib/profile-store.ts";
+import { placeIsVisible } from "../lib/unshared-places.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 
 export type FriendRow = typeof friends.$inferSelect;
@@ -1221,7 +1221,10 @@ export class UserActor
           ? null
           : normaliseTags(input.tags);
 
-    if (!(await this.#placeExists(placeId))) {
+    // X27: "exists" means "exists for this viewer" — a place still under
+    // review is its creator's alone, and anybody else saving it would learn
+    // it exists. Absent and hidden are one answer.
+    if (!(await this.#placeVisible(ctx, placeId))) {
       throw new NotFoundError(`place ${placeId} not found`);
     }
 
@@ -1359,12 +1362,8 @@ export class UserActor
     return row !== undefined;
   }
 
-  async #placeExists(placeId: string): Promise<boolean> {
-    const [row] = await this.db
-      .select({ id: places.id })
-      .from(places)
-      .where(eq(places.id, placeId));
-    return row !== undefined;
+  #placeVisible(ctx: Ctx, placeId: string): Promise<boolean> {
+    return placeIsVisible(this.db, ctx, placeId);
   }
 
   /**

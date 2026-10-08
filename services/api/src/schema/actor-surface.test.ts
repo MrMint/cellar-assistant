@@ -120,6 +120,10 @@ const NO_SURFACE: Readonly<Record<string, string>> = {
     "Started by one outbox row from `MenuScanActor.match` with a " +
     "deterministic job id (§8.5). Its methods are `system`-only, so a " +
     "resolver could not call them even if a field existed.",
+  PlaceReviewActor:
+    "X27: the AI review of a pending place. Delivered only by the outbox row " +
+    "`PlaceActor.create` / `editUnshared` write; `review` is `system`-only, " +
+    "and its verdict reaches clients as `Place.reviewStatus`.",
   PlaceRefreshJobActor:
     "Operator tooling. `start` is admin-only and its Hasura predecessor " +
     "(`refresh_places`) was `role: admin` too, so no user page needs it. " +

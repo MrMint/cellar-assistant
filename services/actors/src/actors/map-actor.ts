@@ -55,6 +55,15 @@
  * as `PlaceSearchActor` left it — which is why `rating`, `confidence`,
  * `isVerified` and `categories` are in the projection rather than a
  * server-computed score.
+ *
+ * ## The viewer's own places under review (X27 / D28)
+ *
+ * `search_places_adaptive_cluster` returns shared (`approved`) places only,
+ * for everybody — the SQL takes no viewer. The viewer's own `pending` and
+ * `rejected` places are added here, from `ownUnsharedInBounds`, with the
+ * viewer id from `ctx`: drawn as their own markers with their status, under
+ * the same category, rating, tier-list and visit filters, and never folded
+ * into a cluster. Nobody else's unshared place can reach this projection.
  */
 import type {
   ActorCategory,
@@ -79,6 +88,10 @@ import {
   searchPlacesAdaptiveCluster,
 } from "../lib/place-search-sql.ts";
 import { resolveTierListFilter } from "../lib/tier-list-visibility.ts";
+import {
+  ownUnsharedInBounds,
+  type UnsharedMapRow,
+} from "../lib/unshared-places.ts";
 import { ViewActorBase } from "../lib/view-actor-base.ts";
 
 export class MapActor
@@ -152,16 +165,36 @@ export class MapActor
     );
     if (tierListFilter.kind === "empty") return [];
 
+    const limit = requireLimit(input.limit ?? MAP_RESULT_CAP);
     const rows = await searchPlacesAdaptiveCluster(this.db, ctx, {
       bounds: input.bounds,
       categoryFilter: input.categories ?? [],
       minRating: input.minRating ?? null,
       visitStatusFilter: input.visitStatus ?? null,
-      resultLimit: requireLimit(input.limit ?? MAP_RESULT_CAP),
+      resultLimit: limit,
       tierListFilter,
     });
 
-    return rows.map(toMapEntry);
+    // X27: the viewer's own unshared places, never anyone else's.
+    const own =
+      ctx.viewerId === null
+        ? []
+        : await ownUnsharedInBounds(this.db, ctx.viewerId, {
+            bounds: input.bounds,
+            categories: input.categories ?? [],
+            minRating: input.minRating ?? null,
+            tierListIds:
+              tierListFilter.kind === "filter" ? tierListFilter.ids : null,
+            visitStatus: input.visitStatus ?? null,
+            limit,
+          });
+
+    // Own places first, so the cap never drops the marker the creator is
+    // most likely looking for; the whole answer still honours `limit`.
+    return [...own.map(unsharedToMapEntry), ...rows.map(toMapEntry)].slice(
+      0,
+      limit,
+    );
   }
 }
 
@@ -188,7 +221,23 @@ const toMapEntry = (row: ClusteredPlaceRow): MapEntry =>
         rating: num(row.rating),
         confidence: num(row.confidence),
         isVerified: row.is_verified,
+        // The SQL returns shared places only (module doc).
+        reviewStatus: "approved",
       };
+
+/** One of the viewer's own unshared places → its own marker. */
+const unsharedToMapEntry = (row: UnsharedMapRow): MapEntry => ({
+  kind: "place",
+  placeId: row.id,
+  name: row.name,
+  location: row.location,
+  primaryCategory: row.primaryCategory,
+  categories: row.categories,
+  rating: row.rating,
+  confidence: row.confidence,
+  isVerified: row.isVerified,
+  reviewStatus: row.reviewStatus,
+});
 
 /**
  * A viewport has to be a real box. `search_places_adaptive_cluster` derives its

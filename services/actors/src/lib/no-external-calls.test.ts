@@ -219,6 +219,19 @@ const GUARDED: readonly Guarded[] = [
     sidecarTargets: [],
   },
   {
+    // X27: the creator-only place reads — Drizzle over `places`, no I/O
+    // beyond the database. `UserActor` imports it for `placeVisibleTo`.
+    file: "../lib/unshared-places.ts",
+    imports: [
+      "@cellar-assistant/contracts",
+      "@cellar-assistant/db",
+      "@cellar-assistant/db/orm",
+      "@cellar-assistant/policy",
+      "./db.ts",
+    ],
+    sidecarTargets: [],
+  },
+  {
     // The display-name rule (W4 security F2): a regex and a random handle.
     // Shared with better-auth's hooks, which is why it lives in `auth/` — and
     // guarded so importing it never pulls better-auth into a UserActor turn.
@@ -245,6 +258,8 @@ const GUARDED: readonly Guarded[] = [
       "../lib/ai/capabilities.ts",
       // `isEmailShaped` — pure, and guarded above.
       "../auth/display-name.ts",
+      // X27: `placeVisibleTo`, a Drizzle predicate — guarded above.
+      "../lib/unshared-places.ts",
     ],
     sidecarTargets: [],
   },

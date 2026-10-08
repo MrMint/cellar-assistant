@@ -378,10 +378,15 @@ Method lists are the *minimum* the frontend needs; add methods, don't move table
   `BudgetActor`, files via `FileActor`; today 8 sequential admin round-trips), `addMenuFromScan`
   (system, called by `MenuScanActor`), `verifyMenuItemMatch`, `linkBrand`, `refreshFromSource`
   (system, called by `PlaceRefreshJobActor`), `recordAccess`.
+- X27 / D28: a user place is inserted `pending` (creator-only, `canSeePlace`) and `create` queues
+  `PlaceReviewActor.review` in the same transaction. `applyReview` (system) lands the verdict;
+  `editUnshared`, `deleteUnshared`, `acceptSuggestion` and `dismissSuggestions` are the creator's
+  controls over an unshared place and over the review's suggestions.
 
 **`PlaceCreationActor(viewerId)`** — keyed per creator (was a singleton until `291bcb97`)
 - Runs one user's place creation: rate limit (today a TOCTOU count), an early fuzzy duplicate
-  check, AI review, then `PlaceActor(newId).create`. The key is the viewer id
+  check, then `PlaceActor(newId).create` (the AI review ran here until X27; it is now
+  `PlaceReviewActor`, delivered by the outbox). The key is the viewer id
   (`placeCreationActorId`), so one user's submissions serialise — which keeps the per-user rate
   limit exact — and an AI review only ever blocks the user who asked for it. `createPlace` refuses
   a ctx whose viewer is not the key.
@@ -601,7 +606,7 @@ logic moves; the HTTP handler, admin-secret client, and Kriti transform are dele
 | `create_search_vector` → `getVectorForString` | `EmbeddingActor` |
 | `item_image_upload` → `uploadItemImage` | `FileActor.createUploadTarget` + `ItemActor.attachImage` |
 | `processRecipePhoto` | `RecipePhotoJobActor` (the owner is taken from the caller's identity, never from the request body — see target-stack.md §7) |
-| `reviewUserPlace` | inside `PlaceCreationActor` |
+| `reviewUserPlace` | `PlaceReviewActor`, from the outbox (X27; inside `PlaceCreationActor` until then) |
 | `google_autocomplete`, `google_nearby_search` | `GooglePlacesActor` |
 | `enrich_place_from_google` → `enrichPlaceFromGoogle` | `PlaceActor.enrichFromGoogle` |
 | `search_nearby_places` → `searchNearbyPlaces` (no caller) | delete; `MapActor` covers it |
@@ -2764,9 +2769,10 @@ naturally idempotent on a unique constraint. Document which in the method's JSDo
   typecheck. Edges have no equivalent — they have an allow-list plus four hand-written pins, which
   is why the count above had to be re-derived by hand. The proportionate fix is a single
   `ACTOR_EDGES` table scanned the same way, not widening `GUARDED` file by file.
-- **Anything over a few seconds is outbox-driven, not request-driven.** The exceptions are
-  `ItemOnboardingActor.start` and `PlaceCreationActor` (the user is waiting on an AI result);
-  set the API's actor-invocation timeout to 120s for those calls and accept the wait.
+- **Anything over a few seconds is outbox-driven, not request-driven.** The exception is
+  `ItemOnboardingActor.start` (the user is waiting on an AI result); set the API's
+  actor-invocation timeout to 120s for that call and accept the wait. `PlaceCreationActor` was the
+  second exception until X27 moved its AI review to `PlaceReviewActor` on the outbox.
 - Actor idle timeout: 10 minutes for entity actors, 5 for search, 24h for `GeocodeActor`.
   Configure in the actors app's Dapr actor runtime options, not per actor.
 

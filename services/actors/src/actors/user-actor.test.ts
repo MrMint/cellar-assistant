@@ -1638,6 +1638,43 @@ describe.skipIf(skip)("UserActor (B4)", () => {
   /* ---------------------------------------------------------------------- */
 
   describe("place interactions are owner-only and count visits server-side", () => {
+    it("X27: a place under review can be saved by its creator; to anyone else it is the NotFound an unknown id gets", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const placeId = await seedPlace(db);
+        await db
+          .update(places)
+          .set({ reviewStatus: "pending", createdBy: alice })
+          .where(eq(places.id, placeId));
+
+        const saved = await (await userActor(alice, db)).recordPlaceInteraction(
+          userCtx(alice, "r"),
+          { placeId, wantToVisit: true },
+        );
+        expect(saved.wantToVisit).toBe(true);
+
+        const bobs = await userActor(bob, db);
+        const hidden = await bobs
+          .recordPlaceInteraction(userCtx(bob, "r"), {
+            placeId,
+            wantToVisit: true,
+          })
+          .catch((error: unknown) => error);
+        const absentId = crypto.randomUUID();
+        const absent = await bobs
+          .recordPlaceInteraction(userCtx(bob, "r"), {
+            placeId: absentId,
+            wantToVisit: true,
+          })
+          .catch((error: unknown) => error);
+        expect(hidden).toBeInstanceOf(NotFoundError);
+        expect(String((hidden as Error).message).replace(placeId, "<id>")).toBe(
+          String((absent as Error).message).replace(absentId, "<id>"),
+        );
+      });
+    });
+
     it("computes visit_count from the visited transition, never from input", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
@@ -1895,6 +1932,9 @@ describe("UserActor makes no external call (§2.1, B4 acceptance)", () => {
       "../lib/outbox.ts",
       "../lib/outbox-targets.ts",
       "../lib/profile-store.ts",
+      // X27: `placeIsVisible`, a Drizzle read of `places` — guarded import by
+      // import in `no-external-calls.test.ts`.
+      "../lib/unshared-places.ts",
       // Pure: validates a uuid and returns its canonical (lowercase) spelling.
       "../lib/uuid.ts",
       // Pure: the display-name rule (a regex, `node:crypto` for a handle).

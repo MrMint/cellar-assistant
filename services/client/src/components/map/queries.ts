@@ -99,6 +99,7 @@ export const MapBrowseQuery = graphql(
               rating
               confidence
               isVerified
+              reviewStatus
               location {
                 lng
                 lat
@@ -159,6 +160,7 @@ export const PlaceSearchQuery = graphql(
             region
             isVerified
             combinedScore
+            reviewStatus
             location {
               lng
               lat
@@ -212,6 +214,7 @@ export const PlaceByIdQuery = graphql(
         hours
         confidence
         isVerified
+        reviewStatus
       }
       ...ActorErrorFields
     }
@@ -332,6 +335,10 @@ export const PlaceDetailsQuery = graphql(
         lastSyncAt
         createdAt
         updatedAt
+        reviewStatus
+        rejectionReason
+        suggestedCategories
+        suggestedDescription
         myInteraction {
           ...MapPlaceInteraction
         }
@@ -611,6 +618,7 @@ export const CreatePlaceMutation = graphql(
       ... on CreatePlacePayload {
         place {
           id
+          reviewStatus
         }
         nearbyDuplicates(first: 5) {
           edges {
@@ -634,6 +642,124 @@ export const CreatePlaceMutation = graphql(
   }
 `,
   [ActorErrorFieldsFragment],
+);
+
+// ---------------------------------------------------------------------------
+// A place under review (X27 / D28) — the creator's controls
+// ---------------------------------------------------------------------------
+
+/** The review fields a creator's controls re-read after every change. */
+export const PlaceReviewFieldsFragment = graphql(`
+  fragment PlaceReviewFields on Place @_unmask {
+    id
+    name
+    description
+    categories
+    primaryCategory
+    reviewStatus
+    rejectionReason
+    suggestedCategories
+    suggestedDescription
+  }
+`);
+
+/** The place as the edit form needs it — every field the creator chose. */
+export const PlaceForEditQuery = graphql(
+  `
+  query PlaceForEdit($id: ID!) {
+    place(id: $id) {
+      __typename
+      ... on Place {
+        id
+        name
+        categories
+        location {
+          lng
+          lat
+        }
+        streetAddress
+        locality
+        region
+        postcode
+        countryCode
+        phone
+        website
+        description
+        reviewStatus
+        rejectionReason
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** Edit a pending or rejected place and send it for review again. */
+export const ResubmitPlaceMutation = graphql(
+  `
+  mutation ResubmitPlace($placeId: ID!, $input: ResubmitPlaceInput!) {
+    resubmitPlace(placeId: $placeId, input: $input) {
+      __typename
+      ... on Place {
+        ...PlaceReviewFields
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [PlaceReviewFieldsFragment, ActorErrorFieldsFragment],
+);
+
+/** Delete a pending or rejected place. */
+export const DeletePlaceMutation = graphql(
+  `
+  mutation DeletePlace($placeId: ID!) {
+    deletePlace(placeId: $placeId) {
+      __typename
+      ... on DeletedPlace {
+        placeId
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** Take one of the review's suggestions ("also tagged as …"). */
+export const AcceptPlaceSuggestionMutation = graphql(
+  `
+  mutation AcceptPlaceSuggestion(
+    $placeId: ID!
+    $input: AcceptPlaceSuggestionInput!
+  ) {
+    acceptPlaceSuggestion(placeId: $placeId, input: $input) {
+      __typename
+      ... on Place {
+        ...PlaceReviewFields
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [PlaceReviewFieldsFragment, ActorErrorFieldsFragment],
+);
+
+/** Dismiss the rest of the review's suggestions. */
+export const DismissPlaceSuggestionsMutation = graphql(
+  `
+  mutation DismissPlaceSuggestions($placeId: ID!) {
+    dismissPlaceSuggestions(placeId: $placeId) {
+      __typename
+      ... on Place {
+        ...PlaceReviewFields
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [PlaceReviewFieldsFragment, ActorErrorFieldsFragment],
 );
 
 // ---------------------------------------------------------------------------

@@ -18,8 +18,14 @@
  *   { googlePlaceId })`), which stores the full enrichment and photos.
  * - `createPlace` gets a client-minted `placeId`, minted once per form and
  *   reused on every retry (N09), so a retried submit is idempotent; it does
- *   the rate limit, duplicate re-check and AI review server-side — closed,
- *   where the old action failed open.
+ *   the rate limit and duplicate re-check server-side — closed, where the old
+ *   action failed open.
+ * - X27 / D28: the place is saved at once as PENDING — the toast says only
+ *   the creator can see it until it has been checked — and the AI review
+ *   runs afterwards. The same form, given `edit`, is the "Edit & resubmit"
+ *   screen for a pending or rejected place (`/places/[placeId]/edit`): no
+ *   pin geocode or Google suggestions, the place's own values, the reviewer's
+ *   reason on top, and `resubmitPlace` on save.
  */
 
 import type { CountryCode } from "libphonenumber-js";
@@ -41,7 +47,8 @@ import PhoneInput from "react-phone-number-input/input";
 import { AIDraftField } from "@/components/app/AIDraftField";
 import { IconButton } from "@/components/app/IconButton";
 import { Back, MyLocation } from "@/components/app/icons";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { notify } from "@/components/app/notify";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -141,11 +148,50 @@ interface FormFields {
   description: string;
 }
 
+/** X27: what the form needs to edit a place under review and resubmit it. */
+export interface PlaceEditTarget {
+  placeId: string;
+  reviewStatus: "PENDING" | "REJECTED";
+  rejectionReason: string | null;
+  values: {
+    name: string;
+    categories: readonly string[];
+    street_address: string;
+    locality: string;
+    region: string;
+    postcode: string;
+    country_code: string;
+    phone: string;
+    website: string;
+    description: string;
+  };
+}
+
 interface CreatePlaceFormProps {
   latitude: number;
   longitude: number;
   /** N22: the name searched for when "Add it here" started this. */
   initialName?: string;
+  /** X27: edit this place under review instead of creating one. */
+  edit?: PlaceEditTarget;
+}
+
+/**
+ * The category options a place's stored categories select. A category
+ * outside the form's list (one a place came with) is kept as an option of
+ * its own rather than silently dropped on resubmit.
+ */
+function categoryOptionsFor(
+  categories: readonly string[],
+): CategoryOption<UserPlaceCategory>[] {
+  return categories.map(
+    (value) =>
+      CATEGORY_OPTIONS.find((option) => option.value === value) ?? {
+        label: formatCategoryLabel(value),
+        value: value as UserPlaceCategory,
+        tier: "Other",
+      },
+  );
 }
 
 // =============================================================================
@@ -156,7 +202,9 @@ export function CreatePlaceForm({
   latitude,
   longitude,
   initialName = "",
+  edit,
 }: CreatePlaceFormProps) {
+  const editing = edit !== undefined;
   const router = useRouter();
   const fieldId = useId();
   const idOf = (name: keyof FormFields) => `${fieldId}-${name}`;
@@ -170,6 +218,7 @@ export function CreatePlaceForm({
     checkDuplicatePlacesAction,
     googlePlaceDetailsAction,
     createUserPlaceAction,
+    resubmitPlaceAction,
     googleNearbySearchAction,
     reverseGeocodeAction,
   } = usePlaceActions();
@@ -177,7 +226,7 @@ export function CreatePlaceForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicatePlace[]>([]);
   const [duplicatesConfirmed, setDuplicatesConfirmed] = useState(false);
-  const [addressLoading, setAddressLoading] = useState(true);
+  const [addressLoading, setAddressLoading] = useState(!editing);
   /** What the pin's reverse geocode filled in — the "From pin" marks' draft. */
   const [pinDraft, setPinDraft] = useState<
     Partial<Record<PinAddressField, string>>
@@ -186,8 +235,9 @@ export function CreatePlaceForm({
 
   // Google Places state
   const [googlePlaces, setGooglePlaces] = useState<GoogleNearbyPlace[]>([]);
-  const [googlePlacesLoading, setGooglePlacesLoading] = useState(true);
-  const [googlePlacesDismissed, setGooglePlacesDismissed] = useState(false);
+  const [googlePlacesLoading, setGooglePlacesLoading] = useState(!editing);
+  // Editing starts from the place's own values; there is no listing to pick.
+  const [googlePlacesDismissed, setGooglePlacesDismissed] = useState(editing);
   const [selectedGooglePlaceId, setSelectedGooglePlaceId] = useState<
     string | null
   >(null);
@@ -209,18 +259,23 @@ export function CreatePlaceForm({
     watch,
     formState: { isSubmitting, errors },
   } = useForm<FormFields>({
-    defaultValues: {
-      name: initialName,
-      categories: [],
-      street_address: "",
-      locality: "",
-      region: "",
-      postcode: "",
-      country_code: "",
-      phone: "",
-      website: "",
-      description: "",
-    },
+    defaultValues: edit
+      ? {
+          ...edit.values,
+          categories: categoryOptionsFor(edit.values.categories),
+        }
+      : {
+          name: initialName,
+          categories: [],
+          street_address: "",
+          locality: "",
+          region: "",
+          postcode: "",
+          country_code: "",
+          phone: "",
+          website: "",
+          description: "",
+        },
   });
 
   const nameValue = watch("name");
@@ -229,8 +284,10 @@ export function CreatePlaceForm({
   const countryCodeValue = watch("country_code");
   const phoneCountry = toSupportedCountryCode(countryCodeValue) ?? "US";
 
-  // Auto-fill address from reverse geocode + fetch Google nearby places on mount
+  // Auto-fill address from reverse geocode + fetch Google nearby places on
+  // mount — a new place only: an edit starts from the place's own values.
   useEffect(() => {
+    if (editing) return;
     let cancelled = false;
 
     setAddressLoading(true);
@@ -264,6 +321,7 @@ export function CreatePlaceForm({
       cancelled = true;
     };
   }, [
+    editing,
     latitude,
     longitude,
     setValue,
@@ -286,11 +344,13 @@ export function CreatePlaceForm({
 
     duplicateCheckTimer.current = setTimeout(async () => {
       try {
-        const { duplicates: found } = await checkDuplicatePlacesAction(
+        const { duplicates: checked } = await checkDuplicatePlacesAction(
           trimmed,
           latitude,
           longitude,
         );
+        // An edited place is never a duplicate of itself.
+        const found = checked.filter((d) => d.id !== edit?.placeId);
         setDuplicates(found);
         if (found.length === 0) {
           setDuplicatesConfirmed(true);
@@ -308,7 +368,7 @@ export function CreatePlaceForm({
         clearTimeout(duplicateCheckTimer.current);
       }
     };
-  }, [nameValue, latitude, longitude, checkDuplicatePlacesAction]);
+  }, [nameValue, latitude, longitude, checkDuplicatePlacesAction, edit]);
 
   const handleSelectExisting = useCallback(
     (placeId: string) => {
@@ -419,9 +479,32 @@ export function CreatePlaceForm({
     };
 
     startTransition(async () => {
+      if (edit) {
+        const { google_place_id: _none, placeId: _id, ...fields } = input;
+        const result = await resubmitPlaceAction(edit.placeId, fields);
+        if (result.success) {
+          notify("Sent for review again", {
+            tone: "success",
+            description: "Only you can see it until it's been checked.",
+          });
+          router.push(`/places/${edit.placeId}`);
+        } else {
+          setServerError(result.error ?? "Something went wrong.");
+        }
+        return;
+      }
+
       const result = await createUserPlaceAction(input);
 
       if (result.success && result.placeId) {
+        // X27 / D28: saved now, shared once the review approves it.
+        notify(`Saved ${input.name.trim()}`, {
+          tone: "success",
+          description:
+            result.reviewStatus === "APPROVED"
+              ? undefined
+              : "Only you can see it until it's been checked.",
+        });
         router.push(`/map?placeId=${result.placeId}`);
       } else {
         setServerError(result.error ?? "Something went wrong.");
@@ -441,10 +524,12 @@ export function CreatePlaceForm({
         {/* Back button + location preview */}
         <div className="flex flex-row items-center gap-2">
           <IconButton
-            aria-label="Back to map"
+            aria-label={editing ? "Back to place" : "Back to map"}
             variant="outline"
             size="sm"
-            onClick={() => router.push("/map")}
+            onClick={() =>
+              router.push(edit ? `/places/${edit.placeId}` : "/map")
+            }
           >
             <Back />
           </IconButton>
@@ -453,6 +538,17 @@ export function CreatePlaceForm({
             {latitude.toFixed(5)}, {longitude.toFixed(5)}
           </Badge>
         </div>
+
+        {/* X27: why a rejected place was refused, above the fields to fix */}
+        {edit?.reviewStatus === "REJECTED" && (
+          <Alert data-testid="edit-rejection-reason">
+            <AlertTitle>Why it wasn't approved</AlertTitle>
+            <AlertDescription>
+              {edit.rejectionReason?.trim() ||
+                "This place couldn't be confirmed as a real venue."}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Google Places suggestions */}
         {!googlePlacesDismissed && (
@@ -465,7 +561,7 @@ export function CreatePlaceForm({
         )}
 
         {/* Google autocomplete search (shown after suggestions dismissed) */}
-        {googlePlacesDismissed && !selectedGooglePlaceId && (
+        {!editing && googlePlacesDismissed && !selectedGooglePlaceId && (
           <GooglePlaceSearch
             latitude={latitude}
             longitude={longitude}
@@ -815,7 +911,7 @@ export function CreatePlaceForm({
           className="mt-2"
         >
           {loading && <Spinner />}
-          Add Place
+          {editing ? "Send for review" : "Add Place"}
         </Button>
 
         {duplicates.length > 0 && !duplicatesConfirmed && (

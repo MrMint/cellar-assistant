@@ -145,6 +145,7 @@ import { idempotencyKey } from "../lib/delivery.ts";
 import { daprEmbedQuery, type EmbedQuery } from "../lib/embedding-client.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { itemNames } from "../lib/item-names.ts";
+import { placeIsVisible } from "../lib/unshared-places.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import { vectorDistances } from "../lib/vectors.ts";
 import {
@@ -522,6 +523,17 @@ export class CellarActor
         ? 100
         : requirePercentage(input.percentageRemaining);
 
+    // X27: a source place the caller cannot see — somebody else's place
+    // still under review — is answered as an unknown one, rather than
+    // accepted by the foreign key and so confirmed to exist.
+    const sourcePlaceId = input.sourcePlaceId ?? null;
+    if (
+      sourcePlaceId !== null &&
+      !(await placeIsVisible(this.db, ctx, sourcePlaceId))
+    ) {
+      throw new NotFoundError(`place ${sourcePlaceId} not found`);
+    }
+
     await this.tx(async (tx) => {
       await tx
         .insert(cellarItems)
@@ -535,7 +547,7 @@ export class CellarActor
           openAt: parseInstant(input.openAt, "openAt"),
           emptyAt: parseInstant(input.emptyAt, "emptyAt"),
           sourceType: input.sourceType ?? null,
-          sourcePlaceId: input.sourcePlaceId ?? null,
+          sourcePlaceId,
           sourceMenuItemId: input.sourceMenuItemId ?? null,
         })
         // Belt and braces for a redelivery racing itself: the pre-check above

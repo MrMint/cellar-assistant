@@ -33,8 +33,14 @@
  * every signed-in user may read every place, including user-created ones —
  * with no anonymous role at all. B3's rule for catalog aggregates ("any
  * signed-in viewer; anonymous refused") reproduces that exactly, so it is what
- * `PlaceActor` uses. There is no privacy column on `places` and no owner
- * branch to add one.
+ * `PlaceActor` uses for an *approved* place.
+ *
+ * X27 / D28 added the one owner branch: a user-created place is inserted
+ * `pending` and stays visible to its creator alone until the outbox-delivered
+ * AI review approves it, and a `rejected` place stays creator-only for good
+ * (`canSeePlace` in `@cellar-assistant/policy`). To anybody else an unshared
+ * place does not exist — the same `NotFound` an unknown id gets, and absent
+ * from every map, search and duplicate answer.
  *
  * ## `googlePlaceId` is server-owned, and is absent from every input here
  *
@@ -55,6 +61,7 @@ import type { ItemType } from "./items.ts";
 import type { ScannedItemType } from "./menu-scans.ts";
 import { SCANNED_ITEM_TYPES } from "./menu-scans.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { PlaceReviewStatus } from "./place-review-status.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Geography                                                                   */
@@ -85,6 +92,16 @@ export const isLngLat = (value: unknown): value is LngLat => {
 /* -------------------------------------------------------------------------- */
 /* Wire shapes                                                                 */
 /* -------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
+/* Review status (X27 / D28)                                                   */
+/* -------------------------------------------------------------------------- */
+
+export {
+  isPlaceReviewStatus,
+  PLACE_REVIEW_STATUSES,
+  type PlaceReviewStatus,
+} from "./place-review-status.ts";
 
 export type PlaceDto = {
   readonly id: string;
@@ -123,6 +140,22 @@ export type PlaceDto = {
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
   readonly lastSyncAt: string | null;
+  /** X27: `approved` is shared; `pending`/`rejected` reach only the creator. */
+  readonly reviewStatus: PlaceReviewStatus;
+  /**
+   * The review's reason, addressed to the creator, when it said no. Only the
+   * creator ever reads a rejected place, so this never reaches anyone else.
+   */
+  readonly rejectionReason: string | null;
+  /**
+   * The review's advisory output, for the creator to confirm ("also tagged
+   * as …") or dismiss — never applied on its own. **Creator-only:** empty /
+   * null for every other viewer, including on an approved place.
+   */
+  readonly suggestedCategories: readonly string[];
+  readonly suggestedDescription: string | null;
+  /** When the latest verdict landed; null while it is still pending. */
+  readonly reviewedAt: string | null;
 };
 
 export type PlaceEnrichmentDto = {
@@ -596,6 +629,64 @@ export type PlaceActorInterface = {
    * `UserActor`'s table and is not touched here (§1.2, single writer).
    */
   recordAccess(ctx: Ctx): Promise<RecordedAccess>;
+
+  /*
+   * X27 / D28 — the creator's controls over a place nobody else can see yet.
+   * All four are the creator's alone (`admin` is the repair path); to anyone
+   * else the place does not exist, so they answer `NotFound` exactly as for an
+   * unknown id.
+   */
+
+  /**
+   * Edit an unshared (`pending` or `rejected`) place and resubmit it: the
+   * row goes back to `pending`, the old verdict and suggestions are cleared,
+   * and a fresh review is queued in the same transaction. The same validation
+   * and the same duplicate check as creation. An approved place is shared
+   * catalog data and is not editable here (`Conflict`).
+   */
+  editUnshared(ctx: Ctx, input: CreatePlaceInput): Promise<PlaceDto>;
+
+  /**
+   * Delete an unshared place. A shared one is not the creator's to delete
+   * (`Conflict`); nor is one a tier list or a menu scan still points at,
+   * because those rows belong to other aggregates (`Conflict`, naming which).
+   */
+  deleteUnshared(ctx: Ctx): Promise<DeletedPlace>;
+
+  /**
+   * Confirm one of the review's suggestions — a suggested category is added
+   * to `categories`, the suggested description becomes `description` (only
+   * when the place has none). The suggestion is removed either way. Any
+   * review status: the suggestions survive approval, which is when they are
+   * most often seen.
+   */
+  acceptSuggestion(
+    ctx: Ctx,
+    input: PlaceSuggestionAcceptance,
+  ): Promise<PlaceDto>;
+
+  /** Dismiss every remaining suggestion. Idempotent. */
+  dismissSuggestions(ctx: Ctx): Promise<PlaceDto>;
+};
+
+/** One of `PlaceDto`'s suggestions, named. Exactly one of the two. */
+export type PlaceSuggestionAcceptance =
+  | { readonly category: string; readonly description?: undefined }
+  | { readonly description: true; readonly category?: undefined };
+
+export type DeletedPlace = { readonly placeId: string };
+
+/**
+ * What one delivery of `PlaceActor.review` did. `skipped` is a normal outcome
+ * (the place is gone, or was already decided — a redelivery), never a failure.
+ * A review that could not run at all is a thrown error, and the place stays
+ * `pending`; with no AI provider configured it is `pending` with
+ * `reason: "unconfigured"` and nothing thrown, because retrying cannot help.
+ */
+export type PlaceReviewOutcome = {
+  readonly placeId: string;
+  readonly status: PlaceReviewStatus | "skipped";
+  readonly reason: string;
 };
 
 /**
@@ -615,6 +706,28 @@ export type InternalPlaceActorInterface = {
     ctx: Ctx,
     input?: RefreshFromSourceInput,
   ): Promise<EnrichFromGoogleResult>;
+  /**
+   * X27: lands the AI review's verdict on a `pending` user place. Called
+   * synchronously by `PlaceReviewActor.review` (registry → entity, §8.5),
+   * which ran the model outside this actor's turn; `system`/`admin` only.
+   *
+   * Approve → `approved` (shared), unless a *shared* place now blocks it as a
+   * duplicate, which rejects it naming that place; reject → `rejected` with
+   * the model's reason. Either way the suggestions are stored for the
+   * creator. A verdict for an older submission than the row's current one
+   * (`submittedAt` ≠ `review_requested_at`), or for a place no longer
+   * `pending`, is `skipped` and writes nothing.
+   */
+  applyReview(
+    ctx: Ctx,
+    input: ApplyPlaceReviewInput,
+  ): Promise<PlaceReviewOutcome>;
+};
+
+export type ApplyPlaceReviewInput = {
+  /** The submission the verdict is for — `places.review_requested_at`, ISO. */
+  readonly submittedAt: string;
+  readonly review: PlaceReview;
 };
 
 export const PlaceActorDescriptor: ActorDescriptor<
@@ -630,8 +743,8 @@ export const PlaceActorDescriptor: ActorDescriptor<
     menus: {},
     brands: {},
     menuItems: {},
-    // Called by `PlaceCreationActor.createPlace` inside its own 120s budget.
-    create: { timeoutMs: 120_000 },
+    // Called by `PlaceCreationActor.createPlace` inside its own 30s budget.
+    create: { timeoutMs: 30_000 },
     // The system half is the same Google path as `refreshFromSource` (up to
     // eight round-trips, `#enrich`), delivered by the outbox — which honours a
     // declared bound, so this is how long that delivery may run. The request
@@ -645,14 +758,69 @@ export const PlaceActorDescriptor: ActorDescriptor<
     linkMenuItemRecipe: {},
     linkBrand: {},
     recordAccess: {},
+    // X27. Each resubmission queues a review, which is a model call.
+    editUnshared: { modelBacked: true },
+    deleteUnshared: {},
+    acceptSuggestion: {},
+    dismissSuggestions: {},
   },
   internalMethods: {
+    // X27: a short write — the model call already happened, in
+    // `PlaceReviewActor`, outside this actor's turn.
+    applyReview: {},
     // Up to eight Google round-trips in one turn (`PlaceRefreshJobActor`).
     // The batch size keeps the *job's* turn short, not this.
     refreshFromSource: { timeoutMs: 90_000 },
     // One Overture page — up to `OVERTURE_RELOAD_MAX_BATCH_SIZE` rows in a
     // single statement.
     bulkUpsertFromOverture: { timeoutMs: 120_000 },
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/* PlaceReviewActor (X27)                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `PlaceReviewActor(placeId)` — runs the AI review of one user-submitted
+ * place, delivered by the outbox from the transaction that inserted (or
+ * resubmitted) it, then hands the verdict to `PlaceActor.applyReview`.
+ *
+ * It exists so the model call is **nobody's turn lock**: inside
+ * `PlaceActor(placeId)` it would stall every reader of the place — its
+ * creator opening it, the map drawer — for as long as the model took; inside
+ * `PlaceCreationActor(viewerId)` it would stall that user's next creation.
+ * Keyed by the place, its blast radius is the one review. It owns no table and
+ * keeps no state; it is `entity`-category for the reason `PlaceCreationActor`
+ * is (a registry in front of `PlaceActor`).
+ */
+export type PlaceReviewActorInterface = Record<never, never>;
+
+export type InternalPlaceReviewActorInterface = {
+  /**
+   * `system`/`admin` only. Idempotent: a place that is gone, already decided,
+   * or resubmitted since `submittedAt` is `skipped`. A reviewer that throws
+   * fails the delivery (the outbox retries; the place stays `pending`), except
+   * an unconfigured one, which is `pending` with nothing thrown — retrying
+   * cannot configure a provider.
+   */
+  review(
+    ctx: Ctx,
+    payload: { readonly submittedAt: string },
+  ): Promise<PlaceReviewOutcome>;
+};
+
+export const PlaceReviewActorDescriptor: ActorDescriptor<
+  PlaceReviewActorInterface,
+  InternalPlaceReviewActorInterface
+> = {
+  actorType: "PlaceReviewActor",
+  category: "entity",
+  methods: {},
+  internalMethods: {
+    // A model call. No bound of its own: the drainer's delivery floor follows
+    // `AI_REQUEST_TIMEOUT_MS` (`deliveryTimeoutMs` in `outbox-actor.ts`).
+    review: {},
   },
 };
 
@@ -712,8 +880,9 @@ export type PlaceReview = {
   /** Clamped to `[-0.3, 0.3]` by the actor before it is applied. */
   readonly confidenceAdjustment: number;
   /**
-   * Written into `places.description` when the submitter left theirs blank, so
-   * this field carries the whole fabrication risk. Optional on purpose: "I have
+   * Stored as the place's `suggestedDescription` — offered to the creator,
+   * never written into `places.description` on its own (X27; it used to be,
+   * whenever the submitter left theirs blank). Optional on purpose: "I have
    * nothing to add beyond what they told me" is a real answer.
    */
   readonly enrichedDescription?: string | null;
@@ -726,6 +895,11 @@ export type CreateUserPlaceResult = {
   readonly place: PlaceDto;
   /** Non-empty when the check found near-misses it did not consider blocking. */
   readonly nearbyDuplicates: readonly DuplicateCandidate[];
+  /**
+   * Always `null` since X27: the review no longer runs inside the creation.
+   * The place is created `pending` (creator-only) and the verdict arrives
+   * later, on `place.reviewStatus`. Kept so the wire shape does not break.
+   */
   readonly review: PlaceReview | null;
 };
 
@@ -734,11 +908,13 @@ export type CreateUserPlaceResult = {
  * owned table, exactly like `BrandRegistryActor`; keyed by
  * {@link placeCreationActorId}.
  *
- * §8.5 names this one of the two request-driven long operations (the user is
- * waiting on the AI review), so the API's actor-invocation timeout for
- * `createPlace` is 120s. Under the old singleton key every user queued behind
- * every other user's review; keyed by creator, a review only ever blocks the
- * user who asked for it. §2.1's other escape hatch — key by geohash cell — was
+ * §8.5 used to name this one of the two request-driven long operations (the
+ * user waited on the AI review, so `createPlace` had a 120s budget). X27 took
+ * the review out of the turn: the place is inserted `pending` and the review
+ * is an outbox delivery to `PlaceActor.review`, so the creation answers in
+ * milliseconds and its budget is 30s. Under the old singleton key every user
+ * queued behind every other user's review; keyed by creator, one user's
+ * submissions still run one at a time, which keeps the rate limit exact. §2.1's other escape hatch — key by geohash cell — was
  * considered and rejected (`docs/architecture/actor-keys.md`).
  */
 export type PlaceCreationActorInterface = {
@@ -770,7 +946,11 @@ export const PlaceCreationActorDescriptor: ActorDescriptor<PlaceCreationActorInt
       // `createPlace`, not `create`: the stale spelling left it on the 15s
       // default from 4e067928, and the API gave up on a review the actor went
       // on to commit. Keyed by the interface, a misspelling no longer compiles.
-      createPlace: { timeoutMs: 120_000, modelBacked: true },
+      //
+      // X27: the review is no longer in this turn — it is queued, and runs on
+      // the outbox — so the turn is a rate-limit count, a duplicate check and
+      // one insert. Still model-backed: what it enqueues is a model call.
+      createPlace: { timeoutMs: 30_000, modelBacked: true },
       findDuplicates: {},
     },
   };

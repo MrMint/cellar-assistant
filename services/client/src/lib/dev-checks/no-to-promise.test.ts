@@ -36,7 +36,8 @@ type Exemption = { readonly calls: number; readonly reason: string };
  */
 const EXEMPT: Readonly<Record<string, Exemption>> = {
   "map/actions.ts": {
-    calls: 12,
+    // 13 since X27's `resubmitPlace` — another submit-driven write.
+    calls: 13,
     reason:
       "The old map server actions as client functions (82450ad1's " +
       "map/actions.ts, place-actions.ts, menuScanning.ts): the map machine's " +

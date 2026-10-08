@@ -61,6 +61,7 @@ import {
   VisitedToggleButton,
 } from "./PlaceActionButtons";
 import { PlaceMenuItems } from "./PlaceMenuItems";
+import { PlaceReviewPanel } from "./PlaceReviewPanel";
 import {
   formatCategoryName,
   formatTimeString,
@@ -523,6 +524,21 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
           </p>
         )}
       </Section>
+
+      {/* X27 / D28: the creator's review state, controls and suggestions.
+          The panel carries the status badge itself, directly under this
+          header, so the header does not repeat it. */}
+      <PlaceReviewPanel
+        placeId={placeData.id}
+        placeName={placeData.name}
+        status={placeData.review_status}
+        rejectionReason={placeData.rejection_reason}
+        categories={placeData.categories}
+        description={placeData.description}
+        suggestedCategories={placeData.suggested_categories}
+        suggestedDescription={placeData.suggested_description}
+        refetch={refetch}
+      />
 
       {/* Business Status Warning */}
       {closedStatus && (

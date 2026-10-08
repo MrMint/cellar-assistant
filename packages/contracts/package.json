@@ -14,6 +14,7 @@
     "./items": "./src/items.ts",
     "./page": "./src/page.ts",
     "./place-categories": "./src/place-categories.ts",
+    "./place-review-status": "./src/place-review-status.ts",
     "./proxy": "./src/proxy.ts"
   },
   "scripts": {

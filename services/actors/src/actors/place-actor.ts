@@ -25,6 +25,24 @@
  * The three-viewer tests exist anyway (§1.6: "for catalog data the stranger
  * case is 'any signed-in user'; the test still exists").
  *
+ * ## …except a place still under review (X27 / D28)
+ *
+ * A user-created place is inserted `pending` and is its creator's alone until
+ * the AI review approves it; a `rejected` one stays creator-only for good
+ * (`canSeePlace`). This actor is therefore privacy-bearing after all: every
+ * read and every request-driven write goes through `requireVisible`, so a
+ * stranger naming an unshared place's id gets exactly the `NotFound` an
+ * unknown id gets. The review itself runs in `PlaceReviewActor` — a model call
+ * held in *this* actor's turn would stall every reader of the place — and
+ * lands here as `applyReview`, a short system write. `create` queues it in the
+ * same transaction as the insert (§1.4); `editUnshared` queues it again.
+ *
+ * The creator's controls over an unshared place — `editUnshared`,
+ * `deleteUnshared` — and over the review's suggestions on any of their places
+ * — `acceptSuggestion`, `dismissSuggestions` — are owner-only, with the same
+ * concealment. Suggestions are advisory and never reach the shared row unless
+ * the creator picks one.
+ *
  * ## `enrichFromGoogle` is outbox-driven when a user asks for it
  *
  * §8.5: "anything over a few seconds is outbox-driven, not request-driven",
@@ -162,10 +180,13 @@ import type {
   ActorCategory,
   AddMenuFromScanInput,
   AddMenuFromScanResult,
+  ApplyPlaceReviewInput,
   BulkUpsertFromOvertureInput,
   BulkUpsertFromOvertureResult,
   CreatePlaceInput,
+  CreateUserPlaceInput,
   Ctx,
+  DeletedPlace,
   DuplicateCandidate,
   EnrichFromGoogleInput,
   EnrichFromGoogleResult,
@@ -192,6 +213,8 @@ import type {
   PlaceMenuDto,
   PlaceMenuItemDto,
   PlacePhotoDto,
+  PlaceReviewOutcome,
+  PlaceSuggestionAcceptance,
   RecordedAccess,
   RefreshFromSourceInput,
   ReserveInput,
@@ -207,6 +230,7 @@ import {
   isLngLat,
   isMenuItemType,
   isPlaceBrandRelationship,
+  isPlaceReviewStatus,
   NotFoundError,
   OVERTURE_RELOAD_MAX_BATCH_SIZE,
   offsetPage,
@@ -223,9 +247,19 @@ import {
   placeMenuItems,
   placeMenus,
   places,
+  tierListItems,
 } from "@cellar-assistant/db";
-import { and, eq, inArray, isNotNull, ne, sql } from "@cellar-assistant/db/orm";
-import { bypassesPolicy, isOwner } from "@cellar-assistant/policy";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNotNull,
+  ne,
+  or,
+  sql,
+} from "@cellar-assistant/db/orm";
+import { bypassesPolicy, canSeePlace, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import {
   EntityActorBase,
@@ -265,6 +299,14 @@ import {
   menuItemRowToDto,
   type PlaceMenuItemRow,
 } from "../lib/place-menu-items.ts";
+import {
+  BASE_CONFIDENCE,
+  confidenceFromReview,
+  rejectionReasonFrom,
+  suggestedCategoriesFrom,
+  suggestedDescriptionFrom,
+} from "../lib/place-review.ts";
+import { ownUnsharedDuplicates } from "../lib/unshared-places.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 
 /** The actor *type* as registered with Dapr — the outbox row's target. */
@@ -448,6 +490,37 @@ export const placeRowToDto = (row: PlaceRow): PlaceDto => ({
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt),
   lastSyncAt: iso(row.lastSyncAt),
+  reviewStatus: isPlaceReviewStatus(row.reviewStatus)
+    ? row.reviewStatus
+    : "pending",
+  rejectionReason: row.rejectionReason,
+  suggestedCategories: row.suggestedCategories ?? [],
+  suggestedDescription: row.suggestedDescription,
+  reviewedAt: iso(row.reviewedAt),
+});
+
+/**
+ * {@link placeRowToDto} as `ctx` may read it. The review's suggestions and
+ * reason are the creator's (X27): anybody else — on an approved place, the
+ * only kind they can see — gets none of them. `system`/`admin` read it whole.
+ */
+export const placeDtoFor = (ctx: Ctx, row: PlaceRow): PlaceDto => {
+  const dto = placeRowToDto(row);
+  if (isOwner(ctx, row.createdBy)) return dto;
+  return {
+    ...dto,
+    rejectionReason: null,
+    suggestedCategories: [],
+    suggestedDescription: null,
+  };
+};
+
+/** `canSeePlace`'s shape, read off a row. */
+const placeVisibility = (row: PlaceRow) => ({
+  createdById: row.createdBy,
+  reviewStatus: isPlaceReviewStatus(row.reviewStatus)
+    ? row.reviewStatus
+    : ("pending" as const),
 });
 
 const enrichmentRowToDto = (row: EnrichmentRow): PlaceEnrichmentDto => ({
@@ -646,45 +719,59 @@ export class PlaceActor
     };
   }
 
+  /**
+   * X27 / D28: an approved place is catalog data; a pending or rejected one is
+   * its creator's alone (`canSeePlace`). The concealment helpers make the
+   * second indistinguishable from an id that names nothing.
+   */
+  protected override canSee(ctx: Ctx, aggregate: PlaceAggregate): boolean {
+    return canSeePlace(ctx, placeVisibility(aggregate.place));
+  }
+
+  /**
+   * Visible first, then signed in — the order every read below uses, so an
+   * anonymous caller is told "absent" about an unshared place, exactly as a
+   * stranger is, and "sign in" only about a place that is shared.
+   */
+  async #readable(ctx: Ctx, action: string): Promise<PlaceAggregate> {
+    const aggregate = await this.requireVisible(ctx);
+    requireSignedIn(ctx, action);
+    return aggregate;
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Reads                                                                   */
   /* ---------------------------------------------------------------------- */
 
   async get(ctx: Ctx): Promise<PlaceDto> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a place");
-    return placeRowToDto(aggregate.place);
+    const aggregate = await this.#readable(ctx, "view a place");
+    return placeDtoFor(ctx, aggregate.place);
   }
 
   async enrichment(ctx: Ctx): Promise<PlaceEnrichmentDto | null> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a place");
+    const aggregate = await this.#readable(ctx, "view a place");
     return aggregate.enrichment === null
       ? null
       : enrichmentRowToDto(aggregate.enrichment);
   }
 
   async photos(ctx: Ctx): Promise<readonly PlacePhotoDto[]> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a place");
+    const aggregate = await this.#readable(ctx, "view a place");
     return aggregate.photos.map(photoRowToDto);
   }
 
   async menus(ctx: Ctx): Promise<readonly PlaceMenuDto[]> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a place");
+    const aggregate = await this.#readable(ctx, "view a place");
     return aggregate.menus.map(menuRowToDto);
   }
 
   async brands(ctx: Ctx): Promise<readonly PlaceBrandDto[]> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a place");
+    const aggregate = await this.#readable(ctx, "view a place");
     return aggregate.brands.map(placeBrandRowToDto);
   }
 
   async menuItems(ctx: Ctx, page: PageArgs): Promise<Page<PlaceMenuItemDto>> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a place");
+    const aggregate = await this.#readable(ctx, "view a place");
     return offsetPage(aggregate.menuItems.map(menuItemRowToDto), page);
   }
 
@@ -731,7 +818,14 @@ export class PlaceActor
       throw new ForbiddenError("a place may only be created for its creator");
     }
     const existing = this.aggregate;
-    if (existing !== null) return placeRowToDto(existing.place);
+    if (existing !== null) {
+      // §8.4's replay — but only of *this creator's* creation. Somebody
+      // else's row under the same id is refused, in one wording whatever its
+      // review status, so a reused id says nothing about whether an unshared
+      // place sits behind it (X27).
+      requireOwnReplay(existing.place, input.createdById, this.key);
+      return placeDtoFor(ctx, existing.place);
+    }
 
     const name = requirePlaceName(input.name);
     const categories = requireCategories(input.categories);
@@ -744,7 +838,7 @@ export class PlaceActor
     const confidence = normalizeConfidence(input.confidence ?? null);
 
     try {
-      await this.#insert(input, {
+      await this.#insert(ctx, input, {
         name,
         categories,
         countryCode,
@@ -764,10 +858,11 @@ export class PlaceActor
       throw error;
     }
     await this.reload();
-    return placeRowToDto(this.requireAggregate().place);
+    return placeDtoFor(ctx, this.requireAggregate().place);
   }
 
   async #insert(
+    ctx: Ctx,
     input: CreatePlaceInput & { readonly createdById: string },
     normalized: {
       readonly name: string;
@@ -785,13 +880,24 @@ export class PlaceActor
       // locks — so of two near-duplicates created at once, the second sees
       // the first's committed row. Held for this transaction only:
       // milliseconds, never the AI review.
+      //
+      // X27: "duplicate" means one the *creator* can see — a shared place, or
+      // one of their own still under review. Somebody else's unshared place
+      // blocks nothing: refusing on it would tell this creator it exists.
       await lockPlaceGeocells(tx, input.location);
       const blocking = blockingDuplicate(
-        await findDuplicatePlaces(tx, name, input.location),
+        await findDuplicatePlaces(
+          tx,
+          name,
+          input.location,
+          DUPLICATE_RADIUS_METERS,
+          input.createdById,
+        ),
         this.key,
       );
       if (blocking !== undefined) throw duplicatePlaceConflict(blocking);
 
+      const submittedAt = new Date();
       await tx.insert(places).values({
         id: this.key,
         name,
@@ -811,8 +917,31 @@ export class PlaceActor
         // Server-set, exactly as today's Hasura insert permission `set`s them.
         source: "user",
         isVerified: false,
+        // X27 / D28: saved at once, shared with nobody until the review —
+        // queued below, in this same transaction (§1.4) — approves it.
+        reviewStatus: "pending",
+        reviewRequestedAt: submittedAt,
       });
+      await this.#queueReview(tx, ctx, submittedAt);
     });
+  }
+
+  /**
+   * One `PlaceReviewActor.review` row for the submission stamped
+   * `submittedAt`. Attributed to the creator, so the model call it causes is
+   * charged to them (`outbox-attribution`), and carrying the stamp so a verdict
+   * reached on an older submission is discarded by `applyReview`.
+   */
+  async #queueReview(tx: DbOrTx, ctx: Ctx, submittedAt: Date): Promise<void> {
+    await enqueueOutbox(
+      tx,
+      OUTBOX_TARGETS["PlaceReviewActor.review"],
+      {
+        targetId: this.key,
+        payload: { submittedAt: submittedAt.toISOString() },
+      },
+      { attributeTo: ctx },
+    );
   }
 
   /* ---------------------------------------------------------------------- */
@@ -852,8 +981,10 @@ export class PlaceActor
     ctx: Ctx,
     input: EnrichFromGoogleInput = {},
   ): Promise<EnrichFromGoogleResult> {
-    this.requireAggregate();
-    requireSignedIn(ctx, "enrich a place");
+    // X27: a stranger may not spend Google budget on — or learn of — a place
+    // still under review. `system`/`admin` see every row, so the delivered
+    // half is unchanged.
+    await this.#readable(ctx, "enrich a place");
 
     const maxPhotos = normalizeMaxPhotos(input.maxPhotos);
     const requestedGoogleId = trimOrNull(input.googlePlaceId);
@@ -964,8 +1095,7 @@ export class PlaceActor
     ctx: Ctx,
     input: RefreshFromSourceInput = {},
   ): Promise<EnrichFromGoogleResult> {
-    this.requireAggregate();
-    requirePrivileged(ctx, deliveredOnly("refreshFromSource"));
+    this.requirePrivilegedAggregate(ctx, deliveredOnly("refreshFromSource"));
 
     const result = await this.#enrich(ctx, {
       googlePlaceId: null,
@@ -1176,8 +1306,10 @@ export class PlaceActor
     ctx: Ctx,
     input: AddMenuFromScanInput,
   ): Promise<AddMenuFromScanResult> {
-    const aggregate = this.requireAggregate();
-    requirePrivileged(ctx, deliveredOnly("addMenuFromScan"));
+    const aggregate = this.requirePrivilegedAggregate(
+      ctx,
+      deliveredOnly("addMenuFromScan"),
+    );
 
     const menuScanId = requireUuid(input.menuScanId, "menuScanId");
     const already = aggregate.menuItems.some(
@@ -1294,8 +1426,7 @@ export class PlaceActor
     ctx: Ctx,
     input: VerifyMenuItemMatchInput,
   ): Promise<PlaceMenuItemDto> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "verify a menu-item match");
+    const aggregate = await this.#readable(ctx, "verify a menu-item match");
 
     const menuItemId = requireUuid(input.menuItemId, "menuItemId");
     const row = aggregate.menuItems.find((item) => item.id === menuItemId);
@@ -1374,8 +1505,10 @@ export class PlaceActor
     ctx: Ctx,
     input: LinkMenuItemRecipeInput,
   ): Promise<LinkMenuItemRecipeResult> {
-    const aggregate = this.requireAggregate();
-    requirePrivileged(ctx, deliveredOnly("linkMenuItemRecipe"));
+    const aggregate = this.requirePrivilegedAggregate(
+      ctx,
+      deliveredOnly("linkMenuItemRecipe"),
+    );
 
     const menuItemId = requireUuid(input.menuItemId, "menuItemId");
     const recipeId = requireUuid(input.recipeId, "recipeId");
@@ -1443,8 +1576,7 @@ export class PlaceActor
    * conflicting — the pair, not the triple, is the identity.
    */
   async linkBrand(ctx: Ctx, input: LinkBrandInput): Promise<PlaceBrandDto> {
-    this.requireAggregate();
-    requireSignedIn(ctx, "link a brand to a place");
+    await this.#readable(ctx, "link a brand to a place");
 
     const brandId = requireUuid(input.brandId, "brandId");
     if (!isPlaceBrandRelationship(input.relationshipType)) {
@@ -1491,8 +1623,7 @@ export class PlaceActor
    * rule holds even for a one-column bump.
    */
   async recordAccess(ctx: Ctx): Promise<RecordedAccess> {
-    this.requireAggregate();
-    requireSignedIn(ctx, "record a place visit");
+    await this.#readable(ctx, "record a place visit");
 
     const now = new Date();
     await this.tx(async (tx) => {
@@ -1512,6 +1643,330 @@ export class PlaceActor
       accessCount: place.accessCount ?? 0,
       lastAccessedAt: (place.lastAccessedAt ?? now).toISOString(),
     };
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Review (X27 / D28)                                                      */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The verdict `PlaceReviewActor` reached, landed — see the interface doc.
+   *
+   * ## Never an approval nobody made
+   *
+   * Only a `PlaceReview` whose `approved` is literally `true` shares a place,
+   * and only for the submission it was reached on. Everything else leaves the
+   * row where it was: a stale verdict (the creator edited since), a place
+   * already decided (a redelivery), a place that is gone. Those are `skipped`
+   * rather than errors, because each is a normal way for a queued review to
+   * arrive late, and an error would only make the outbox retry it.
+   *
+   * ## The duplicate check, once more, against what is now shared
+   *
+   * While a place was pending, a near-identical *shared* place may have
+   * appeared (someone else added the same bar, and theirs was approved
+   * first). Two shared rows for one venue is the thing the creation check
+   * exists to prevent, so approval re-runs it under the same geocell locks —
+   * against shared places only, since only those are on everyone's map — and
+   * turns an approval that would duplicate one into a rejection that names
+   * it. Naming it leaks nothing: it is shared.
+   */
+  async applyReview(
+    ctx: Ctx,
+    input: ApplyPlaceReviewInput,
+  ): Promise<PlaceReviewOutcome> {
+    requirePrivileged(ctx, deliveredOnly("applyReview"));
+    const aggregate = this.aggregate;
+    if (aggregate === null) {
+      return { placeId: this.key, status: "skipped", reason: "gone" };
+    }
+    const row = aggregate.place;
+    if (row.reviewStatus !== "pending") {
+      return { placeId: this.key, status: "skipped", reason: "decided" };
+    }
+    if (!sameInstant(row.reviewRequestedAt, input.submittedAt)) {
+      return { placeId: this.key, status: "skipped", reason: "stale" };
+    }
+
+    const review = input.review;
+    const suggestions = {
+      suggestedCategories: [...suggestedCategoriesFrom(review, row.categories)],
+      suggestedDescription: suggestedDescriptionFrom(review, row.description),
+    };
+    const reviewedAt = new Date();
+
+    // The write lands only on the row this verdict was reached for: still
+    // `pending`, still this submission. The checks above read this
+    // activation's cached copy, which is authoritative while every write goes
+    // through this actor — but a row changed underneath it (an admin's SQL,
+    // the e2e suite's `holdPlaceInReview`) must not be overwritten by a
+    // verdict about content it no longer holds. Zero rows is `stale`.
+    const thisSubmission = and(
+      eq(places.id, this.key),
+      eq(places.reviewStatus, "pending"),
+      eq(places.reviewRequestedAt, new Date(Date.parse(input.submittedAt))),
+    );
+
+    const outcome = await this.tx(async (tx): Promise<PlaceReviewOutcome> => {
+      const land = async (
+        set: Partial<typeof places.$inferInsert>,
+        landed: PlaceReviewOutcome,
+      ): Promise<PlaceReviewOutcome> => {
+        const written = await tx
+          .update(places)
+          .set({ reviewedAt, ...suggestions, ...set })
+          .where(thisSubmission)
+          .returning({ id: places.id });
+        return written.length === 0
+          ? { placeId: this.key, status: "skipped", reason: "stale" }
+          : landed;
+      };
+
+      // `=== true`, not truthiness: the seam already refuses an answer with
+      // no boolean verdict, and this keeps a malformed one from ever
+      // reading as consent.
+      if (review.approved === true) {
+        await lockPlaceGeocells(tx, row.location);
+        const blocking = blockingDuplicate(
+          await findDuplicatePlaces(tx, row.name, row.location),
+          this.key,
+        );
+        if (blocking === undefined) {
+          return land(
+            {
+              reviewStatus: "approved",
+              rejectionReason: null,
+              confidence: confidenceFromReview(review).toFixed(2),
+            },
+            { placeId: this.key, status: "approved", reason: "approved" },
+          );
+        }
+        return land(
+          {
+            reviewStatus: "rejected",
+            rejectionReason: alreadySharedReason(blocking),
+          },
+          { placeId: this.key, status: "rejected", reason: "duplicate" },
+        );
+      }
+
+      return land(
+        {
+          reviewStatus: "rejected",
+          rejectionReason: rejectionReasonFrom(review),
+        },
+        { placeId: this.key, status: "rejected", reason: "rejected" },
+      );
+    });
+    await this.reload();
+    return outcome;
+  }
+
+  /**
+   * Resubmit an unshared place (interface doc). Same normalisation as
+   * creation (`normalizeCreateInput`), same duplicate rule from the creator's
+   * point of view, and a fresh review queued in the same transaction; the old
+   * verdict, its reason and its suggestions are cleared, because they were
+   * about what the creator just changed.
+   */
+  async editUnshared(ctx: Ctx, input: CreatePlaceInput): Promise<PlaceDto> {
+    const aggregate = await this.#requireCreator(ctx, "edit this place");
+    if (aggregate.place.reviewStatus === "approved") {
+      throw new ConflictError(
+        "this place is already shared on the map, so it can no longer be " +
+          "edited from here",
+      );
+    }
+    const normalized = normalizeCreateInput(input);
+    const submittedAt = new Date();
+    const creatorId = aggregate.place.createdBy ?? ctx.viewerId;
+
+    await this.tx(async (tx) => {
+      await lockPlaceGeocells(tx, normalized.location);
+      const blocking = blockingDuplicate(
+        await findDuplicatePlaces(
+          tx,
+          normalized.name,
+          normalized.location,
+          DUPLICATE_RADIUS_METERS,
+          creatorId,
+        ),
+        this.key,
+      );
+      if (blocking !== undefined) throw duplicatePlaceConflict(blocking);
+
+      await tx
+        .update(places)
+        .set({
+          name: normalized.name,
+          categories: [...normalized.categories],
+          location: normalized.location,
+          streetAddress: normalized.streetAddress,
+          locality: normalized.locality,
+          region: normalized.region,
+          postcode: normalized.postcode,
+          countryCode: normalized.countryCode,
+          phone: normalized.phone,
+          website: normalized.website,
+          email: normalized.email,
+          description: normalized.description,
+          confidence: BASE_CONFIDENCE.toFixed(2),
+          reviewStatus: "pending",
+          reviewRequestedAt: submittedAt,
+          rejectionReason: null,
+          suggestedCategories: null,
+          suggestedDescription: null,
+          reviewedAt: null,
+          updatedAt: submittedAt,
+        })
+        .where(eq(places.id, this.key));
+      await this.#queueReview(tx, ctx, submittedAt);
+    });
+    await this.reload();
+    return placeDtoFor(ctx, this.requireAggregate().place);
+  }
+
+  /**
+   * Delete an unshared place (interface doc). The place-owned children go
+   * with it (`ON DELETE CASCADE`), and so does the creator's own saved /
+   * visited row (`user_place_interactions`, cascade too). A tier-list entry
+   * or a menu scan is another aggregate's row that this actor may not
+   * delete, so either one refuses the delete, naming what to remove first.
+   */
+  async deleteUnshared(ctx: Ctx): Promise<DeletedPlace> {
+    const aggregate = await this.#requireCreator(ctx, "delete this place");
+    if (aggregate.place.reviewStatus === "approved") {
+      throw new ConflictError(
+        "this place is shared on the map, so it can no longer be deleted",
+      );
+    }
+    await this.tx(async (tx) => {
+      const [listed] = await tx
+        .select({ total: count() })
+        .from(tierListItems)
+        .where(eq(tierListItems.placeId, this.key));
+      if ((listed?.total ?? 0) > 0) {
+        throw new ConflictError(
+          "this place is on one of your tier lists; remove it from the list " +
+            "first, then delete it",
+        );
+      }
+      const [scanned] = await tx
+        .select({ total: count() })
+        .from(menuScans)
+        .where(
+          or(
+            eq(menuScans.placeId, this.key),
+            eq(menuScans.estimatedPlaceId, this.key),
+            eq(menuScans.manualPlaceOverride, this.key),
+          ),
+        );
+      if ((scanned?.total ?? 0) > 0) {
+        throw new ConflictError(
+          "a menu scan is filed against this place, so it can't be deleted",
+        );
+      }
+      await tx.delete(places).where(eq(places.id, this.key));
+    });
+    this.setAggregate(null);
+    return { placeId: this.key };
+  }
+
+  /**
+   * Take one of the review's suggestions (interface doc). Only what the
+   * review actually offered can be taken — this is not a general category
+   * editor — and the suggestion is consumed either way.
+   */
+  async acceptSuggestion(
+    ctx: Ctx,
+    input: PlaceSuggestionAcceptance,
+  ): Promise<PlaceDto> {
+    const aggregate = await this.#requireCreator(ctx, "change this place");
+    const row = aggregate.place;
+    const offered = row.suggestedCategories ?? [];
+
+    if (input.category !== undefined) {
+      const category = input.category.trim();
+      if (!offered.includes(category)) {
+        throw new ValidationError(
+          `"${category}" is not one of this place's suggested categories`,
+        );
+      }
+      const categories = row.categories.includes(category)
+        ? row.categories
+        : [...row.categories, category];
+      await this.tx(async (tx) => {
+        await tx
+          .update(places)
+          .set({
+            categories,
+            suggestedCategories: offered.filter((c) => c !== category),
+            updatedAt: new Date(),
+          })
+          .where(eq(places.id, this.key));
+      });
+    } else if (input.description === true) {
+      const suggestion = row.suggestedDescription;
+      if (suggestion === null) {
+        throw new ValidationError("this place has no suggested description");
+      }
+      await this.tx(async (tx) => {
+        await tx
+          .update(places)
+          .set({
+            // The creator's own words are never replaced: the suggestion is
+            // only taken onto a place with no description of its own.
+            ...(trimOrNull(row.description) === null
+              ? { description: suggestion }
+              : {}),
+            suggestedDescription: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(places.id, this.key));
+      });
+    } else {
+      throw new ValidationError(
+        "name a suggested category, or `description: true`",
+      );
+    }
+    await this.reload();
+    return placeDtoFor(ctx, this.requireAggregate().place);
+  }
+
+  /** Dismiss every remaining suggestion (interface doc). Idempotent. */
+  async dismissSuggestions(ctx: Ctx): Promise<PlaceDto> {
+    const aggregate = await this.#requireCreator(ctx, "change this place");
+    const row = aggregate.place;
+    if (
+      (row.suggestedCategories ?? []).length > 0 ||
+      row.suggestedDescription !== null
+    ) {
+      await this.tx(async (tx) => {
+        await tx
+          .update(places)
+          .set({ suggestedCategories: null, suggestedDescription: null })
+          .where(eq(places.id, this.key));
+      });
+      await this.reload();
+    }
+    return placeDtoFor(ctx, this.requireAggregate().place);
+  }
+
+  /**
+   * The creator's controls: signed in, able to see the place (anyone else is
+   * told it is absent), and its creator (an approved place is visible to
+   * all, so a stranger there is told `Forbidden` — existence is no secret).
+   * `admin` passes, as the repair path.
+   */
+  async #requireCreator(ctx: Ctx, action: string): Promise<PlaceAggregate> {
+    const aggregate = await this.#readable(ctx, action);
+    await this.requireAllowed(
+      ctx,
+      isOwner(ctx, aggregate.place.createdBy),
+      `only the person who added this place can ${action}`,
+      aggregate,
+    );
+    return aggregate;
   }
 
   /* ---------------------------------------------------------------------- */
@@ -2164,6 +2619,105 @@ export const normalizeConfidence = (value: number | null): number | null => {
   return value;
 };
 
+type NormalizedCreateInput = {
+  readonly name: string;
+  readonly categories: readonly string[];
+  readonly location: LngLat;
+  readonly streetAddress: string | null;
+  readonly locality: string | null;
+  readonly region: string | null;
+  readonly postcode: string | null;
+  readonly countryCode: string | null;
+  readonly phone: string | null;
+  readonly website: string | null;
+  readonly email: string | null;
+  readonly description: string | null;
+};
+
+/**
+ * Everything `createUserPlaceAction` validated before it inserted, minus the
+ * two things that were never the client's to choose (`confidence`, which the
+ * review sets, and `google_place_id`, which nothing user-facing sets at all).
+ *
+ * Moved here from `place-creation-actor.ts` (which re-exports it) when X27
+ * gave this actor `editUnshared`: a resubmission is held to exactly the rules
+ * a creation is, and two copies of a bound drift.
+ */
+export const normalizeCreateInput = (
+  input: CreatePlaceInput | CreateUserPlaceInput,
+): NormalizedCreateInput => {
+  if (!isLngLat(input.location)) {
+    throw new ValidationError(
+      "location must be { lng, lat } within (-180..180, -90..90)",
+    );
+  }
+  const description = trimOrNull(input.description);
+  if (description !== null && description.length > PLACE_DESCRIPTION_MAX) {
+    throw new ValidationError(
+      `a description must be under ${PLACE_DESCRIPTION_MAX} characters`,
+    );
+  }
+  // Present so a caller passing one gets told it is ignored rather than
+  // silently dropped — `confidence` is the review's to set (§2.1).
+  if (normalizeConfidence(input.confidence ?? null) !== null) {
+    throw new ValidationError(
+      "confidence is set by the AI review, not by the caller",
+    );
+  }
+
+  return {
+    name: requirePlaceName(input.name),
+    categories: requireCategories(input.categories),
+    location: input.location,
+    streetAddress: trimOrNull(input.streetAddress),
+    locality: trimOrNull(input.locality),
+    region: trimOrNull(input.region),
+    postcode: trimOrNull(input.postcode),
+    countryCode: normalizeCountryCode(input.countryCode ?? null),
+    phone: trimOrNull(input.phone),
+    website: normalizeWebsite(input.website),
+    email: trimOrNull(input.email),
+    description,
+  };
+};
+
+const WEBSITE_MAX_LENGTH = 2048;
+const WEBSITE_PROTOCOL = /^https?:\/\//i;
+
+/**
+ * `place-actions.ts`'s `normalizeWebsite`, preserved — including the bare-host
+ * convenience (`example.com` → `https://example.com`) the create form relies
+ * on. The one change: an unusable value is a `ValidationError` rather than a
+ * silent `null`, so a typo is reported instead of quietly discarded.
+ */
+export const normalizeWebsite = (
+  value: string | null | undefined,
+): string | null => {
+  const trimmed = trimOrNull(value);
+  if (trimmed === null) return null;
+  if (trimmed.length > WEBSITE_MAX_LENGTH) {
+    throw new ValidationError(
+      `a website URL must be under ${WEBSITE_MAX_LENGTH} characters`,
+    );
+  }
+  const candidate = WEBSITE_PROTOCOL.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new ValidationError(`not a usable website URL: ${trimmed}`);
+  }
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    !parsed.hostname.includes(".")
+  ) {
+    throw new ValidationError(`not a usable website URL: ${trimmed}`);
+  }
+  return parsed.toString();
+};
+
 /* -------------------------------------------------------------------------- */
 /* The duplicate rule — shared with `PlaceCreationActor`                       */
 /* -------------------------------------------------------------------------- */
@@ -2197,17 +2751,33 @@ const numeric = (value: number | string): number =>
  * {@link DUPLICATE_LIMIT} by similarity).
  *
  * Both halves of the duplicate check call this with the same arguments — the
- * early one in `PlaceCreationActor` (before the AI review, so a duplicate is
- * refused without paying for one) and the authoritative one in
+ * early one in `PlaceCreationActor` and the authoritative one in
  * `PlaceActor.create` under the geocell locks — so the two cannot disagree
  * about what a duplicate is.
+ *
+ * X27: the SQL now answers with **shared** places only, for everybody. Pass
+ * `viewerId` to add that viewer's own unshared places
+ * (`ownUnsharedDuplicates`): a creator is told about a place they already
+ * saved, and nobody is told about anyone else's. Without it — the approval
+ * re-check in `applyReview` — only what is on everyone's map counts.
  */
 export const findDuplicatePlaces = async (
   db: DbOrTx,
   name: string,
   location: LngLat,
   radiusMeters: number = DUPLICATE_RADIUS_METERS,
+  viewerId: string | null = null,
 ): Promise<readonly DuplicateCandidate[]> => {
+  const own =
+    viewerId === null
+      ? []
+      : await ownUnsharedDuplicates(db, viewerId, {
+          name,
+          location,
+          radiusMeters,
+          minSimilarity: DUPLICATE_MIN_SIMILARITY,
+          limit: DUPLICATE_LIMIT,
+        });
   const result = await db.execute<DuplicateRow>(sql`
     select id, name, similarity, distance_m
     from find_duplicate_places(
@@ -2219,12 +2789,21 @@ export const findDuplicatePlaces = async (
       ${DUPLICATE_LIMIT}
     )
   `);
-  return result.rows.map((row) => ({
+  const shared = result.rows.map((row) => ({
     placeId: row.id,
     name: row.name,
     similarity: numeric(row.similarity),
     distanceMeters: numeric(row.distance_m),
   }));
+  if (own.length === 0) return shared;
+  // The function's own order — similarity, then distance — over both halves,
+  // and its own limit.
+  return [...own, ...shared]
+    .sort(
+      (a, b) =>
+        b.similarity - a.similarity || a.distanceMeters - b.distanceMeters,
+    )
+    .slice(0, DUPLICATE_LIMIT);
 };
 
 /**
@@ -2242,6 +2821,37 @@ export const blockingDuplicate = (
       candidate.similarity > DUPLICATE_BLOCK_SIMILARITY &&
       candidate.distanceMeters < DUPLICATE_BLOCK_DISTANCE_METERS,
   );
+
+/**
+ * §8.4's replay rule, from the creator's side (X27): a `placeId` that already
+ * names a row converges on it only when the row is the same creator's. Any
+ * other owner's row — shared, pending or rejected alike — is refused in one
+ * wording, so a reused id cannot be used to learn whether an unshared place
+ * sits behind it.
+ */
+export const requireOwnReplay = (
+  row: { readonly createdBy: string | null },
+  creatorId: string,
+  placeId: string,
+): void => {
+  if (row.createdBy === creatorId) return;
+  throw new ConflictError(
+    `placeId ${placeId} is already in use; mint a new id for a new place`,
+  );
+};
+
+/** Two timestamps naming one instant, a `Date` against an ISO string. */
+const sameInstant = (stored: Date | null, iso: string): boolean => {
+  if (stored === null) return false;
+  const parsed = Date.parse(iso);
+  return Number.isFinite(parsed) && parsed === stored.getTime();
+};
+
+/** The rejection an approval turns into when a shared twin now exists. */
+const alreadySharedReason = (blocking: DuplicateCandidate): string =>
+  `"${blocking.name}" is already on the map ` +
+  `${Math.round(blocking.distanceMeters)}m away. Save that one instead, or ` +
+  "edit this place if it really is somewhere else.";
 
 /** What a blocked creation is told — one wording, wherever it was caught. */
 export const duplicatePlaceConflict = (

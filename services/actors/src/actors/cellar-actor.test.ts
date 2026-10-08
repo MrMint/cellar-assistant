@@ -818,6 +818,50 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
   /* §8.4 idempotency                                                    */
   /* ------------------------------------------------------------------ */
 
+  describe("addItem: a source place under review (X27)", () => {
+    it("somebody else's pending place is refused as an unknown one; the owner's own is accepted", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const other = await seedUser(db);
+        const cellarId = await seedCellar(db, { createdById: owner });
+        const actor = await activate(newCellarActor(cellarId, db));
+        const wine = await seedWine(db, owner);
+        const placeIdFor = async (createdBy: string) => {
+          const id = randomUUID();
+          await db.execute(sql`
+            insert into public.places
+              (id, name, categories, location, source, review_status, created_by)
+            values (${id}::uuid, 'Pending shop', ARRAY['wine_shop']::text[],
+              ST_SetSRID(ST_MakePoint(-122.41, 37.77), 4326)::geography,
+              'user', 'pending', ${createdBy}::uuid)
+          `);
+          return id;
+        };
+        const theirs = await placeIdFor(other);
+        const mine = await placeIdFor(owner);
+        const ctx = userCtx(owner, "r");
+
+        const hidden = await actor
+          .addItem(ctx, { item: wine, sourcePlaceId: theirs })
+          .catch((error: unknown) => error);
+        const absentId = randomUUID();
+        const absent = await actor
+          .addItem(ctx, { item: wine, sourcePlaceId: absentId })
+          .catch((error: unknown) => error);
+        expect(hidden).toBeInstanceOf(NotFoundError);
+        expect(String((hidden as Error).message).replace(theirs, "<id>")).toBe(
+          String((absent as Error).message).replace(absentId, "<id>"),
+        );
+
+        const added = await actor.addItem(ctx, {
+          item: wine,
+          sourcePlaceId: mine,
+        });
+        expect(added.sourcePlaceId).toBe(mine);
+      });
+    });
+  });
+
   describe("addItem idempotency (§8.4)", () => {
     it("a re-delivered outbox call creates exactly one cellar item", async () => {
       await withTestDb(async (db) => {

@@ -41,6 +41,8 @@ export type MarkerNode = {
   readonly priceLevel?: number | null;
   readonly confidence?: number | null;
   readonly isVerified?: boolean | null;
+  /** X27: absent on a node that predates it (a deep link's shape). */
+  readonly reviewStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
   readonly location?: LngLat | null;
   readonly streetAddress?: string | null;
   readonly locality?: string | null;
@@ -89,6 +91,7 @@ export function placeResultFromNode(
     hours: node.hours ?? undefined,
     confidence: orUndefined(node.confidence),
     is_verified: orUndefined(node.isVerified),
+    review_status: orUndefined(node.reviewStatus),
   };
   if (!searchParams) return base;
   const overallQuality = calculateOverallQuality(base);
@@ -110,6 +113,7 @@ export type MapEntryNode = {
   readonly rating?: number | null;
   readonly confidence?: number | null;
   readonly isVerified?: boolean | null;
+  readonly reviewStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
   readonly location?: LngLat | null;
   readonly clusterId?: number;
   readonly count?: number;
@@ -141,6 +145,7 @@ export function mapItemsFromBrowse(
             rating: node.rating,
             confidence: node.confidence,
             isVerified: node.isVerified,
+            reviewStatus: node.reviewStatus,
             location: node.location,
           },
           searchParams,

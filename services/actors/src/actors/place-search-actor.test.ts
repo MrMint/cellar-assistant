@@ -361,12 +361,14 @@ describe.skipIf(skip)("PlaceSearchActor (§2.3)", () => {
   /* §1.5 keying                                                         */
   /* ------------------------------------------------------------------ */
 
-  describe("the viewer is in the key only when the search is viewer-scoped", () => {
-    it("shares one activation for an unfiltered search", async () => {
+  describe("the viewer is always in the key (X27)", () => {
+    it("splits activations even for an unfiltered search — the answer carries the viewer's own places under review", async () => {
       const a = "11111111-1111-4111-8111-111111111111";
       const b = "22222222-2222-4222-8222-222222222222";
       const input: PlaceSearchInput = { query: "wine bar" };
-      expect(placeSearchActorId(input, a)).toBe(placeSearchActorId(input, b));
+      expect(placeSearchActorId(input, a)).not.toBe(
+        placeSearchActorId(input, b),
+      );
     });
 
     it("splits activations for a tier-list-filtered or visit-filtered search", () => {
@@ -443,6 +445,64 @@ describe.skipIf(skip)("PlaceSearchActor (§2.3)", () => {
       await expect(
         newActor(input, db, null).all(userCtx(null), input),
       ).rejects.toThrow(ForbiddenError);
+    });
+  });
+  /* ------------------------------------------------------------------ */
+  /* X27 / D28                                                           */
+  /* ------------------------------------------------------------------ */
+
+  describe("places under review (X27)", () => {
+    it("the creator finds their own pending place by its name, marked; a stranger asking the same question gets nothing", async () => {
+      await withTestDb(async (db) => {
+        const creator = await seedUser(db);
+        const stranger = await seedUser(db);
+        const pending = await seedPlace(db, {
+          name: "Quietly Pending Wine Room",
+          lng: -83,
+          lat: 40,
+          reviewStatus: "pending",
+          createdBy: creator,
+        });
+        await seedPlace(db, {
+          name: "Quietly Rejected Wine Room",
+          lng: -83.01,
+          lat: 40,
+          reviewStatus: "rejected",
+          createdBy: stranger,
+        });
+        const input: PlaceSearchInput = { query: "Quietly Pending Wine" };
+
+        const mine = await newActor(input, db, creator).all(
+          userCtx(creator),
+          input,
+        );
+        expect(mine.map((h) => [h.placeId, h.reviewStatus])).toEqual([
+          [pending, "pending"],
+        ]);
+
+        const theirs = await newActor(input, db, stranger).all(
+          userCtx(stranger),
+          input,
+        );
+        expect(theirs).toEqual([]);
+      });
+    });
+
+    it("a shared hit says so", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedPlace(db, {
+          name: "Openly Shared Taproom",
+          lng: -83,
+          lat: 40,
+        });
+        const input: PlaceSearchInput = { query: "Openly Shared Taproom" };
+        const hits = await newActor(input, db, viewer).all(
+          userCtx(viewer),
+          input,
+        );
+        expect(hits.map((h) => h.reviewStatus)).toEqual(["approved"]);
+      });
     });
   });
 });

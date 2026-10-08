@@ -133,9 +133,11 @@ describe.skipIf(skip)("MapActor", () => {
       "placeId",
       "primaryCategory",
       "rating",
-    ];
+      // X27: what draws a creator's own place as "Under review".
+      "reviewStatus",
+    ].sort();
 
-    it("returns exactly the nine place fields, and no more", async () => {
+    it("returns exactly the ten place fields, and no more", async () => {
       await withTestDb(async (db) => {
         const s = await scenario(db, "PUBLIC");
         const entries = await browseAll(db, s.owner);
@@ -487,6 +489,94 @@ describe.skipIf(skip)("MapActor", () => {
           { first: 1, after: first.entries[0]?.cursor ?? null },
         );
         expect(actor.projectionRuns).toBe(2);
+      });
+    });
+  });
+  /* -------------------------------------------------------------------- */
+  /* X27 / D28: places under review are their creator's alone              */
+  /* -------------------------------------------------------------------- */
+
+  describe("places under review (X27)", () => {
+    const seedUnshared = async (db: DbOrTx) => {
+      const creator = await seedUser(db);
+      const stranger = await seedUser(db);
+      const pending = await seedPlace(db, {
+        name: "Under Review Bar",
+        lng: -83.003,
+        lat: 40.003,
+        reviewStatus: "pending",
+        createdBy: creator,
+      });
+      const rejected = await seedPlace(db, {
+        name: "Rejected Bar",
+        lng: -83.004,
+        lat: 40.004,
+        reviewStatus: "rejected",
+        createdBy: creator,
+        // A low confidence would hide a *shared* place at this zoom; the
+        // creator's own place is drawn regardless.
+        confidence: 0.2,
+      });
+      const shared = await seedPlace(db, {
+        name: "Shared Bar",
+        lng: -83.005,
+        lat: 40.005,
+      });
+      return { creator, stranger, pending, rejected, shared };
+    };
+
+    it("the creator sees their pending and rejected places, with their status; a stranger sees neither", async () => {
+      await withTestDb(async (db) => {
+        const s = await seedUnshared(db);
+        const mine = await browseAll(db, s.creator);
+        const byId = new Map(
+          mine.flatMap((e) => (e.kind === "place" ? [[e.placeId, e]] : [])),
+        );
+        expect(byId.get(s.pending)?.reviewStatus).toBe("pending");
+        expect(byId.get(s.rejected)?.reviewStatus).toBe("rejected");
+        expect(byId.get(s.shared)?.reviewStatus).toBe("approved");
+
+        const theirs = await browseAll(db, s.stranger);
+        expect(names(theirs)).toEqual(["Shared Bar"]);
+      });
+    });
+
+    it("the creator's own places honour the map's filters", async () => {
+      await withTestDb(async (db) => {
+        const s = await seedUnshared(db);
+        const coffee = await browseAll(db, s.creator, {
+          categories: ["coffee_shop"],
+        });
+        expect(names(coffee)).not.toContain("Under Review Bar");
+        const visited = await browseAll(db, s.creator, {
+          visitStatus: "visited",
+        });
+        expect(names(visited)).toEqual([]);
+        const outside = await browseAll(db, s.creator, {
+          bounds: { west: -84, south: 41, east: -83.9, north: 41.1 },
+        });
+        expect(outside).toEqual([]);
+      });
+    });
+
+    it("a tier list's pending place is drawn for its creator and nobody else, even on a public list", async () => {
+      await withTestDb(async (db) => {
+        const s = await seedUnshared(db);
+        const tierListId = await seedTierList(db, {
+          createdById: s.creator,
+          privacy: "PUBLIC",
+        });
+        await seedTierListPlace(db, tierListId, s.pending);
+        await seedTierListPlace(db, tierListId, s.shared);
+
+        const forCreator = await browseAll(db, s.creator, {
+          tierListIds: [tierListId],
+        });
+        expect(names(forCreator)).toEqual(["Shared Bar", "Under Review Bar"]);
+        const forStranger = await browseAll(db, s.stranger, {
+          tierListIds: [tierListId],
+        });
+        expect(names(forStranger)).toEqual(["Shared Bar"]);
       });
     });
   });

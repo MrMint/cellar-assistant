@@ -28,7 +28,6 @@ import {
   MODEL_SEAMS,
   readModelBudgetPolicy,
 } from "../../actors/budget-actor.ts";
-import { setPlaceReviewer } from "../../actors/place-creation-actor.ts";
 import { setInsightsGenerator } from "../../actors/tier-list-actor.ts";
 import { EMBEDDING_DIMENSIONS, setEmbedder } from "../embeddings.ts";
 import {
@@ -37,6 +36,7 @@ import {
 } from "../image-embeddings.ts";
 import { setItemDefaultsProvider } from "../item-defaults.ts";
 import { setMenuExtractionProvider, setMenuMatchVerifier } from "../menu-ai.ts";
+import { setPlaceReviewer } from "../place-review.ts";
 import { setRecipePhotoExtractor } from "../recipe-photo-ai.ts";
 import type { EmbeddingModelIdentity } from "../vectors.ts";
 import { embeddingModelKey, setEmbeddingModel } from "../vectors.ts";

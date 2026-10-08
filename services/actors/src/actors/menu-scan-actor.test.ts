@@ -726,6 +726,64 @@ describe.skipIf(skip)("MenuScanActor (B8)", () => {
     });
   });
 
+  /**
+   * X27: somebody else's place under review is, to this caller, a place that
+   * does not exist — the same refusal, before anything is written, so a scan
+   * can neither be filed into it nor used to learn that it is there. The
+   * creator's own pending place is a fine hint.
+   */
+  it("create: a hint naming somebody else's pending place is refused exactly as an unknown one; the creator's own is accepted", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const creator = await seedUser(db);
+      const fileId = await seedFile(db);
+      const pending = await seedPlace(db, {
+        name: "Pending",
+        ...SAN_FRANCISCO,
+      });
+      await db.execute(sql`
+        update public.places
+        set review_status = 'pending', created_by = ${creator}::uuid
+        where id = ${pending}::uuid
+      `);
+
+      for (const placeHint of [
+        { placeId: pending },
+        { estimatedPlaceId: pending },
+      ]) {
+        const scanId = crypto.randomUUID();
+        const actor = await activate(newScanActor(scanId, db));
+        const hidden = await actor
+          .create(userCtx(owner, "r1"), { originalImageId: fileId, placeHint })
+          .catch((error: unknown) => error);
+        const ghost = await (
+          await activate(newScanActor(crypto.randomUUID(), db))
+        )
+          .create(userCtx(owner, "r2"), {
+            originalImageId: fileId,
+            placeHint: Object.fromEntries(
+              Object.keys(placeHint).map((key) => [key, crypto.randomUUID()]),
+            ),
+          })
+          .catch((error: unknown) => error);
+        expect(hidden).toBeInstanceOf(NotFoundError);
+        expect((hidden as Error).message).toBe((ghost as Error).message);
+        expect(
+          await db.select().from(menuScans).where(eq(menuScans.id, scanId)),
+        ).toEqual([]);
+      }
+
+      const creatorsFile = await seedFile(db);
+      const own = await (
+        await activate(newScanActor(crypto.randomUUID(), db))
+      ).create(userCtx(creator, "r3"), {
+        originalImageId: creatorsFile,
+        placeHint: { placeId: pending },
+      });
+      expect(own.placeId).toBe(pending);
+    });
+  });
+
   /** Same FK, the other client-suppliable column that feeds `effectivePlaceId`. */
   it("create: an estimatedPlaceId naming no place is refused the same way", async () => {
     await withTestDb(async (db) => {

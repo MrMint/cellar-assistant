@@ -53,6 +53,8 @@ import {
   VisitedToggleButton,
 } from "./PlaceActionButtons";
 import { PlaceMenuItems } from "./PlaceMenuItems";
+import { PlaceReviewBadge } from "./PlaceReviewBadge";
+import { isUnshared, type ReviewStatus } from "./place-review";
 import {
   formatCategoryName,
   formatTimeString,
@@ -64,6 +66,8 @@ import {
 export interface Place {
   id: string;
   name: string;
+  /** X27: PENDING / REJECTED reach only the person who added the place. */
+  review_status?: ReviewStatus;
   primary_category?: string;
   categories: string[];
   street_address?: string;
@@ -359,6 +363,7 @@ export function PlaceDetailsContent({
               {place.name}
             </Link>
           </h2>
+          <PlaceReviewBadge status={place.review_status} className="mb-2" />
 
           <div className="mb-2 flex flex-row flex-wrap items-center gap-x-4 gap-y-1">
             {mergedPlace.rating && (
@@ -410,6 +415,21 @@ export function PlaceDetailsContent({
           <Close />
         </IconButton>
       </div>
+
+      {/* X27: what "Under review" means, and where the controls are */}
+      {!isCompact && isUnshared(place.review_status) && (
+        <p
+          className={cn("type-footnote pb-4 text-ink-2", gutter)}
+          data-testid="drawer-review-note"
+        >
+          {place.review_status === "PENDING"
+            ? "Only you can see this place until it's been checked. "
+            : "Only you can see this place. "}
+          <Link href={`/places/${place.id}`} underline="always">
+            {place.review_status === "PENDING" ? "Edit or delete" : "See why"}
+          </Link>
+        </p>
+      )}
 
       {/* Business Status Warning */}
       {!isCompact && closedStatus && (

@@ -492,6 +492,93 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
     });
   });
 
+  describe("places under review (X27)", () => {
+    const makeUnshared = async (db: DbOrTx, creator: string, name: string) => {
+      const id = await seedPlace(db, name);
+      await db.execute(sql`
+        update public.places
+        set review_status = 'pending', created_by = ${creator}::uuid
+        where id = ${id}::uuid
+      `);
+      return id;
+    };
+
+    it("a creator may rank their own pending place; anybody else naming it gets the NotFound an unknown id gets", async () => {
+      await withTestDb(async (db) => {
+        const creator = await seedUser(db);
+        const stranger = await seedUser(db);
+        const pending = await makeUnshared(db, creator, "Pending Bar");
+
+        const mine = await activate(
+          newTierListActor(
+            await seedTierList(db, { createdById: creator }),
+            db,
+          ),
+        );
+        const added = await mine.addItem(userCtx(creator, "r1"), {
+          entry: { type: "PLACE", id: pending },
+        });
+        expect(added.entry).toEqual({ type: "PLACE", id: pending });
+
+        const theirs = await activate(
+          newTierListActor(
+            await seedTierList(db, { createdById: stranger }),
+            db,
+          ),
+        );
+        const hidden = await theirs
+          .addItem(userCtx(stranger, "r2"), {
+            entry: { type: "PLACE", id: pending },
+          })
+          .catch((error: unknown) => error);
+        const absentId = randomUUID();
+        const absent = await theirs
+          .addItem(userCtx(stranger, "r3"), {
+            entry: { type: "PLACE", id: absentId },
+          })
+          .catch((error: unknown) => error);
+        expect(hidden).toBeInstanceOf(NotFoundError);
+        expect(absent).toBeInstanceOf(NotFoundError);
+        expect(String((hidden as Error).message).replace(pending, "<id>")).toBe(
+          String((absent as Error).message).replace(absentId, "<id>"),
+        );
+      });
+    });
+
+    it("a public list's entry for its creator's pending place is shown to the creator and silently left out for everyone else", async () => {
+      await withTestDb(async (db) => {
+        const creator = await seedUser(db);
+        const stranger = await seedUser(db);
+        const pending = await makeUnshared(db, creator, "Pending Bar");
+        const shared = await seedPlace(db, "Shared Bar");
+        const id = await seedTierList(db, {
+          createdById: creator,
+          privacy: "PUBLIC",
+        });
+        const actor = await activate(newTierListActor(id, db));
+        for (const placeId of [pending, shared]) {
+          await actor.addItem(userCtx(creator, `r-${placeId}`), {
+            entry: { type: "PLACE", id: placeId },
+          });
+        }
+
+        const forCreator = await actor.items(userCtx(creator, "r1"), page);
+        expect(forCreator.entries.map((e) => e.node.entry.id).sort()).toEqual(
+          [pending, shared].sort(),
+        );
+        const forStranger = await actor.items(userCtx(stranger, "r2"), page);
+        expect(forStranger.entries.map((e) => e.node.entry.id)).toEqual([
+          shared,
+        ]);
+
+        // …and the count agrees with the rows: "2 entries" over one row would
+        // say a hidden place is on the list.
+        expect((await actor.get(userCtx(creator, "r3"))).itemCount).toBe(2);
+        expect((await actor.get(userCtx(stranger, "r4"))).itemCount).toBe(1);
+      });
+    });
+  });
+
   /* ------------------------------------------------------------------ */
   /* removeItem — renumbers what remains                                 */
   /* ------------------------------------------------------------------ */

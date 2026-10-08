@@ -15,14 +15,15 @@
  *  4. `search_places_hybrid` with the categories, their scores, the viewport,
  *     the rating floor and the **visibility-filtered** tier-list ids.
  *
- * ## The viewer is in the key exactly when the search is viewer-scoped
+ * ## The viewer is always in the key (X27)
  *
  * §2.3's table says "viewer in hash: no" for this actor; §1.5 says the viewer
  * *is* in the hash for "map browse with tier-list or visit filters". Those
- * disagree, because `search_places_hybrid` takes `tier_list_ids`. C1 follows
- * §1.5: `placeSearchIsViewerScoped` puts the viewer in the key iff a tier-list
- * or visit filter is present, and the search is shared across every viewer
- * otherwise.
+ * disagree, because `search_places_hybrid` takes `tier_list_ids`. C1 followed
+ * §1.5 and put the viewer in the key only with one of those filters. X27 ended
+ * the distinction: every answer now includes the viewer's own places under
+ * review (`ownUnsharedMatching`), so `placeSearchActorId` always hashes the
+ * viewer and no activation is ever shared between two people.
  *
  * That is not a tidiness point. An unconditional "no" means one activation
  * holds the result set for a tier-list-filtered search, and the *next* viewer
@@ -90,6 +91,7 @@ import {
 } from "../lib/place-search-sql.ts";
 import { SearchActorBase } from "../lib/search-actor-base.ts";
 import { resolveTierListFilter } from "../lib/tier-list-visibility.ts";
+import { ownUnsharedMatching } from "../lib/unshared-places.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
 
 /** `performSemanticSearch`'s adaptive cut, ported. */
@@ -210,10 +212,52 @@ export class PlaceSearchActor
         trigramSimilarity: Number(row.trigram_similarity),
         categoryScore: Number(row.category_score),
         combinedScore: Number(row.combined_score),
+        // `search_places_hybrid` returns shared places only (X27).
+        reviewStatus: "approved",
       }),
     );
 
-    return this.#applyVisitFilter(ctx, input, cutWeakMatches(hits));
+    // X27 / D28: the viewer's own places under review, matched on the name
+    // they gave it — `search_places_hybrid` cannot see them, and must not
+    // see anyone else's. Scored by name similarity on the same 0–1 scale as
+    // the shared hits' combined score, so an exact name ranks at the top.
+    const own =
+      ctx.viewerId === null
+        ? []
+        : await ownUnsharedMatching(this.db, ctx.viewerId, {
+            query,
+            bounds: input.bounds ?? null,
+            filterCategories: input.filterCategories ?? [],
+            minRating: input.minRating ?? null,
+            tierListIds:
+              tierListFilter.kind === "filter" ? tierListFilter.ids : null,
+            limit,
+          });
+    const ownHits = own.map(
+      (row): PlaceSearchHit => ({
+        placeId: row.id,
+        name: row.name,
+        location: row.location,
+        primaryCategory: row.primaryCategory,
+        categories: row.categories,
+        rating: row.rating,
+        priceLevel: row.priceLevel,
+        streetAddress: row.streetAddress,
+        locality: row.locality,
+        region: row.region,
+        isVerified: row.isVerified,
+        textRank: 0,
+        trigramSimilarity: row.similarity,
+        categoryScore: 0,
+        combinedScore: row.similarity,
+        reviewStatus: row.reviewStatus,
+      }),
+    );
+    const merged = [...ownHits, ...hits]
+      .sort((a, b) => b.combinedScore - a.combinedScore)
+      .slice(0, limit);
+
+    return this.#applyVisitFilter(ctx, input, cutWeakMatches(merged));
   }
 
   /**

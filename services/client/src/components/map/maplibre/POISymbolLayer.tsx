@@ -485,7 +485,23 @@ const poiLayout: SymbolLayerSpecification["layout"] = {
   "icon-size": 0.85,
   "icon-anchor": "bottom",
   "icon-allow-overlap": true,
-  "text-field": ["get", "name"],
+  // X27: the creator's own place under review carries a second, smaller line
+  // ("Under review" / "Not approved"), so the map says it as well as the
+  // drawer does. Every shared pin's `reviewLabel` is null.
+  "text-field": [
+    "case",
+    ["to-boolean", ["get", "reviewLabel"]],
+    [
+      "format",
+      ["get", "name"],
+      {},
+      "\n",
+      {},
+      ["get", "reviewLabel"],
+      { "font-scale": 0.85 },
+    ],
+    ["get", "name"],
+  ],
   "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
   "text-size": ["interpolate", ["linear"], ["zoom"], 10, 9, 14, 11, 18, 12],
   "text-variable-anchor": ["right", "left"],

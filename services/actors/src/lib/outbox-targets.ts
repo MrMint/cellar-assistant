@@ -200,6 +200,7 @@ import {
   PingActorDescriptor,
   PlaceActorDescriptor,
   PlaceRefreshJobActorDescriptor,
+  PlaceReviewActorDescriptor,
   RecipeActorDescriptor,
   RecipeGroupActorDescriptor,
   RecipePhotoJobActorDescriptor,
@@ -643,17 +644,15 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
             "place_id ?? estimated_place_id` on this actor's own `menu_scans` " +
             "row. It reads as `derived`, and one hop back it is not: " +
             "`MenuScanActor.create` takes `input.placeHint.placeId` and stores " +
-            "it after `requireUuid` and nothing else, so the caller chooses " +
-            "which place this delivery writes menus into.",
-          authorization: null,
-          accepted:
-            "Places are shared reference entities, not user-owned aggregates — " +
-            "`PlaceActor` has no owner column to check against, and attaching a " +
-            "menu to a place is the product's intended behaviour for any signed-" +
-            "in user. Recorded rather than fixed, and deliberately classified " +
-            "`caller` rather than `derived`: the inventory test below is the " +
-            "standing reminder that the id is caller-chosen and lands with " +
-            "policy off.",
+            "it, so the caller chooses which place this delivery writes menus " +
+            "into.",
+          authorization:
+            "X27: `MenuScanActor.create` refuses a hinted place the caller " +
+            "cannot see (`placeIsVisible`) with the foreign key's own " +
+            "NotFound, so a scan can only be filed into a shared place or one " +
+            "of the caller's own places under review. Attaching a menu to a " +
+            "shared place is still the product's intended behaviour for any " +
+            "signed-in user — places have no owner to defer to once shared.",
         },
       ],
     },
@@ -685,6 +684,17 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
       ],
     },
   ),
+
+  "PlaceReviewActor.review": target(PlaceReviewActorDescriptor, "review", {
+    note:
+      "X27 / D28: the AI review of a pending user place, queued in the " +
+      "same transaction as the insert (`create`) or the resubmission " +
+      "(`editUnshared`). Keyed by the place's own id — the row `PlaceActor` " +
+      "is writing — so it can only ever review that place, and its verdict " +
+      "comes back through `PlaceActor.applyReview`, which re-checks the " +
+      "submission it names.",
+    enqueuedBy: [{ module: "actors/place-actor.ts", targetId: "self" }],
+  }),
 
   "PlaceActor.verifyMenuItemMatch": target(
     PlaceActorDescriptor,

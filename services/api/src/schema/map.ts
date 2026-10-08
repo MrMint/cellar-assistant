@@ -68,7 +68,7 @@ import {
 } from "@cellar-assistant/contracts";
 import { builder } from "./builder.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
-import { LngLatType } from "./place.ts";
+import { LngLatType, PlaceReviewStatusEnum, reviewStatusOut } from "./place.ts";
 import { MapBoundsInput, VisitStatusEnum } from "./place-search.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -77,7 +77,7 @@ import { MapBoundsInput, VisitStatusEnum } from "./place-search.ts";
 
 const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
   description:
-    "One place marker. Nine fields, every one of them read by the marker " +
+    "One place marker. Ten fields, every one of them read by the marker " +
     "renderer (§2.4); the address and contact block lives on `Place` and is " +
     "fetched by id when the drawer opens.",
   fields: (t) => ({
@@ -109,6 +109,14 @@ const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
     isVerified: t.boolean({
       nullable: true,
       resolve: (place) => place.isVerified,
+    }),
+    reviewStatus: t.field({
+      type: PlaceReviewStatusEnum,
+      description:
+        "X27: APPROVED for every shared marker. PENDING / REJECTED markers " +
+        "are the viewer's own places under review — drawn as their own " +
+        "markers, never clustered — and appear on nobody else's map.",
+      resolve: (place) => reviewStatusOut(place.reviewStatus),
     }),
   }),
 });

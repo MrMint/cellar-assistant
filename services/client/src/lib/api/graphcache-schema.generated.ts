@@ -97,6 +97,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "AcceptPlaceSuggestionResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "Place" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "ActOnMenuScanSuggestionResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -1533,6 +1545,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "DeletePlaceResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "DeletedPlace" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "DeleteRecipeGroupResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -1614,6 +1638,17 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "DeletedPlace",
+        fields: [
+          {
+            name: "placeId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "DeletedRecipe",
         fields: [
           {
@@ -1678,6 +1713,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
         ],
         interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "DismissPlaceSuggestionsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "Place" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
       },
       {
         kind: "OBJECT",
@@ -3336,6 +3383,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "primaryCategory", type: { kind: "SCALAR", name: "String" } },
           { name: "rating", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "reviewStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PlaceReviewStatus" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -3644,6 +3698,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "acceptPlaceSuggestion",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "AcceptPlaceSuggestionResult" },
+            },
+          },
+          {
             name: "actOnMenuScanSuggestion",
             type: {
               kind: "NON_NULL",
@@ -3805,6 +3866,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "deletePlace",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "DeletePlaceResult" },
+            },
+          },
+          {
             name: "deleteRecipe",
             type: {
               kind: "NON_NULL",
@@ -3837,6 +3905,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "DetachItemImageResult" },
+            },
+          },
+          {
+            name: "dismissPlaceSuggestions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "DismissPlaceSuggestionsResult" },
             },
           },
           {
@@ -3963,6 +4038,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "ResolveBrandResult" },
+            },
+          },
+          {
+            name: "resubmitPlace",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "ResubmitPlaceResult" },
             },
           },
           {
@@ -4411,7 +4493,16 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "primaryCategory", type: { kind: "SCALAR", name: "String" } },
           { name: "rating", type: { kind: "SCALAR", name: "Float" } },
           { name: "region", type: { kind: "SCALAR", name: "String" } },
+          { name: "rejectionReason", type: { kind: "SCALAR", name: "String" } },
           { name: "reviewCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "reviewStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PlaceReviewStatus" },
+            },
+          },
+          { name: "reviewedAt", type: { kind: "SCALAR", name: "DateTime" } },
           {
             name: "source",
             type: {
@@ -4420,6 +4511,23 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "streetAddress", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "suggestedCategories",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
+            name: "suggestedDescription",
+            type: { kind: "SCALAR", name: "String" },
+          },
           {
             name: "tierListEntries",
             type: {
@@ -5187,6 +5295,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "primaryCategory", type: { kind: "SCALAR", name: "String" } },
           { name: "rating", type: { kind: "SCALAR", name: "Float" } },
           { name: "region", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "reviewStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PlaceReviewStatus" },
+            },
+          },
           { name: "streetAddress", type: { kind: "SCALAR", name: "String" } },
           {
             name: "textRank",
@@ -7168,6 +7283,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "ResubmitPlaceResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "Place" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },

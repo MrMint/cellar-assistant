@@ -49,7 +49,7 @@
  *
  * Re-keying moved no data: this actor keeps nothing in Dapr actor state
  * (`../lib/no-actor-state.test.ts` holds that for every actor), registers no
- * timer or reminder, and its only instance fields are its two seams.
+ * timer or reminder, and its only instance field is its one seam.
  *
  * ## `places_pkey` convergence (§8.4)
  *
@@ -59,43 +59,28 @@
  * rather than a 500. The geocell recheck excludes the creation's own id, so a
  * sibling of the same creation is never mistaken for a duplicate of it.
  *
- * ## Two request-driven external calls, and §8.5 allows exactly that
+ * ## The review is not in this turn any more (X27 / D28)
  *
- * §8.5: "anything over a few seconds is outbox-driven, not request-driven",
- * with two named exceptions — `ItemOnboardingActor.start` and **this actor**.
- * The user is staring at a form waiting to be told whether their place was
- * accepted, so the AI review runs in-turn. That is also why the API's actor
- * invocation timeout for `createPlace` is 120s (§8.5).
+ * This actor used to run the AI review in-turn — §8.5 named it one of the two
+ * request-driven exceptions, because the user was staring at a form waiting to
+ * be told whether their place was accepted — and N09 later bounded that wait
+ * at ~8 s, past which the place was created *unreviewed and shared*. X27
+ * inverts it. The place is inserted at once as `pending`, visible to its
+ * creator alone ("Under review"), and `PlaceActor.create` queues
+ * `PlaceReviewActor.review` in the same transaction (§1.4). The verdict lands
+ * later through `PlaceActor.applyReview`: approved → shared; rejected → still
+ * creator-only, with the model's reason, for the creator to edit or delete.
  *
- * ## The review degrades, and says so
+ * So the explicit `approved: false` gate is not dropped — it moved from "the
+ * creation throws" to "the place is never shared" — and the N09 timeout path
+ * no longer leads anywhere public: a review that fails, times out or cannot
+ * run (no provider) leaves the place `pending`. Nothing here, or downstream,
+ * ever records an approval a model did not make. `CreateUserPlaceResult.review`
+ * is therefore always `null` now; the verdict is `place.reviewStatus`.
  *
- * `PlaceReviewer` resolves the way B7's `InsightsGenerator` does: a module-level
- * registry (`setPlaceReviewer`) that `installAI()` fills at boot, read by the
- * constructor's default. With a provider configured that default is the real
- * reviewer — `providerPlaceReviewer` in `../lib/ai/seams.ts`, the port of
- * `functions/reviewUserPlace`. With `AI_PROVIDER` unset it is
- * `unconfiguredPlaceReviewer`, which **throws** rather than pretending a model
- * that never ran approved the submission. `createPlace` catches that (and any
- * other reviewer failure), logs it, and returns `review: null` — which is what
- * the old `callAIReview` did on any error, and what
- * `CreateUserPlaceResult.review`'s nullability is for. A caller can therefore
- * tell "the model approved this" from "no model ran"; what it can never get is
- * a fabricated approval.
- *
- * A review that has not answered within `PLACE_REVIEW_TIMEOUT_MS` (~8 s, N09)
- * takes the same path: `review: null`, never an approval. The user is waiting
- * on a form, and an unbounded review was what made one measured create take
- * 48.7 s and another fail at the API's 120 s after its row had been written.
- * The deadline also aborts the reviewer's `signal`, which `providerPlaceReviewer`
- * hands to the model call, so a timed-out review is cancelled rather than left
- * running and metered behind a form that has already moved on.
- *
- * B5b is the fix for the version of this that shipped: the constructor default
- * was the throwing stub itself, so *every* production activation took the
- * `review: null` path and the feature was dark behind a green suite. The
- * regression test in `place-creation-actor.test.ts` constructs this actor with
- * the reviewer argument omitted, which is the one thing the rest of the file
- * never did.
+ * The reviewer seam (`PlaceReviewer`, the `setPlaceReviewer` registry, the
+ * unconfigured default that throws) moved to `../lib/place-review.ts` with the
+ * review, and is re-exported below for the callers that import it from here.
  *
  * ## `google_place_id` is not here either
  *
@@ -116,7 +101,6 @@ import type {
   LngLat,
   PlaceCreationActorInterface,
   PlaceDto,
-  PlaceReview,
 } from "@cellar-assistant/contracts";
 import {
   ConflictError,
@@ -135,26 +119,39 @@ import type { ActorId, DaprClient } from "@dapr/dapr";
 import { ActorBase } from "../lib/actor-base.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
-import { DeadlineExceededError, withDeadline } from "../lib/deadline.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
+import { BASE_CONFIDENCE } from "../lib/place-review.ts";
 import {
   blockingDuplicate,
   DUPLICATE_RADIUS_METERS,
   duplicatePlaceConflict,
   findDuplicatePlaces,
-  normalizeConfidence,
-  normalizeCountryCode,
-  PLACE_DESCRIPTION_MAX,
-  placeRowToDto,
-  requireCategories,
-  requirePlaceName,
-  trimOrNull,
+  normalizeCreateInput,
+  placeDtoFor,
+  requireOwnReplay,
 } from "./place-actor.ts";
 
 /** The actor *type* as registered with Dapr. */
 export const PLACE_CREATION_ACTOR_TYPE = "PlaceCreationActor";
 
+/**
+ * The review seam moved to `../lib/place-review.ts` with the review itself
+ * (X27); re-exported for the callers that still import it from here.
+ */
+export {
+  BASE_CONFIDENCE,
+  CONFIDENCE_CEILING,
+  CONFIDENCE_FLOOR,
+  confidenceFromReview,
+  MAX_CONFIDENCE_ADJUSTMENT,
+  type PlaceReviewer,
+  type PlaceReviewSubject,
+  placeReviewer,
+  requirePlaceReviewSubject,
+  setPlaceReviewer,
+  unconfiguredPlaceReviewer,
+} from "../lib/place-review.ts";
 /**
  * The duplicate rule's numbers live beside `PlaceActor.create`, which applies
  * them authoritatively under the geocell locks; re-exported so both halves of
@@ -166,36 +163,12 @@ export {
   DUPLICATE_LIMIT,
   DUPLICATE_MIN_SIMILARITY,
   DUPLICATE_RADIUS_METERS,
+  normalizeCreateInput,
+  normalizeWebsite,
 } from "./place-actor.ts";
 
-/** The neutral starting confidence the AI review adjusts. */
-export const BASE_CONFIDENCE = 0.5;
-export const CONFIDENCE_FLOOR = 0.1;
-export const CONFIDENCE_CEILING = 0.9;
-/** `reviewUserPlace` clamps its own output to this; so does this actor. */
-export const MAX_CONFIDENCE_ADJUSTMENT = 0.3;
-
-/**
- * N09: how long the user's form waits on the AI review before the creation
- * goes ahead unreviewed.
- *
- * The review runs in-turn (module doc, "Two request-driven external calls"),
- * and with nothing bounding it a slow model held the form for as long as the
- * provider's own timeout allowed — 48.7 s for one measured create, and 120.8 s
- * for another that the API then reported as a failure although the row had
- * been written. Past this bound the review is treated exactly as a review that
- * threw: `review: null`, the neutral confidence, and no claim that anything
- * approved the place (`#reviewOrNull`). It never becomes an approval.
- *
- * What a timeout gives up is the synchronous *rejection*: a model that would
- * have said "not approved" after nine seconds is not heard. That trade is the
- * roadmap's (N09; insert-first moderation with a pending state is X27), and it
- * is the same trade an unconfigured provider already makes.
- */
-export const PLACE_REVIEW_TIMEOUT_MS = 8_000;
-
 /* -------------------------------------------------------------------------- */
-/* Injected seams                                                              */
+/* Injected seam                                                               */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -210,125 +183,9 @@ export type PlaceCreator = (
   input: CreatePlaceInput & { readonly createdById: string },
 ) => Promise<PlaceDto>;
 
-/** §8.5: the user waits on the AI review, so `PlaceActor.create` is bounded
- * by the 120s its descriptor declares. */
+/** Bounded by the 30s `PlaceActor.create` declares. */
 export const daprPlaceCreator: PlaceCreator = (ctx, placeId, input) =>
   internal(ctx)(PlaceActorDescriptor, placeId).create(input);
-
-/**
- * What the AI review is handed — `functions/reviewUserPlace`'s request body,
- * field for field (checked against `a5b90784^`), with two shape changes and no
- * content changes: the pair `latitude`/`longitude` is this stack's `LngLat`,
- * and the names are camelCase. `postcode` and `email` are absent here because
- * they were absent there — the review judges what a stranger could recognise
- * the venue by, and a postcode adds nothing to that judgement.
- */
-export type PlaceReviewSubject = {
-  readonly name: string;
-  readonly categories: readonly string[];
-  readonly location: LngLat;
-  readonly streetAddress: string | null;
-  readonly locality: string | null;
-  readonly region: string | null;
-  readonly countryCode: string | null;
-  readonly phone: string | null;
-  readonly website: string | null;
-  readonly description: string | null;
-};
-
-/**
- * `signal` fires when the creation stops waiting (`PLACE_REVIEW_TIMEOUT_MS`,
- * N09): a reviewer should hand it to the model call so the request is
- * cancelled rather than left running and metered. An aborted review rejects,
- * which `#reviewOrNull` records as `review: null` — never an approval.
- */
-export type PlaceReviewer = (
-  ctx: Ctx,
-  subject: PlaceReviewSubject,
-  signal?: AbortSignal,
-) => Promise<PlaceReview>;
-
-/**
- * What a reviewer owes before it calls anything, whichever model is behind it.
- *
- * `normalizeCreateInput` already guarantees all three for the one caller that
- * exists today, so this never fires from `createPlace`. It is here for the
- * reason `requireExtractableInput` is in `../lib/item-defaults.ts`: the
- * precondition belongs to the *seam*, not to one implementation. "Review this
- * place" over a blank name and no categories is not a hard question, it is an
- * empty one — and a model asked an empty question does not abstain, it invents
- * a venue and returns a verdict on it (measured, for the item-defaults seam:
- * a Château d'Yquem, vintage and all, from no input whatsoever). The old
- * `reviewUserPlace` answered the same case with a 400; this is that 400,
- * moved to where every caller passes through it.
- */
-export const requirePlaceReviewSubject = (
-  subject: PlaceReviewSubject,
-): void => {
-  const problems: string[] = [];
-  if (subject.name.trim() === "") problems.push("a name");
-  if (subject.categories.length === 0) problems.push("at least one category");
-  if (!isLngLat(subject.location)) problems.push("a location");
-  if (problems.length === 0) return;
-  throw new ConflictError(
-    `this place submission cannot be reviewed: it is missing ${problems.join(
-      ", ",
-    )}. A review is a judgement about a specific venue; asked about nothing, ` +
-      "a model returns a confident verdict on a venue it made up rather than " +
-      "declining — see requireExtractableInput in lib/item-defaults.ts.",
-  );
-};
-
-/**
- * What a caller reaches when no AI provider is configured. Throws.
- *
- * Running with `AI_PROVIDER` unset is a supported state, not a broken one: the
- * host starts, places are still created, and every AI feature fails naming
- * itself rather than producing something plausible. `#reviewOrNull` catches
- * this and records `review: null`, so an unconfigured deployment behaves the
- * way the old server action did whenever the review errored — a place, the
- * neutral 0.5 confidence, and no claim that anything approved it.
- *
- * (This used to say `services/actors` had no AI client and that a `PlaceReviewer`
- * had to be injected through the constructor. Both halves were false by the
- * time anyone read them — X1 delivered `lib/ai/`, and Dapr constructs actors
- * with `(daprClient, id)` alone, so there is no injection site above this
- * file. Together they were the whole bug: the default below was this stub, so
- * AI place review threw on every production activation while every test
- * passed its own reviewer and stayed green. `item-defaults.ts` carries the
- * same correction for the same reason.)
- */
-export const unconfiguredPlaceReviewer: PlaceReviewer = async () => {
-  throw new ConflictError(
-    "no AI provider is configured to review a user-submitted place: " +
-      "AI_PROVIDER is unset, so `installAI()` installed nothing at boot. Set " +
-      "AI_PROVIDER=ollama for a local model that needs no credentials — see " +
-      "services/actors/README.md · Local AI. Until then each creation is recorded " +
-      "with `review: null` and the neutral confidence, which is what the old " +
-      "server action did whenever the review failed.",
-    "AI_UNCONFIGURED",
-  );
-};
-
-/**
- * The installed reviewer, defaulting to the loud one above.
- *
- * The registry exists because a constructor cannot be reached: Dapr's
- * `ActorManager` builds every actor as `new ActorCls(daprClient, actorId)` and
- * offers no factory hook, so a constructor parameter's *default* is the only
- * wiring production ever sees. `installAI()` calls `setPlaceReviewer` at boot
- * when a provider is configured; a process that never calls it — every test
- * here, and any deployment with `AI_PROVIDER` unset — still gets
- * `unconfiguredPlaceReviewer` and still throws. This is
- * `tier-list-actor.ts`'s `InsightsGenerator` registry, exactly.
- */
-let installedPlaceReviewer: PlaceReviewer = unconfiguredPlaceReviewer;
-
-export const setPlaceReviewer = (next: PlaceReviewer): void => {
-  installedPlaceReviewer = next;
-};
-
-export const placeReviewer = (): PlaceReviewer => installedPlaceReviewer;
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                     */
@@ -336,28 +193,6 @@ export const placeReviewer = (): PlaceReviewer => installedPlaceReviewer;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const clamp = (value: number, low: number, high: number): number =>
-  Math.max(low, Math.min(high, value));
-
-/** `0.5 + adjustment`, both halves clamped, to two decimals for `numeric(3,2)`. */
-export const confidenceFromReview = (review: PlaceReview | null): number => {
-  if (review === null) return BASE_CONFIDENCE;
-  const adjustment = Number.isFinite(review.confidenceAdjustment)
-    ? clamp(
-        review.confidenceAdjustment,
-        -MAX_CONFIDENCE_ADJUSTMENT,
-        MAX_CONFIDENCE_ADJUSTMENT,
-      )
-    : 0;
-  return Number(
-    clamp(
-      BASE_CONFIDENCE + adjustment,
-      CONFIDENCE_FLOOR,
-      CONFIDENCE_CEILING,
-    ).toFixed(2),
-  );
-};
 
 /* -------------------------------------------------------------------------- */
 /* The actor                                                                   */
@@ -372,31 +207,21 @@ export class PlaceCreationActor
     PlaceCreationActorDescriptor.category;
 
   readonly #createPlaceRow: PlaceCreator;
-  readonly #review: PlaceReviewer;
-  readonly #reviewTimeoutMs: number;
 
   constructor(
     daprClient: DaprClient,
     id: ActorId,
     db: DbOrTx = actorDb(),
     createPlaceRow: PlaceCreator = daprPlaceCreator,
-    // B5b: `placeReviewer()`, **not** `unconfiguredPlaceReviewer`. Dapr builds
-    // this actor with two arguments, so this default is production's only
-    // wiring; naming the stub here made AI place review throw on every real
-    // activation. `GooglePlacesActor` (`google: GooglePlacesClient =
-    // googlePlacesClient()`) and `GeocodeActor` (X5) set the same precedent.
-    review: PlaceReviewer = placeReviewer(),
-    reviewTimeoutMs: number = PLACE_REVIEW_TIMEOUT_MS,
   ) {
     super(daprClient, id, db);
     this.#createPlaceRow = createPlaceRow;
-    this.#review = review;
-    this.#reviewTimeoutMs = reviewTimeoutMs;
   }
 
   /**
-   * The whole creation pipeline, in one turn: validate, rate-limit,
-   * duplicate-check, review, delegate.
+   * The whole creation pipeline, in one short turn: validate, rate-limit,
+   * duplicate-check, delegate. The place comes back `pending` — its creator's
+   * alone — with its review already queued (module doc).
    */
   async createPlace(
     ctx: Ctx,
@@ -412,17 +237,30 @@ export class PlaceCreationActor
     // the row committed by the first attempt is found 0m away with similarity
     // 1.0, so the retry is refused as a duplicate of itself. Nothing else has
     // happened either — no second rate-limit slot is consumed and no second
-    // review is paid for — so the replay returns the row and stops.
+    // review is queued — so the replay returns the row and stops.
+    //
+    // X27: only the creator's own row is a replay. Another user's row under
+    // the same id is refused in one wording whatever its review status, so
+    // the id cannot be used to learn whether an unshared place sits behind it.
     const replay = await this.#existing(placeId);
     if (replay !== null) {
-      return { place: replay, nearbyDuplicates: [], review: null };
+      requireOwnReplay(replay, createdById, placeId);
+      return {
+        place: placeDtoFor(ctx, replay),
+        nearbyDuplicates: [],
+        review: null,
+      };
     }
 
     await this.#enforceRateLimit(ctx, createdById);
 
-    // The early duplicate check: refuse the obvious case before an AI review
-    // is paid for. `PlaceActor.create` runs the same check again under the
-    // geocell locks, which is what makes it sound across users (module doc).
+    // The early duplicate check: refuse the obvious case before the insert.
+    // `PlaceActor.create` runs the same check again under the geocell locks,
+    // which is what makes it sound across users (module doc).
+    //
+    // X27: from the creator's point of view — shared places, plus the
+    // creator's own unshared ones. Somebody else's pending place is neither
+    // a block nor a near-miss: either would tell this creator it exists.
     //
     // Self-exclusion closes the remaining window: a concurrent sibling
     // carrying the same `placeId` can commit between the check above and this
@@ -432,35 +270,30 @@ export class PlaceCreationActor
         normalized.name,
         normalized.location,
         DUPLICATE_RADIUS_METERS,
+        createdById,
       )
     ).filter((candidate) => candidate.placeId !== placeId);
     const blocking = blockingDuplicate(nearby, placeId);
     if (blocking !== undefined) throw duplicatePlaceConflict(blocking);
 
-    const review = await this.#reviewOrNull(ctx, normalized);
-    if (review !== null && !review.approved) {
-      throw new ValidationError(
-        review.rejectionReason ??
-          "this place submission was not approved; check the details and try again",
-      );
-    }
-
     const place = await this.#createOrConverge(ctx, placeId, {
       ...normalized,
-      description:
-        normalized.description ??
-        trimOrNull(review?.enrichedDescription ?? null),
-      confidence: confidenceFromReview(review),
+      // The neutral confidence a review then moves (`applyReview`); the
+      // caller may never choose its own (`normalizeCreateInput`).
+      confidence: BASE_CONFIDENCE,
       createdById,
     });
 
-    return { place, nearbyDuplicates: nearby, review };
+    // `review: null` always: the verdict arrives later, on
+    // `place.reviewStatus` (module doc).
+    return { place, nearbyDuplicates: nearby, review: null };
   }
 
   /**
    * The duplicate check on its own — the create form calls this as the user
    * types. Read-only, and deliberately *not* a search actor: C1 owns
    * `DuplicatePlaceSearchActor` and this delegates to it once it exists.
+   * Scoped to the viewer like the creation check (X27).
    */
   async findDuplicates(
     ctx: Ctx,
@@ -485,7 +318,7 @@ export class PlaceCreationActor
     if (!Number.isFinite(radius) || radius <= 0 || radius > 5000) {
       throw new ValidationError("radiusMeters must be between 0 and 5000");
     }
-    return this.#duplicates(name, input.location, radius);
+    return this.#duplicates(name, input.location, radius, ctx.viewerId);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -496,7 +329,7 @@ export class PlaceCreationActor
    * A place is created *by somebody*. `system` has no viewer, so — unlike most
    * methods — a system ctx is refused here rather than waved through: there is
    * no one to attribute the row to, and `places.created_by` is what the rate
-   * limit and the map's "added by you" both read.
+   * limit, the map's "added by you" and X27's creator-only visibility all read.
    */
   #requireCreator(ctx: Ctx): string {
     if (ctx.viewerId === null) {
@@ -512,7 +345,7 @@ export class PlaceCreationActor
    * The key is the creator's viewer id (module doc), and it is an address,
    * not a credential: a ctx for anyone else is refused before the rate limit
    * is read, so nobody can spend — or be refused from — another user's
-   * bucket, or queue behind another user's review.
+   * bucket.
    */
   #requireOwnKey(creatorId: string): void {
     if (creatorId === this.key) return;
@@ -533,7 +366,8 @@ export class PlaceCreationActor
 
   /**
    * 25 per user per 24 hours (`PLACE_RATE_LIMIT_PER_DAY`), backed by
-   * `idx_places_created_by_created_at`.
+   * `idx_places_created_by_created_at`. Every status counts: a pending or
+   * rejected place is still a creation.
    *
    * One behaviour change from `createUserPlaceAction`, deliberate: the old
    * code caught a failed rate-limit query and **allowed** the creation. A
@@ -564,45 +398,9 @@ export class PlaceCreationActor
     name: string,
     location: LngLat,
     radiusMeters: number,
+    viewerId: string | null,
   ): Promise<readonly DuplicateCandidate[]> {
-    return findDuplicatePlaces(this.db, name, location, radiusMeters);
-  }
-
-  /**
-   * Never throws: a review that fails is a review that did not happen — and
-   * so is one that has not answered within `PLACE_REVIEW_TIMEOUT_MS` (N09).
-   * Both take the one "no model ran" path; a timeout is never an approval.
-   */
-  async #reviewOrNull(
-    ctx: Ctx,
-    subject: PlaceReviewSubject,
-  ): Promise<PlaceReview | null> {
-    try {
-      // A function, not a promise: `withDeadline` aborts the signal at the
-      // deadline, so the timed-out model call is cancelled, not abandoned.
-      const review = await withDeadline(
-        (signal) => this.#review(ctx, subject, signal),
-        this.#reviewTimeoutMs,
-        () =>
-          new DeadlineExceededError(
-            `the AI review took longer than ${this.#reviewTimeoutMs}ms; ` +
-              "the place is created unreviewed (review: null)",
-          ),
-      );
-      return {
-        ...review,
-        confidenceAdjustment: Number.isFinite(review.confidenceAdjustment)
-          ? review.confidenceAdjustment
-          : 0,
-        flags: Array.isArray(review.flags) ? review.flags : [],
-      };
-    } catch (error) {
-      console.warn(
-        "[PlaceCreationActor] AI review skipped:",
-        error instanceof Error ? error.message : error,
-      );
-      return null;
-    }
+    return findDuplicatePlaces(this.db, name, location, radiusMeters, viewerId);
   }
 
   /**
@@ -614,7 +412,8 @@ export class PlaceCreationActor
    * and both insert. `places_pkey` decides; the loser's unique violation
    * arrives here as a `ConflictError`, and the answer is the winner's row —
    * exactly `BrandRegistryActor.resolve`'s shape, with the primary key playing
-   * the part `brands_unique_lower_name` plays there.
+   * the part `brands_unique_lower_name` plays there. The winner must be this
+   * creator's own sibling; anybody else's row is refused (`requireOwnReplay`).
    */
   async #createOrConverge(
     ctx: Ctx,
@@ -630,7 +429,8 @@ export class PlaceCreationActor
       // the conflict and this re-read. Surface the conflict rather than
       // manufacture a confusing NotFound.
       if (row === null) throw error;
-      return row;
+      requireOwnReplay(row, input.createdById, placeId);
+      return placeDtoFor(ctx, row);
     }
   }
 
@@ -639,106 +439,12 @@ export class PlaceCreationActor
    * shape `BrandRegistryActor.loadAggregate` uses, and for the same reason:
    * this actor is not keyed by anything it could load an aggregate from.
    */
-  async #existing(placeId: string): Promise<PlaceDto | null> {
+  async #existing(placeId: string) {
     const [row] = await this.db
       .select()
       .from(places)
       .where(eq(places.id, placeId))
       .limit(1);
-    return row === undefined ? null : placeRowToDto(row);
+    return row ?? null;
   }
 }
-
-/* -------------------------------------------------------------------------- */
-/* Input normalisation                                                         */
-/* -------------------------------------------------------------------------- */
-
-type NormalizedCreateInput = PlaceReviewSubject & {
-  readonly postcode: string | null;
-  readonly email: string | null;
-};
-
-/**
- * Everything `createUserPlaceAction` validated before it inserted, minus the
- * two things that were never the client's to choose (`confidence`, which the
- * review sets, and `google_place_id`, which nothing user-facing sets at all).
- *
- * `requirePlaceName`, `requireCategories` and `normalizeCountryCode` are
- * imported from `place-actor.ts` rather than duplicated: `PlaceActor.create`
- * runs them again on the far side of the sidecar hop, and two copies of a
- * bound would drift.
- */
-export const normalizeCreateInput = (
-  input: CreateUserPlaceInput,
-): NormalizedCreateInput => {
-  if (!isLngLat(input.location)) {
-    throw new ValidationError(
-      "location must be { lng, lat } within (-180..180, -90..90)",
-    );
-  }
-  const description = trimOrNull(input.description);
-  if (description !== null && description.length > PLACE_DESCRIPTION_MAX) {
-    throw new ValidationError(
-      `a description must be under ${PLACE_DESCRIPTION_MAX} characters`,
-    );
-  }
-  // Present so a caller passing one gets told it is ignored rather than
-  // silently dropped — `confidence` is the review's to set (§2.1).
-  if (normalizeConfidence(input.confidence ?? null) !== null) {
-    throw new ValidationError(
-      "confidence is set by the AI review, not by the caller",
-    );
-  }
-
-  return {
-    name: requirePlaceName(input.name),
-    categories: requireCategories(input.categories),
-    location: input.location,
-    streetAddress: trimOrNull(input.streetAddress),
-    locality: trimOrNull(input.locality),
-    region: trimOrNull(input.region),
-    postcode: trimOrNull(input.postcode),
-    countryCode: normalizeCountryCode(input.countryCode ?? null),
-    phone: trimOrNull(input.phone),
-    website: normalizeWebsite(input.website),
-    email: trimOrNull(input.email),
-    description,
-  };
-};
-
-const WEBSITE_MAX_LENGTH = 2048;
-const WEBSITE_PROTOCOL = /^https?:\/\//i;
-
-/**
- * `place-actions.ts`'s `normalizeWebsite`, preserved — including the bare-host
- * convenience (`example.com` → `https://example.com`) the create form relies
- * on. The one change: an unusable value is a `ValidationError` rather than a
- * silent `null`, so a typo is reported instead of quietly discarded.
- */
-export const normalizeWebsite = (
-  value: string | null | undefined,
-): string | null => {
-  const trimmed = trimOrNull(value);
-  if (trimmed === null) return null;
-  if (trimmed.length > WEBSITE_MAX_LENGTH) {
-    throw new ValidationError(
-      `a website URL must be under ${WEBSITE_MAX_LENGTH} characters`,
-    );
-  }
-  const candidate = WEBSITE_PROTOCOL.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
-  let parsed: URL;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    throw new ValidationError(`not a usable website URL: ${trimmed}`);
-  }
-  if (
-    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
-    !parsed.hostname.includes(".")
-  ) {
-    throw new ValidationError(`not a usable website URL: ${trimmed}`);
-  }
-  return parsed.toString();
-};

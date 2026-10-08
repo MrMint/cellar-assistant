@@ -23,7 +23,6 @@ import {
   googlePlacesActorId,
   itemSearchActorId,
   placeSearchActorId,
-  placeSearchIsViewerScoped,
   recipeSearchActorId,
   searchHash,
   userSearchActorId,
@@ -63,12 +62,12 @@ const SURFACES: readonly [
         { name: "Bar", location: { lng: -83, lat: 40 } },
         v,
       ),
-    false,
+    true,
   ],
   [
     "PlaceSearchActor (no tier-list / visit filter)",
     (v) => placeSearchActorId({ query: "wine bar" }, v),
-    false,
+    true,
   ],
   [
     "PlaceSearchActor (tier-list filter)",
@@ -110,29 +109,21 @@ describe("search actor keys (§1.5, §2.3)", () => {
       });
     }
 
-    it("names exactly the three §1.5 surfaces", () => {
+    it("names exactly the §1.5 surfaces, plus X27's two place surfaces", () => {
+      // X27: a place search and a duplicate check both answer with the
+      // viewer's own places under review, so neither may share an activation
+      // across viewers any more — with or without a tier-list / visit filter.
       expect(
         SURFACES.filter(([, , scoped]) => scoped).map(([label]) => label),
       ).toEqual([
         "CellarItemSearchActor",
         "UserSearchActor",
+        "DuplicatePlaceSearchActor",
+        "PlaceSearchActor (no tier-list / visit filter)",
         "PlaceSearchActor (tier-list filter)",
         "PlaceSearchActor (visit filter)",
       ]);
     });
-  });
-
-  it("`placeSearchIsViewerScoped` is what decides the conditional case", () => {
-    expect(placeSearchIsViewerScoped({ query: "q" })).toBe(false);
-    expect(placeSearchIsViewerScoped({ query: "q", tierListIds: [] })).toBe(
-      false,
-    );
-    expect(placeSearchIsViewerScoped({ query: "q", tierListIds: [TIER] })).toBe(
-      true,
-    );
-    expect(
-      placeSearchIsViewerScoped({ query: "q", visitStatus: "unvisited" }),
-    ).toBe(true);
   });
 
   describe("pagination is never an input", () => {

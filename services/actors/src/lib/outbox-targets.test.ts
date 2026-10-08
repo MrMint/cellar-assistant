@@ -496,8 +496,11 @@ describe("outbox allow-list — caller-influenced target ids", () => {
     // standing list of caller-chosen ids that reach a policy-off delivery
     // unchecked, each with a written justification in the registry. A new one
     // fails here and has to be argued for in review.
+    //
+    // X27 shortened it: `PlaceActor.addMenuFromScan`'s caller-chosen place is
+    // now checked at the enqueue site (`placeIsVisible`), because a place can
+    // be its creator's alone.
     expect(unauthorizedCallerTargets()).toEqual([
-      "PlaceActor.addMenuFromScan <- actors/menu-scan-actor.ts",
       "RecipeGroupActor.recomputeCanonical <- actors/recipe-actor.ts",
     ]);
   });
