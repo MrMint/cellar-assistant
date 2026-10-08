@@ -37,6 +37,8 @@ const NO_SEARCH: Page<BrandCardItem> = {
 
 interface BrandsListClientProps {
   initialPage: Page<BrandCardItem>;
+  /** A term to start with — `/brands?q=`, from search's "See all" (D1). */
+  initialSearch?: string;
 }
 
 /**
@@ -54,9 +56,12 @@ interface BrandsListClientProps {
  *   item count. `first` caps at 100, so the search pages too, through the
  *   same eager load-more as the unsearched grid.
  */
-export const BrandsListClient = ({ initialPage }: BrandsListClientProps) => {
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+export const BrandsListClient = ({
+  initialPage,
+  initialSearch = "",
+}: BrandsListClientProps) => {
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearch(search.trim()), 300);

@@ -19,7 +19,14 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  */
 export const dynamic = "force-dynamic";
 
-export default async function BrandsPage() {
+export default async function BrandsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // `?q=` — search's Brands section opens here with its term (D1).
+  const { q } = await searchParams;
+  const initialSearch = (Array.isArray(q) ? q[0] : q) ?? "";
   const data = await apiServerQuery(BrandsListQuery, {
     first: BRANDS_PAGE_SIZE,
     after: null,
@@ -37,6 +44,7 @@ export default async function BrandsPage() {
       </header>
       {result.ok ? (
         <BrandsListClient
+          initialSearch={initialSearch}
           initialPage={{
             rows: toBrandCardItems(
               result.data.edges.map((edge) =>

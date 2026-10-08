@@ -43,9 +43,8 @@ const { NearbyPlaces } = await import("./NearbyPlaces");
 const { SearchNearbyPlacesQuery, NEARBY_PLACES_LIMIT } = await import(
   "./queries"
 );
-const { Greeting } = await import("./Greeting");
+const { Greeting, greetingText } = await import("./Greeting");
 const { SearchResultGrid } = await import("./SearchResultGrid");
-const { FadeIn, StaggerIn, StaggerItem } = await import("./AnimateIn");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -77,30 +76,24 @@ describe("ClientSearchInterface (restored)", () => {
   });
 });
 
-describe("Greeting (verbatim)", () => {
-  test("time-of-day greeting with the first name", () => {
+describe("Greeting (X01: the viewer's clock, never the server's)", () => {
+  test("the server render carries no greeting — the browser supplies it", () => {
     const html = text(render(<Greeting displayName="Jared Prather" />));
-    assert.match(html, /Good (morning|afternoon|evening), Jared/);
-    assert.doesNotMatch(html, /Prather/);
+    assert.doesNotMatch(html, /Good (morning|afternoon|evening)/);
   });
-  test("no name, no comma", () => {
-    assert.match(
-      text(render(<Greeting />)),
-      /Good (morning|afternoon|evening)\s*$/,
-    );
+  test("time of day from the hour, with the first name only", () => {
+    const at = (hour: number) => new Date(2026, 9, 5, hour, 30);
+    assert.equal(greetingText(at(0), "Jared Prather"), "Good morning, Jared");
+    assert.equal(greetingText(at(11), "Jared"), "Good morning, Jared");
+    assert.equal(greetingText(at(12), "Jared"), "Good afternoon, Jared");
+    assert.equal(greetingText(at(16), "Jared"), "Good afternoon, Jared");
+    assert.equal(greetingText(at(17), "Jared"), "Good evening, Jared");
+    assert.equal(greetingText(at(23), "Jared"), "Good evening, Jared");
   });
-});
-
-describe("AnimateIn (verbatim)", () => {
-  test("renders its children", () => {
-    const html = render(
-      <FadeIn>
-        <StaggerIn>
-          <StaggerItem>chip</StaggerItem>
-        </StaggerIn>
-      </FadeIn>,
-    );
-    assert.match(html, /chip/);
+  test("no name, no comma; a blank name is no name", () => {
+    const noon = new Date(2026, 9, 5, 12);
+    assert.equal(greetingText(noon), "Good afternoon");
+    assert.equal(greetingText(noon, "   "), "Good afternoon");
   });
 });
 
@@ -110,26 +103,11 @@ describe("SearchResultGrid (restored)", () => {
   });
 });
 
-/** No server-rendered entrance may leave content invisible (see AnimateIn). */
+/** No server-rendered entrance may leave content invisible. */
 const assertVisibleAtRest = (html: string) => {
   assert.doesNotMatch(html, /opacity:\s*0[;"]/);
   assert.doesNotMatch(html, /translateY\(10px\)|translateX\(-12px\)/);
 };
-
-describe("AnimateIn — visible without JavaScript", () => {
-  test("no hidden inline state; the entrance is a CSS animation", () => {
-    const html = render(
-      <FadeIn>
-        <StaggerIn>
-          <StaggerItem>chip</StaggerItem>
-          <StaggerItem>chip 2</StaggerItem>
-        </StaggerIn>
-      </FadeIn>,
-    );
-    assertVisibleAtRest(html);
-    assert.equal(html.match(/data-stagger-item/g)?.length, 2);
-  });
-});
 
 const NOW = "2026-10-05T12:00:00.000Z";
 const person = {

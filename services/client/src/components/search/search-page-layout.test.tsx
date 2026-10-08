@@ -107,7 +107,6 @@ function Page({ href }: { href: string }) {
           ? null
           : {
               hero: <h1 data-testid="hero">Good evening</h1>,
-              quickLinks: <nav data-testid="quick-links">links</nav>,
             }
       }
     >
