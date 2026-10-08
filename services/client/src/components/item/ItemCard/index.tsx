@@ -138,8 +138,10 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
   };
 
   const placeholder = getNextPlaceholder(item.placeholder);
-  const title =
-    type === "WINE" ? `${formatVintage(item.vintage)} ${item.name}` : item.name;
+  // Wine titles lead with the year — when there is one: a non-vintage wine
+  // printed "undefined Brut" here.
+  const vintage = type === "WINE" ? formatVintage(item.vintage) : undefined;
+  const title = vintage === undefined ? item.name : `${vintage} ${item.name}`;
   const handleClick = isNotNil(onClick) ? () => onClick(item.id) : undefined;
   const interactive = isNotNil(href) || isNotNil(onClick);
   const hasFavorites = isNotNil(item.favoriteCount);

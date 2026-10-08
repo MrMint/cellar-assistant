@@ -164,6 +164,14 @@ describe("ItemCard", () => {
     assert.match(html, />2021</);
   });
 
+  test("a wine with no vintage is titled by its name alone", () => {
+    const html = render(
+      <ItemCard type="WINE" href="/wines/i" item={{ ...base, name: "Brut" }} />,
+    );
+    assert.match(html, />Brut<\/a>/);
+    assert.doesNotMatch(html, /undefined/);
+  });
+
   test("no image and no plate data: a name-only plate", () => {
     const html = render(
       <ItemCard
