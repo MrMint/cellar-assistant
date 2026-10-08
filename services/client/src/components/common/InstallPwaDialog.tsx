@@ -4,8 +4,8 @@ import { track } from "@vercel/analytics/react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "urql";
-import { BottomSheet } from "@/components/app/BottomSheet";
 import { ICON_STROKE, Share } from "@/components/app/icons";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import {
   detectPlatform,
   hasSeenFirstSave,
@@ -109,7 +109,9 @@ function useFirstSave(enabled: boolean): boolean {
  * Shown only after the viewer's first save — asking someone to install an
  * app they have not used yet is the wrong first impression — and never again
  * once put off for good, or for a week after "Remind me later". A bottom sheet
- * (N27): the same copy, steps and buttons as the Joy-era modal.
+ * on phones (N27) and a centred dialog from `md` up, where the Joy-era modal
+ * was centred too (`ResponsiveDialog`, the mapping for every former Joy
+ * `Modal`): the same copy, steps and buttons.
  */
 export const InstallPwaDialog = () => {
   const checkboxId = useId();
@@ -216,14 +218,14 @@ export const InstallPwaDialog = () => {
           ];
 
   return (
-    <BottomSheet
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         if (!next) handleDismiss();
       }}
       title="Install Cellar Assistant"
       footer={
-        <div className="flex flex-col gap-3">
+        <div className="flex w-full flex-col gap-3">
           <div className="flex items-center gap-2">
             <Checkbox
               id={checkboxId}
@@ -253,7 +255,8 @@ export const InstallPwaDialog = () => {
         </div>
       }
     >
-      <div className="flex flex-col gap-3 px-4 pb-2">
+      {/* The sheet and the dialog pad their own content. */}
+      <div className="flex flex-col gap-3 pb-2">
         <p className="type-body text-ink-2">
           To get the full experience of Cellar Assistant we recommend installing
           it as an app. This will allow easy access from the home screen.
@@ -268,6 +271,6 @@ export const InstallPwaDialog = () => {
           </ol>
         )}
       </div>
-    </BottomSheet>
+    </ResponsiveDialog>
   );
 };
