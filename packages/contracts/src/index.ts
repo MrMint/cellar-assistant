@@ -5,6 +5,7 @@ export * from "./brand.ts";
 export * from "./budget.ts";
 export * from "./categories.ts";
 export * from "./cellars.ts";
+export * from "./check-ins.ts";
 export * from "./collections.ts";
 export * from "./ctx.ts";
 export * from "./dead-delivery.ts";
