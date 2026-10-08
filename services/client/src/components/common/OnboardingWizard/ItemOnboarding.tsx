@@ -13,8 +13,9 @@ import {
 import { AiStatus } from "../AiStatus";
 import { AnimationShowcase } from "../AnimationShowcase";
 import { QuickAddCard } from "../QuickAddCard";
-import { emptyDefaults, quickAddDefaultsFrom } from "./adapter";
+import { emptyDefaults } from "./adapter";
 import { CatalogMatchPrompt } from "./CatalogMatchPrompt";
+import { catalogMatchSummary } from "./catalog-match";
 import { FinalPrompt } from "./FinalPrompt";
 import { type OnboardingResult, OnboardingWizard } from "./index";
 import { OnboardingMachine } from "./machines";
@@ -158,15 +159,14 @@ export const ItemOnboarding = ({ type, cellarId }: ItemOnboardingProps) => {
           <Grid xs={12} sm={6}>
             <QuickAddCard
               heading="Is it this one?"
+              // The card names the item it will file, in the catalogue's
+              // words — not the label read's, and not its raw enum codes.
               defaults={{
-                ...quickAddDefaultsFrom(
-                  type,
-                  state.context.defaults ?? emptyDefaults(),
-                ),
-                // The card names the item it will file, not the read.
                 name: catalogMatch.item.name,
                 vintage: catalogMatch.item.vintage,
+                brand_name: catalogMatch.brandName,
               }}
+              summary={catalogMatchSummary(catalogMatch)}
               itemType={type}
               confidence={state.context.confidence ?? 0}
               confirmLabel="+1 bottle"

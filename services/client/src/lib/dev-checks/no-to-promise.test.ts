@@ -72,6 +72,14 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "in an effect whose cleanup sets `cancelled`; a poll is a loop over one " +
       "object, not a list.",
   },
+  "common/OnboardingWizard/actors/closeOnboarding.ts": {
+    calls: 1,
+    reason:
+      "An xstate promise actor spawned once the catalogue match is filed: " +
+      "one idempotent closeItemOnboarding per wizard, fire-and-forget " +
+      "bookkeeping whose answer nothing reads — there is no list, and no " +
+      "newer request for it to race.",
+  },
   "common/OnboardingWizard/actors/createItem.ts": {
     calls: 4,
     reason:

@@ -532,6 +532,26 @@ export const StartItemOnboardingMutation = graphql(
 );
 
 /**
+ * Close a session whose bottle was an item the catalogue already held (the
+ * quick-add, or "+1 bottle"): `MATCHED`, nothing created. Idempotent.
+ */
+export const CloseItemOnboardingMutation = graphql(
+  `
+  mutation CloseItemOnboarding($onboardingId: ID!) {
+    closeItemOnboarding(onboardingId: $onboardingId) {
+      __typename
+      ... on ItemOnboarding {
+        id
+        status
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/**
  * Turn an accepted proposal into an item, a brand link and a cellar item.
  *
  * **`item` is deliberately not selected.** The schema says it is "null until

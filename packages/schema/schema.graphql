@@ -947,6 +947,8 @@ type CheckInEdge {
 
 union CheckInResult = BudgetExceededError | CheckIn | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+union CloseItemOnboardingResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
+
 type Coffee implements Item {
   barcode: String
 
@@ -2676,6 +2678,11 @@ type Mutation {
   ): CheckInResult!
 
   """
+  Closes a session whose bottle turned out to be an item the catalogue already held (the quick-add, or “Is it this one? +1 bottle”): its status becomes `MATCHED` and nothing is created. Idempotent; a session that already `CONFIRMED` an item of its own stays `CONFIRMED`.
+  """
+  closeItemOnboarding(onboardingId: ID!): CloseItemOnboardingResult!
+
+  """
   Turns an accepted proposal into an item, a brand link and a cellar item. Delivered twice, it yields one of each (§8.4).
   """
   confirmItemOnboarding(input: ConfirmItemOnboardingInput!, onboardingId: ID!): ConfirmItemOnboardingResult!
@@ -2990,12 +2997,13 @@ type NotFoundError implements ActorError & Error {
 }
 
 """
-`item_onboardings.status`. Plain `text` in the database with no check constraint, so this enum is the convention rather than an enforced domain. `START` is the column default; `COMPLETED` is what the old `getItemDefaults` wrote; `CONFIRMED` and `FAILED` are B2 additions for two states the old flow had nowhere to record.
+`item_onboardings.status`. Plain `text` in the database with no check constraint, so this enum is the convention rather than an enforced domain. `START` is the column default; `COMPLETED` is what the old `getItemDefaults` wrote; `CONFIRMED` and `FAILED` are B2 additions for two states the old flow had nowhere to record. `MATCHED` closes a session whose bottle was an item the catalogue already held (`closeItemOnboarding`): nothing was created from it.
 """
 enum OnboardingStatus {
   COMPLETED
   CONFIRMED
   FAILED
+  MATCHED
   START
 }
 

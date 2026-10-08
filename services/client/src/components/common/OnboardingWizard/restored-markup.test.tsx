@@ -159,6 +159,25 @@ describe("QuickAddCard", () => {
   });
 });
 
+describe("QuickAddCard with a known item's summary", () => {
+  test("the summary given replaces the one built from the read", () => {
+    const html = text(
+      render(
+        <QuickAddCard
+          defaults={quickAddDefaultsFrom("WINE", wine)}
+          itemType="WINE"
+          confidence={0.93}
+          summary="2015 · Cabernet Sauvignon"
+          onConfirm={async () => undefined}
+          onEdit={noop}
+        />,
+      ),
+    );
+    assert.match(html, /2015 · Cabernet Sauvignon/);
+    assert.doesNotMatch(html, /RED/);
+  });
+});
+
 describe("OnboardingItemForm (the old {T}Form in create mode)", () => {
   const labels = (html: string) =>
     [...html.matchAll(/<label[^>]*>([^<]*)/g)].map((match) => match[1]);
@@ -234,5 +253,18 @@ describe("OnboardingItemForm: the old create forms' required stars (gap #14b)", 
       />,
     );
     assert.deepEqual(starred(html), ["Name", "Category"]);
+  });
+
+  test("the form opts out of native validation, so N03's own messages show", () => {
+    const html = render(
+      <OnboardingItemForm
+        type="WINE"
+        itemOnboardingId="o"
+        defaultValues={formDefaultsFromOnboarding("WINE", {})}
+        onCreated={noop}
+      />,
+    );
+    assert.match(html, /<input[^>]*required/);
+    assert.match(html, /<form[^>]*novalidate/i);
   });
 });

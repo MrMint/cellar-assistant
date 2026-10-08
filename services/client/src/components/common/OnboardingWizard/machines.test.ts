@@ -8,6 +8,7 @@ import type { Client } from "urql";
 import { createActor, fromPromise, waitFor } from "xstate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type {
+  CloseOnboardingInput,
   DefaultValuesResult,
   InsertCellarItemInput,
   SearchCatalogInput,
@@ -40,8 +41,10 @@ const run = ({
   match = null as CatalogMatch | null,
   inCellar = true,
   itemType = "WINE" as ApiItemType,
+  addFails = false,
 }) => {
   const filed: InsertCellarItemInput[] = [];
+  const closed: CloseOnboardingInput[] = [];
   const photographed: UploadItemImageInput[] = [];
   const searched: SearchCatalogInput[] = [];
   const machine = OnboardingMachine.provide({
@@ -62,8 +65,15 @@ const run = ({
       ),
       insertCellarItem: fromPromise(
         async ({ input }: { input: InsertCellarItemInput }) => {
+          if (addFails) throw new Error("refused");
           filed.push(input);
           return { itemId: input.cellarItemId };
+        },
+      ),
+      closeOnboarding: fromPromise(
+        async ({ input }: { input: CloseOnboardingInput }) => {
+          closed.push(input);
+          return true;
         },
       ),
       uploadItemImage: fromPromise(
@@ -88,7 +98,7 @@ const run = ({
     frontLabel: "data:image/jpeg;base64,AA==",
     declinedItemIds: ["declined"],
   });
-  return { actor, filed, photographed, searched };
+  return { actor, filed, photographed, searched, closed };
 };
 
 const settled = (actor: ReturnType<typeof run>["actor"]) =>
@@ -254,5 +264,56 @@ describe("quick add (N02: only another bottle of a known item)", () => {
     assert.equal(state.value, "form");
     assert.equal(state.context.catalogMatch, undefined);
     assert.ok(state.context.declinedItemIds.includes("known"));
+  });
+});
+
+describe("the onboarding is closed when an existing item is filed", () => {
+  const closedIds = (closed: CloseOnboardingInput[]) =>
+    closed.map((c) => c.itemOnboardingId);
+
+  test("quick-add CONFIRM closes the session analyze opened", async () => {
+    const { actor, closed } = run({ confidence: 0.95, match: exact });
+    await settled(actor);
+    actor.send({ type: "CONFIRM" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    await waitFor(actor, () => closed.length > 0);
+    assert.deepEqual(closedIds(closed), ["onb"]);
+  });
+
+  test("+1 bottle closes it, in a cellar or not", async () => {
+    for (const inCellar of [true, false]) {
+      const { actor, closed } = run({
+        confidence: 0.5,
+        match: exact,
+        inCellar,
+      });
+      await settled(actor);
+      actor.send({ type: "USE_MATCH" });
+      await waitFor(actor, (s) => s.value === "finalPrompt");
+      await waitFor(actor, () => closed.length > 0);
+      assert.deepEqual(closedIds(closed), ["onb"], `inCellar=${inCellar}`);
+    }
+  });
+
+  test("a created item does not (confirmItemOnboarding closes its own)", async () => {
+    const { actor, closed } = run({ confidence: 0.5, match: null });
+    await settled(actor);
+    actor.send({ type: "CREATED", itemId: "new" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(closed, []);
+  });
+
+  test("a bottle that failed to file leaves the session open", async () => {
+    const { actor, closed } = run({
+      confidence: 0.95,
+      match: exact,
+      addFails: true,
+    });
+    await settled(actor);
+    actor.send({ type: "CONFIRM" });
+    await waitFor(actor, (s) => s.value === "addFailed");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(closed, []);
   });
 });

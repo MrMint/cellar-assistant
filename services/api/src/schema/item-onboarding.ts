@@ -36,7 +36,9 @@ const OnboardingStatusEnum = builder.enumType("OnboardingStatus", {
     "constraint, so this enum is the convention rather than an enforced " +
     "domain. `START` is the column default; `COMPLETED` is what the old " +
     "`getItemDefaults` wrote; `CONFIRMED` and `FAILED` are B2 additions for " +
-    "two states the old flow had nowhere to record.",
+    "two states the old flow had nowhere to record. `MATCHED` closes a " +
+    "session whose bottle was an item the catalogue already held " +
+    "(`closeItemOnboarding`): nothing was created from it.",
   values: ONBOARDING_STATUSES,
 });
 
@@ -265,5 +267,22 @@ builder.mutationField("confirmItemOnboarding", (t) =>
               ? null
               : String(args.input.cellarItemId),
         } satisfies ConfirmOnboardingInputType),
+  }),
+);
+
+builder.mutationField("closeItemOnboarding", (t) =>
+  t.field({
+    type: ItemOnboardingType,
+    description:
+      "Closes a session whose bottle turned out to be an item the catalogue " +
+      "already held (the quick-add, or “Is it this one? +1 bottle”): its " +
+      "status becomes `MATCHED` and nothing is created. Idempotent; a " +
+      "session that already `CONFIRMED` an item of its own stays `CONFIRMED`.",
+    errors: {},
+    args: { onboardingId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(ItemOnboardingActorDescriptor, String(args.onboardingId))
+        .closeAsMatched(),
   }),
 );

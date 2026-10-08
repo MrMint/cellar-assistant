@@ -1,15 +1,22 @@
 import { isEmpty, isNil, isNotNil, not } from "ramda";
 import type { Client } from "urql";
-import { assign, createMachine, type PromiseActorLogic } from "xstate";
+import {
+  assign,
+  createMachine,
+  enqueueActions,
+  type PromiseActorLogic,
+} from "xstate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { Barcode } from "@/constants";
 import type { AiOutcome } from "@/lib/ai/outcome";
+import { closeOnboarding } from "./actors/closeOnboarding";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
 import { searchByBarcode } from "./actors/searchByBarcode";
 import { searchByImage } from "./actors/searchByImage";
 import { searchCatalog } from "./actors/searchCatalog";
 import type {
+  CloseOnboardingInput,
   DefaultValuesResult,
   FetchDefaultsInput,
   InsertCellarItemInput,
@@ -106,6 +113,12 @@ export const OnboardingMachine = createMachine(
         declinedItemIds: readonly string[];
         /** N19: the catalogue item the label names, if there is one. */
         catalogMatch?: CatalogMatch;
+        /**
+         * The bottle being filed is the catalogue match (quick-add CONFIRM or
+         * USE_MATCH), so the onboarding `analyze` opened is closed as
+         * `MATCHED` once it is filed rather than left open forever.
+         */
+        filedMatch?: boolean;
         /** The cellar_items ID after adding item to cellar (used for redirect) */
         cellarItemId?: string;
         /** Minted up front so a retried add files one bottle. */
@@ -167,6 +180,10 @@ export const OnboardingMachine = createMachine(
               UploadItemImageResult,
               UploadItemImageInput
             >;
+          }
+        | {
+            src: "closeOnboarding";
+            logic: PromiseActorLogic<boolean, CloseOnboardingInput>;
           };
       delays: "catalogMatchTimeout";
     },
@@ -361,6 +378,7 @@ export const OnboardingMachine = createMachine(
             actions: assign({
               existingItemId: ({ context }) =>
                 context.catalogMatch?.item.itemId,
+              filedMatch: true,
             }),
             target: "addItemToCellar",
           },
@@ -392,6 +410,7 @@ export const OnboardingMachine = createMachine(
               actions: assign({
                 existingItemId: ({ context }) =>
                   context.catalogMatch?.item.itemId,
+                filedMatch: true,
               }),
               target: "addItemToCellar",
             },
@@ -400,6 +419,7 @@ export const OnboardingMachine = createMachine(
               actions: assign({
                 existingItemId: ({ context }) =>
                   context.catalogMatch?.item.itemId,
+                filedMatch: true,
               }),
               target: "uploadImage",
             },
@@ -456,9 +476,12 @@ export const OnboardingMachine = createMachine(
           }),
           onDone: {
             target: "finalPrompt",
-            actions: assign({
-              cellarItemId: ({ event }) => event.output.itemId,
-            }),
+            actions: [
+              assign({
+                cellarItemId: ({ event }) => event.output.itemId,
+              }),
+              "closeMatchedOnboarding",
+            ],
           },
           onError: {
             target: "addFailed",
@@ -490,17 +513,22 @@ export const OnboardingMachine = createMachine(
             displayImage: displayImageDataUrl,
             urqlClient,
           }),
+          // The item was chosen either way; only its photo can have failed.
           onDone: {
             target: "finalPrompt",
+            actions: "closeMatchedOnboarding",
           },
           onError: {
             target: "finalPrompt",
-            actions: assign({
-              imageError: ({ event }) =>
-                event.error instanceof Error
-                  ? event.error.message
-                  : "The photo could not be saved.",
-            }),
+            actions: [
+              assign({
+                imageError: ({ event }) =>
+                  event.error instanceof Error
+                    ? event.error.message
+                    : "The photo could not be saved.",
+              }),
+              "closeMatchedOnboarding",
+            ],
           },
         },
       },
@@ -537,12 +565,29 @@ export const OnboardingMachine = createMachine(
     delays: {
       catalogMatchTimeout: CATALOG_MATCH_TIMEOUT_MS,
     },
+    actions: {
+      // Fire and forget: the bottle is filed, and closing the session is
+      // bookkeeping the person need not wait on (`closeOnboarding` never
+      // throws). Only when the bottle was the catalogue match — a created
+      // item's session is closed by `confirmItemOnboarding` itself, and a
+      // barcode-chooser pick never opened one.
+      closeMatchedOnboarding: enqueueActions(({ context, enqueue }) => {
+        if (context.filedMatch !== true) return;
+        enqueue.spawnChild("closeOnboarding", {
+          input: {
+            urqlClient: context.urqlClient,
+            itemOnboardingId: context.itemOnboardingId,
+          },
+        });
+      }),
+    },
     actors: {
       uploadFiles,
       fetchDefaults,
       searchCatalog,
       insertCellarItem,
       uploadItemImage,
+      closeOnboarding,
     },
   },
 );
