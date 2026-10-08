@@ -203,7 +203,9 @@ export const checkIns = pgTable("check_ins", {
 	cellarItemId: uuid("cellar_item_id").notNull().references(() => cellarItems.id, { onDelete: "restrict", onUpdate: "restrict" } ),
 	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`).notNull(),
-});
+}, (table) => [
+	index("idx_check_ins_cellar_item_id_created_at").using("btree", table.cellarItemId.asc().nullsLast(), table.createdAt.asc().nullsLast()),
+]);
 
 export const coffeeCultivar = pgTable("coffee_cultivar", {
 	value: text().primaryKey(),
