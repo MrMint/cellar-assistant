@@ -50,7 +50,7 @@ Recommended option taken unless the row says otherwise. Notes are the user's, li
 
 - **Tier-list history (D4):** an append-only edit log per tier list, with undo/redo in Arrange mode. Needs a migration.
 - **Cellar dashboard (D3):** extends X04.
-- **Provider parity (D25):** a local image-embedding path so photo search and image matching work without Gemini (see `docs/architecture/findings/vllm-provider.md` and the AI provider notes).
+- **Provider parity (D25):** a local image-embedding path so photo search and image matching work without Gemini. **Owned by a separate session working on local models**, not this roadmap's work; roadmap packages consume `viewer.aiCapabilities` and must not change local model setup.
 - **Places budget cap (D16):** an in-app monthly cap sized to the free tier + ~$5.
 
 ## Delivery (user)
