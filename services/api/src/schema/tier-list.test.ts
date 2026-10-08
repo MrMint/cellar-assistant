@@ -4,6 +4,8 @@
  * resolvers marshal arguments and results correctly, not that `TierListActor`
  * itself is correct (that is `tier-list-actor.test.ts`, against real Postgres).
  */
+import type { PageArgs } from "@cellar-assistant/contracts";
+import { offsetPage } from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -265,5 +267,164 @@ describe("reorderTierListBand", () => {
       method: "reorderBand",
       args: [expect.anything(), 2, [items[0]?.id, items[1]?.id]],
     });
+  });
+});
+
+describe("edit history (D4)", () => {
+  const removal = {
+    seq: 4,
+    kind: "REMOVE" as const,
+    entry: {
+      type: "WINE" as const,
+      id: "44444444-4444-4444-8444-444444444444",
+    },
+    entryName: "Barolo",
+    fromBand: 5,
+    toBand: null,
+    at: "2026-10-08T00:00:00.000Z",
+  };
+
+  it("serves TierList.editHistory from the actor, with canUndo/canRedo", async () => {
+    const { invoke, calls } = stubSidecar({
+      "TierListActor.get": () => tierListDto,
+      "TierListActor.editHistory": () => ({
+        editCount: 4,
+        undo: removal,
+        redo: null,
+      }),
+    });
+    const result = await run(
+      `{ tierList(id: "${tierListDto.id}") { ... on TierList {
+           editHistory { editCount canUndo canRedo
+             undo { seq kind entryType entryId entryName fromBand toBand at }
+             redo { seq } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.tierList).toEqual({
+      editHistory: {
+        editCount: 4,
+        canUndo: true,
+        canRedo: false,
+        undo: {
+          seq: 4,
+          kind: "REMOVE",
+          entryType: "WINE",
+          entryId: removal.entry.id,
+          entryName: "Barolo",
+          fromBand: 5,
+          toBand: null,
+          at: removal.at,
+        },
+        redo: null,
+      },
+    });
+    expect(calls.map((call) => call.method)).toEqual(["get", "editHistory"]);
+  });
+
+  it("is null when the actor says the viewer is not the owner", async () => {
+    const { invoke } = stubSidecar({
+      "TierListActor.get": () => tierListDto,
+      "TierListActor.editHistory": () => null,
+    });
+    const result = await run(
+      `{ tierList(id: "${tierListDto.id}") { ... on TierList { editHistory { canUndo } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.tierList).toEqual({ editHistory: null });
+  });
+
+  it("routes undoTierListEdit and redoTierListEdit to the list's actor", async () => {
+    const step = {
+      applied: removal,
+      history: { editCount: 4, undo: null, redo: removal },
+    };
+    const { invoke, calls } = stubSidecar({
+      "TierListActor.undo": () => step,
+      "TierListActor.redo": () => step,
+    });
+    for (const field of ["undoTierListEdit", "redoTierListEdit"]) {
+      const result = await run(
+        `mutation { ${field}(tierListId: "${tierListDto.id}") {
+           __typename
+           ... on TierListHistoryStep {
+             applied { kind entryName }
+             history { canUndo canRedo }
+           } } }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.[field]).toEqual({
+        __typename: "TierListHistoryStep",
+        applied: { kind: "REMOVE", entryName: "Barolo" },
+        history: { canUndo: false, canRedo: true },
+      });
+    }
+    expect(calls).toMatchObject([
+      { actorType: "TierListActor", actorId: tierListDto.id, method: "undo" },
+      { actorType: "TierListActor", actorId: tierListDto.id, method: "redo" },
+    ]);
+  });
+});
+
+describe("TierListItem.ownerReview (X23)", () => {
+  const owner = "55555555-5555-4555-8555-555555555555";
+  const wineId = "44444444-4444-4444-8444-444444444444";
+  const row = (type: "WINE" | "PLACE", id: string) => ({
+    id: `66666666-6666-4666-8666-66666666666${type === "WINE" ? 1 : 2}`,
+    tierListId: tierListDto.id,
+    band: 4,
+    position: 0,
+    notes: null,
+    entry: { type, id },
+    createdAt: null,
+    updatedAt: null,
+  });
+
+  it("asks the item for the list owner's review, the list read once", async () => {
+    const { invoke, calls } = stubSidecar({
+      "TierListActor.get": () => ({ ...tierListDto, createdById: owner }),
+      "TierListActor.items": (_id, _ctx, args) =>
+        offsetPage(
+          [
+            row("WINE", wineId),
+            row("PLACE", "77777777-7777-4777-8777-777777777777"),
+          ],
+          args as PageArgs,
+        ),
+      "ItemActor.reviewBy": (_actorId, _ctx, userId) => ({
+        id: "88888888-8888-4888-8888-888888888888",
+        itemId: wineId,
+        itemType: "WINE",
+        userId,
+        score: 2.5,
+        text: null,
+        createdAt: "2026-10-08T00:00:00.000Z",
+        updatedAt: "2026-10-08T00:00:00.000Z",
+      }),
+    });
+    const result = await run(
+      `{ tierList(id: "${tierListDto.id}") { ... on TierList {
+           items(first: 10) { edges { node { entryType ownerReview { score userId } } } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    const list = result.data?.tierList as
+      | { items: { edges: { node: unknown }[] } }
+      | undefined;
+    const edges = list?.items.edges.map((edge) => edge.node);
+    expect(edges).toEqual([
+      { entryType: "WINE", ownerReview: { score: 2.5, userId: owner } },
+      // A place rating is its giver's alone: never served as the owner's.
+      { entryType: "PLACE", ownerReview: null },
+    ]);
+    const reviewCalls = calls.filter((call) => call.method === "reviewBy");
+    expect(reviewCalls[0]?.args.at(-1)).toBe(owner);
+    expect(reviewCalls).toEqual([
+      expect.objectContaining({ actorId: `wine:${wineId}` }),
+    ]);
+    // `tierList(id:)` itself, then the loader once for the row.
+    expect(calls.filter((call) => call.method === "get")).toHaveLength(2);
   });
 });

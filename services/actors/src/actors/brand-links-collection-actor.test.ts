@@ -16,6 +16,7 @@
 import { randomUUID } from "node:crypto";
 import {
   anonymousCtx,
+  brandFirstItemTypesActorId,
   brandItemCountsActorId,
   brandLinksCollectionActorId,
   ForbiddenError,
@@ -412,6 +413,53 @@ describe.skipIf(skip)("BrandLinksCollectionActor", () => {
         actor.itemCounts(anonymousCtx("r"), filter),
       ).rejects.toBeInstanceOf(ForbiddenError);
       expect(actor.queryCount).toBe(1);
+    });
+  });
+  it("firstItemTypes (X23): each brand's earliest-linked item's type, aligned", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const mixed = await seedBrand(db, `zzz-x23-mixed-${randomUUID()}`);
+      const empty = await seedBrand(db, `zzz-x23-empty-${randomUUID()}`);
+      // The beer was linked first, though the wine is primary: earliest wins.
+      await linkItem(
+        db,
+        "beer_id",
+        await seedBeer(db, viewer, "zzz-x23 beer"),
+        mixed,
+        false,
+        "2026-01-01T00:00:00Z",
+      );
+      await linkItem(
+        db,
+        "wine_id",
+        await seedWine(db, viewer, "zzz-x23 wine"),
+        mixed,
+        true,
+        "2026-02-01T00:00:00Z",
+      );
+      const filter = { brandIds: [empty, mixed] };
+      const actor = await activate(
+        createActor(
+          BrandLinksCollectionActor,
+          brandFirstItemTypesActorId(filter),
+          db,
+        ),
+      );
+      expect(await actor.firstItemTypes(userCtx(viewer, "r"), filter)).toEqual([
+        null,
+        "BEER",
+      ]);
+      expect(actor.queryCount).toBe(1);
+      // Its own key space: the counts' id for the same set is a different actor.
+      expect(brandFirstItemTypesActorId(filter)).not.toBe(
+        brandItemCountsActorId(filter),
+      );
+      await expect(
+        actor.firstItemTypes(userCtx(viewer, "r"), { brandIds: [mixed] }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.firstItemTypes(anonymousCtx("r"), filter),
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
   });
 });

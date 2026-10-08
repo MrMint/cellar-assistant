@@ -577,6 +577,19 @@ export class ItemActor
     return mine === undefined ? null : reviewRowToDto(aggregate.ref.type, mine);
   }
 
+  /**
+   * X23: `userId`'s newest review, or `null` — the owner's verdict beside an
+   * entry on their tier list. The same rows `reviews` pages through for any
+   * signed-in viewer, so nothing is visible here that was not already.
+   */
+  async reviewBy(ctx: Ctx, userId: string): Promise<ItemReviewDto | null> {
+    const aggregate = this.#requireItem();
+    requireSignedIn(ctx, "view an item review");
+    const wanted = requireUuid(userId, "userId");
+    const row = aggregate.reviews.find((review) => review.userId === wanted);
+    return row === undefined ? null : reviewRowToDto(aggregate.ref.type, row);
+  }
+
   async brands(ctx: Ctx, page: PageArgs): Promise<Page<ItemBrandDto>> {
     const aggregate = this.#requireItem();
     requireSignedIn(ctx, "view item brands");

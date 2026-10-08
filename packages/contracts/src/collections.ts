@@ -912,6 +912,19 @@ export type BrandLinksCollectionActorInterface = {
     ctx: Ctx,
     filter: BrandItemCountsFilter,
   ): Promise<readonly number[]>;
+
+  /**
+   * X23 — the type of each brand's **earliest-linked** item (`item_brands`
+   * by `created_at`, then id), aligned to `filter.brandIds`; `null` for a
+   * brand that carries no item. One statement for a page of brands,
+   * addressed at {@link brandFirstItemTypesActorId}. The client infers a
+   * brand's type from it when `brands.brand_type` says nothing (null or
+   * `other`) — a fact read, not a write to the shared catalog.
+   */
+  firstItemTypes(
+    ctx: Ctx,
+    filter: BrandItemCountsFilter,
+  ): Promise<readonly (ItemType | null)[]>;
 };
 
 /** The brands whose item counts one {@link BrandLinksCollectionActorInterface.itemCounts} call reads. */
@@ -928,6 +941,7 @@ export const BrandLinksCollectionActorDescriptor: ActorDescriptor<BrandLinksColl
       places: {},
       itemLinks: {},
       itemCounts: {},
+      firstItemTypes: {},
     },
   };
 
@@ -943,5 +957,17 @@ export const brandLinksCollectionActorId = (filter: BrandLinksFilter): string =>
 export const brandItemCountsActorId = (filter: BrandItemCountsFilter): string =>
   searchHash({
     kind: "brand-item-counts",
+    brandIds: Array.from(new Set(filter.brandIds)).sort(),
+  });
+
+/**
+ * The actor id for one batch of first-item types — {@link brandItemCountsActorId}'s
+ * rule under its own namespace, so the two batches never share an activation.
+ */
+export const brandFirstItemTypesActorId = (
+  filter: BrandItemCountsFilter,
+): string =>
+  searchHash({
+    kind: "brand-first-item-types",
     brandIds: Array.from(new Set(filter.brandIds)).sort(),
   });

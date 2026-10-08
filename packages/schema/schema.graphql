@@ -480,6 +480,11 @@ type Brand {
   ): BrandConnection!
   createdAt: DateTime!
   description: String
+
+  """
+  X23: the type of the earliest item linked to this brand, or null when it carries none — what a client infers the brand's kind from when `brandType` is unset or `other`. One batched call per page of brands. Null for an anonymous viewer.
+  """
+  firstItemType: ItemType
   id: ID!
 
   """
@@ -2835,6 +2840,11 @@ type Mutation {
   recordPlaceInteraction(input: RecordPlaceInteractionInput!): RecordPlaceInteractionResult!
 
   """
+  D4: puts back the latest undone edit. A new edit after an undo clears what Redo can put back. Creator only; nothing to redo is a `ConflictError`.
+  """
+  redoTierListEdit(tierListId: ID!): RedoTierListEditResult!
+
+  """
   Decline a request sent to you, or cancel one you sent. Both are the same row; only the requester's actor may delete it.
   """
   rejectFriendRequest(requestId: ID!): RejectFriendRequestResult!
@@ -2907,6 +2917,11 @@ type Mutation {
 
   """Add or remove one item from the viewer's favourites."""
   toggleFavorite(itemId: ID!, type: ItemType!): ToggleFavoriteResult!
+
+  """
+  D4: takes back the latest edit not already undone (an add, a removal, a move) and records that in the list's append-only history. Creator only; nothing to undo is a `ConflictError`.
+  """
+  undoTierListEdit(tierListId: ID!): UndoTierListEditResult!
   unlinkItemBrand(brandId: ID!, itemId: ID!, type: ItemType!): UnlinkItemBrandResult!
 
   """Admin only (BrandActor.update)."""
@@ -4847,6 +4862,8 @@ type RecordedPlaceAccess {
   placeId: ID!
 }
 
+union RedoTierListEditResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListHistoryStep | ValidationError
+
 """
 Which of §4's ten reference tables to read (corrected by A3: catalog data code never branches on, not the twelve compile-time enums).
 """
@@ -5722,6 +5739,11 @@ type TierList {
   createdBy: UserProfile
   createdById: ID!
   description: String
+
+  """
+  D4: Undo / Redo for the list's owner. Null for anyone else who may see the list — the history is the owner's tool.
+  """
+  editHistory: TierListEditHistory
   id: ID!
 
   """
@@ -5783,6 +5805,54 @@ type TierListEdge {
   node: TierList!
 }
 
+"""One recorded edit to a tier list's entries, as Undo and Redo name it."""
+type TierListEdit {
+  at: DateTime!
+
+  """The item's or place's id (not the row's)."""
+  entryId: ID
+
+  """Its name as it reads now; null when unreadable."""
+  entryName: String
+
+  """
+  What the edited entry ranks. Null for a reorder that moved several entries at once.
+  """
+  entryType: TierListEntryType
+
+  """The band it left; null for ADD."""
+  fromBand: Int
+  kind: TierListEditKind!
+
+  """Per list, from 1, in the order the edits happened."""
+  seq: Int!
+
+  """The band it landed in; null for REMOVE."""
+  toBand: Int
+}
+
+"""
+Where a tier list's edit history stands for its owner (D4): the edit Undo would take back and the one Redo would put back. The log behind it is append-only and kept for the life of the list.
+"""
+type TierListEditHistory {
+  canRedo: Boolean!
+  canUndo: Boolean!
+
+  """Edits recorded so far, undone ones included."""
+  editCount: Int!
+  redo: TierListEdit
+  undo: TierListEdit
+}
+
+"""
+What a tier-list edit did: ADD an entry, REMOVE one, or MOVE entries (a reorder within a band, or into another band).
+"""
+enum TierListEditKind {
+  ADD
+  MOVE
+  REMOVE
+}
+
 """A typed reference to whatever a tier list ranks."""
 input TierListEntryRefInput {
   id: ID!
@@ -5800,6 +5870,12 @@ enum TierListEntryType {
   SPIRIT
   TEA
   WINE
+}
+
+"""What an Undo or Redo did, and where the history stands now."""
+type TierListHistoryStep {
+  applied: TierListEdit!
+  history: TierListEditHistory!
 }
 
 """
@@ -5826,6 +5902,11 @@ type TierListItem {
   """Non-null exactly when entryType is not PLACE."""
   item: Item
   notes: String
+
+  """
+  X23: the list owner's own newest review of this entry's item — the verdict a ranked row should show on someone else's list, where `item.myReview` is only yours. Reviews are readable by any signed-in viewer, so this widens nothing. Null for a PLACE entry (a place rating is private to the person who gave it), for an anonymous viewer, and when the owner has not reviewed it.
+  """
+  ownerReview: ItemReview
 
   """Non-null exactly when entryType is PLACE."""
   place: Place
@@ -5863,6 +5944,8 @@ type ToggleFavoritePayload {
 }
 
 union ToggleFavoriteResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ToggleFavoritePayload | ValidationError
+
+union UndoTierListEditResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListHistoryStep | ValidationError
 
 union UnlinkItemBrandResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | UnlinkedItemBrand | ValidationError
 

@@ -63,6 +63,7 @@ import type {
 } from "@cellar-assistant/contracts";
 import {
   BrandLinksCollectionActorDescriptor,
+  brandFirstItemTypesActorId,
   brandItemCountsActorId,
   brandLinksCollectionActorId,
   isItemType,
@@ -252,6 +253,45 @@ export class BrandLinksCollectionActor
         `);
         const counts = new Map(rows.map((row) => [row.brand_id, row.n]));
         return filter.brandIds.map((id) => counts.get(id) ?? 0);
+      },
+    );
+  }
+
+  /**
+   * X23 — each brand's earliest-linked item's type, for a page of brands in
+   * one statement (`distinct on`), addressed at `brandFirstItemTypesActorId`.
+   * "Earliest" is the link's `created_at`, then its id, so the answer is
+   * stable while links are only ever added.
+   */
+  async firstItemTypes(
+    ctx: Ctx,
+    filter: BrandItemCountsFilter,
+  ): Promise<readonly (ItemType | null)[]> {
+    requireReverseEdgeBatch(filter.brandIds, "firstItemTypes brandIds");
+    return await this.keyedBatch(
+      ctx,
+      brandFirstItemTypesActorId(filter),
+      async () => {
+        if (filter.brandIds.length === 0) return [];
+        const { rows } = await this.db.execute<{
+          readonly brand_id: string;
+          readonly item_type: string;
+        }>(sql`
+          select distinct on (ib.brand_id)
+            ib.brand_id, ${ITEM_TYPE_EXPR} as item_type
+          from public.item_brands ib
+          where ib.brand_id = any(${uuidArray(filter.brandIds, "brandId")})
+          order by ib.brand_id,
+                   coalesce(ib.created_at, 'epoch'::timestamptz),
+                   ib.id
+        `);
+        const types = new Map(
+          rows.map((row) => [
+            row.brand_id,
+            isItemType(row.item_type) ? row.item_type : null,
+          ]),
+        );
+        return filter.brandIds.map((id) => types.get(id) ?? null);
       },
     );
   }
