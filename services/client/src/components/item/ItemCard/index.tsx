@@ -47,9 +47,28 @@ export type ItemCardProps = {
   type: ItemTypeValue;
 };
 
-/** One footer section: centred, a third of the row. */
+/**
+ * One footer section: centred, an equal share of the row. Every section has
+ * the same zero horizontal padding — `flex-1` shares out what is left *after*
+ * padding, so a padded heart button took a wider third and squeezed the score
+ * against the card's edge.
+ */
 const FOOTER_CELL =
-  "flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 text-ink-1";
+  "flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-0 text-ink-1";
+
+/**
+ * A hairline between two footer sections — only *between* two that are shown.
+ * Joy's card drew the old unconditional dividers against its own border, where
+ * a trailing one vanished; this tile has no border, so one with nothing after
+ * it hangs inside the rounded corner.
+ */
+const FooterSeparator = () => (
+  <Separator
+    orientation="vertical"
+    decorative={false}
+    className="data-[orientation=vertical]:h-6"
+  />
+);
 
 /**
  * The card clips its children (`overflow-hidden`, for the image's corners),
@@ -132,6 +151,9 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
     type === "WINE" ? `${formatVintage(item.vintage)} ${item.name}` : item.name;
   const handleClick = isNotNil(onClick) ? () => onClick(item.id) : undefined;
   const interactive = isNotNil(href) || isNotNil(onClick);
+  const hasFavorites = isNotNil(item.favoriteCount);
+  const hasReviews = isNotNil(item.reviewCount);
+  const hasScore = isNotNil(item.score);
 
   const subtitle = (
     <div className="type-footnote flex items-center justify-between gap-1">
@@ -200,7 +222,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         </div>
       )}
       <div className="flex items-center border-line border-t">
-        {isNotNil(item.favoriteCount) && (
+        {hasFavorites && (
           <Button
             variant="ghost"
             // `disabled:pointer-events-auto`: while the toggle is pending it
@@ -209,7 +231,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             // fell through to the stretched link and left the page.
             className={cn(
               FOOTER_CELL,
-              "relative z-10 rounded-none px-2 disabled:pointer-events-auto",
+              "relative z-10 rounded-none has-[>svg]:px-0 disabled:pointer-events-auto",
               RING_INSIDE,
             )}
             onClick={handleFavoriteClick}
@@ -233,12 +255,8 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             )}
           </Button>
         )}
-        <Separator
-          orientation="vertical"
-          decorative={false}
-          className="data-[orientation=vertical]:h-6"
-        />
-        {isNotNil(item.reviewCount) && (
+        {hasFavorites && hasReviews && <FooterSeparator />}
+        {hasReviews && (
           <div className={FOOTER_CELL}>
             <span className="type-headline tabular">{item.reviewCount}</span>
             <span className="sr-only"> reviews</span>
@@ -249,12 +267,8 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             />
           </div>
         )}
-        <Separator
-          orientation="vertical"
-          decorative={false}
-          className="data-[orientation=vertical]:h-6"
-        />
-        {isNotNil(item.score) && (
+        {(hasFavorites || hasReviews) && hasScore && <FooterSeparator />}
+        {hasScore && (
           <div
             className={FOOTER_CELL}
             data-reviewed={item.reviewed === true || undefined}

@@ -147,14 +147,11 @@ describe("ItemCard", () => {
     assert.doesNotMatch(html, /2020 Pliny/);
   });
 
-  test("missing counts hide their footer sections; the dividers stay", () => {
+  test("missing counts hide their footer sections and the dividers beside them", () => {
     const html = render(<ItemCard type="WINE" href="/wines/i" item={base} />);
-    assert.deepEqual(skeleton(html), [
-      "image",
-      "link",
-      "separator",
-      "separator",
-    ]);
+    // Joy's trailing divider vanished against the card's border; this tile
+    // has none, so a divider is drawn only between two shown sections.
+    assert.deepEqual(skeleton(html), ["image", "link"]);
     // An empty subtitle keeps its line with a non-breaking space.
     assert.match(html, />\u00a0<\/span>/);
   });
@@ -164,12 +161,24 @@ describe("ItemCard", () => {
       <ItemCard type="TEA" href="/teas/i" item={{ ...base, reviewCount: 0 }} />,
     );
     assert.match(html, />0<\/span>/);
+    assert.deepEqual(skeleton(html), ["image", "link", "0"]);
+  });
+
+  test("a divider joins the shown sections across a missing one", () => {
+    const html = render(
+      <ItemCard
+        type="WINE"
+        href="/wines/i"
+        item={{ ...base, favoriteCount: 2, score: 4 }}
+      />,
+    );
     assert.deepEqual(skeleton(html), [
       "image",
       "link",
+      "favorite",
+      "2",
       "separator",
-      "0",
-      "separator",
+      "4",
     ]);
   });
 
@@ -192,7 +201,7 @@ describe("ItemCard", () => {
     const html = render(
       <ItemCard type="SPIRIT" onClick={() => {}} item={base} />,
     );
-    assert.deepEqual(skeleton(html), ["image", "separator", "separator"]);
+    assert.deepEqual(skeleton(html), ["image"]);
     assert.doesNotMatch(html, /<a\b/);
     assert.match(html, />Barolo</);
     // The whole tile is a button named for the item.
@@ -229,7 +238,7 @@ describe("ItemCard", () => {
 
   test("neither href nor onClick: image and footer only", () => {
     const html = render(<ItemCard type="WINE" item={base} />);
-    assert.deepEqual(skeleton(html), ["image", "separator", "separator"]);
+    assert.deepEqual(skeleton(html), ["image"]);
     assert.doesNotMatch(html, />Barolo</);
     assert.doesNotMatch(html, /<button\b/);
   });
