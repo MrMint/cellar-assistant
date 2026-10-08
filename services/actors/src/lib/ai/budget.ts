@@ -140,6 +140,7 @@ const IMAGE_TOKENS = 4200;
  */
 export const OUTPUT_TOKEN_ESTIMATES: Readonly<Record<ModelSeam, number>> = {
   embedding: 0,
+  flavour_tags: 256,
   image_embedding: 0,
   image_search: 0,
   item_defaults: 1024,

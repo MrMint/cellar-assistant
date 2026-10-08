@@ -52,6 +52,7 @@ import {
   CellarActorDescriptor,
   CellarItemSearchActorDescriptor,
   CellarsCollectionActorDescriptor,
+  CheckInActorDescriptor,
   CheckInsCollectionActorDescriptor,
   DuplicatePlaceSearchActorDescriptor,
   EmbeddingActorDescriptor,
@@ -102,6 +103,7 @@ import { CategoryVectorsActor } from "./category-vectors-actor.ts";
 import { CellarActor } from "./cellar-actor.ts";
 import { CellarItemSearchActor } from "./cellar-item-search-actor.ts";
 import { CellarsCollectionActor } from "./cellars-collection-actor.ts";
+import { CheckInActor } from "./check-in-actor.ts";
 import { CheckInsCollectionActor } from "./check-ins-collection-actor.ts";
 import { DuplicatePlaceSearchActor } from "./duplicate-place-search-actor.ts";
 import { EmbeddingActor } from "./embedding-actor.ts";
@@ -240,6 +242,7 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   entry(CategoryVectorsActor, CategoryVectorsActorDescriptor),
   // B1 (§2.1).
   entry(CellarActor, CellarActorDescriptor),
+  entry(CheckInActor, CheckInActorDescriptor),
   // B4 (§2.1, §1.7).
   entry(UserActor, UserActorDescriptor),
   // B3 (§2.1).

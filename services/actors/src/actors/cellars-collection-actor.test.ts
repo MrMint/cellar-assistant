@@ -7,6 +7,7 @@
  * activation, and a viewer-keyed actor refusing a caller who is not that
  * viewer.
  */
+import { randomUUID } from "node:crypto";
 import {
   ForbiddenError,
   type PermissionType,
@@ -228,9 +229,12 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
       await bottleOn(a, 7);
       // `b`'s bottle is old (day 2), but it had a check-in on day 6.
       const bBottle = await bottleOn(b, 2);
+      const checkInId = randomUUID();
       await db.execute(sql`
-        insert into public.check_ins (user_id, cellar_item_id, created_at)
-        values (${me}::uuid, ${bBottle}::uuid, ${at(6)}::timestamptz)
+        insert into public.check_ins
+          (id, user_id, created_by_id, group_id, cellar_item_id, wine_id, created_at)
+        values (${checkInId}::uuid, ${me}::uuid, ${me}::uuid, ${checkInId}::uuid,
+                ${bBottle}::uuid, ${wine}::uuid, ${at(6)}::timestamptz)
       `);
 
       // a (7) > b (6) > c (5, created), then the stranger's despite day 9.

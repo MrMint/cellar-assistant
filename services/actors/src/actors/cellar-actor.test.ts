@@ -7,7 +7,8 @@
  *   1. the four-branch visibility rule holds for `get`, `items` **and**
  *      `checkIns`, from all three viewpoints §1.6 requires — owner, friend,
  *      stranger — at every privacy;
- *   2. `bulkCheckIn` refuses a non-friend id;
+ *   2. (moved) `bulkCheckIn`'s non-friend refusal is `CheckInActor.log`'s now
+ *      (`check-in-actor.test.ts`), since X02 made it the log's writer;
  *   3. `update` with a changed owner set is **one** transaction: a co-owner id
  *      the foreign key rejects rolls the rename back with it.
  *
@@ -172,6 +173,25 @@ const unitVector = (axis: number): number[] =>
   Array.from({ length: 768 }, (_, i) => (i === axis ? 1 : 0));
 
 /**
+ * A log poured from `cellarItemId`, written straight into `check_ins`: since
+ * X02 the writer is `CheckInActor` (`check-in-actor.test.ts`), and this file
+ * only reads the rows back through the cellar.
+ */
+const seedCheckIn = async (
+  db: DbOrTx,
+  options: { userId: string; cellarItemId: string; wineId: string },
+): Promise<string> => {
+  const id = randomUUID();
+  await db.execute(sql`
+    insert into public.check_ins
+      (id, user_id, created_by_id, group_id, cellar_item_id, wine_id)
+    values (${id}::uuid, ${options.userId}::uuid, ${options.userId}::uuid,
+            ${id}::uuid, ${options.cellarItemId}::uuid, ${options.wineId}::uuid)
+  `);
+  return id;
+};
+
+/**
  * Owner, one friend of the owner, one stranger, and a cellar at `privacy` with
  * one item and one check-in on it. Everything the three-viewer matrix needs.
  */
@@ -185,7 +205,11 @@ const seedScenario = async (db: DbOrTx, privacy: PermissionType) => {
   const actor = await activate(newCellarActor(cellarId, db));
   const wine = await seedWine(db, owner);
   const item = await actor.addItem(userCtx(owner, "seed-add"), { item: wine });
-  await actor.checkIn(userCtx(owner, "seed-checkin"), item.id);
+  await seedCheckIn(db, {
+    userId: owner,
+    cellarItemId: item.id,
+    wineId: wine.id,
+  });
 
   return { owner, friend, stranger, cellarId, actor, wine, itemId: item.id };
 };
@@ -716,20 +740,34 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
       });
     });
 
-    it("removeItem takes the item's check-ins with it (FK is RESTRICT)", async () => {
+    it("removeItem keeps the bottle's logs, detached (X02, D5)", async () => {
       await withTestDb(async (db) => {
         const scenario = await seedScenario(db, "PRIVATE");
+        const before = await db
+          .select()
+          .from(checkIns)
+          .where(eq(checkIns.cellarItemId, scenario.itemId));
+        expect(before).toHaveLength(1);
+
         await scenario.actor.removeItem(
           userCtx(scenario.owner, "r"),
           scenario.itemId,
         );
-        const remaining = await db
+        const [kept] = await db
           .select()
           .from(checkIns)
-          .where(eq(checkIns.cellarItemId, scenario.itemId));
-        expect(remaining).toEqual([]);
+          .where(eq(checkIns.id, before[0]?.id ?? ""));
+        // Still there, still about the same wine — only the bottle is gone.
+        expect(kept?.cellarItemId).toBeNull();
+        expect(kept?.wineId).toBe(scenario.wine.id);
+        expect(kept?.userId).toBe(scenario.owner);
         expect(
           (await scenario.actor.get(userCtx(scenario.owner, "r2"))).itemCount,
+        ).toBe(0);
+        // …and the cellar's own history no longer lists it.
+        expect(
+          (await scenario.actor.checkIns(userCtx(scenario.owner, "r3"), page))
+            .totalCount,
         ).toBe(0);
       });
     });
@@ -906,128 +944,40 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
   });
 
   /* ------------------------------------------------------------------ */
-  /* Check-ins                                                           */
+  /* Check-ins: read fresh, never cached (X02)                           */
   /* ------------------------------------------------------------------ */
 
-  describe("checkIn / bulkCheckIn", () => {
-    it("a viewer who can see the cellar may check in; one who cannot, cannot", async () => {
-      await withTestDb(async (db) => {
-        const scenario = await seedScenario(db, "PUBLIC");
-        const outsider = await seedUser(db);
-        const written = await scenario.actor.checkIn(
-          userCtx(outsider, "r"),
-          scenario.itemId,
-        );
-        expect(written.userId).toBe(outsider);
-
-        const hidden = await seedScenario(db, "PRIVATE");
-        await expect(
-          hidden.actor.checkIn(userCtx(outsider, "r2"), hidden.itemId),
-        ).rejects.toBeInstanceOf(NotFoundError);
-      });
-    });
-
-    it("is idempotent on an explicit id / the outbox row id", async () => {
+  describe("checkIns reads what another actor wrote", () => {
+    it("sees a log written after the cellar activated", async () => {
       await withTestDb(async (db) => {
         const scenario = await seedScenario(db, "PRIVATE");
         const ctx = userCtx(scenario.owner, "r");
-        const id = randomUUID();
-        const once = await scenario.actor.checkIn(ctx, scenario.itemId, id);
-        const twice = await scenario.actor.checkIn(ctx, scenario.itemId, id);
-        expect(twice).toEqual(once);
-        expect((await scenario.actor.checkIns(ctx, page)).totalCount).toBe(2); // the seeded one, plus this one
-      });
-    });
-
-    /** **B1 acceptance**: `bulkCheckIn` rejects a non-friend id. */
-    it("refuses a non-friend id, and writes nothing when it does", async () => {
-      await withTestDb(async (db) => {
-        const scenario = await seedScenario(db, "PUBLIC");
-        const nonFriend = await seedUser(db);
-        const ctx = userCtx(scenario.owner, "r");
-
-        await expect(
-          scenario.actor.bulkCheckIn(ctx, scenario.itemId, [
-            scenario.owner,
-            scenario.friend,
-            nonFriend,
-          ]),
-        ).rejects.toBeInstanceOf(ForbiddenError);
-
-        // The seeded check-in and nothing else: the rejection came before the
-        // transaction, so there is no partial write to clean up.
         expect((await scenario.actor.checkIns(ctx, page)).totalCount).toBe(1);
+        // `CheckInActor` writes these now; a cache loaded on activate would
+        // still say 1.
+        await seedCheckIn(db, {
+          userId: scenario.owner,
+          cellarItemId: scenario.itemId,
+          wineId: scenario.wine.id,
+        });
+        expect((await scenario.actor.checkIns(ctx, page)).totalCount).toBe(2);
       });
     });
 
-    it("writes one row per friend, on their behalf", async () => {
-      await withTestDb(async (db) => {
-        const scenario = await seedScenario(db, "FRIENDS");
-        const ctx = userCtx(scenario.owner, "r");
-        const written = await scenario.actor.bulkCheckIn(ctx, scenario.itemId, [
-          scenario.owner,
-          scenario.friend,
-          scenario.friend,
-        ]);
-        expect(written.map((row) => row.userId).sort()).toEqual(
-          [scenario.owner, scenario.friend].sort(),
-        );
-        expect((await scenario.actor.checkIns(ctx, page)).totalCount).toBe(3);
-      });
-    });
-
-    /**
-     * Review W4 #3, on the check-in side: the dedupe and the friend check both
-     * compare strings, so an upper-cased copy of your own id used to count as
-     * a second person and then fail as "not a friend".
-     */
-    it("reads uppercase item and user ids as the ids they name", async () => {
-      await withTestDb(async (db) => {
-        const scenario = await seedScenario(db, "FRIENDS");
-        const ctx = userCtx(scenario.owner, "r");
-        const written = await scenario.actor.bulkCheckIn(
-          ctx,
-          scenario.itemId.toUpperCase(),
-          [
-            scenario.owner,
-            scenario.owner.toUpperCase(),
-            scenario.friend.toUpperCase(),
-          ],
-        );
-        expect(written.map((row) => row.userId).sort()).toEqual(
-          [scenario.owner, scenario.friend].sort(),
-        );
-        expect(
-          written.every((row) => row.cellarItemId === scenario.itemId),
-        ).toBe(true);
-
-        // `checkIn`'s explicit id is its idempotency key: two spellings of it
-        // are one check-in, not a second insert that then cannot be found.
-        const id = randomUUID();
-        const once = await scenario.actor.checkIn(ctx, scenario.itemId, id);
-        const twice = await scenario.actor.checkIn(
-          ctx,
-          scenario.itemId.toUpperCase(),
-          id.toUpperCase(),
-        );
-        expect(twice).toEqual(once);
-
-        expect(
-          await scenario.actor.removeItem(ctx, scenario.itemId.toUpperCase()),
-        ).toEqual({ id: scenario.itemId });
-      });
-    });
-
-    it("refuses an empty id list rather than writing nothing quietly", async () => {
+    it("lists only logs still poured from its bottles", async () => {
       await withTestDb(async (db) => {
         const scenario = await seedScenario(db, "PRIVATE");
-        await expect(
-          scenario.actor.bulkCheckIn(
-            userCtx(scenario.owner, "r"),
-            scenario.itemId,
-            [],
-          ),
-        ).rejects.toBeInstanceOf(ValidationError);
+        const ctx = userCtx(scenario.owner, "r");
+        // A bottle-less log of the same wine is the drinker's, not the cellar's.
+        const id = randomUUID();
+        await db.execute(sql`
+          insert into public.check_ins (id, user_id, created_by_id, group_id, wine_id)
+          values (${id}::uuid, ${scenario.owner}::uuid, ${scenario.owner}::uuid,
+                  ${id}::uuid, ${scenario.wine.id}::uuid)
+        `);
+        const listed = await scenario.actor.checkIns(ctx, page);
+        expect(listed.totalCount).toBe(1);
+        expect(listed.entries.map((e) => e.node.id)).not.toContain(id);
       });
     });
   });
@@ -1339,8 +1289,21 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
         const second = await actor.addItem(ctx, {
           item: await seedWine(db, owner),
         });
-        const earlier = await actor.checkIn(ctx, second.id);
-        const later = await actor.checkIn(ctx, second.id);
+        const secondWine = second.item.id;
+        const earlier = {
+          id: await seedCheckIn(db, {
+            userId: owner,
+            cellarItemId: second.id,
+            wineId: secondWine,
+          }),
+        };
+        const later = {
+          id: await seedCheckIn(db, {
+            userId: owner,
+            cellarItemId: second.id,
+            wineId: secondWine,
+          }),
+        };
 
         const [first, other, nothing] = await actor.checkInsOf(ctx, [
           itemId,
@@ -1380,7 +1343,11 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
       for (let index = 0; index < 3; index += 1) {
         const wine = await seedWine(db, owner, `Wine ${index}`);
         const item = await actor.addItem(ctx, { item: wine });
-        await actor.checkIn(ctx, item.id);
+        await seedCheckIn(db, {
+          userId: owner,
+          cellarItemId: item.id,
+          wineId: wine.id,
+        });
       }
 
       const first = await actor.items(ctx, { page: pageArgs({ first: 2 }) });
@@ -1433,8 +1400,6 @@ describe.skipIf(skip)("CellarActor concealment", () => {
     ["openItem", (actor, ctx) => actor.openItem(ctx, ITEM)],
     ["emptyItem", (actor, ctx) => actor.emptyItem(ctx, ITEM)],
     ["removeItem", (actor, ctx) => actor.removeItem(ctx, ITEM)],
-    ["checkIn", (actor, ctx) => actor.checkIn(ctx, ITEM)],
-    ["bulkCheckIn", (actor, ctx) => actor.bulkCheckIn(ctx, ITEM, [ITEM])],
     ["item", (actor, ctx) => actor.item(ctx, ITEM)],
     [
       "bottleFor",

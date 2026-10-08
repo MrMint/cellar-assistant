@@ -1,14 +1,21 @@
 /**
  * `CellarActor` — B1 (migration plan §2.1, §3).
  *
- * Owns `cellars`, `cellar_owners`, `cellar_items` and `check_ins`, and loads
- * all four on activate: §2.1's "the cellar row, owners, all `cellar_items` (a
- * cellar is small enough to hold), and `check_ins` for those items". That
- * sentence is load-bearing rather than descriptive — because the whole
- * aggregate is in memory, `items` and `checkIns` sort and page the cached
- * list with `offsetPage` instead of issuing a keyset query per call, and
- * `semanticQuery` becomes a *re-sort* of that same list rather than a
- * different query.
+ * Owns `cellars`, `cellar_owners` and `cellar_items`, and loads all three on
+ * activate: §2.1's "the cellar row, owners, all `cellar_items` (a cellar is
+ * small enough to hold)". That sentence is load-bearing rather than
+ * descriptive — because the whole aggregate is in memory, `items` sorts and
+ * pages the cached list with `offsetPage` instead of issuing a keyset query
+ * per call, and `semanticQuery` becomes a *re-sort* of that same list rather
+ * than a different query.
+ *
+ * **`check_ins` left this aggregate in X02.** A log entry is about an item,
+ * and a bottle is only where it was poured from, so its writer is
+ * `CheckInActor`. This actor still answers the cellar-scoped history
+ * (`checkIns`, `checkInsOf`) — read fresh per call, never cached, because it
+ * no longer writes the rows (§1.3: cache only what you write) — and
+ * `removeItem` no longer deletes a bottle's logs: the foreign key nulls their
+ * `cellar_item_id`, and the drinker's history survives the bottle (D5).
  *
  * ## The four-branch rule, and where it does and does not apply
  *
@@ -63,24 +70,21 @@
  *
  * ## Idempotency (§8.4)
  *
- * `cellar_items` and `check_ins` have no natural unique constraint — two
- * bottles of the same wine, or two drinks from the same bottle, are two
- * legitimate rows — so the only thing that can recognise a redelivery is the
- * row id. `addItem` and `checkIn` therefore take one from the caller.
+ * `cellar_items` has no natural unique constraint — two bottles of the same
+ * wine are two legitimate rows — so the only thing that can recognise a
+ * redelivery is the row id. `addItem` therefore takes one from the caller
+ * (as `CheckInActor.log` does, keyed by the id its caller mints).
  * `addItem` alone falls back to `idempotencyKey(ctx, …)` (`lib/delivery.ts`),
  * derived from the delivery `OutboxActor` minted and so stable across its
  * at-least-once redeliveries — and null for anything but a genuine delivery,
  * so a request cannot pick its own row ids. `addItem` is the method B2's
  * `ItemOnboardingActor.confirm` calls (§2.1), so this is where its
  * "re-delivered twice … one cellar item" acceptance is actually paid for.
- * `checkIn` is no outbox target, and `forwardCtx` strips `delivery` from
- * every onward call, so a delivery key could never reach it: without a
- * caller's id it mints a random one, and a retry is a second check-in.
  *
  * ## No outbox row is written here
  *
  * Deliberately, and it is a finding rather than an omission: §2.1 lists no
- * `(system, outbox)` method for this aggregate, none of its four tables has
+ * `(system, outbox)` method for this aggregate, none of its tables has
  * an event trigger today, and its one cross-actor dependency —
  * `EmbeddingActor` for semantic sort — is the single synchronous entity →
  * search call §8.5 allows. This actor is an outbox *target*, not a source.
@@ -134,7 +138,6 @@ import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import {
   bypassesPolicy,
   canSeeCellar,
-  isFriend,
   isOwner,
 } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
@@ -150,13 +153,19 @@ import { vectorDistances } from "../lib/vectors.ts";
 import {
   type CellarAccess,
   cellarVisibility,
-  friendshipsOf,
   isCellarOwner,
 } from "../lib/visibility.ts";
 
 type CellarRow = typeof cellars.$inferSelect;
 type CellarItemRow = typeof cellarItems.$inferSelect;
-type CheckInRow = typeof checkIns.$inferSelect;
+/** A log that still points at one of this cellar's bottles. */
+type BottleCheckInRow = {
+  readonly id: string;
+  readonly userId: string;
+  readonly cellarItemId: string;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+};
 
 export type CellarAggregate = {
   readonly cellar: CellarRow;
@@ -164,8 +173,6 @@ export type CellarAggregate = {
   readonly coOwnerIds: readonly string[];
   /** Every row, newest first. §2.1: a cellar is small enough to hold. */
   readonly items: readonly CellarItemRow[];
-  /** Every check-in on those items, newest first. */
-  readonly checkIns: readonly CheckInRow[];
 };
 
 /** What `../lib/visibility.ts` decides a cellar's visibility and ownership from. */
@@ -174,12 +181,6 @@ const access = (aggregate: CellarAggregate): CellarAccess => ({
   privacy: aggregate.cellar.privacy,
   coOwnerIds: aggregate.coOwnerIds,
 });
-
-/**
- * You drank it with a table, not a stadium. Also `MAX_PAGE_SIZE`, so the
- * resolver can hand the written rows straight back as one page.
- */
-const MAX_BULK_CHECK_IN = 100;
 
 /** `cellar_items`' item arc (`../lib/item-arcs.ts`). */
 const ITEMS = ARCS.cellarItems;
@@ -239,21 +240,10 @@ export class CellarActor
       .where(eq(cellarItems.cellarId, id))
       .orderBy(sql`${cellarItems.createdAt} desc, ${cellarItems.id} desc`);
 
-    const itemIds = items.map((item) => item.id);
-    const checkInRows =
-      itemIds.length === 0
-        ? []
-        : await this.db
-            .select()
-            .from(checkIns)
-            .where(inArray(checkIns.cellarItemId, itemIds))
-            .orderBy(sql`${checkIns.createdAt} desc, ${checkIns.id} desc`);
-
     return {
       cellar,
       coOwnerIds: owners.map((owner) => owner.userId),
       items,
-      checkIns: checkInRows,
     };
   }
 
@@ -292,7 +282,8 @@ export class CellarActor
     const aggregate = this.requireAggregate();
     // The §1.6 decision, in one line. See the module doc.
     await this.requireVisible(ctx, aggregate);
-    return offsetPage(aggregate.checkIns.map(toCheckInDto), page);
+    const rows = await this.#checkInsFor(aggregate.items.map((row) => row.id));
+    return offsetPage(rows.map(toCheckInDto), page);
   }
 
   /**
@@ -340,12 +331,13 @@ export class CellarActor
     requireReverseEdgeBatch(cellarItemIds, "checkInsOf cellarItemIds");
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return cellarItemIds.map((cellarItemId) => {
-      const wanted = String(cellarItemId).toLowerCase();
-      // `aggregate.checkIns` is newest first already (`loadAggregate`).
-      const rows = aggregate.checkIns.filter(
-        (row) => row.cellarItemId === wanted,
-      );
+    const mine = new Set(aggregate.items.map((row) => row.id));
+    const wanted = cellarItemIds.map((id) => String(id).toLowerCase());
+    // Newest first (`#checkInsFor`), and only this cellar's bottles: an id
+    // from another cellar answers an empty list, as it always has.
+    const all = await this.#checkInsFor(wanted.filter((id) => mine.has(id)));
+    return wanted.map((cellarItemId) => {
+      const rows = all.filter((row) => row.cellarItemId === cellarItemId);
       return {
         nodes: rows.slice(0, REVERSE_EDGE_CAP).map(toCheckInDto),
         totalCount: rows.length,
@@ -608,9 +600,9 @@ export class CellarActor
   }
 
   /**
-   * Removes the item and the check-ins that point at it, in one transaction —
-   * `check_ins.cellar_item_id` is `ON DELETE RESTRICT`, so the order is not a
-   * preference.
+   * Removes the bottle and nothing else. Its logs are `CheckInActor`'s and
+   * outlive it: `check_ins.cellar_item_id` is `ON DELETE SET NULL` since X02,
+   * so Postgres detaches them as the row goes (D5, "logs survive the bottle").
    */
   async removeItem(ctx: Ctx, cellarItemId: string): Promise<RemovedCellarItem> {
     const aggregate = this.requireAggregate();
@@ -618,116 +610,10 @@ export class CellarActor
     const { id } = this.#requireItem(cellarItemId);
 
     await this.tx(async (tx) => {
-      await tx.delete(checkIns).where(eq(checkIns.cellarItemId, id));
       await tx.delete(cellarItems).where(eq(cellarItems.id, id));
     });
     await this.reload();
     return { id };
-  }
-
-  /* ---------------------------------------------------------------------- */
-  /* Check-ins                                                               */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * Requires the cellar to be *visible*, which the Hasura permission it
-   * replaces did not check — `check_ins`' insert rule gated only on the
-   * subject being the caller or a friend, so any `cellar_item_id` a client
-   * could name was checkinnable. Drinking from a cellar you cannot see is not
-   * a thing.
-   */
-  async checkIn(
-    ctx: Ctx,
-    requestedItemId: string,
-    checkInId?: string,
-  ): Promise<CheckInDto> {
-    const aggregate = this.requireAggregate();
-    await this.requireVisible(ctx, aggregate);
-    const userId = ctx.viewerId;
-    if (userId === null) throw new ForbiddenError("sign in to check in");
-    const { id: cellarItemId } = this.#requireItem(requestedItemId);
-
-    const id = requireUuid(checkInId ?? randomUUID(), "checkInId");
-    const existing = aggregate.checkIns.find((row) => row.id === id);
-    if (existing !== undefined) return toCheckInDto(existing);
-
-    await this.tx(async (tx) => {
-      await tx
-        .insert(checkIns)
-        .values({ id, userId, cellarItemId })
-        .onConflictDoNothing({ target: checkIns.id });
-    });
-    await this.reload();
-    const written = this.requireAggregate().checkIns.find(
-      (row) => row.id === id,
-    );
-    if (written === undefined) {
-      throw new ConflictError(`check-in ${id} was not written`);
-    }
-    return toCheckInDto(written);
-  }
-
-  /**
-   * §2.1: "rows written on behalf of friends; friend check in policy". Every
-   * id must be the caller or a friend of the caller; one that is not rejects
-   * the whole call before the transaction opens, so there is no partial write.
-   */
-  async bulkCheckIn(
-    ctx: Ctx,
-    requestedItemId: string,
-    userIds: readonly string[],
-  ): Promise<readonly CheckInDto[]> {
-    const aggregate = this.requireAggregate();
-    await this.requireVisible(ctx, aggregate);
-    const viewer = ctx.viewerId;
-    if (viewer === null) throw new ForbiddenError("sign in to check in");
-    const { id: cellarItemId } = this.#requireItem(requestedItemId);
-    if (!Array.isArray(userIds)) {
-      throw new ValidationError("bulkCheckIn takes a list of user ids");
-    }
-
-    // Canonical before the dedupe and before the friend check, both of which
-    // compare strings: an uppercase copy of your own id, or of a friend's,
-    // used to count as a second person and fail as "not a friend".
-    const unique = [
-      ...new Set(userIds.map((userId) => requireUuid(userId, "userIds[]"))),
-    ];
-    if (unique.length === 0) {
-      throw new ValidationError("bulkCheckIn needs at least one user id");
-    }
-    if (unique.length > MAX_BULK_CHECK_IN) {
-      throw new ValidationError(
-        `bulkCheckIn takes at most ${MAX_BULK_CHECK_IN} user ids, got ${unique.length}`,
-      );
-    }
-    const friendships = await friendshipsOf(this.db, viewer);
-    for (const userId of unique) {
-      if (userId === viewer) continue;
-      if (isFriend(ctx, userId, friendships)) continue;
-      throw new ForbiddenError(
-        `cannot check in on behalf of ${userId}: not a friend`,
-      );
-    }
-
-    const rows = unique.map((userId) => ({
-      id: randomUUID(),
-      userId,
-      cellarItemId,
-    }));
-    await this.tx(async (tx) => {
-      await tx.insert(checkIns).values(rows);
-    });
-    await this.reload();
-    const written = new Map(
-      this.requireAggregate().checkIns.map((row) => [row.id, row]),
-    );
-    return rows.map(({ id }) => {
-      const row = written.get(id);
-      if (row === undefined) {
-        throw new ConflictError(`check-in ${id} was not written`);
-      }
-      return toCheckInDto(row);
-    });
   }
 
   /* ---------------------------------------------------------------------- */
@@ -875,6 +761,33 @@ export class CellarActor
     return dtos.sort(byName(names));
   }
 
+  /**
+   * The logs poured from these bottles, newest first. Read per call: since
+   * X02 `CheckInActor` writes `check_ins`, so a cached copy here would go
+   * stale the moment somebody logged a glass.
+   */
+  async #checkInsFor(
+    cellarItemIds: readonly string[],
+  ): Promise<readonly BottleCheckInRow[]> {
+    if (cellarItemIds.length === 0) return [];
+    const rows = await this.db
+      .select({
+        id: checkIns.id,
+        userId: checkIns.userId,
+        cellarItemId: checkIns.cellarItemId,
+        createdAt: checkIns.createdAt,
+        updatedAt: checkIns.updatedAt,
+      })
+      .from(checkIns)
+      .where(inArray(checkIns.cellarItemId, [...cellarItemIds]))
+      .orderBy(sql`${checkIns.createdAt} desc, ${checkIns.id} desc`);
+    return rows.flatMap((row) =>
+      row.cellarItemId === null
+        ? []
+        : [{ ...row, cellarItemId: row.cellarItemId }],
+    );
+  }
+
   #toDto(aggregate: CellarAggregate): CellarDto {
     return {
       id: aggregate.cellar.id,
@@ -916,7 +829,7 @@ const toItemDto = (
   updatedAt: requiredIso(row.updatedAt),
 });
 
-const toCheckInDto = (row: CheckInRow): CheckInDto => ({
+const toCheckInDto = (row: BottleCheckInRow): CheckInDto => ({
   id: row.id,
   userId: row.userId,
   cellarItemId: row.cellarItemId,

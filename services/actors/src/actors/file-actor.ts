@@ -158,11 +158,12 @@ import {
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { files, itemImage, placeGooglePhotos } from "@cellar-assistant/db";
-import { and, eq } from "@cellar-assistant/db/orm";
+import { and, eq, sql } from "@cellar-assistant/db/orm";
 import { isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
 import { detectImageMime, type ImageMime } from "../lib/ai/image-mime.ts";
+import { canSeeCheckInSql } from "../lib/check-in-visibility.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import {
@@ -178,6 +179,7 @@ import {
   readUrlWindowSettings,
   stableReadWindow,
 } from "../lib/s3-presign.ts";
+import { visibilityScope } from "../lib/visibility-sql.ts";
 
 export type FileRow = typeof files.$inferSelect;
 type FileAggregate = { readonly file: FileRow };
@@ -231,6 +233,7 @@ export const uploadKeyOf = (key: string): string => `uploads/${key}`;
  * `select` first would only race the delete.
  */
 const ATTACHMENTS: Readonly<Record<string, string>> = {
+  check_ins_photo_file_id_files_id_fkey: "a drink log",
   item_image_file_id_files_id_fkey: "an item image",
   item_onboardings_front_label_image_id_files_id_fkey:
     "an item onboarding's front label",
@@ -725,13 +728,32 @@ export class FileActor
    * The other three referents (`item_onboardings`' two label images and
    * `menu_scans`' two) are deliberately absent: both aggregates are owner-only,
    * and their owner is the uploader, so the first branch already covers them.
+   *
+   * **A drink log's photo (X02)** is the one viewer-dependent referent: it is
+   * readable by whoever may see the log it is attached to — `canSeeCheckIn`,
+   * as SQL (`../lib/check-in-visibility.ts`): the drinker, a companion, a
+   * friend of the drinker, or anyone who can see the bottle's cellar. A file
+   * attached to no log they may see stays as private as before.
    */
   protected override async canSee(
     ctx: Ctx,
     aggregate: FileAggregate,
   ): Promise<boolean> {
     if (isOwner(ctx, aggregate.file.uploadedBy)) return true;
-    return await this.#hasPublicReferent();
+    if (await this.#hasPublicReferent()) return true;
+    return await this.#hasVisibleCheckInReferent(ctx);
+  }
+
+  async #hasVisibleCheckInReferent(ctx: Ctx): Promise<boolean> {
+    const scope = await visibilityScope(this.db, ctx);
+    if (scope.kind === "nothing") return false;
+    const { rows } = await this.db.execute<{ id: string }>(sql`
+      select ci.id from public.check_ins ci
+      where ci.photo_file_id = ${this.key}::uuid
+        and ${canSeeCheckInSql(scope, "ci")}
+      limit 1
+    `);
+    return rows.length > 0;
   }
 
   /**

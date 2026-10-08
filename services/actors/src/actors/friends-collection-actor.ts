@@ -69,6 +69,12 @@ import {
 } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
 import { bypassesPolicy } from "@cellar-assistant/policy";
+import {
+  type CheckInSqlRow,
+  checkInColumns,
+  toItemCheckInDto,
+} from "../lib/check-in-rows.ts";
+import { canSeeCheckInSql } from "../lib/check-in-visibility.ts";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import {
@@ -262,6 +268,8 @@ export class FriendsCollectionActor
    *   admits — a friend's PRIVATE list contributes nothing.
    * - **ADDED**: bottles the authors added to cellars `canSeeCellar` admits
    *   (creator, co-owner, PUBLIC, FRIENDS-and-a-friend).
+   * - **CHECKED_IN** (X02): drinks the authors logged, one per occasion,
+   *   filtered by `canSeeCheckIn` — a bottle-less log included.
    *
    * The newest `filter.limit` of each requested kind, merged newest first —
    * the old page's three `limit: 6` queries and its client-side merge. One
@@ -297,6 +305,11 @@ export class FriendsCollectionActor
       }
       if (kinds.includes("ADDED")) {
         entries.push(...(await this.#added(authors, scope, filter.limit)));
+      }
+      if (kinds.includes("CHECKED_IN")) {
+        entries.push(
+          ...(await this.#checkedIn(authors, scope, viewer, filter.limit)),
+        );
       }
       return entries.sort(
         (a, b) =>
@@ -344,6 +357,7 @@ export class FriendsCollectionActor
         rank: null,
         cellarId: null,
         cellarItemId: null,
+        checkIn: null,
       });
     }
     return entries;
@@ -409,6 +423,7 @@ export class FriendsCollectionActor
         rank: row.rank,
         cellarId: null,
         cellarItemId: null,
+        checkIn: null,
       };
     });
   }
@@ -450,9 +465,60 @@ export class FriendsCollectionActor
         rank: null,
         cellarId: row.cellar_id,
         cellarItemId: row.id,
+        checkIn: null,
       });
     }
     return entries;
+  }
+
+  /**
+   * **CHECKED_IN** (X02): drinks the authors logged, one entry per occasion.
+   *
+   * A table's round is one row per drinker (`CheckInActor.log`), and listing
+   * each would put "You had X", "Sam had X" and "Ana had X" in a row on the
+   * feed. So each `group_id` contributes its keyed row (the logger's own),
+   * or — when that row is not an author's — the earliest author row, and the
+   * entry's `companionIds` name the rest. `canSeeCheckIn` runs as SQL even
+   * though every author is the viewer or a friend (the friend branch admits
+   * them all): the rule stays stated where the rows are read.
+   */
+  async #checkedIn(
+    authors: SQL,
+    scope: VisibilityScope,
+    viewer: string,
+    limit: number,
+  ): Promise<ActivityEntryDto[]> {
+    const visible = canSeeCheckInSql(scope, "ci");
+    const { rows } = await this.db.execute<CheckInSqlRow>(sql`
+      select * from (
+        select distinct on (ci.group_id) ${checkInColumns("ci")}
+        from public.check_ins ci
+        where ci.user_id = any(${authors})
+          and ${visible}
+        order by ci.group_id, (ci.id = ci.group_id) desc, ci.created_at, ci.id
+      ) occasion
+      order by occasion.created_at desc, occasion.id desc
+      limit ${limit}
+    `);
+    return rows.map((row): ActivityEntryDto => {
+      const checkIn = toItemCheckInDto(row, viewer);
+      return {
+        kind: "CHECKED_IN",
+        id: checkIn.id,
+        occurredAt: checkIn.createdAt,
+        userId: checkIn.userId,
+        item: checkIn.item,
+        // `ActivityEntry.place` means "the tier-listed place"; a log's place
+        // is `checkIn.placeId`, read from the entry itself.
+        placeId: null,
+        review: null,
+        tierListItem: null,
+        rank: null,
+        cellarId: null,
+        cellarItemId: null,
+        checkIn,
+      };
+    });
   }
 
   protected override async authorize(

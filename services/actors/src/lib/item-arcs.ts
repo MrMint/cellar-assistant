@@ -1,7 +1,7 @@
 /**
  * The polymorphic item foreign key — "an arc" — stated once per table.
  *
- * Ten tables point at an item through six nullable columns, one per item type
+ * Eleven tables point at an item through six nullable columns, one per item type
  * (`wine_id`, `beer_id`, … or `suggested_wine_id`, …), under a
  * `num_nonnulls(...)` check that lets exactly one be set. Every reader and
  * writer of those tables used to carry its own `ItemType → column` map — about
@@ -35,6 +35,7 @@ import type { ItemRef, ItemType } from "@cellar-assistant/contracts";
 import { ConflictError, ITEM_TYPES } from "@cellar-assistant/contracts";
 import {
   cellarItems,
+  checkIns,
   itemBrands,
   itemFavorites,
   itemImage,
@@ -238,6 +239,7 @@ export const itemArc = <TTable extends Table>(
  */
 export const ARCS = {
   cellarItems: itemArc(cellarItems),
+  checkIns: itemArc(checkIns),
   itemBrands: itemArc(itemBrands),
   itemFavorites: itemArc(itemFavorites),
   itemImage: itemArc(itemImage),

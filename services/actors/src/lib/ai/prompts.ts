@@ -1448,3 +1448,78 @@ Evaluate this submission for quality, accuracy and potential abuse.
   \`flags\` means you saw nothing wrong. Both are real answers.
 - \`suggestedCategories\` and \`flags\` may only use the values listed above.`;
 };
+
+/* -------------------------------------------------------------------------- */
+/* X02 · CheckInActor.suggestFlavourTags                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The note-to-flavour-chips schema. Three rules decide its shape, all of them
+ * the house rules for an abstaining seam (`seams.ts`, `structured-output-
+ * abstention`):
+ *
+ * 1. **The discriminator is first and is the only required field.**
+ *    `noteDescribesTaste` is generated before any tag, so the model commits to
+ *    "does this note say how it tasted?" before it has started listing
+ *    flavours; and a `required` tag array would compile into the sampler's
+ *    grammar and make "nothing here" an answer it cannot reach — "great night
+ *    with Sam!" would come back as three invented flavours.
+ * 2. **`evidence` comes before `tag` inside each entry.** Property order is
+ *    generation order: the model copies the words out of the note first and
+ *    names the flavour second, so the name is conditioned on text that exists.
+ *    The seam then checks the evidence really is in the note and drops any tag
+ *    whose words it cannot find there (`groundFlavourTags`).
+ * 3. **No numbers, no intensities, no scores.** A chip is a word the drinker
+ *    already wrote, tidied; anything the note does not say is not a chip.
+ */
+export const FLAVOUR_TAGS_SCHEMA: JsonSchema = {
+  type: "object",
+  properties: {
+    noteDescribesTaste: {
+      type: "boolean",
+      description:
+        "true only when the note says how the drink tasted, smelled or felt " +
+        "in the mouth. false for notes about the occasion, the company, the " +
+        "price, the place or the mood.",
+    },
+    tags: {
+      type: "array",
+      maxItems: 6,
+      description:
+        "One entry per flavour, aroma or texture the note itself names. " +
+        "Omit it when noteDescribesTaste is false.",
+      items: {
+        type: "object",
+        properties: {
+          evidence: string_(
+            "The words from the note this flavour was read from, copied " +
+              "exactly as written.",
+          ),
+          tag: string_(
+            "That flavour as one or two plain lowercase words, e.g. " +
+              '"cherry", "smoky", "dry finish".',
+          ),
+        },
+        required: ["evidence", "tag"],
+      },
+    },
+  },
+  required: ["noteDescribesTaste"],
+};
+
+export const buildFlavourTagsPrompt = (input: {
+  readonly note: string;
+  readonly itemType: ItemType;
+}): string => `A person logged a ${input.itemType.toLowerCase()} they drank and wrote this note:
+
+"""
+${input.note}
+"""
+
+Pick out the flavours, aromas and textures the note names, so they can be offered as tags the person can tap to keep.
+
+Rules:
+- Only use what the note says. Do not add flavours that are typical for this drink but not written in the note.
+- For each one, copy the exact words from the note into \`evidence\`, then write the tag as one or two plain lowercase words.
+- If the note does not describe how it tasted or smelled — it is about the occasion, the people, the price or the mood — set \`noteDescribesTaste\` to false and leave \`tags\` out. That is a real answer.
+- No scores, numbers or ratings.`;

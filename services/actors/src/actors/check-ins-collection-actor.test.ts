@@ -17,13 +17,12 @@ import {
   pageArgs,
   userCtx,
 } from "@cellar-assistant/contracts";
-import { sql } from "@cellar-assistant/db/orm";
 import { canSeeCheckIn } from "@cellar-assistant/policy";
 import { afterAll, describe, expect, it } from "vitest";
-import type { DbOrTx } from "../lib/db.ts";
 import {
   seedCellar,
   seedCellarItem,
+  seedCheckIn,
   seedFriendship,
   seedWine,
 } from "../lib/search-testing.ts";
@@ -38,21 +37,6 @@ import {
 import { CheckInsCollectionActor } from "./check-ins-collection-actor.ts";
 
 const { skip } = await resolveTestDatabase();
-
-const seedCheckIn = async (
-  db: DbOrTx,
-  userId: string,
-  cellarItemId: string,
-): Promise<string> => {
-  const { rows } = await db.execute<{ id: string }>(sql`
-    insert into public.check_ins (user_id, cellar_item_id)
-    values (${userId}::uuid, ${cellarItemId}::uuid)
-    returning id
-  `);
-  const id = rows[0]?.id;
-  if (id === undefined) throw new Error("no check-in id");
-  return id;
-};
 
 describe.skipIf(skip)("CheckInsCollectionActor", () => {
   afterAll(closeTestDb);
@@ -78,7 +62,11 @@ describe.skipIf(skip)("CheckInsCollectionActor", () => {
         cellarOwner,
         wine,
       );
-      const checkInId = await seedCheckIn(db, drinker, cellarItemId);
+      const checkInId = await seedCheckIn(db, {
+        userId: drinker,
+        item: wine,
+        cellarItemId,
+      });
 
       const seenBy = async (viewerId: string): Promise<string[]> => {
         const actor = await activate(
@@ -130,7 +118,11 @@ describe.skipIf(skip)("CheckInsCollectionActor", () => {
         coOwnerIds: [coOwner],
       });
       const cellarItemId = await seedCellarItem(db, cellarId, owner, wine);
-      const checkInId = await seedCheckIn(db, drinker, cellarItemId);
+      const checkInId = await seedCheckIn(db, {
+        userId: drinker,
+        item: wine,
+        cellarItemId,
+      });
 
       const actor = await activate(
         createActor(CheckInsCollectionActor, coOwner, db),
@@ -147,13 +139,135 @@ describe.skipIf(skip)("CheckInsCollectionActor", () => {
     });
   });
 
+  it("X02: a bottle-less log is the drinker's, their companions' and their friends' — nobody else's", async () => {
+    await withTestDb(async (db) => {
+      const drinker = await seedUser(db);
+      const friendOfDrinker = await seedUser(db);
+      const companion = await seedUser(db);
+      const stranger = await seedUser(db);
+      await seedFriendship(db, drinker, friendOfDrinker);
+      const wine = await seedWine(db, drinker, "No Bottle");
+      const lead = await seedCheckIn(db, { userId: drinker, item: wine });
+      // The companion's own row in the same occasion, written by the drinker.
+      await seedCheckIn(db, {
+        userId: companion,
+        item: wine,
+        createdById: drinker,
+        groupId: lead,
+      });
+
+      const seenBy = async (viewerId: string) => {
+        const actor = await activate(
+          createActor(CheckInsCollectionActor, viewerId, db),
+        );
+        return (
+          await actor.list(
+            userCtx(viewerId, "r"),
+            wine,
+            pageArgs({ first: 20 }),
+          )
+        ).entries.map((entry) => entry.node);
+      };
+
+      const cases = [
+        ["drinker", drinker, true, false, false],
+        ["companion", companion, true, false, true],
+        ["friend-of-drinker", friendOfDrinker, true, true, false],
+        ["stranger", stranger, false, false, false],
+      ] as const;
+      for (const [
+        label,
+        viewerId,
+        expected,
+        friendFlag,
+        companionFlag,
+      ] of cases) {
+        const ids = (await seenBy(viewerId)).map((node) => node.id);
+        expect(ids.includes(lead), label).toBe(expected);
+        expect(
+          canSeeCheckIn(userCtx(viewerId, "r"), {
+            userId: drinker,
+            cellar: null,
+            viewerIsFriendOfCheckInUser: friendFlag,
+            viewerIsCompanion: companionFlag,
+          }),
+          `${label} / policy`,
+        ).toBe(expected);
+      }
+
+      const [entry] = (await seenBy(drinker)).filter(
+        (node) => node.id === lead,
+      );
+      expect(entry?.companionIds).toEqual([companion]);
+      expect(entry?.fromCellar).toBe(false);
+    });
+  });
+
+  it("D8: scope MINE is 'Your log' — only entries about the viewer", async () => {
+    await withTestDb(async (db) => {
+      const me = await seedUser(db);
+      const friend = await seedUser(db);
+      await seedFriendship(db, me, friend);
+      const wine = await seedWine(db, me, "Mine and theirs");
+      const mine = await seedCheckIn(db, { userId: me, item: wine });
+      await seedCheckIn(db, { userId: friend, item: wine });
+
+      const actor = await activate(
+        createActor(CheckInsCollectionActor, me, db),
+      );
+      const all = await actor.list(
+        userCtx(me, "r"),
+        wine,
+        pageArgs({ first: 20 }),
+      );
+      expect(all.totalCount).toBe(2);
+      const yours = await actor.list(
+        userCtx(me, "r"),
+        wine,
+        pageArgs({ first: 20 }),
+        "MINE",
+      );
+      expect(yours.totalCount).toBe(1);
+      expect(yours.entries.map((e) => e.node.id)).toEqual([mine]);
+    });
+  });
+
+  it("from a bottle: the drinker's own view says so, a friend's does not", async () => {
+    await withTestDb(async (db) => {
+      const drinker = await seedUser(db);
+      const friend = await seedUser(db);
+      await seedFriendship(db, drinker, friend);
+      const wine = await seedWine(db, drinker, "Bottled");
+      const cellarId = await seedCellar(db, { createdById: drinker });
+      const cellarItemId = await seedCellarItem(db, cellarId, drinker, wine);
+      const id = await seedCheckIn(db, {
+        userId: drinker,
+        item: wine,
+        cellarItemId,
+      });
+      const fromCellarFor = async (viewerId: string) => {
+        const actor = await activate(
+          createActor(CheckInsCollectionActor, viewerId, db),
+        );
+        const page = await actor.list(
+          userCtx(viewerId, "r"),
+          wine,
+          pageArgs({ first: 5 }),
+        );
+        return page.entries.find((e) => e.node.id === id)?.node.fromCellar;
+      };
+      expect(await fromCellarFor(drinker)).toBe(true);
+      expect(await fromCellarFor(friend)).toBe(false);
+    });
+  });
+
   it("refuses an anonymous or mis-addressed caller on a warm activation", async () => {
     await withTestDb(async (db) => {
       const drinker = await seedUser(db);
       const wine = await seedWine(db, drinker, "Warm");
       const cellarId = await seedCellar(db, { createdById: drinker });
       const cellarItemId = await seedCellarItem(db, cellarId, drinker, wine);
-      await seedCheckIn(db, drinker, cellarItemId);
+      await seedCheckIn(db, { userId: drinker, item: wine, cellarItemId });
 
       const actor = await activate(
         createActor(CheckInsCollectionActor, drinker, db),

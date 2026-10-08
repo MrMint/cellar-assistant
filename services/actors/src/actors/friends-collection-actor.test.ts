@@ -21,6 +21,7 @@ import type { DbOrTx } from "../lib/db.ts";
 import {
   seedCellar,
   seedCellarItem,
+  seedCheckIn,
   seedFriendship,
   seedItemReview,
   seedPlace,
@@ -192,6 +193,41 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
         where ${where}
       `);
     };
+
+    it("CHECKED_IN (X02): the viewer's and friends' logs, one entry per occasion, a stranger's never", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        const stranger = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const wine = await seedWine(db, viewer, "Logged");
+
+        // A table's round the friend logged for themself and the viewer: one
+        // occasion, two rows — it must appear once.
+        const round = await seedCheckIn(db, { userId: friend, item: wine });
+        await seedCheckIn(db, {
+          userId: viewer,
+          item: wine,
+          createdById: friend,
+          groupId: round,
+        });
+        const mine = await seedCheckIn(db, { userId: viewer, item: wine });
+        const theirs = await seedCheckIn(db, { userId: stranger, item: wine });
+
+        const { entries } = await activityOf(db, viewer, {
+          kinds: ["CHECKED_IN"],
+          limit: 6,
+        });
+        const ids = entries.map((e) => e.id);
+        expect(ids.sort()).toEqual([round, mine].sort());
+        expect(ids).not.toContain(theirs);
+        const roundEntry = entries.find((e) => e.id === round);
+        expect(roundEntry?.kind).toBe("CHECKED_IN");
+        expect(roundEntry?.userId).toBe(friend);
+        expect(roundEntry?.checkIn?.companionIds).toEqual([viewer]);
+        expect(roundEntry?.item).toEqual(wine);
+      });
+    });
 
     it("tier-list entries: the viewer's and friends' lists exactly as canSeeTierList admits them", async () => {
       await withTestDb(async (db) => {
