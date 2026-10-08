@@ -59,7 +59,11 @@ export function SegmentedControl<V extends string>({
           data-slot="segment"
           className={cn(
             "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[10px] px-3 font-medium text-ink-2 outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 data-[state=on]:bg-surface-3 data-[state=on]:text-ink-1 data-[state=on]:shadow-sm [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0",
-            size === "default" ? "min-h-10 text-sm" : "min-h-8 text-xs",
+            // Default: a 40 px segment whose hit area reaches the group's
+            // padding, 44 px in all (design §3.3). `sm` is for dense desktop rows.
+            size === "default"
+              ? "relative min-h-10 text-sm after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-['']"
+              : "min-h-8 text-xs",
           )}
         >
           {option.icon}

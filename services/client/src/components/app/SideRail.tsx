@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { CaptureChooser } from "./CaptureChooser";
 import { Link } from "./Link";
 import { CaptureIcon, TABS, type Tab } from "./nav";
-import { handleActiveTabTap, useOptimisticTab } from "./TabBar";
+import { handleActiveTabTap, opensElsewhere, useOptimisticTab } from "./TabBar";
 
 /**
  * From `sm` up: the same five destinations as `TabBar`, stacked in a rail on
@@ -19,6 +19,7 @@ export function SideRail({ className }: { className?: string }) {
   const [choosing, setChoosing] = useState(false);
 
   const onTap = (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => {
+    if (opensElsewhere(event)) return;
     if (tab.key === active) {
       if (handleActiveTabTap(tab, pathname, router.push)) {
         event.preventDefault();

@@ -37,7 +37,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div
       data-slot="app-shell"
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:flex-row"
+      className={cn(
+        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:flex-row",
+        // Phones: reclaim the bottom safe area the root layout pads, so the
+        // tab bar's glass runs under the home indicator. It has to be this
+        // element: the shell clips (overflow-hidden), so a negative margin
+        // on the tab bar itself was cut off at the shell's edge. Nothing
+        // between the root layout and here may clip either.
+        "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
+      )}
     >
       <SideRail className="hidden sm:flex" />
       <main

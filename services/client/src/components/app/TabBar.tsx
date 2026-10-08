@@ -10,6 +10,14 @@ import { activeTab, CaptureIcon, TABS, type Tab, type TabKey } from "./nav";
 /** The shell's inner scroller (`AppShell`), which re-tap scrolls to the top. */
 export const SCROLLER_SELECTOR = "[data-app-scroller]";
 
+/** A click that opens elsewhere (new tab/window) rather than navigating here. */
+export const opensElsewhere = (event: MouseEvent<HTMLAnchorElement>): boolean =>
+  event.button !== 0 ||
+  event.metaKey ||
+  event.ctrlKey ||
+  event.shiftKey ||
+  event.altKey;
+
 /**
  * Re-tapping the active tab (D26): scroll its page to the top first; already
  * at the top, pop to the tab's root. Returns whether it handled the tap.
@@ -88,6 +96,7 @@ export function TabBar({ className }: { className?: string }) {
   const [choosing, setChoosing] = useState(false);
 
   const onTap = (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => {
+    if (opensElsewhere(event)) return;
     if (tab.key === active) {
       if (handleActiveTabTap(tab, pathname, router.push)) {
         event.preventDefault();
@@ -104,9 +113,9 @@ export function TabBar({ className }: { className?: string }) {
       data-slot="tab-bar"
       className={cn(
         "surface-glass touch-none-select relative z-40 shrink-0 rounded-none",
-        // Extend under the home indicator: the root layout pads the safe
-        // area, the bar reclaims it and pads its own content instead.
-        "mb-[calc(-1*env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)]",
+        // Under the home indicator: AppShell reclaims the safe area the root
+        // layout pads, and the bar pads its own content instead.
+        "pb-[env(safe-area-inset-bottom)]",
         className,
       )}
     >

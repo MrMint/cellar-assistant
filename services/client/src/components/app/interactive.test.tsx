@@ -352,6 +352,42 @@ describe("TabBar", () => {
     assert.equal(map?.getAttribute("aria-current"), "page");
   });
 
+  test("a modifier-click (new tab) does not light the tab here", async () => {
+    await render(<TabBar />);
+    const map = [...container.querySelectorAll("a")].find(
+      (a) => a.textContent === "Map",
+    );
+    await act(async () => {
+      map?.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          metaKey: true,
+        }),
+      );
+    });
+    assert.equal(map?.getAttribute("aria-current"), null);
+  });
+
+  test("the bar pads the home indicator; the shell, not the bar, reclaims it", async () => {
+    await render(
+      <AppShell>
+        <p>page</p>
+      </AppShell>,
+    );
+    const shell = container.querySelector('[data-slot="app-shell"]');
+    const bar = container.querySelector('[data-slot="tab-bar"]');
+    // The shell clips (overflow-hidden), so a negative margin on the bar
+    // would be cut off at the shell's bottom edge.
+    assert.match(shell?.className ?? "", /overflow-hidden/);
+    assert.match(
+      shell?.className ?? "",
+      /max-sm:mb-\[calc\(-1\*env\(safe-area-inset-bottom\)\)\]/,
+    );
+    assert.doesNotMatch(bar?.className ?? "", /\bmb-\[/);
+    assert.match(bar?.className ?? "", /pb-\[env\(safe-area-inset-bottom\)\]/);
+  });
+
   test("＋ opens the chooser: Bottle · Menu · Recipe · Place", async () => {
     await render(<TabBar />);
     await click(container.querySelector('button[aria-label="Add"]'));

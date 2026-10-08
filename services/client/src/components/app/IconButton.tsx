@@ -37,7 +37,9 @@ export function IconButton({
       type={asChild ? type : (type ?? "button")}
       className={cn(
         buttonVariants({ variant }),
-        "rounded-full p-0 [&_svg:not([class*='size-'])]:size-5 [&_svg]:[stroke-width:1.75]",
+        // `has-[>svg]:p-0`: buttonVariants' default size pads an icon child
+        // (`has-[>svg]:px-4`), which tailwind-merge keeps beside a plain p-0.
+        "rounded-full p-0 has-[>svg]:p-0 [&_svg:not([class*='size-'])]:size-5 [&_svg]:[stroke-width:1.75]",
         size === "default" && "size-11",
         size === "lg" && "size-12",
         // The visual is 36 px; a pseudo-element keeps the target at 44.

@@ -160,6 +160,18 @@ describe("IconButton", () => {
     assert.match(m, /aria-label="Share"/);
     assert.match(classOf(m, "icon-button"), /\bsize-11\b/);
   });
+  test("an icon child is not padded off-centre by buttonVariants", () => {
+    const cls = classOf(
+      html(
+        <IconButton aria-label="Share">
+          <icons.Share />
+        </IconButton>,
+      ),
+      "icon-button",
+    );
+    assert.doesNotMatch(cls, /has-\[(>|&gt;)svg\]:px-4/);
+    assert.match(cls, /has-\[(>|&gt;)svg\]:p-0/);
+  });
   test("sm keeps a 44 px target around a 36 px visual", () => {
     const cls = classOf(
       html(<IconButton aria-label="x" size="sm" />),
