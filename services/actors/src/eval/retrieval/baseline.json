@@ -1,0 +1,18 @@
+{
+  "recorded": "2026-10-07, before N08 (pure vector search, codes-and-camelCase embedding text, no brand)",
+  "model": "ollama:nomic-embed-text@768/RETRIEVAL_DOCUMENT",
+  "verifier": "stand-in",
+  "search": {
+    "hitAt1": 0.9592,
+    "hitAt3": 0.9796,
+    "hitAt10": 1,
+    "recallAt3": 0.9456,
+    "recallAt10": 0.966,
+    "mrr": 0.9719
+  },
+  "menus": {
+    "matchRate": 0.92,
+    "candidateRecall": 0.98,
+    "falseAutoMatches": 0
+  }
+}
