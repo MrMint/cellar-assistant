@@ -140,6 +140,7 @@ export const TABLE_WRITERS = {
   user_place_interactions: "UserActor",
   friends: "UserActor",
   friend_requests: "UserActor",
+  friend_invites: "UserActor",
 
   item_onboardings: "ItemOnboardingActor",
   barcodes: "BarcodeActor",

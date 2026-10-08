@@ -252,6 +252,16 @@ export const files = pgTable("files", {
 	index("files_unverified_idx").using("btree", table.createdAt.asc().nullsLast()).where(sql`(verified_at IS NULL)`),
 ]);
 
+// X17 friend invites: one live invite secret per user, written only by that
+// user's `UserActor`. Added by `db:generate`
+// (`migrations/20261008214452_friend_invites`), in the shape `pull` emits.
+export const friendInvites = pgTable("friend_invites", {
+	userId: uuid("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" } ),
+	secret: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
+}, (table) => [
+	unique("friend_invites_secret_key").on(table.secret),check("friend_invites_secret_check", sql`(char_length(secret) = 22)`),]);
+
 export const friendRequests = pgTable("friend_requests", {
 	id: uuid().defaultRandom().primaryKey(),
 	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "restrict", onUpdate: "restrict" } ),

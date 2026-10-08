@@ -58,6 +58,7 @@ export const relations = defineRelations(schema, (r) => ({
 		wines: r.many.wines(),
 		cellarOwners: r.many.cellarOwners(),
 		checkIns: r.many.checkIns(),
+		friendInvites: r.many.friendInvites(),
 		friendRequestsFriendId: r.many.friendRequests({
 			alias: "friendRequests_friendId_user_id"
 		}),
@@ -920,6 +921,12 @@ export const relations = defineRelations(schema, (r) => ({
 		user: r.one.user({
 			from: r.checkIns.userId,
 			to: r.user.id
+		}),
+	},
+	friendInvites: {
+		user: r.one.user({
+			from: r.friendInvites.userId,
+			to: r.user.id,
 		}),
 	},
 	friendRequests: {
