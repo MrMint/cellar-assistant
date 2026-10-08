@@ -9,8 +9,10 @@ import {
   finishReducer,
   initialFinishState,
   performFinish,
+  performRestore,
   performUndo,
   restoredPercentage,
+  restoreFinishedInput,
   undoFinishInput,
   type WriteOutcome,
 } from "./finish-bottle";
@@ -214,6 +216,70 @@ describe("performFinish / performUndo", () => {
     const h = harness({ ok: false, message: "gone" });
     await performUndo(h.deps, opened);
     assert.deepEqual(h.events, [{ type: "FAILED", message: "gone" }]);
+  });
+});
+
+describe("Restore to cellar (after the Undo toast is gone)", () => {
+  test("idle → restoring → idle; a refusal lands idle with its message", () => {
+    let state = run([{ type: "RESTORE" }]);
+    assert.deepEqual(state, { phase: "restoring" });
+    assert.deepEqual(finishReducer(state, { type: "RESTORED" }), {
+      phase: "idle",
+      error: null,
+    });
+    state = finishReducer(state, { type: "FAILED", message: "Not yours" });
+    assert.deepEqual(state, { phase: "idle", error: "Not yours" });
+  });
+
+  test("only from idle: not mid-finish, not during the toast", () => {
+    for (const from of [
+      run([{ type: "REQUEST", snapshot: opened }]),
+      run([{ type: "FINISH_NOW", snapshot: opened }]),
+      run([{ type: "FINISH_NOW", snapshot: opened }, { type: "FINISHED" }]),
+    ]) {
+      assert.equal(finishReducer(from, { type: "RESTORE" }), from);
+    }
+    const finished = run([
+      { type: "FINISH_NOW", snapshot: opened },
+      { type: "FINISHED" },
+    ]);
+    assert.equal(finishReducer(finished, { type: "RESTORED" }), finished);
+  });
+
+  test("a finished bottle (saved at 0) comes back full and stays opened", () => {
+    assert.deepEqual(restoreFinishedInput(0), {
+      emptyAt: null,
+      percentageRemaining: 100,
+    });
+    assert.deepEqual(restoreFinishedInput(40), {
+      emptyAt: null,
+      percentageRemaining: 40,
+    });
+    assert.equal("openAt" in restoreFinishedInput(0), false);
+  });
+
+  test("performRestore: updateCellarItem, RESTORED, then a refresh", async () => {
+    const events: FinishEvent[] = [];
+    const calls: string[] = [];
+    let refreshes = 0;
+    const deps = (outcome: WriteOutcome): FinishDeps => ({
+      dispatch: (event) => events.push(event),
+      empty: async () => outcome,
+      update: async (input) => {
+        calls.push(JSON.stringify(input));
+        return outcome;
+      },
+      refresh: () => {
+        refreshes += 1;
+      },
+    });
+    await performRestore(deps({ ok: true }), 0);
+    assert.deepEqual(calls, ['{"emptyAt":null,"percentageRemaining":100}']);
+    assert.deepEqual(events, [{ type: "RESTORED" }]);
+    assert.equal(refreshes, 1);
+    await performRestore(deps({ ok: false, message: "gone" }), 0);
+    assert.deepEqual(events.at(-1), { type: "FAILED", message: "gone" });
+    assert.equal(refreshes, 1);
   });
 });
 

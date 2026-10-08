@@ -52,6 +52,11 @@ export type ItemCheckInsProps = {
    * past that the oldest are held back and the card says so.
    */
   total?: number | null;
+  /**
+   * The bottle is finished: a check-in is still allowed (logs survive the
+   * bottle, D5), but it is no longer the page's main action.
+   */
+  finished?: boolean;
 };
 
 /**
@@ -72,6 +77,7 @@ export const ItemCheckIns = ({
   friends,
   user,
   total,
+  finished = false,
 }: ItemCheckInsProps) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -143,8 +149,8 @@ export const ItemCheckIns = ({
       <Card>
         <Stack direction="row" spacing={2}>
           <Button
-            variant="solid"
-            color="primary"
+            variant={finished ? "outlined" : "solid"}
+            color={finished ? "neutral" : "primary"}
             onClick={handleClickCheckIn}
             loading={isPending}
             fullWidth
@@ -153,8 +159,8 @@ export const ItemCheckIns = ({
           </Button>
           {friends.length > 0 && (
             <Button
-              variant="solid"
-              color="primary"
+              variant={finished ? "outlined" : "solid"}
+              color={finished ? "neutral" : "primary"}
               onClick={handleClickBulk}
               loading={isPending}
               fullWidth

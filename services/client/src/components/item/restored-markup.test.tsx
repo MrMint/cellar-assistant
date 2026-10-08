@@ -220,6 +220,7 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
       />,
     );
     assert.match(html, />Check In</);
+    assert.match(html, /MuiButton-variantSolid[^"]*"[^>]*>Check In</);
     assert.match(html, /Remaining: 40%/);
     assert.match(html, /Opened/);
     assert.match(html, /2026-01-02/);
@@ -242,6 +243,29 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     );
     assert.match(html, /Empty/);
     assert.doesNotMatch(html, /Remaining:/);
+    // Restore belongs to the cellar's owner only.
+    assert.doesNotMatch(html, />Restore to cellar</);
+  });
+
+  test("emptied, owner: Restore to cellar outlives the Undo toast", () => {
+    const html = render(
+      <CellarItemPageView
+        {...props}
+        isOwner
+        bottle={{
+          id: "b1",
+          openAt: "2026-01-01T00:00:00Z",
+          emptyAt: "2026-01-03T00:00:00Z",
+          percentageRemaining: 0,
+          displayImage: null,
+        }}
+      />,
+    );
+    assert.match(html, />Restore to cellar</);
+    // Check In stays (logs survive the bottle) but is no longer the solid
+    // primary action.
+    assert.match(html, />Check In</);
+    assert.doesNotMatch(html, /MuiButton-variantSolid[^"]*"[^>]*>Check In</);
   });
 });
 

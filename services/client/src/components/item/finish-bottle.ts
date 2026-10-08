@@ -11,7 +11,10 @@
  *    which is `updateCellarItem(emptyAt: null)` with the remaining level (and,
  *    for a bottle that was never opened, `openAt: null`) put back;
  * 3. the delete dialog says the check-ins go too, and offers "Mark finished
- *    instead", which goes straight to step 2.
+ *    instead", which goes straight to step 2;
+ * 4. after the toast is gone, a finished bottle's page still offers
+ *    "Restore to cellar" (`restoring`) — the same `updateCellarItem(emptyAt:
+ *    null)`, so Undo is not limited to six seconds.
  *
  * This module is the whole behaviour — a reducer and two commands with their
  * side effects injected — so it is tested without React, and the shadcn
@@ -38,7 +41,9 @@ export type FinishState =
    * finished. The toast stays up with the reason and "Try again" — an Undo
    * that fails silently would read as done.
    */
-  | { phase: "undoFailed"; snapshot: FinishSnapshot; error: string };
+  | { phase: "undoFailed"; snapshot: FinishSnapshot; error: string }
+  /** "Restore to cellar" on a bottle that was finished earlier. */
+  | { phase: "restoring" };
 
 export type FinishEvent =
   /** The slider settled on 0%: ask first. */
@@ -51,6 +56,9 @@ export type FinishEvent =
   | { type: "UNDO" }
   | { type: "UNDONE" }
   | { type: "DISMISS" }
+  /** "Restore to cellar", long after the Undo toast. */
+  | { type: "RESTORE" }
+  | { type: "RESTORED" }
   | { type: "FAILED"; message: string };
 
 export const initialFinishState: FinishState = { phase: "idle", error: null };
@@ -92,8 +100,12 @@ export function finishReducer(
       return state.phase === "finished" || state.phase === "undoFailed"
         ? initialFinishState
         : state;
+    case "RESTORE":
+      return state.phase === "idle" ? { phase: "restoring" } : state;
+    case "RESTORED":
+      return state.phase === "restoring" ? initialFinishState : state;
     case "FAILED":
-      if (state.phase === "finishing") {
+      if (state.phase === "finishing" || state.phase === "restoring") {
         return { phase: "idle", error: event.message };
       }
       return state.phase === "undoing"
@@ -123,6 +135,19 @@ export const undoFinishInput = (
   ...(snapshot.openAt === null ? { openAt: null } : {}),
 });
 
+/**
+ * `UpdateCellarItemInput` for "Restore to cellar". Finishing saved the level
+ * as 0 and the level before it is gone, so the bottle comes back full unless
+ * it somehow still has a level; the slider is right there to correct it. Its
+ * `openAt` stays: whether it was opened before finishing is not recorded.
+ */
+export const restoreFinishedInput = (
+  percentageRemaining: number,
+): { emptyAt: null; percentageRemaining: number } => ({
+  emptyAt: null,
+  percentageRemaining: percentageRemaining > 0 ? percentageRemaining : 100,
+});
+
 /** A write's outcome, as the commands need it. */
 export type WriteOutcome = { ok: true } | { ok: false; message: string };
 
@@ -131,7 +156,11 @@ export type FinishDeps = {
   /** `emptyCellarItem`. */
   empty: () => Promise<WriteOutcome>;
   /** `updateCellarItem(input)`. */
-  update: (input: ReturnType<typeof undoFinishInput>) => Promise<WriteOutcome>;
+  update: (
+    input:
+      | ReturnType<typeof undoFinishInput>
+      | ReturnType<typeof restoreFinishedInput>,
+  ) => Promise<WriteOutcome>;
   /** Re-read the page (`router.refresh()`). */
   refresh: () => void;
 };
@@ -158,6 +187,20 @@ export async function performUndo(
     return;
   }
   deps.dispatch({ type: "UNDONE" });
+  deps.refresh();
+}
+
+/** Run after `RESTORE`: put a finished bottle back in the cellar. */
+export async function performRestore(
+  deps: FinishDeps,
+  percentageRemaining: number,
+): Promise<void> {
+  const outcome = await deps.update(restoreFinishedInput(percentageRemaining));
+  if (!outcome.ok) {
+    deps.dispatch({ type: "FAILED", message: outcome.message });
+    return;
+  }
+  deps.dispatch({ type: "RESTORED" });
   deps.refresh();
 }
 

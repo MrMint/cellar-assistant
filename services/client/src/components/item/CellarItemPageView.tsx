@@ -118,6 +118,7 @@ export function CellarItemPageView({
                   friends={friends}
                   user={viewer}
                   total={checkInsTotal}
+                  finished={bottle.emptyAt !== null}
                 />
               )}
               <ItemRemainingSlider

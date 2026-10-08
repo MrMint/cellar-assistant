@@ -15,6 +15,7 @@ import {
   finishReducer,
   initialFinishState,
   performFinish,
+  performRestore,
   performUndo,
   type WriteOutcome,
 } from "./finish-bottle";
@@ -29,6 +30,8 @@ export type FinishBottle = {
   cancel: () => void;
   undo: () => void;
   dismiss: () => void;
+  /** "Restore to cellar" on a bottle finished earlier (no snapshot left). */
+  restore: (percentageRemaining: number) => void;
 };
 
 /**
@@ -97,5 +100,10 @@ export function useFinishBottle({
       void performUndo(deps, state.snapshot);
     },
     dismiss: () => dispatch({ type: "DISMISS" }),
+    restore: (percentageRemaining) => {
+      if (state.phase !== "idle") return;
+      dispatch({ type: "RESTORE" });
+      void performRestore(deps, percentageRemaining);
+    },
   };
 }
