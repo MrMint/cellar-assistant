@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { generateBreadcrumbs } from "./breadcrumbs";
+import { generateBreadcrumbs, pageHeader } from "./breadcrumbs";
 
 const C = "0b9a1c52-6a0e-4d33-9a43-7f1e2c3d4e5f";
 const I = "4f7e2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6";
@@ -106,8 +106,15 @@ describe("generateBreadcrumbs — the old ServerBreadcrumbs rule", () => {
 
   test("unknown segments are title-cased; unknown uuids are dropped", () => {
     assert.deepEqual(
+      generateBreadcrumbs(`/discoveries/${I}`).map((b) => b.label),
+      ["Home", "Discoveries"],
+    );
+  });
+
+  test("tier lists read as words, not the title-cased slug", () => {
+    assert.deepEqual(
       generateBreadcrumbs(`/tier-lists/${I}`).map((b) => b.label),
-      ["Home", "Tier-lists"],
+      ["Home", "Tier lists"],
     );
   });
 
@@ -116,5 +123,63 @@ describe("generateBreadcrumbs — the old ServerBreadcrumbs rule", () => {
       generateBreadcrumbs("/(authenticated)/favorites").map((b) => b.label),
       ["Home", "Favorites"],
     );
+  });
+});
+
+describe("pageHeader — the phone's Back and title", () => {
+  const header = (
+    path: string,
+    names?: Parameters<typeof generateBreadcrumbs>,
+  ) => pageHeader(path, generateBreadcrumbs(...(names ?? [path])));
+
+  test("a tab root has a title and no Back", () => {
+    assert.deepEqual(header("/cellars"), { title: "Cellars", tabRoot: true });
+    assert.equal(header("/me").tabRoot, true);
+    assert.equal(header("/map").tabRoot, true);
+  });
+
+  test("/search, where Home lands, is Home's root", () => {
+    assert.equal(header("/search").tabRoot, true);
+    assert.equal(header("/search").parent, undefined);
+  });
+
+  test("a cellar's items: titled by the cellar, Back to the cellars list", () => {
+    const path = `/cellars/${C}/items`;
+    assert.deepEqual(header(path, [path, "Home bar"]), {
+      title: "Home bar",
+      parent: "/cellars",
+      tabRoot: false,
+    });
+  });
+
+  test("a bottle in a cellar goes back to that cellar's items", () => {
+    const path = `/cellars/${C}/wines/${I}`;
+    assert.deepEqual(header(path, [path, "Home bar", "Barolo"]), {
+      title: "Barolo",
+      parent: `/cellars/${C}/items`,
+      tabRoot: false,
+    });
+  });
+
+  test("an edit page names what it edits", () => {
+    const path = `/wines/${I}/edit`;
+    assert.equal(
+      header(path, [path, undefined, "Barolo"]).title,
+      "Edit Barolo",
+    );
+    assert.equal(
+      header(path, [path, undefined, "Barolo"]).parent,
+      `/wines/${I}`,
+    );
+  });
+
+  test("lists that moved under Me (D1) go back to /me, not Home", () => {
+    assert.equal(header("/tier-lists").parent, "/me");
+    assert.equal(header("/favorites").parent, "/me");
+    assert.equal(header("/rankings").parent, "/me");
+  });
+
+  test("a page outside the tabs still goes back Home", () => {
+    assert.equal(header(`/wines/${I}`).parent, "/");
   });
 });

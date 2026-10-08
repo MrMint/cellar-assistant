@@ -9,26 +9,33 @@
  * verification off in development.
  */
 
-import {
-  Box,
-  Button,
-  Divider,
-  FormControl,
-  FormHelperText,
-  FormLabel,
-  Input,
-  Sheet,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
+import { Link } from "@/components/app/Link";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
 import { withReturnTo } from "@/utilities/sanitize-return-to";
+import { AuthField, AuthPage, AuthPanel, WordDivider } from "./AuthCard";
 import { SocialButtons, useSocialSignIn } from "./SocialButtons";
+
+/** "Already have an account? Sign in", under both versions of the form. */
+function SignInInstead({ returnTo }: { returnTo?: string }) {
+  return (
+    <p className="type-callout text-ink-2">
+      Already have an account?{" "}
+      <Link
+        href={withReturnTo("/sign-in", returnTo)}
+        underline="always"
+        className="text-ink-1"
+      >
+        Sign in
+      </Link>
+    </p>
+  );
+}
 
 /**
  * The actor host's floor — `minPasswordLength: 9` in
@@ -70,44 +77,23 @@ function SocialSignUp({ returnTo }: { returnTo?: string }) {
     returnTo ?? "/cellars",
   );
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        flexGrow: 1,
-      }}
-    >
-      <Sheet
-        variant="outlined"
-        sx={{
-          width: { xs: "100%", sm: "400px" },
-          maxWidth: "400px",
-          display: "flex",
-          flexDirection: "column",
-          padding: 3,
-          margin: 2,
-          borderRadius: "lg",
-        }}
-      >
-        <Stack gap={2}>
-          <Typography level="h3">Sign up for Cellar Assistant</Typography>
-          <Stack gap={1}>
+    <AuthPage>
+      <AuthPanel>
+        <div className="flex flex-col gap-4">
+          <h1 className="type-title-2">Sign up for Cellar Assistant</h1>
+          <div className="flex flex-col gap-2">
             <SocialButtons
               busy={redirectingTo !== null}
               redirectingTo={redirectingTo}
               ssoError={ssoError}
               onSelect={(provider) => void start(provider)}
             />
-          </Stack>
-          <Divider />
-          <Typography level="body-sm">
-            Already have an account?{" "}
-            <Link href={withReturnTo("/sign-in", returnTo)}>Sign in</Link>
-          </Typography>
-        </Stack>
-      </Sheet>
-    </Box>
+          </div>
+          <WordDivider />
+          <SignInInstead returnTo={returnTo} />
+        </div>
+      </AuthPanel>
+    </AuthPage>
   );
 }
 
@@ -150,76 +136,53 @@ function PasswordSignUp({ returnTo }: { returnTo?: string }) {
   const formError = localError ?? error?.message ?? null;
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        flexGrow: 1,
-      }}
-    >
-      <Sheet
-        variant="outlined"
-        sx={{
-          width: { xs: "100%", sm: "400px" },
-          maxWidth: "400px",
-          display: "flex",
-          flexDirection: "column",
-          padding: 3,
-          margin: 2,
-          borderRadius: "lg",
-        }}
-      >
-        <form onSubmit={handleSubmit}>
-          <Stack gap={2}>
-            <Typography level="h3">Sign up for Cellar Assistant</Typography>
-            <FormControl>
-              <FormLabel>Display name</FormLabel>
-              <Input
-                name="name"
-                autoComplete="nickname"
-                placeholder="Optional"
-                disabled={pending}
-              />
-              <FormHelperText>
-                Shown to other users. Leave it blank and you'll get a neutral
-                handle you can change later — your email is never shown.
-              </FormHelperText>
-            </FormControl>
-            <FormControl required error={formError !== null}>
-              <FormLabel>Email</FormLabel>
-              <Input
-                type="email"
-                name="email"
-                autoComplete="email"
-                required
-                disabled={pending}
-              />
-            </FormControl>
-            <FormControl required error={formError !== null}>
-              <FormLabel>Password</FormLabel>
-              <Input
-                type="password"
-                name="password"
-                autoComplete="new-password"
-                required
-                disabled={pending}
-              />
-              {formError !== null && (
-                <FormHelperText>{formError}</FormHelperText>
-              )}
-            </FormControl>
-            <Button loading={pending} type="submit" sx={{ mt: 1 }}>
-              Sign up
-            </Button>
-            <Divider />
-            <Typography level="body-sm">
-              Already have an account?{" "}
-              <Link href={withReturnTo("/sign-in", returnTo)}>Sign in</Link>
-            </Typography>
-          </Stack>
+    <AuthPage>
+      <AuthPanel>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <h1 className="type-title-2">Sign up for Cellar Assistant</h1>
+          <AuthField
+            id="sign-up-name"
+            label="Display name"
+            name="name"
+            autoComplete="nickname"
+            placeholder="Optional"
+            disabled={pending}
+            description="Shown to other users. Leave it blank and you'll get a neutral handle you can change later — your email is never shown."
+          />
+          <AuthField
+            id="sign-up-email"
+            label="Email"
+            type="email"
+            name="email"
+            autoComplete="email"
+            required
+            invalid={formError !== null}
+            disabled={pending}
+          />
+          <AuthField
+            id="sign-up-password"
+            label="Password"
+            type="password"
+            name="password"
+            autoComplete="new-password"
+            required
+            invalid={formError !== null}
+            message={formError}
+            disabled={pending}
+          />
+          <Button
+            type="submit"
+            disabled={pending}
+            aria-busy={pending || undefined}
+            className="mt-2"
+          >
+            {pending && <Spinner aria-hidden />}
+            Sign up
+          </Button>
+          <WordDivider />
+          <SignInInstead returnTo={returnTo} />
         </form>
-      </Sheet>
-    </Box>
+      </AuthPanel>
+    </AuthPage>
   );
 }

@@ -1,14 +1,10 @@
-"use client";
-
-import { Stack, Typography } from "@mui/joy";
 import type { ReactNode } from "react";
 import type { ShellCopy } from "./shell-copy";
 
 /**
  * The one layout behind the shell's not-found, error and offline states: an
  * icon, a heading, a sentence and the actions, centred in whatever space the
- * shell leaves. Deliberately plain Joy — the shadcn migration (D20) replaces
- * this file, and the copy and behaviour around it stay.
+ * shell leaves. The copy and the behaviour around it live in `shell-copy.ts`.
  */
 export function ShellMessage({
   copy,
@@ -22,38 +18,20 @@ export function ShellMessage({
   footnote?: string | null;
 }) {
   return (
-    <Stack
-      spacing={2}
-      sx={{
-        flexGrow: 1,
-        minHeight: "100%",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        px: 2,
-        py: 4,
-      }}
+    <div
+      data-slot="shell-message"
+      className="flex min-h-full flex-1 flex-col items-center justify-center gap-4 px-4 py-8 text-center"
     >
-      <Typography
+      <div
         aria-hidden
-        sx={{ fontSize: "3rem", color: "text.tertiary", lineHeight: 1 }}
+        className="text-ink-3 [&_svg:not([class*='size-'])]:size-12"
       >
         {icon}
-      </Typography>
-      <Typography level="h3" component="h1" sx={{ maxWidth: 420 }}>
-        {copy.title}
-      </Typography>
-      <Typography level="body-md" sx={{ maxWidth: 420 }}>
-        {copy.body}
-      </Typography>
-      <Stack direction="row" spacing={1.5} sx={{ pt: 1 }}>
-        {actions}
-      </Stack>
-      {footnote ? (
-        <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
-          {footnote}
-        </Typography>
-      ) : null}
-    </Stack>
+      </div>
+      <h1 className="type-title-1 max-w-[420px] text-ink-1">{copy.title}</h1>
+      <p className="type-body max-w-[420px] text-ink-2">{copy.body}</p>
+      <div className="flex flex-row gap-3 pt-2">{actions}</div>
+      {footnote ? <p className="type-footnote">{footnote}</p> : null}
+    </div>
   );
 }

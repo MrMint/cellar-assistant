@@ -5,6 +5,8 @@
  * `client-boundary.test.ts` forbids). Logic unchanged except `ITEM_SEGMENTS`.
  */
 
+import { activeTab, TABS } from "@/components/app/nav";
+
 export interface BreadcrumbSegment {
   label: string;
   href?: string;
@@ -87,6 +89,12 @@ export function generateBreadcrumbs(
       breadcrumbs.push({ label: "Friends", href: isLast ? undefined : href });
     } else if (segment === "rankings") {
       breadcrumbs.push({ label: "Rankings", href: isLast ? undefined : href });
+    } else if (segment === "tier-lists") {
+      // Title-cased by the fallback below this read "Tier-lists".
+      breadcrumbs.push({
+        label: "Tier lists",
+        href: isLast ? undefined : href,
+      });
     } else if (segment === "search") {
       breadcrumbs.push({ label: "Search", href: isLast ? undefined : href });
     } else if (segment === "recipes") {
@@ -120,4 +128,61 @@ export function generateBreadcrumbs(
   }
 
   return breadcrumbs;
+}
+
+/**
+ * Pages that *are* a tab: the four tabs' own hrefs, plus `/search`, where
+ * Home's `/` lands (it redirects there until X10's Home exists).
+ */
+const TAB_ROOTS: ReadonlySet<string> = new Set(["/", "/search"]);
+
+/** Crumbs too generic to stand alone as a page title on a phone. */
+const GENERIC_LAST = new Set(["Items", "Edit", "Add"]);
+
+export interface PageHeader {
+  /** The phone title: the page's own crumb, named after its owner if generic. */
+  title: string;
+  /** Where Back goes on a cold open; undefined on a tab root. */
+  parent?: string;
+  /** One of the five tabs' own pages (`/`, `/cellars`, `/map`, `/me`): no Back. */
+  tabRoot: boolean;
+}
+
+/**
+ * What `HeaderBar` hands `AppBar` on a phone, where the trail collapses to a
+ * Back and a title (N26):
+ *
+ * - **title** — the last crumb; a generic one ("Items", "Edit", "Add") takes
+ *   the crumb before it as its subject ("Home bar", "Edit Barolo").
+ * - **parent** — the nearest earlier crumb that links somewhere other than
+ *   this page (a cellar's crumb points at its own items page, so on that page
+ *   it is skipped). A parent of `/` becomes the route's tab root instead, so
+ *   the lists that moved under Me (D1) go back to `/me`, not Home.
+ * - **tabRoot** — the page *is* a tab (or `/search`, Home's landing): no
+ *   Back, whatever the history.
+ */
+export function pageHeader(
+  pathname: string,
+  crumbs: readonly BreadcrumbSegment[],
+): PageHeader {
+  const last = crumbs.at(-1);
+  const before = crumbs.at(-2);
+  let title = last?.label ?? "";
+  if (last !== undefined && before !== undefined && GENERIC_LAST.has(title)) {
+    title = title === "Items" ? before.label : `${title} ${before.label}`;
+  }
+
+  const tabRoot =
+    TAB_ROOTS.has(pathname) || TABS.some((t) => t.href === pathname);
+  if (tabRoot) return { title, tabRoot };
+
+  let parent = crumbs
+    .slice(0, -1)
+    .reverse()
+    .find((c) => c.href !== undefined && c.href !== pathname)?.href;
+  if (parent === "/") {
+    const tab = TABS.find((t) => t.key === activeTab(pathname));
+    if (tab !== undefined && tab.href !== pathname) parent = tab.href;
+  }
+  return { title, parent, tabRoot };
 }

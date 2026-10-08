@@ -18,7 +18,7 @@ export default async function NotFound() {
   const user = await getOptionalServerUser();
   if (user === null) return <NotFoundMessage signedIn={false} />;
   return (
-    <AppShell user={user}>
+    <AppShell>
       <NotFoundMessage />
     </AppShell>
   );

@@ -12,25 +12,16 @@
  * action would have to forward `Set-Cookie` by hand.
  */
 
-import {
-  Box,
-  Button,
-  Divider,
-  FormControl,
-  FormHelperText,
-  FormLabel,
-  Input,
-  Sheet,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
+import { Link } from "@/components/app/Link";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
 import { withReturnTo } from "@/utilities/sanitize-return-to";
+import { AuthField, AuthPage, AuthPanel, WordDivider } from "./AuthCard";
 import { LiquidBackground } from "./LiquidBackground";
 import {
   FORMER_PASSWORD_USER_NOTE,
@@ -89,79 +80,59 @@ export function SignInApiClient({
   const formError = error?.message ?? null;
 
   const passwordForm = (
-    <form onSubmit={handleSubmit}>
-      <Stack gap={2} sx={{ mt: 2 }}>
-        <FormControl required error={formError !== null}>
-          <FormLabel>Email</FormLabel>
-          <Input
-            type="email"
-            name="email"
-            autoComplete="email"
-            required
-            disabled={busy}
-          />
-        </FormControl>
-        <FormControl required error={formError !== null}>
-          <FormLabel>Password</FormLabel>
-          <Input
-            type="password"
-            name="password"
-            autoComplete="current-password"
-            required
-            disabled={busy}
-          />
-          {formError !== null && <FormHelperText>{formError}</FormHelperText>}
-        </FormControl>
-        <Button loading={pending} type="submit" disabled={busy}>
-          Sign in
-        </Button>
-      </Stack>
+    <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
+      <AuthField
+        id="sign-in-email"
+        label="Email"
+        type="email"
+        name="email"
+        autoComplete="email"
+        required
+        invalid={formError !== null}
+        disabled={busy}
+      />
+      <AuthField
+        id="sign-in-password"
+        label="Password"
+        type="password"
+        name="password"
+        autoComplete="current-password"
+        required
+        invalid={formError !== null}
+        message={formError}
+        disabled={busy}
+      />
+      <Button type="submit" disabled={busy} aria-busy={pending || undefined}>
+        {pending && <Spinner aria-hidden />}
+        Sign in
+      </Button>
     </form>
   );
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        flexGrow: 1,
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
+    <AuthPage>
       <LiquidBackground />
-      <Sheet
-        variant="outlined"
-        sx={{
-          maxWidth: { xs: "400px" },
-          width: { xs: "100%", sm: "400px" },
-          flexGrow: { xs: 1, sm: 0 },
-          display: "flex",
-          flexDirection: "column",
-          padding: 3,
-          margin: 2,
-          position: "relative",
-          zIndex: 1,
-          borderRadius: "lg",
-          backgroundColor: "rgba(17, 16, 21, 0.65)",
-          backdropFilter: "blur(16px) saturate(1.2)",
-          WebkitBackdropFilter: "blur(16px) saturate(1.2)",
-          borderColor: "rgba(255, 255, 255, 0.08)",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
-        }}
-      >
-        <Stack
-          gap={1}
-          sx={{ marginBottom: passwordMode === "disabled" ? 0 : 2 }}
+      <AuthPanel glass>
+        <div
+          className={
+            passwordMode === "disabled"
+              ? "flex flex-col gap-2"
+              : "mb-4 flex flex-col gap-2"
+          }
         >
-          <Stack gap={1} marginBottom={2}>
-            <Typography level="h3">Sign in</Typography>
-            <Typography level="body-sm">
+          <div className="mb-4 flex flex-col gap-2">
+            <h1 className="type-title-2">Sign in</h1>
+            <p className="type-callout text-ink-2">
               New to Cellar Assistant?{" "}
-              <Link href={withReturnTo("/sign-up", returnTo)}>Sign up!</Link>
-            </Typography>
-          </Stack>
+              <Link
+                href={withReturnTo("/sign-up", returnTo)}
+                underline="always"
+                className="text-ink-1"
+              >
+                Sign up!
+              </Link>
+            </p>
+          </div>
 
           <SocialButtons
             busy={busy}
@@ -170,35 +141,35 @@ export function SignInApiClient({
             onSelect={(provider) => void start(provider)}
           />
           {passwordMode === "disabled" && (
-            <Typography level="body-sm" sx={{ mt: 1 }}>
+            <p className="type-callout mt-2 text-ink-2">
               {FORMER_PASSWORD_USER_NOTE}
-            </Typography>
+            </p>
           )}
-        </Stack>
+        </div>
         {passwordMode === "enabled" && (
           <>
-            <Divider>or</Divider>
+            <WordDivider>or</WordDivider>
             {passwordForm}
           </>
         )}
         {passwordMode === "signin-only" && (
           <>
-            <Divider />
+            <WordDivider />
             <Button
-              variant="plain"
-              color="neutral"
+              type="button"
+              variant="ghost"
               size="sm"
               aria-expanded={passwordOpen}
               aria-controls="password-sign-in"
               onClick={() => setPasswordOpen((open) => !open)}
-              sx={{ mt: 1, alignSelf: "center" }}
+              className="mt-2 self-center"
             >
               Sign in with your password
             </Button>
-            {passwordOpen && <Box id="password-sign-in">{passwordForm}</Box>}
+            {passwordOpen && <div id="password-sign-in">{passwordForm}</div>}
           </>
         )}
-      </Sheet>
-    </Box>
+      </AuthPanel>
+    </AuthPage>
   );
 }

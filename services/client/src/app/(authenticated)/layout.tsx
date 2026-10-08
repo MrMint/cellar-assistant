@@ -30,8 +30,10 @@ export default async function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Server-side authentication check — redirects to /sign-in if not authenticated.
-  const user = await getServerUser();
+  // Server-side authentication check — redirects to /sign-in if not
+  // authenticated. The shell no longer needs the viewer itself (the `/me` hub
+  // reads it), but the gate has to run before any page in the group renders.
+  await getServerUser();
 
-  return <AppShell user={user}>{children}</AppShell>;
+  return <AppShell>{children}</AppShell>;
 }

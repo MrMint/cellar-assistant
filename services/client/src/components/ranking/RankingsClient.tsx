@@ -1,8 +1,8 @@
 "use client";
 
-import { Stack, Typography } from "@mui/joy";
 import { useEffect, useMemo } from "react";
 import { useQuery } from "urql";
+import { AppBar } from "@/components/app/AppBar";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { virtualTotal } from "@/components/cellar/virtualTotal";
 import { ApiError } from "@/components/cellar-api/ApiError";
@@ -36,7 +36,7 @@ const filtersKey = (filters: Filters) => `${filters.scope}|${filters.types}`;
 /**
  * `82450ad1:src/components/ranking/RankingsClient.tsx`, restored.
  *
- * Same tree — "Rankings" title, `RankingsFilter` and `CellarItemsFilter` in the
+ * Same tree — "Rankings" title (now an `AppBar`, Back to Me), `RankingsFilter` and `CellarItemsFilter` in the
  * old URL state (`?reviewers=`, `?types=` as JSON), `VirtualGrid` of
  * `ItemCard`s — over `Query.rankings`:
  *
@@ -97,17 +97,14 @@ export const RankingsClient = () => {
 
   return (
     <>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
-      >
-        <Typography level="title-lg">Rankings</Typography>
-        <Stack direction="row" spacing={2}>
+      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* "Top rated" on the Me hub (D1): Back goes there on a cold open. */}
+        <AppBar title="Rankings" parent="/me" className="min-w-0 flex-1" />
+        <div className="flex flex-row flex-wrap items-center gap-4">
           <RankingsFilter types={reviewers} onTypesChange={setReviewers} />
           <CellarItemsFilter types={types} onTypesChange={setTypes} />
-        </Stack>
-      </Stack>
+        </div>
+      </div>
       {list.failure !== null && (
         <ApiError error={list.failure} title="Could not load rankings" />
       )}
