@@ -1,13 +1,13 @@
-import { Box, Chip, Stack, Typography } from "@mui/joy";
-import Link from "next/link";
-import { Suspense } from "react";
+import { type ReactNode, Suspense } from "react";
 import {
-  MdFavorite,
-  MdHome,
-  MdLeaderboard,
-  MdMap,
-  MdViewList,
-} from "react-icons/md";
+  Cellar,
+  ICON_STROKE,
+  Leaderboard,
+  ListView,
+  Love,
+  MapIcon,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { FadeIn, StaggerIn, StaggerItem } from "@/components/search/AnimateIn";
 import {
   type ActivityEntry,
@@ -100,110 +100,105 @@ export default async function Search({ searchParams }: SearchPageProps) {
       )}
 
       {hasActiveSearch && (
-        <Stack spacing={3}>
+        <div className="flex flex-col gap-6">
           {imageFileId !== null && (
-            <Stack spacing={2}>
-              <Typography level="title-lg">Image search results</Typography>
+            <ResultsSection title="Image search results">
               <Suspense fallback={<SearchResultsSkeleton />}>
                 <ServerImageResults imageFileId={imageFileId} />
               </Suspense>
-            </Stack>
+            </ResultsSection>
           )}
 
           {imageFileId === null && legacyImageLink && (
-            <Stack spacing={2}>
-              <Typography level="title-lg">Image search results</Typography>
+            <ResultsSection title="Image search results">
               <ExpiredImageSearch />
-            </Stack>
+            </ResultsSection>
           )}
 
           {barcode !== null && (
-            <Stack spacing={2}>
-              <Typography level="title-lg">Barcode search results</Typography>
+            <ResultsSection title="Barcode search results">
               <Suspense fallback={<SearchResultsSkeleton />}>
                 <ServerBarcodeResults code={barcode} />
               </Suspense>
-            </Stack>
+            </ResultsSection>
           )}
 
           {query !== null && (
-            <Stack spacing={2}>
-              <Typography level="title-lg">
-                Search results for &ldquo;{query}&rdquo;
-              </Typography>
+            <ResultsSection
+              title={<>Search results for &ldquo;{query}&rdquo;</>}
+            >
               <Suspense fallback={<SearchResultsSkeleton />}>
                 <ServerSearchResults query={query} />
               </Suspense>
-            </Stack>
+            </ResultsSection>
           )}
-        </Stack>
+        </div>
       )}
     </SearchPageLayout>
+  );
+}
+
+/** One block of results under its heading. */
+function ResultsSection({
+  title,
+  children,
+}: {
+  title: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="type-headline">{title}</h2>
+      {children}
+    </section>
   );
 }
 
 /** Greeting and the collection line, above the box on the landing view. */
 function LandingHero({ displayName }: { displayName?: string }) {
   return (
-    <Stack spacing={3} alignItems="center">
+    <div className="flex flex-col items-center gap-6">
       <FadeIn>
         <Greeting displayName={displayName} />
       </FadeIn>
-      <Box
-        sx={{
-          minHeight: "1.5rem",
-          mt: -1.5,
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
+      <div className="-mt-3 flex min-h-6 justify-center">
         <Suspense fallback={null}>
           <CollectionStats />
         </Suspense>
-      </Box>
-    </Stack>
+      </div>
+    </div>
   );
 }
 
 const QUICK_LINKS = [
-  { href: "/cellars", label: "Cellars", icon: <MdHome /> },
-  { href: "/map", label: "Map", icon: <MdMap /> },
-  { href: "/tier-lists", label: "Tier Lists", icon: <MdViewList /> },
-  { href: "/favorites", label: "Favorites", icon: <MdFavorite /> },
-  { href: "/rankings", label: "Rankings", icon: <MdLeaderboard /> },
+  { href: "/cellars", label: "Cellars", icon: Cellar },
+  { href: "/map", label: "Map", icon: MapIcon },
+  { href: "/tier-lists", label: "Tier Lists", icon: ListView },
+  { href: "/favorites", label: "Favorites", icon: Love },
+  { href: "/rankings", label: "Rankings", icon: Leaderboard },
 ];
 
 /** The five quick links under the box on the landing view. */
 function QuickLinks() {
   return (
     <StaggerIn>
-      <Stack
-        component="nav"
+      <nav
         aria-label="Quick links"
-        direction="row"
-        spacing={1}
-        flexWrap="wrap"
-        justifyContent="center"
-        useFlexGap
+        className="flex flex-wrap justify-center gap-2"
       >
-        {QUICK_LINKS.map(({ href, label, icon }) => (
-          <StaggerItem key={href}>
-            <Link href={href} style={{ textDecoration: "none" }}>
-              <Chip
-                variant="outlined"
-                startDecorator={icon}
-                sx={{
-                  cursor: "pointer",
-                  "--Chip-minHeight": "32px",
-                  fontSize: "sm",
-                }}
-              >
-                {label}
-              </Chip>
+        {QUICK_LINKS.map(({ href, label, icon: Icon }, index) => (
+          <StaggerItem key={href} index={index}>
+            <Link
+              href={href}
+              underline="none"
+              className="relative inline-flex h-9 items-center gap-1.5 rounded-full bg-surface-2 px-3.5 font-medium text-ink-1 text-sm transition-colors duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] hover:bg-surface-3 active:bg-surface-3"
+            >
+              <Icon aria-hidden className="size-4" strokeWidth={ICON_STROKE} />
+              {label}
             </Link>
           </StaggerItem>
         ))}
-      </Stack>
+      </nav>
     </StaggerIn>
   );
 }
@@ -223,20 +218,9 @@ async function CollectionStats() {
   if (stats === undefined) return null;
 
   return (
-    <Typography
-      level="body-md"
-      sx={{
-        color: "text.secondary",
-        textAlign: "center",
-        "@keyframes fadeIn": {
-          from: { opacity: 0 },
-          to: { opacity: 1 },
-        },
-        animation: "fadeIn 0.3s ease-out",
-      }}
-    >
+    <p className="type-body animate-in fade-in text-center text-ink-2 duration-(--ca-dur-medium) ease-enter">
       {collectionStatsLine(stats)}
-    </Typography>
+    </p>
   );
 }
 

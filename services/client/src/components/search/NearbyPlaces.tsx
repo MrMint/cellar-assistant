@@ -1,30 +1,14 @@
 "use client";
 
-import {
-  Avatar,
-  Box,
-  Card,
-  CardContent,
-  Grid,
-  IconButton,
-  Stack,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import {
-  FaBeer,
-  FaCocktail,
-  FaCoffee,
-  FaGlassWhiskey,
-  FaWineGlass,
-} from "react-icons/fa";
-import { MdLocationOn, MdStar } from "react-icons/md";
 import { useQuery } from "urql";
+import { FilterChip } from "@/components/app/FilterChip";
+import { ICON_STROKE, Place, Star } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { itemTypeTokens } from "@/components/app/TypeChip";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { mapItemTypesToCategories } from "@/components/map/config/scoring";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import {
@@ -32,12 +16,13 @@ import {
   getPriceLevelText,
 } from "@/components/map/places/place-utils";
 import type { ItemType } from "@/components/map/types";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
+import { distance } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { type NearbyPlace, nearbyPlacesFromNodes } from "./adapter";
-import { fadeInLeft, staggerContainerFast } from "./motion-variants";
 import { NEARBY_PLACES_LIMIT, SearchNearbyPlacesQuery } from "./queries";
-import { useHasMounted } from "./useHasMounted";
+import { fadeInLeft, fadeShort, staggerContainerFast } from "./search-motion";
+import { useHasMounted, useHydratedReducedMotion } from "./useHasMounted";
 
 /**
  * `82450ad1:src/components/search/NearbyPlaces.tsx`, restored (UI parity
@@ -57,15 +42,26 @@ import { useHasMounted } from "./useHasMounted";
  *   position differs from the cookie's.
  * - **The photo** is the presigned `file { url }` instead of a Nhost storage
  *   URL built from a file id; same `next/image` props.
+ * - **The filters** are labelled `FilterChip`s (the type's glyph and its
+ *   word), where the old ones were bare icons in a Joy `ToggleButtonGroup`
+ *   (design §3.4). Still a multi-select: any combination, none meaning all.
  */
 
-const PLACE_TYPE_FILTERS: { id: ItemType; label: string; icon: React.FC }[] = [
-  { id: "wine", label: "Wine", icon: FaWineGlass },
-  { id: "beer", label: "Beer", icon: FaBeer },
-  { id: "spirit", label: "Spirits", icon: FaCocktail },
-  { id: "coffee", label: "Coffee", icon: FaCoffee },
-  { id: "sake", label: "Sake", icon: FaGlassWhiskey },
+const PLACE_TYPE_FILTERS: {
+  id: ItemType;
+  label: string;
+  glyph: ApiItemType;
+}[] = [
+  { id: "wine", label: "Wine", glyph: "WINE" },
+  { id: "beer", label: "Beer", glyph: "BEER" },
+  { id: "spirit", label: "Spirits", glyph: "SPIRIT" },
+  { id: "coffee", label: "Coffee", glyph: "COFFEE" },
+  { id: "sake", label: "Sake", glyph: "SAKE" },
 ];
+
+/** A type toggled in or out, keeping the order the types were picked in. */
+const toggleType = (types: readonly ItemType[], type: ItemType): ItemType[] =>
+  types.includes(type) ? types.filter((t) => t !== type) : [...types, type];
 
 function formatDistance(
   placeLat: number,
@@ -125,9 +121,7 @@ export function NearbyPlaces({
   const geo = useGeolocation();
   const hasInitialData = initialPlaces != null && initialPlaces.length > 0;
   const [selectedTypes, setSelectedTypes] = useState<ItemType[]>([]);
-  const prefersReducedMotion = useMediaQuery(
-    "(prefers-reduced-motion: reduce)",
-  );
+  const prefersReducedMotion = useHydratedReducedMotion();
   // The server's render and the hydration pass start visible; only what
   // mounts afterwards (a filter change) plays the entrance. See ./AnimateIn.
   const animateEntrance = useHasMounted();
@@ -196,41 +190,39 @@ export function NearbyPlaces({
   const userLng = geo.location?.longitude ?? cachedLocation?.longitude ?? 0;
 
   return (
-    <Stack component="section" aria-label="Nearby Places" spacing={1.5}>
-      <Stack
-        direction="row"
-        spacing={1}
-        alignItems="center"
-        justifyContent="space-between"
-        flexWrap="wrap"
-        useFlexGap
-      >
-        <Stack direction="row" spacing={1} alignItems="center">
-          <MdLocationOn
-            style={{
-              color: "var(--joy-palette-primary-400)",
-              fontSize: "1.25rem",
-            }}
+    <section aria-label="Nearby Places" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Place
+            aria-hidden
+            className="size-5 text-ink-3"
+            strokeWidth={ICON_STROKE}
           />
-          <Typography level="title-lg">Nearby Places</Typography>
-        </Stack>
+          <h2 className="type-headline">Nearby Places</h2>
+        </div>
 
-        <ToggleButtonGroup
-          variant="plain"
-          spacing={0.5}
-          value={selectedTypes}
-          onChange={(_event, newTypes) => setSelectedTypes(newTypes)}
+        <fieldset
           aria-label="Place type filters"
+          className="flex min-w-0 flex-wrap gap-1.5"
         >
-          {PLACE_TYPE_FILTERS.map(({ id, label, icon: Icon }) => (
-            <Tooltip key={id} title={label}>
-              <IconButton value={id} aria-label={label} size="sm">
-                <Icon />
-              </IconButton>
-            </Tooltip>
-          ))}
-        </ToggleButtonGroup>
-      </Stack>
+          {PLACE_TYPE_FILTERS.map(({ id, label, glyph }) => {
+            // The type's own glyph, in the chip's ink: a filter is state,
+            // so it takes the chip's colour rather than the type's hue.
+            const Glyph = itemTypeTokens[glyph].glyph;
+            return (
+              <FilterChip
+                key={id}
+                aria-label={label}
+                selected={selectedTypes.includes(id)}
+                icon={<Glyph aria-hidden strokeWidth={ICON_STROKE} />}
+                onClick={() => setSelectedTypes(toggleType(selectedTypes, id))}
+              >
+                {label}
+              </FilterChip>
+            );
+          })}
+        </fieldset>
+      </div>
 
       {/* Cards: AnimatePresence handles smooth exit/enter between filter changes */}
       <AnimatePresence mode="wait">
@@ -240,12 +232,12 @@ export function NearbyPlaces({
             initial={animateEntrance ? { opacity: 0 } : false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={fadeShort}
           >
-            <Typography level="body-sm" sx={{ color: "text.tertiary", py: 2 }}>
+            <p className="type-footnote py-4">
               No nearby places found
               {selectedTypes.length > 0 && " for the selected types"}
-            </Typography>
+            </p>
           </motion.div>
         ) : (
           <motion.div
@@ -256,152 +248,105 @@ export function NearbyPlaces({
             }
             animate="show"
             exit="exit"
+            className="grid grid-cols-1 gap-2 md:grid-cols-2"
           >
-            <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
-              {places.map((place) => {
-                const [lng, lat] = place.coordinates;
-                const dist = formatDistance(lat, lng, userLat, userLng);
-                const photoUrl = place.photoUrl;
-                const rating = place.rating;
-                const priceLevelText = getPriceLevelText(place.priceLevel);
-                const openStatus = place.openingHours
-                  ? getOpenStatus(place.openingHours)
-                  : null;
+            {places.map((place) => {
+              const [lng, lat] = place.coordinates;
+              const dist = formatDistance(lat, lng, userLat, userLng);
+              const photoUrl = place.photoUrl;
+              const rating = place.rating;
+              const priceLevelText = getPriceLevelText(place.priceLevel);
+              const openStatus = place.openingHours
+                ? getOpenStatus(place.openingHours)
+                : null;
 
-                return (
-                  <Grid key={place.id} xs={1}>
-                    <motion.div
-                      variants={prefersReducedMotion ? undefined : fadeInLeft}
-                      whileHover={prefersReducedMotion ? undefined : { y: -2 }}
-                      whileTap={
-                        prefersReducedMotion ? undefined : { scale: 0.98 }
-                      }
-                      transition={{ duration: 0.15 }}
-                    >
-                      <Card
-                        component={Link}
-                        href={`/map?placeId=${place.id}`}
-                        variant="outlined"
-                        orientation="horizontal"
-                        sx={{
-                          textDecoration: "none",
-                          "--Card-padding": "0.625rem",
-                          height: "100%",
-                          transition: "all 0.15s ease",
-                          "&:hover": {
-                            boxShadow: "sm",
-                            borderColor: "neutral.outlinedHoverBorder",
-                          },
-                        }}
-                      >
-                        {/* Place thumbnail */}
-                        <Box
-                          sx={{
-                            width: 44,
-                            height: 44,
-                            flexShrink: 0,
-                            borderRadius: "md",
-                            overflow: "hidden",
-                            position: "relative",
-                          }}
-                        >
-                          {photoUrl ? (
-                            <Image
-                              src={photoUrl}
-                              alt={place.name}
-                              fill
-                              style={{ objectFit: "cover" }}
-                              sizes="44px"
-                            />
-                          ) : (
-                            <Avatar
-                              variant="soft"
-                              color="primary"
-                              sx={{
-                                width: "100%",
-                                height: "100%",
-                                borderRadius: "md",
-                                fontSize: "md",
-                              }}
-                            >
-                              {place.name.charAt(0)}
-                            </Avatar>
-                          )}
-                        </Box>
+              return (
+                <motion.div
+                  key={place.id}
+                  variants={prefersReducedMotion ? undefined : fadeInLeft}
+                  whileHover={prefersReducedMotion ? undefined : { y: -2 }}
+                  whileTap={
+                    prefersReducedMotion ? undefined : { scale: distance.press }
+                  }
+                  transition={fadeShort}
+                >
+                  <Link
+                    href={`/map?placeId=${place.id}`}
+                    underline="none"
+                    className="flex h-full items-center gap-3 rounded-md bg-surface-1 p-2.5 text-ink-1 transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2"
+                  >
+                    {/* Place thumbnail */}
+                    <div className="relative size-11 shrink-0 overflow-hidden rounded-sm">
+                      {photoUrl ? (
+                        <Image
+                          src={photoUrl}
+                          alt={place.name}
+                          fill
+                          className="object-cover"
+                          sizes="44px"
+                        />
+                      ) : (
+                        <span className="flex size-full items-center justify-center bg-surface-2 font-semibold text-ink-2">
+                          {place.name.charAt(0)}
+                        </span>
+                      )}
+                    </div>
 
-                        <CardContent sx={{ gap: 0.25, minWidth: 0 }}>
-                          <Typography level="title-sm" noWrap>
-                            {place.name}
-                          </Typography>
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <p className="type-callout truncate font-semibold">
+                        {place.name}
+                      </p>
 
-                          {/* Info line: category · rating · price · distance */}
-                          <Typography
-                            level="body-xs"
-                            noWrap
-                            sx={{ color: "text.tertiary" }}
-                          >
-                            {formatCategoryName(place.primaryCategory)}
-                            {rating != null && (
-                              <>
-                                {" \u00B7 "}
-                                <MdStar
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    verticalAlign: "middle",
-                                    color: "var(--joy-palette-warning-400)",
-                                  }}
-                                />{" "}
-                                {rating.toFixed(1)}
-                              </>
-                            )}
-                            {priceLevelText && (
-                              <>
-                                {" \u00B7 "}
-                                {priceLevelText}
-                              </>
-                            )}
+                      {/* Info line: category · rating · price · distance */}
+                      <p className="type-footnote truncate">
+                        {formatCategoryName(place.primaryCategory)}
+                        {rating != null && (
+                          <>
                             {" \u00B7 "}
-                            {dist}
-                          </Typography>
+                            <Star
+                              aria-hidden
+                              strokeWidth={0}
+                              className="inline size-[0.85em] fill-current align-[-0.1em]"
+                            />{" "}
+                            {rating.toFixed(1)}
+                          </>
+                        )}
+                        {priceLevelText && (
+                          <>
+                            {" \u00B7 "}
+                            {priceLevelText}
+                          </>
+                        )}
+                        {" \u00B7 "}
+                        {dist}
+                      </p>
 
-                          {/* Open/closed status when available */}
-                          {openStatus && (
-                            <Typography
-                              level="body-xs"
-                              sx={{
-                                color: openStatus.isOpen
-                                  ? "success.600"
-                                  : "danger.600",
-                                fontWeight: "md",
-                              }}
-                            >
-                              {openStatus.text}
-                            </Typography>
+                      {/* Open/closed status when available */}
+                      {openStatus && (
+                        <p
+                          className={cn(
+                            "type-footnote font-medium",
+                            openStatus.isOpen
+                              ? "text-success"
+                              : "text-destructive",
                           )}
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </Grid>
-                );
-              })}
-            </Grid>
+                        >
+                          {openStatus.text}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                </motion.div>
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
-      <Box sx={{ textAlign: "center" }}>
-        <Typography
-          component={Link}
-          href="/map"
-          level="body-sm"
-          sx={{
-            color: "primary.400",
-            textDecoration: "none",
-            "&:hover": { textDecoration: "underline" },
-          }}
-        >
+      <div className="text-center">
+        <Link href="/map" className="type-callout text-primary">
           View all on map
-        </Typography>
-      </Box>
-    </Stack>
+        </Link>
+      </div>
+    </section>
   );
 }

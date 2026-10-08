@@ -1,6 +1,5 @@
 "use client";
 
-import { Box } from "@mui/joy";
 import {
   createContext,
   type ReactNode,
@@ -50,8 +49,8 @@ export const useSearchNavigation = (): SearchNavigationValue | null =>
 export function SearchResultsRegion({ children }: { children: ReactNode }) {
   const isPending = useSearchNavigation()?.isPending ?? false;
   return (
-    <Box aria-busy={isPending}>
+    <div aria-busy={isPending}>
       {isPending ? <SearchResultsSkeleton /> : children}
-    </Box>
+    </div>
   );
 }

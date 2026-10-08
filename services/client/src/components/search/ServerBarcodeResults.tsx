@@ -1,10 +1,8 @@
-import { Button, Stack, Typography } from "@mui/joy";
-import Link from "next/link";
-import { MdAdd } from "react-icons/md";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { type SearchResultItem, searchResultsFromNodes } from "./adapter";
+import { NoSearchResults } from "./NoSearchResults";
 import { BARCODE_SEARCH_LIMIT, SearchBarcodeQuery } from "./queries";
 import { SearchResultGrid } from "./SearchResultGrid";
 
@@ -36,16 +34,7 @@ export async function ServerBarcodeResults({ code }: { code: string }) {
   }
 
   return results.length === 0 ? (
-    <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
-      <Typography level="body-lg" sx={{ textAlign: "center" }}>
-        No items found matching the barcode
-      </Typography>
-      <Link href="/add" style={{ textDecoration: "none" }}>
-        <Button variant="outlined" startDecorator={<MdAdd />}>
-          Add an item
-        </Button>
-      </Link>
-    </Stack>
+    <NoSearchResults>No items found matching the barcode</NoSearchResults>
   ) : (
     <SearchResultGrid items={results} />
   );

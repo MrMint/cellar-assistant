@@ -1,5 +1,6 @@
-import { Box } from "@mui/joy";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { STAGGER } from "./search-motion";
 
 /**
  * `82450ad1:src/components/search/AnimateIn.tsx` — the same entrance, done in
@@ -12,11 +13,12 @@ import type { ReactNode } from "react";
  * chips and the collection line were invisible, and stayed so if hydration
  * never finished.
  *
- * Here the markup carries no hidden state at all; a CSS animation plays the
- * old variants (`fadeUp`: opacity 0 → 1, 10px → 0, 0.25s ease-out; the
- * container's `staggerChildren: 0.04` / `delayChildren: 0.03`) and ends on the
- * element's own, visible style. It runs from the first paint, needs no
- * hydration, and `prefers-reduced-motion: reduce` turns it off.
+ * Here the markup carries no hidden state at all: `tw-animate-css`'s
+ * `animate-in` plays the old `fadeUp` (opacity 0 → 1, a short rise) on the
+ * motion tokens (`--ca-dur-medium`, the enter curve, the 8 px list distance) and ends on the
+ * element's own, visible style. It runs from the first paint and needs no
+ * hydration. Under reduced motion `globals.css` drops the slide and keeps
+ * the fade (design §4.9).
  */
 
 interface AnimateInProps {
@@ -24,70 +26,47 @@ interface AnimateInProps {
   className?: string;
 }
 
-/** `fadeUp`'s duration and easing. */
-const FADE_UP = "searchFadeUp 0.25s ease-out both";
-
-const fadeUpKeyframes = {
-  "@keyframes searchFadeUp": {
-    from: { opacity: 0, transform: "translateY(10px)" },
-    to: { opacity: 1, transform: "none" },
-  },
-};
-
-const reducedMotion = {
-  "@media (prefers-reduced-motion: reduce)": { animation: "none" },
-};
-
-/** `staggerContainer`'s timing, for the first {@link STAGGER_SLOTS} items. */
-const STAGGER_DELAY_S = 0.03;
-const STAGGER_STEP_S = 0.04;
-const STAGGER_SLOTS = 12;
-
-const staggerDelays = Object.fromEntries(
-  Array.from({ length: STAGGER_SLOTS }, (_, index) => [
-    `& [data-stagger-item]:nth-of-type(${index + 1})`,
-    {
-      animationDelay: `${(STAGGER_DELAY_S + index * STAGGER_STEP_S).toFixed(2)}s`,
-    },
-  ]),
-);
+/** `fadeUp`: an 8 px rise (`distance.list`; was 10) and a fade. */
+const FADE_UP =
+  "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-(--ca-dur-medium) ease-enter";
 
 /**
  * Fade-up entrance for a single element.
  * Wraps server components to add the animation.
  */
 export function FadeIn({ children, className }: AnimateInProps) {
-  return (
-    <Box
-      className={className}
-      sx={{ ...fadeUpKeyframes, animation: FADE_UP, ...reducedMotion }}
-    >
-      {children}
-    </Box>
-  );
+  return <div className={cn(FADE_UP, className)}>{children}</div>;
 }
 
 /**
- * Stagger container — staggers its StaggerItem children.
+ * Stagger container — its {@link StaggerItem}s enter one after another.
  */
 export function StaggerIn({ children, className }: AnimateInProps) {
-  return (
-    <Box className={className} sx={{ ...fadeUpKeyframes, ...staggerDelays }}>
-      {children}
-    </Box>
-  );
+  return <div className={className}>{children}</div>;
 }
 
 /**
- * Child of StaggerIn — participates in the stagger sequence.
+ * Child of StaggerIn — participates in the stagger sequence: item `index`
+ * starts `STAGGER.delay + index × STAGGER.step` seconds in, the old
+ * `staggerContainer`'s timing.
  */
-export function StaggerItem({ children }: { children: ReactNode }) {
+export function StaggerItem({
+  children,
+  index = 0,
+}: {
+  children: ReactNode;
+  /** The item's position in the sequence (0-based). */
+  index?: number;
+}) {
+  const delay = STAGGER.delay + index * STAGGER.step;
   return (
-    <Box
+    <div
       data-stagger-item=""
-      sx={{ ...fadeUpKeyframes, animation: FADE_UP, ...reducedMotion }}
+      className={FADE_UP}
+      // Computed per item at render: the one value here that is not a class.
+      style={{ animationDelay: `${delay.toFixed(2)}s` }}
     >
       {children}
-    </Box>
+    </div>
   );
 }

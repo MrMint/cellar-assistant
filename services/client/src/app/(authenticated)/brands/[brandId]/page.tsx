@@ -1,5 +1,5 @@
-import { Box, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
+import { Page } from "@/components/app/Page";
 import { itemLinkFromFragment } from "@/components/brand/adapter";
 import { BrandDetailsClient } from "@/components/brand/BrandDetailsClient";
 import {
@@ -51,7 +51,7 @@ export default async function BrandDetailPage({
   const result = unwrapResult(data.brand, "Brand");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return <p className="type-body text-destructive">{result.error.message}</p>;
   }
 
   const brand = result.data;
@@ -71,7 +71,7 @@ export default async function BrandDetailPage({
       : readFragment(BrandCoreFragment, brand.parentBrand);
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
+    <Page wide>
       <BrandDetailsClient
         brand={{ ...core, parentBrand: parent }}
         initialItems={{
@@ -87,6 +87,6 @@ export default async function BrandDetailPage({
           readFragment(BrandPlaceLinkFragment, edge.node),
         )}
       />
-    </Box>
+    </Page>
   );
 }

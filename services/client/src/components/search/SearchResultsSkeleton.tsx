@@ -1,4 +1,4 @@
-import { Card, Grid, Skeleton, Stack } from "@mui/joy";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** Placeholder cards — as many as a phone's first screen of results shows. */
 const PLACEHOLDERS = [1, 2, 3, 4, 5, 6];
@@ -9,16 +9,17 @@ const PLACEHOLDERS = [1, 2, 3, 4, 5, 6];
  */
 export function SearchResultsSkeleton() {
   return (
-    <Grid container spacing={2} data-testid="search-results-skeleton">
+    <div
+      data-testid="search-results-skeleton"
+      className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6"
+    >
       {PLACEHOLDERS.map((i) => (
-        <Grid key={i} xs={6} sm={6} md={4} lg={2}>
-          <Card sx={{ overflow: "hidden" }}>
-            <Skeleton variant="rectangular" sx={{ aspectRatio: 1 }} />
-            <Skeleton variant="text" sx={{ mx: 1, my: 1 }} />
-          </Card>
-        </Grid>
+        <div key={i} className="overflow-hidden rounded-md bg-surface-1">
+          <Skeleton className="aspect-square rounded-none" />
+          <Skeleton className="m-2 h-4" />
+        </div>
       ))}
-    </Grid>
+    </div>
   );
 }
 
@@ -32,17 +33,20 @@ const DISCOVERY_ROWS = [1, 2, 3, 4];
  */
 export function SearchDiscoverySkeleton() {
   return (
-    <Stack spacing={2} data-testid="search-discovery-skeleton">
-      <Skeleton variant="text" level="title-lg" sx={{ width: 180 }} />
+    <div
+      data-testid="search-discovery-skeleton"
+      className="flex flex-col gap-4"
+    >
+      <Skeleton className="h-6 w-45" />
       {DISCOVERY_ROWS.map((i) => (
-        <Stack key={i} direction="row" spacing={2} alignItems="center">
-          <Skeleton variant="rectangular" width={48} height={48} />
-          <Stack spacing={0.5} sx={{ flex: 1 }}>
-            <Skeleton variant="text" level="body-md" sx={{ width: "70%" }} />
-            <Skeleton variant="text" level="body-sm" sx={{ width: "40%" }} />
-          </Stack>
-        </Stack>
+        <div key={i} className="flex items-center gap-4">
+          <Skeleton className="size-12 shrink-0" />
+          <div className="flex flex-1 flex-col gap-1">
+            <Skeleton className="h-4 w-[70%]" />
+            <Skeleton className="h-3.5 w-[40%]" />
+          </div>
+        </div>
       ))}
-    </Stack>
+    </div>
   );
 }

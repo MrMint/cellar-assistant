@@ -1,6 +1,3 @@
-import { Button, Stack, Typography } from "@mui/joy";
-import Link from "next/link";
-import { MdAdd } from "react-icons/md";
 import { AiFailureStatus } from "@/components/common/AiStatus";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -9,21 +6,13 @@ import {
   isImageSearchUnavailable,
 } from "@/lib/items/image-search";
 import { searchResultsFromNodes } from "./adapter";
+import { NoSearchResults } from "./NoSearchResults";
 import { SearchImageQuery } from "./queries";
 import { SearchResultGrid } from "./SearchResultGrid";
 
 /** The old page's empty state for an image search, verbatim. */
 const NoImageMatches = ({ message }: { message: string }) => (
-  <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
-    <Typography level="body-lg" sx={{ textAlign: "center" }}>
-      {message}
-    </Typography>
-    <Link href="/add" style={{ textDecoration: "none" }}>
-      <Button variant="outlined" startDecorator={<MdAdd />}>
-        Add an item
-      </Button>
-    </Link>
-  </Stack>
+  <NoSearchResults>{message}</NoSearchResults>
 );
 
 /**

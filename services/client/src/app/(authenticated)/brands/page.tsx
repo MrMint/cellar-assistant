@@ -1,4 +1,4 @@
-import { Box, Typography } from "@mui/joy";
+import { Page } from "@/components/app/Page";
 import { toBrandCardItems } from "@/components/brand/adapter";
 import { BrandsListClient } from "@/components/brand/BrandsListClient";
 import {
@@ -27,14 +27,14 @@ export default async function BrandsPage() {
   const result = unwrapResult(data.brands, "BrandConnection");
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
-      <Typography level="h1" sx={{ mb: 1 }}>
-        Brands
-      </Typography>
-      <Typography level="body-lg" sx={{ mb: 3, color: "text.secondary" }}>
-        Browse the wineries, breweries, distilleries, and other producers behind
-        the items in your cellar.
-      </Typography>
+    <Page wide>
+      <header className="flex flex-col gap-2">
+        <h1 className="type-large-title">Brands</h1>
+        <p className="type-body text-ink-2">
+          Browse the wineries, breweries, distilleries, and other producers
+          behind the items in your cellar.
+        </p>
+      </header>
       {result.ok ? (
         <BrandsListClient
           initialPage={{
@@ -51,6 +51,6 @@ export default async function BrandsPage() {
       ) : (
         <ApiError error={result.error} title="Brands" />
       )}
-    </Box>
+    </Page>
   );
 }

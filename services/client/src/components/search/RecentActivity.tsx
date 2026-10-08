@@ -1,40 +1,40 @@
 "use client";
 
-import {
-  Avatar,
-  Box,
-  Card,
-  CardContent,
-  Grid,
-  IconButton,
-  Stack,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isNotNil } from "ramda";
 import { useCallback, useEffect, useState } from "react";
-import { MdAdd, MdHistory, MdPlace, MdStar, MdViewList } from "react-icons/md";
-import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { FilterChip } from "@/components/app/FilterChip";
+import {
+  Add,
+  type AppIcon,
+  History,
+  ICON_STROKE,
+  ListView,
+  Place,
+  Star,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
+import { UserAvatar } from "@/components/app/UserAvatar";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { formatDistance } from "@/lib/items/distance";
+import { distance } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { getNextPlaceholder } from "@/utilities";
 import { RichTextDisplay } from "../common/RichTextDisplay";
 import { formatRating } from "../common/rating/rating";
-import { UserAvatar } from "../common/UserAvatar";
 import type { ActivityEntry, ActivityKind } from "./adapter";
-import { fadeInLeft, staggerContainerFast } from "./motion-variants";
-import { useHasMounted } from "./useHasMounted";
+import { fadeInLeft, fadeShort, staggerContainerFast } from "./search-motion";
+import { useHasMounted, useHydratedReducedMotion } from "./useHasMounted";
 
 /**
  * `82450ad1:src/components/search/RecentActivity.tsx`, restored (UI parity
  * G31, restored at the user's request).
  *
- * Markup, copy, filters and motion are the old feed's. What changed under it:
+ * Copy, filters and motion are the old feed's, on the app primitives and the
+ * motion tokens (`./search-motion.ts`). What changed under it:
  *
  * - **The feed arrives built.** The old component took three Hasura result
  *   sets — queried with a browser-built `$userIds` — and merged them here.
@@ -48,6 +48,10 @@ import { useHasMounted } from "./useHasMounted";
  *   date-fns wording), not during render: a relative time is a hydration
  *   mismatch by construction (`hydration-safety.test.ts`). The first paint
  *   shows the line without it.
+ * - **The filters** are labelled `FilterChip`s (a glyph and its word) in a
+ *   group, where the old ones were bare icons in a Joy `ToggleButtonGroup`
+ *   — a glyph is never a touch control's only label (design §3.4). Still a
+ *   multi-select: any combination, none meaning all.
  */
 
 export type { ActivityKind } from "./adapter";
@@ -57,48 +61,64 @@ export type { ActivityKind } from "./adapter";
 const ACTIVITY_KIND_FILTERS: {
   id: ActivityKind;
   label: string;
-  icon: React.FC;
+  icon: AppIcon;
 }[] = [
-  { id: "added", label: "Added", icon: MdAdd },
-  { id: "reviewed", label: "Reviews", icon: MdStar },
-  { id: "tier-listed", label: "Tier Lists", icon: MdViewList },
+  { id: "added", label: "Added", icon: Add },
+  { id: "reviewed", label: "Reviews", icon: Star },
+  { id: "tier-listed", label: "Tier Lists", icon: ListView },
 ];
 
-// ─── Item type icon helper ──────────────────────────────────────────────────
+/** A kind toggled in or out, keeping the order the kinds were picked in. */
+const toggleKind = (
+  kinds: readonly ActivityKind[],
+  kind: ActivityKind,
+): ActivityKind[] =>
+  kinds.includes(kind) ? kinds.filter((k) => k !== kind) : [...kinds, kind];
 
-function getItemTypeIcon(type: string) {
-  switch (type) {
-    case "BEER":
-    case "WINE":
-    case "SPIRIT":
-    case "COFFEE":
-    case "SAKE":
-    case "TEA":
-      return <ItemTypeIcon type={type} />;
-    case "PLACE":
-      return <MdPlace />;
-    default:
-      return <MdPlace />;
+// ─── Item type thumbnail fallback ───────────────────────────────────────────
+
+const isItemType = (type: string): type is ApiItemType =>
+  Object.hasOwn(itemTypeTokens, type);
+
+/** No photo: the type's glyph on its tint, or a pin for a place. */
+function TypeThumbnail({ type }: { type: string }) {
+  if (isItemType(type)) {
+    return (
+      <span
+        className={cn(
+          "flex size-full items-center justify-center",
+          itemTypeTokens[type].tintClass,
+        )}
+      >
+        <TypeGlyph type={type} className="size-5" />
+      </span>
+    );
   }
+  return (
+    <span className="flex size-full items-center justify-center bg-surface-2 text-ink-2">
+      <Place aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
+    </span>
+  );
 }
 
-function getItemTypeColor(type: string) {
-  switch (type) {
-    case "WINE":
-      return "danger";
-    case "BEER":
-      return "warning";
-    case "SPIRIT":
-      return "neutral";
-    case "COFFEE":
-      return "success";
-    case "TEA":
-      return "success";
-    case "PLACE":
-      return "primary";
-    default:
-      return "neutral";
-  }
+/** The small mark on the thumbnail's corner: what kind of activity this is. */
+function KindMark({ kind }: { kind: ActivityKind }) {
+  const Icon =
+    kind === "added" ? Add : kind === "tier-listed" ? ListView : Star;
+  return (
+    <span className="absolute -top-1 -left-1 leading-none drop-shadow-md">
+      <Icon
+        aria-hidden
+        strokeWidth={kind === "reviewed" ? 0 : 2.5}
+        className={cn(
+          "size-4",
+          kind === "added" && "text-success",
+          kind === "tier-listed" && "text-ink-1",
+          kind === "reviewed" && "fill-current text-ink-1",
+        )}
+      />
+    </span>
+  );
 }
 
 /** `formatDistanceToNow(…, { addSuffix: true })`, once mounted. */
@@ -128,15 +148,13 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
   const now = useNow();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const prefersReducedMotion = useMediaQuery(
-    "(prefers-reduced-motion: reduce)",
-  );
+  const prefersReducedMotion = useHydratedReducedMotion();
   // The server's render and the hydration pass start visible; only what
   // mounts afterwards (a filter change) plays the entrance. See ./AnimateIn.
   const animateEntrance = useHasMounted();
 
   const handleKindsChange = useCallback(
-    (_event: React.MouseEvent, newKinds: ActivityKind[]) => {
+    (newKinds: ActivityKind[]) => {
       const params = new URLSearchParams(searchParams.toString());
       if (newKinds.length === 0) {
         params.delete("activity");
@@ -151,41 +169,34 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
   if (feed.length === 0 && selectedKinds.length === 0) return null;
 
   return (
-    <Stack spacing={1.5}>
-      <Stack
-        direction="row"
-        spacing={1}
-        alignItems="center"
-        justifyContent="space-between"
-        flexWrap="wrap"
-        useFlexGap
-      >
-        <Stack direction="row" spacing={1} alignItems="center">
-          <MdHistory
-            style={{
-              color: "var(--joy-palette-neutral-400)",
-              fontSize: "1.25rem",
-            }}
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <History
+            aria-hidden
+            className="size-5 text-ink-3"
+            strokeWidth={ICON_STROKE}
           />
-          <Typography level="title-lg">Recent Activity</Typography>
-        </Stack>
+          <h2 className="type-headline">Recent Activity</h2>
+        </div>
 
-        <ToggleButtonGroup
-          variant="plain"
-          spacing={0.5}
-          value={selectedKinds}
-          onChange={handleKindsChange}
+        <fieldset
           aria-label="Activity type filters"
+          className="flex min-w-0 flex-wrap gap-1.5"
         >
           {ACTIVITY_KIND_FILTERS.map(({ id, label, icon: Icon }) => (
-            <Tooltip key={id} title={label}>
-              <IconButton value={id} aria-label={label} size="sm">
-                <Icon />
-              </IconButton>
-            </Tooltip>
+            <FilterChip
+              key={id}
+              aria-label={label}
+              selected={selectedKinds.includes(id)}
+              icon={<Icon aria-hidden strokeWidth={ICON_STROKE} />}
+              onClick={() => handleKindsChange(toggleKind(selectedKinds, id))}
+            >
+              {label}
+            </FilterChip>
           ))}
-        </ToggleButtonGroup>
-      </Stack>
+        </fieldset>
+      </div>
       <AnimatePresence mode="wait">
         {feed.length === 0 ? (
           <motion.div
@@ -193,11 +204,11 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
             initial={animateEntrance ? { opacity: 0 } : false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={fadeShort}
           >
-            <Typography level="body-sm" sx={{ color: "text.tertiary", py: 2 }}>
+            <p className="type-footnote py-4">
               No recent activity for the selected filters
-            </Typography>
+            </p>
           </motion.div>
         ) : (
           <motion.div
@@ -208,199 +219,98 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
             }
             animate="show"
             exit="exit"
+            className="grid grid-cols-1 gap-2 md:grid-cols-2"
           >
-            <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
-              {feed.map((entry) => {
-                const timeAgo = timeAgoText(entry.timestamp, now);
-                const blurDataURL = getNextPlaceholder(entry.itemPlaceholder);
-                const typeColor = getItemTypeColor(entry.itemType) as
-                  | "danger"
-                  | "warning"
-                  | "neutral"
-                  | "success"
-                  | "primary";
+            {feed.map((entry) => {
+              const timeAgo = timeAgoText(entry.timestamp, now);
+              const blurDataURL = getNextPlaceholder(entry.itemPlaceholder);
 
-                return (
-                  <Grid key={entry.id} xs={1}>
-                    <motion.div
-                      variants={prefersReducedMotion ? undefined : fadeInLeft}
-                      whileHover={prefersReducedMotion ? undefined : { y: -2 }}
-                      whileTap={
-                        prefersReducedMotion ? undefined : { scale: 0.98 }
-                      }
-                      transition={{ duration: 0.15 }}
-                    >
-                      <Card
-                        component={Link}
-                        href={entry.itemHref}
-                        variant="outlined"
-                        orientation="horizontal"
-                        sx={{
-                          textDecoration: "none",
-                          "--Card-padding": "0.625rem",
-                          transition: "all 0.15s ease",
-                          height: "100%",
-                          "&:hover": {
-                            boxShadow: "sm",
-                            borderColor: "neutral.outlinedHoverBorder",
-                          },
-                        }}
-                      >
-                        {/* Item thumbnail with action badge */}
-                        <Box
-                          sx={{
-                            width: 44,
-                            height: 44,
-                            flexShrink: 0,
-                            position: "relative",
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              width: "100%",
-                              height: "100%",
-                              borderRadius: "md",
-                              overflow: "hidden",
-                              position: "relative",
-                            }}
-                          >
-                            {entry.itemImageUrl ? (
-                              <Image
-                                src={entry.itemImageUrl}
-                                alt={entry.itemName}
-                                fill
-                                style={{ objectFit: "cover" }}
-                                sizes="44px"
-                                placeholder={blurDataURL ? "blur" : undefined}
-                                blurDataURL={blurDataURL}
-                              />
-                            ) : (
-                              <Avatar
-                                variant="soft"
-                                color={typeColor}
-                                sx={{
-                                  width: "100%",
-                                  height: "100%",
-                                  borderRadius: "md",
-                                  fontSize: "md",
-                                }}
-                              >
-                                {getItemTypeIcon(entry.itemType)}
-                              </Avatar>
-                            )}
-                          </Box>
+              return (
+                <motion.div
+                  key={entry.id}
+                  variants={prefersReducedMotion ? undefined : fadeInLeft}
+                  whileHover={prefersReducedMotion ? undefined : { y: -2 }}
+                  whileTap={
+                    prefersReducedMotion ? undefined : { scale: distance.press }
+                  }
+                  transition={fadeShort}
+                >
+                  <Link
+                    href={entry.itemHref}
+                    underline="none"
+                    className="flex h-full items-center gap-3 rounded-md bg-surface-1 p-2.5 text-ink-1 transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2"
+                  >
+                    {/* Item thumbnail with action badge */}
+                    <div className="relative size-11 shrink-0">
+                      <div className="relative size-full overflow-hidden rounded-sm">
+                        {entry.itemImageUrl ? (
+                          <Image
+                            src={entry.itemImageUrl}
+                            alt={entry.itemName}
+                            fill
+                            className="object-cover"
+                            sizes="44px"
+                            placeholder={blurDataURL ? "blur" : undefined}
+                            blurDataURL={blurDataURL}
+                          />
+                        ) : (
+                          <TypeThumbnail type={entry.itemType} />
+                        )}
+                      </div>
+                      <KindMark kind={entry.kind} />
+                    </div>
 
-                          {/* Action icon */}
-                          <Box
-                            sx={{
-                              position: "absolute",
-                              top: -4,
-                              left: -4,
-                              lineHeight: 0,
-                              filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))",
-                            }}
-                          >
-                            {entry.kind === "added" ? (
-                              <MdAdd
-                                style={{
-                                  fontSize: "1rem",
-                                  color: "var(--joy-palette-success-400)",
-                                }}
-                              />
-                            ) : entry.kind === "tier-listed" ? (
-                              <MdViewList
-                                style={{
-                                  fontSize: "1rem",
-                                  color: "var(--joy-palette-primary-400)",
-                                }}
-                              />
-                            ) : (
-                              <MdStar
-                                style={{
-                                  fontSize: "1rem",
-                                  color: "var(--joy-palette-warning-400)",
-                                }}
-                              />
-                            )}
-                          </Box>
-                        </Box>
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      {/* Item name */}
+                      <p className="type-callout truncate font-semibold">
+                        {entry.itemName}
+                      </p>
 
-                        <CardContent sx={{ gap: 0.25, minWidth: 0, flex: 1 }}>
-                          {/* Item name */}
-                          <Typography level="title-sm" noWrap>
-                            {entry.itemName}
-                          </Typography>
+                      {/* Action line */}
+                      <p className="type-footnote truncate">
+                        {entry.kind === "added" ? (
+                          <>
+                            Added to {entry.cellarName}
+                            {timeAgo !== null && ` \u00B7 ${timeAgo}`}
+                          </>
+                        ) : entry.kind === "tier-listed" ? (
+                          <>
+                            #{entry.rank} in {entry.tierListName}
+                            {timeAgo !== null && ` \u00B7 ${timeAgo}`}
+                          </>
+                        ) : (
+                          <>
+                            {/* "Rated 4", as the rating control says it; no score is a text-only review. */}
+                            {isNotNil(entry.score)
+                              ? `Rated ${formatRating(entry.score)}`
+                              : "Reviewed"}
+                            {timeAgo !== null && ` \u00B7 ${timeAgo}`}
+                          </>
+                        )}
+                      </p>
 
-                          {/* Action line */}
-                          <Typography
-                            level="body-xs"
-                            noWrap
-                            sx={{ color: "text.tertiary" }}
-                          >
-                            {entry.kind === "added" ? (
-                              <>
-                                Added to {entry.cellarName}
-                                {timeAgo !== null && ` \u00B7 ${timeAgo}`}
-                              </>
-                            ) : entry.kind === "tier-listed" ? (
-                              <>
-                                #{entry.rank} in {entry.tierListName}
-                                {timeAgo !== null && ` \u00B7 ${timeAgo}`}
-                              </>
-                            ) : (
-                              <>
-                                {/* "Rated 4", as the rating control says it; no score is a text-only review. */}
-                                {isNotNil(entry.score)
-                                  ? `Rated ${formatRating(entry.score)}`
-                                  : "Reviewed"}
-                                {timeAgo !== null && ` \u00B7 ${timeAgo}`}
-                              </>
-                            )}
-                          </Typography>
+                      {/* Review text snippet */}
+                      {entry.kind === "reviewed" && entry.reviewText && (
+                        <div className="mt-0.5 max-h-[1.4em] overflow-hidden text-ink-2 text-xs italic [&_[contenteditable]]:max-h-[1.4em] [&_[contenteditable]]:overflow-hidden [&_[contenteditable]]:p-0 [&_p]:m-0">
+                          <RichTextDisplay text={entry.reviewText} />
+                        </div>
+                      )}
+                    </div>
 
-                          {/* Review text snippet */}
-                          {entry.kind === "reviewed" && entry.reviewText && (
-                            <Box
-                              sx={{
-                                maxHeight: "1.4em",
-                                overflow: "hidden",
-                                mt: 0.25,
-                                fontSize: "xs",
-                                color: "text.secondary",
-                                fontStyle: "italic",
-                                "& [contenteditable]": {
-                                  padding: 0,
-                                  maxHeight: "1.4em",
-                                  overflow: "hidden",
-                                },
-                                "& p": { margin: 0 },
-                              }}
-                            >
-                              <RichTextDisplay text={entry.reviewText} />
-                            </Box>
-                          )}
-                        </CardContent>
-
-                        {/* User avatar on right */}
-                        <UserAvatar
-                          avatarUrl={entry.userAvatar}
-                          displayName={entry.userName}
-                          size="sm"
-                          sx={{
-                            "--Avatar-size": "28px",
-                            flexShrink: 0,
-                            alignSelf: "center",
-                          }}
-                        />
-                      </Card>
-                    </motion.div>
-                  </Grid>
-                );
-              })}
-            </Grid>
+                    {/* User avatar on right */}
+                    <UserAvatar
+                      avatarUrl={entry.userAvatar}
+                      displayName={entry.userName}
+                      size="sm"
+                      className="size-7 self-center text-xs"
+                    />
+                  </Link>
+                </motion.div>
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
-    </Stack>
+    </section>
   );
 }

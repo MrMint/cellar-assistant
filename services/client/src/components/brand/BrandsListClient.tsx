@@ -1,11 +1,15 @@
 "use client";
 
-import { Box, Input, Stack } from "@mui/joy";
 import { useEffect, useState } from "react";
-import { MdSearch } from "react-icons/md";
+import { ICON_STROKE, Search } from "@/components/app/icons";
 import { virtualTotal } from "@/components/cellar/virtualTotal";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { VirtualGrid } from "@/components/common/VirtualGrid";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import { type Page, pageOf } from "@/lib/paging/paged-connection";
@@ -103,14 +107,18 @@ export const BrandsListClient = ({ initialPage }: BrandsListClientProps) => {
   const failure = active.failure;
 
   return (
-    <Stack spacing={2}>
-      <Input
-        placeholder="Search brands…"
-        startDecorator={<MdSearch />}
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        sx={{ maxWidth: 400 }}
-      />
+    <div className="flex flex-col gap-4">
+      <InputGroup className="max-w-100">
+        <InputGroupAddon>
+          <Search aria-hidden strokeWidth={ICON_STROKE} />
+        </InputGroupAddon>
+        <InputGroupInput
+          aria-label="Search brands"
+          placeholder="Search brands…"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </InputGroup>
       {failure !== null && <ApiError error={failure} title="Brands" />}
       <VirtualGrid
         items={brands}
@@ -130,11 +138,15 @@ export const BrandsListClient = ({ initialPage }: BrandsListClientProps) => {
         }}
         isLoadingMore={active.status === "loadingMore"}
         renderItem={(brand, onBeforeNavigate) => (
-          <Box onClick={onBeforeNavigate}>
-            <BrandCard brand={brand} href={`/brands/${brand.id}`} />
-          </Box>
+          // A tap anywhere on the card lands on its stretched title link,
+          // which saves the grid's scroll position before navigating.
+          <BrandCard
+            brand={brand}
+            href={`/brands/${brand.id}`}
+            onClick={onBeforeNavigate}
+          />
         )}
       />
-    </Stack>
+    </div>
   );
 };

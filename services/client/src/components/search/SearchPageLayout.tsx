@@ -1,5 +1,5 @@
-import { Box, Stack } from "@mui/joy";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { ClientSearchInterface } from "./ClientSearchInterface";
 import {
   SearchNavigationProvider,
@@ -39,22 +39,16 @@ export function SearchPageLayout({
 }: SearchPageLayoutProps) {
   return (
     <SearchNavigationProvider>
-      <Stack spacing={3} sx={landing ? { pt: { xs: 2, sm: 4 } } : undefined}>
+      <div className={cn("flex flex-col gap-6", landing && "pt-4 sm:pt-8")}>
         {landing ? landing.hero : null}
-        {/* `alignSelf`, not `mx: "auto"`: the Stack's spacing resets its
-            children's margins, which left the box flush left on desktop. */}
-        <Box
-          sx={
-            landing
-              ? { width: "100%", maxWidth: 600, alignSelf: "center" }
-              : undefined
-          }
-        >
+        {/* The same element in both views — only its classes change — so
+            the box below it is never remounted. */}
+        <div className={cn(landing && "w-full max-w-150 self-center")}>
           <ClientSearchInterface urlQuery={urlQuery} />
-        </Box>
+        </div>
         {landing ? landing.quickLinks : null}
         <SearchResultsRegion>{children}</SearchResultsRegion>
-      </Stack>
+      </div>
     </SearchNavigationProvider>
   );
 }
