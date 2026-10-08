@@ -160,6 +160,12 @@ export function CreatePlaceForm({
   const router = useRouter();
   const fieldId = useId();
   const idOf = (name: keyof FormFields) => `${fieldId}-${name}`;
+  /**
+   * The error line's id when that field has one, for `aria-describedby` —
+   * what Joy's FormControl wired up on its own.
+   */
+  const errorOf = (name: keyof FormFields) =>
+    errors[name] ? `${fieldId}-${name}-error` : undefined;
   const {
     checkDuplicatePlacesAction,
     googlePlaceDetailsAction,
@@ -515,9 +521,14 @@ export function CreatePlaceForm({
                 {...field}
                 id={idOf("name")}
                 aria-invalid={!!errors.name || undefined}
+                aria-describedby={errorOf("name")}
                 placeholder="e.g. The Rusty Barrel"
               />
-              {errors.name && <FieldError>{errors.name.message}</FieldError>}
+              {errors.name && (
+                <FieldError id={errorOf("name")}>
+                  {errors.name.message}
+                </FieldError>
+              )}
             </Field>
           )}
         />
@@ -539,10 +550,13 @@ export function CreatePlaceForm({
                 onChange={field.onChange}
                 onBlur={field.onBlur}
                 invalid={!!errors.categories}
+                describedBy={errorOf("categories")}
                 placeholder="Select categories..."
               />
               {errors.categories && (
-                <FieldError>{errors.categories.message}</FieldError>
+                <FieldError id={errorOf("categories")}>
+                  {errors.categories.message}
+                </FieldError>
               )}
             </Field>
           )}
@@ -654,6 +668,7 @@ export function CreatePlaceForm({
                     {...field}
                     id={idOf("country_code")}
                     aria-invalid={!!errors.country_code || undefined}
+                    aria-describedby={errorOf("country_code")}
                     value={field.value}
                     onChange={(event) =>
                       field.onChange(
@@ -663,7 +678,9 @@ export function CreatePlaceForm({
                     placeholder="US"
                   />
                   {errors.country_code && (
-                    <FieldError>{errors.country_code.message}</FieldError>
+                    <FieldError id={errorOf("country_code")}>
+                      {errors.country_code.message}
+                    </FieldError>
                   )}
                 </Field>
               </AIDraftField>
@@ -697,6 +714,7 @@ export function CreatePlaceForm({
                   id={idOf("phone")}
                   inputComponent={Input}
                   aria-invalid={!!errors.phone || undefined}
+                  aria-describedby={errorOf("phone")}
                   country={phoneCountry}
                   international
                   withCountryCallingCode
@@ -707,7 +725,9 @@ export function CreatePlaceForm({
                   placeholder="+1 555 123 4567"
                 />
                 {errors.phone && (
-                  <FieldError>{errors.phone.message}</FieldError>
+                  <FieldError id={errorOf("phone")}>
+                    {errors.phone.message}
+                  </FieldError>
                 )}
               </Field>
             )}
@@ -729,6 +749,7 @@ export function CreatePlaceForm({
                   {...field}
                   id={idOf("website")}
                   aria-invalid={!!errors.website || undefined}
+                  aria-describedby={errorOf("website")}
                   inputMode="url"
                   placeholder="https://example.com"
                   onBlur={(event) => {
@@ -743,7 +764,9 @@ export function CreatePlaceForm({
                   }}
                 />
                 {errors.website && (
-                  <FieldError>{errors.website.message}</FieldError>
+                  <FieldError id={errorOf("website")}>
+                    {errors.website.message}
+                  </FieldError>
                 )}
               </Field>
             )}
@@ -769,12 +792,15 @@ export function CreatePlaceForm({
                 {...field}
                 id={idOf("description")}
                 aria-invalid={!!errors.description || undefined}
+                aria-describedby={errorOf("description")}
                 rows={2}
                 className="max-h-28"
                 placeholder="A brief description of the place..."
               />
               {errors.description && (
-                <FieldError>{errors.description.message}</FieldError>
+                <FieldError id={errorOf("description")}>
+                  {errors.description.message}
+                </FieldError>
               )}
             </Field>
           )}

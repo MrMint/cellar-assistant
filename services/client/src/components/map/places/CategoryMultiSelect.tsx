@@ -57,6 +57,13 @@ export function CategoryMultiSelect<V extends string>({
 }) {
   const [open, setOpen] = useState(false);
   const listId = `${id}-list`;
+  // The label names the combobox; the picked categories describe it, so a
+  // screen reader hears them without opening the list.
+  const valueId = `${id}-value`;
+  const describedByIds =
+    [value.length > 0 ? valueId : undefined, describedBy]
+      .filter(Boolean)
+      .join(" ") || undefined;
   const selected = new Set(value.map((option) => option.value));
   const tiers = Array.from(new Set(options.map((option) => option.tier)));
 
@@ -85,7 +92,7 @@ export function CategoryMultiSelect<V extends string>({
           aria-controls={listId}
           aria-haspopup="listbox"
           aria-invalid={invalid || undefined}
-          aria-describedby={describedBy}
+          aria-describedby={describedByIds}
           className={cn(
             "flex min-h-11 w-full min-w-0 flex-wrap items-center gap-1 rounded-sm border border-input bg-transparent py-1.5 pr-9 pl-3 text-left text-base shadow-xs outline-none transition-[color,box-shadow] md:text-sm dark:bg-input/30",
             "relative focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
@@ -95,11 +102,17 @@ export function CategoryMultiSelect<V extends string>({
           {value.length === 0 ? (
             <span className="text-muted-foreground">{placeholder}</span>
           ) : (
-            value.map((option) => (
-              <Badge key={option.value} variant="secondary">
-                {option.label}
-              </Badge>
-            ))
+            <span id={valueId} className="contents">
+              {value.map((option, index) => (
+                <Badge key={option.value} variant="secondary">
+                  {option.label}
+                  {/* a separator for the description, not for the eye */}
+                  {index < value.length - 1 && (
+                    <span className="sr-only">,</span>
+                  )}
+                </Badge>
+              ))}
+            </span>
           )}
           <ChevronDown
             aria-hidden
