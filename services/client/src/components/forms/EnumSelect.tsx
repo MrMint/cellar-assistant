@@ -90,17 +90,26 @@ export function EnumSelect<
   // N03: the error is drawn here, under the select — a required pick that is
   // missing says so instead of only scrolling to it.
   return (
+    // `text-foreground`: the label and the chosen value inherit their ink,
+    // and on a Joy screen the inherited ink is Joy's body-md (ink-2), not the
+    // body's — they sat a step dimmer than the Joy labels and values beside
+    // them. The invalid state's `text-destructive` still wins.
     <Field
       data-invalid={isInvalid || undefined}
       data-disabled={unavailable || undefined}
-      className="gap-2"
+      className="gap-2 text-foreground"
     >
       <FieldLabel htmlFor={id} className="gap-1">
         {label}
-        {/* Joy's FormLabel marked a required field with an asterisk; the
+        {/* Joy's FormLabel marked a required field with a danger-coloured
+            asterisk, as the Joy labels around this one still do; the
             data-slot is what tests (and styling) anchor on. */}
         {required && (
-          <span aria-hidden="true" data-slot="label-asterisk">
+          <span
+            aria-hidden="true"
+            data-slot="label-asterisk"
+            className="text-destructive"
+          >
             *
           </span>
         )}
@@ -119,7 +128,10 @@ export function EnumSelect<
           id={id}
           ref={ref}
           onBlur={onBlur}
-          className="w-full"
+          // 16px on a phone like `ui/input` (`text-base md:text-sm`), not the
+          // vendored trigger's 14px: the value read smaller than every input
+          // in the same form.
+          className="w-full text-base md:text-sm"
           // `disabled` is native here; aria-disabled keeps the anchor the
           // tests (and assistive tech, before hydration) read.
           aria-disabled={unavailable || undefined}
