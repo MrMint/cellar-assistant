@@ -1,28 +1,22 @@
 "use client";
 
-import {
-  Alert,
-  Box,
-  Button,
-  FormControl,
-  FormLabel,
-  Input,
-  List,
-  ListItem,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import { Fragment, useState } from "react";
+import { Fragment, useId, useState } from "react";
 import { type SubmitHandler, useForm, useWatch } from "react-hook-form";
 import { useClient } from "urql";
+import { AIDraftField } from "@/components/app/AIDraftField";
+import { Info } from "@/components/app/icons";
 import { BrandPicker } from "@/components/brand/BrandPicker";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { requiredSummary } from "@/components/item/form-errors";
 import type { ItemFormValues } from "@/components/item/ItemForm";
 import { ItemFormField } from "@/components/item/ItemFormField";
 import { entryPath, formLayout } from "@/components/item/itemFormLayout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { draftedPaths, isDrafted } from "@/lib/forms/ai-draft";
-import { AIDraftField } from "../AIDraftField";
 import { createOnboardedItem } from "./actors/createItem";
 import { type OnboardingDefaults, saveBlocker, skippedNotes } from "./adapter";
 
@@ -37,8 +31,8 @@ type OnboardingItemFormProps = {
 
 /**
  * The six `82450ad1:src/components/{type}/{T}Form.tsx` in **create** mode —
- * what the onboarding wizard's `form` step rendered. Same `Box` capped at the
- * `sm` breakpoint, the same fields in the same order through the shared
+ * what the onboarding wizard's `form` step rendered. Same column capped at the
+ * `sm` breakpoint (600 px), the same fields in the same order through the shared
  * `ItemFormField` (`item/itemFormLayout.ts`), `BrandPicker` after the
  * description as before, a Barcode field last, "Add", and the same
  * "Something went wrong please try again..." root error.
@@ -58,6 +52,7 @@ export const OnboardingItemForm = ({
   const layout = formLayout(type, "create");
   const [brandName, setBrandName] = useState(defaultValues.brandName);
   const [barcode, setBarcode] = useState(sessionBarcode ?? "");
+  const barcodeId = useId();
 
   const {
     control,
@@ -118,31 +113,26 @@ export const OnboardingItemForm = ({
   };
 
   return (
-    <Box
-      sx={(theme) => ({
-        maxWidth: theme.breakpoints.values.sm,
-      })}
-    >
-      {/* noValidate: `FormControl required` puts a native `required` on the
-          inputs, and the browser's own check would cancel the submit before
-          react-hook-form runs — so none of N03's messages would ever show. */}
+    <div className="max-w-[600px]">
+      {/* noValidate: the required fields carry a native `required`, and the
+          browser's own check would cancel the submit before react-hook-form
+          runs — so none of N03's messages would ever show. */}
       <form noValidate onSubmit={handleSubmit(onSubmit, onInvalid)}>
-        <Stack spacing={4}>
+        <div className="flex flex-col gap-8">
           {notFilled.length > 0 && (
-            <Alert color="neutral" variant="soft">
-              <Stack spacing={0.5}>
-                <Typography level="title-sm">
-                  Read from the label but not filled in
-                </Typography>
-                <List size="sm" marker="disc">
+            <Alert>
+              <Info aria-hidden />
+              <AlertTitle>Read from the label but not filled in</AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc pl-5">
                   {notFilled.map((note) => (
-                    <ListItem key={note}>{note}</ListItem>
+                    <li key={note}>{note}</li>
                   ))}
-                </List>
-              </Stack>
+                </ul>
+              </AlertDescription>
             </Alert>
           )}
-          <Stack spacing={2}>
+          <div className="flex flex-col gap-4">
             {layout.map((entry) => (
               <Fragment
                 key={entry.kind === "attribute" ? entry.field.key : entry.kind}
@@ -171,27 +161,39 @@ export const OnboardingItemForm = ({
                 )}
               </Fragment>
             ))}
-            <FormControl>
-              <FormLabel>Barcode</FormLabel>
+            {/* AIDraftField gives every field above a 2 px rule and 12 px
+                inset whether or not it is drafted; the same inset keeps
+                Barcode's label in their column. */}
+            <Field
+              data-disabled={isSubmitting || undefined}
+              className="border-transparent border-l-2 pl-3"
+            >
+              <FieldLabel htmlFor={barcodeId}>Barcode</FieldLabel>
               <Input
+                id={barcodeId}
                 disabled={isSubmitting}
                 type="text"
-                slotProps={{ input: { inputMode: "numeric" } }}
+                inputMode="numeric"
                 value={barcode}
                 onChange={(event) => setBarcode(event.target.value)}
               />
-            </FormControl>
-          </Stack>
+            </Field>
+          </div>
           {errors.root !== undefined && (
-            <Typography color="danger" role="alert">
+            <p role="alert" className="type-body text-destructive">
               {errors.root.message}
-            </Typography>
+            </p>
           )}
-          <Button loading={isSubmitting} type="submit">
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting || undefined}
+          >
+            {isSubmitting && <Spinner aria-hidden />}
             Add
           </Button>
-        </Stack>
+        </div>
       </form>
-    </Box>
+    </div>
   );
 };

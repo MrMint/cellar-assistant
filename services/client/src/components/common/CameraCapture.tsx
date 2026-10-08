@@ -1,98 +1,22 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Card,
-  CardCover,
-  CircularProgress,
-  IconButton,
-  Stack,
-  styled,
-  Typography,
-} from "@mui/joy";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  BsCamera,
-  BsImages,
-  BsLightbulb,
-  BsLightbulbFill,
-} from "react-icons/bs";
 import Webcam from "react-webcam";
+import { IconButton } from "@/components/app/IconButton";
+import { Camera, Idea, PhotoLibrary } from "@/components/app/icons";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useCameraStatus } from "@/hooks/useCameraStatus";
 import {
   CAMERA_CAPTURE_CONSTRAINTS,
   cameraKeepsListening,
 } from "@/lib/camera/camera-status";
 import { libraryImageToDataUrl } from "@/lib/camera/library-image";
+import { cn } from "@/lib/utils";
 
 // N04: every constraint is `ideal` (`CAMERA_CAPTURE_CONSTRAINTS`). The old
 // `min: 1080` made getUserMedia refuse outright on cameras that could not meet
 // it, and the non-standard focus/exposure/white-balance modes are gone with it.
-
-const CameraContainer = styled(Box)(() => ({
-  position: "relative",
-  width: "100%",
-  height: "100%",
-}));
-
-const FocusIndicator = styled(Box)<{ x: number; y: number; visible: boolean }>(
-  ({ x, y, visible }) => ({
-    position: "absolute",
-    left: `${x - 25}px`,
-    top: `${y - 25}px`,
-    width: "50px",
-    height: "50px",
-    border: "2px solid rgba(255, 255, 255, 0.8)",
-    borderRadius: "50%",
-    pointerEvents: "none",
-    opacity: visible ? 1 : 0,
-    transform: visible ? "scale(1)" : "scale(1.5)",
-    transition: "all 0.3s ease",
-    "&::before": {
-      content: '""',
-      position: "absolute",
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
-      width: "2px",
-      height: "20px",
-      backgroundColor: "rgba(255, 255, 255, 0.8)",
-    },
-    "&::after": {
-      content: '""',
-      position: "absolute",
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
-      width: "20px",
-      height: "2px",
-      backgroundColor: "rgba(255, 255, 255, 0.8)",
-    },
-  }),
-);
-
-const TapToFocusOverlay = styled(Box)(() => ({
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  cursor: "crosshair",
-}));
-
-const ControlsContainer = styled(Box)(() => ({
-  position: "absolute",
-  bottom: 0,
-  left: 0,
-  right: 0,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "16px",
-  backgroundColor: "rgba(0, 0, 0, 0.3)",
-  backdropFilter: "blur(4px)",
-}));
 
 export const CameraCapture = ({
   onCapture,
@@ -284,7 +208,10 @@ export const CameraCapture = ({
   const failed = camera.status.kind === "failed" ? camera.status : null;
 
   return (
-    <Card sx={{ aspectRatio: "1", maxHeight: "600px" }}>
+    <div
+      data-slot="camera-capture"
+      className="relative aspect-square max-h-[600px] w-full overflow-hidden rounded-lg bg-surface-2"
+    >
       <input
         ref={libraryRef}
         type="file"
@@ -293,119 +220,128 @@ export const CameraCapture = ({
         onChange={handleLibraryPick}
       />
       {camera.status.kind === "starting" && (
-        <CardCover>
-          <CircularProgress />
-        </CardCover>
+        <div className="absolute inset-0 flex items-center justify-center">
+          {/* `progressbar`, as Joy's CircularProgress was: the mobile e2e
+              (m02-camera-fallback) proves the spinner is gone by that role. */}
+          <Spinner
+            role="progressbar"
+            aria-label="Starting the camera"
+            className="size-8 text-ink-2"
+          />
+        </div>
       )}
       {failed !== null && (
-        <CardCover sx={{ zIndex: 1 }}>
-          <Stack
-            spacing={2}
-            alignItems="center"
-            justifyContent="center"
-            sx={{ p: 3, textAlign: "center" }}
-            role="alert"
-          >
-            <Typography level="body-md">{failed.message}</Typography>
-            {libraryError !== null && (
-              <Typography level="body-sm" color="danger">
-                {libraryError}
-              </Typography>
-            )}
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Button startDecorator={<BsImages />} onClick={openLibrary}>
-                Choose from library
-              </Button>
-              <Button variant="outlined" color="neutral" onClick={camera.retry}>
-                Try again
-              </Button>
-            </Stack>
-          </Stack>
-        </CardCover>
+        <div
+          role="alert"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-surface-2 p-6 text-center"
+        >
+          <p className="type-body">{failed.message}</p>
+          {libraryError !== null && (
+            <p className="type-callout text-destructive">{libraryError}</p>
+          )}
+          <div className="flex flex-row flex-wrap justify-center gap-2">
+            <Button onClick={openLibrary}>
+              <PhotoLibrary aria-hidden />
+              Choose from library
+            </Button>
+            <Button variant="outline" onClick={camera.retry}>
+              Try again
+            </Button>
+          </div>
+        </div>
       )}
-      <CardCover>
-        <CameraContainer>
-          {/* A timed-out camera stays mounted under its message, so a late
-              "Allow" still lands (`cameraKeepsListening`). */}
-          {cameraKeepsListening(camera.status) && (
-            <Webcam
-              key={camera.attempt}
-              ref={webcamRef}
-              audio={false}
-              forceScreenshotSourceSize={true}
-              screenshotQuality={1}
-              screenshotFormat="image/jpeg"
-              videoConstraints={CAMERA_CAPTURE_CONSTRAINTS}
-              onUserMedia={handleUserMedia}
-              onUserMediaError={camera.onError}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-            />
-          )}
-          {isVideoLoaded && <TapToFocusOverlay onClick={handleTapToFocus} />}
-          {focusPoint && (
-            <FocusIndicator
-              x={focusPoint.x}
-              y={focusPoint.y}
-              visible={showFocusIndicator}
-            />
-          )}
-          {failed === null && (
-            <ControlsContainer>
-              {/* Torch control */}
-              {torchSupported && (
-                <IconButton
-                  onClick={toggleTorch}
-                  variant={torchEnabled ? "solid" : "outlined"}
-                  color={torchEnabled ? "warning" : "neutral"}
-                  size="md"
-                >
-                  {torchEnabled ? <BsLightbulbFill /> : <BsLightbulb />}
-                </IconButton>
-              )}
-
-              {/* Spacer when torch not available */}
-              {!torchSupported && <Box />}
-
-              {/* Capture button */}
+      <div className="absolute inset-0">
+        {/* A timed-out camera stays mounted under its message, so a late
+            "Allow" still lands (`cameraKeepsListening`). */}
+        {cameraKeepsListening(camera.status) && (
+          <Webcam
+            key={camera.attempt}
+            ref={webcamRef}
+            audio={false}
+            forceScreenshotSourceSize={true}
+            screenshotQuality={1}
+            screenshotFormat="image/jpeg"
+            videoConstraints={CAMERA_CAPTURE_CONSTRAINTS}
+            onUserMedia={handleUserMedia}
+            onUserMediaError={camera.onError}
+            className="size-full object-cover"
+          />
+        )}
+        {isVideoLoaded && (
+          // Tap to focus is a pointer gesture on the picture itself; the
+          // shutter and the library are the keyboard's controls.
+          // biome-ignore lint/a11y/noStaticElementInteractions: see above.
+          // biome-ignore lint/a11y/useKeyWithClickEvents: see above.
+          <div
+            className="absolute inset-0 cursor-crosshair"
+            onClick={handleTapToFocus}
+          />
+        )}
+        {focusPoint && (
+          <div
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute size-[50px] rounded-full border-2 border-white/80",
+              "transition-[opacity,scale] duration-(--ca-dur-medium) ease-standard",
+              "before:absolute before:top-1/2 before:left-1/2 before:h-5 before:w-0.5 before:-translate-1/2 before:bg-white/80 before:content-['']",
+              "after:absolute after:top-1/2 after:left-1/2 after:h-0.5 after:w-5 after:-translate-1/2 after:bg-white/80 after:content-['']",
+              showFocusIndicator
+                ? "scale-100 opacity-100"
+                : "scale-150 opacity-0",
+            )}
+            // The tap's position, known only at runtime.
+            style={{ left: focusPoint.x - 25, top: focusPoint.y - 25 }}
+          />
+        )}
+        {failed === null && (
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/30 p-4 backdrop-blur-xs">
+            {/* Torch control, or a spacer that keeps the shutter centred */}
+            {torchSupported ? (
+              // The label names the action, as BarcodeScanner's torch does, so
+              // no `aria-pressed`: "Turn off light, pressed" reads as a
+              // contradiction.
               <IconButton
-                aria-label="Take photo"
-                onClick={capture}
-                size="lg"
-                variant="solid"
-                color="primary"
-                disabled={isCapturing || !isVideoLoaded}
-                // Joy marks the button `disabled` only after hydration.
-                aria-disabled={isCapturing || !isVideoLoaded || undefined}
-                sx={{
-                  transform: isCapturing ? "scale(0.95)" : "scale(1)",
-                  transition: "transform 0.1s ease",
-                }}
+                aria-label={torchEnabled ? "Turn off light" : "Turn on light"}
+                onClick={toggleTorch}
+                variant="outline"
+                className={cn(
+                  torchEnabled &&
+                    "bg-ink-1 text-background hover:bg-ink-1/90 hover:text-background dark:bg-ink-1 dark:hover:bg-ink-1/90",
+                )}
               >
-                <BsCamera />
+                <Idea className={cn(torchEnabled && "fill-current")} />
               </IconButton>
+            ) : (
+              <div className="size-11" />
+            )}
 
-              {/* N04: the photo library, beside the shutter */}
-              {showLibrary ? (
-                <IconButton
-                  aria-label="Choose from library"
-                  onClick={openLibrary}
-                  size="md"
-                  variant="outlined"
-                  color="neutral"
-                >
-                  <BsImages />
-                </IconButton>
-              ) : (
-                <Box sx={{ width: 40 }} />
-              )}
-            </ControlsContainer>
-          )}
-        </CameraContainer>
-      </CardCover>
-    </Card>
+            {/* Capture button */}
+            <IconButton
+              aria-label="Take photo"
+              onClick={capture}
+              size="lg"
+              variant="default"
+              disabled={isCapturing || !isVideoLoaded}
+              className={cn(isCapturing && "scale-95")}
+            >
+              <Camera />
+            </IconButton>
+
+            {/* N04: the photo library, beside the shutter */}
+            {showLibrary ? (
+              <IconButton
+                aria-label="Choose from library"
+                onClick={openLibrary}
+                variant="outline"
+              >
+                <PhotoLibrary />
+              </IconButton>
+            ) : (
+              <div className="size-11" />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
