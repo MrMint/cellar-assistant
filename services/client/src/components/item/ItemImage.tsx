@@ -85,6 +85,9 @@ export const ItemImage = ({
     <>
       <button
         type="button"
+        // Named by what it does: read from its content, the name would start
+        // with the picture's alt ("A picture of a glass Add a photo").
+        aria-label={hasImage ? "Update photo" : "Add a photo"}
         onClick={() => setOpen(true)}
         className={cn(
           tile,

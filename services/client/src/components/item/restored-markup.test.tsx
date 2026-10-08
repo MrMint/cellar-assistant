@@ -102,7 +102,10 @@ describe("ItemPageView (restored {T}Details)", () => {
   );
 
   test("details card: title, subtitle joined with ' - ', description", () => {
-    assert.match(html, /<h3[^>]*>Dragonwell/);
+    // The page's one h1: the AppBar has no title on the item pages, and
+    // the cards under it are h2s.
+    assert.match(html, /<h1[^>]*>Dragonwell/);
+    assert.equal(html.match(/<h1\b/g)?.length, 1);
     assert.match(html, /Green - Loose Leaf - China/);
     assert.match(html, /A green tea\./);
   });
@@ -220,7 +223,7 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
       ),
       ["Edit item", "Delete item"],
     );
-    assert.match(html, /Add a photo/);
+    assert.match(html, /<button[^>]*aria-label="Add a photo"/);
     assert.match(html, />Wineries \(1\)</);
     assert.doesNotMatch(html, />Check In</);
   });

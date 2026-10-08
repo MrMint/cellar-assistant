@@ -69,7 +69,10 @@ const ItemDetails = ({
     <ItemSection>
       <div className="flex flex-col gap-2">
         <div className="flex items-start gap-2">
-          <h3 className="type-title-1 min-w-0 flex-1 text-ink-1">{title}</h3>
+          {/* The page's heading: the AppBar above leaves its title to this. */}
+          <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
+            {title}
+          </h1>
           <IconButton
             disabled={isPending}
             onClick={handleFavoriteClick}
