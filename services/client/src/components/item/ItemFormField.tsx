@@ -60,7 +60,7 @@ export const ItemFormField = ({
               disabled={disabled}
               type="text"
               {...field}
-              aria-invalid={invalid(fieldState)}
+              {...errorAria(id, entry.label, fieldState)}
             />
           </FieldShell>
         )}
@@ -88,7 +88,7 @@ export const ItemFormField = ({
               disabled={disabled}
               rows={2}
               {...field}
-              aria-invalid={invalid(fieldState)}
+              {...errorAria(id, entry.label, fieldState)}
             />
           </FieldShell>
         )}
@@ -183,7 +183,7 @@ export const ItemFormField = ({
               rows={2}
               {...input}
               value={input.value ?? ""}
-              aria-invalid={invalid(fieldState)}
+              {...errorAria(id, entry.label, fieldState)}
             />
           ) : (
             <Input
@@ -194,7 +194,7 @@ export const ItemFormField = ({
               disabled={disabled}
               {...input}
               value={input.value ?? ""}
-              aria-invalid={invalid(fieldState)}
+              {...errorAria(id, entry.label, fieldState)}
               {...(isYear
                 ? { min: "1900", max: "2099", step: "1" }
                 : field.kind === "number"
@@ -239,7 +239,10 @@ const FieldShell = ({
       </FieldLabel>
       {children}
       {text !== undefined && (
-        <FieldError className="type-footnote text-destructive">
+        <FieldError
+          id={errorId(id)}
+          className="type-footnote text-destructive"
+        >
           {text}
         </FieldError>
       )}
@@ -247,6 +250,23 @@ const FieldShell = ({
   );
 };
 
-/** `aria-invalid` for a field's control: present only while it holds an error. */
-const invalid = (fieldState: { error?: unknown }): true | undefined =>
-  fieldState.error !== undefined || undefined;
+/** The id of the line under a field that says what is wrong with it. */
+const errorId = (id: string) => `${id}-error`;
+
+/**
+ * A control's error state for assistive tech: `aria-invalid` while it holds
+ * an error, and `aria-describedby` naming the line that says why — what
+ * Joy's `FormControl` wired up for its helper text, so the message is read
+ * with the field, not only announced once.
+ */
+const errorAria = (
+  id: string,
+  label: string,
+  fieldState: { error?: { type?: string; message?: string } },
+): { "aria-invalid"?: true; "aria-describedby"?: string } => ({
+  "aria-invalid": fieldState.error !== undefined || undefined,
+  "aria-describedby":
+    fieldErrorText(label, fieldState.error) === undefined
+      ? undefined
+      : errorId(id),
+});
