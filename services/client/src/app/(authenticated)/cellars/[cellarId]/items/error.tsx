@@ -6,10 +6,15 @@ import { MdRefresh, MdWarning } from "react-icons/md";
 
 interface ErrorProps {
   error: Error & { digest?: string };
-  reset: () => void;
+  /**
+   * Next 16's `retry` re-fetches the segment's server components; the
+   * `reset` this used re-rendered only the client tree, so a server-side
+   * failure threw again on every tap.
+   */
+  retry: () => void;
 }
 
-export default function CellarItemsError({ error, reset }: ErrorProps) {
+export default function CellarItemsError({ error, retry }: ErrorProps) {
   useEffect(() => {
     // Log the error to an error reporting service
     console.error("Cellar items error:", error);
@@ -34,7 +39,7 @@ export default function CellarItemsError({ error, reset }: ErrorProps) {
         variant="outlined"
         color="neutral"
         startDecorator={<MdRefresh />}
-        onClick={reset}
+        onClick={() => retry()}
         sx={{ alignSelf: "flex-start" }}
       >
         Try again
