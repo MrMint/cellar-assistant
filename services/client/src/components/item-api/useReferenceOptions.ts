@@ -53,6 +53,29 @@ const toPageInfo = (
 };
 
 /**
+ * Whether the reference options are still arriving.
+ *
+ * Not just the two queries' own `fetching`: in the render where the first
+ * page lands, the second-page query has only just been unpaused and does not
+ * report `fetching` yet, so for that render the list looked complete at 100
+ * countries — and Joy's `Select` erased any held country past the hundredth
+ * (`optionsHolding`). A second page that is owed and has neither data nor an
+ * error is still loading.
+ */
+export const referenceFetching = ({
+  fetching,
+  fetchingMore,
+  nextCursor,
+  moreArrived,
+}: {
+  fetching: boolean;
+  fetchingMore: boolean;
+  nextCursor: string | null;
+  moreArrived: boolean;
+}): boolean =>
+  fetching || fetchingMore || (nextCursor !== null && !moreArrived);
+
+/**
  * Every constrained field's allowed values, in as few reads as the API allows.
  *
  * `referenceData` takes one `kind` per call, so the document aliases all ten
@@ -82,7 +105,7 @@ export const useReferenceOptions = () => {
   const countryPage = toPageInfo(data?.country);
   const nextCursor = countryPage.hasNextPage ? countryPage.endCursor : null;
 
-  const [{ data: more, fetching: fetchingMore }] = useQuery({
+  const [{ data: more, fetching: fetchingMore, error: moreError }] = useQuery({
     query: MoreCountriesQuery,
     variables: { after: nextCursor ?? "" },
     pause: nextCursor === null,
@@ -108,7 +131,12 @@ export const useReferenceOptions = () => {
   return {
     optionsFor,
     countries,
-    fetching: fetching || fetchingMore,
+    fetching: referenceFetching({
+      fetching,
+      fetchingMore,
+      nextCursor,
+      moreArrived: more !== undefined || moreError !== undefined,
+    }),
     error,
   };
 };

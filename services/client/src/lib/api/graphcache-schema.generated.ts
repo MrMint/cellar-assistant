@@ -1154,6 +1154,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "UNION",
+        name: "CloseItemOnboardingResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "OBJECT",
         name: "Coffee",
         fields: [
@@ -3666,6 +3678,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "CheckInResult" },
+            },
+          },
+          {
+            name: "closeItemOnboarding",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "CloseItemOnboardingResult" },
             },
           },
           {

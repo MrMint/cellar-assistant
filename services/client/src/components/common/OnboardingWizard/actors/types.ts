@@ -92,3 +92,9 @@ export type UploadItemImageInput = {
 export type UploadItemImageResult = {
   imageId?: string;
 };
+
+/** The session `analyze` opened, closed because an existing item was filed. */
+export type CloseOnboardingInput = {
+  urqlClient: Client;
+  itemOnboardingId: string;
+};

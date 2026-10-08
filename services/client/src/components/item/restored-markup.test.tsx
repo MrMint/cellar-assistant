@@ -471,4 +471,24 @@ describe("ItemForm edit mode keeps the database's required rule (gap #14b)", () 
     ].map((match) => match[1]);
     assert.deepEqual(starred, ["Name"]);
   });
+
+  test("the form opts out of native validation, so N03's own messages show", () => {
+    const html = render(
+      <ItemForm
+        id="s1"
+        type="SAKE"
+        defaultValues={{
+          name: "",
+          description: "",
+          country: "",
+          attributes: {},
+        }}
+        onSavedHref="/sakes/s1"
+      />,
+    );
+    // The inputs carry `required` (Joy's FormControl); without `noValidate`
+    // the browser cancels the submit before react-hook-form ever runs.
+    assert.match(html, /<input[^>]*required/);
+    assert.match(html, /<form[^>]*novalidate/i);
+  });
 });

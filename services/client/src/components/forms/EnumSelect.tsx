@@ -13,7 +13,7 @@ import {
   type FieldPath,
   type FieldValues,
 } from "react-hook-form";
-import type { EnumKey } from "@/hooks/enum-options";
+import { type EnumKey, optionsHolding } from "@/hooks/enum-options";
 import { useEnum } from "@/hooks/useEnum";
 
 interface EnumSelectProps<
@@ -73,11 +73,15 @@ export function EnumSelect<
               field.onChange(value);
             }}
           >
-            {options.map((option) => (
-              <Option key={option.value} value={option.value}>
-                {option.label}
-              </Option>
-            ))}
+            {/* A value held before its option has loaded (a country past the
+                first page) is kept, or Joy would erase it — `optionsHolding`. */}
+            {optionsHolding(enumKey, options, field.value, loading).map(
+              (option) => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ),
+            )}
           </Select>
           {invalid !== undefined && (
             <FormHelperText>

@@ -123,7 +123,10 @@ export const OnboardingItemForm = ({
         maxWidth: theme.breakpoints.values.sm,
       })}
     >
-      <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
+      {/* noValidate: `FormControl required` puts a native `required` on the
+          inputs, and the browser's own check would cancel the submit before
+          react-hook-form runs — so none of N03's messages would ever show. */}
+      <form noValidate onSubmit={handleSubmit(onSubmit, onInvalid)}>
         <Stack spacing={4}>
           {notFilled.length > 0 && (
             <Alert color="neutral" variant="soft">

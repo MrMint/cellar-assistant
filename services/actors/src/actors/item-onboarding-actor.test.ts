@@ -775,6 +775,67 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
   });
 
   /* ------------------------------------------------------------------ */
+  /* closeAsMatched — an existing item was filed instead                 */
+  /* ------------------------------------------------------------------ */
+
+  describe("closeAsMatched (quick-add / +1 bottle of an existing item)", () => {
+    it("closes a read session as MATCHED, idempotently, creating nothing", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const id = randomUUID();
+        const actor = await activate(newOnboardingActor(id, db, provider()));
+        await actor.start(userCtx(owner, "r"), { itemType: "WINE" });
+
+        const closed = await actor.closeAsMatched(userCtx(owner, "r"));
+        expect(closed.status).toBe("MATCHED");
+        expect((await actor.closeAsMatched(userCtx(owner, "r2"))).status).toBe(
+          "MATCHED",
+        );
+        expect((await actor.get(userCtx(owner, "r"))).status).toBe("MATCHED");
+        expect(
+          await db
+            .select({ method: outbox.method })
+            .from(outbox)
+            .where(eq(outbox.status, "pending")),
+        ).toEqual([]);
+      });
+    });
+
+    it("never downgrades a session that confirmed an item of its own", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const id = randomUUID();
+        await (await activate(newOnboardingActor(id, db, provider()))).start(
+          userCtx(owner, "r"),
+          { itemType: "WINE" },
+        );
+        await db.execute(
+          sql`update public.item_onboardings set status = 'CONFIRMED' where id = ${id}::uuid`,
+        );
+        const actor = await activate(newOnboardingActor(id, db));
+        expect((await actor.closeAsMatched(userCtx(owner, "r"))).status).toBe(
+          "CONFIRMED",
+        );
+      });
+    });
+
+    it("a reprocess refreshes the proposal without reopening the session", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const id = randomUUID();
+        const actor = await activate(newOnboardingActor(id, db, provider()));
+        await actor.start(userCtx(owner, "r"), { itemType: "WINE" });
+        await actor.closeAsMatched(userCtx(owner, "r"));
+
+        await expect(
+          actor.reprocess(systemCtx("job-turn"), {}),
+        ).resolves.toMatchObject({ reprocessed: true });
+        expect((await actor.get(userCtx(owner, "r"))).status).toBe("MATCHED");
+      });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
   /* confirm — B2's headline acceptance                                  */
   /* ------------------------------------------------------------------ */
 
@@ -1440,6 +1501,7 @@ describe.skipIf(skip)("ItemOnboardingActor concealment", () => {
     ["get", "NOT_FOUND", (actor, ctx) => actor.get(ctx)],
     ["defaults", "NOT_FOUND", (actor, ctx) => actor.defaults(ctx)],
     ["confirm", "NOT_FOUND", (actor, ctx) => actor.confirm(ctx, {} as never)],
+    ["closeAsMatched", "NOT_FOUND", (actor, ctx) => actor.closeAsMatched(ctx)],
     ["reprocess", "FORBIDDEN", (actor, ctx) => actor.reprocess(ctx)],
   ];
 

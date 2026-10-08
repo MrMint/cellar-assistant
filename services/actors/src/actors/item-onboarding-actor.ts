@@ -702,6 +702,35 @@ export class ItemOnboardingActor
   }
 
   /**
+   * The person filed a bottle of an item the catalogue already held (the
+   * quick-add countdown, or "Is it this one? +1 bottle"), so this session
+   * creates nothing: mark it `MATCHED` rather than leave it `COMPLETED`,
+   * indistinguishable from one somebody walked away from.
+   *
+   * Owner only, like every other method here. Idempotent. A session that has
+   * already `CONFIRMED` an item of its own keeps that status: `confirm`
+   * short-circuits on it, and its item references this row.
+   */
+  async closeAsMatched(ctx: Ctx): Promise<ItemOnboardingDto> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    if (
+      aggregate.row.status === "CONFIRMED" ||
+      aggregate.row.status === "MATCHED"
+    ) {
+      return onboardingRowToDto(aggregate.row);
+    }
+    await this.tx(async (tx) => {
+      await tx
+        .update(itemOnboardings)
+        .set({ status: "MATCHED", updatedAt: new Date() })
+        .where(eq(itemOnboardings.id, this.key));
+    });
+    await this.reload();
+    return onboardingRowToDto(this.requireAggregate().row);
+  }
+
+  /**
    * `system`; called by `OnboardingReprocessJobActor` (C4) to re-run an
    * extraction whose model or prompt has since improved.
    *
@@ -778,11 +807,17 @@ export class ItemOnboardingActor
       throw error;
     }
 
+    // A re-read refreshes the proposal; it does not reopen a session that
+    // has already ended in an item (`CONFIRMED`) or in an existing one
+    // (`MATCHED`).
+    const closed =
+      aggregate.row.status === "CONFIRMED" ||
+      aggregate.row.status === "MATCHED";
     await this.tx(async (tx) => {
       await tx
         .update(itemOnboardings)
         .set({
-          status: "COMPLETED",
+          status: closed ? aggregate.row.status : "COMPLETED",
           defaults: result.defaults,
           rawDefaults: result.raw,
           aiModel: result.model,

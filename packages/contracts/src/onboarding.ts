@@ -35,12 +35,21 @@ import type { ItemRef, ItemType } from "./items.ts";
  * default and `COMPLETED` is what `getItemDefaults` writes today; `CONFIRMED`
  * and `FAILED` are B2's additions, for the two states the old flow had nowhere
  * to record.
+ *
+ * `MATCHED` (N02/N19 follow-up): the person filed a bottle of an item the
+ * catalogue already held — the 15 s quick-add or "Is it this one? +1
+ * bottle" — so the session closed without creating anything. Distinct from
+ * `CONFIRMED`, which means *this* onboarding created an item (and which
+ * `confirm` short-circuits on, answering with this session's derived item
+ * id); without it, every quick-add left a `COMPLETED` row behind that looked
+ * exactly like a session someone walked away from.
  */
 export const ONBOARDING_STATUSES = [
   "START",
   "COMPLETED",
   "CONFIRMED",
   "FAILED",
+  "MATCHED",
 ] as const;
 export type OnboardingStatus = (typeof ONBOARDING_STATUSES)[number];
 
@@ -153,6 +162,12 @@ export type ItemOnboardingActorInterface = {
     ctx: Ctx,
     input: ConfirmOnboardingInput,
   ): Promise<ConfirmOnboardingResult>;
+  /**
+   * Close the session as `MATCHED`: the person filed an existing catalogue
+   * item instead of creating one. Idempotent, and never a downgrade — a
+   * session that already `CONFIRMED` an item of its own stays `CONFIRMED`.
+   */
+  closeAsMatched(ctx: Ctx): Promise<ItemOnboardingDto>;
 };
 
 /**
@@ -178,6 +193,8 @@ export const ItemOnboardingActorDescriptor: ActorDescriptor<
     defaults: {},
     // Enqueues the new item's `regenerateVector` (an embedding).
     confirm: { modelBacked: true },
+    // One status write; no model, no outbox.
+    closeAsMatched: {},
   },
   internalMethods: {
     // A vision call per row, from `OnboardingReprocessJobActor`; "over a
