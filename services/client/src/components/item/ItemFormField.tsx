@@ -239,10 +239,7 @@ const FieldShell = ({
       </FieldLabel>
       {children}
       {text !== undefined && (
-        <FieldError
-          id={errorId(id)}
-          className="type-footnote text-destructive"
-        >
+        <FieldError id={errorId(id)} className="type-footnote text-destructive">
           {text}
         </FieldError>
       )}
