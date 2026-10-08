@@ -367,25 +367,26 @@ const unclassified = (target: GraphQLSchema): string[] =>
   );
 
 describe("update mutations: per-field patch policy", () => {
-  it.each(
-    FIELDS,
-  )("%s.%s is %s", async (name, field, policy, literal, value) => {
-    expect(await sent(name, "{}")).toEqual({});
-    const onNull = await run(name, `{ ${field}: null }`);
-    if (policy === "reject") {
-      expect(onNull.typename).toBe("ValidationError");
-      expect(onNull.sent, "a refused null must not reach the actor").toBe(
-        undefined,
-      );
-    } else {
-      expect(onNull.sent).toEqual(
-        policy === "clearable" ? { [field]: null } : {},
-      );
-    }
-    expect(await sent(name, `{ ${field}: ${literal} }`)).toEqual({
-      [field]: value,
-    });
-  });
+  it.each(FIELDS)(
+    "%s.%s is %s",
+    async (name, field, policy, literal, value) => {
+      expect(await sent(name, "{}")).toEqual({});
+      const onNull = await run(name, `{ ${field}: null }`);
+      if (policy === "reject") {
+        expect(onNull.typename).toBe("ValidationError");
+        expect(onNull.sent, "a refused null must not reach the actor").toBe(
+          undefined,
+        );
+      } else {
+        expect(onNull.sent).toEqual(
+          policy === "clearable" ? { [field]: null } : {},
+        );
+      }
+      expect(await sent(name, `{ ${field}: ${literal} }`)).toEqual({
+        [field]: value,
+      });
+    },
+  );
 
   it("covers every nullable field of every pinned mutation's input", () => {
     for (const name of Object.keys(MUTATIONS)) {

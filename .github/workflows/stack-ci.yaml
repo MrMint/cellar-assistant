@@ -138,7 +138,7 @@ concurrency:
 # package.json rather than leaving a comment asking someone to remember.
 env:
   BUN_VERSION: "1.4.2"
-  BIOME_VERSION: "2.5.3"
+  BIOME_VERSION: "2.5.15"
 
 jobs:
   check:
@@ -193,7 +193,7 @@ jobs:
           - project: services/actors
             also_install: --filter "./services/client"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Node is NOT vestigial here, and this step is NOT a leftover from before
       # the bun migration. Every test suite in this matrix except one runs on
@@ -211,7 +211,7 @@ jobs:
       #    goes green on the wrong runtime. Dropping setup-node would not break
       #    the schema leg; it would quietly move it to bun, and the same is true
       #    of `migrate:users` / `migrate:files` / `db:seed` wherever they run.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
 
@@ -267,7 +267,7 @@ jobs:
       # were ~1 GB per PR across the seven legs, evicting `main`'s entries.
       - name: Restore bun's module cache
         id: bun-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.bun/install/cache
           # `+reads` when the leg also installs another workspace's closure
@@ -298,7 +298,7 @@ jobs:
 
       - name: Save bun's module cache
         if: github.event_name == 'push' && steps.bun-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
@@ -436,7 +436,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # No setup-node here on purpose, and unlike the matrix job above that is
       # NOT load-bearing in reverse: biome's npm entry point is a
@@ -482,7 +482,7 @@ jobs:
   compose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Validate compose file
         run: docker compose -f infra/docker-compose.yml config --quiet
@@ -542,12 +542,12 @@ jobs:
           - app: actors
             dockerfile: services/actors/Dockerfile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build the ${{ matrix.app }} image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}

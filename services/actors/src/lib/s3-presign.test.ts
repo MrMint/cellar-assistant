@@ -214,15 +214,18 @@ describe("presignedPutUrl signs for the host the browser must address", () => {
       "https://files.example.com:8443",
     ],
     [{ FILES_S3_ENDPOINT: "loki.lan", FILES_S3_PORT: "80" }, "http://loki.lan"],
-  ])("signedOrigin(%o) === the URL's own origin (%s)", async (environment, expected) => {
-    const config = filesS3Config(environment);
-    expect(signedOrigin(config)).toBe(expected);
-    // `signedOrigin` is what the deploy docs and `.env.prod.example` quote;
-    // this keeps it honest against what is actually signed.
-    expect(new URL(await presignedPutUrl(config, KEY, 900)).origin).toBe(
-      expected,
-    );
-  });
+  ])(
+    "signedOrigin(%o) === the URL's own origin (%s)",
+    async (environment, expected) => {
+      const config = filesS3Config(environment);
+      expect(signedOrigin(config)).toBe(expected);
+      // `signedOrigin` is what the deploy docs and `.env.prod.example` quote;
+      // this keeps it honest against what is actually signed.
+      expect(new URL(await presignedPutUrl(config, KEY, 900)).origin).toBe(
+        expected,
+      );
+    },
+  );
 });
 
 /**

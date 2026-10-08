@@ -126,13 +126,13 @@ concurrency:
 # rather than leaving a comment asking someone to remember.
 env:
   BUN_VERSION: "1.4.2"
-  BIOME_VERSION: "2.5.3"
+  BIOME_VERSION: "2.5.15"
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Node is NOT vestigial here, and this step is NOT a leftover from before
       # the bun migration. Bun runs the installs and the unit tests now, but on
@@ -150,7 +150,7 @@ jobs:
       #    (`process.versions.bun` set, `execPath` the bun binary) and the step
       #    goes green on the wrong runtime. Dropping setup-node would not break
       #    a leg; it would quietly move it to bun with every gate still green.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
 
@@ -208,7 +208,7 @@ jobs:
       # ones every PR restores from.
       - name: Restore bun's module cache
         id: bun-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.bun/install/cache
           key: bun-cache-${{ runner.os }}-client-${{ hashFiles('bun.lock') }}
@@ -259,7 +259,7 @@ jobs:
       # on `main` still leaves the cache warm for the PR that fixes it.
       - name: Save bun's module cache
         if: github.event_name == 'push' && steps.bun-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
@@ -355,12 +355,12 @@ jobs:
   image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build the client image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: services/client/Dockerfile

@@ -12,16 +12,16 @@
       "packages/*"
     ],
     "catalog": {
-      "@types/node": "25.9.5",
-      "@types/pg": "8.15.6",
+      "@types/node": "25.9.9",
+      "@types/pg": "8.23.1",
       "drizzle-kit": "1.0.0-rc.4",
       "drizzle-orm": "1.0.0-rc.4",
-      "gql.tada": "1.11.2",
-      "graphql": "16.14.2",
-      "jose": "6.2.3",
-      "pg": "8.16.3",
+      "gql.tada": "1.11.4",
+      "graphql": "17.0.2",
+      "jose": "6.2.12",
+      "pg": "8.23.1",
       "typescript": "6.0.3",
-      "vitest": "5.0.0"
+      "vitest": "5.0.3"
     }
   },
   "trustedDependencies": [
@@ -72,7 +72,7 @@
   },
   "packageManager": "bun@1.4.2",
   "devDependencies": {
-    "@biomejs/biome": "2.5.3",
-    "turbo": "^2.10.12"
+    "@biomejs/biome": "2.5.15",
+    "turbo": "^2.11.7"
   }
 }

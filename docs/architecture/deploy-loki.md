@@ -1259,11 +1259,18 @@ Stated plainly, because the difference matters when something fails at 2am.
 
 `otel-lgtm` is Grafana, Loki, Prometheus, Tempo, Pyroscope and an OpenTelemetry
 collector in one container. Both compose files pin it to
-`grafana/otel-lgtm:0.32.1` (Grafana 13.2.0, Loki 3.7.7, Prometheus 3.14.0,
+`grafana/otel-lgtm:0.35.0` (Grafana 13.2.2, Loki 3.7.8, Prometheus 3.15.0,
 Tempo 3.0.3); `OTEL_LGTM_IMAGE` in `infra/.env.prod` still overrides it, with
 the caveat in §9.5.
 
-Everything below was measured on 2026-09-27 against that image, in two places:
+The 0.35.0 bump (2026-10-05) ran §9.5's checklist and nothing more: upstream
+`prometheus.yaml`, the Grafana provisioning tree and `run-grafana.sh` are
+byte-identical to 0.32.1's; every retention flag is still listed in its
+server's `-help`; and the image's own healthcheck now also waits for the
+stack's ready file. It did not re-run the measurements below.
+
+Everything below was measured on 2026-09-27 against the previous pin,
+`0.32.1` (Grafana 13.2.0, Loki 3.7.7, Prometheus 3.14.0), in two places:
 the shared `cellar-stack` lane (compose files as committed in `cc489371`,
 provisioning as in `82481bc5` and `76c32d6a`; `otel-lgtm` mounts only
 `infra/grafana/**`, so no other agent's working-tree edits were in play), and a

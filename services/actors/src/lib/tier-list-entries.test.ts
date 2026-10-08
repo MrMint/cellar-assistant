@@ -235,40 +235,46 @@ describe.skipIf(skip)("resolveTierListEntries (B7b)", () => {
     });
   });
 
-  it.each(
-    ITEM_TYPES,
-  )("describes a %s with every attribute its vocabulary declares", async (type) => {
-    await withTestDb(async (db) => {
-      const owner = await seedUser(db);
-      const { id, values } = await seedItem(db, type, owner, `zzz-b7b ${type}`);
-      const entry = (await resolveTierListEntries(db, [{ type, id }])).get(
-        entryKey({ type, id }),
-      );
+  it.each(ITEM_TYPES)(
+    "describes a %s with every attribute its vocabulary declares",
+    async (type) => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const { id, values } = await seedItem(
+          db,
+          type,
+          owner,
+          `zzz-b7b ${type}`,
+        );
+        const entry = (await resolveTierListEntries(db, [{ type, id }])).get(
+          entryKey({ type, id }),
+        );
 
-      expect(entry?.name).toBe(`zzz-b7b ${type}`);
+        expect(entry?.name).toBe(`zzz-b7b ${type}`);
 
-      // The domain, taken from the map rather than copied: every constrained
-      // field except `country`, which is folded into `location` instead of
-      // being repeated as an attribute.
-      const expected = CONSTRAINED_ITEM_ATTRIBUTES[type]
-        .filter((attribute) => attribute.field !== "country")
-        .map((attribute) => ({
-          label: attribute.field,
-          value: values[attribute.field] ?? "",
-        }));
-      expect(entry?.attributes).toEqual(expected);
+        // The domain, taken from the map rather than copied: every constrained
+        // field except `country`, which is folded into `location` instead of
+        // being repeated as an attribute.
+        const expected = CONSTRAINED_ITEM_ATTRIBUTES[type]
+          .filter((attribute) => attribute.field !== "country")
+          .map((attribute) => ({
+            label: attribute.field,
+            value: values[attribute.field] ?? "",
+          }));
+        expect(entry?.attributes).toEqual(expected);
 
-      // `country` is not lost — it is the tail of the location string.
-      expect(entry?.location).toContain(values.country ?? "");
-      const region = EXTRA_COLUMNS[type].region;
-      if (region !== undefined) expect(entry?.location).toContain(region);
+        // `country` is not lost — it is the tail of the location string.
+        expect(entry?.location).toContain(values.country ?? "");
+        const region = EXTRA_COLUMNS[type].region;
+        if (region !== undefined) expect(entry?.location).toContain(region);
 
-      // Items carry no crowd consensus in this schema, and saying so is the
-      // point: `check_ins` are personal scores, not a public rating.
-      expect(entry?.publicRating).toBeNull();
-      expect(entry?.priceLevel).toBeNull();
-    });
-  });
+        // Items carry no crowd consensus in this schema, and saying so is the
+        // point: `check_ins` are personal scores, not a public rating.
+        expect(entry?.publicRating).toBeNull();
+        expect(entry?.priceLevel).toBeNull();
+      });
+    },
+  );
 
   it("batches by type — a mixed list resolves in one pass", async () => {
     await withTestDb(async (db) => {

@@ -708,43 +708,43 @@ describe("in-process wiring", () => {
       },
     ];
 
-    it.each(cases)("fires once for $reason, and never ships the token", async ({
-      reason,
-      severity,
-      token,
-      setup,
-      extra,
-    }) => {
-      serveJwks();
-      setup?.();
-      const bearer = await token();
-      const yoga = yogaVerifying();
+    it.each(cases)(
+      "fires once for $reason, and never ships the token",
+      async ({ reason, severity, token, setup, extra }) => {
+        serveJwks();
+        setup?.();
+        const bearer = await token();
+        const yoga = yogaVerifying();
 
-      const { status, body } = await post(
-        yoga,
-        { query: "{ __typename }" },
-        { authorization: `Bearer ${bearer}`, "x-request-id": `req-${reason}` },
-      );
+        const { status, body } = await post(
+          yoga,
+          { query: "{ __typename }" },
+          {
+            authorization: `Bearer ${bearer}`,
+            "x-request-id": `req-${reason}`,
+          },
+        );
 
-      // The key set being unreachable is our outage, not a bad token: a 503
-      // the client can retry, rather than the 401 that signs it out
-      // (`context.ts`, `authUnavailable`).
-      const outage = reason === "jwks_unavailable";
-      expect(status).toBe(outage ? 503 : 401);
-      expect(body.errors?.[0]?.extensions?.code).toBe(
-        outage ? "AUTH_UNAVAILABLE" : "UNAUTHENTICATED",
-      );
-      const events = named("auth.token_rejected");
-      expect(events).toHaveLength(1);
-      expect(events[0]?.severity).toBe(severity);
-      expect(events[0]?.attributes).toMatchObject({
-        "request.id": `req-${reason}`,
-        "auth.reason": reason,
-        ...extra,
-      });
-      expect(shipped()).not.toContain(bearer);
-      expect(shipped()).not.toContain("alice@example.com");
-    });
+        // The key set being unreachable is our outage, not a bad token: a 503
+        // the client can retry, rather than the 401 that signs it out
+        // (`context.ts`, `authUnavailable`).
+        const outage = reason === "jwks_unavailable";
+        expect(status).toBe(outage ? 503 : 401);
+        expect(body.errors?.[0]?.extensions?.code).toBe(
+          outage ? "AUTH_UNAVAILABLE" : "UNAUTHENTICATED",
+        );
+        const events = named("auth.token_rejected");
+        expect(events).toHaveLength(1);
+        expect(events[0]?.severity).toBe(severity);
+        expect(events[0]?.attributes).toMatchObject({
+          "request.id": `req-${reason}`,
+          "auth.reason": reason,
+          ...extra,
+        });
+        expect(shipped()).not.toContain(bearer);
+        expect(shipped()).not.toContain("alice@example.com");
+      },
+    );
 
     it("stays silent for a request with no token, which is anonymous, not rejected", async () => {
       serveJwks();

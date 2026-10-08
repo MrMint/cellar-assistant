@@ -111,7 +111,7 @@ x-node-app: &node-app
   restart: unless-stopped
 
 x-daprd: &daprd
-  image: daprio/daprd:1.18.3
+  image: daprio/daprd:1.18.4
   # Each sidecar is a normal container on the compose network rather than
   # sharing its app's network namespace. `network_mode: "service:<app>"` also
   # works, but then restarting the app tears down the namespace the sidecar is
@@ -290,7 +290,7 @@ services:
   # moved out of the actor state store into this service in Dapr 1.15, which is
   # why it is not optional here even though no state store is declared.
   placement:
-    image: daprio/placement:1.18.3
+    image: daprio/placement:1.18.4
     command:
       - "/placement"
       - "--port=50005"
@@ -299,7 +299,7 @@ services:
     restart: unless-stopped
 
   scheduler:
-    image: daprio/scheduler:1.18.3
+    image: daprio/scheduler:1.18.4
     user: "0:0"
     command:
       - "/scheduler"
@@ -767,7 +767,12 @@ services:
   # and its Prometheus scrapes the Dapr runtime's own metrics (see the
   # prometheus.yaml mount below).
   otel-lgtm:
-    # PINNED, to the exact build this lane had been running. Resolved
+    # PINNED — now to 0.35.0 (Grafana 13.2.2, Loki 3.7.8, Prometheus 3.15.0,
+    # Tempo 3.0.3), bumped 2026-10-05 through the checklist below
+    # (deploy-loki.md §9.5). Why it is pinned at all is the history that
+    # follows, written about the previous pin, 0.32.1.
+    #
+    # The first pin was the exact build this lane had been running. Resolved
     # 2026-09-27, not guessed: the running container's image carried
     # `org.opencontainers.image.version=0.32.1`, and
     # `docker buildx imagetools inspect grafana/otel-lgtm:0.32.1` returns the
@@ -782,7 +787,7 @@ services:
     # ./grafana/otel-lgtm/prometheus.yaml from the NEW image (that file's
     # header says how). The retention flags below are CLI flags of the bundled
     # servers and are worth re-checking against the new versions' `-help`.
-    image: grafana/otel-lgtm:0.32.1
+    image: grafana/otel-lgtm:0.35.0
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${GRAFANA_PORT:-3010}:3000"
     volumes:

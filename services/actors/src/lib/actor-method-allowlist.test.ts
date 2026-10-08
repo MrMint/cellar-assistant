@@ -418,7 +418,7 @@ describe("the middleware, in front of a stand-in for the SDK's routes", () => {
       next();
     });
     app.use(express.json());
-    app.all("/actors/*", (req, res) => {
+    app.all("/actors/{*splat}", (req, res) => {
       reached.push(`sdk ${req.method} ${req.path}`);
       res.status(200).json({ ok: true });
     });

@@ -88,17 +88,20 @@ describe("actor error envelope (A7b, §8.3)", () => {
     "/ACTORS/CellarActor/c-1/method/rename",
     "/Actors/CellarActor/c-1/METHOD/rename",
     "/actors/CellarActor/c-1/method/rename/",
-  ])("sanitises %s too: any spelling Express 4 could route to the method handler", (path) => {
-    const { req, res, sent } = harness(path);
-    shapeActorErrors(req, res);
-    res.send(
-      Object.assign(new Error("select secret"), {
-        detail: "Key (owner)=(u-1)",
-      }) as never,
-    );
-    expect(sent.status).toBe(500);
-    expect(JSON.parse(sent.body as string)).toEqual(OPAQUE_ERROR_BODY);
-  });
+  ])(
+    "sanitises %s too: any spelling Express 4 could route to the method handler",
+    (path) => {
+      const { req, res, sent } = harness(path);
+      shapeActorErrors(req, res);
+      res.send(
+        Object.assign(new Error("select secret"), {
+          detail: "Key (owner)=(u-1)",
+        }) as never,
+      );
+      expect(sent.status).toBe(500);
+      expect(JSON.parse(sent.body as string)).toEqual(OPAQUE_ERROR_BODY);
+    },
+  );
 
   it("keeps the message, which JSON.stringify(error) silently dropped", () => {
     // The bug this replaces: `message` is non-enumerable on `Error`, so the

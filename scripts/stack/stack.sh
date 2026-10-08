@@ -571,7 +571,7 @@ require_daprd() {
   (it does NOT need \`dapr init\`'s shared control plane — placement and
   scheduler are per-stack containers). Install the binaries only:
 
-      dapr init --slim --runtime-version 1.18.3
+      dapr init --slim --runtime-version 1.18.4
 
   That writes daprd/placement/scheduler to ~/.dapr/bin and starts nothing."
 }
@@ -1493,7 +1493,7 @@ doctor_dapr() {
     fi
   else
     d_fail "no daprd binary at $DAPRD_BIN — this lane runs the sidecars as host processes"
-    d_hint "dapr init --slim --runtime-version ${want:-1.18.3}   (installs binaries, starts nothing)"
+    d_hint "dapr init --slim --runtime-version ${want:-1.18.4}   (installs binaries, starts nothing)"
   fi
   if command -v dapr >/dev/null 2>&1; then
     d_ok "dapr CLI $(dapr --version 2>/dev/null | sed -n 's/CLI version: *//p' | tr -d ' \r') (runs the Multi-App Run file)"
@@ -2522,7 +2522,7 @@ cmd_doctor() {
       local want
       want="$(sed -n 's|.*image:[[:space:]]*daprio/daprd:\([0-9.]*\).*|\1|p' "$COMPOSE_BASE" | head -1)"
       say "installing the Dapr slim binaries (starts nothing)"
-      dapr init --slim --runtime-version "${want:-1.18.3}" || warn "dapr init --slim failed"
+      dapr init --slim --runtime-version "${want:-1.18.4}" || warn "dapr init --slim failed"
     fi
   fi
   doctor_run "$fix"

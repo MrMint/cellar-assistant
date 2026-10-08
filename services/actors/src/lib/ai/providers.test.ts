@@ -784,16 +784,17 @@ describe("default model ids", () => {
     }),
   };
 
-  it.each(
-    Object.entries(defaults),
-  )("%s defaults to no retired chat or embedding model", (_name, config) => {
-    if (!("models" in config)) throw new Error("expected a paid provider");
-    const used = [...Object.values(config.models), config.embeddingModel];
-    expect(used.filter(isRetired)).toEqual([]);
-    // And the defaults really are the shared constant, so the check above
-    // and the one below cannot pass on two different lists.
-    expect(config.models).toEqual(GEMINI_CHAT_MODELS);
-  });
+  it.each(Object.entries(defaults))(
+    "%s defaults to no retired chat or embedding model",
+    (_name, config) => {
+      if (!("models" in config)) throw new Error("expected a paid provider");
+      const used = [...Object.values(config.models), config.embeddingModel];
+      expect(used.filter(isRetired)).toEqual([]);
+      // And the defaults really are the shared constant, so the check above
+      // and the one below cannot pass on two different lists.
+      expect(config.models).toEqual(GEMINI_CHAT_MODELS);
+    },
+  );
 
   it("knows a retired id when it sees one", () => {
     expect(isRetired("gemini-2.5-flash")).toBe(true);

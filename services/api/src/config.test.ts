@@ -116,18 +116,18 @@ describe("auth identity coherence", () => {
     ).toThrow(/AUTH_ISSUER must be set explicitly in production/);
   });
 
-  it.each([
-    "http://cellar.example.com",
-    "https://localhost:3002",
-  ])("throws in production for a non-public issuer (%s)", (issuer) => {
-    expect(() =>
-      assertAuthIdentityCoherence({
-        NODE_ENV: "production",
-        AUTH_ISSUER: issuer,
-        AUTH_JWKS_URL: "http://actors:3002/api/auth/jwks",
-      }),
-    ).toThrow(/must be a public https origin in production/);
-  });
+  it.each(["http://cellar.example.com", "https://localhost:3002"])(
+    "throws in production for a non-public issuer (%s)",
+    (issuer) => {
+      expect(() =>
+        assertAuthIdentityCoherence({
+          NODE_ENV: "production",
+          AUTH_ISSUER: issuer,
+          AUTH_JWKS_URL: "http://actors:3002/api/auth/jwks",
+        }),
+      ).toThrow(/must be a public https origin in production/);
+    },
+  );
 
   it("throws in production when AUTH_JWKS_URL would point the container at itself", () => {
     expect(() =>

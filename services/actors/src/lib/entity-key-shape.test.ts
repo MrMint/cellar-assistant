@@ -161,28 +161,24 @@ describe.skipIf(skip)(
       })),
     );
 
-    it.each(
-      rows.filter(({ Actor, key }) => !Actor.keyShape(key)),
-    )("$name($label): rejected by its shape, activates without SQL, refuses every turn", async ({
-      Actor,
-      key,
-    }) => {
-      const actor = await activate(construct(Actor, key, untouchable));
-      await expect(actor.onActorMethodPre()).rejects.toBeInstanceOf(
-        NotFoundError,
-      );
-    });
+    it.each(rows.filter(({ Actor, key }) => !Actor.keyShape(key)))(
+      "$name($label): rejected by its shape, activates without SQL, refuses every turn",
+      async ({ Actor, key }) => {
+        const actor = await activate(construct(Actor, key, untouchable));
+        await expect(actor.onActorMethodPre()).rejects.toBeInstanceOf(
+          NotFoundError,
+        );
+      },
+    );
 
-    it.each(
-      rows.filter(({ Actor, key }) => Actor.keyShape(key)),
-    )("$name($label): accepted by its shape, and Postgres accepts it too", async ({
-      Actor,
-      key,
-    }) => {
-      await withTestDb(async (db) => {
-        const actor = await activate(construct(Actor, key, db));
-        await actor.onActorMethodPre();
-      });
-    });
+    it.each(rows.filter(({ Actor, key }) => Actor.keyShape(key)))(
+      "$name($label): accepted by its shape, and Postgres accepts it too",
+      async ({ Actor, key }) => {
+        await withTestDb(async (db) => {
+          const actor = await activate(construct(Actor, key, db));
+          await actor.onActorMethodPre();
+        });
+      },
+    );
   },
 );
