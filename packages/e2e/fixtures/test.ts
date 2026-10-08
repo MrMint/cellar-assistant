@@ -36,8 +36,6 @@ const IGNORED = [
   /\[Fast Refresh\]/,
   /Download the React DevTools/,
   /webpack-hmr|__nextjs/,
-  // Joy UI's SSR/hydration warnings about `sx` are pre-existing and unrelated.
-  /MUI: The `sx` prop/,
   // maplibre asks for a WebGL context the headless shell may not grant.
   /WebGL|webgl/i,
   // Service worker registration is disabled in dev.

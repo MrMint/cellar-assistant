@@ -152,7 +152,7 @@ function measure(page: Page) {
     ].join(",");
     for (const el of document.querySelectorAll(selector)) {
       if (!shown(el) || exempt(el)) continue;
-      // A native input Joy stretches invisibly over its own control has the
+      // A native input stretched invisibly over its own control has the
       // control's edges; one hidden by opacity alone is not content.
       if (getComputedStyle(el).opacity === "0") continue;
       // An icon-only button is measured by its glyph, not its hit area: the

@@ -94,7 +94,7 @@ test("a cellar's privacy can be changed to PRIVATE", async ({
   await primary.goto("/cellars/add");
   await primary.getByLabel("Name").fill(name);
 
-  // Joy's Select is a listbox, not a native <select>.
+  // The Privacy select is a listbox (Radix Select), not a native <select>.
   await primary.getByRole("combobox", { name: "Privacy" }).click();
   await primary.getByRole("option", { name: /^private$/i }).click();
 
