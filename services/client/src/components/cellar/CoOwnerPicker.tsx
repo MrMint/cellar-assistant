@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCommandState } from "cmdk";
+import { type ReactNode, useState } from "react";
 import { Check, ChevronDown } from "@/components/app/icons";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import {
@@ -130,8 +131,7 @@ export function CoOwnerPicker({
       >
         <Command filter={matchFriendName}>
           <CommandInput placeholder="Search friends" />
-          <CommandList aria-label="Co-Owners">
-            <CommandEmpty>No friends found.</CommandEmpty>
+          <FriendOptions>
             <CommandGroup>
               {friends.map((friend) => {
                 const selected = value.includes(friend.id);
@@ -164,9 +164,28 @@ export function CoOwnerPicker({
                 );
               })}
             </CommandGroup>
-          </CommandList>
+          </FriendOptions>
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * The listbox, hidden while nothing matches. cmdk keeps an empty `listbox`
+ * in the tree when the search (or a friendless viewer) leaves no option, and
+ * a listbox that owns no option is axe's `aria-required-children` (serious) —
+ * measured on the lane by searching "zzzz". "No friends found." sits beside
+ * it, inside the `Command`, which is all cmdk's `Empty` needs.
+ */
+function FriendOptions({ children }: { children: ReactNode }) {
+  const empty = useCommandState((state) => state.filtered.count === 0);
+  return (
+    <>
+      <CommandEmpty>No friends found.</CommandEmpty>
+      <CommandList aria-label="Co-Owners" hidden={empty}>
+        {children}
+      </CommandList>
+    </>
   );
 }
