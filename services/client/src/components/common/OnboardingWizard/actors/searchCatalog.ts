@@ -1,5 +1,8 @@
 import { fromPromise } from "xstate";
-import { itemCardFromFragment } from "@/components/item/ItemCard/adapter";
+import {
+  itemCardFromFragment,
+  primaryBrandName,
+} from "@/components/item/ItemCard/adapter";
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
@@ -20,7 +23,8 @@ import type { SearchCatalogInput } from "./types";
  *
  * `itemSearch(text:, itemTypes:)` over the name as read, then
  * `findCatalogMatch` — same type, explicit vintage compare, the person's
- * earlier "no" excluded. Like the other searches, anything that is not a hit
+ * earlier "no" excluded, the item's brand carried so a same-name bottle from
+ * another producer is never counted down. Like the other searches, anything that is not a hit
  * (nothing read, no AI provider, a refusal) resolves `null`: the wizard goes
  * on to the form, as it did before this step existed.
  */
@@ -58,12 +62,16 @@ export const searchCatalog = fromPromise(
       values: defaults.values,
       brandName: defaults.brandName,
       excludeItemIds,
-      candidates: result.data.edges.map(({ node }) => ({
-        item: itemCardFromFragment(node.item),
-        type: readFragment(ItemCardFragment, node.item).type,
-        source: "search" as const,
-        distance: node.distance,
-      })),
+      candidates: result.data.edges.map(({ node }) => {
+        const card = readFragment(ItemCardFragment, node.item);
+        return {
+          item: itemCardFromFragment(node.item),
+          type: card.type,
+          source: "search" as const,
+          distance: node.distance,
+          brandName: primaryBrandName(card),
+        };
+      }),
     });
   },
 );

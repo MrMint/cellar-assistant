@@ -19,9 +19,12 @@
  * `exact` is the stronger claim the 15 s quick-add needs (`canQuickAdd`): a
  * barcode hit (the code names the product) or a search hit whose name is the
  * name read, letter for letter once case, accents and punctuation are set
- * aside. A semantic neighbour that is merely close is offered with a button
- * the person taps (D25: the AI never adds anything without a tap) — never
- * counted down.
+ * aside, **and whose brand does not contradict the read** — names repeat
+ * across producers ("Reserve Cabernet Sauvignon", "Ethiopia Yirgacheffe"), so
+ * a same-name hit filed under a brand the label did not name is only offered.
+ * A semantic neighbour that is merely close is offered with a button the
+ * person taps (D25: the AI never adds anything without a tap) — never counted
+ * down.
  */
 
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -33,10 +36,12 @@ export type CatalogCandidate = ExistingItem & {
   source: "barcode" | "search";
   /** Cosine distance from `itemSearch`; lower is closer. Search hits only. */
   distance?: number;
+  /** The catalogue item's (primary) brand, when it has one. */
+  brandName?: string;
 };
 
 export type CatalogMatch = CatalogCandidate & {
-  /** A barcode hit, or a search hit with the very name read. */
+  /** A barcode hit, or a search hit with the very name (and brand) read. */
   exact: boolean;
 };
 
@@ -107,6 +112,31 @@ const sameName = (
 };
 
 /**
+ * Whether a candidate's brand is consistent with the read: it has none, or it
+ * is the brand read, or the name read carries it as whole words. A brand the
+ * label did not name is a different producer's bottle as far as an
+ * unattended add is concerned.
+ */
+const brandAgrees = (
+  candidateBrand: string | undefined,
+  read: { name: string; brandName: string },
+): boolean => {
+  const brand = normalizeName(candidateBrand ?? "");
+  if (brand === "") return true;
+  if (normalizeName(read.brandName) === brand) return true;
+  return ` ${normalizeName(read.name)} `.includes(` ${brand} `);
+};
+
+/** A barcode hit, or a search hit with the very name — and brand — read. */
+const isExact = (
+  candidate: CatalogCandidate,
+  read: { name: string; brandName: string },
+): boolean =>
+  candidate.source === "barcode" ||
+  (sameName(candidate.item.name, read) &&
+    brandAgrees(candidate.brandName, read));
+
+/**
  * The text `itemSearch` is asked for: the name as read, with the brand in
  * front when the name does not already carry it. `null` when nothing was read
  * — searching for an empty string would only return the catalogue's nearest
@@ -166,12 +196,7 @@ export const findCatalogMatch = ({
   ];
   const read = { name: values.name, brandName };
   // An exact one anywhere in the list beats a nearer near-miss.
-  const best =
-    ranked.find((c) => c.source === "barcode" || sameName(c.item.name, read)) ??
-    ranked[0];
+  const best = ranked.find((c) => isExact(c, read)) ?? ranked[0];
   if (best === undefined) return null;
-  return {
-    ...best,
-    exact: best.source === "barcode" || sameName(best.item.name, read),
-  };
+  return { ...best, exact: isExact(best, read) };
 };

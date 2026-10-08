@@ -128,6 +128,85 @@ describe("findCatalogMatch (N19)", () => {
     assert.equal(found?.exact, true);
   });
 
+  test("a same-name hit filed under another producer is offered, not exact", () => {
+    // Names repeat across producers; the countdown must not file the wrong one.
+    const found = match(
+      "WINE",
+      wine("Reserve Cabernet Sauvignon", "2018"),
+      [
+        candidate("other", "Reserve Cabernet Sauvignon", "2018", {
+          brandName: "Other Estate",
+        }),
+      ],
+      [],
+      "Jordan",
+    );
+    assert.equal(found?.item.itemId, "other");
+    assert.equal(found?.exact, false);
+    assert.equal(
+      match("WINE", wine("Reserve Cabernet Sauvignon", "2018"), [
+        candidate("other", "Reserve Cabernet Sauvignon", "2018", {
+          brandName: "Other Estate",
+        }),
+      ])?.exact,
+      false,
+      "nor when the label named no brand at all",
+    );
+  });
+
+  test("the item's brand, read as the brand or inside the name, is exact", () => {
+    assert.equal(
+      match(
+        "WINE",
+        wine("Reserve Cabernet Sauvignon", "2018"),
+        [
+          candidate("j", "Reserve Cabernet Sauvignon", "2018", {
+            brandName: "Jordan",
+          }),
+        ],
+        [],
+        "JORDAN",
+      )?.exact,
+      true,
+    );
+    assert.equal(
+      match("WINE", read, [
+        candidate("m", "Château Margaux", "2015", {
+          brandName: "Chateau Margaux",
+        }),
+      ])?.exact,
+      true,
+    );
+    assert.equal(
+      match("WINE", wine("Margaux Reserve", "2015"), [
+        candidate("m", "Margaux Reserve", "2015", { brandName: "Margaux R" }),
+      ])?.exact,
+      false,
+      "whole words only",
+    );
+  });
+
+  test("an exact hit further down beats a nearer brand clash", () => {
+    const found = match(
+      "WINE",
+      wine("Reserve Cabernet Sauvignon", "2018"),
+      [
+        candidate("clash", "Reserve Cabernet Sauvignon", "2018", {
+          brandName: "Other Estate",
+          distance: 0.01,
+        }),
+        candidate("mine", "Reserve Cabernet Sauvignon", "2018", {
+          brandName: "Jordan",
+          distance: 0.2,
+        }),
+      ],
+      [],
+      "Jordan",
+    );
+    assert.equal(found?.item.itemId, "mine");
+    assert.equal(found?.exact, true);
+  });
+
   test("another type, or an item the person declined, is never offered", () => {
     assert.equal(
       match("WINE", read, [

@@ -29,6 +29,14 @@ import {
 } from "./adapter";
 import type { CatalogMatch } from "./catalog-match";
 
+/**
+ * How long `matching` waits for `itemSearch` before showing the form anyway.
+ * A text search is one embedding plus a vector query; past this the provider
+ * is struggling, and the person should not be left watching a spinner for a
+ * suggestion.
+ */
+export const CATALOG_MATCH_TIMEOUT_MS = 8000;
+
 /** `router.push` is all the machine needs of Next's router. */
 type Navigate = { push: (href: string) => void };
 
@@ -156,6 +164,7 @@ export const OnboardingMachine = createMachine(
               UploadItemImageInput
             >;
           };
+      delays: "catalogMatchTimeout";
     },
     context: ({ input }) => ({
       itemOnboardingId: crypto.randomUUID(),
@@ -290,6 +299,13 @@ export const OnboardingMachine = createMachine(
         },
       },
       matching: {
+        // The lookup is a convenience, so it never holds the form hostage: a
+        // search that has not answered in time is the old path to the form.
+        // (Leaving the state stops the invoked actor; its late answer is
+        // dropped.)
+        after: {
+          catalogMatchTimeout: { target: "form" },
+        },
         invoke: {
           src: "searchCatalog",
           input: ({
@@ -514,6 +530,9 @@ export const OnboardingMachine = createMachine(
     },
   },
   {
+    delays: {
+      catalogMatchTimeout: CATALOG_MATCH_TIMEOUT_MS,
+    },
     actors: {
       uploadFiles,
       fetchDefaults,

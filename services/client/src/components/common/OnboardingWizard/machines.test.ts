@@ -181,6 +181,38 @@ describe("matching (N19)", () => {
     const state = await settled(actor);
     assert.equal(state.value, "form");
   });
+
+  test("a lookup that never answers times out to the form", async () => {
+    const machine = OnboardingMachine.provide({
+      delays: { catalogMatchTimeout: 20 },
+      actors: {
+        uploadFiles: fromPromise(async () => ({ frontLabelFileId: "f" })),
+        fetchDefaults: fromPromise(
+          async (): Promise<DefaultValuesResult> => ({
+            defaults: read,
+            itemOnboardingId: "onb",
+            confidence: 1,
+          }),
+        ),
+        searchCatalog: fromPromise(
+          () => new Promise<CatalogMatch | null>(() => {}),
+        ),
+      },
+    });
+    const actor = createActor(machine, {
+      input: {
+        urqlClient: {} as Client,
+        router: { push: () => {} },
+        cellarId: "c",
+        itemType: "WINE",
+      },
+    });
+    actor.start();
+    actor.send({ type: "COMPLETE", frontLabel: "data:x" });
+    const state = await settled(actor);
+    assert.equal(state.value, "form");
+    assert.equal(state.context.catalogMatch, undefined);
+  });
 });
 
 describe("quick add (N02: only another bottle of a known item)", () => {
