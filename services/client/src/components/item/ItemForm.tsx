@@ -1,6 +1,5 @@
 "use client";
 
-import { Box, Button, Stack, Typography } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { useMutation } from "urql";
@@ -15,6 +14,7 @@ import { unwrapResult } from "@/lib/api/result";
 import { requiredSummary } from "./form-errors";
 import { ItemFormField } from "./ItemFormField";
 import { dateFromYear, formLayout, yearFromDate } from "./itemFormLayout";
+import { LoadingButton } from "./LoadingButton";
 
 export type ItemFormValues = {
   name: string;
@@ -34,9 +34,10 @@ type ItemFormProps = {
 
 /**
  * The six `82450ad1:src/components/{wine,…}/{T}Form.tsx` in edit mode, as one
- * form over `formLayout(type)` — same `Box` capped at the `sm` breakpoint,
- * same stacks, same `FormControl`/`FormLabel`/`Input`, `EnumSelect` for
- * reference and enum columns, `Checkbox` for tea's two flags, the same order
+ * form over `formLayout(type)` — capped at the `sm` breakpoint (600 px) as
+ * the old `Box` was, labelled fields (`ItemFormField`, on `ui/field`),
+ * `EnumSelect` for reference and enum columns, checkboxes for tea's two
+ * flags, the same order
  * and labels, and the same "Something went wrong please try again..." root
  * error. A vintage is a year, as it was (see `dateFromYear`).
  *
@@ -137,17 +138,13 @@ export const ItemForm = ({
   };
 
   return (
-    <Box
-      sx={(theme) => ({
-        maxWidth: theme.breakpoints.values.sm,
-      })}
-    >
-      {/* noValidate: `FormControl required` puts a native `required` on the
-          inputs, and the browser's own check would cancel the submit before
-          react-hook-form runs — so none of N03's messages would ever show. */}
+    <div className="w-full max-w-[600px]">
+      {/* noValidate: required fields carry a native `required`, and the
+          browser's own check would cancel the submit before react-hook-form
+          runs — so none of N03's messages would ever show. */}
       <form noValidate onSubmit={handleSubmit(onSubmit, onInvalid)}>
-        <Stack spacing={4}>
-          <Stack spacing={2}>
+        <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-4">
             {layout.map((entry) => (
               <ItemFormField
                 key={entry.kind === "attribute" ? entry.field.key : entry.kind}
@@ -156,17 +153,17 @@ export const ItemForm = ({
                 disabled={isSubmitting}
               />
             ))}
-          </Stack>
+          </div>
           {errors.root !== undefined && (
-            <Typography color="danger" role="alert">
+            <p role="alert" className="type-body text-destructive">
               {errors.root.message}
-            </Typography>
+            </p>
           )}
-          <Button loading={isSubmitting} type="submit">
+          <LoadingButton loading={isSubmitting} type="submit">
             Save
-          </Button>
-        </Stack>
+          </LoadingButton>
+        </div>
       </form>
-    </Box>
+    </div>
   );
 };

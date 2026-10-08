@@ -1,18 +1,12 @@
 "use client";
 
-import {
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  Input,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useMutation } from "urql";
+import { RatingInput } from "@/components/app/RatingInput";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   AddItemReviewMutation,
   DeleteItemReviewMutation,
@@ -20,7 +14,8 @@ import {
 } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import { RichTextEditor } from "../common/RichTextEditor";
-import { StarRating } from "../common/rating/StarRating";
+import { ItemSection } from "../item/ItemSection";
+import { LoadingButton } from "../item/LoadingButton";
 
 export type AddReviewProps = {
   itemId: string;
@@ -150,51 +145,52 @@ export const AddReview = ({
       <Input
         placeholder={editing ? "Edit your Review..." : "Add a Review..."}
         onClick={() => setOpen(true)}
-        slotProps={{ input: { readOnly: true } }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") setOpen(true);
+        }}
+        readOnly
+        className="h-11 cursor-pointer text-base"
       />
     );
   }
 
   return (
-    <Card>
-      <Stack spacing={2}>
-        <Typography level="title-lg">
-          {editing ? "Edit Review:" : "Add Review:"}
-        </Typography>
-        <CardContent>
-          <StarRating
-            value={score}
-            onChange={handleRatingClick}
-            disabled={isPending}
-            label="Your score"
-          />
-        </CardContent>
-        <RichTextEditor
-          placeholder="What did you think of it?"
-          initialText={text}
-          onChange={setText}
-        />
-        {error !== null && (
-          <Typography level="body-sm" color="danger">
-            {error}
-          </Typography>
-        )}
-      </Stack>
-      <CardActions>
-        <Button onClick={handleClick} disabled={!canSubmit} loading={isPending}>
+    <ItemSection title={editing ? "Edit Review:" : "Add Review:"}>
+      <RatingInput
+        value={score}
+        onChange={handleRatingClick}
+        disabled={isPending}
+        label="Your score"
+      />
+      <RichTextEditor
+        placeholder="What did you think of it?"
+        initialText={text}
+        onChange={setText}
+      />
+      {error !== null && (
+        <p role="alert" className="type-callout text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <LoadingButton
+          onClick={handleClick}
+          disabled={!canSubmit}
+          loading={isPending}
+        >
           {editing ? "Save" : "Add"}
-        </Button>
+        </LoadingButton>
         {editing && (
           <Button
-            variant="plain"
-            color="danger"
+            variant="ghost"
+            className="text-destructive"
             disabled={isPending}
             onClick={handleDelete}
           >
             Delete
           </Button>
         )}
-      </CardActions>
-    </Card>
+      </div>
+    </ItemSection>
   );
 };
