@@ -157,7 +157,6 @@
     "src/components/recipe/RecipeVoteButtons.tsx",
     "src/components/recipe/VirtualizedRecipeGroupGrid.tsx",
     "src/components/review/AddReview.tsx",
-    "src/components/search/NearbyPlaces.tsx",
     "src/components/search/RecipeGroupSearch.tsx",
     "src/components/search/motion-variants.ts",
     "src/components/shell/AppShell.tsx",
