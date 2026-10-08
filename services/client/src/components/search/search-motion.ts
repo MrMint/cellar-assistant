@@ -2,9 +2,9 @@ import type { Variants } from "motion/react";
 import { distance, tween } from "@/lib/motion";
 
 /**
- * The search page's motion, on the `@/lib/motion` tokens. It replaces
- * `./motion-variants.ts` (framer-motion era: literal 0.25 s / 0.12 s tweens,
- * `easeOut` / `easeIn`), which nothing imports any more:
+ * The search page's motion, on the `@/lib/motion` tokens. It replaced the
+ * framer-motion era `motion-variants.ts` (literal 0.25 s / 0.12 s tweens,
+ * `easeOut` / `easeIn`), since deleted:
  *
  * - enters run `dur.medium` on `ease.enter` (was 0.20–0.25 s ease-out);
  * - exits run `dur.short` on `ease.exit`, two thirds of the enter (was
