@@ -61,7 +61,6 @@ import {
   VisitedToggleButton,
 } from "./PlaceActionButtons";
 import { PlaceMenuItems } from "./PlaceMenuItems";
-import { PlaceReviewBadge } from "./PlaceReviewBadge";
 import { PlaceReviewPanel } from "./PlaceReviewPanel";
 import {
   formatCategoryName,
@@ -437,11 +436,6 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
 
           <div className="min-w-0 flex-1">
             <h1 className="type-title-1 mb-1 text-ink-1">{placeData.name}</h1>
-            {/* X27: "Under review" / "Not approved" — the creator only. */}
-            <PlaceReviewBadge
-              status={placeData.review_status}
-              className="mb-2"
-            />
             {placeData.display_name &&
               placeData.display_name !== placeData.name && (
                 <p className="type-body mb-1 text-ink-2">
@@ -531,7 +525,9 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
         )}
       </Section>
 
-      {/* X27 / D28: the creator's review state, controls and suggestions */}
+      {/* X27 / D28: the creator's review state, controls and suggestions.
+          The panel carries the status badge itself, directly under this
+          header, so the header does not repeat it. */}
       <PlaceReviewPanel
         placeId={placeData.id}
         placeName={placeData.name}
