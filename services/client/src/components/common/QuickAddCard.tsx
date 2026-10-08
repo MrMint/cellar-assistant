@@ -231,10 +231,6 @@ export const QuickAddCard = ({
         <div>
           <Progress
             value={progress}
-            // `ui/progress` draws `value` but does not hand it to Radix's
-            // root, which would leave the bar indeterminate to a screen
-            // reader; Joy's determinate bar announced it.
-            aria-valuenow={Math.round(progress)}
             aria-valuetext={`${countdown} seconds`}
             aria-label="Time until it is added"
             className="h-1"
