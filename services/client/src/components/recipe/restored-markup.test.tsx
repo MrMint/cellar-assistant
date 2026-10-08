@@ -314,6 +314,21 @@ describe("RecipeVersionsTab (restored)", () => {
     assert.match(html, />Description</);
     assert.match(html, /Step 1/);
   });
+
+  test("a cast vote is pressed, and keeps its tint in the dark theme", () => {
+    const tag = (name: string) =>
+      html.match(new RegExp(`<button[^>]*aria-label="${name}"[^>]*>`))?.[0] ??
+      "";
+    const up = tag("Upvote Negroni");
+    const down = tag("Downvote Negroni");
+    assert.match(up, /aria-pressed="true"/);
+    assert.match(down, /aria-pressed="false"/);
+    // `outline`'s `dark:bg-input/30` sorts after a plain `bg-success/10`, so
+    // the tint has to be restated under `dark:` (the default theme).
+    assert.match(up, /dark:bg-success\/10/);
+    assert.doesNotMatch(up, /dark:bg-input\/30/);
+    assert.doesNotMatch(up, /dark:border-input/);
+  });
 });
 
 describe("AI Recipe Generator (restored)", () => {

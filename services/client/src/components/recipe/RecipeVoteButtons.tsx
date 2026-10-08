@@ -16,12 +16,17 @@ import { RemoveRecipeVoteMutation, VoteOnRecipeMutation } from "./queries";
  * A cast vote is a tint plus text in its colour — success for up, danger for
  * down — never a solid green or red slab (design §3.1). `aria-pressed` says
  * which one is yours.
+ *
+ * Each colour is repeated under `dark:` because the `outline` and `ghost`
+ * variants carry `dark:border-input dark:bg-input/30 dark:hover:bg-*`, and a
+ * `dark:` utility sorts after a plain one: without the repeats the dark
+ * theme (the default) drew a cast vote with no tint and no coloured border.
  */
 const CAST = {
   upvote:
-    "border-success/60 bg-success/10 text-success hover:bg-success/15 hover:text-success",
+    "border-success/60 bg-success/10 text-success hover:bg-success/15 hover:text-success dark:border-success/60 dark:bg-success/10 dark:hover:bg-success/15",
   downvote:
-    "border-destructive/60 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive",
+    "border-destructive/60 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive dark:border-destructive/60 dark:bg-destructive/10 dark:hover:bg-destructive/15",
 } as const;
 
 const scoreClass = (netScore: number) =>
