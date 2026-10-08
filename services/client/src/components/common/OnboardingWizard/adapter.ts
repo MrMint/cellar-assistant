@@ -155,25 +155,27 @@ export const confirmInputFrom = (
  * Why a save would fail in the outbox rather than here — `null` when it
  * would not. `wines.style`/`vintage`, `spirits.type` and `coffees.description`
  * are NOT NULL behind nullable GraphQL inputs (`itemFormRules.ts`).
+ *
+ * Names **every** missing column at once (N03): it is also the line the form
+ * shows when validation stops a submit, so it must not make the person fix
+ * one field to be told about the next.
  */
 export const saveBlocker = (
   type: ApiItemType,
   values: ItemFormValues,
 ): string | null => {
-  if (values.name.trim() === "") return "Name cannot be empty.";
-  if (
-    ITEM_FORM_RULES[type].descriptionRequired &&
+  const missing = [
+    ...(values.name.trim() === "" ? ["Name"] : []),
+    ...(ITEM_FORM_RULES[type].descriptionRequired &&
     values.description.trim() === ""
-  ) {
-    return "Description cannot be empty.";
-  }
-  const missing = missingRequiredAttributes(
-    type,
-    attributesForSave(type, values.attributes),
-  );
-  return missing.length === 0
-    ? null
-    : `${missing.map((field) => field.label).join(", ")} cannot be empty.`;
+      ? ["Description"]
+      : []),
+    ...missingRequiredAttributes(
+      type,
+      attributesForSave(type, values.attributes),
+    ).map((field) => field.label),
+  ];
+  return missing.length === 0 ? null : `${missing.join(", ")} cannot be empty.`;
 };
 
 /**

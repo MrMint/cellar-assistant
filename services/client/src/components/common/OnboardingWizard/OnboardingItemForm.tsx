@@ -19,6 +19,7 @@ import { BrandPicker } from "@/components/brand/BrandPicker";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemFormValues } from "@/components/item/ItemForm";
 import { ItemFormField } from "@/components/item/ItemFormField";
+import { requiredSummary } from "@/components/item/form-errors";
 import { entryPath, formLayout } from "@/components/item/itemFormLayout";
 import { draftedPaths, isDrafted } from "@/lib/forms/ai-draft";
 import { AIDraftField } from "../AIDraftField";
@@ -61,6 +62,7 @@ export const OnboardingItemForm = ({
   const {
     control,
     handleSubmit,
+    getValues,
     setError,
     formState: { isSubmitting, errors },
   } = useForm<ItemFormValues>({ defaultValues: defaultValues.values });
@@ -98,13 +100,27 @@ export const OnboardingItemForm = ({
     }
   };
 
+  // N03: validation stopped the submit — say which fields, beside the button,
+  // as well as under each one. `saveBlocker` names the database's columns;
+  // the layout's summary covers the create form's own stars (sake, tea).
+  const onInvalid = () => {
+    const values = getValues();
+    setError("root", {
+      type: "custom",
+      message:
+        saveBlocker(type, values) ??
+        requiredSummary(layout, values) ??
+        "Check the highlighted fields.",
+    });
+  };
+
   return (
     <Box
       sx={(theme) => ({
         maxWidth: theme.breakpoints.values.sm,
       })}
     >
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
         <Stack spacing={4}>
           {notFilled.length > 0 && (
             <Alert color="neutral" variant="soft">
@@ -161,7 +177,9 @@ export const OnboardingItemForm = ({
             </FormControl>
           </Stack>
           {errors.root !== undefined && (
-            <Typography>{errors.root.message}</Typography>
+            <Typography color="danger" role="alert">
+              {errors.root.message}
+            </Typography>
           )}
           <Button loading={isSubmitting} type="submit">
             Add

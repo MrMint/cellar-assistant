@@ -12,6 +12,7 @@ import {
 } from "@/components/item-api/itemFormRules";
 import { UpdateItemMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
+import { requiredSummary } from "./form-errors";
 import { ItemFormField } from "./ItemFormField";
 import { dateFromYear, formLayout, yearFromDate } from "./itemFormLayout";
 
@@ -69,6 +70,7 @@ export const ItemForm = ({
   const {
     control,
     handleSubmit,
+    getValues,
     setError,
     formState: { isSubmitting, errors },
   } = useForm<ItemFormValues>({
@@ -125,13 +127,22 @@ export const ItemForm = ({
     router.refresh();
   };
 
+  // N03: validation stopped the submit — name the fields beside the button.
+  const onInvalid = () => {
+    setError("root", {
+      type: "custom",
+      message:
+        requiredSummary(layout, getValues()) ?? "Check the highlighted fields.",
+    });
+  };
+
   return (
     <Box
       sx={(theme) => ({
         maxWidth: theme.breakpoints.values.sm,
       })}
     >
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
         <Stack spacing={4}>
           <Stack spacing={2}>
             {layout.map((entry) => (
@@ -144,7 +155,9 @@ export const ItemForm = ({
             ))}
           </Stack>
           {errors.root !== undefined && (
-            <Typography>{errors.root.message}</Typography>
+            <Typography color="danger" role="alert">
+              {errors.root.message}
+            </Typography>
           )}
           <Button loading={isSubmitting} type="submit">
             Save

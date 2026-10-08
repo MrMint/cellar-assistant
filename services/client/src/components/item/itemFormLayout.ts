@@ -32,7 +32,12 @@ import {
 
 export type FormEntry =
   | { kind: "name"; label: string }
-  | { kind: "description"; label: string }
+  | {
+      kind: "description";
+      label: string;
+      /** Coffee's `description` is NOT NULL (`descriptionRequired`). */
+      required?: boolean;
+    }
   | { kind: "country"; label: string }
   | {
       kind: "attribute";
@@ -156,6 +161,13 @@ export const formLayout = (
   mode: FormMode = "edit",
 ): FormEntry[] =>
   ORDER[type].map((spec): FormEntry => {
+    if (spec === "description") {
+      return {
+        kind: spec,
+        label: LABELS[spec],
+        required: ITEM_FORM_RULES[type].descriptionRequired,
+      };
+    }
     if (typeof spec === "string") return { kind: spec, label: LABELS[spec] };
     const [key, label, multiline] = spec;
     const field = ITEM_FORM_RULES[type].attributes.find((f) => f.key === key);
