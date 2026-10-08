@@ -1,4 +1,3 @@
-import { Box, Stack, Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { canAddToCellar, cellarGridItem } from "@/components/cellar/adapter";
 import { CellarOverviewHeader } from "@/components/cellar/CellarOverviewHeader";
@@ -52,7 +51,11 @@ export default async function CellarPage({
     // §1.6 makes NOT_FOUND cover "not yours to see" as well, on purpose: a
     // cellar id must not be an oracle for whether a cellar exists.
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="type-body text-destructive">
+        {result.error.message}
+      </p>
+    );
   }
 
   const cellar = readFragment(CellarInfoFragment, result.data);
@@ -60,32 +63,28 @@ export default async function CellarPage({
   const canAdd = canAddToCellar(cellar, viewerId);
 
   return (
-    <Box>
-      <Stack spacing={2}>
-        <CellarOverviewHeader
-          cellarId={cellar.id}
-          cellarName={cellar.name}
-          activeCount={cellar.itemCounts.total}
-          canAdd={canAdd}
-        />
+    <div className="flex flex-col gap-4">
+      <CellarOverviewHeader
+        cellarId={cellar.id}
+        cellarName={cellar.name}
+        activeCount={cellar.itemCounts.total}
+        canAdd={canAdd}
+      />
 
-        <Typography level="title-lg">Open and recent</Typography>
-        <CellarOverviewItems
-          cellarId={cellar.id}
-          items={result.data.items.edges.map((edge) =>
-            cellarGridItem(edge.node),
-          )}
-          viewerId={viewerId}
-        />
+      <h2 className="type-headline">Open and recent</h2>
+      <CellarOverviewItems
+        cellarId={cellar.id}
+        items={result.data.items.edges.map((edge) => cellarGridItem(edge.node))}
+        viewerId={viewerId}
+      />
 
-        <CellarCheckIns
-          cellarId={cellar.id}
-          initialEdges={[...result.data.checkIns.edges]}
-          initialHasNextPage={result.data.checkIns.pageInfo.hasNextPage}
-          totalCount={result.data.checkIns.totalCount ?? null}
-          viewerId={viewerId}
-        />
-      </Stack>
-    </Box>
+      <CellarCheckIns
+        cellarId={cellar.id}
+        initialEdges={[...result.data.checkIns.edges]}
+        initialHasNextPage={result.data.checkIns.pageInfo.hasNextPage}
+        totalCount={result.data.checkIns.totalCount ?? null}
+        viewerId={viewerId}
+      />
+    </div>
   );
 }

@@ -1,17 +1,10 @@
 "use client";
 
-import {
-  Box,
-  Card,
-  CircularProgress,
-  Grid,
-  Skeleton,
-  Typography,
-} from "@mui/joy";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { ItemCard } from "@/components/item/ItemCard";
+import { Spinner } from "@/components/ui/spinner";
 import { useColumnCount } from "@/hooks/useColumnCount";
 import { unwrapResult } from "@/lib/api/result";
 import { toPage } from "@/lib/paging/paged-connection";
@@ -21,6 +14,10 @@ import {
   cellarBottleHref,
   cellarGridItem,
 } from "./adapter";
+import {
+  CellarItemSkeletonCard,
+  cellarItemsGridClass,
+} from "./CellarItemsGridSkeleton";
 import {
   type CellarItemsArgs,
   cellarItemsCacheKey,
@@ -311,9 +308,7 @@ export function CellarItemsGrid({
   if (items.length === 0) {
     if (list.failure !== null) return <ApiError error={list.failure} />;
     return (
-      <Typography level="body-md" sx={{ textAlign: "center", py: 4 }}>
-        No items in this cellar
-      </Typography>
+      <p className="type-body py-8 text-center">No items in this cellar</p>
     );
   }
 
@@ -324,40 +319,24 @@ export function CellarItemsGrid({
 
       {/* Virtualized grid — scroll position is set in useLayoutEffect (before
           paint), so the grid is always visible at the correct offset. */}
-      <Box
-        sx={{
-          height: virtualizer.getTotalSize(),
-          width: "100%",
-          position: "relative",
-        }}
+      <div
+        className="relative w-full"
+        style={{ height: virtualizer.getTotalSize() }}
       >
         {virtualRows.map((virtualRow) => {
           const row = loadedRows[virtualRow.index];
           return (
-            <Box
+            <div
               key={virtualRow.key}
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
-              sx={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
+              className="absolute top-0 left-0 w-full"
+              style={{ transform: `translateY(${virtualRow.start}px)` }}
             >
-              <Grid container spacing={2}>
+              <div className={cellarItemsGridClass(items.length)}>
                 {row
                   ? row.map((x) => (
-                      <Grid
-                        id={x.item.id}
-                        key={x.item.id}
-                        xs={items.length > 6 ? 6 : 12}
-                        sm={6}
-                        md={4}
-                        lg={3}
-                        xl={2}
-                      >
+                      <div id={x.item.id} key={x.item.id} className="min-w-0">
                         <ItemCard
                           item={x.item}
                           type={x.type}
@@ -366,43 +345,25 @@ export function CellarItemsGrid({
                             writeScrollData(scrollContainer?.scrollTop ?? 0)
                           }
                         />
-                      </Grid>
+                      </div>
                     ))
                   : Array.from({ length: columnCount }, (_, colIndex) => {
                       const skeletonKey = `skeleton-${virtualRow.key}-${colIndex}`;
-                      return (
-                        <Grid
-                          key={skeletonKey}
-                          xs={items.length > 6 ? 6 : 12}
-                          sm={6}
-                          md={4}
-                          lg={3}
-                          xl={2}
-                        >
-                          <Card sx={{ overflow: "hidden" }}>
-                            <Skeleton
-                              variant="rectangular"
-                              sx={{ aspectRatio: { xs: 1.2, sm: 1 } }}
-                            />
-                            <Skeleton variant="text" sx={{ mx: 1, my: 1 }} />
-                            <Skeleton variant="rectangular" height={40} />
-                          </Card>
-                        </Grid>
-                      );
+                      return <CellarItemSkeletonCard key={skeletonKey} />;
                     })}
-              </Grid>
-            </Box>
+              </div>
+            </div>
           );
         })}
-      </Box>
+      </div>
 
       {list.failure !== null && <ApiError error={list.failure} />}
 
       {/* Loading indicator */}
       {isLoadingMore && (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-          <CircularProgress size="sm" />
-        </Box>
+        <div className="flex justify-center py-4">
+          <Spinner className="size-5" />
+        </div>
       )}
     </>
   );

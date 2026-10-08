@@ -1,11 +1,11 @@
 "use client";
 
-import { Grid, Stack, Typography } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { CheckInButton } from "@/components/cellar-api/CheckInButton";
 import { ItemCard } from "@/components/item/ItemCard";
 import { type CellarGridItem, cellarBottleHref } from "./adapter";
+import { cellarItemsGridClass } from "./CellarItemsGridSkeleton";
 
 /**
  * The overview's "Open and recent" preview: restored `ItemCard`s in the old
@@ -31,24 +31,15 @@ export function CellarOverviewItems({
 
   if (items.length === 0) {
     return (
-      <Typography level="body-md" sx={{ textAlign: "center", py: 4 }}>
-        No items in this cellar
-      </Typography>
+      <p className="type-body py-8 text-center">No items in this cellar</p>
     );
   }
 
   return (
-    <Grid container spacing={2}>
+    <div className={cellarItemsGridClass(items.length)}>
       {items.map((x) => (
-        <Grid
-          key={x.item.id}
-          xs={items.length > 6 ? 6 : 12}
-          sm={6}
-          md={4}
-          lg={3}
-          xl={2}
-        >
-          <Stack spacing={1}>
+        <div key={x.item.id} className="min-w-0">
+          <div className="flex flex-col gap-2">
             <ItemCard
               item={x.item}
               type={x.type}
@@ -61,9 +52,9 @@ export function CellarOverviewItems({
               viewerId={viewerId}
               onCheckedIn={onCheckedIn}
             />
-          </Stack>
-        </Grid>
+          </div>
+        </div>
       ))}
-    </Grid>
+    </div>
   );
 }

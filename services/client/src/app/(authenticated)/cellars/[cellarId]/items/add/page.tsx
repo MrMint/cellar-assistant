@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import { notFound } from "next/navigation";
 import { AddItemClient } from "@/components/cellar/AddItemClient";
 import { canAddToCellar } from "@/components/cellar/adapter";
@@ -31,7 +30,11 @@ export default async function Add({
   const result = unwrapResult(header.cellar, "Cellar");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="type-body text-destructive">
+        {result.error.message}
+      </p>
+    );
   }
   const cellar = readFragment(CellarCardFragment, result.data);
 
