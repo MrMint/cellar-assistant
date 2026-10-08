@@ -151,6 +151,45 @@ describe("ui-platform rules (the scanner itself)", () => {
     );
   });
 
+  test("motion literals: the other spring shapes and timing keys", () => {
+    assert.deepEqual(
+      rules(
+        "src/x.tsx",
+        `const a = <motion.div transition={{ type: "spring", bounce: 0.3, visualDuration: 0.4 }} />;
+         const b = { transition: { mass: 2, delay: 0.1, ease: [0.4, 0, 0.2, 1] } };
+         const ok1 = { delay: 2 }; // not a transition
+         const ok2 = { transition: { ease: ease.standard, delay: dur.short } };`,
+      ),
+      [
+        "motion-literal",
+        "motion-literal",
+        "motion-literal",
+        "motion-literal",
+        "motion-literal",
+      ],
+    );
+  });
+
+  test("Tailwind's default palette is banned outright; black/white scrims are not", () => {
+    assert.deepEqual(
+      rules(
+        "src/x.tsx",
+        `const a = <p className="text-red-500 hover:bg-zinc-900/50 border-t-gray-200" />;
+         const ok = <div className="bg-black/50 text-ink-3 bg-type-wine/15 shadow-black/40" />;
+         const joy = "var(--joy-palette-neutral-500)";`,
+      ),
+      ["palette-colour"],
+    );
+    assert.deepEqual(
+      violations(
+        scanSource("src/legacy.tsx", `const a = "text-emerald-400";`),
+        new Set(["src/legacy.tsx"]),
+      ).map((f) => f.rule),
+      ["palette-colour"],
+      "even in a legacy file",
+    );
+  });
+
   test("motion literals are allowed where the tokens live", () => {
     const f = scanSource(
       "src/lib/motion.ts",

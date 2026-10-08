@@ -17,14 +17,16 @@
  * | `sx-prop`       | a JSX `sx=` attribute                                                 |
  * | `raw-colour`    | a hex colour or `rgb(`/`rgba(`/`hsl(` in a string (non-test source)   |
  * | `arbitrary-colour` | a Tailwind arbitrary colour class, `bg-[#…]` / `text-[rgb(…)]`     |
- * | `motion-literal`| a `stiffness`/`damping` number, a numeric `duration` in a `transition`, or a `duration-[…]`/`ease-[…]` class |
+ * | `palette-colour` | a Tailwind default-palette class, `text-red-500` / `bg-zinc-900/50` (bypasses the tokens) |
+ * | `motion-literal`| a `stiffness`/`damping`/`bounce`/`mass`/`visualDuration` number, a numeric `duration`/`delay` or a numeric `ease` curve in a `transition`, or a `duration-[…]`/`ease-[…]` class |
  * | `reduced-motion-query` | a hand-rolled `prefers-reduced-motion` media query (use `useReducedMotion`) |
  *
  * ## Phase 1 (now → the removal step)
  *
  * Files in `ui-platform.legacy.json` — frozen when the foundation landed, the
  * files that still used the old platform then — are exempt from every rule
- * but `framer-motion` and `arbitrary-colour`, which nothing may break. A
+ * but `framer-motion`, `arbitrary-colour` and `palette-colour`, which nothing
+ * may break. A
  * converted file simply stops matching; nobody edits the list (so it never
  * conflicts), and it can only go stale in the safe direction.
  * `raw-colour` also exempts `COLOUR_ALLOWLIST`: code that cannot read a CSS
@@ -52,6 +54,7 @@ export type Rule =
   | "sx-prop"
   | "raw-colour"
   | "arbitrary-colour"
+  | "palette-colour"
   | "motion-literal"
   | "reduced-motion-query";
 
@@ -67,6 +70,7 @@ export type Finding = {
 export const ALWAYS_ENFORCED: ReadonlySet<Rule> = new Set<Rule>([
   "framer-motion",
   "arbitrary-colour",
+  "palette-colour",
 ]);
 
 /**
@@ -95,6 +99,23 @@ const HEX =
 const FUNC_COLOUR = /\b(rgba?|hsla?)\(/;
 const ARBITRARY_COLOUR = /-\[(?:#|(?:rgba?|hsla?|oklch|oklab|color-mix)\()/;
 const ARBITRARY_MOTION = /\b(duration|ease|delay)-\[/;
+/**
+ * Tailwind's built-in palette (`text-red-500`, `hover:bg-zinc-900/50`): a raw
+ * colour by another name. The app's colours are the `globals.css` roles.
+ * `black`/`white` stay legal (scrims, shadows).
+ */
+const PALETTE_COLOUR =
+  /(?<![\w-])-?(?:bg|text|border(?:-[xytrblse])?|ring(?:-offset)?|inset-ring|outline|fill|stroke|from|via|to|decoration|divide|placeholder|caret|accent|shadow|inset-shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)(?![\w-])/;
+/** Spring parameters that only ever mean a literal spring. */
+const SPRING_KEYS = new Set([
+  "stiffness",
+  "damping",
+  "bounce",
+  "mass",
+  "visualDuration",
+]);
+/** Timing keys that are a literal only inside a `transition`. */
+const TRANSITION_TIME_KEYS = new Set(["duration", "delay"]);
 const REDUCED_MOTION_QUERY = /prefers-reduced-motion/;
 
 const isTest = (file: string) => /\.test\.tsx?$/.test(file);
@@ -199,18 +220,32 @@ export function scanSource(file: string, source: string): Finding[] {
           ts.isNumericLiteral(node.initializer) ||
           (ts.isPrefixUnaryExpression(node.initializer) &&
             ts.isNumericLiteral(node.initializer.operand));
-        if (numeric && (key === "stiffness" || key === "damping"))
+        if (numeric && key !== undefined && SPRING_KEYS.has(key))
           add(
             node,
             "motion-literal",
             `${key}: ${node.initializer.getText(sf)}`,
           );
-        if (numeric && key === "duration" && inTransition)
+        if (
+          numeric &&
+          key !== undefined &&
+          TRANSITION_TIME_KEYS.has(key) &&
+          inTransition
+        )
           add(
             node,
             "motion-literal",
-            `duration: ${node.initializer.getText(sf)}`,
+            `${key}: ${node.initializer.getText(sf)}`,
           );
+        // A hand-written cubic-bézier: `ease: [0.4, 0, 0.2, 1]`.
+        if (
+          key === "ease" &&
+          inTransition &&
+          ts.isArrayLiteralExpression(node.initializer) &&
+          node.initializer.elements.length > 0 &&
+          node.initializer.elements.every(ts.isNumericLiteral)
+        )
+          add(node, "motion-literal", `ease: ${node.initializer.getText(sf)}`);
       }
 
       const text = literalText(node);
@@ -219,6 +254,8 @@ export function scanSource(file: string, source: string): Finding[] {
           add(node, "arbitrary-colour", text.slice(0, 80));
         else if (HEX.test(text) || FUNC_COLOUR.test(text))
           add(node, "raw-colour", text.slice(0, 80));
+        if (PALETTE_COLOUR.test(text))
+          add(node, "palette-colour", text.slice(0, 80));
         if (ARBITRARY_MOTION.test(text))
           add(node, "motion-literal", text.slice(0, 80));
         if (REDUCED_MOTION_QUERY.test(text))
