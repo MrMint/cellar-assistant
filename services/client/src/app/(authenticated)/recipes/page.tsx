@@ -1,3 +1,4 @@
+import { BarEntryCard } from "@/components/bar/BarEntryCard";
 import {
   RECIPE_GROUPS_PAGE_SIZE,
   RecipeGroupsQuery,
@@ -39,6 +40,11 @@ export default async function RecipesPage({
   return (
     <div className="mx-auto w-full max-w-[1200px]">
       <h1 className="mb-6 type-large-title">Recipe Groups</h1>
+
+      {/* X14 / G29: the bar's verdict, first thing on the recipes tab. */}
+      <div className="mb-6">
+        <BarEntryCard />
+      </div>
 
       <p className="mb-8 type-body text-ink-2">
         Discover and explore cocktail recipes. Each recipe group shows the

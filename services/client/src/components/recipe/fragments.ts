@@ -93,6 +93,16 @@ export const RecipeDetailsFragment = graphql(`
           isOptional
           substitutionNotes
           refType
+          role
+          kind
+          kindLabel
+          amount
+          brandMentioned
+          availability {
+            status
+            source
+            label
+          }
           item {
             __typename
             id

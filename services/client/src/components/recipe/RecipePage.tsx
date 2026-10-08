@@ -39,15 +39,17 @@ export async function RecipePage({
   }
 
   const group = result.data.recipeGroup ?? null;
-  const recipe = recipeDetailsFromNode(
-    readFragment(RecipeDetailsFragment, result.data),
-    {
+  const recipe = {
+    ...recipeDetailsFromNode(readFragment(RecipeDetailsFragment, result.data), {
       group,
       reviews: result.data.reviews.edges.map((edge) =>
         readFragment(RecipeReviewFragment, edge.node),
       ),
-    },
-  );
+    }),
+    // X14 / D9: the viewer's own verdict and Love, beside the fragment.
+    is_loved: result.data.isLoved,
+    makeability: result.data.makeability ?? null,
+  };
 
   return (
     <>

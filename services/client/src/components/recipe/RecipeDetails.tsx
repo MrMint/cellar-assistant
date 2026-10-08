@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { isNotNil } from "ramda";
 import { Link } from "@/components/app/Link";
+import { MakeabilitySummary } from "@/components/bar/Availability";
 import { Badge } from "@/components/ui/badge";
 import beer1 from "@/images/beer1.png";
 import wine1 from "@/images/wine1.png";
@@ -60,8 +61,10 @@ export type RecipeDetailsProps = {
  *   which the old ones did not — the only way off this page to a sibling.
  * - The canonical version wears `CanonicalRecipeBadge` (the old versions-tab
  *   badge) in that card — the rewrite's "Community pick".
- * - The favourite heart is gone (`RecipeDetailsCard`), and the ingredient
- *   availability icons with it (`RecipeIngredientList`).
+ * - The favourite heart came back as Love (D9, `RecipeDetailsCard`), and the
+ *   ingredient availability icons as real availability from the viewer's
+ *   bottles and Bar pantry (D9, `RecipeIngredientList`), with the recipe's
+ *   verdict — You can make this / One bottle away — above the list (X14).
  */
 export const RecipeDetails = ({
   recipe,
@@ -125,6 +128,7 @@ export const RecipeDetails = ({
               serving_size={recipe.serving_size}
               version={recipe.version}
               description={recipe.description}
+              isLoved={recipe.is_loved}
             />
 
             {/* Recipe variations */}
@@ -176,6 +180,12 @@ export const RecipeDetails = ({
             {/* Ingredients */}
             <section className="rounded-lg bg-surface-1 p-4">
               <h2 className="mb-4 type-title-2">Ingredients</h2>
+              {isNotNil(recipe.makeability) && (
+                <MakeabilitySummary
+                  makeability={recipe.makeability}
+                  className="mb-4"
+                />
+              )}
               <RecipeIngredientList ingredients={recipe.ingredients} />
             </section>
           </div>

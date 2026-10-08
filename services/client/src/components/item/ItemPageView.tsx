@@ -1,3 +1,4 @@
+import { ItemCocktails } from "@/components/bar/ItemCocktails";
 import { AddReview } from "@/components/review/AddReview";
 import type { ItemView } from "./adapter";
 import { ItemBrands } from "./ItemBrands";
@@ -80,6 +81,9 @@ export function ItemPageView({
               flavorProfile={item.flavorProfile}
               ingredients={item.ingredients}
             />
+            {/* X14: "Cocktails with this" — every type; renders nothing
+                when no cocktail uses it. */}
+            <ItemCocktails itemId={item.itemId} type={item.type} />
             <ItemCellars cellars={cellars} total={cellarsTotal} />
             {config.brandsColumn === "left" && brands}
             <ItemTierLists entries={tierLists} total={tierListsTotal} />

@@ -254,7 +254,10 @@ export const RecipeVersionsTab = ({
                 {/* Ingredients */}
                 <section className="rounded-lg bg-surface-1 p-4">
                   <p className="mb-4 type-callout font-semibold">Ingredients</p>
-                  <RecipeIngredientList ingredients={recipe.ingredients} />
+                  <RecipeIngredientList
+                    ingredients={recipe.ingredients}
+                    showAvailability={false}
+                  />
                 </section>
 
                 {/* Instructions */}

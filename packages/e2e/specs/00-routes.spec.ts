@@ -54,6 +54,9 @@ const ROUTES = [
   "/discoveries",
   "/recipes",
   "/recipes/ai-generator",
+  // X14: What can I make (G29) and the Bar pantry (D23).
+  "/recipes/bar",
+  "/recipes/bar/pantry",
   "/tier-lists",
   "/tier-lists/add",
   "/rankings",
