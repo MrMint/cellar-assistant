@@ -3,7 +3,7 @@
 /**
  * The pieces the place page (`PlaceDetails`) and the map drawer's body
  * (`PlaceDetailsContent`) both draw: the category glyph in its tile and the
- * Save / Mark Visited toggles. Joy drew a toggled-on Save as a solid red slab
+ * Love / Mark Visited toggles. Joy drew a toggled-on Save as a solid red slab
  * and Visited as a solid green one; design §3.1 bans both, so "on" is a
  * filled glyph on the secondary surface (a claret heart, a success check)
  * and the label still says which state it is in.
