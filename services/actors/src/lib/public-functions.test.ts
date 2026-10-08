@@ -65,6 +65,10 @@ const ALLOWED: Readonly<Record<string, Use>> = {
     trigger: true,
     why: "user_disabled_ends_sessions deletes a user's sessions the moment they are disabled",
   },
+  tier_list_history_is_append_only: {
+    trigger: true,
+    why: "tier_list_history_no_update refuses an UPDATE: the D4 edit log is append-only (undo and redo are new rows)",
+  },
   canonical_barcode_code: {
     constraint: "barcodes_code_canonical",
     why: "the SQL mirror of contracts' canonicalBarcodeCode; the CHECK refuses a non-canonical barcodes.code (canonical_barcode_codes)",
