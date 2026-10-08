@@ -1695,6 +1695,43 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
     });
   });
 
+  it("an edit whose snapshot no longer parses is stepped past, not thrown on after commit", async () => {
+    await withTestDb(async (db) => {
+      const { id, owner, wines, ctx } = await setup(db);
+      const first = await activate(newTierListActor(id, db));
+      await first.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      // A row the actor never writes (a hand edit): an ADD with no snapshot.
+      await db.insert(tierListHistory).values({
+        tierListId: id,
+        seq: 2,
+        kind: "ADD",
+        targetSeq: null,
+        change: {},
+        userId: owner,
+      });
+      const fresh = await activate(newTierListActor(id, db));
+      const before = await board(fresh, ctx);
+
+      const step = await fresh.undo(ctx);
+      expect(step.applied).toMatchObject({
+        seq: 2,
+        kind: "ADD",
+        entry: null,
+        entryName: null,
+      });
+      // Nothing to apply, so the board is as it was — and the stacks moved:
+      // the next Undo is the real add beneath it.
+      expect(await board(fresh, ctx)).toEqual(before);
+      expect(step.history.undo).toMatchObject({ seq: 1, kind: "ADD" });
+      const log = await db
+        .select({ seq: tierListHistory.seq, kind: tierListHistory.kind })
+        .from(tierListHistory)
+        .where(eq(tierListHistory.tierListId, id))
+        .orderBy(tierListHistory.seq);
+      expect(log.at(-1)).toEqual({ seq: 3, kind: "UNDO" });
+    });
+  });
+
   it("the log is append-only: an UPDATE is refused by the database", async () => {
     await withTestDb(async (db) => {
       const { id, actor, wines, ctx } = await setup(db);

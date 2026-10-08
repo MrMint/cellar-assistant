@@ -209,6 +209,7 @@ import type {
 import {
   historyStacks,
   insertAt,
+  isEditKind,
   movedEntry,
   parseChange,
   planBandOrders,
@@ -830,7 +831,19 @@ export class TierListActor
     if (target === undefined) {
       throw new ConflictError(`history row ${targetSeq} vanished mid-turn`);
     }
-    const applied = await this.#describeEdits([target]);
+    // Described before the write, so nothing can fail after it commits. A
+    // row whose snapshot no longer parses still advances the stacks (below)
+    // and is named only by its kind.
+    const [described] = await this.#describeEdits([target]);
+    const applied: TierListEditDto = described ?? {
+      seq: target.seq,
+      kind: isEditKind(target.kind) ? target.kind : "MOVE",
+      entry: null,
+      entryName: null,
+      fromBand: null,
+      toBand: null,
+      at: target.createdAt.toISOString(),
+    };
     const change = parseChange(target.kind, target.change);
 
     await this.tx(async (tx) => {
@@ -846,12 +859,8 @@ export class TierListActor
     });
     await this.reload();
 
-    const [edit] = applied;
-    if (edit === undefined) {
-      throw new ConflictError(`history row ${targetSeq} could not be read`);
-    }
     return {
-      applied: edit,
+      applied,
       history: await this.#describeHistory(this.requireAggregate()),
     };
   }
