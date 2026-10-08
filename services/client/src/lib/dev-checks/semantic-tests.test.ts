@@ -35,15 +35,27 @@ const ROOTS = [
 ];
 const EXEMPT = /^services\/client\/src\/lib\/dev-checks\//;
 
-/** A Joy/MUI class name (`MuiCard-root`, `Mui-disabled`), or a Joy import/mock in a test. */
+/**
+ * What couples a test to Joy: a class name (`MuiCard-root`, `Mui-disabled`),
+ * including one spelled through a regex group or an attribute selector
+ * (`Mui(Card|Divider)-root`, `[class*=MuiChip]`); Emotion's labelled class
+ * (`css-1cgyvsv-JoyCard-root`); a Joy CSS variable (`--Icon-color`,
+ * `--joy-palette-…`; the app's own are lower-case, `--ca-…`); and a Joy
+ * import or mock.
+ */
 const COUPLED = [
   /\bMui(?:[A-Z][A-Za-z]*)?-[A-Za-z][\w-]*/g,
+  /\bMui(?:[A-Z][A-Za-z]*(?![\w-])|\(|\[)/g,
+  /\bJoy[A-Z][A-Za-z]*-[A-Za-z][\w-]*/g,
+  /--(?:joy-[\w-]+|[A-Z][A-Za-z]*-[A-Za-z][\w-]*)/g,
   /\b(?:import|mock\.module)\(\s*["']@mui\/[^"']+["']/g,
   /\bfrom\s+["']@mui\/[^"']+["']/g,
 ];
 
+/** Test files, plus the helpers they share (`src/test-support/`). */
 const isTestFile = (path: string): boolean =>
   /\.test\.tsx?$/.test(path) ||
+  (path.includes(join("src", "test-support")) && /\.tsx?$/.test(path)) ||
   (path.includes(`${join("packages", "e2e")}`) && /\.tsx?$/.test(path));
 
 function* walk(dir: string): Generator<string> {
@@ -70,6 +82,9 @@ describe("tests are anchored on semantics, not Joy markup", () => {
   test("the walk saw the client's tests and the e2e specs", () => {
     const rel = files.map((f) => relative(REPO, f));
     assert.ok(rel.some((f) => f.startsWith("services/client/src/components")));
+    assert.ok(
+      rel.some((f) => f.startsWith("services/client/src/test-support/")),
+    );
     assert.ok(rel.some((f) => f.startsWith("packages/e2e/specs/")));
   });
 
@@ -93,6 +108,26 @@ describe("tests are anchored on semantics, not Joy markup", () => {
       ["MuiAccordionSummary-button"],
     );
     assert.deepEqual(scanCoupling("/Mui-disabled/"), ["Mui-disabled"]);
+    // The spellings that slipped past the first version of this scanner.
+    assert.ok(
+      scanCoupling("/Mui(Card|CardOverflow|Divider)-root/g").length > 0,
+      "a class name built from a regex group",
+    );
+    assert.ok(
+      scanCoupling('page.locator("[class*=MuiChip]")').length > 0,
+      "a class named without its -root suffix",
+    );
+    assert.deepEqual(scanCoupling("/color:var\\(--Icon-color\\)/"), [
+      "--Icon-color",
+    ]);
+    assert.deepEqual(scanCoupling("var(--joy-palette-primary-500)"), [
+      "--joy-palette-primary-500",
+    ]);
+    assert.deepEqual(scanCoupling('class="css-1cgyvsv-JoyCard-root"'), [
+      "JoyCard-root",
+    ]);
+    // The app's own variables are lower-case and are fair game.
+    assert.deepEqual(scanCoupling("min-width:var(--ca-rating-target)"), []);
     assert.deepEqual(scanCoupling('mock.module("@mui/joy", () => ({}))'), [
       'mock.module("@mui/joy"',
     ]);
