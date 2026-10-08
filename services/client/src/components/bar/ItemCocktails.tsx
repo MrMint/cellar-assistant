@@ -3,7 +3,6 @@
 import { useQuery } from "urql";
 import { Link } from "@/components/app/Link";
 import { InsetSection } from "@/components/app/Page";
-import { Skeleton } from "@/components/ui/skeleton";
 import { unwrapResult } from "@/lib/api/result";
 import { BarRecipeRow } from "./BarRecipeRow";
 import { ItemCocktailsQuery } from "./queries";
@@ -24,22 +23,15 @@ export type ItemCocktailsProps = {
  * viewer's bar (`BarActor.cocktailsFor`), which the item page's own server
  * render should not wait on; and it keeps this section a one-line insertion
  * on both the item and the bottle page. Renders nothing for an item no
- * cocktail uses — an empty "Cocktails with this" on a Pinot Noir is noise.
+ * cocktail uses — an empty "Cocktails with this" on a Pinot Noir is noise —
+ * and nothing while loading: a skeleton that then vanished on every wine and
+ * coffee page would be a layout jump for a section most of them never have.
  */
 export function ItemCocktails({ itemId, type }: ItemCocktailsProps) {
-  const [{ data, fetching }] = useQuery({
+  const [{ data }] = useQuery({
     query: ItemCocktailsQuery,
     variables: { itemId, type },
   });
-
-  if (fetching && data === undefined) {
-    return (
-      <div aria-hidden className="flex flex-col gap-2">
-        <Skeleton className="mx-4 h-4 w-40" />
-        <Skeleton className="h-28 w-full rounded-lg" />
-      </div>
-    );
-  }
 
   const result = unwrapResult(data?.item, "QueryItemSuccess");
   const cocktails = result.ok ? result.data.data.cocktails : null;
