@@ -6,7 +6,7 @@ import {
   PANTRY_KINDS,
   PANTRY_SECTIONS,
 } from "@cellar-assistant/contracts/bar";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "urql";
 import { FilterChip } from "@/components/app/FilterChip";
 import { Check } from "@/components/app/icons";
@@ -40,8 +40,13 @@ export function PantryEditor({ initial }: { initial: readonly BarKind[] }) {
     () => new Set(initial),
   );
   const [, setItem] = useMutation(SetBarPantryItemMutation);
+  // Per chip: the save in flight (so a quick second tap is sent after the
+  // first, never racing it to the server and landing first) and how many
+  // taps there have been (so only the newest tap's failure flips it back).
+  const inFlight = useRef(new Map<BarKind, Promise<void>>());
+  const taps = useRef(new Map<BarKind, number>());
 
-  const toggle = async (kind: BarKind) => {
+  const toggle = (kind: BarKind) => {
     const next = !have.has(kind);
     const flip = (on: boolean) =>
       setHave((current) => {
@@ -51,15 +56,23 @@ export function PantryEditor({ initial }: { initial: readonly BarKind[] }) {
         return copy;
       });
     flip(next);
-    const response = await setItem({ kind, have: next });
-    const result = unwrapResult(
-      response.data?.setBarPantryItem,
-      "BarPantryEntry",
-    );
-    if (!result.ok) {
-      flip(!next);
-      notify(`Couldn't update ${BAR_KINDS[kind].label}`, { tone: "error" });
-    }
+    const tap = (taps.current.get(kind) ?? 0) + 1;
+    taps.current.set(kind, tap);
+    const save = async () => {
+      const response = await setItem({ kind, have: next });
+      const result = unwrapResult(
+        response.data?.setBarPantryItem,
+        "BarPantryEntry",
+      );
+      if (!result.ok && taps.current.get(kind) === tap) {
+        flip(!next);
+        notify(`Couldn't update ${BAR_KINDS[kind].label}`, { tone: "error" });
+      }
+    };
+    const queued = (inFlight.current.get(kind) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(save);
+    inFlight.current.set(kind, queued);
   };
 
   return (
@@ -88,9 +101,7 @@ export function PantryEditor({ initial }: { initial: readonly BarKind[] }) {
                   selected={on}
                   data-pantry-kind={kind}
                   icon={on ? <Check aria-hidden /> : undefined}
-                  onClick={() => {
-                    void toggle(kind);
-                  }}
+                  onClick={() => toggle(kind)}
                 >
                   {BAR_KINDS[kind].label}
                 </FilterChip>

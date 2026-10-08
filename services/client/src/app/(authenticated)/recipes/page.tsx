@@ -1,4 +1,8 @@
-import { BarEntryCard } from "@/components/bar/BarEntryCard";
+import { Suspense } from "react";
+import {
+  BarEntryCard,
+  BarEntryCardFallback,
+} from "@/components/bar/BarEntryCard";
 import {
   RECIPE_GROUPS_PAGE_SIZE,
   RecipeGroupsQuery,
@@ -43,7 +47,9 @@ export default async function RecipesPage({
 
       {/* X14 / G29: the bar's verdict, first thing on the recipes tab. */}
       <div className="mb-6">
-        <BarEntryCard />
+        <Suspense fallback={<BarEntryCardFallback />}>
+          <BarEntryCard />
+        </Suspense>
       </div>
 
       <p className="mb-8 type-body text-ink-2">
