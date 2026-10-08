@@ -8,8 +8,8 @@
  * go into `brands` and `item_brands` the way `BrandRegistryActor` and
  * `ItemActor.linkBrand` leave them, primary first.
  *
- * Vectors are not written here: `writeItemVector` takes whatever vector the
- * harness's embedder produced, so the seed is model-agnostic.
+ * Vectors are not written here: the harness has `ItemActor.regenerateVector`
+ * make them, so the seed is model-agnostic.
  */
 import { randomUUID } from "node:crypto";
 import type {
@@ -23,7 +23,6 @@ import type { DbOrTx } from "../../lib/db.ts";
 import { ARCS } from "../../lib/item-arcs.ts";
 import type { ItemRow } from "../../lib/item-bindings.ts";
 import { ITEM_TABLES, itemInsertValues } from "../../lib/item-bindings.ts";
-import { toVectorLiteral } from "../../lib/vectors.ts";
 import type { CatalogEntry } from "./catalog.ts";
 
 export type SeededItem = {
@@ -111,17 +110,4 @@ const insertItem = async (
 ): Promise<void> => {
   const table = ITEM_TABLES[type] as (typeof ITEM_TABLES)["WINE"];
   await db.insert(table).values(values as typeof table.$inferInsert);
-};
-
-/** The item's one `item_vectors` row, as `regenerateVector` would upsert it. */
-export const writeItemVector = async (
-  db: DbOrTx,
-  ref: ItemRef,
-  vector: readonly number[],
-  embeddingModel: string,
-): Promise<void> => {
-  await db.execute(sql`
-    insert into public.item_vectors (${ARCS.itemVectors.unqualified(ref.type)}, vector, embedding_model, embedding_images)
-    values (${ref.id}::uuid, ${toVectorLiteral(vector)}::halfvec, ${embeddingModel}, 'none')
-  `);
 };

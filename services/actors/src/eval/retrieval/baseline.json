@@ -1,18 +1,18 @@
 {
-  "recorded": "2026-10-07, before N08 (pure vector search, codes-and-camelCase embedding text, no brand)",
+  "recorded": "2026-10-07, after N08 (hybrid vector + trigram name ranking, embedding text v2 with labels and brand, auto band needs a separated winner)",
   "model": "ollama:nomic-embed-text@768/RETRIEVAL_DOCUMENT",
   "verifier": "stand-in",
   "search": {
-    "hitAt1": 0.9592,
-    "hitAt3": 0.9796,
+    "hitAt1": 0.9796,
+    "hitAt3": 1,
     "hitAt10": 1,
-    "recallAt3": 0.9456,
-    "recallAt10": 0.966,
-    "mrr": 0.9719
+    "recallAt3": 0.9694,
+    "recallAt10": 1,
+    "mrr": 0.9864
   },
   "menus": {
-    "matchRate": 0.92,
-    "candidateRecall": 0.98,
+    "matchRate": 0.96,
+    "candidateRecall": 1,
     "falseAutoMatches": 0
   }
 }

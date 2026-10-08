@@ -3,9 +3,9 @@
  * embedding model.
  *
  * It seeds the fixture catalog (`catalog.ts`) into a rolled-back transaction,
- * embeds every item through the real model exactly as `regenerateVector`
- * would (`embeddingTextFor`, `RETRIEVAL_DOCUMENT`), and then drives the real
- * actors over it:
+ * embeds every item by calling the real `ItemActor.regenerateVector` with only
+ * its model call pointed at Ollama (`RETRIEVAL_DOCUMENT`), and then drives the
+ * real actors over it:
  *
  *  - **search** — `ItemSearchActor.all` for each of `queries.ts`, scored by
  *    hit@k, recall@k and MRR (`metrics.ts`);
@@ -42,21 +42,27 @@ import type {
   ItemSearchInput,
   RecordSuggestionsInput,
 } from "@cellar-assistant/contracts";
-import { itemSearchActorId } from "@cellar-assistant/contracts";
+import {
+  itemActorId,
+  itemSearchActorId,
+  systemCtx,
+} from "@cellar-assistant/contracts";
 import { sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
+import { ItemActor } from "../../actors/item-actor.ts";
 import { ItemSearchActor } from "../../actors/item-search-actor.ts";
 import { MenuMatchJobActor } from "../../actors/menu-match-job-actor.ts";
 import { readAIProviderConfig } from "../../lib/ai/config.ts";
 import { providerFor } from "../../lib/ai/factory.ts";
 import { providerMenuMatchVerifier } from "../../lib/ai/seams.ts";
 import type { DbOrTx } from "../../lib/db.ts";
-import { embeddingTextFor } from "../../lib/item-bindings.ts";
+import type { EmbedDocument } from "../../lib/embedding-client.ts";
 import type { MenuMatchVerifier } from "../../lib/menu-ai.ts";
 import type { MenuSearcher } from "../../lib/menu-matching.ts";
 import { seedPlace } from "../../lib/search-testing.ts";
 import {
+  activate,
   closeTestDb,
   resolveTestDatabase,
   seedUser,
@@ -76,8 +82,8 @@ import type {
 import { regressions, summariseMenus, summariseSearch } from "./metrics.ts";
 import type { QueryKind } from "./queries.ts";
 import { QUERIES } from "./queries.ts";
-import type { SeededCatalog, SeededItem } from "./seed.ts";
-import { seedCatalog, writeItemVector } from "./seed.ts";
+import type { SeededCatalog } from "./seed-testing.ts";
+import { seedCatalog } from "./seed-testing.ts";
 
 const ENDPOINT = process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434";
 
@@ -143,14 +149,31 @@ const searchActor = (db: DbOrTx, input: ItemSearchInput): ItemSearchActor =>
     async (_ctx, text) => embed(text, "query"),
   );
 
-/** What `regenerateVector` embeds for a seeded item. */
-const documentText = (item: SeededItem): string =>
-  embeddingTextFor(item.ref, item.row);
-
+/**
+ * Every item's vector, made by the real `ItemActor.regenerateVector` — its
+ * text (`embeddingTextFor`, brands looked up as it looks them up), its write
+ * and its identity columns — with only the model call routed to Ollama. So
+ * the eval measures what production would store, not a copy of it.
+ */
 const seedVectors = async (db: DbOrTx, seeded: SeededCatalog) => {
+  const embedDocument: EmbedDocument = async (_ctx, input) => ({
+    vector: await embed(input.text, "document"),
+    model: MODEL_KEY,
+  });
   for (const item of seeded.items) {
-    const vector = await embed(documentText(item), "document");
-    await writeItemVector(db, item.ref, vector, MODEL_KEY);
+    const actor = await activate(
+      new ItemActor(
+        daprClient(),
+        new ActorId(itemActorId(item.ref)),
+        db,
+        async () => {
+          throw new Error("the eval verifies no files");
+        },
+        embedDocument,
+      ),
+    );
+    const result = await actor.regenerateVector(systemCtx("eval-embed"));
+    if (result.skipped) throw new Error(`${item.entry.key} was not embedded`);
   }
 };
 
@@ -214,6 +237,9 @@ const standInVerifier: MenuMatchVerifier = async (_ctx, request) => {
   };
 };
 
+/** Verifier answers the seam refused, in `RETRIEVAL_EVAL_VERIFIER=model`. */
+const verifierErrors: string[] = [];
+
 const runMenus = async (
   db: DbOrTx,
   userId: string,
@@ -240,7 +266,23 @@ const runMenus = async (
         return seeded.keyOf.get(id) ?? `?${candidate.key}`;
       }),
     );
-    return inner(ctx, request);
+    try {
+      return await inner(ctx, request);
+    } catch (error) {
+      // The real verifier can answer with something that is not a key (a
+      // product name, measured with gemma3:4b); the seam refuses it and in
+      // production the outbox retries the batch. Here it is counted and the
+      // line scored as unmatched, so one bad answer does not void the run.
+      verifierErrors.push(
+        `${request.menuItemName}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return {
+        acceptedKey: null,
+        confidence: 0,
+        reasoning: "verifier error",
+        model: "eval",
+      };
+    }
   };
   const recorded: RecordSuggestionsInput[] = [];
 
@@ -345,6 +387,7 @@ const report = (
       `${pct(menus.correctRejections)}  false auto ${menus.falseAutoMatches}  ` +
       `false suggestions ${menus.falseSuggestions}/${menus.notInCatalog}`,
     `  misses: ${menus.misses.join(", ") || "none"}`,
+    `  verifier errors: ${verifierErrors.length}`,
   ].join("\n");
 
 const BASELINE = new URL("./baseline.json", import.meta.url);
@@ -379,7 +422,8 @@ describe.skipIf(skip)(`retrieval eval (N05), live at ${ENDPOINT}`, () => {
           summariseSearch(ranked.filter((query) => query.kind === kind)),
         ]),
       );
-      const menus = summariseMenus(await runMenus(db, userId, seeded));
+      const lines = await runMenus(db, userId, seeded);
+      const menus = summariseMenus(lines);
 
       console.log(report(search, byKind, menus));
       const out = process.env.RETRIEVAL_EVAL_OUT;
@@ -394,6 +438,8 @@ describe.skipIf(skip)(`retrieval eval (N05), live at ${ENDPOINT}`, () => {
               byKind,
               menus,
               ranked,
+              lines,
+              verifierErrors,
             },
             null,
             2,
