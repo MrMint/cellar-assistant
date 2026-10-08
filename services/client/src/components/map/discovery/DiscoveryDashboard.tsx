@@ -382,6 +382,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                           </p>
                           {interaction.is_favorite && (
                             <Love
+                              role="img"
                               aria-label="Favorite"
                               strokeWidth={ICON_STROKE}
                               className="size-4 shrink-0 fill-brand text-brand"

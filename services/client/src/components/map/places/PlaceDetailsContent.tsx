@@ -753,7 +753,12 @@ function TipIconButton({
           {children}
         </IconButton>
       </TooltipTrigger>
-      <TooltipContent side="top">{label}</TooltipContent>
+      {/* z-[1200]: these buttons sit in the Joy-era PlaceDetailsDrawer
+          (z-index 1100 on phones), which would cover a z-50 tooltip. Drop it
+          with PlaceMenuItems' when S7 converts the drawer. */}
+      <TooltipContent side="top" className="z-[1200]">
+        {label}
+      </TooltipContent>
     </Tooltip>
   );
 }
