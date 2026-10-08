@@ -60,6 +60,16 @@ describe("MeHub", () => {
     assert.ok(html.indexOf("Sign out") > html.indexOf("Edit profile"));
   });
 
+  test("the avatar beside the name is hidden from assistive tech (no second reading)", () => {
+    const withPhoto = renderToStaticMarkup(
+      <MeHub user={{ ...user, avatarUrl: "https://example.test/a.jpg" }} />,
+    );
+    assert.match(
+      withPhoto,
+      /<span\b[^>]*aria-hidden="true"[^>]*data-slot="user-avatar"|<span\b[^>]*data-slot="user-avatar"[^>]*aria-hidden="true"/,
+    );
+  });
+
   test("no display name: the email stands in, once", () => {
     const bare = renderToStaticMarkup(
       <MeHub user={{ id: "u2", email: "sam@example.test" }} />,

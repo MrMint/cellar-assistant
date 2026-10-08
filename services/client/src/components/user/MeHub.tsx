@@ -75,7 +75,10 @@ export function MeHub({ user }: { user: ServerUser }) {
   return (
     <Page>
       <header className="flex items-center gap-4 px-1 pt-2">
+        {/* Decorative here: the name is the heading beside it, and the
+            photo's alt would read it a second time. */}
         <UserAvatar
+          aria-hidden
           avatarUrl={user.avatarUrl}
           displayName={name}
           size="lg"
