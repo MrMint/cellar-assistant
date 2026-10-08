@@ -166,7 +166,14 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       slug: "favorites",
       path: "/favorites",
       as: "demo",
-      note: "favourites (items)",
+      note: "Loved (items; the route keeps its old name)",
+    },
+    {
+      slice: "S1",
+      slug: "want-to-try",
+      path: "/want-to-try",
+      as: "demo",
+      note: "Want to try (X08): drinks, places, recipes",
     },
     {
       slice: "S1",

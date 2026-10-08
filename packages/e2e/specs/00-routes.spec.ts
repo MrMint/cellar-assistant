@@ -48,6 +48,7 @@ const ROUTES = [
   "/search",
   "/brands",
   "/favorites",
+  "/want-to-try",
   "/map",
   "/map/create-place",
   "/map/scans",
