@@ -89,7 +89,9 @@ const ItemDetails = ({
               target={{ kind: "ITEM", itemType: type, itemId }}
               saved={isWantToTry}
               name={title}
-              className="shrink-0"
+              // The heart beside it draws its glyph at 28 px; the bookmark
+              // matches it rather than sitting at IconButton's default 20.
+              className="shrink-0 [&_svg:not([class*='size-'])]:size-7"
             />
           )}
           <IconButton
