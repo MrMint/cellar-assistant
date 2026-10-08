@@ -13,9 +13,9 @@ import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { formatItemType } from "@/utilities";
 import { displayItemName } from "@/utilities/smart-title-case";
-import { shownBrandOf } from "./brand-change";
 import { ItemAppBar } from "./ItemAppBar";
 import { ItemForm } from "./ItemForm";
+import { shownBrandOf } from "./shown-brand";
 
 /**
  * `/{type}s/[itemId]/edit` and `/cellars/[c]/{type}s/[bottleId]/edit` — new

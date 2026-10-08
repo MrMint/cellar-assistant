@@ -22,9 +22,9 @@ import {
   UnlinkItemBrandMutation,
 } from "@/lib/api/item-correction";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
+import type { ShownBrand } from "./shown-brand";
 
-/** The brand an item shows — its primary link, or its first. */
-export type ShownBrand = { brandId: string; name: string };
+export { type ShownBrand, shownBrandOf } from "./shown-brand";
 
 /** A change that happened — what an Undo needs to put it back exactly. */
 export type AppliedBrandChange = {
@@ -49,19 +49,6 @@ export const isBrandChange = (
   name: string,
 ): boolean =>
   (shown?.name.trim().toLowerCase() ?? "") !== name.trim().toLowerCase();
-
-/** The primary link's brand, or the first one's — what the item page shows. */
-export const shownBrandOf = (
-  links: readonly {
-    isPrimary?: boolean | null;
-    brand?: { id: string; name: string } | null;
-  }[],
-): ShownBrand | null => {
-  const link = links.find((candidate) => candidate.isPrimary) ?? links[0];
-  return link?.brand === null || link?.brand === undefined
-    ? null
-    : { brandId: link.brand.id, name: link.brand.name };
-};
 
 export type BrandChanger = {
   /** Make the item's brand `toName` (blank: none), from the one it shows. */
