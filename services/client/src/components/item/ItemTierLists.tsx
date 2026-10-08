@@ -13,14 +13,25 @@ export type ItemTierListEntry = {
 
 /**
  * The tier-band ramp (design §3.1): claret → brass for 5 … 1, Unrated on
- * `surface-3`. The band word is always printed beside the hue. Written out in
- * full so Tailwind sees every class.
+ * `surface-3`. The band word is always printed beside the hue, in the ink
+ * that reads on that fill at 4.5:1 — parchment (`ink-1`) on the dark bands,
+ * the page's near-black (`background`) on the two light ones, where
+ * parchment is only 3.1 and 3.6:1 (`item-tier-bands.test.ts`). Written out
+ * in full so Tailwind sees every class.
  */
-const BAND_CLASS: Record<number, string> = {
+export const BAND_INK = {
+  5: "ink1",
+  4: "ink1",
+  3: "bg",
+  2: "bg",
+  1: "ink1",
+} as const satisfies Record<1 | 2 | 3 | 4 | 5, "ink1" | "bg">;
+
+export const BAND_CLASS: Record<number, string> = {
   5: "bg-band-5 text-ink-1",
   4: "bg-band-4 text-ink-1",
-  3: "bg-band-3 text-ink-1",
-  2: "bg-band-2 text-ink-1",
+  3: "bg-band-3 text-background",
+  2: "bg-band-2 text-background",
   1: "bg-band-1 text-ink-1",
   0: "bg-surface-3 text-ink-2",
 };
