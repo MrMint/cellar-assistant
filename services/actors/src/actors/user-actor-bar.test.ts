@@ -127,6 +127,25 @@ describe.skipIf(skip)("UserActor — recipe Love (D9)", () => {
     });
   });
 
+  it("leaves a since-deleted recipe out of the list rather than a dead id", async () => {
+    await withTestDb(async (db) => {
+      const me = await seedUser(db);
+      const kept = await seedRecipe(db, { name: "Martinez" });
+      const gone = await seedRecipe(db, { name: "Bijou" });
+      const actor = await actorOf(me, db);
+      const ctx = userCtx(me);
+      await actor.toggleRecipeLove(ctx, kept);
+      await actor.toggleRecipeLove(ctx, gone);
+      // Deleted by its author: the Love goes with it by cascade, behind this
+      // actor's cached aggregate.
+      await db.execute(
+        sql`delete from public.recipes where id = ${gone}::uuid`,
+      );
+      const loved = await actor.lovedRecipes(ctx, pageArgs({ first: 10 }));
+      expect(loved.entries.map((entry) => entry.node)).toEqual([kept]);
+    });
+  });
+
   it("refuses a recipe that does not exist, and another user's actor", async () => {
     await withTestDb(async (db) => {
       const me = await seedUser(db);

@@ -1441,17 +1441,35 @@ export class UserActor
     return { recipeId, loved: true };
   }
 
+  /**
+   * Newest Love first. A recipe deleted since is left out: its row went with
+   * it (`ON DELETE CASCADE`, written by `RecipeActor`'s delete, not this
+   * actor), so the cached aggregate can still hold it — and handing its id
+   * to the API would fail the whole list on one dead node.
+   */
   async lovedRecipes(ctx: Ctx, page: PageArgs): Promise<Page<string>> {
     const aggregate = this.requireAggregate();
     this.#requireSelf(ctx, "view these loves");
+    const ids = [...aggregate.recipeLoves]
+      .sort(
+        (a, b) =>
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          a.id.localeCompare(b.id),
+      )
+      .map((row) => row.recipeId);
+    const alive =
+      ids.length === 0
+        ? new Set<string>()
+        : new Set(
+            (
+              await this.db
+                .select({ id: recipes.id })
+                .from(recipes)
+                .where(inArray(recipes.id, ids))
+            ).map((row) => row.id),
+          );
     return offsetPage(
-      [...aggregate.recipeLoves]
-        .sort(
-          (a, b) =>
-            b.createdAt.getTime() - a.createdAt.getTime() ||
-            a.id.localeCompare(b.id),
-        )
-        .map((row) => row.recipeId),
+      ids.filter((id) => alive.has(id)),
       page,
     );
   }
