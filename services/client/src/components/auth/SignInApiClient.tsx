@@ -12,7 +12,6 @@
  * action would have to forward `Set-Cookie` by hand.
  */
 
-import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
 import { Link } from "@/components/app/Link";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
-import { withReturnTo } from "@/utilities/sanitize-return-to";
+import { HOME_PATH, withReturnTo } from "@/utilities/sanitize-return-to";
 import { AuthField, AuthPage, AuthPanel, WordDivider } from "./AuthCard";
 import { LiquidBackground } from "./LiquidBackground";
 import {
@@ -28,6 +27,7 @@ import {
   SocialButtons,
   useSocialSignIn,
 } from "./SocialButtons";
+import { useLanding } from "./useLanding";
 
 /**
  * `passwordMode` comes from the page's server component
@@ -49,34 +49,33 @@ export function SignInApiClient({
   passwordMode?: PasswordMode;
 }) {
   usePurgeUserCachesOnMount();
-  const router = useRouter();
   const { run, pending, error } = useAuthAction(authClient.signIn.email);
   const [passwordOpen, setPasswordOpen] = useState(false);
 
-  const destination = returnTo ?? "/cellars";
+  const destination = returnTo ?? HOME_PATH;
+  const { land, landing } = useLanding(destination);
   const { ssoError, redirectingTo, start } = useSocialSignIn(destination);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      const ok = await run({
-        email: String(form.get("email") ?? ""),
-        password: String(form.get("password") ?? ""),
-        rememberMe: true,
-      });
-      if (!ok) return;
-      // `replace`, so Back does not walk into the sign-in page behind a live
-      // session and bounce straight forward again.
-      router.replace(destination);
-      // The `(authenticated)` layout is a server component; without this it
-      // would re-render from the router cache, before the cookie existed.
-      router.refresh();
+      // `land` starts the navigation in the same tick `pending` clears, so
+      // the spinner never drops before the next page commits (X01).
+      await run(
+        {
+          email: String(form.get("email") ?? ""),
+          password: String(form.get("password") ?? ""),
+          rememberMe: true,
+        },
+        land,
+      );
     },
-    [run, router, destination],
+    [run, land],
   );
 
-  const busy = pending || redirectingTo !== null;
+  const submitting = pending || landing;
+  const busy = submitting || redirectingTo !== null;
   const formError = error?.message ?? null;
 
   const passwordForm = (
@@ -102,8 +101,8 @@ export function SignInApiClient({
         message={formError}
         disabled={busy}
       />
-      <Button type="submit" disabled={busy} aria-busy={pending || undefined}>
-        {pending && <Spinner aria-hidden />}
+      <Button type="submit" disabled={busy} aria-busy={submitting || undefined}>
+        {submitting && <Spinner aria-hidden />}
         Sign in
       </Button>
     </form>

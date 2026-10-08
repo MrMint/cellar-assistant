@@ -9,7 +9,6 @@
  * verification off in development.
  */
 
-import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
 import { Link } from "@/components/app/Link";
 import { Button } from "@/components/ui/button";
@@ -17,9 +16,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
-import { withReturnTo } from "@/utilities/sanitize-return-to";
+import { HOME_PATH, withReturnTo } from "@/utilities/sanitize-return-to";
 import { AuthField, AuthPage, AuthPanel, WordDivider } from "./AuthCard";
 import { SocialButtons, useSocialSignIn } from "./SocialButtons";
+import { useLanding } from "./useLanding";
 
 /** "Already have an account? Sign in", under both versions of the form. */
 function SignInInstead({ returnTo }: { returnTo?: string }) {
@@ -74,7 +74,7 @@ export function SignUpApiClient({
 
 function SocialSignUp({ returnTo }: { returnTo?: string }) {
   const { ssoError, redirectingTo, start } = useSocialSignIn(
-    returnTo ?? "/cellars",
+    returnTo ?? HOME_PATH,
   );
   return (
     <AuthPage>
@@ -98,10 +98,16 @@ function SocialSignUp({ returnTo }: { returnTo?: string }) {
 }
 
 function PasswordSignUp({ returnTo }: { returnTo?: string }) {
-  const router = useRouter();
-  const destination = returnTo ?? "/cellars";
+  const destination = returnTo ?? HOME_PATH;
+  const { land, landing } = useLanding(destination);
   const [localError, setLocalError] = useState<string | null>(null);
-  const { run, pending, error } = useAuthAction(authClient.signUp.email);
+  const {
+    run,
+    pending: requesting,
+    error,
+  } = useAuthAction(authClient.signUp.email);
+  // Through the request and on until the next page commits (X01).
+  const pending = requesting || landing;
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -125,12 +131,9 @@ function PasswordSignUp({ returnTo }: { returnTo?: string }) {
       }
       // Blank stays blank: the server gives a neutral handle. It used to send
       // the email here, which made every such address public (W4 security F2).
-      const ok = await run({ email, password, name });
-      if (!ok) return;
-      router.replace(destination);
-      router.refresh();
+      await run({ email, password, name }, land);
     },
-    [run, router, destination],
+    [run, land],
   );
 
   const formError = localError ?? error?.message ?? null;
