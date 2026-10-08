@@ -234,6 +234,7 @@ interface PlaceDetailsProps {
 export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
   const [activeTab, setActiveTab] = useState(0);
   // N07/D25: menu scanning is hidden, not refused, where no AI can read one.
+  // A tab picked before the answer arrived falls back to Menu if it hides.
   const menuScanOffered = isOffered(useAiCapabilities(), "menuScan");
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
   const [isMarkingVisited, setIsMarkingVisited] = useState(false);
@@ -789,7 +790,7 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
       {/* Content tabs */}
       <Card>
         <Tabs
-          value={activeTab}
+          value={!menuScanOffered && activeTab === 1 ? 0 : activeTab}
           onChange={(_, value) => setActiveTab(value as number)}
         >
           <TabList>

@@ -313,7 +313,7 @@ export function TierListInsightsPanel({
               >
                 <MdUpdate style={{ fontSize: 14 }} />
                 <Typography level="body-xs" sx={{ color: "inherit" }}>
-                  Your list has changed since this analysis.
+                  This list has changed since this analysis.
                 </Typography>
               </Stack>
             )}

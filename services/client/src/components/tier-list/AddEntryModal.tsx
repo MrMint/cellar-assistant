@@ -119,7 +119,9 @@ export function AddEntryModal({
           setRows(null);
           // N07: a semantic search refused for an AI reason (no provider, a
           // spent allowance) says so in words, never the server's message.
-          setSearchError(aiOutcome(result.error).message);
+          setSearchError(
+            aiOutcome(result.error, { subject: "search" }).message,
+          );
           return;
         }
         setRows(
@@ -165,7 +167,7 @@ export function AddEntryModal({
       );
       if (!result.ok) {
         setRows(null);
-        setSearchError(aiOutcome(result.error).message);
+        setSearchError(aiOutcome(result.error, { subject: "search" }).message);
         return;
       }
       setRows(

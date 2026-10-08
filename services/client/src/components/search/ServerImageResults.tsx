@@ -1,8 +1,7 @@
 import { Button, Stack, Typography } from "@mui/joy";
 import Link from "next/link";
 import { MdAdd } from "react-icons/md";
-import { AiStatus } from "@/components/common/AiStatus";
-import { aiOutcome } from "@/lib/ai/outcome";
+import { AiFailureStatus } from "@/components/common/AiStatus";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import {
@@ -70,13 +69,15 @@ export async function ServerImageResults({
     }
     if (result.error.code === "NOT_FOUND") return <ExpiredImageSearch />;
     // N07: a limit or any other refusal, in words chosen from the reason —
-    // never the server's message. `retryAt` is phrased in the server's zone
-    // here; the status is short-lived, so that is good enough.
+    // never the server's message; `retryAt` in the viewer's own zone.
     return (
-      <AiStatus
-        outcome={aiOutcome(result.error, {
-          fallback: "search by name or scan a barcode",
-        })}
+      <AiFailureStatus
+        failure={{
+          code: result.error.code,
+          reason: result.error.reason,
+          retryAt: result.error.retryAt,
+        }}
+        fallback="search by name or scan a barcode"
       />
     );
   }

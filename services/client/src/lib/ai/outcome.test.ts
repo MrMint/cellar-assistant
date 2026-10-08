@@ -138,6 +138,33 @@ describe("aiOutcome", () => {
   });
 });
 
+describe("aiOutcome: what the person handed over", () => {
+  test("a refused text search never talks about a photo", () => {
+    const outcome = aiOutcome(failure({ code: "VALIDATION" }), {
+      ...opts,
+      subject: "search",
+    });
+    assert.equal(outcome.kind, "rejected");
+    assert.doesNotMatch(outcome.message, /photo/i);
+    assert.match(
+      aiOutcome(failure({ code: "VALIDATION" }), opts).message,
+      /photo/,
+    );
+  });
+
+  test("the fallback ends every message, a spent allowance included", () => {
+    for (const over of [
+      { reason: "USER_CAP" as const, code: "BUDGET_EXCEEDED" as const },
+      { code: "CONFLICT" as const },
+    ]) {
+      assert.match(
+        aiOutcome(failure(over), { ...opts, fallback: "type it in" }).message,
+        /You can type it in\.$/,
+      );
+    }
+  });
+});
+
 describe("retryPhrase", () => {
   test("is null for a missing, unparseable or past time", () => {
     assert.equal(retryPhrase(null, opts), null);

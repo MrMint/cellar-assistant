@@ -1798,7 +1798,9 @@ export class BudgetActor
     // reached. When both windows are full the call fits only once *both* have
     // a slot, so the later of the two times is the answer — the hour freeing
     // up first would otherwise promise a retry the day still refuses.
-    const freedAt = async (w: (typeof full)[number]): Promise<string | null> => {
+    const freedAt = async (
+      w: (typeof full)[number],
+    ): Promise<string | null> => {
       const span = sql.raw(`interval '${w.span}'`);
       const [freed] = await tx
         .select({

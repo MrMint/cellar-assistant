@@ -99,6 +99,22 @@ describe("insightsView", () => {
     assert.match(view({ status: "IDLE" }).hint ?? "", /next change/);
   });
 
+  test("no line assumes the viewer is the list's creator", () => {
+    // A shared list is read by friends too; none of these is theirs to act on.
+    for (const over of [
+      { status: "NOT_ENOUGH_ENTRIES" as const, itemCount: 2 },
+      { status: "IDLE" as const },
+      { hasInsights: true },
+      { hasInsights: true, retryAt: "2026-10-08T09:00:00.000Z" },
+      { status: "FAILED" as const, failureReason: "NOTHING_READ" as const },
+      { status: "FAILED" as const },
+    ]) {
+      const result = view(over);
+      const words = `${result.hint ?? ""} ${result.notice?.title ?? ""} ${result.notice?.message ?? ""}`;
+      assert.doesNotMatch(words, /\byour\b|\bRank\b|\bAdd a few\b/i);
+    }
+  });
+
   test("READY is nothing but the insights", () => {
     assert.deepEqual(view({ status: "READY", hasInsights: true }), {
       generating: false,

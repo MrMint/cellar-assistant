@@ -59,6 +59,12 @@ export type AiOutcomeOptions = {
    * the `unavailable` and `nothing-read` messages when given.
    */
   readonly fallback?: string;
+  /**
+   * What the person handed over, for the one message that names it: a
+   * refused `photo` (the default) or a refused text `search`. A search box
+   * must never answer "That photo couldn't be used".
+   */
+  readonly subject?: "photo" | "search";
   /** For `retryAt` phrasing; defaults to the current instant. */
   readonly now?: Date;
   /** For `retryAt` phrasing; defaults to the runtime's. */
@@ -137,8 +143,8 @@ export const aiOutcome = (
         title: "You've reached your limit for now",
         message:
           when === null
-            ? "You can try again a little later."
-            : `${sentence(`you can try again ${when}`)}.`,
+            ? `You can try again a little later.${instead}`
+            : `${sentence(`you can try again ${when}`)}.${instead}`,
         retryAt,
         canRetry: false,
         tone: "warning",
@@ -177,7 +183,10 @@ export const aiOutcome = (
       return {
         kind: "rejected",
         title: "That didn't work",
-        message: `That photo couldn't be used. Try a different one.${instead}`,
+        message:
+          options.subject === "search"
+            ? "That search couldn't be run. Try different words."
+            : `That photo couldn't be used. Try a different one.${instead}`,
         retryAt: null,
         canRetry: false,
         tone: "danger",
@@ -186,7 +195,7 @@ export const aiOutcome = (
       return {
         kind: "retryable",
         title: "That didn't go through",
-        message: "Try again in a moment.",
+        message: `Try again in a moment.${instead}`,
         retryAt: null,
         canRetry: true,
         tone: "danger",

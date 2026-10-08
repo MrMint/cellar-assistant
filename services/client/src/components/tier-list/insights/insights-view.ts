@@ -8,6 +8,12 @@
  * delivery), and the panel could not know. The server now says
  * (`TierList.insightsStatus`), and this turns the status into a view model.
  *
+ * Every line is worded for whoever is looking — the creator, or a friend
+ * reading a shared list — so none of them says "your" or asks for an edit
+ * only the creator could make. (A per-user limit, the one outcome that is
+ * about a person, only ever reaches the creator: the actor redacts it for
+ * everyone else.)
+ *
  * Pure — no React, no router — so the markup can change (the shadcn
  * migration) without touching the rules, and the rules are tested as data.
  */
@@ -69,7 +75,7 @@ export const insightsView = (
       return quiet(
         input.itemCount === 0
           ? null
-          : `Rank at least ${MIN_INSIGHT_ENTRIES} entries to get insights.`,
+          : `Insights appear once this list has at least ${MIN_INSIGHT_ENTRIES} entries.`,
       );
     case "UNAVAILABLE":
       return {
@@ -89,8 +95,8 @@ export const insightsView = (
         return {
           ...quiet(
             when === null
-              ? "Your list has changed. Updated insights are on the way."
-              : `Your list has changed. Insights refresh at most once a day; the next one is ${when}.`,
+              ? "This list has changed. Updated insights are on the way."
+              : `This list has changed. Insights refresh at most once a day; the next one is ${when}.`,
           ),
           poll: soon,
         };
@@ -122,7 +128,7 @@ export const insightsView = (
                   ...outcome,
                   title: "Not enough to go on yet",
                   message:
-                    "Insights need entries with names or notes. Add a few more and they'll be generated.",
+                    "Insights need entries with names or notes; they're generated once there are a few more.",
                 }
               : outcome,
       };
@@ -131,7 +137,7 @@ export const insightsView = (
       return quiet(
         input.hasInsights
           ? null
-          : "Insights are generated after your next change to this list.",
+          : "Insights are generated after the next change to this list.",
       );
     default:
       return quiet();
