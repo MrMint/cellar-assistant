@@ -116,6 +116,7 @@ const CHECK_SHAPE: Readonly<
   place_menu_items: { extra: [], op: "<= 1" },
   recipe_ingredients: { extra: ["generic_item_id"], op: "= 1" },
   tier_list_items: { extra: ["place_id"], op: "= 1" },
+  want_to_try: { extra: ["recipe_id"], op: "= 1" },
 };
 
 const NUM_NONNULLS = /num_nonnulls\(([^)]*)\)\s*(=|<=)\s*1/;
