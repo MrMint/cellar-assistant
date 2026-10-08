@@ -166,7 +166,13 @@ export const CellarItemHeader = ({
               </Typography>
             )}
           </DialogContent>
-          <DialogActions>
+          {/* Three buttons do not fit side by side at 390px: stack them. */}
+          <DialogActions
+            sx={{
+              flexDirection: { xs: "column", sm: "row-reverse" },
+              alignItems: { xs: "stretch", sm: "center" },
+            }}
+          >
             <Button
               variant="solid"
               color="danger"

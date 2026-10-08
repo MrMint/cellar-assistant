@@ -88,6 +88,28 @@ describe("finishReducer", () => {
     );
   });
 
+  test("a refused Undo keeps the toast up, with the reason and a retry", () => {
+    const failed = run([
+      { type: "FINISH_NOW", snapshot: opened },
+      { type: "FINISHED" },
+      { type: "UNDO" },
+      { type: "FAILED", message: "offline" },
+    ]);
+    assert.deepEqual(failed, {
+      phase: "undoFailed",
+      snapshot: opened,
+      error: "offline",
+    });
+    assert.deepEqual(finishReducer(failed, { type: "UNDO" }), {
+      phase: "undoing",
+      snapshot: opened,
+    });
+    assert.deepEqual(
+      finishReducer(failed, { type: "DISMISS" }),
+      initialFinishState,
+    );
+  });
+
   test("events that do not apply are ignored", () => {
     // A double tap on Finished, an Undo with no toast, a stray FINISHED.
     const finishing = run([

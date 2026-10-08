@@ -32,7 +32,13 @@ export type FinishState =
   /** `asked`: it came through "Finished it?", which shows the progress. */
   | { phase: "finishing"; snapshot: FinishSnapshot; asked: boolean }
   | { phase: "finished"; snapshot: FinishSnapshot }
-  | { phase: "undoing"; snapshot: FinishSnapshot };
+  | { phase: "undoing"; snapshot: FinishSnapshot }
+  /**
+   * Undo was refused (or the network dropped it): the bottle is still
+   * finished. The toast stays up with the reason and "Try again" — an Undo
+   * that fails silently would read as done.
+   */
+  | { phase: "undoFailed"; snapshot: FinishSnapshot; error: string };
 
 export type FinishEvent =
   /** The slider settled on 0%: ask first. */
@@ -77,16 +83,25 @@ export function finishReducer(
         ? { phase: "finished", snapshot: state.snapshot }
         : state;
     case "UNDO":
-      return state.phase === "finished"
+      return state.phase === "finished" || state.phase === "undoFailed"
         ? { phase: "undoing", snapshot: state.snapshot }
         : state;
     case "UNDONE":
       return state.phase === "undoing" ? initialFinishState : state;
     case "DISMISS":
-      return state.phase === "finished" ? initialFinishState : state;
+      return state.phase === "finished" || state.phase === "undoFailed"
+        ? initialFinishState
+        : state;
     case "FAILED":
-      return state.phase === "finishing" || state.phase === "undoing"
-        ? { phase: "idle", error: event.message }
+      if (state.phase === "finishing") {
+        return { phase: "idle", error: event.message };
+      }
+      return state.phase === "undoing"
+        ? {
+            phase: "undoFailed",
+            snapshot: state.snapshot,
+            error: event.message,
+          }
         : state;
   }
 }

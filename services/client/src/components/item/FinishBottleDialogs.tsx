@@ -32,7 +32,11 @@ export function FinishBottleDialogs({
   const asking =
     state.phase === "confirming" ||
     (state.phase === "finishing" && state.asked);
-  const name = itemName === undefined || itemName === "" ? "this" : itemName;
+  const undoFailed = state.phase === "undoFailed";
+  const toastOpen =
+    state.phase === "finished" || state.phase === "undoing" || undoFailed;
+  const name =
+    itemName === undefined || itemName === "" ? "This bottle" : itemName;
 
   return (
     <>
@@ -45,11 +49,12 @@ export function FinishBottleDialogs({
         <ModalDialog
           role="alertdialog"
           aria-labelledby="finish-bottle-title"
+          aria-describedby="finish-bottle-body"
           layout="center"
           sx={{ maxWidth: 400, width: "calc(100% - 32px)" }}
         >
           <DialogTitle id="finish-bottle-title">Finished it?</DialogTitle>
-          <DialogContent>
+          <DialogContent id="finish-bottle-body">
             {`${name} leaves the cellar. Its check-ins stay, and you can undo this.`}
           </DialogContent>
           <DialogActions>
@@ -71,15 +76,18 @@ export function FinishBottleDialogs({
         </ModalDialog>
       </Modal>
       <Snackbar
-        open={state.phase === "finished" || state.phase === "undoing"}
-        autoHideDuration={state.phase === "finished" ? UNDO_WINDOW_MS : null}
+        open={toastOpen}
+        // Announced, not just shown: Joy's root is role="presentation".
+        role="status"
+        aria-live="polite"
+        autoHideDuration={state.phase === "undoing" ? null : UNDO_WINDOW_MS}
         onClose={(_event, reason) => {
           // A tap elsewhere is not a decision; only the timer closes it.
           if (reason === "clickaway") return;
           finish.dismiss();
         }}
         variant="soft"
-        color="neutral"
+        color={undoFailed ? "danger" : "neutral"}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
         sx={{
           bottom: {
@@ -91,15 +99,18 @@ export function FinishBottleDialogs({
           <Button
             size="sm"
             variant="plain"
+            color={undoFailed ? "danger" : "primary"}
             loading={state.phase === "undoing"}
             onClick={finish.undo}
           >
-            Undo
+            {undoFailed ? "Try again" : "Undo"}
           </Button>
         }
       >
         <Typography level="body-sm">
-          Finished. Moved out of the cellar.
+          {state.phase === "undoFailed"
+            ? `Couldn't undo: ${state.error}`
+            : "Finished. Moved out of the cellar."}
         </Typography>
       </Snackbar>
     </>

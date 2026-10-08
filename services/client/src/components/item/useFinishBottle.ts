@@ -92,7 +92,7 @@ export function useFinishBottle({
     },
     cancel: () => dispatch({ type: "CANCEL" }),
     undo: () => {
-      if (state.phase !== "finished") return;
+      if (state.phase !== "finished" && state.phase !== "undoFailed") return;
       dispatch({ type: "UNDO" });
       void performUndo(deps, state.snapshot);
     },
