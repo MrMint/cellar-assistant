@@ -83,13 +83,20 @@ const PARTICLES = new Set([
 /** Roman numerals up to the length a cuvée or a batch name ever uses. */
 const ROMAN = /^(?=[IVX])X{0,3}(IX|IV|V?I{0,3})$/;
 const ORDINAL = /^\d+(ST|ND|RD|TH)$/i;
-// Unicode property escapes need the `u` flag, which the client's `es5`
-// `target` refuses in a literal; the runtime (every supported browser) has it.
-const LETTER = /\p{L}/u;
-const LOWER = /\p{Ll}/u;
-const DIGIT = /\p{N}/u;
-const NOT_LETTER = /[^\p{L}]/gu;
-const NOT_ALNUM = /[^\p{L}\p{N}]/gu;
+const DIGIT = /[0-9]/;
+
+// Case, not `\p{L}`: property escapes need the `u` flag, which the client's
+// `es5` target refuses. A character is a (cased) letter when its two cases
+// differ, and lowercase when uppercasing changes it (`ß` → `SS` included).
+const isLetter = (char: string): boolean =>
+  char.toLocaleLowerCase() !== char.toLocaleUpperCase();
+const isLower = (char: string): boolean => char !== char.toLocaleUpperCase();
+const lettersOf = (word: string): string =>
+  Array.from(word).filter(isLetter).join("");
+const alphanumericOf = (word: string): string =>
+  Array.from(word)
+    .filter((char) => isLetter(char) || DIGIT.test(char))
+    .join("");
 
 /**
  * True when `name` is written in capitals throughout: no lowercase letter,
@@ -97,16 +104,16 @@ const NOT_ALNUM = /[^\p{L}\p{N}]/gu;
  * — so `IPA`, `XO` or `ABC` on their own are left alone.
  */
 export const isShouting = (name: string): boolean => {
-  if (LOWER.test(name)) return false;
+  if (Array.from(name).some(isLower)) return false;
   return name.split(/[\s\-/.&,]+/).some((word) => {
-    const letters = word.replace(NOT_LETTER, "");
+    const letters = lettersOf(word);
     return Array.from(letters).length >= 4 && !ACRONYMS.has(letters);
   });
 };
 
 const capitalize = (word: string): string => {
   const chars = Array.from(word);
-  const first = chars.findIndex((char) => LETTER.test(char));
+  const first = chars.findIndex(isLetter);
   if (first === -1) return word;
   return (
     chars.slice(0, first).join("") +
@@ -117,7 +124,7 @@ const capitalize = (word: string): string => {
 
 /** One whitespace/hyphen-delimited piece of a name known to be all-caps. */
 const caseWord = (word: string, isInner: boolean): string => {
-  const bare = word.replace(NOT_ALNUM, "");
+  const bare = alphanumericOf(word);
   if (bare === "") return word;
   if (ACRONYMS.has(bare) || ROMAN.test(bare)) return word;
   if (DIGIT.test(bare)) {
