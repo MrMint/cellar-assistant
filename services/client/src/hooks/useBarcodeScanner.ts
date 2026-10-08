@@ -5,6 +5,7 @@ import {
 } from "barcode-detector/ponyfill";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Barcode, BarcodeType } from "@/constants";
+import { createStreamGate, stopStream } from "@/lib/camera/stream-gate";
 
 // Self-hosted zxing-wasm reader, served same-origin so it works under the
 // app's strict CSP (connect-src 'self') and offline (PWA). The file is copied
@@ -103,6 +104,9 @@ export const useBarcodeScanner = ({
   const animationFrameRef = useRef<number | undefined>(undefined);
   const canvasRef = useRef<HTMLCanvasElement | undefined>(undefined);
   const detectBarcodesRef = useRef<(() => void) | undefined>(undefined);
+  // Which getUserMedia request is still wanted: a stream that answers after
+  // Try again or Skip is stopped instead of adopted (`stream-gate.ts`).
+  const gateRef = useRef(createStreamGate());
 
   // Select the detector once on mount: native `BarcodeDetector` first (fast,
   // OS-accelerated, zero-download on Chrome/Edge/Android), the WASM ponyfill as
@@ -165,14 +169,15 @@ export const useBarcodeScanner = ({
 
   // Stop scanning function
   const stopScanning = useCallback(() => {
+    // Voids a request still pending, so its stream is stopped on arrival.
+    gateRef.current.cancel();
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
 
     if (streamRef.current) {
-      for (const track of streamRef.current.getTracks()) {
-        track.stop();
-      }
+      stopStream(streamRef.current);
       streamRef.current = null;
     }
 
@@ -277,6 +282,8 @@ export const useBarcodeScanner = ({
   const startScanning = useCallback(async () => {
     if (!detectorRef.current || isInitializedRef.current) return; // Wait for detector and prevent double init
 
+    const gate = gateRef.current;
+    const ticket = gate.begin();
     try {
       setError(null);
       setFailure(null);
@@ -284,6 +291,9 @@ export const useBarcodeScanner = ({
 
       const stream =
         await navigator.mediaDevices.getUserMedia(stableConstraints);
+      // Stopped (Skip, unmount) or superseded (Try again) while the camera
+      // was being asked: this stream is nobody's, so it is stopped here.
+      if (!gate.adopt(ticket, stream)) return;
       streamRef.current = stream;
 
       if (videoRef.current) {
@@ -299,6 +309,10 @@ export const useBarcodeScanner = ({
           }
         });
 
+        // Stopped while the video was loading: `stopScanning` has already
+        // stopped this stream's tracks; do not start detecting on it.
+        if (!gate.isCurrent(ticket)) return;
+
         setIsStreaming(true);
 
         // Check for torch support
@@ -312,6 +326,8 @@ export const useBarcodeScanner = ({
         detectBarcodesRef.current?.();
       }
     } catch (err) {
+      // A refusal for a request nobody wants any more says nothing now.
+      if (!gate.isCurrent(ticket)) return;
       setError(err instanceof Error ? err.message : "Failed to start camera");
       setFailure(err ?? new Error("Failed to start camera"));
       setIsStreaming(false);
