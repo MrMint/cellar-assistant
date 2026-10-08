@@ -78,16 +78,20 @@ describe("tapStar", () => {
 });
 
 describe("ratingForKey", () => {
-  test("arrows step by half a star in both orientations", () => {
+  test("arrows step by half a star, in a native radio group's direction", () => {
+    // Down/Right = next radio = more; Up/Left = previous radio = less. The
+    // control is announced as radios, so Down must not lower the score.
     assert.equal(ratingForKey("ArrowRight", 3), 3.5);
-    assert.equal(ratingForKey("ArrowUp", 3), 3.5);
+    assert.equal(ratingForKey("ArrowDown", 3), 3.5);
     assert.equal(ratingForKey("ArrowLeft", 3), 2.5);
-    assert.equal(ratingForKey("ArrowDown", 3), 2.5);
+    assert.equal(ratingForKey("ArrowUp", 3), 2.5);
   });
 
   test("arrows clamp at the ends instead of wrapping like native radios", () => {
     assert.equal(ratingForKey("ArrowRight", 5), 5);
+    assert.equal(ratingForKey("ArrowDown", 5), 5);
     assert.equal(ratingForKey("ArrowLeft", 0.5), 0.5);
+    assert.equal(ratingForKey("ArrowUp", 0.5), 0.5);
   });
 
   test("PageUp/PageDown move a whole star; Home/End jump to the ends", () => {
@@ -114,7 +118,9 @@ describe("ratingForKey", () => {
   test("every reachable value is a valid rating", () => {
     const keys = [
       "ArrowRight",
+      "ArrowDown",
       "ArrowLeft",
+      "ArrowUp",
       "PageUp",
       "PageDown",
       "Home",

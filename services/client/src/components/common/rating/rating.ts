@@ -106,10 +106,15 @@ export function tapStar(star: number, current: number | null): number {
  * The value a key sets, or `undefined` when the key is not the rating's (so
  * the caller leaves it to the browser — Tab, Space, Enter…).
  *
- * Arrows move half a star and **clamp** at the ends; a native radio group
- * wraps, which would turn "one more" at 5 into 0.5. PageUp/PageDown move a
- * whole star, Home/End jump to 0.5/5. From "not rated", a step lands on the
- * nearest valid value: 0.5 for every step down or up, 1 for PageUp.
+ * Arrows move half a star in the **direction a native radio group moves**,
+ * because the control is announced as one: Right and Down go to the next
+ * radio (half a star more), Left and Up to the previous (half a star less).
+ * A screen-reader user in focus mode presses Down for "next option" and must
+ * not hear the score drop. They differ from native radios in one way: they
+ * **clamp** at the ends, where a native group wraps and would turn "one
+ * more" at 5 into 0.5. PageUp/PageDown move a whole star, Home/End jump to
+ * 0.5/5. From "not rated", a step lands on the nearest valid value: 0.5 for
+ * every half step either way, 1 for PageUp.
  */
 export function ratingForKey(
   key: string,
@@ -119,10 +124,10 @@ export function ratingForKey(
   const clamp = (v: number) => Math.min(RATING_MAX, Math.max(RATING_MIN, v));
   switch (key) {
     case "ArrowRight":
-    case "ArrowUp":
+    case "ArrowDown":
       return clamp(base + RATING_STEP);
     case "ArrowLeft":
-    case "ArrowDown":
+    case "ArrowUp":
       return clamp(base - RATING_STEP);
     case "PageUp":
       return clamp(base + 1);

@@ -154,10 +154,15 @@ function hook(options: Parameters<typeof useStarRatingInput>[0]): Handlers {
   return out;
 }
 
-function key(h: Handlers, k: string) {
+function key(
+  h: Handlers,
+  k: string,
+  mods: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean } = {},
+) {
   let prevented = false;
   h.onKeyDown({
     key: k,
+    ...mods,
     preventDefault: () => {
       prevented = true;
     },
@@ -175,8 +180,9 @@ describe("useStarRatingInput", () => {
     const h = hook({ value: 3, onChange: (v) => seen.push(v) });
     assert.equal(key(h, "ArrowRight"), true);
     assert.equal(key(h, "ArrowLeft"), true);
+    assert.equal(key(h, "ArrowDown"), true);
     assert.equal(key(h, "End"), true);
-    assert.deepEqual(seen, [3.5, 2.5, 5]);
+    assert.deepEqual(seen, [3.5, 2.5, 3.5, 5]);
   });
 
   test("at an end the key is still consumed (no wrap) but nothing changes", () => {
@@ -191,6 +197,49 @@ describe("useStarRatingInput", () => {
     const h = hook({ value: 3, onChange: (v) => seen.push(v) });
     for (const k of ["Tab", " ", "Enter"]) assert.equal(key(h, k), false, k);
     assert.deepEqual(seen, []);
+  });
+
+  test("a chord with Alt, Ctrl or Meta is left to the browser", () => {
+    const seen: number[] = [];
+    const h = hook({ value: 3, onChange: (v) => seen.push(v) });
+    assert.equal(key(h, "ArrowLeft", { altKey: true }), false, "Alt+Left");
+    assert.equal(key(h, "ArrowRight", { metaKey: true }), false, "Cmd+Right");
+    assert.equal(key(h, "Home", { ctrlKey: true }), false, "Ctrl+Home");
+    assert.deepEqual(seen, []);
+  });
+
+  test("Clear clears and keeps focus in the group", () => {
+    let cleared = 0;
+    let focused = false;
+    const h = hook({
+      value: 3,
+      onChange: () => {},
+      onClear: () => {
+        cleared += 1;
+      },
+    });
+    h.radioRef(0.5)({
+      focus: () => {
+        focused = true;
+      },
+    } as never);
+    h.clear();
+    assert.equal(cleared, 1);
+    assert.ok(focused, "focus moved to the first radio, not to <body>");
+  });
+
+  test("a disabled Clear does nothing", () => {
+    let cleared = 0;
+    const h = hook({
+      value: 3,
+      onChange: () => {},
+      onClear: () => {
+        cleared += 1;
+      },
+      disabled: true,
+    });
+    h.clear();
+    assert.equal(cleared, 0);
   });
 
   test("taps set a star, then its half", () => {

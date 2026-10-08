@@ -98,10 +98,16 @@ function StarGlyph({
  * Defaults for the custom properties. `--joy-palette-*` resolve in both
  * colour schemes; the fallbacks keep the control legible outside a Joy
  * provider (the markup tests, a future shadcn page).
+ *
+ * The empty star is the control's only visible affordance before a first
+ * tap, so it needs 3:1 against the card (WCAG 1.4.11). `text-icon` gives
+ * 3.5:1 on the dark card the app defaults to (`#786E91` on `#221F2A`) and
+ * 5.4:1 in light; `neutral-outlinedBorder` gave 1.6:1 in dark — nearly
+ * invisible — where the old widget's fixed `#cccccc` had been plainly visible.
  */
 const tokens = {
   "--ca-rating-fill": "var(--joy-palette-warning-400, #ea9a3e)",
-  "--ca-rating-empty": "var(--joy-palette-neutral-outlinedBorder, #cdd7e1)",
+  "--ca-rating-empty": "var(--joy-palette-text-icon, #636b74)",
   "--ca-rating-focus": "var(--joy-palette-focusVisible, #0b6bcb)",
   "--ca-rating-target": "44px",
   "--ca-rating-icon": "32px",
@@ -185,8 +191,15 @@ export function StarRating({
   disabled = false,
   label = "Your score",
 }: StarRatingProps) {
-  const { name, current, radioRef, onKeyDown, onStarClick, onRadioChange } =
-    useStarRatingInput({ value, onChange, disabled });
+  const {
+    name,
+    current,
+    radioRef,
+    onKeyDown,
+    onStarClick,
+    onRadioChange,
+    clear,
+  } = useStarRatingInput({ value, onChange, onClear, disabled });
   const fractions = starFractions(current);
   const word = ratingLabel(current);
 
@@ -245,7 +258,7 @@ export function StarRating({
           size="sm"
           variant="plain"
           color="neutral"
-          onClick={onClear}
+          onClick={clear}
           disabled={disabled}
         >
           Clear rating

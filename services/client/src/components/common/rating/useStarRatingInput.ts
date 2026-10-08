@@ -8,11 +8,13 @@ import {
   useId,
   useRef,
 } from "react";
-import { normalizeRating, ratingForKey, tapStar } from "./rating";
+import { normalizeRating, RATING_MIN, ratingForKey, tapStar } from "./rating";
 
 export type UseStarRatingInputOptions = {
   value: number | null | undefined;
   onChange: (value: number) => void;
+  /** Clears the rating (a recipe review may be text only). */
+  onClear?: () => void;
   disabled?: boolean;
 };
 
@@ -31,10 +33,15 @@ export type UseStarRatingInputOptions = {
  *   so sliding a thumb across the stars to scroll sets nothing.
  * - A click that *is* a radio's own (VoiceOver's double-tap, Space) bubbles
  *   to the star as well; the star ignores it, or it would be applied twice.
+ * - A key with Alt, Ctrl or Meta held is the browser's or the OS's
+ *   (Alt+Left is Back), never the rating's.
+ * - **Clear** unmounts its own button, so focus moves to the first radio
+ *   rather than falling to `<body>` and sending a keyboard user to the top.
  */
 export function useStarRatingInput({
   value,
   onChange,
+  onClear,
   disabled = false,
 }: UseStarRatingInputOptions) {
   const name = useId();
@@ -64,6 +71,7 @@ export function useStarRatingInput({
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
       if (disabled) return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
       const next = ratingForKey(event.key, current);
       if (next === undefined) return;
       event.preventDefault();
@@ -93,5 +101,19 @@ export function useStarRatingInput({
     [commit],
   );
 
-  return { name, current, radioRef, onKeyDown, onStarClick, onRadioChange };
+  const clear = useCallback(() => {
+    if (disabled || onClear === undefined) return;
+    onClear();
+    focusValue(RATING_MIN);
+  }, [disabled, focusValue, onClear]);
+
+  return {
+    name,
+    current,
+    radioRef,
+    onKeyDown,
+    onStarClick,
+    onRadioChange,
+    clear,
+  };
 }
