@@ -120,6 +120,12 @@ describe("CheckInButton", () => {
     await flush(50);
     assert.equal(trigger().getAttribute("aria-busy"), "true");
     assert.ok(trigger().disabled, "no second check-in while one is running");
+    // X24: the glass is a popped check at once, not a spinner.
+    assert.ok(
+      trigger().querySelector('[data-slot="toggle-pop"][data-state="on"]'),
+      "the check is drawn while the write runs",
+    );
+    assert.equal(trigger().querySelector(".animate-spin"), null, "no spinner");
     assert.equal(document.querySelector('[role="dialog"]'), null);
   });
 
