@@ -189,7 +189,9 @@ export const MapFilter: FC<MapFilterProps> = ({
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      // Escape in the open tier-list picker closes the picker (Radix), not
+      // the whole panel underneath it.
+      if (event.key === "Escape" && !tierListPickerOpen) {
         setShowAdvanced(false);
       }
     };
@@ -200,7 +202,7 @@ export const MapFilter: FC<MapFilterProps> = ({
         document.removeEventListener("keydown", handleEscape);
       };
     }
-  }, [showAdvanced]);
+  }, [showAdvanced, tierListPickerOpen]);
 
   useEffect(() => {
     if (!showAdvanced || !isMobile) return;
@@ -503,7 +505,10 @@ export const MapFilter: FC<MapFilterProps> = ({
                                     key={tierList.id}
                                     value={tierList.id}
                                     keywords={[tierList.name]}
-                                    aria-selected={selected}
+                                    // cmdk owns `aria-selected` (the
+                                    // highlighted row); which lists are
+                                    // chosen is `aria-checked`.
+                                    aria-checked={selected}
                                     onSelect={() => toggleTierList(tierList.id)}
                                     className="min-h-11"
                                   >
