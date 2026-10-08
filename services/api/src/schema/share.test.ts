@@ -6,13 +6,17 @@
  * is the actors' to decide (`tier-list-actor.test.ts` and friends).
  */
 import { formatInviteToken, NotFoundError } from "@cellar-assistant/contracts";
-import { execute, parse } from "graphql";
+import { execute, parse, validate } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
 import { schema } from "./index.ts";
 
-const run = (document: string, context: ReturnType<typeof testContext>) =>
-  execute({ schema, document: parse(document), contextValue: context });
+/** Validated first: `execute` alone silently skips a fragment on a typo'd type. */
+const run = (document: string, context: ReturnType<typeof testContext>) => {
+  const parsed = parse(document);
+  expect(validate(schema, parsed)).toEqual([]);
+  return execute({ schema, document: parsed, contextValue: context });
+};
 
 const LIST = "22222222-2222-4222-8222-222222222222";
 const WINE = "44444444-4444-4444-8444-444444444444";
@@ -252,11 +256,15 @@ describe("friend invites", () => {
       }),
     });
     const result = await run(
-      `mutation { acceptFriendInvite(token: "${token}") { ... on MutationAcceptFriendInviteSuccess {
-           data { friendId becameFriends } } } }`,
+      `mutation { acceptFriendInvite(token: "${token}") { ... on AcceptFriendInvitePayload {
+           friendId becameFriends } } }`,
       testContext(invoke, viewer),
     );
     expect(result.errors).toBeUndefined();
+    expect(result.data?.acceptFriendInvite).toEqual({
+      friendId: INVITER,
+      becameFriends: true,
+    });
     expect(calls[0]).toMatchObject({
       actorType: "UserActor",
       actorId: viewer.id,

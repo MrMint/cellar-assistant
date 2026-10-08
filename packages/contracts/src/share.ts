@@ -190,7 +190,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const bytesToBase64Url = (bytes: Uint8Array): string => {
   let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  for (let index = 0; index < bytes.length; index++) {
+    binary += String.fromCharCode(bytes[index] ?? 0);
+  }
   return btoa(binary)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
