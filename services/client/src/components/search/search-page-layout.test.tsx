@@ -45,6 +45,7 @@ mock.module("next/navigation", () => ({
 
 const React = await import("react");
 const { act, Suspense, use, useState } = React;
+type ReactNode = import("react").ReactNode;
 const { createRoot } = await import("react-dom/client");
 const { Client, Provider } = await import("urql");
 const { searchStateFromParams } = await import("./adapter");
@@ -57,19 +58,33 @@ const { SEARCH_DEBOUNCE_MS } = await import("./search-navigation");
 /* -------------------------------------------------------------------------- */
 
 type Deferred = { promise: Promise<void>; resolve: () => void };
-const results = new Map<string, Deferred>();
-const resultsFor = (query: string): Deferred => {
-  let entry = results.get(query);
+const deferredIn = (map: Map<string, Deferred>, key: string): Deferred => {
+  let entry = map.get(key);
   if (entry === undefined) {
     let resolve = () => {};
     const promise = new Promise<void>((r) => {
       resolve = r;
     });
     entry = { promise, resolve };
-    results.set(query, entry);
+    map.set(key, entry);
   }
   return entry;
 };
+const results = new Map<string, Deferred>();
+const resultsFor = (query: string): Deferred => deferredIn(results, query);
+
+/**
+ * Gated hrefs: the page's shell has not arrived. The App Router suspends
+ * above the page (`use(rsc)` in its layout router) until the shell streams,
+ * so the navigation has not committed — the page, `urlQuery` included,
+ * still shows the old URL. Ungated hrefs commit at once.
+ */
+const shells = new Map<string, Deferred>();
+function Shell({ href, children }: { href: string; children: ReactNode }) {
+  const gate = shells.get(href);
+  if (gate !== undefined) use(gate.promise);
+  return children;
+}
 
 function Results({ query }: { query: string }) {
   use(resultsFor(query).promise);
@@ -112,7 +127,9 @@ function App({ initialHref }: { initialHref: string }) {
   navigateTo = setHref;
   return (
     <Provider value={urql}>
-      <Page href={href} />
+      <Shell href={href}>
+        <Page href={href} />
+      </Shell>
     </Provider>
   );
 }
@@ -172,6 +189,13 @@ const pressEnter = async (el: HTMLInputElement) => {
 const settle = async (ms = SEARCH_DEBOUNCE_MS + 50) => {
   await act(async () => {
     await new Promise((r) => setTimeout(r, ms));
+  });
+};
+
+const openShell = async (href: string) => {
+  await act(async () => {
+    deferredIn(shells, href).resolve();
+    await deferredIn(shells, href).promise;
   });
 };
 
@@ -248,6 +272,47 @@ describe("the search box survives typing (N01)", () => {
       await resolveResults("pinot");
       assert.deepEqual(calls, [["push", "/search?q=pinot"]]);
       assert.equal(document.activeElement, box);
+    } finally {
+      await unmount();
+    }
+  });
+
+  test("a session pushes until its push lands: the next navigation discards a pending one", async () => {
+    // The App Router discards a navigation that has not committed when the
+    // next one starts (`app-router-instance.js`:
+    // `actionQueue.pending.discarded = true`), history update included. If
+    // the next page is still pending at the next pause, a `replace` there
+    // would overwrite the entry of the view the session started from, and
+    // Back would skip it. So a session keeps pushing until a push has landed.
+    await resolveResults("merlot");
+    deferredIn(shells, "/search?q=z");
+    deferredIn(shells, "/search?q=zin");
+    await mount("/search?q=merlot");
+    try {
+      const box = input();
+      await act(async () => box.focus());
+      await typeInto(box, "z");
+      await settle();
+      // `z`'s shell has not arrived when the next pause comes: not landed.
+      assert.ok(testId("search-results-skeleton"), "z is still pending");
+      await typeInto(box, "zin");
+      await settle();
+      await openShell("/search?q=zin");
+      await resolveResults("zin");
+      assert.equal(testId("results")?.textContent, "results for zin");
+      // Landed: from here the session replaces.
+      await typeInto(box, "zinfandel");
+      await settle();
+      await resolveResults("zinfandel");
+      assert.deepEqual(calls, [
+        ["push", "/search?q=z"],
+        ["push", "/search?q=zin"],
+        ["replace", "/search?q=zinfandel"],
+      ]);
+      assert.equal(testId("results")?.textContent, "results for zinfandel");
+      assert.equal(input(), box);
+      assert.equal(document.activeElement, box);
+      assert.equal(box.value, "zinfandel");
     } finally {
       await unmount();
     }

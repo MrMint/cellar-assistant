@@ -92,7 +92,10 @@ test("semantic item search returns ranked results", async ({ api }) => {
   ).toEqual(distances);
 });
 
-/** The restored box: no label, no submit button, an animated placeholder. */
+/**
+ * The restored box: no visible label (an `aria-label` since N01), no submit
+ * button, an animated placeholder.
+ */
 const searchBox = (page: import("@playwright/test").Page) =>
   page.getByRole("textbox").first();
 

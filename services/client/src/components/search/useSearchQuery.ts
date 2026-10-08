@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   initialSearchNavState,
+  landNavigation,
   planCommitNavigation,
   planTypingNavigation,
   SEARCH_DEBOUNCE_MS,
@@ -26,7 +27,8 @@ type UseSearchQueryOptions = {
  * no markup, so the shadcn migration swaps the `<Input>` and keeps this.
  *
  * - `onChange` updates the text at once and navigates after the debounce
- *   (`replace` inside a typing session, `push` to open one).
+ *   (`replace` inside a typing session, `push` to open one or while the
+ *   session's push has not landed).
  * - `commit` (Enter, blur) and `clear` flush the debounce and close the
  *   session.
  * - A URL query that is not the box's own echo (Back, Forward, a link)
@@ -89,8 +91,11 @@ export function useSearchQuery({
   }, [cancelDebounce, run, update]);
 
   useEffect(() => {
+    // A push lands whether or not the user is still typing; only a navigation
+    // in flight means it has not.
+    const landed = landNavigation(navStateRef.current, urlQuery, isNavigating);
     const sync = syncFromUrl(
-      navStateRef.current,
+      landed,
       urlQuery,
       isNavigating || debounceRef.current !== undefined,
     );

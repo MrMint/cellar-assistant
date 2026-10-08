@@ -8,6 +8,14 @@
  *   pushes (so the search or landing view you were on keeps its entry); every
  *   later keystroke-driven navigation in the same session replaces it. One
  *   typing session is at most one history entry, however many pauses it had.
+ * - **A push counts once it has landed.** The App Router discards a pending
+ *   navigation, its history update included, when the next one starts
+ *   (`next/dist/client/components/app-router-instance.js`:
+ *   `actionQueue.pending.discarded = true`). A search that streams for longer
+ *   than the next pause would otherwise lose its push to a `replace`, which
+ *   then overwrites the entry the push was meant to keep — Back skips the
+ *   view you started from. So until the URL shows a push's query with nothing
+ *   in flight, the session's next navigation pushes again.
  * - **A commit closes the session** — Enter, the clear button, or leaving the
  *   field. The URL is brought up to date at once (a pending debounce is
  *   flushed), and the next keystroke opens a new session, so the committed
@@ -33,6 +41,8 @@ export type SearchNavState = {
   sentQuery: string;
   /** A typing session has navigated since the last commit. */
   sessionOpen: boolean;
+  /** The box's last push has not landed yet, so the next navigation pushes. */
+  pushPending: boolean;
 };
 
 export type SearchNavigation = {
@@ -51,21 +61,27 @@ export const initialSearchNavState = (
 ): SearchNavState => ({
   sentQuery: urlQuery?.trim() ?? "",
   sessionOpen: false,
+  pushPending: false,
 });
 
-/** The debounce fired while typing: replace within a session, push to open one. */
+/**
+ * The debounce fired while typing: replace within a session, push to open one
+ * — and push again while the session's push has not landed.
+ */
 export const planTypingNavigation = (
   state: SearchNavState,
   value: string,
 ): SearchNavStep => {
   const query = value.trim();
   if (query === state.sentQuery) return { state, navigation: null };
+  const method = state.sessionOpen && !state.pushPending ? "replace" : "push";
   return {
-    state: { sentQuery: query, sessionOpen: true },
-    navigation: {
-      method: state.sessionOpen ? "replace" : "push",
-      href: textSearchHref(query),
+    state: {
+      sentQuery: query,
+      sessionOpen: true,
+      pushPending: method === "push",
     },
+    navigation: { method, href: textSearchHref(query) },
   };
 };
 
@@ -80,10 +96,26 @@ export const planCommitNavigation = (
 ): SearchNavStep => {
   const typed = planTypingNavigation(state, value);
   return {
-    state: { sentQuery: typed.state.sentQuery, sessionOpen: false },
+    state: { ...typed.state, sessionOpen: false },
     navigation: typed.navigation,
   };
 };
+
+/**
+ * The router settled: when the URL shows what the box last sent and nothing is
+ * in flight, its push (if one was pending) has landed, and the session may
+ * replace from here.
+ */
+export const landNavigation = (
+  state: SearchNavState,
+  urlQuery: string | null | undefined,
+  navigating: boolean,
+): SearchNavState =>
+  state.pushPending &&
+  !navigating &&
+  (urlQuery?.trim() ?? "") === state.sentQuery
+    ? { ...state, pushPending: false }
+    : state;
 
 export type SearchUrlSync = {
   state: SearchNavState;
@@ -104,5 +136,8 @@ export const syncFromUrl = (
 ): SearchUrlSync => {
   const query = urlQuery?.trim() ?? "";
   if (busy || query === state.sentQuery) return { state, value: null };
-  return { state: { sentQuery: query, sessionOpen: false }, value: query };
+  return {
+    state: { sentQuery: query, sessionOpen: false, pushPending: false },
+    value: query,
+  };
 };

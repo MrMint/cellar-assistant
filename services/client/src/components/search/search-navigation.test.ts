@@ -8,6 +8,7 @@ import { describe, test } from "node:test";
 import { searchStateFromParams } from "./adapter";
 import {
   initialSearchNavState,
+  landNavigation,
   planCommitNavigation,
   planTypingNavigation,
   type SearchNavigation,
@@ -16,14 +17,23 @@ import {
   textSearchHref,
 } from "./search-navigation";
 
-/** Feed a sequence of debounced values through, collecting navigations. */
-const typeAll = (start: SearchNavState, values: string[]) => {
+/**
+ * Feed a sequence of debounced values through, collecting navigations. By
+ * default each navigation lands before the next pause (the router settled on
+ * the URL it was sent to); `land: false` keeps them all in flight.
+ */
+const typeAll = (
+  start: SearchNavState,
+  values: string[],
+  { land = true }: { land?: boolean } = {},
+) => {
   let state = start;
   const navigations: SearchNavigation[] = [];
   for (const value of values) {
     const step = planTypingNavigation(state, value);
     state = step.state;
     if (step.navigation) navigations.push(step.navigation);
+    if (land) state = landNavigation(state, state.sentQuery, false);
   }
   return { state, navigations };
 };
@@ -58,7 +68,31 @@ describe("planTypingNavigation", () => {
       { method: "replace", href: "/search?q=wi" },
       { method: "replace", href: "/search?q=wine" },
     ]);
-    assert.deepEqual(state, { sentQuery: "wine", sessionOpen: true });
+    assert.deepEqual(state, {
+      sentQuery: "wine",
+      sessionOpen: true,
+      pushPending: false,
+    });
+  });
+
+  test("while the session's push is in flight, the next pause pushes again", () => {
+    // The App Router discards the pending push when the next navigation
+    // starts; a replace here would overwrite the landing view's entry.
+    const { navigations, state } = typeAll(
+      initialSearchNavState(null),
+      ["w", "wine"],
+      { land: false },
+    );
+    assert.deepEqual(navigations, [
+      { method: "push", href: "/search?q=w" },
+      { method: "push", href: "/search?q=wine" },
+    ]);
+    assert.equal(state.pushPending, true);
+    const landed = landNavigation(state, "wine", false);
+    assert.deepEqual(planTypingNavigation(landed, "wines").navigation, {
+      method: "replace",
+      href: "/search?q=wines",
+    });
   });
 
   test("a value the URL already shows goes nowhere, and opens no session", () => {
@@ -92,7 +126,21 @@ describe("planCommitNavigation", () => {
       method: "push",
       href: "/search?q=barolo",
     });
-    assert.deepEqual(step.state, { sentQuery: "barolo", sessionOpen: false });
+    assert.deepEqual(step.state, {
+      sentQuery: "barolo",
+      sessionOpen: false,
+      pushPending: true,
+    });
+  });
+
+  test("Enter while the session's push is in flight pushes", () => {
+    const typed = typeAll(initialSearchNavState(null), ["bar"], {
+      land: false,
+    });
+    assert.deepEqual(planCommitNavigation(typed.state, "barolo").navigation, {
+      method: "push",
+      href: "/search?q=barolo",
+    });
   });
 
   test("Enter inside a session replaces the session's entry", () => {
@@ -109,7 +157,11 @@ describe("planCommitNavigation", () => {
     const typed = typeAll(initialSearchNavState(null), ["barolo"]);
     const step = planCommitNavigation(typed.state, "barolo");
     assert.equal(step.navigation, null);
-    assert.deepEqual(step.state, { sentQuery: "barolo", sessionOpen: false });
+    assert.deepEqual(step.state, {
+      sentQuery: "barolo",
+      sessionOpen: false,
+      pushPending: false,
+    });
   });
 
   test("after a commit, the next typing session pushes, keeping the committed search", () => {
@@ -155,11 +207,37 @@ describe("syncFromUrl", () => {
     const typed = typeAll(initialSearchNavState("wine"), ["b", "beer"]);
     const sync = syncFromUrl(typed.state, "wine", false);
     assert.equal(sync.value, "wine");
-    assert.deepEqual(sync.state, { sentQuery: "wine", sessionOpen: false });
+    assert.deepEqual(sync.state, {
+      sentQuery: "wine",
+      sessionOpen: false,
+      pushPending: false,
+    });
   });
 
   test("Back to the landing view empties the box", () => {
     const typed = typeAll(initialSearchNavState(null), ["wine"]);
     assert.equal(syncFromUrl(typed.state, null, false).value, "");
+  });
+});
+
+describe("landNavigation", () => {
+  const inFlight = typeAll(initialSearchNavState(null), ["wine"], {
+    land: false,
+  }).state;
+
+  test("a push has not landed while a navigation is in flight", () => {
+    assert.equal(landNavigation(inFlight, "wine", true), inFlight);
+  });
+
+  test("nor while the URL shows something else", () => {
+    assert.equal(landNavigation(inFlight, null, false), inFlight);
+  });
+
+  test("the URL showing the sent query, settled, is a landed push", () => {
+    assert.deepEqual(landNavigation(inFlight, " wine ", false), {
+      sentQuery: "wine",
+      sessionOpen: true,
+      pushPending: false,
+    });
   });
 });
