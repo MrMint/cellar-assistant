@@ -1,7 +1,7 @@
 "use client";
 
 import { isNotNil } from "ramda";
-import { useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { RatingInput } from "@/components/app/RatingInput";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,23 @@ export const AddRecipeReview = ({
   onReviewAdded,
 }: AddRecipeReviewProps) => {
   const [open, setOpen] = useState(false);
+  // The prompt and the form replace each other, so focus would drop to
+  // <body> on either swap: carry it across (the form on open, the prompt on
+  // Cancel). Never on mount — the page must not scroll to the review box.
+  const formRef = useRef<HTMLElement>(null);
+  const promptRef = useRef<HTMLInputElement>(null);
+  const toggled = useRef(false);
+  const headingId = useId();
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    if (open) formRef.current?.focus();
+    else promptRef.current?.focus();
+  }, [open]);
+  const toggle = (next: boolean) => {
+    toggled.current = true;
+    setOpen(next);
+  };
   const [score, setScore] = useState<number | undefined>(myReview?.score);
   const [text, setText] = useState<string | undefined>(
     myReview?.text ?? undefined,
@@ -151,7 +168,7 @@ export const AddRecipeReview = ({
   };
 
   const handleCancel = () => {
-    setOpen(false);
+    toggle(false);
     setError(null);
     setScore(myReview?.score);
     setText(myReview?.text ?? undefined);
@@ -165,7 +182,16 @@ export const AddRecipeReview = ({
             ? "Edit your review of this recipe..."
             : "Add a review for this recipe..."
         }
-        onClick={() => setOpen(true)}
+        ref={promptRef}
+        onClick={() => toggle(true)}
+        // A read-only field that opens the form: Enter and Space open it too,
+        // as a click does.
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggle(true);
+          }
+        }}
         readOnly
         className="cursor-pointer"
       />
@@ -173,8 +199,13 @@ export const AddRecipeReview = ({
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
-      <p className="type-headline">
+    <section
+      ref={formRef}
+      tabIndex={-1}
+      aria-labelledby={headingId}
+      className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4 outline-none"
+    >
+      <p id={headingId} className="type-headline">
         {editing ? "Edit Recipe Review:" : "Add Recipe Review:"}
       </p>
       <div className="flex flex-col gap-4">
