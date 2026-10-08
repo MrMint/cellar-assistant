@@ -1,4 +1,3 @@
-import { Box, Typography } from "@mui/joy";
 import { redirect } from "next/navigation";
 import { CreatePlaceForm } from "@/components/map/places/CreatePlaceForm";
 
@@ -31,17 +30,8 @@ export default async function CreatePlacePage({
   }
 
   return (
-    <Box
-      sx={{
-        maxWidth: 600,
-        mx: "auto",
-        py: { xs: 2, md: 4 },
-        px: 2,
-      }}
-    >
-      <Typography level="h3" sx={{ mb: 3 }}>
-        Add a new place
-      </Typography>
+    <div className="mx-auto max-w-[600px] px-4 py-4 md:py-8">
+      <h1 className="type-title-2 mb-6 text-ink-1">Add a new place</h1>
       <CreatePlaceForm
         latitude={lat}
         longitude={lng}
@@ -52,6 +42,6 @@ export default async function CreatePlacePage({
             : ""
         }
       />
-    </Box>
+    </div>
   );
 }

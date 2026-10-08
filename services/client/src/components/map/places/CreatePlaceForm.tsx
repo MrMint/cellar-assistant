@@ -22,35 +22,34 @@
  *   where the old action failed open.
  */
 
-import {
-  Alert,
-  Autocomplete,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Divider,
-  FormControl,
-  FormHelperText,
-  FormLabel,
-  IconButton,
-  Input,
-  Stack,
-  Textarea,
-  Typography,
-} from "@mui/joy";
 import type { CountryCode } from "libphonenumber-js";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
-import { MdArrowBack, MdMyLocation } from "react-icons/md";
 import {
   isSupportedCountry,
   isValidPhoneNumber,
 } from "react-phone-number-input";
 import PhoneInput from "react-phone-number-input/input";
+import { AIDraftField } from "@/components/app/AIDraftField";
+import { IconButton } from "@/components/app/IconButton";
+import { Back, MyLocation } from "@/components/app/icons";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 import { isDrafted } from "@/lib/forms/ai-draft";
-import { AIDraftField } from "../../common/AIDraftField";
 import {
   type CreatePlaceInput,
   type DuplicatePlace,
@@ -64,6 +63,10 @@ import {
   pinAddressDraft,
   pinAddressNotFound,
 } from "../adapter";
+import {
+  CategoryMultiSelect,
+  type CategoryOption,
+} from "./CategoryMultiSelect";
 import { DuplicatePlaceCheck } from "./DuplicatePlaceCheck";
 import { GooglePlaceSearch } from "./GooglePlaceSearch";
 import { GooglePlaceSuggestions } from "./GooglePlaceSuggestions";
@@ -77,13 +80,7 @@ import {
 // Category Options
 // =============================================================================
 
-interface CategoryOption {
-  label: string;
-  value: UserPlaceCategory;
-  tier: string;
-}
-
-const CATEGORY_OPTIONS: CategoryOption[] = [
+const CATEGORY_OPTIONS: CategoryOption<UserPlaceCategory>[] = [
   ...PLACE_CATEGORY_TIERS.venues.map((value) => ({
     label: formatCategoryLabel(value),
     value,
@@ -133,7 +130,7 @@ function toSupportedCountryCode(value: string): CountryCode | undefined {
 
 interface FormFields {
   name: string;
-  categories: CategoryOption[];
+  categories: CategoryOption<UserPlaceCategory>[];
   street_address: string;
   locality: string;
   region: string;
@@ -161,6 +158,14 @@ export function CreatePlaceForm({
   initialName = "",
 }: CreatePlaceFormProps) {
   const router = useRouter();
+  const fieldId = useId();
+  const idOf = (name: keyof FormFields) => `${fieldId}-${name}`;
+  /**
+   * The error line's id when that field has one, for `aria-describedby` —
+   * what Joy's FormControl wired up on its own.
+   */
+  const errorOf = (name: keyof FormFields) =>
+    errors[name] ? `${fieldId}-${name}-error` : undefined;
   const {
     checkDuplicatePlacesAction,
     googlePlaceDetailsAction,
@@ -432,26 +437,22 @@ export function CreatePlaceForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
-      <Stack spacing={2.5}>
+      <div className="flex flex-col gap-5">
         {/* Back button + location preview */}
-        <Stack direction="row" spacing={1} alignItems="center">
+        <div className="flex flex-row items-center gap-2">
           <IconButton
-            variant="outlined"
-            color="neutral"
+            aria-label="Back to map"
+            variant="outline"
             size="sm"
             onClick={() => router.push("/map")}
           >
-            <MdArrowBack />
+            <Back />
           </IconButton>
-          <Chip
-            variant="soft"
-            color="neutral"
-            startDecorator={<MdMyLocation />}
-            size="sm"
-          >
+          <Badge variant="secondary" className="tabular">
+            <MyLocation aria-hidden />
             {latitude.toFixed(5)}, {longitude.toFixed(5)}
-          </Chip>
-        </Stack>
+          </Badge>
+        </div>
 
         {/* Google Places suggestions */}
         {!googlePlacesDismissed && (
@@ -475,26 +476,17 @@ export function CreatePlaceForm({
 
         {/* Pre-filled indicator */}
         {selectedGooglePlaceId && (
-          <Chip variant="soft" color="success" size="sm">
+          <Badge variant="secondary" className="text-success">
             Pre-filled from Google
-          </Chip>
+          </Badge>
         )}
 
         {/* Enriching indicator */}
         {enriching && (
-          <Chip
-            variant="soft"
-            color="neutral"
-            size="sm"
-            startDecorator={
-              <CircularProgress
-                size="sm"
-                sx={{ "--CircularProgress-size": "14px" }}
-              />
-            }
-          >
+          <Badge variant="secondary">
+            <Spinner />
             Fetching place details...
-          </Chip>
+          </Badge>
         )}
 
         {/* Duplicate check */}
@@ -506,8 +498,8 @@ export function CreatePlaceForm({
 
         {/* Server error */}
         {serverError && (
-          <Alert color="danger" size="sm">
-            {serverError}
+          <Alert variant="destructive">
+            <AlertDescription>{serverError}</AlertDescription>
           </Alert>
         )}
 
@@ -523,13 +515,21 @@ export function CreatePlaceForm({
             },
           }}
           render={({ field }) => (
-            <FormControl error={!!errors.name}>
-              <FormLabel>Name *</FormLabel>
-              <Input {...field} placeholder="e.g. The Rusty Barrel" />
+            <Field data-invalid={!!errors.name || undefined}>
+              <FieldLabel htmlFor={idOf("name")}>Name *</FieldLabel>
+              <Input
+                {...field}
+                id={idOf("name")}
+                aria-invalid={!!errors.name || undefined}
+                aria-describedby={errorOf("name")}
+                placeholder="e.g. The Rusty Barrel"
+              />
               {errors.name && (
-                <FormHelperText>{errors.name.message}</FormHelperText>
+                <FieldError id={errorOf("name")}>
+                  {errors.name.message}
+                </FieldError>
               )}
-            </FormControl>
+            </Field>
           )}
         />
 
@@ -541,62 +541,46 @@ export function CreatePlaceForm({
             validate: (v) => v.length > 0 || "Select at least one category",
           }}
           render={({ field }) => (
-            <FormControl error={!!errors.categories}>
-              <FormLabel>Categories *</FormLabel>
-              <Autocomplete
-                multiple
+            <Field data-invalid={!!errors.categories || undefined}>
+              <FieldLabel htmlFor={idOf("categories")}>Categories *</FieldLabel>
+              <CategoryMultiSelect
+                id={idOf("categories")}
                 options={CATEGORY_OPTIONS}
-                groupBy={(option) => option.tier}
-                getOptionLabel={(option) => option.label}
-                isOptionEqualToValue={(option, value) =>
-                  option.value === value.value
-                }
                 value={field.value}
-                onChange={(_, newValue) => field.onChange(newValue)}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                invalid={!!errors.categories}
+                describedBy={errorOf("categories")}
                 placeholder="Select categories..."
-                size="sm"
               />
               {errors.categories && (
-                <FormHelperText>{errors.categories.message}</FormHelperText>
+                <FieldError id={errorOf("categories")}>
+                  {errors.categories.message}
+                </FieldError>
               )}
-            </FormControl>
+            </Field>
           )}
         />
 
-        <Divider />
+        <Separator />
 
         {/* Address section */}
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography level="title-sm">Address</Typography>
+        <div className="flex flex-row items-center gap-2">
+          <h2 className="type-callout font-semibold text-ink-1">Address</h2>
           {addressLoading && (
-            <Chip
-              variant="soft"
-              color="neutral"
-              size="sm"
-              startDecorator={
-                <CircularProgress
-                  size="sm"
-                  sx={{ "--CircularProgress-size": "14px" }}
-                />
-              }
-            >
+            <Badge variant="secondary">
+              <Spinner />
               Loading address...
-            </Chip>
+            </Badge>
           )}
-        </Stack>
+        </div>
         {pinAddressNotFound(addressLoading, pinDraft) && (
-          <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
+          <p className="type-footnote">
             Couldn't find an address for this pin. Add it below if you know it.
-          </Typography>
+          </p>
         )}
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-            gap: 2,
-          }}
-        >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Controller
             name="street_address"
             control={control}
@@ -604,12 +588,18 @@ export function CreatePlaceForm({
               <AIDraftField
                 source="pin"
                 drafted={fromPin("street_address")}
-                sx={{ gridColumn: { xs: "1", sm: "1 / -1" } }}
+                className="sm:col-span-2"
               >
-                <FormControl>
-                  <FormLabel>Street Address</FormLabel>
-                  <Input {...field} placeholder="123 Main St" size="sm" />
-                </FormControl>
+                <Field>
+                  <FieldLabel htmlFor={idOf("street_address")}>
+                    Street Address
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    id={idOf("street_address")}
+                    placeholder="123 Main St"
+                  />
+                </Field>
               </AIDraftField>
             )}
           />
@@ -619,10 +609,10 @@ export function CreatePlaceForm({
             control={control}
             render={({ field }) => (
               <AIDraftField source="pin" drafted={fromPin("locality")}>
-                <FormControl>
-                  <FormLabel>City</FormLabel>
-                  <Input {...field} placeholder="City" size="sm" />
-                </FormControl>
+                <Field>
+                  <FieldLabel htmlFor={idOf("locality")}>City</FieldLabel>
+                  <Input {...field} id={idOf("locality")} placeholder="City" />
+                </Field>
               </AIDraftField>
             )}
           />
@@ -632,10 +622,10 @@ export function CreatePlaceForm({
             control={control}
             render={({ field }) => (
               <AIDraftField source="pin" drafted={fromPin("region")}>
-                <FormControl>
-                  <FormLabel>State/Region</FormLabel>
-                  <Input {...field} placeholder="State" size="sm" />
-                </FormControl>
+                <Field>
+                  <FieldLabel htmlFor={idOf("region")}>State/Region</FieldLabel>
+                  <Input {...field} id={idOf("region")} placeholder="State" />
+                </Field>
               </AIDraftField>
             )}
           />
@@ -645,10 +635,12 @@ export function CreatePlaceForm({
             control={control}
             render={({ field }) => (
               <AIDraftField source="pin" drafted={fromPin("postcode")}>
-                <FormControl>
-                  <FormLabel>Postal Code</FormLabel>
-                  <Input {...field} placeholder="12345" size="sm" />
-                </FormControl>
+                <Field>
+                  <FieldLabel htmlFor={idOf("postcode")}>
+                    Postal Code
+                  </FieldLabel>
+                  <Input {...field} id={idOf("postcode")} placeholder="12345" />
+                </Field>
               </AIDraftField>
             )}
           />
@@ -668,10 +660,15 @@ export function CreatePlaceForm({
             }}
             render={({ field }) => (
               <AIDraftField source="pin" drafted={fromPin("country_code")}>
-                <FormControl error={!!errors.country_code}>
-                  <FormLabel>Country Code</FormLabel>
+                <Field data-invalid={!!errors.country_code || undefined}>
+                  <FieldLabel htmlFor={idOf("country_code")}>
+                    Country Code
+                  </FieldLabel>
                   <Input
                     {...field}
+                    id={idOf("country_code")}
+                    aria-invalid={!!errors.country_code || undefined}
+                    aria-describedby={errorOf("country_code")}
                     value={field.value}
                     onChange={(event) =>
                       field.onChange(
@@ -679,31 +676,26 @@ export function CreatePlaceForm({
                       )
                     }
                     placeholder="US"
-                    size="sm"
                   />
                   {errors.country_code && (
-                    <FormHelperText>
+                    <FieldError id={errorOf("country_code")}>
                       {errors.country_code.message}
-                    </FormHelperText>
+                    </FieldError>
                   )}
-                </FormControl>
+                </Field>
               </AIDraftField>
             )}
           />
-        </Box>
+        </div>
 
-        <Divider />
+        <Separator />
 
         {/* Contact info */}
-        <Typography level="title-sm">Contact (optional)</Typography>
+        <h2 className="type-callout font-semibold text-ink-1">
+          Contact (optional)
+        </h2>
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-            gap: 2,
-          }}
-        >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Controller
             name="phone"
             control={control}
@@ -716,41 +708,28 @@ export function CreatePlaceForm({
               },
             }}
             render={({ field }) => (
-              <FormControl error={!!errors.phone}>
-                <FormLabel>Phone</FormLabel>
-                <Box
-                  sx={{
-                    border: "1px solid",
-                    borderColor: errors.phone
-                      ? "danger.outlinedBorder"
-                      : "neutral.outlinedBorder",
-                    borderRadius: "sm",
-                    px: 1.5,
-                    py: 1,
-                    "& input": {
-                      width: "100%",
-                      border: "none",
-                      outline: "none",
-                      font: "inherit",
-                      background: "transparent",
-                    },
-                  }}
-                >
-                  <PhoneInput
-                    country={phoneCountry}
-                    international
-                    withCountryCallingCode
-                    value={field.value || undefined}
-                    onChange={(value) => field.onChange(value ?? "")}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    placeholder="+1 555 123 4567"
-                  />
-                </Box>
+              <Field data-invalid={!!errors.phone || undefined}>
+                <FieldLabel htmlFor={idOf("phone")}>Phone</FieldLabel>
+                <PhoneInput
+                  id={idOf("phone")}
+                  inputComponent={Input}
+                  aria-invalid={!!errors.phone || undefined}
+                  aria-describedby={errorOf("phone")}
+                  country={phoneCountry}
+                  international
+                  withCountryCallingCode
+                  value={field.value || undefined}
+                  onChange={(value) => field.onChange(value ?? "")}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  placeholder="+1 555 123 4567"
+                />
                 {errors.phone && (
-                  <FormHelperText>{errors.phone.message}</FormHelperText>
+                  <FieldError id={errorOf("phone")}>
+                    {errors.phone.message}
+                  </FieldError>
                 )}
-              </FormControl>
+              </Field>
             )}
           />
 
@@ -764,12 +743,15 @@ export function CreatePlaceForm({
                 "Enter a valid URL",
             }}
             render={({ field }) => (
-              <FormControl error={!!errors.website}>
-                <FormLabel>Website</FormLabel>
+              <Field data-invalid={!!errors.website || undefined}>
+                <FieldLabel htmlFor={idOf("website")}>Website</FieldLabel>
                 <Input
                   {...field}
+                  id={idOf("website")}
+                  aria-invalid={!!errors.website || undefined}
+                  aria-describedby={errorOf("website")}
+                  inputMode="url"
                   placeholder="https://example.com"
-                  size="sm"
                   onBlur={(event) => {
                     field.onBlur();
                     const normalized = normalizeWebsite(event.target.value);
@@ -782,12 +764,14 @@ export function CreatePlaceForm({
                   }}
                 />
                 {errors.website && (
-                  <FormHelperText>{errors.website.message}</FormHelperText>
+                  <FieldError id={errorOf("website")}>
+                    {errors.website.message}
+                  </FieldError>
                 )}
-              </FormControl>
+              </Field>
             )}
           />
-        </Box>
+        </div>
 
         {/* Description */}
         <Controller
@@ -800,39 +784,46 @@ export function CreatePlaceForm({
             },
           }}
           render={({ field }) => (
-            <FormControl error={!!errors.description}>
-              <FormLabel>Description (optional)</FormLabel>
+            <Field data-invalid={!!errors.description || undefined}>
+              <FieldLabel htmlFor={idOf("description")}>
+                Description (optional)
+              </FieldLabel>
               <Textarea
                 {...field}
-                minRows={2}
-                maxRows={4}
+                id={idOf("description")}
+                aria-invalid={!!errors.description || undefined}
+                aria-describedby={errorOf("description")}
+                rows={2}
+                className="max-h-28"
                 placeholder="A brief description of the place..."
-                size="sm"
               />
               {errors.description && (
-                <FormHelperText>{errors.description.message}</FormHelperText>
+                <FieldError id={errorOf("description")}>
+                  {errors.description.message}
+                </FieldError>
               )}
-            </FormControl>
+            </Field>
           )}
         />
 
         {/* Submit */}
         <Button
           type="submit"
-          loading={loading}
           disabled={loading || (duplicates.length > 0 && !duplicatesConfirmed)}
+          aria-busy={loading || undefined}
           size="lg"
-          sx={{ mt: 1 }}
+          className="mt-2"
         >
+          {loading && <Spinner />}
           Add Place
         </Button>
 
         {duplicates.length > 0 && !duplicatesConfirmed && (
-          <Typography level="body-xs" color="warning" textAlign="center">
+          <p className="type-footnote text-center text-ink-2">
             Please review the similar places above before submitting
-          </Typography>
+          </p>
         )}
-      </Stack>
+      </div>
     </form>
   );
 }

@@ -16,57 +16,50 @@
  *   server's, not `visit_count + 1` computed here.
  * - Photos are the mirrored `Place.photos` (presigned, through `next/image`); Google's
  *   attribution blocks are printed with "Powered by Google".
+ *
+ * On shadcn (S8, parity only — X20 rebuilds this page): the Joy cards are
+ * borderless `surface-1` sections, the tabs are `ui/tabs`, and the feedback
+ * Snackbar is `notify`.
  */
 
-import {
-  Alert,
-  AspectRatio,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Divider,
-  Snackbar,
-  Stack,
-  Tab,
-  TabList,
-  TabPanel,
-  Tabs,
-  Typography,
-} from "@mui/joy";
 import Image from "next/image";
-import Link from "next/link";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
-  MdCheckCircle,
-  MdCoffee,
-  MdDirections,
-  MdFavorite,
-  MdFavoriteBorder,
-  MdFormatListNumbered,
-  MdLanguage,
-  MdLocalBar,
-  MdMap,
-  MdPhone,
-  MdPlace,
-  MdRadioButtonUnchecked,
-  MdRestaurant,
-  MdSchedule,
-  MdShare,
-  MdSportsBar,
-  MdStar,
-  MdWineBar,
-} from "react-icons/md";
+  Directions,
+  ICON_STROKE,
+  MapIcon,
+  Phone,
+  Public,
+  Ranked,
+  Restaurant,
+  Schedule,
+  Share,
+  Star,
+  Warning,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { notify } from "@/components/app/notify";
+import { Page } from "@/components/app/Page";
 import { Timestamp } from "@/components/common/Timestamp";
 import { ItemTierLists } from "@/components/item/ItemTierLists";
 import { NotFoundMessage } from "@/components/shell/NotFoundMessage";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
+import { cn } from "@/lib/utils";
 import { AddToTierListModal } from "../../tier-list/AddToTierListModal";
 import { usePlaceDetails } from "../hooks/usePlaceDetails";
 import { MenuScanner } from "../scanning/MenuScanner";
 import { GoogleAttribution } from "./GoogleAttribution";
+import {
+  PlaceCategoryTile,
+  SaveToggleButton,
+  VisitedToggleButton,
+} from "./PlaceActionButtons";
 import { PlaceMenuItems } from "./PlaceMenuItems";
 import {
   formatCategoryName,
@@ -86,26 +79,7 @@ const DAY_NAMES = [
   "Saturday",
 ];
 
-// ── Utilities ──────────────────────────────────────────────────────────
-
-function getCategoryIcon(category: string) {
-  switch (category) {
-    case "restaurant":
-      return MdRestaurant;
-    case "bar":
-    case "pub":
-      return MdLocalBar;
-    case "cafe":
-    case "coffee_shop":
-      return MdCoffee;
-    case "brewery":
-      return MdSportsBar;
-    case "winery":
-      return MdWineBar;
-    default:
-      return MdPlace;
-  }
-}
+type PlaceTab = "menu" | "scan" | "info";
 
 // ── Sub-components ─────────────────────────────────────────────────────
 
@@ -132,11 +106,7 @@ function formatOpeningPoint(point: {
 
 function HoursDisplay({ hours }: { hours: unknown }) {
   if (typeof hours === "string") {
-    return (
-      <Typography level="body-sm" sx={{ mt: 1 }}>
-        {hours}
-      </Typography>
-    );
+    return <p className="type-callout mt-2 text-ink-1">{hours}</p>;
   }
 
   // Google Places API (New) includes weekdayDescriptions — use them directly
@@ -152,17 +122,13 @@ function HoursDisplay({ hours }: { hours: unknown }) {
       .weekdayDescriptions;
     if (descriptions.length > 0) {
       return (
-        <Stack spacing={0.5} sx={{ mt: 1 }}>
+        <ul className="mt-2 flex flex-col gap-1">
           {descriptions.map((desc) => (
-            <Typography
-              key={desc}
-              level="body-sm"
-              sx={{ color: "text.secondary" }}
-            >
+            <li key={desc} className="type-callout text-ink-2">
               {desc}
-            </Typography>
+            </li>
           ))}
-        </Stack>
+        </ul>
       );
     }
   }
@@ -189,18 +155,15 @@ function HoursDisplay({ hours }: { hours: unknown }) {
     }
 
     return (
-      <Stack spacing={0.5} sx={{ mt: 1 }}>
+      <dl className="mt-2 flex flex-col gap-1">
         {Array.from({ length: 7 }, (_, i) => {
           const dayPeriods = byDay.get(i);
           return (
-            <Stack key={DAY_NAMES[i]} direction="row" spacing={2}>
-              <Typography
-                level="body-sm"
-                sx={{ minWidth: 90, fontWeight: "md" }}
-              >
+            <div key={DAY_NAMES[i]} className="flex flex-row gap-4">
+              <dt className="type-callout min-w-[90px] font-medium text-ink-1">
                 {DAY_NAMES[i]}
-              </Typography>
-              <Typography level="body-sm" sx={{ color: "text.secondary" }}>
+              </dt>
+              <dd className="type-callout tabular text-ink-2">
                 {dayPeriods
                   ? dayPeriods
                       .map(
@@ -209,18 +172,55 @@ function HoursDisplay({ hours }: { hours: unknown }) {
                       )
                       .join(", ")
                   : "Closed"}
-              </Typography>
-            </Stack>
+              </dd>
+            </div>
           );
         })}
-      </Stack>
+      </dl>
     );
   }
 
+  return <p className="type-callout mt-2 text-ink-1">{String(hours)}</p>;
+}
+
+/** A borderless section surface — the old Joy `Card` (design §3.3). */
+function Section({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <Typography level="body-sm" sx={{ mt: 1 }}>
-      {String(hours)}
-    </Typography>
+    <section className={cn("rounded-lg bg-surface-1 p-4", className)}>
+      {children}
+    </section>
+  );
+}
+
+/** A tappable phone / website line (the old clickable `Stack`). */
+function ContactRow({
+  icon: Icon,
+  onClick,
+  children,
+}: {
+  icon: typeof Phone;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="type-callout flex min-h-11 w-full flex-row items-center gap-4 rounded-sm text-left text-primary outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      <Icon
+        aria-hidden
+        strokeWidth={ICON_STROKE}
+        className="size-5 shrink-0 text-ink-2"
+      />
+      <span className="min-w-0 break-all">{children}</span>
+    </button>
   );
 }
 
@@ -233,16 +233,12 @@ interface PlaceDetailsProps {
 }
 
 export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState<PlaceTab>("menu");
   // N07/D25: menu scanning is hidden, not refused, where no AI can read one.
   // A tab picked before the answer arrived falls back to Menu if it hides.
   const menuScanOffered = isOffered(useAiCapabilities(), "menuScan");
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
   const [isMarkingVisited, setIsMarkingVisited] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    message: string;
-    color: "success" | "danger" | "neutral";
-  } | null>(null);
   const [tierListModalOpen, setTierListModalOpen] = useState(false);
 
   const {
@@ -311,10 +307,10 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
         await navigator.clipboard.writeText(
           `${shareData.title}\n${shareData.text}\n${shareData.url}`,
         );
-        setFeedback({ message: "Link copied to clipboard", color: "success" });
+        notify("Link copied to clipboard", { tone: "success" });
       }
     } catch {
-      setFeedback({ message: "Failed to share", color: "danger" });
+      notify("Failed to share", { tone: "error" });
     }
   };
 
@@ -326,20 +322,14 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
         isFavorite: !userInteraction?.is_favorite,
       });
       if (error) {
-        setFeedback({
-          message: "Failed to update favorite",
-          color: "danger",
-        });
+        notify("Failed to update favorite", { tone: "error" });
       } else {
-        setFeedback({
-          message: userInteraction?.is_favorite
-            ? "Removed from saved"
-            : "Saved",
-          color: "success",
+        notify(userInteraction?.is_favorite ? "Removed from saved" : "Saved", {
+          tone: "success",
         });
       }
     } catch {
-      setFeedback({ message: "Failed to update favorite", color: "danger" });
+      notify("Failed to update favorite", { tone: "error" });
     } finally {
       setIsTogglingFavorite(false);
     }
@@ -352,21 +342,14 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     try {
       const error = await setInteraction({ isVisited: willBeVisited });
       if (error) {
-        setFeedback({
-          message: "Failed to update visited status",
-          color: "danger",
-        });
+        notify("Failed to update visited status", { tone: "error" });
       } else {
-        setFeedback({
-          message: willBeVisited ? "Marked as visited" : "Unmarked",
-          color: "success",
+        notify(willBeVisited ? "Marked as visited" : "Unmarked", {
+          tone: "success",
         });
       }
     } catch {
-      setFeedback({
-        message: "Failed to update visited status",
-        color: "danger",
-      });
+      notify("Failed to update visited status", { tone: "error" });
     } finally {
       setIsMarkingVisited(false);
     }
@@ -376,20 +359,22 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
 
   if (fetching) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <Spinner className="size-10 text-ink-2" />
+      </div>
     );
   }
 
   // "Not found" and "not yours to see" are one state (§1.6).
   if (failure && failure.code !== "NOT_FOUND") {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert color="danger">
-          Failed to load place details: {failure.message}
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load place details: {failure.message}
+          </AlertDescription>
         </Alert>
-      </Box>
+      </div>
     );
   }
 
@@ -406,6 +391,7 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
   const mergedPriceLevel = enrichment?.priceLevel ?? placeData.price_level;
   const mergedPhone = enrichment?.phone ?? placeData.phone;
   const mergedWebsite = enrichment?.website ?? placeData.website;
+  const ratingCount = enrichment?.userRatingsTotal ?? placeData.review_count;
 
   const openNow = (() => {
     const hours = enrichment?.openingHours;
@@ -418,10 +404,6 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     return null;
   })();
 
-  const MainCategoryIcon = getCategoryIcon(
-    placeData.primary_category ?? placeData.categories[0],
-  );
-
   const fullAddress = [
     placeData.street_address,
     placeData.locality,
@@ -431,389 +413,274 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     .filter(Boolean)
     .join(", ");
 
+  const closedStatus =
+    enrichment?.businessStatus === "CLOSED_TEMPORARILY" ||
+    enrichment?.businessStatus === "CLOSED_PERMANENTLY"
+      ? enrichment.businessStatus
+      : null;
+
+  const hours = enrichment?.openingHours ?? placeData.hours;
+
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <Box sx={{ maxWidth: 720, mx: "auto" }}>
+    <Page>
       {/* Hero Header */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="flex-start">
-            <Box
-              sx={{
-                p: 1.5,
-                borderRadius: "md",
-                backgroundColor: "primary.100",
-                color: "primary.600",
-                flexShrink: 0,
-              }}
-            >
-              <MainCategoryIcon size={28} />
-            </Box>
+      <Section>
+        <div className="flex flex-row items-start gap-4">
+          <PlaceCategoryTile
+            category={placeData.primary_category ?? placeData.categories[0]}
+            large
+          />
 
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography level="h2" sx={{ mb: 0.5 }}>
-                {placeData.name}
-              </Typography>
-              {placeData.display_name &&
-                placeData.display_name !== placeData.name && (
-                  <Typography
-                    level="body-lg"
-                    sx={{ color: "text.secondary", mb: 0.5 }}
-                  >
-                    {placeData.display_name}
-                  </Typography>
-                )}
-
-              {/* Rating / Price / Review count row */}
-              <Stack
-                direction="row"
-                spacing={2}
-                alignItems="center"
-                sx={{ mb: 1, flexWrap: "wrap" }}
-              >
-                {mergedRating != null && (
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <MdStar
-                      size={18}
-                      style={{ color: "var(--joy-palette-warning-400)" }}
-                    />
-                    <Typography level="body-sm" sx={{ fontWeight: "md" }}>
-                      {mergedRating.toFixed(1)}
-                      {(enrichment?.userRatingsTotal ??
-                        placeData.review_count) != null &&
-                        ` (${enrichment?.userRatingsTotal ?? placeData.review_count})`}
-                    </Typography>
-                  </Stack>
-                )}
-                {mergedPriceLevel != null && (
-                  <Typography
-                    level="body-sm"
-                    sx={{ color: "success.600", fontWeight: "md" }}
-                  >
-                    {getPriceLevelText(mergedPriceLevel)}
-                  </Typography>
-                )}
-                {openNow != null && (
-                  <Typography
-                    level="body-sm"
-                    sx={{
-                      color: openNow ? "success.600" : "danger.600",
-                      fontWeight: "md",
-                    }}
-                  >
-                    {openNow ? "Open" : "Closed"}
-                  </Typography>
-                )}
-                {/* N22: capped at 8 s, then a calm line rather than a spinner */}
-                {isEnriching && (
-                  <CircularProgress
-                    size="sm"
-                    aria-label="Loading details"
-                    sx={{ "--CircularProgress-size": "16px" }}
-                  />
-                )}
-                {!isEnriching && detailsPending && (
-                  <Typography level="body-xs" color="neutral">
-                    Details pending
-                  </Typography>
-                )}
-                {placeData.is_verified && (
-                  <Chip size="sm" variant="soft" color="success">
-                    Verified
-                  </Chip>
-                )}
-              </Stack>
-
-              {/* Address with map link */}
-              {fullAddress && (
-                <Link
-                  href={`/map?placeId=${placeData.id}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    sx={{
-                      cursor: "pointer",
-                      "&:hover .address-text": { color: "primary.500" },
-                    }}
-                  >
-                    <MdMap
-                      size={18}
-                      style={{
-                        color: "var(--joy-palette-primary-500)",
-                        flexShrink: 0,
-                      }}
-                    />
-                    <Typography
-                      className="address-text"
-                      level="body-sm"
-                      sx={{
-                        color: "primary.600",
-                        transition: "color 0.15s",
-                      }}
-                    >
-                      {fullAddress}
-                    </Typography>
-                  </Stack>
-                </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="type-title-1 mb-1 text-ink-1">{placeData.name}</h1>
+            {placeData.display_name &&
+              placeData.display_name !== placeData.name && (
+                <p className="type-body mb-1 text-ink-2">
+                  {placeData.display_name}
+                </p>
               )}
-            </Box>
-          </Stack>
 
-          {/* Categories */}
-          {placeData.categories && placeData.categories.length > 0 && (
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ mt: 2, flexWrap: "wrap", gap: 1 }}
-            >
-              {placeData.categories.map((category: string) => (
-                <Chip key={category} variant="soft" color="neutral" size="sm">
-                  {formatCategoryName(category)}
-                </Chip>
-              ))}
-            </Stack>
-          )}
+            {/* Rating / Price / Review count row */}
+            <div className="mb-2 flex flex-row flex-wrap items-center gap-x-4 gap-y-1">
+              {mergedRating != null && (
+                <span className="type-callout tabular flex flex-row items-center gap-1 font-medium text-ink-1">
+                  <Star
+                    aria-hidden
+                    strokeWidth={0}
+                    className="size-[18px] fill-current text-ink-2"
+                  />
+                  {mergedRating.toFixed(1)}
+                  {ratingCount != null && ` (${ratingCount})`}
+                </span>
+              )}
+              {mergedPriceLevel != null && (
+                <span className="type-callout font-medium text-success">
+                  {getPriceLevelText(mergedPriceLevel)}
+                </span>
+              )}
+              {openNow != null && (
+                <span
+                  className={cn(
+                    "type-callout font-medium",
+                    openNow ? "text-success" : "text-destructive",
+                  )}
+                >
+                  {openNow ? "Open" : "Closed"}
+                </span>
+              )}
+              {/* N22: capped at 8 s, then a calm line rather than a spinner */}
+              {isEnriching && (
+                <Spinner aria-label="Loading details" className="text-ink-2" />
+              )}
+              {!isEnriching && detailsPending && (
+                <span className="type-footnote">Details pending</span>
+              )}
+              {placeData.is_verified && (
+                <Badge variant="secondary" className="text-success">
+                  Verified
+                </Badge>
+              )}
+            </div>
 
-          {/* Visit info */}
-          {userInteraction?.last_visited_at && (
-            <Typography level="body-xs" sx={{ mt: 2, color: "text.tertiary" }}>
-              Last visited:{" "}
-              <Timestamp
-                iso={userInteraction.last_visited_at}
-                precision="date"
-              />
-              {userInteraction.visit_count != null &&
-                userInteraction.visit_count > 1 &&
-                ` (${userInteraction.visit_count} visits)`}
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
+            {/* Address with map link */}
+            {fullAddress && (
+              <Link
+                href={`/map?placeId=${placeData.id}`}
+                className="type-callout inline-flex flex-row items-center gap-2 text-primary"
+              >
+                <MapIcon
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-[18px] shrink-0"
+                />
+                {fullAddress}
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* Categories */}
+        {placeData.categories && placeData.categories.length > 0 && (
+          <div className="mt-4 flex flex-row flex-wrap gap-2">
+            {placeData.categories.map((category: string) => (
+              <Badge key={category} variant="secondary">
+                {formatCategoryName(category)}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* Visit info */}
+        {userInteraction?.last_visited_at && (
+          <p className="type-footnote mt-4">
+            Last visited:{" "}
+            <Timestamp iso={userInteraction.last_visited_at} precision="date" />
+            {userInteraction.visit_count != null &&
+              userInteraction.visit_count > 1 &&
+              ` (${userInteraction.visit_count} visits)`}
+          </p>
+        )}
+      </Section>
 
       {/* Business Status Warning */}
-      {enrichment?.businessStatus &&
-        (enrichment.businessStatus === "CLOSED_TEMPORARILY" ||
-          enrichment.businessStatus === "CLOSED_PERMANENTLY") && (
-          <Alert
-            color={
-              enrichment.businessStatus === "CLOSED_PERMANENTLY"
-                ? "danger"
-                : "warning"
-            }
-            sx={{ mb: 3 }}
-          >
-            {enrichment.businessStatus === "CLOSED_PERMANENTLY"
+      {closedStatus && (
+        <Alert
+          variant={
+            closedStatus === "CLOSED_PERMANENTLY" ? "destructive" : "default"
+          }
+        >
+          <Warning aria-hidden />
+          <AlertDescription>
+            {closedStatus === "CLOSED_PERMANENTLY"
               ? "This place is permanently closed"
               : "This place is temporarily closed"}
-          </Alert>
-        )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Google Photo */}
       {googlePhotos[0]?.url && (
-        <Card sx={{ mb: 3, p: 0, overflow: "hidden" }}>
-          <AspectRatio ratio="16/9">
-            <Image
-              src={googlePhotos[0].url}
-              alt={placeData.name}
-              fill
-              sizes="(max-width: 720px) 100vw, 720px"
-              style={{ objectFit: "cover" }}
-            />
-          </AspectRatio>
-        </Card>
+        <div className="relative aspect-video overflow-hidden rounded-lg bg-surface-1">
+          <Image
+            src={googlePhotos[0].url}
+            alt={placeData.name}
+            fill
+            sizes="(max-width: 720px) 100vw, 720px"
+            className="object-cover"
+          />
+        </div>
       )}
 
       {/* Action Buttons */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack spacing={1.5}>
-            <Button
-              variant="solid"
-              color="primary"
-              startDecorator={<MdDirections />}
-              fullWidth
-              onClick={handleDirections}
-            >
-              Directions
-            </Button>
+      <Section className="flex flex-col gap-3">
+        <Button className="w-full" onClick={handleDirections}>
+          <Directions aria-hidden />
+          Directions
+        </Button>
 
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<MdPhone />}
-                disabled={!mergedPhone}
-                sx={{ flex: 1 }}
-                onClick={handleCall}
-              >
-                Call
-              </Button>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<MdLanguage />}
-                disabled={!mergedWebsite}
-                sx={{ flex: 1 }}
-                onClick={handleWebsite}
-              >
-                Website
-              </Button>
-            </Stack>
+        <div className="flex flex-row gap-2">
+          <Button
+            variant="outline"
+            disabled={!mergedPhone}
+            className="flex-1"
+            onClick={handleCall}
+          >
+            <Phone aria-hidden />
+            Call
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!mergedWebsite}
+            className="flex-1"
+            onClick={handleWebsite}
+          >
+            <Public aria-hidden />
+            Website
+          </Button>
+        </div>
 
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant={userInteraction?.is_favorite ? "solid" : "outlined"}
-                color={userInteraction?.is_favorite ? "danger" : "neutral"}
-                startDecorator={
-                  userInteraction?.is_favorite ? (
-                    <MdFavorite />
-                  ) : (
-                    <MdFavoriteBorder />
-                  )
-                }
-                onClick={handleToggleFavorite}
-                loading={isTogglingFavorite}
-                disabled={isTogglingFavorite}
-                sx={{ flex: 1 }}
-              >
-                {userInteraction?.is_favorite ? "Saved" : "Save"}
-              </Button>
-              <Button
-                variant={userInteraction?.is_visited ? "solid" : "outlined"}
-                color={userInteraction?.is_visited ? "success" : "neutral"}
-                startDecorator={
-                  userInteraction?.is_visited ? (
-                    <MdCheckCircle />
-                  ) : (
-                    <MdRadioButtonUnchecked />
-                  )
-                }
-                onClick={handleMarkVisited}
-                loading={isMarkingVisited}
-                disabled={isMarkingVisited}
-                sx={{ flex: 1 }}
-              >
-                {userInteraction?.is_visited ? "Visited" : "Mark Visited"}
-              </Button>
-            </Stack>
+        <div className="flex flex-row gap-2">
+          <SaveToggleButton
+            on={!!userInteraction?.is_favorite}
+            pending={isTogglingFavorite}
+            onClick={() => void handleToggleFavorite()}
+            className="flex-1"
+          />
+          <VisitedToggleButton
+            on={!!userInteraction?.is_visited}
+            pending={isMarkingVisited}
+            onClick={() => void handleMarkVisited()}
+            className="flex-1"
+          />
+        </div>
 
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<MdShare />}
-                sx={{ flex: 1 }}
-                onClick={handleShare}
-              >
-                Share
-              </Button>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<MdFormatListNumbered />}
-                sx={{ flex: 1 }}
-                onClick={() => setTierListModalOpen(true)}
-              >
-                Add to Tier List
-              </Button>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
+        <div className="flex flex-row gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => void handleShare()}
+          >
+            <Share aria-hidden />
+            Share
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setTierListModalOpen(true)}
+          >
+            <Ranked aria-hidden />
+            Add to Tier List
+          </Button>
+        </div>
+      </Section>
 
       {/* Editorial Summary */}
       {enrichment?.editorialSummary && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography level="body-md" sx={{ fontStyle: "italic" }}>
-              {enrichment.editorialSummary}
-            </Typography>
-          </CardContent>
-        </Card>
+        <Section>
+          <p className="type-body text-ink-1 italic">
+            {enrichment.editorialSummary}
+          </p>
+        </Section>
       )}
 
       {/* Contact Info */}
       {(mergedPhone || mergedWebsite) && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Stack spacing={1.5}>
-              {mergedPhone && (
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  alignItems="center"
-                  sx={{ cursor: "pointer" }}
-                  onClick={handleCall}
-                >
-                  <MdPhone
-                    size={20}
-                    style={{ color: "var(--joy-palette-text-secondary)" }}
-                  />
-                  <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                    {mergedPhone}
-                  </Typography>
-                </Stack>
-              )}
-              {mergedPhone && mergedWebsite && <Divider />}
-              {mergedWebsite && (
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  alignItems="center"
-                  sx={{ cursor: "pointer" }}
-                  onClick={handleWebsite}
-                >
-                  <MdLanguage
-                    size={20}
-                    style={{ color: "var(--joy-palette-text-secondary)" }}
-                  />
-                  <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                    {mergedWebsite
-                      .replace(/^https?:\/\//, "")
-                      .replace(/\/$/, "")}
-                  </Typography>
-                </Stack>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
+        <Section className="flex flex-col gap-1 py-2">
+          {mergedPhone && (
+            <ContactRow icon={Phone} onClick={handleCall}>
+              {mergedPhone}
+            </ContactRow>
+          )}
+          {mergedPhone && mergedWebsite && <Separator />}
+          {mergedWebsite && (
+            <ContactRow icon={Public} onClick={handleWebsite}>
+              {mergedWebsite.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+            </ContactRow>
+          )}
+        </Section>
       )}
 
       {/* Tier lists this place belongs to (G8: visible lists only) */}
-      <Box sx={{ mb: 3 }}>
-        <ItemTierLists entries={tierListEntries} />
-      </Box>
+      <ItemTierLists entries={tierListEntries} />
 
       {/* Google Attribution (the Places terms require the blocks too) */}
       <GoogleAttribution
         enrichment={enrichment}
         photos={googlePhotos.slice(0, 1)}
+        className="mb-0"
       />
 
       {/* Content tabs */}
-      <Card>
+      <Section className="px-0 pt-2">
         <Tabs
-          value={!menuScanOffered && activeTab === 1 ? 0 : activeTab}
-          onChange={(_, value) => setActiveTab(value as number)}
+          value={!menuScanOffered && activeTab === "scan" ? "menu" : activeTab}
+          onValueChange={(value) => setActiveTab(value as PlaceTab)}
         >
-          <TabList>
-            <Tab value={0}>
+          <TabsList
+            variant="line"
+            className="w-full justify-start border-line border-b px-2 group-data-[orientation=horizontal]/tabs:h-11"
+          >
+            <TabsTrigger value="menu" className="flex-none px-3">
               Menu
               {menuItems.length > 0 && (
-                <Chip size="sm" variant="soft" color="primary" sx={{ ml: 1 }}>
+                <Badge variant="secondary" className="tabular">
                   {menuItemCount}
-                </Chip>
+                </Badge>
               )}
-            </Tab>
-            {menuScanOffered && <Tab value={1}>Camera Scan</Tab>}
-            <Tab value={2}>Info</Tab>
-          </TabList>
+            </TabsTrigger>
+            {menuScanOffered && (
+              <TabsTrigger value="scan" className="flex-none px-3">
+                Camera Scan
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="info" className="flex-none px-3">
+              Info
+            </TabsTrigger>
+          </TabsList>
 
-          <TabPanel value={0}>
+          <TabsContent value="menu" className="px-4 pt-4">
             {currentMenu ? (
               <PlaceMenuItems
                 placeId={placeData.id}
@@ -825,29 +692,27 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
                 onLoadMore={loadMoreMenuItems}
               />
             ) : (
-              <Box sx={{ textAlign: "center", py: 4 }}>
-                <MdRestaurant
-                  size={48}
-                  style={{
-                    color: "var(--joy-palette-text-tertiary)",
-                    marginBottom: 16,
-                  }}
+              <div className="flex flex-col items-center py-8 text-center">
+                <Restaurant
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="mb-4 size-12 text-ink-3"
                 />
-                <Typography level="title-lg" sx={{ mb: 1 }}>
+                <h2 className="type-headline mb-2 text-ink-1">
                   No menu discovered yet
-                </Typography>
+                </h2>
                 {menuScanOffered && (
-                  <Typography level="body-md" sx={{ color: "text.secondary" }}>
+                  <p className="type-body text-ink-2">
                     Scan a menu at this location using the &quot;Camera
                     Scan&quot; tab above.
-                  </Typography>
+                  </p>
                 )}
-              </Box>
+              </div>
             )}
-          </TabPanel>
+          </TabsContent>
 
           {menuScanOffered && (
-            <TabPanel value={1}>
+            <TabsContent value="scan" className="px-4 pt-4">
               <MenuScanner
                 placeId={placeData.id}
                 userId={userId}
@@ -856,82 +721,62 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
                 // completes — that refetch read the menu before it existed.
                 onScanComplete={refetch}
               />
-            </TabPanel>
+            </TabsContent>
           )}
 
-          <TabPanel value={2}>
-            <Stack spacing={2}>
-              {(enrichment?.openingHours ?? placeData.hours) != null && (
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography
-                      level="title-md"
-                      startDecorator={<MdSchedule />}
-                    >
-                      Hours
-                    </Typography>
-                    <HoursDisplay
-                      hours={enrichment?.openingHours ?? placeData.hours}
-                    />
-                  </CardContent>
-                </Card>
-              )}
+          <TabsContent value="info" className="flex flex-col gap-4 px-4 pt-4">
+            {hours != null && (
+              <div className="rounded-md bg-surface-2 p-4">
+                <h2 className="type-headline flex flex-row items-center gap-2 text-ink-1">
+                  <Schedule
+                    aria-hidden
+                    strokeWidth={ICON_STROKE}
+                    className="size-5 text-ink-2"
+                  />
+                  Hours
+                </h2>
+                <HoursDisplay hours={hours} />
+              </div>
+            )}
 
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography level="title-md">Details</Typography>
-                  <Stack spacing={1} sx={{ mt: 1 }}>
-                    {placeData.primary_category && (
-                      <Typography level="body-sm">
-                        <strong>Primary Category:</strong>{" "}
-                        {formatCategoryName(placeData.primary_category)}
-                      </Typography>
-                    )}
-                    {placeData.categories &&
-                      placeData.categories.length > 0 && (
-                        <Typography level="body-sm">
-                          <strong>Categories:</strong>{" "}
-                          {placeData.categories
-                            .map((c: string) => formatCategoryName(c))
-                            .join(", ")}
-                        </Typography>
-                      )}
-                    {placeData.confidence != null && (
-                      <Typography level="body-sm">
-                        <strong>Data Confidence:</strong>{" "}
-                        {(placeData.confidence * 100).toFixed(0)}%
-                      </Typography>
-                    )}
-                    {mergedPriceLevel != null && (
-                      <Typography level="body-sm">
-                        <strong>Price Level:</strong>{" "}
-                        {"$".repeat(mergedPriceLevel)}
-                      </Typography>
-                    )}
-                    {placeData.is_verified && (
-                      <Typography level="body-sm">
-                        <strong>Verified:</strong> Yes
-                      </Typography>
-                    )}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Stack>
-          </TabPanel>
+            <div className="rounded-md bg-surface-2 p-4">
+              <h2 className="type-headline text-ink-1">Details</h2>
+              <div className="type-callout mt-2 flex flex-col gap-2 text-ink-1">
+                {placeData.primary_category && (
+                  <p>
+                    <strong>Primary Category:</strong>{" "}
+                    {formatCategoryName(placeData.primary_category)}
+                  </p>
+                )}
+                {placeData.categories && placeData.categories.length > 0 && (
+                  <p>
+                    <strong>Categories:</strong>{" "}
+                    {placeData.categories
+                      .map((c: string) => formatCategoryName(c))
+                      .join(", ")}
+                  </p>
+                )}
+                {placeData.confidence != null && (
+                  <p>
+                    <strong>Data Confidence:</strong>{" "}
+                    {(placeData.confidence * 100).toFixed(0)}%
+                  </p>
+                )}
+                {mergedPriceLevel != null && (
+                  <p>
+                    <strong>Price Level:</strong> {"$".repeat(mergedPriceLevel)}
+                  </p>
+                )}
+                {placeData.is_verified && (
+                  <p>
+                    <strong>Verified:</strong> Yes
+                  </p>
+                )}
+              </div>
+            </div>
+          </TabsContent>
         </Tabs>
-      </Card>
-
-      {/* Feedback Snackbar */}
-      <Snackbar
-        open={feedback !== null}
-        autoHideDuration={3000}
-        onClose={() => setFeedback(null)}
-        color={feedback?.color ?? "neutral"}
-        variant="soft"
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        {feedback?.message}
-      </Snackbar>
+      </Section>
 
       {/* Add to Tier List Modal */}
       <AddToTierListModal
@@ -942,6 +787,6 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
         entityName={placeData.name}
         userId={userId}
       />
-    </Box>
+    </Page>
   );
 }

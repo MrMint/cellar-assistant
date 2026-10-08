@@ -27,6 +27,7 @@ const { GooglePlaceSuggestions } = await import(
 );
 const { PlaceDetailsContent } = await import("./places/PlaceDetailsContent");
 const { CreatePlaceForm } = await import("./places/CreatePlaceForm");
+const { CategoryMultiSelect } = await import("./places/CategoryMultiSelect");
 const { DiscoveryDashboard } = await import("./discovery/DiscoveryDashboard");
 const { menuItemFrom } = await import("./adapter");
 const { LOADING } = await import("../../test-support/markup");
@@ -176,6 +177,11 @@ describe("create place (restored)", () => {
     assert.match(html, /We found similar places nearby/);
     assert.match(html, /This is it/);
     assert.match(html, /None of these — create new place/);
+    // It renders inside CreatePlaceForm's <form>: a button without
+    // type="button" would submit (and create) the place on either choice.
+    const buttons = html.match(/<button[^>]*>/g) ?? [];
+    assert.equal(buttons.length, 2);
+    for (const button of buttons) assert.match(button, /type="button"/);
   });
 
   test("GooglePlaceSuggestions copy", () => {
@@ -218,6 +224,49 @@ describe("create place (restored)", () => {
     assert.match(html, /43\.07000, -89\.40000/);
     assert.match(html, /Loading address\.\.\./);
     assert.match(html, />Add Place</);
+    // Joy's FormControl wired label to input itself; ui/field does not, and
+    // the e2e finds every field by its label. Each label must name a control.
+    const fors = Array.from(html.matchAll(/<label[^>]*\sfor="([^"]+)"/g));
+    assert.equal(fors.length, 10);
+    for (const [, id] of fors) {
+      assert.match(
+        html,
+        new RegExp(`<(input|textarea|button)[^>]*\\sid="${id}"`),
+        id,
+      );
+    }
+    // The only submit in the form is Add Place.
+    assert.deepEqual(html.match(/type="submit"/g), ['type="submit"']);
+  });
+
+  test("Categories: a combobox the label names, described by the picks", () => {
+    const options = [
+      { label: "Wine Bar", value: "wine_bar", tier: "Venues" },
+      { label: "Bottle Shop", value: "bottle_shop", tier: "Retail" },
+    ];
+    const empty = render(
+      <CategoryMultiSelect
+        id="cats"
+        options={options}
+        value={[]}
+        onChange={() => {}}
+        placeholder="Select categories..."
+      />,
+    );
+    assert.match(empty, /<button[^>]*role="combobox"[^>]*>/);
+    assert.match(empty, /type="button"/);
+    assert.doesNotMatch(empty, /aria-describedby/);
+    const picked = render(
+      <CategoryMultiSelect
+        id="cats"
+        options={options}
+        value={options}
+        onChange={() => {}}
+        describedBy="cats-error"
+      />,
+    );
+    assert.match(picked, /aria-describedby="cats-value cats-error"/);
+    assert.match(picked, /id="cats-value"[^>]*>.*Wine Bar.*Bottle Shop/);
   });
 
   test("N22: 'Add it here' arrives with the searched name already in the form", () => {

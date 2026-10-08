@@ -1,40 +1,23 @@
-import { Box, CircularProgress, Typography } from "@mui/joy";
 import { Suspense } from "react";
 import { DiscoveryDashboard } from "@/components/map/discovery/DiscoveryDashboard";
+import { Spinner } from "@/components/ui/spinner";
 
 /** `82450ad1:src/app/(authenticated)/discoveries/page.tsx`, restored. */
 export default function DiscoveriesPage() {
   return (
-    <Box
-      sx={{
-        height: "100dvh",
-        overflow: "auto",
-        p: 2,
-      }}
-    >
-      <Typography level="h2" sx={{ mb: 3 }}>
-        Your Discoveries
-      </Typography>
+    <div className="h-dvh overflow-auto p-4">
+      <h1 className="type-title-1 mb-6 text-ink-1">Your Discoveries</h1>
 
       <Suspense
         fallback={
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "50vh",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            <CircularProgress />
-            <Typography>Loading discoveries...</Typography>
-          </Box>
+          <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
+            <Spinner className="size-10 text-ink-2" />
+            <p className="type-body text-ink-1">Loading discoveries...</p>
+          </div>
         }
       >
         <DiscoveryDashboard />
       </Suspense>
-    </Box>
+    </div>
   );
 }

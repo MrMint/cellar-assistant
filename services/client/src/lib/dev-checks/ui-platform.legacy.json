@@ -1,22 +1,11 @@
 {
   "_frozen": "Written once by the foundation (F) on 2026-10-08 (branch shadcn/foundation, cut from 004cbac4): every client source file that still used the legacy UI platform (MUI Joy, Emotion, sx, react-icons, raw colours, literal motion). Slices NEVER edit this list: a converted file simply stops matching. The removal step (R) deletes it and makes the guard absolute. See ui-platform.ts.",
   "files": [
-    "src/app/(authenticated)/discoveries/page.tsx",
-    "src/app/(authenticated)/map/create-place/page.tsx",
-    "src/app/(authenticated)/places/[placeId]/page.tsx",
     "src/components/common/AIDraftField.tsx",
     "src/components/common/InteractiveCard.tsx",
     "src/components/common/Link.tsx",
     "src/components/common/UserAvatar.tsx",
     "src/components/common/rating/StarRating.tsx",
-    "src/components/map/discovery/DiscoveryDashboard.tsx",
-    "src/components/map/places/CreatePlaceForm.tsx",
-    "src/components/map/places/DuplicatePlaceCheck.tsx",
-    "src/components/map/places/GoogleAttribution.tsx",
-    "src/components/map/places/PlaceDetails.tsx",
-    "src/components/map/places/PlaceDetailsContent.tsx",
-    "src/components/map/places/PlaceMenuItems.tsx",
-    "src/components/map/places/SearchEmptyState.tsx",
     "src/components/providers/AppClientProviders.tsx",
     "src/components/providers/EmotionCacheProvider.tsx",
     "src/components/providers/ThemeRegistry.tsx"
