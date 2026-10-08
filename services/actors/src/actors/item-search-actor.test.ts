@@ -14,6 +14,8 @@
  */
 import type { Ctx, ItemSearchInput } from "@cellar-assistant/contracts";
 import {
+  BudgetExceededError,
+  ConflictError,
   ForbiddenError,
   itemSearchActorId,
   ValidationError,
@@ -38,7 +40,11 @@ import {
   seedUser,
   withTestDb,
 } from "../lib/testing.ts";
-import { ItemSearchActor, LEXICAL_THRESHOLD } from "./item-search-actor.ts";
+import {
+  embeddingUnavailable,
+  ItemSearchActor,
+  LEXICAL_THRESHOLD,
+} from "./item-search-actor.ts";
 
 const { skip } = await resolveTestDatabase();
 
@@ -343,6 +349,104 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
           distance: 0,
         });
       });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* No embedding (D25 parity)                                           */
+  /* ------------------------------------------------------------------ */
+
+  describe("a phrase that cannot be embedded (D25)", () => {
+    const unconfigured: EmbedQuery = async () => {
+      throw new ConflictError("no embedding provider", "AI_UNCONFIGURED");
+    };
+
+    it("returns name matches, ranked by name, with no distances", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const exact = await seedWine(db, owner, "Duvel");
+        const longer = await seedWine(db, owner, "Duvel Tripel Hop Citra");
+        await seedWine(db, owner, "Chimay Blue");
+        await seedItemVector(db, longer, unitVector(0));
+        const input: ItemSearchInput = { text: "duvel" };
+        const hits = await newActor(input, db, owner, unconfigured).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hits.map((hit) => hit.id)).toEqual([exact.id, longer.id]);
+        expect(hits.map((hit) => hit.distance)).toEqual([null, null]);
+        expect(at(hits, 0).lexicalSimilarity).toBe(1);
+      });
+    });
+
+    it("finds a misspelt name and keeps the type filter", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        await seedWine(db, owner, "Guinness Reserve");
+        const beer = await seedBeer(db, owner, "Guinness Draught");
+        const input: ItemSearchInput = {
+          text: "guiness draught",
+          itemTypes: ["BEER"],
+        };
+        const hits = await newActor(input, db, owner, unconfigured).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hits.map((hit) => hit.id)).toEqual([beer.id]);
+      });
+    });
+
+    it("does not hold a name-only answer: the next turn tries the embedding again", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        await seedWine(db, owner, "Pinot Retry");
+        let calls = 0;
+        const flaky: EmbedQuery = async () => {
+          calls += 1;
+          if (calls === 1)
+            throw new ConflictError("ollama could not be reached");
+          return unitVector(0);
+        };
+        const input: ItemSearchInput = { text: "pinot retry" };
+        const actor = newActor(input, db, owner, flaky);
+        await actor.all(userCtx(owner), input);
+        await actor.all(userCtx(owner), input);
+        expect(calls).toBe(2);
+        expect(actor.searchRuns).toBe(2);
+        // …and once it embeds, that answer is held as usual.
+        await actor.all(userCtx(owner), input);
+        expect(actor.searchRuns).toBe(2);
+      });
+    });
+
+    it("still throws a refusal that is about the request", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const input: ItemSearchInput = { text: "anything" };
+        const refusing: EmbedQuery = async () => {
+          throw new ValidationError("cannot embed that");
+        };
+        await expect(
+          newActor(input, db, owner, refusing).all(userCtx(owner), input),
+        ).rejects.toBeInstanceOf(ValidationError);
+      });
+    });
+
+    it("classifies which failures mean 'no embedding right now'", () => {
+      expect(
+        embeddingUnavailable(new ConflictError("x", "AI_UNCONFIGURED")),
+      ).toBe(true);
+      expect(embeddingUnavailable(new ConflictError("provider failed"))).toBe(
+        true,
+      );
+      expect(
+        embeddingUnavailable(
+          new BudgetExceededError("cap", "SERVICE_BUDGET", null),
+        ),
+      ).toBe(true);
+      expect(embeddingUnavailable(new Error("sidecar timed out"))).toBe(true);
+      expect(embeddingUnavailable(new ValidationError("bad"))).toBe(false);
+      expect(embeddingUnavailable(new ForbiddenError("no"))).toBe(false);
     });
   });
 

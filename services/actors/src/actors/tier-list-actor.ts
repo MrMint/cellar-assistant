@@ -950,6 +950,7 @@ export class TierListActor
       failedAt: row.insightsFailedAt,
       failure: row.insightsFailure,
       retryAt: row.insightsRetryAt,
+      throttleMs: INSIGHTS_THROTTLE_MS,
       now: new Date(),
     });
     // A per-user limit is the creator's own allowance (generation is

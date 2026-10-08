@@ -1054,6 +1054,35 @@ describe("B8 · menu match verification", () => {
       providerMenuMatchVerifier(provider)(ctx, request),
     ).rejects.toThrow(/was not one of the 2 offered/);
   });
+
+  it("constrains acceptedKey to the offered keys and none", async () => {
+    const { provider, asked } = fakeProvider(
+      JSON.stringify({ acceptedKey: "none", confidence: 0.5, reasoning: "" }),
+    );
+    await providerMenuMatchVerifier(provider)(ctx, request);
+    const schema = asked[0]?.request.schema as {
+      properties: { acceptedKey: { enum?: readonly string[] } };
+    };
+    expect(schema.properties.acceptedKey.enum).toEqual([
+      "wine:a",
+      "wine:b",
+      "none",
+    ]);
+  });
+
+  it("reads a candidate's exact name, answered in place of its key, as that key", async () => {
+    // gemma3:4b on the local lane answered "Ridge Lytton Springs" for a
+    // candidate offered as `WINE:<uuid>` named exactly that.
+    const { provider } = fakeProvider(
+      JSON.stringify({
+        acceptedKey: "château margaux 2016",
+        confidence: 0.9,
+        reasoning: "Same wine.",
+      }),
+    );
+    const result = await providerMenuMatchVerifier(provider)(ctx, request);
+    expect(result.acceptedKey).toBe("wine:b");
+  });
 });
 
 /* -------------------------------------------------------------------------- */

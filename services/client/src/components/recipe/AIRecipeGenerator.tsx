@@ -141,8 +141,25 @@ const STEPS = [
  * - "compatibility scores and substitutions" — G29 is dropped.
  */
 export function AIRecipeGenerator() {
+  return (
+    <AIRecipeGeneratorView
+      recipePhotoOffered={isOffered(useAiCapabilities(), "recipePhoto")}
+    />
+  );
+}
+
+/**
+ * The page for a known capability. Where reading recipe photos is not
+ * offered, the page is the notice alone: the pitch, the feature list, the
+ * tips and "How It Works" all describe the photo flow, and around the notice
+ * they contradicted it.
+ */
+export function AIRecipeGeneratorView({
+  recipePhotoOffered,
+}: {
+  recipePhotoOffered: boolean;
+}) {
   const [createdRecipeIds, setCreatedRecipeIds] = useState<string[]>([]);
-  const recipePhotoOffered = isOffered(useAiCapabilities(), "recipePhoto");
 
   const handleRecipesCreated = (recipeIds: string[]) => {
     setCreatedRecipeIds((prev) => [
@@ -158,19 +175,21 @@ export function AIRecipeGenerator() {
         <Typography level="h1" component="h1" sx={{ mb: 2 }}>
           AI Recipe Generator
         </Typography>
-        <Typography
-          level="body-lg"
-          sx={{ color: "text.secondary", maxWidth: 600, mx: "auto" }}
-        >
-          Transform any menu photo, recipe card, or cookbook page into a
-          detailed, executable recipe, with its ingredients matched to items in
-          the catalog.
-        </Typography>
+        {recipePhotoOffered && (
+          <Typography
+            level="body-lg"
+            sx={{ color: "text.secondary", maxWidth: 600, mx: "auto" }}
+          >
+            Transform any menu photo, recipe card, or cookbook page into a
+            detailed, executable recipe, with its ingredients matched to items
+            in the catalog.
+          </Typography>
+        )}
       </Box>
 
       {/* Main Generator */}
       <Grid container spacing={4}>
-        <Grid xs={12} lg={8}>
+        <Grid xs={12} lg={recipePhotoOffered ? 8 : 12}>
           {recipePhotoOffered ? (
             <RecipePhotoProcessor onRecipesCreated={handleRecipesCreated} />
           ) : (
@@ -187,100 +206,111 @@ export function AIRecipeGenerator() {
           )}
         </Grid>
 
-        <Grid xs={12} lg={4}>
-          <Stack spacing={3}>
-            {/* Features */}
-            <Card variant="outlined">
-              <CardContent>
-                <Typography level="h3" sx={{ mb: 2 }}>
-                  AI Features
-                </Typography>
-                <Stack spacing={2}>
-                  {FEATURES.map(({ icon: Icon, title, text }) => (
-                    <Box
-                      key={title}
-                      sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}
-                    >
-                      <Icon
-                        style={{
-                          color: "var(--joy-palette-primary-500)",
-                          marginTop: 4,
+        {recipePhotoOffered && (
+          <Grid xs={12} lg={4}>
+            <Stack spacing={3}>
+              {/* Features */}
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography level="h3" sx={{ mb: 2 }}>
+                    AI Features
+                  </Typography>
+                  <Stack spacing={2}>
+                    {FEATURES.map(({ icon: Icon, title, text }) => (
+                      <Box
+                        key={title}
+                        sx={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 2,
                         }}
-                      />
-                      <Box>
-                        <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
-                          {title}
-                        </Typography>
-                        <Typography
-                          level="body-xs"
-                          sx={{ color: "text.tertiary" }}
-                        >
-                          {text}
-                        </Typography>
+                      >
+                        <Icon
+                          style={{
+                            color: "var(--joy-palette-primary-500)",
+                            marginTop: 4,
+                          }}
+                        />
+                        <Box>
+                          <Typography level="body-sm" sx={{ fontWeight: "lg" }}>
+                            {title}
+                          </Typography>
+                          <Typography
+                            level="body-xs"
+                            sx={{ color: "text.tertiary" }}
+                          >
+                            {text}
+                          </Typography>
+                        </Box>
                       </Box>
-                    </Box>
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
+                    ))}
+                  </Stack>
+                </CardContent>
+              </Card>
 
-            {/* Tips */}
-            <Card variant="outlined">
-              <CardContent>
-                <Typography level="h3" sx={{ mb: 2 }}>
-                  Best Results Tips
-                </Typography>
-                <Stack spacing={1.5}>
-                  <Typography level="body-sm">
-                    📱 <strong>Clear photos:</strong> Ensure text is readable
-                    and well-lit
+              {/* Tips */}
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography level="h3" sx={{ mb: 2 }}>
+                    Best Results Tips
                   </Typography>
-                  <Typography level="body-sm">
-                    🍸 <strong>One recipe per photo:</strong> Each photo becomes
-                    one recipe
-                  </Typography>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Stack>
-        </Grid>
+                  <Stack spacing={1.5}>
+                    <Typography level="body-sm">
+                      📱 <strong>Clear photos:</strong> Ensure text is readable
+                      and well-lit
+                    </Typography>
+                    <Typography level="body-sm">
+                      🍸 <strong>One recipe per photo:</strong> Each photo
+                      becomes one recipe
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Stack>
+          </Grid>
+        )}
       </Grid>
 
       {/* How It Works */}
-      <Box sx={{ mt: 8 }}>
-        <Typography
-          level="h2"
-          component="h2"
-          sx={{ mb: 4, textAlign: "center" }}
-        >
-          How It Works
-        </Typography>
-        <Grid container spacing={4}>
-          {STEPS.map(({ icon: Icon, title, text }) => (
-            <Grid key={title} xs={12} md={3}>
-              <Card variant="outlined" sx={{ height: "100%" }}>
-                <CardContent sx={{ textAlign: "center" }}>
-                  <Icon
-                    size={40}
-                    style={{
-                      color: "var(--joy-palette-primary-500)",
-                      marginBottom: 16,
-                      marginLeft: "auto",
-                      marginRight: "auto",
-                    }}
-                  />
-                  <Typography level="h4" sx={{ mb: 1 }}>
-                    {title}
-                  </Typography>
-                  <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-                    {text}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
+      {recipePhotoOffered && (
+        <Box sx={{ mt: 8 }}>
+          <Typography
+            level="h2"
+            component="h2"
+            sx={{ mb: 4, textAlign: "center" }}
+          >
+            How It Works
+          </Typography>
+          <Grid container spacing={4}>
+            {STEPS.map(({ icon: Icon, title, text }) => (
+              <Grid key={title} xs={12} md={3}>
+                <Card variant="outlined" sx={{ height: "100%" }}>
+                  <CardContent sx={{ textAlign: "center" }}>
+                    <Icon
+                      size={40}
+                      style={{
+                        color: "var(--joy-palette-primary-500)",
+                        marginBottom: 16,
+                        marginLeft: "auto",
+                        marginRight: "auto",
+                      }}
+                    />
+                    <Typography level="h4" sx={{ mb: 1 }}>
+                      {title}
+                    </Typography>
+                    <Typography
+                      level="body-sm"
+                      sx={{ color: "text.secondary" }}
+                    >
+                      {text}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
 
       {/* Generated Recipes Display */}
       {createdRecipeIds.length > 0 && (

@@ -116,7 +116,10 @@ builder.queryField("itemSearch", (t) =>
       "client already has — exactly one. A `text` search ranks by " +
       "`item_vectors` distance and by trigram similarity of item names " +
       "together (reciprocal rank fusion), so an exact or misspelt name " +
-      "finds its item even where the embedding prefers a sibling. A photo " +
+      "finds its item even where the embedding prefers a sibling. Where " +
+      "the phrase cannot be embedded (no AI provider, a spent budget, a " +
+      "provider failure) it ranks by name alone and every `distance` is " +
+      "null, rather than failing. A photo " +
       "search matches the " +
       "item vectors and every stored photo you may see, ranks each item by " +
       "the nearer, and defaults `maxDistance` to " +

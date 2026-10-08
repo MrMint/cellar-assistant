@@ -303,8 +303,9 @@ export class MenuMatchJobActor
     if (searchText === "") return [];
 
     const route = routeFor(itemType, searchText);
-    // Auto by vector similarity wherever it sits; otherwise the search's own
-    // order (N08: vector and name fused) for the verifier — `planCandidates`.
+    // Auto by vector similarity wherever it sits, or by a name identical to
+    // the line's; otherwise the search's own order (N08: vector and name
+    // fused) for the verifier — `planCandidates`.
     const plan = planCandidates(
       route.kind === "RECIPE"
         ? (await this.#search.searchRecipes(ctx, route.input)).map(
@@ -313,6 +314,7 @@ export class MenuMatchJobActor
         : (await this.#search.searchItems(ctx, route.input)).map(
             itemHitToCandidate,
           ),
+      [searchText, row.menu_item_name],
     );
 
     const metrics = (
@@ -334,10 +336,18 @@ export class MenuMatchJobActor
         placeMenuItemId: row.id,
         target: candidate.target,
         confidenceScore: candidate.similarity,
-        matchReasoning: `vector similarity ${candidate.similarity.toFixed(
-          2,
-        )} >= ${MATCH_AUTO_CONFIDENCE} (${route.kind.toLowerCase()} search)`,
-        similarityMetrics: metrics(candidate),
+        matchReasoning:
+          plan.autoBy === "name"
+            ? `the menu names it exactly, vector similarity ${candidate.similarity.toFixed(
+                2,
+              )} (${route.kind.toLowerCase()} search)`
+            : `vector similarity ${candidate.similarity.toFixed(
+                2,
+              )} >= ${MATCH_AUTO_CONFIDENCE} (${route.kind.toLowerCase()} search)`,
+        similarityMetrics: {
+          ...metrics(candidate),
+          ...(plan.autoBy === "name" ? { exactName: true } : {}),
+        },
       }));
     }
 

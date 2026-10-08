@@ -71,6 +71,7 @@ export abstract class SearchActorBase<TInput, THit> extends ActorBase {
 
   #results: readonly THit[] | null = null;
   #runs = 0;
+  #cacheThisRun = true;
 
   /**
    * Recompute this actor's id from `input`. Every C1 actor delegates to its
@@ -126,9 +127,20 @@ export abstract class SearchActorBase<TInput, THit> extends ActorBase {
     if ((await this.authorize(ctx, input)) === "empty") return [];
     if (this.#results !== null) return this.#results;
     this.#runs += 1;
+    this.#cacheThisRun = true;
     const results = await this.runSearch(ctx, input);
-    this.#results = results;
+    if (this.#cacheThisRun) this.#results = results;
     return results;
+  }
+
+  /**
+   * Called from `runSearch`: answer this turn, but do not hold the result
+   * for the next one — a degraded answer (D25: an item search ranked by name
+   * because the phrase could not be embedded) that a later turn should get
+   * the chance to improve on.
+   */
+  protected doNotCache(): void {
+    this.#cacheThisRun = false;
   }
 
   /** §1.5's "pages it in memory". The cursor is an offset into a stable set. */

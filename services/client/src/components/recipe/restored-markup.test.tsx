@@ -26,7 +26,9 @@ const { RecipeDetails } = await import("./RecipeDetails");
 const { RecipeGroupCard } = await import("./RecipeGroupCard");
 const { RecipeVersionsTab } = await import("./RecipeVersionsTab");
 const { RecipePhotoProcessor } = await import("./RecipePhotoProcessor");
-const { AIRecipeGenerator } = await import("./AIRecipeGenerator");
+const { AIRecipeGenerator, AIRecipeGeneratorView } = await import(
+  "./AIRecipeGenerator"
+);
 const { RecipeGroupSearch } = await import("../search/RecipeGroupSearch");
 
 const client = new Client({
@@ -331,5 +333,14 @@ describe("AI Recipe Generator (restored)", () => {
     assert.match(html, />1. Upload Photo</);
     assert.doesNotMatch(html, /OCR Accuracy|System Capabilities|95%/);
     assert.doesNotMatch(html, /your cellar/);
+  });
+
+  test("where recipe photos are not offered, the notice alone — no pitch around it", () => {
+    const html = render(<AIRecipeGeneratorView recipePhotoOffered={false} />);
+    assert.match(html, /Reading recipe photos isn&#x27;t available here/);
+    assert.doesNotMatch(html, /Transform any menu photo/);
+    assert.doesNotMatch(html, />AI Features</);
+    assert.doesNotMatch(html, />How It Works</);
+    assert.doesNotMatch(html, />Choose Photo</);
   });
 });

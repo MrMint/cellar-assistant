@@ -22,7 +22,9 @@ import type { MenuMatchCandidate } from "./menu-matching.ts";
 import {
   AUTO_LEXICAL_MARGIN,
   AUTO_MARGIN,
+  foldName,
   itemHitToCandidate,
+  NAME_AUTO_MIN_SIMILARITY,
   planCandidates,
   recipeHitToCandidate,
   routeFor,
@@ -191,7 +193,95 @@ describe("planCandidates (N08)", () => {
     expect(keys(plan.verify)).toEqual(["ok"]);
     expect(planCandidates([candidate("weak", 0.3)])).toEqual({
       auto: [],
+      autoBy: null,
       verify: [],
+    });
+  });
+
+  describe("an identical name below the auto band", () => {
+    const named = (
+      name: string,
+      similarity: number,
+      lexicalSimilarity: number | null,
+    ): MenuMatchCandidate => ({
+      ...candidate(name, similarity, lexicalSimilarity),
+      name,
+    });
+
+    /**
+     * Measured on the local lane: exact catalog names at 0.829–0.888, every
+     * one sent to a verifier that accepted none, so a menu matched nothing.
+     */
+    it("auto-suggests the one candidate the menu names exactly", () => {
+      const plan = planCandidates(
+        [
+          named("Guinness Draught", 0.888, 1),
+          named("Guinness Extra Stout", 0.807, 0.47),
+          named("Murphy's Irish Stout", 0.76, null),
+        ],
+        ["Guinness Draught", "GUINNESS DRAUGHT (pint)"],
+      );
+      expect(keys(plan.auto)).toEqual(["Guinness Draught"]);
+      expect(plan.autoBy).toBe("name");
+      expect(plan.verify).toEqual([]);
+    });
+
+    it("matches the printed name too, folding case, accents and punctuation", () => {
+      const plan = planCandidates(
+        [
+          named("Château Margaux 2015", 0.86, 1),
+          named("Château Margaux 2016", 0.85, 0.8),
+        ],
+        ["", "chateau margaux, 2015"],
+      );
+      expect(keys(plan.auto)).toEqual(["Château Margaux 2015"]);
+      expect(foldName("  Château-Margaux 2015! ")).toBe("chateau margaux 2015");
+    });
+
+    it("never for a name that only contains the line's", () => {
+      const plan = planCandidates(
+        [named("Pilsner Urquell", 0.83, 1), named("Bud Light", 0.6, null)],
+        ["Pilsner"],
+      );
+      expect(plan.auto).toEqual([]);
+      expect(plan.autoBy).toBeNull();
+      expect(keys(plan.verify)).toEqual(["Pilsner Urquell", "Bud Light"]);
+    });
+
+    it("never when the vector disagrees", () => {
+      const plan = planCandidates(
+        [named("Saison Dupont", NAME_AUTO_MIN_SIMILARITY - 0.01, 1)],
+        ["Saison Dupont"],
+      );
+      expect(plan.auto).toEqual([]);
+    });
+
+    it("never for a name the catalog has twice", () => {
+      const plan = planCandidates(
+        [named("Duvel", 0.85, 1), named("duvel", 0.8, 1)],
+        ["Duvel"],
+      );
+      expect(plan.auto).toEqual([]);
+    });
+
+    it("never past a sibling neither the vector nor the name separates", () => {
+      // "Caymus Cabernet Sauvignon" is identical to the line, but the vintage
+      // contains the line's words just as well and the vector puts it level.
+      const plan = planCandidates(
+        [
+          named("Caymus Cabernet Sauvignon", 0.87, 1),
+          named("Caymus Cabernet Sauvignon 2021", 0.86, 1),
+        ],
+        ["Caymus Cabernet Sauvignon"],
+      );
+      expect(plan.auto).toEqual([]);
+      expect(plan.verify).toHaveLength(2);
+    });
+
+    it("leaves a line with no names to compare to the verifier", () => {
+      expect(
+        planCandidates([named("Guinness Draught", 0.888, 1)]).auto,
+      ).toEqual([]);
     });
   });
 

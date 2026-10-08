@@ -38,9 +38,31 @@ export type InsightsStatusInput = {
   /** `insights_failure`, a stored failure (`CODE[REASON]: message`). */
   readonly failure: string | null;
   readonly retryAt: Date | null;
+  /**
+   * The once-a-day throttle (`INSIGHTS_THROTTLE_MS`): no generation runs
+   * sooner than this after `generatedAt`, whatever asked for one.
+   */
+  readonly throttleMs: number;
   /** For `retryAt` in the past, which is no longer worth reporting. */
   readonly now: Date;
 };
+
+/**
+ * How long a request may stay unanswered past the moment it was due before
+ * it reads as `FAILED` rather than `PENDING`.
+ *
+ * A failure *inside* the generation is written down (`insights_failed_at`)
+ * and reads as `FAILED` at once. One outside it is not: a delivery that
+ * dead-letters before the generator runs, a host that dies mid-call, a
+ * delivery timeout. Nothing then ever writes again, and the list said
+ * "Generating Insights" for good — the N07 bug from the other side. The
+ * outbox retries for roughly 17 minutes (2 s doubling to 512 s, nine
+ * retries; `backoffMs`) before it dead-letters, so half an hour past due is
+ * comfortably beyond any delivery still coming. A late success still wins:
+ * it writes `generatedAt`, which reads `READY`; and the next change asks
+ * again, which reads `PENDING`.
+ */
+export const INSIGHTS_PENDING_STALE_MS = 30 * 60_000;
 
 export type InsightsStatus = {
   readonly status: TierListInsightsStatus;
@@ -58,10 +80,16 @@ export const tierListInsightsStatus = (
   input: InsightsStatusInput,
 ): InsightsStatus => {
   const none = { failureReason: null, retryAt: null } as const;
-  const future =
-    input.retryAt !== null && input.retryAt.getTime() > input.now.getTime()
-      ? input.retryAt.toISOString()
-      : null;
+  const now = input.now.getTime();
+  // The throttle is known the moment a change lands, so a change inside it
+  // reports when the refresh will run straight away — not "on the way" until
+  // the first delivery has deferred itself and stored `retryAt`.
+  const throttledUntil =
+    input.generatedAt === null
+      ? null
+      : input.generatedAt.getTime() + input.throttleMs;
+  const nextRun = Math.max(input.retryAt?.getTime() ?? 0, throttledUntil ?? 0);
+  const future = nextRun > now ? new Date(nextRun).toISOString() : null;
 
   if (input.itemCount < input.minimumItems) {
     return { status: "NOT_ENOUGH_ENTRIES", ...none };
@@ -87,6 +115,12 @@ export const tierListInsightsStatus = (
     };
   }
   if (after(input.requestedAt, input.generatedAt)) {
+    // Due when it was asked for, or when the throttle or a budget window
+    // lets it run, whichever is later.
+    const due = Math.max(input.requestedAt?.getTime() ?? 0, nextRun);
+    if (now - due > INSIGHTS_PENDING_STALE_MS) {
+      return { status: "FAILED", ...none };
+    }
     return { status: "PENDING", failureReason: null, retryAt: future };
   }
   if (input.hasInsights) return { status: "READY", ...none };
