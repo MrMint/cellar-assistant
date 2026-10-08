@@ -82,23 +82,6 @@ export const BAND_TONES: Record<
   },
 };
 
-/**
- * Joy chip colours per band, for the Joy-era item page (`item/ItemTierLists`)
- * until its slice converts it; deleted in the removal step once unused. The
- * union is spelled out so this file needs no Joy import.
- */
-export const BAND_JOY_COLORS: Record<
-  number,
-  "success" | "primary" | "neutral" | "warning" | "danger"
-> = {
-  5: "success",
-  4: "primary",
-  3: "neutral",
-  2: "warning",
-  1: "danger",
-  0: "neutral",
-};
-
 /** Entity types that can be added to a tier list (matches tier_lists.list_type). */
 export type TierListEntityType =
   | "place"
