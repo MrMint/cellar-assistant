@@ -376,6 +376,7 @@ export const AI_MODEL_SERVICE = "ai_model";
  */
 export const MODEL_SEAMS = [
   "embedding",
+  "flavour_tags",
   "image_embedding",
   "image_search",
   "item_defaults",
@@ -484,6 +485,9 @@ export type ModelSpender = {
  */
 export const MODEL_SPENDERS: Readonly<Record<ModelSeam, ModelSpender>> = {
   embedding: { maxMonthlyRequests: 200_000, defaultMonthlyBudgetCents: 200 },
+  // X02. One short note on the "low" model — a few hundred tokens each way —
+  // asked at most once per log the drinker types a note into.
+  flavour_tags: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 100 },
   // G32. One `gemini-embedding-2` image is ~$0.00012 (`EMBEDDING_IMAGE_TEXT_TOKENS`
   // in `../lib/ai/budget.ts`), so $5 is ~41,000 stored photos — the attach path
   // plus a backfill of a catalogue this size several times over — and $2 is
@@ -821,6 +825,8 @@ export type UserCap = { readonly hourly: number; readonly daily: number };
  */
 export const USER_CAPS: Readonly<Record<string, UserCap>> = {
   "ai_model/embedding": { hourly: 300, daily: 2_000 },
+  // A suggestion per typed note; a person logging a whole tasting is ~30.
+  "ai_model/flavour_tags": { hourly: 60, daily: 300 },
   // A stored photo is embedded once per attach, so this is a person attaching
   // a photo a minute for an hour; the backfill runs as `system`.
   "ai_model/image_embedding": { hourly: 60, daily: 300 },

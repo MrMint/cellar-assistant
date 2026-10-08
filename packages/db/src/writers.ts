@@ -38,6 +38,7 @@ export const ACTOR_WRITERS = [
   "BudgetActor",
   "CategoryVectorsActor",
   "CellarActor",
+  "CheckInActor",
   "FileActor",
   "ItemActor",
   "ItemOnboardingActor",
@@ -118,7 +119,11 @@ export const TABLE_WRITERS = {
   cellars: "CellarActor",
   cellar_owners: "CellarActor",
   cellar_items: "CellarActor",
-  check_ins: "CellarActor",
+  // X02: a drink log is about an item and only optionally a bottle, so it is
+  // no longer part of the cellar aggregate. `CellarActor` reads it (its
+  // cellar-scoped check-in list) and never writes it; removing a bottle nulls
+  // `cellar_item_id` through the foreign key instead of deleting the history.
+  check_ins: "CheckInActor",
 
   // ItemActor — one actor per `type:itemId`; the six physical item tables and
   // their satellites are hidden behind it.

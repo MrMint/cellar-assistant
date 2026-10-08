@@ -74,6 +74,27 @@ const checkIn = {
   updatedAt: "2026-09-09T00:00:00.000Z",
 };
 
+/** What `CheckInActor.log` answers for `rows` written from the bottle. */
+const logged = (rows: readonly { id: string; userId: string }[]) => ({
+  entry: {
+    id: rows[0]?.id ?? checkIn.id,
+    userId: rows[0]?.userId ?? viewer.id,
+    createdById: viewer.id,
+    item: { type: "WINE" as const, id: WINE_ID },
+    score: null,
+    note: null,
+    tags: [],
+    placeId: null,
+    photoFileId: null,
+    companionIds: rows.slice(1).map((row) => row.userId),
+    fromCellar: true,
+    createdAt: checkIn.createdAt,
+    updatedAt: checkIn.updatedAt,
+  },
+  rows,
+  cellarItemId: cellarItem.id,
+});
+
 const wine = {
   id: WINE_ID,
   type: "WINE" as const,
@@ -295,13 +316,14 @@ describe("cellar mutations (§8.3)", () => {
   });
 
   it("bulkCheckIn returns a connection, and surfaces ForbiddenError typed", async () => {
+    // X02: `bulkCheckIn` is `CheckInActor.log` with the ids as companions.
     const { invoke, calls } = stubSidecar({
-      "CellarActor.bulkCheckIn": (_actorId, _ctx, _cellarItemId, userIds) =>
-        (userIds as string[]).map((userId, index) => ({
-          ...checkIn,
-          id: `id-${index}`,
-          userId,
-        })),
+      "CheckInActor.log": (_actorId, _ctx, input) =>
+        logged(
+          ((input as { companionIds: string[] }).companionIds ?? []).map(
+            (userId, index) => ({ id: `id-${index}`, userId }),
+          ),
+        ),
     });
     const result = await run(
       `mutation { bulkCheckIn(
@@ -327,12 +349,15 @@ describe("cellar mutations (§8.3)", () => {
       },
     });
     expect(calls[0]?.args.slice(1)).toEqual([
-      cellarItem.id,
-      [viewer.id, "friend"],
+      {
+        bottle: { cellarId: CELLAR_ID, cellarItemId: cellarItem.id },
+        companionIds: [viewer.id, "friend"],
+        includeSelf: false,
+      },
     ]);
 
     const denied = stubSidecar({
-      "CellarActor.bulkCheckIn": () => {
+      "CheckInActor.log": () => {
         throw new ForbiddenError(
           "cannot check in on behalf of x: not a friend",
         );
@@ -359,7 +384,7 @@ describe("cellar mutations (§8.3)", () => {
       "CellarActor.setItemPercentage": () => cellarItem,
       "CellarActor.openItem": () => cellarItem,
       "CellarActor.emptyItem": () => cellarItem,
-      "CellarActor.checkIn": () => checkIn,
+      "CheckInActor.log": () => logged([{ id: checkIn.id, userId: viewer.id }]),
       "ItemActor.get": () => wine,
     });
     const result = await run(
@@ -382,15 +407,14 @@ describe("cellar mutations (§8.3)", () => {
       "setItemPercentage",
       "openItem",
       "emptyItem",
-      "checkIn",
+      "log",
     ]);
     // An explicitly-null `openAt` means "clear it" and must survive the trip.
     expect(calls[2]?.args[2]).toEqual({ openAt: null });
-    // An omitted `checkInId` is `undefined`, never a fabricated id.
+    // X02: the bottle check-in is a log poured from that bottle.
     expect(calls[6]?.args).toEqual([
       { viewerId: viewer.id, kind: "user", requestId: "req-test" },
-      cellarItem.id,
-      undefined,
+      { bottle: { cellarId: CELLAR_ID, cellarItemId: cellarItem.id } },
     ]);
   });
 });

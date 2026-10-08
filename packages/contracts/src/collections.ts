@@ -80,6 +80,7 @@
 import type { ActorDescriptor } from "./actors.ts";
 import type { BrandDto } from "./brand.ts";
 import type { ItemTypeCountsDto } from "./cellars.ts";
+import type { ItemCheckInDto } from "./check-ins.ts";
 import type { Ctx } from "./ctx.ts";
 import type {
   BrandType,
@@ -200,8 +201,8 @@ export const CellarsCollectionActorDescriptor: ActorDescriptor<CellarsCollection
 /* -------------------------------------------------------------------------- */
 
 /**
- * One `check_ins` row on an item's detail page, with the cellar it came from
- * deliberately **absent**.
+ * The item page's check-in list is `ItemCheckInDto` (`./check-ins.ts`, X02):
+ * one log entry, with the cellar it came from deliberately **absent**.
  *
  * §1.6's settled reading of this surface is that it *"names the drinker rather
  * than where the bottle sat"*. `CellarActor.checkIns` carries `cellarItemId`
@@ -210,15 +211,13 @@ export const CellarsCollectionActorDescriptor: ActorDescriptor<CellarsCollection
  * a row id inside a cellar they may not be able to see — the oracle B1 refused,
  * one field smaller.
  */
-export type ItemCheckInDto = {
-  readonly id: string;
-  /** `check_ins.user_id` — who the check-in is *about* (`bulkCheckIn`, §2.1). */
-  readonly userId: string;
-  /** The item this check-in is on. Equal to the requested ref, echoed back. */
-  readonly item: ItemRef;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-};
+/**
+ * Whose entries an item's check-in list holds. `ALL` is the C3 surface (yours,
+ * your companions', your friends', and any from a cellar you can see); `MINE`
+ * is the item page's "Your log" (D8) — entries about the viewer only.
+ */
+export const ITEM_CHECK_IN_SCOPES = ["ALL", "MINE"] as const;
+export type ItemCheckInScope = (typeof ITEM_CHECK_IN_SCOPES)[number];
 
 /**
  * `CheckInsCollectionActor(viewerId)` — collection actor, **C3**.
@@ -246,7 +245,12 @@ export type CheckInsCollectionActorInterface = {
    * **projection** — check-ins on `item`, newest first, filtered by
    * `canSeeCheckIn`. See the type doc: a check-in has no entity actor to load.
    */
-  list(ctx: Ctx, item: ItemRef, page: PageArgs): Promise<Page<ItemCheckInDto>>;
+  list(
+    ctx: Ctx,
+    item: ItemRef,
+    page: PageArgs,
+    scope?: ItemCheckInScope | null,
+  ): Promise<Page<ItemCheckInDto>>;
 };
 
 export const CheckInsCollectionActorDescriptor: ActorDescriptor<CheckInsCollectionActorInterface> =
@@ -394,7 +398,13 @@ export const isFriendRequestFilter = (
  * (`82450ad1:src/components/search/RecentActivity.tsx`): a bottle added to a
  * cellar, an item review, an entry added to a tier list.
  */
-export const ACTIVITY_KINDS = ["ADDED", "REVIEWED", "TIER_LISTED"] as const;
+export const ACTIVITY_KINDS = [
+  "ADDED",
+  "REVIEWED",
+  "TIER_LISTED",
+  // X02: a drink logged — by the viewer, a friend, or a table the viewer sat at.
+  "CHECKED_IN",
+] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
 export const isActivityKind = (value: string): value is ActivityKind =>
@@ -423,7 +433,8 @@ export type ActivityFilter = {
  * (`TierListActor.get`, which applies `canSeeTierList` again) and the cellar
  * (`CellarActor.get`, `canSeeCellar` again).
  *
- * Exactly one of `review` / `tierListItem` / `cellarItemId` is set, by `kind`.
+ * Exactly one of `review` / `tierListItem` / `cellarItemId` / `checkIn` is
+ * set, by `kind` (`cellarItemId` for ADDED).
  */
 export type ActivityEntryDto = {
   readonly kind: ActivityKind;
@@ -443,6 +454,8 @@ export type ActivityEntryDto = {
   readonly rank: number | null;
   readonly cellarId: string | null;
   readonly cellarItemId: string | null;
+  /** The log entry, CHECKED_IN only — `canSeeCheckIn` decided it is shown. */
+  readonly checkIn: ItemCheckInDto | null;
 };
 
 /**

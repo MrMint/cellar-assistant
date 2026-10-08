@@ -28,7 +28,7 @@ export type CellarItemPageViewProps = {
   checkInsTotal?: number | null;
   /** `recipeIngredients.totalCount` — the API returns 100. */
   recipesTotal?: number | null;
-  viewer: ItemCellarUser;
+  /** The viewer's friends — "Who with" in the log sheet, preloaded. */
   friends: ItemCellarUser[];
   isOwner: boolean;
   editHref: string | null;
@@ -52,7 +52,6 @@ export function CellarItemPageView({
   checkIns,
   checkInsTotal,
   recipesTotal,
-  viewer,
   friends,
   isOwner,
   editHref,
@@ -111,10 +110,13 @@ export function CellarItemPageView({
             {bottle.openAt !== null && (
               <ItemCheckIns
                 checkIns={checkIns}
-                itemId={bottle.id}
-                cellarId={cellar.id}
+                subject={{
+                  itemType: item.type,
+                  itemId: item.itemId,
+                  itemName: item.name,
+                  bottle: { cellarId: cellar.id, cellarItemId: bottle.id },
+                }}
                 friends={friends}
-                user={viewer}
                 total={checkInsTotal}
                 finished={bottle.emptyAt !== null}
               />

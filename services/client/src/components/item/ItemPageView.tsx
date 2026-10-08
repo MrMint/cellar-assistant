@@ -1,3 +1,4 @@
+import { YourLog } from "@/components/drink-log/YourLog";
 import { AddReview } from "@/components/review/AddReview";
 import type { ItemView } from "./adapter";
 import { ItemBrands } from "./ItemBrands";
@@ -79,6 +80,14 @@ export function ItemPageView({
               characteristics={item.characteristics}
               flavorProfile={item.flavorProfile}
               ingredients={item.ingredients}
+            />
+            {/* D8: check-ins restored as "Your log" (X02's drink log). */}
+            <YourLog
+              subject={{
+                itemType: item.type,
+                itemId: item.itemId,
+                itemName: item.name,
+              }}
             />
             <ItemCellars cellars={cellars} total={cellarsTotal} />
             {config.brandsColumn === "left" && brands}

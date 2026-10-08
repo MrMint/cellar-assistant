@@ -7,7 +7,7 @@ import { bodyText, expect, test, watch } from "../fixtures/test.ts";
  * The restored item pages (UI parity wave 3a): the item page, the edit form
  * and the **bottle** page, asserted against the production copy at
  * `82450ad1` — "Located in:", "Reviews:", "Tea Characteristics", "Open it!",
- * "Check In", "Delete item".
+ * "Log a drink", "Delete item".
  *
  * A tea, because sake and tea are the two types `createItem` can write
  * without the onboarding flow (`item_onboarding_id NOT NULL` on the other
@@ -187,7 +187,12 @@ test("the bottle page: open it, check in, delete it", async ({ primary }) => {
     timeout: 20_000,
   });
 
-  await primary.getByRole("button", { name: "Check In", exact: true }).click();
+  // X02: "Log a drink" opens the sheet; "Log it" alone is the old "Check In".
+  await primary.getByRole("button", { name: "Log a drink" }).click();
+  await primary
+    .getByRole("dialog", { name: "Log a drink" })
+    .getByRole("button", { name: "Log it" })
+    .click();
   // The day row the check-in list adds (reviews carry a <time> too).
   await expect(
     primary.getByRole("list", { name: "Check-ins" }).locator("time").first(),

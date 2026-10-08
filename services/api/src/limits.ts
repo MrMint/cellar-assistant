@@ -224,6 +224,11 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     ],
     // A vision or LLM call inside the request.
     ["Mutation.startItemOnboarding", { via: ["ItemOnboardingActor.start"] }],
+    // X02: a typed note's flavour words (`flavour_tags`).
+    [
+      "Mutation.suggestFlavourTags",
+      { via: ["CheckInActor.suggestFlavourTags"] },
+    ],
     ["Mutation.createPlace", { via: ["PlaceCreationActor.createPlace"] }],
     // X27: a resubmission queues a fresh review, which is a model call.
     ["Mutation.resubmitPlace", { via: ["PlaceActor.editUnshared"] }],

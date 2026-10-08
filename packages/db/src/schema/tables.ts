@@ -200,12 +200,34 @@ export const cellars = pgTable("cellars", {
 export const checkIns = pgTable("check_ins", {
 	id: uuid().defaultRandom().primaryKey(),
 	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "restrict", onUpdate: "restrict" } ),
-	cellarItemId: uuid("cellar_item_id").notNull().references(() => cellarItems.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	cellarItemId: uuid("cellar_item_id").references(() => cellarItems.id, { onDelete: "set null" } ),
 	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`).notNull(),
+	wineId: uuid("wine_id").references(() => wines.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	beerId: uuid("beer_id").references(() => beers.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	spiritId: uuid("spirit_id").references(() => spirits.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	coffeeId: uuid("coffee_id").references(() => coffees.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	sakeId: uuid("sake_id").references(() => sakes.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	teaId: uuid("tea_id").references(() => teas.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	createdById: uuid("created_by_id").notNull().references(() => user.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	groupId: uuid("group_id").notNull(),
+	score: real(),
+	note: text(),
+	tags: text().array().default([]).notNull(),
+	placeId: uuid("place_id").references(() => places.id, { onDelete: "set null" } ),
+	photoFileId: uuid("photo_file_id").references(() => files.id, { onDelete: "restrict", onUpdate: "restrict" } ),
 }, (table) => [
 	index("idx_check_ins_cellar_item_id_created_at").using("btree", table.cellarItemId.asc().nullsLast(), table.createdAt.asc().nullsLast()),
-]);
+	index("idx_check_ins_user_id_created_at").using("btree", table.userId.asc().nullsLast(), table.createdAt.asc().nullsLast()),
+	index("idx_check_ins_group_id").using("btree", table.groupId.asc().nullsLast()),
+	index("idx_check_ins_wine_id").using("btree", table.wineId.asc().nullsLast()),
+	index("idx_check_ins_beer_id").using("btree", table.beerId.asc().nullsLast()),
+	index("idx_check_ins_spirit_id").using("btree", table.spiritId.asc().nullsLast()),
+	index("idx_check_ins_coffee_id").using("btree", table.coffeeId.asc().nullsLast()),
+	index("idx_check_ins_sake_id").using("btree", table.sakeId.asc().nullsLast()),
+	index("idx_check_ins_tea_id").using("btree", table.teaId.asc().nullsLast()),
+	index("idx_check_ins_photo_file_id").using("btree", table.photoFileId.asc().nullsLast()),
+check("check_ins_one_item", sql`(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("check_ins_score_half_stars", sql`((score IS NULL) OR (score = ANY (ARRAY[(0.5)::double precision, (1)::double precision, (1.5)::double precision, (2)::double precision, (2.5)::double precision, (3)::double precision, (3.5)::double precision, (4)::double precision, (4.5)::double precision, (5)::double precision])))`),check("check_ins_note_length", sql`((note IS NULL) OR (char_length(note) <= 2000))`),check("check_ins_tags_count", sql`(cardinality(tags) <= 12)`),]);
 
 export const coffeeCultivar = pgTable("coffee_cultivar", {
 	value: text().primaryKey(),

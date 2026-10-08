@@ -38,6 +38,7 @@ import type {
   ItemRef,
   ItemType,
   ItemTypeCountsDto,
+  LoggedDrinkDto,
   PermissionType,
   RemovedCellarItem,
   UpdateCellarInput as UpdateCellarInputType,
@@ -49,6 +50,7 @@ import {
   CELLAR_ITEM_STATUSES,
   CellarActorDescriptor,
   CellarsCollectionActorDescriptor,
+  CheckInActorDescriptor,
   ForbiddenError,
   itemActorId,
   offsetPage,
@@ -131,8 +133,9 @@ const CellarItemSourceEnum = builder.enumType("CellarItemSource", {
 
 export const CheckInType = builder.objectRef<CheckInDto>("CheckIn").implement({
   description:
-    "One drink from one cellar item. `userId` is who it is *about* — " +
-    "`bulkCheckIn` writes rows on behalf of friends.",
+    "One drink from one cellar item, as the cellar sees it. `userId` is who " +
+    "it is *about* — `bulkCheckIn` writes rows on behalf of friends. The full " +
+    "log entry (score, note, tags, place, companions) is `ItemCheckIn`.",
   fields: (t) => ({
     id: t.exposeID("id"),
     userId: t.exposeID("userId"),
@@ -612,7 +615,9 @@ builder.mutationField("updateCellarItem", (t) =>
 builder.mutationField("removeItemFromCellar", (t) =>
   t.field({
     type: RemovedCellarItemType,
-    description: "Removes the bottle and the check-ins that point at it.",
+    description:
+      "Removes the bottle. Its check-ins are kept, detached from it: they " +
+      "are the drinkers' history, not the bottle's (X02).",
     errors: {},
     args: {
       cellarId: t.arg.id({ required: true }),
@@ -673,12 +678,34 @@ builder.mutationField("emptyCellarItem", (t) =>
   }),
 );
 
+/**
+ * X02: both bottle check-ins are `CheckInActor.log` now — a log is about an
+ * item, poured from this bottle. The GraphQL shape is unchanged (`CheckIn`
+ * carries the `cellarItemId` you named), and so is the rule: the cellar must
+ * be visible to you, and everyone in `userIds` must be you or a friend. The
+ * richer form — score, note, tags, place, photo, no bottle at all — is
+ * `logDrink` (`check-in.ts`).
+ */
+const loggedRows = (
+  logged: LoggedDrinkDto,
+  cellarItemId: string,
+): CheckInDto[] => {
+  const at = logged.entry.createdAt;
+  return logged.rows.map((row) => ({
+    id: row.id,
+    userId: row.userId,
+    cellarItemId: logged.cellarItemId ?? cellarItemId,
+    createdAt: at,
+    updatedAt: at,
+  }));
+};
+
 builder.mutationField("checkIn", (t) =>
   t.field({
     type: CheckInType,
     description:
       "Records that you drank from this bottle. Requires the cellar to be " +
-      "visible to you.",
+      "visible to you. The quick form of `logDrink`.",
     errors: {},
     args: {
       cellarId: t.arg.id({ required: true }),
@@ -688,15 +715,20 @@ builder.mutationField("checkIn", (t) =>
         description: "Mint it yourself to make the call idempotent (§8.4).",
       }),
     },
-    resolve: (_root, args, context) =>
-      context
-        .actor(CellarActorDescriptor, String(args.cellarId))
-        .checkIn(
-          String(args.cellarItemId),
-          args.checkInId === null || args.checkInId === undefined
-            ? undefined
-            : String(args.checkInId),
-        ),
+    resolve: async (_root, args, context): Promise<CheckInDto> => {
+      const cellarItemId = String(args.cellarItemId);
+      const id = present(args.checkInId)
+        ? String(args.checkInId)
+        : randomUUID();
+      const logged = await context.actor(CheckInActorDescriptor, id).log({
+        bottle: { cellarId: String(args.cellarId), cellarItemId },
+      });
+      const [own] = loggedRows(logged, cellarItemId);
+      if (own === undefined) {
+        throw new ForbiddenError("the check-in wrote no row");
+      }
+      return own;
+    },
   }),
 );
 
@@ -705,7 +737,8 @@ builder.mutationField("bulkCheckIn", (t) =>
     type: BulkCheckInPayloadType,
     description:
       "Records the drink for you and your friends at the table. Every id " +
-      "must be you or a friend of yours; one that is not rejects the call.",
+      "must be you or a friend of yours; one that is not rejects the call. " +
+      "The rows share one occasion, so each entry says who else was there.",
     errors: {},
     args: {
       cellarId: t.arg.id({ required: true }),
@@ -714,10 +747,17 @@ builder.mutationField("bulkCheckIn", (t) =>
     },
     resolve: async (_root, args, context): Promise<BulkCheckInPayload> => {
       const cellarItemId = String(args.cellarItemId);
-      const written = await context
-        .actor(CellarActorDescriptor, String(args.cellarId))
-        .bulkCheckIn(cellarItemId, args.userIds.map(String));
-      return { cellarItemId, checkIns: written };
+      const logged = await context
+        .actor(CheckInActorDescriptor, randomUUID())
+        .log({
+          bottle: { cellarId: String(args.cellarId), cellarItemId },
+          companionIds: args.userIds.map(String),
+          // `bulkCheckIn` writes exactly the rows it is given: you drank only
+          // if your own id is among them, which the actor reads as "include
+          // yourself" (`LogDrinkInput.includeSelf`).
+          includeSelf: false,
+        });
+      return { cellarItemId, checkIns: loggedRows(logged, cellarItemId) };
     },
   }),
 );

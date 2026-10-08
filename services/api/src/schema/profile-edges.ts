@@ -105,14 +105,28 @@ builder.objectField(CheckInType, "user", (t) =>
   }),
 );
 
-builder.objectField(ItemCheckInType, "user", (t) =>
-  t.field({
+builder.objectFields(ItemCheckInType, (t) => ({
+  user: t.field({
     type: UserProfileType,
     nullable: true,
     description: "Who the check-in is about.",
     resolve: (checkIn, _args, context) => profileOf(checkIn.userId, context),
   }),
-);
+  companions: t.field({
+    type: UserProfileConnection,
+    description:
+      "Who else drank with them (X02) — the other rows of the same occasion, " +
+      "in `companionIds` order. Empty for an anonymous viewer.",
+    args: t.arg.connectionArgs(),
+    resolve: (checkIn, args, context) =>
+      connectionFromPage(
+        offsetPage(
+          context.ctx.viewerId === null ? [] : checkIn.companionIds,
+          toPageArgs(args),
+        ),
+      ),
+  }),
+}));
 
 builder.objectField(RecipeReviewType, "user", (t) =>
   t.field({

@@ -191,7 +191,6 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     recipes: [],
     cellar: { id: "c", name: "Home" },
     checkIns: [],
-    viewer: { id: "me", displayName: "Me", avatarUrl: "" },
     friends: [],
     editHref: null,
   };
@@ -225,7 +224,7 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     );
     assert.match(html, /<button[^>]*aria-label="Add a photo"/);
     assert.match(html, />Wineries \(1\)</);
-    assert.doesNotMatch(html, />Check In</);
+    assert.doesNotMatch(html, />Log a drink</);
   });
 
   test("not the cellar's owner, not the creator: no `⋯` at all", () => {
@@ -268,8 +267,9 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
         ]}
       />,
     );
-    assert.match(html, />Check In</);
-    assert.match(html, /data-emphasis="primary"[^>]*>Check In</);
+    // X02: one "Log a drink" (the sheet covers "just me" and the table).
+    assert.match(html, /data-emphasis="primary"[^>]*>.*Log a drink</);
+    assert.doesNotMatch(html, /Bulk Check In/);
     assert.match(html, /Remaining: 40%/);
     assert.match(html, /Opened/);
     assert.match(html, /2026-01-02/);
@@ -311,10 +311,9 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
       />,
     );
     assert.match(html, />Restore to cellar</);
-    // Check In stays (logs survive the bottle) but is no longer the solid
+    // Logging stays (logs survive the bottle, D5) but is no longer the solid
     // primary action.
-    assert.match(html, />Check In</);
-    assert.match(html, /data-emphasis="secondary"[^>]*>Check In</);
+    assert.match(html, /data-emphasis="secondary"[^>]*>.*Log a drink</);
   });
 });
 

@@ -125,6 +125,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
         fields: [
           { name: "cellar", type: { kind: "OBJECT", name: "Cellar" } },
           { name: "cellarItemId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "checkIn", type: { kind: "OBJECT", name: "ItemCheckIn" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -1521,6 +1522,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "DeleteDrinkLogResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "DeletedDrinkLogPayload" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "DeleteFileResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -1610,6 +1623,26 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "DeletedDrinkLogPayload",
+        fields: [
+          {
+            name: "ids",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
           },
         ],
         interfaces: [],
@@ -1973,6 +2006,100 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "verifiedAt", type: { kind: "SCALAR", name: "DateTime" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FlavourTagSuggestion",
+        fields: [
+          {
+            name: "evidence",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "tag",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FlavourTagSuggestionConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "FlavourTagSuggestionEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FlavourTagSuggestionEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "FlavourTagSuggestion" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FlavourTagSuggestionsPayload",
+        fields: [
+          {
+            name: "abstained",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "suggestions",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "OBJECT",
+                name: "FlavourTagSuggestionConnection",
+              },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -2660,6 +2787,33 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "ItemCheckIn",
         fields: [
           {
+            name: "canRemove",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "companionIds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+          {
+            name: "companions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "UserProfileConnection" },
+            },
+          },
+          {
             name: "createdAt",
             type: {
               kind: "NON_NULL",
@@ -2667,14 +2821,49 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "createdById",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "fromCellar",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "isMine",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
           },
           {
             name: "item",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+          { name: "note", type: { kind: "SCALAR", name: "String" } },
+          { name: "photo", type: { kind: "OBJECT", name: "File" } },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          { name: "score", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "tags",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -3278,6 +3467,49 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "UNION",
+        name: "LogDrinkResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "LoggedDrinkPayload" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "LoggedDrinkPayload",
+        fields: [
+          {
+            name: "drinkerCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "entry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemCheckIn" },
+            },
+          },
+          {
+            name: "entryIds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "OBJECT",
         name: "MapCluster",
         fields: [
@@ -3852,6 +4084,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "deleteDrinkLog",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "DeleteDrinkLogResult" },
+            },
+          },
+          {
             name: "deleteFile",
             type: {
               kind: "NON_NULL",
@@ -3961,6 +4200,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "LinkPlaceBrandResult" },
+            },
+          },
+          {
+            name: "logDrink",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "LogDrinkResult" },
             },
           },
           {
@@ -4097,6 +4343,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "suggestFlavourTags",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SuggestFlavourTagsResult" },
+            },
+          },
+          {
             name: "toggleFavorite",
             type: {
               kind: "NON_NULL",
@@ -4129,6 +4382,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "UpdateCellarItemResult" },
+            },
+          },
+          {
+            name: "updateDrinkLog",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "UpdateDrinkLogResult" },
             },
           },
           {
@@ -7654,6 +7914,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "UNION",
+        name: "SuggestFlavourTagsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "FlavourTagSuggestionsPayload" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "OBJECT",
         name: "Tea",
         fields: [
@@ -8102,6 +8374,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "Cellar" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "UpdateDrinkLogResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemCheckIn" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],

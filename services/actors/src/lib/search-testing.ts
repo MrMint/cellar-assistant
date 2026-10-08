@@ -210,6 +210,37 @@ export const seedCellarItem = async (
   return id;
 };
 
+/**
+ * One `check_ins` row (X02's shape): about `userId`, on `item`, poured from
+ * `cellarItemId` when given. Its own occasion unless `groupId` is passed.
+ */
+export const seedCheckIn = async (
+  db: DbOrTx,
+  options: {
+    readonly userId: string;
+    readonly item: ItemRef;
+    readonly cellarItemId?: string | null;
+    readonly createdById?: string;
+    readonly groupId?: string;
+    readonly id?: string;
+    readonly createdAt?: string;
+  },
+): Promise<string> => {
+  const id = options.id ?? randomUUID();
+  const createdAt = options.createdAt ?? new Date().toISOString();
+  await db.execute(sql`
+    insert into public.check_ins
+      (id, user_id, created_by_id, group_id, cellar_item_id,
+       ${ARCS.checkIns.unqualified(options.item.type)}, created_at, updated_at)
+    values (${id}::uuid, ${options.userId}::uuid,
+            ${options.createdById ?? options.userId}::uuid,
+            ${options.groupId ?? id}::uuid, ${options.cellarItemId ?? null}::uuid,
+            ${options.item.id}::uuid, ${createdAt}::timestamptz,
+            ${createdAt}::timestamptz)
+  `);
+  return id;
+};
+
 /* -------------------------------------------------------------------------- */
 /* Places, tier lists                                                          */
 /* -------------------------------------------------------------------------- */

@@ -1,9 +1,9 @@
 /**
- * `CheckInButton`'s menu and friend picker, driven through happy-dom: the
- * trigger opens a `menu` of `menuitem`s (e2e 04 picks "Just me" by role),
- * "Me and friends…" opens the picker, and closing the picker hands focus
- * back to "Check in" rather than dropping it on `<body>` (the menu item that
- * opened it is gone by then).
+ * `CheckInButton` through happy-dom (X02): the cellar overview's "Check in"
+ * opens the drink-log sheet for that bottle — titled "Log a drink", naming the
+ * item, with "Log it" — and closing it hands focus back to "Check in" rather
+ * than dropping it on `<body>`. It used to be a menu of "Just me" and "Me and
+ * friends…"; the sheet's empty "Log it" and its "Who with" are those two now.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -64,20 +64,6 @@ const trigger = () => {
   assert.ok(button, "a 'Check in' button");
   return button;
 };
-const openMenu = async () => {
-  const button = trigger();
-  await act(async () => {
-    button.focus();
-    button.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-    );
-  });
-  await flush(10);
-};
-const menuItem = (name: string) =>
-  [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-    (el) => el.textContent?.trim() === name,
-  );
 
 beforeEach(async () => {
   container = document.createElement("div");
@@ -89,8 +75,9 @@ beforeEach(async () => {
         <CheckInButton
           cellarId="c1"
           cellarItemId="ci1"
+          itemType="WINE"
+          itemId="w1"
           itemName="Barolo 2016"
-          viewerId="u1"
         />
       </Provider>,
     ),
@@ -103,44 +90,29 @@ afterEach(async () => {
 });
 
 describe("CheckInButton", () => {
-  test("the trigger opens a menu: Just me, Me and friends…", async () => {
-    await openMenu();
-    assert.ok(document.querySelector('[role="menu"]'), "a menu is open");
-    assert.ok(menuItem("Just me"));
-    assert.ok(menuItem("Me and friends…"));
+  test("is one button that opens a dialog, not a menu", () => {
+    assert.equal(trigger().getAttribute("aria-haspopup"), "dialog");
+    assert.equal(document.querySelector('[role="menu"]'), null);
   });
 
-  test("Just me checks in at once: the trigger is busy, no picker", async () => {
-    await openMenu();
-    const justMe = menuItem("Just me");
-    assert.ok(justMe);
+  test("opens 'Log a drink' for this item; Cancel closes it and refocuses Check in", async () => {
+    const button = trigger();
     await act(async () => {
-      justMe.click();
-    });
-    await flush(50);
-    assert.equal(trigger().getAttribute("aria-busy"), "true");
-    assert.ok(trigger().disabled, "no second check-in while one is running");
-    assert.equal(document.querySelector('[role="dialog"]'), null);
-  });
-
-  test("Me and friends… opens the picker; closing it refocuses Check in", async () => {
-    await openMenu();
-    const friends = menuItem("Me and friends…");
-    assert.ok(friends);
-    await act(async () => {
-      friends.click();
+      button.focus();
+      button.click();
     });
     await flush(50);
 
-    assert.equal(
-      document.querySelector('[role="menu"]'),
-      null,
-      "the menu is gone",
-    );
     const dialog = document.querySelector('[role="dialog"]');
-    assert.ok(dialog, "the picker is open");
-    assert.match(dialog.textContent ?? "", /Who is drinking\?/);
+    assert.ok(dialog, "the sheet is open");
+    assert.match(dialog.textContent ?? "", /Log a drink/);
     assert.match(dialog.textContent ?? "", /Barolo 2016/);
+    assert.ok(
+      [...dialog.querySelectorAll("button")].some(
+        (b) => b.textContent?.trim() === "Log it",
+      ),
+      "its one action is Log it",
+    );
 
     const cancel = [...dialog.querySelectorAll("button")].find(
       (b) => b.textContent === "Cancel",
@@ -159,7 +131,7 @@ describe("CheckInButton", () => {
     assert.equal(
       document.activeElement,
       trigger(),
-      "focus returns to the button the picker was opened from",
+      "focus returns to the button the sheet was opened from",
     );
   });
 });

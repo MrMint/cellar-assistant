@@ -51,6 +51,12 @@ import {
 } from "@cellar-assistant/contracts";
 import type { InsightsGenerator } from "../../actors/tier-list-actor.ts";
 import type { Embedder } from "../embeddings.ts";
+import type { FlavourTagSuggester } from "../flavour-tags.ts";
+import {
+  groundFlavourTags,
+  NO_FLAVOUR_TAGS,
+  noteIsWorthAsking,
+} from "../flavour-tags.ts";
 import { downscaleForEmbedding } from "../image-downscale.ts";
 import type { ImageEmbedder } from "../image-embeddings.ts";
 import type {
@@ -85,12 +91,14 @@ import {
   str,
 } from "./json.ts";
 import {
+  buildFlavourTagsPrompt,
   buildInsightsPrompt,
   buildItemDefaultsPrompt,
   buildMenuExtractionPrompt,
   buildMenuMatchPrompt,
   buildPlaceReviewPrompt,
   buildRecipePhotoPrompt,
+  FLAVOUR_TAGS_SCHEMA,
   INSIGHTS_FIELDS,
   INSIGHTS_REQUIRED_FIELDS,
   INSIGHTS_SCHEMA,
@@ -950,4 +958,60 @@ export const providerPlaceReviewer =
       flags: strings(parsed.flags),
     };
     return review;
+  };
+
+/* -------------------------------------------------------------------------- */
+/* X02 · CheckInActor.suggestFlavourTags                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A typed note → flavour chips the drinker may tap. Abstention first, in the
+ * same order as the other abstaining seams:
+ *
+ * 1. **Before the call:** a note with fewer than three letters in it is an
+ *    abstention without a model call, and so without a charge.
+ * 2. **The discriminator:** `noteDescribesTaste` is the schema's one required
+ *    field and its first property. Absent means the provider ignored the
+ *    schema — refused, not defaulted, exactly as `providerMenuExtraction`
+ *    treats `menuIsLegible`. `false` is an abstention, and any tags that came
+ *    with it are dropped: the model has said the note names no flavour.
+ * 3. **Grounding:** `groundFlavourTags` keeps only tags whose evidence is in
+ *    the note and whose words come from that evidence. A model that answers
+ *    "tannic" for "great night!" gets nothing through.
+ *
+ * Nothing here writes. The answer is a list of suggestions the client shows as
+ * dashed `source="suggested"` chips; only a tap puts one on the log.
+ */
+export const providerFlavourTags =
+  (provider: ProviderFor): FlavourTagSuggester =>
+  async (ctx, request) => {
+    if (!noteIsWorthAsking(request.note)) return NO_FLAVOUR_TAGS;
+    const { content } = await provider(ctx).generateContent(
+      {
+        prompt: buildFlavourTagsPrompt(request),
+        schema: FLAVOUR_TAGS_SCHEMA,
+      },
+      "low",
+    );
+    const parsed = parseModelJson(content, "flavour tags");
+    const describesTaste = bool(parsed.noteDescribesTaste);
+    if (describesTaste === null) {
+      throw new ConflictError(
+        "the model's flavour-tag answer has no `noteDescribesTaste`, the one " +
+          "field `FLAVOUR_TAGS_SCHEMA` requires. Either the provider is not " +
+          "constraining its sampler to the output schema, or it was given a " +
+          "different schema. Reading the absence as `true` would let a note " +
+          "about the evening come back as a list of flavours, so it is " +
+          "refused instead.",
+      );
+    }
+    if (!describesTaste) return NO_FLAVOUR_TAGS;
+    const candidates = arr(parsed.tags).map((entry) => {
+      const fields = record(entry);
+      return {
+        tag: fields === null ? null : str(fields.tag),
+        evidence: fields === null ? null : str(fields.evidence),
+      };
+    });
+    return groundFlavourTags(request.note, candidates, request.existing);
   };

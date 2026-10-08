@@ -75,7 +75,6 @@ export default async function CellarPage({
       <CellarOverviewItems
         cellarId={cellar.id}
         items={result.data.items.edges.map((edge) => cellarGridItem(edge.node))}
-        viewerId={viewerId}
       />
 
       <CellarCheckIns

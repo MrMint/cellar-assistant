@@ -40,6 +40,10 @@ import "./recipe-photo.ts";
 // B8: `MenuScan` links to `Item`, `Recipe` and the `Place` stub, so it follows
 // the three modules that declare them.
 import "./menu-scan.ts";
+// X02: the drink log. Adds `place`/`photo` to `item.ts`'s `ItemCheckIn` and
+// links `tier-list.ts`'s `Place` stub and `file.ts`'s `File`, so it follows all
+// three.
+import "./check-in.ts";
 import "./viewer.ts";
 // B4 adds a field to `Viewer`, so it is imported after the module that
 // declares it — `builder.objectField` needs the ref to exist.

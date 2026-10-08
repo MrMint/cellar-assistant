@@ -14,12 +14,16 @@ import { describe, expect, it } from "vitest";
 import {
   bypassesPolicy,
   type CellarVisibility,
+  canEditCheckIn,
+  canRemoveCheckIn,
   canSee,
   canSeeCellar,
   canSeeCheckIn,
+  canSeeCheckInDetails,
   canSeeItemImage,
   canSeePlace,
   canSeeTierList,
+  checkInIsClaimed,
   type Friendship,
   isFriend,
   isOwner,
@@ -298,6 +302,124 @@ describe("canSeeCheckIn", () => {
     // whole file green, and hands a signed-out caller any check-in whose
     // caller-supplied flag is wrong.
     expect(canSeeCheckIn(anonymous, checkIn(true, "PRIVATE"))).toBe(false);
+  });
+});
+
+describe("canSeeCheckIn — a bottle-less log (X02)", () => {
+  const log = (flags: { friend?: boolean; companion?: boolean }) => ({
+    userId: OWNER,
+    cellar: null,
+    viewerIsFriendOfCheckInUser: flags.friend ?? false,
+    viewerIsCompanion: flags.companion ?? false,
+  });
+
+  it("owner sees their own bottle-less entry", () => {
+    expect(canSeeCheckIn(owner, log({}))).toBe(true);
+  });
+
+  it("a friend of the drinker sees it", () => {
+    expect(canSeeCheckIn(friend, log({ friend: true }))).toBe(true);
+  });
+
+  it("a companion sees the entry that names them, friend or not", () => {
+    expect(canSeeCheckIn(stranger, log({ companion: true }))).toBe(true);
+  });
+
+  it("a stranger is denied: no cellar means no public way in", () => {
+    expect(canSeeCheckIn(stranger, log({}))).toBe(false);
+  });
+
+  it("an absent companion flag is never permission", () => {
+    expect(
+      canSeeCheckIn(stranger, {
+        userId: OWNER,
+        cellar: null,
+        viewerIsFriendOfCheckInUser: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("anonymous is denied even if both flags arrive set", () => {
+    expect(
+      canSeeCheckIn(anonymous, log({ friend: true, companion: true })),
+    ).toBe(false);
+  });
+
+  it("a removed bottle keeps the drinker's and friends' access, drops the cellar's", () => {
+    // Same row before and after `CellarActor.removeItem`: the FK nulls
+    // `cellar_item_id`, so the public cellar branch is gone.
+    const before = {
+      userId: OWNER,
+      cellar: cellar("PUBLIC", { viewerIsFriendOfCreator: false }),
+      viewerIsFriendOfCheckInUser: false,
+    };
+    expect(canSeeCheckIn(stranger, before)).toBe(true);
+    expect(canSeeCheckIn(stranger, { ...before, cellar: null })).toBe(false);
+    expect(canSeeCheckIn(owner, { ...before, cellar: null })).toBe(true);
+  });
+});
+
+describe("canSeeCheckInDetails — what the drinker said (X02)", () => {
+  const entry = (flags: { friend?: boolean; companion?: boolean }) => ({
+    userId: OWNER,
+    viewerIsFriendOfCheckInUser: flags.friend ?? false,
+    viewerIsCompanion: flags.companion ?? false,
+  });
+
+  it("the drinker, a companion and a friend of the drinker see the details", () => {
+    expect(canSeeCheckInDetails(owner, entry({}))).toBe(true);
+    expect(canSeeCheckInDetails(friend, entry({ friend: true }))).toBe(true);
+    expect(canSeeCheckInDetails(stranger, entry({ companion: true }))).toBe(
+      true,
+    );
+  });
+
+  it("a viewer admitted only by a PUBLIC cellar sees the entry but not the details", () => {
+    const viaCellar = {
+      ...entry({}),
+      cellar: cellar("PUBLIC", { viewerIsFriendOfCreator: false }),
+    };
+    expect(canSeeCheckIn(stranger, viaCellar)).toBe(true);
+    expect(canSeeCheckInDetails(stranger, viaCellar)).toBe(false);
+  });
+
+  it("anonymous never sees details, whatever flags arrive", () => {
+    expect(
+      canSeeCheckInDetails(anonymous, entry({ friend: true, companion: true })),
+    ).toBe(false);
+  });
+});
+
+describe("canEditCheckIn / canRemoveCheckIn", () => {
+  const written = { userId: FRIEND, createdById: OWNER };
+  const unclaimed = { ...written, claimedByDrinker: false };
+  const claimed = { ...written, claimedByDrinker: true };
+
+  it("only the drinker edits — not whoever wrote the row for them", () => {
+    expect(canEditCheckIn(friend, written)).toBe(true);
+    expect(canEditCheckIn(owner, written)).toBe(false);
+    expect(canEditCheckIn(stranger, written)).toBe(false);
+  });
+
+  it("the drinker and the writer may both remove an unclaimed row; nobody else", () => {
+    expect(canRemoveCheckIn(friend, unclaimed)).toBe(true);
+    expect(canRemoveCheckIn(owner, unclaimed)).toBe(true);
+    expect(canRemoveCheckIn(stranger, unclaimed)).toBe(false);
+    expect(canRemoveCheckIn(anonymous, unclaimed)).toBe(false);
+  });
+
+  it("once the drinker has added their own words, only they remove it", () => {
+    expect(canRemoveCheckIn(friend, claimed)).toBe(true);
+    expect(canRemoveCheckIn(owner, claimed)).toBe(false);
+  });
+
+  it("a row is claimed by a score, a note, a tag or a photo — not by a place", () => {
+    const bare = { score: null, note: null, tags: [], photoFileId: null };
+    expect(checkInIsClaimed(bare)).toBe(false);
+    expect(checkInIsClaimed({ ...bare, score: 3 })).toBe(true);
+    expect(checkInIsClaimed({ ...bare, note: "plum" })).toBe(true);
+    expect(checkInIsClaimed({ ...bare, tags: ["plum"] })).toBe(true);
+    expect(checkInIsClaimed({ ...bare, photoFileId: "f" })).toBe(true);
   });
 });
 

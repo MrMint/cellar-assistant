@@ -121,6 +121,11 @@ export type CellarItemDto = {
   readonly updatedAt: string;
 };
 
+/**
+ * A `check_ins` row as the *cellar* sees it: always one of its bottles, because
+ * `CellarActor.checkIns` reads only rows whose `cellar_item_id` is set. The
+ * richer log entry (score, note, tags, place, companions) is `ItemCheckInDto`.
+ */
 export type CheckInDto = {
   readonly id: string;
   /**
@@ -257,9 +262,8 @@ export type RemovedCellarItem = { readonly id: string };
  * - **creator or co-owner** — `update` (name/privacy), every `*Item` method;
  * - **creator only** — changing the co-owner set, and `delete`.
  *
- * `checkIn`/`bulkCheckIn` additionally require the cellar to be *visible*,
- * which the Hasura rule did not check at all (it gated only on the check-in's
- * subject being the caller or a friend). See the actor's module doc.
+ * Logging a drink from one of its bottles is `CheckInActor.log` (X02), which
+ * requires the cellar to be *visible* — the rule `checkIn` had here.
  */
 export type CellarActorInterface = {
   get(ctx: Ctx): Promise<CellarDto>;
@@ -292,22 +296,13 @@ export type CellarActorInterface = {
   openItem(ctx: Ctx, cellarItemId: string): Promise<CellarItemDto>;
   emptyItem(ctx: Ctx, cellarItemId: string): Promise<CellarItemDto>;
 
-  /** Idempotent on `checkInId` / the delivery's key, like `addItem`. */
-  checkIn(
-    ctx: Ctx,
-    cellarItemId: string,
-    checkInId?: string,
-  ): Promise<CheckInDto>;
   /**
-   * Writes one row per id in `userIds`, each of which must be the caller or a
-   * friend of the caller — §2.1's "friend check in policy". A single
-   * non-friend rejects the whole call; no partial write.
+   * X02: `checkIn` and `bulkCheckIn` moved to `CheckInActor.log` — a log is
+   * about an item, and a bottle is only where it was poured from. This actor
+   * reads `check_ins` (fresh, never cached: it is not the writer) and never
+   * writes it; removing a bottle nulls the log's `cellar_item_id` through the
+   * foreign key rather than deleting the history.
    */
-  bulkCheckIn(
-    ctx: Ctx,
-    cellarItemId: string,
-    userIds: readonly string[],
-  ): Promise<readonly CheckInDto[]>;
   checkIns(ctx: Ctx, page: PageArgs): Promise<Page<CheckInDto>>;
 
   /**
@@ -353,8 +348,6 @@ export const CellarActorDescriptor: ActorDescriptor<CellarActorInterface> = {
     setItemPercentage: {},
     openItem: {},
     emptyItem: {},
-    checkIn: {},
-    bulkCheckIn: {},
     checkIns: {},
     item: {},
     bottleFor: {},

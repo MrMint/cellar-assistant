@@ -61,6 +61,7 @@ import ts from "typescript";
 import * as brandQueries from "@/components/brand/queries";
 import * as cellarFragments from "@/components/cellar/fragments";
 import * as onboardingQueries from "@/components/common/OnboardingWizard/queries";
+import * as drinkLogQueries from "@/components/drink-log/queries";
 import * as favoritesFragments from "@/components/favorites/fragments";
 import * as friendFragments from "@/components/friend/fragments";
 import * as itemFragments from "@/components/item/fragments";
@@ -91,6 +92,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/brand/queries.ts": brandQueries,
   "components/cellar/fragments.ts": cellarFragments,
   "components/common/OnboardingWizard/queries.ts": onboardingQueries,
+  "components/drink-log/queries.ts": drinkLogQueries,
   "components/favorites/fragments.ts": favoritesFragments,
   "components/friend/fragments.ts": friendFragments,
   "components/item/ItemCard/fragments.ts": itemCardFragments,

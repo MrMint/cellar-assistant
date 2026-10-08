@@ -8,6 +8,7 @@
 
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { richTextFromReviewText } from "@/components/common/rich-text";
+import { entryContext } from "@/components/drink-log/log-draft";
 import { itemCardFromItem } from "@/components/item/ItemCard/adapter";
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
@@ -187,14 +188,16 @@ export const barcodeSearchHref = (code: string): string | null => {
  * The old feed's filter ids, which are also its `?activity=` values
  * (`82450ad1:src/components/search/RecentActivity.tsx`).
  */
-export type ActivityKind = "added" | "reviewed" | "tier-listed";
+export type ActivityKind = "added" | "reviewed" | "tier-listed" | "drank";
 
-type ApiActivityKind = "ADDED" | "REVIEWED" | "TIER_LISTED";
+type ApiActivityKind = "ADDED" | "REVIEWED" | "TIER_LISTED" | "CHECKED_IN";
 
 const API_KIND: Record<ActivityKind, ApiActivityKind> = {
   added: "ADDED",
   reviewed: "REVIEWED",
   "tier-listed": "TIER_LISTED",
+  // X02: a drink logged — `?activity=drank`.
+  drank: "CHECKED_IN",
 };
 
 /**
@@ -244,6 +247,15 @@ export type ActivityEntry =
       kind: "tier-listed";
       tierListName: string;
       rank: number;
+    })
+  | (ActivityBase & {
+      kind: "drank";
+      /** This glass's half stars — the log's, never the review. */
+      score: number | null;
+      note: string | null;
+      tags: readonly string[];
+      /** "with Sam and Ana · at The Corner Bar", or "". */
+      context: string;
     });
 
 type ActivityNode = NonNullable<
@@ -331,6 +343,28 @@ export const activityEntryFromNode = (
     itemPlaceholder: image?.placeholder ?? null,
     itemHref: `/${ITEM_ROUTE[node.item.type] ?? "wines"}/${node.item.id}`,
   };
+
+  if (node.kind === "CHECKED_IN") {
+    const log = node.checkIn;
+    if (log === null) return null;
+    return {
+      ...base,
+      ...item,
+      kind: "drank",
+      id: `drank-${log.id}`,
+      score: log.score,
+      note: log.note,
+      tags: log.tags,
+      context: entryContext({
+        companionNames: log.companions.edges.map(
+          (edge) => edge.node.displayName,
+        ),
+        companionCount: log.companionIds.length,
+        placeName:
+          log.place === null ? null : (log.place.displayName ?? log.place.name),
+      }),
+    };
+  }
 
   if (node.kind === "REVIEWED") {
     if (node.review === null) return null;

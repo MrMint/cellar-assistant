@@ -30,6 +30,7 @@ import {
 } from "../../actors/budget-actor.ts";
 import { setInsightsGenerator } from "../../actors/tier-list-actor.ts";
 import { EMBEDDING_DIMENSIONS, setEmbedder } from "../embeddings.ts";
+import { setFlavourTagSuggester } from "../flavour-tags.ts";
 import {
   setDocumentImageEmbedder,
   setQueryImageEmbedder,
@@ -55,6 +56,7 @@ import { daprImageLoader } from "./images.ts";
 import { LLAMACPP_EMBEDDING_VARIANT } from "./openai-compatible.ts";
 import {
   providerEmbedder,
+  providerFlavourTags,
   providerImageEmbedder,
   providerInsightsGenerator,
   providerItemDefaults,
@@ -106,6 +108,11 @@ export const SEAMS = {
   embedding: {
     install: (provider, loadImages) =>
       setEmbedder(providerEmbedder(provider, loadImages)),
+  },
+  flavour_tags: {
+    entityType: "check_in",
+    install: (provider) =>
+      setFlavourTagSuggester(providerFlavourTags(provider)),
   },
   // G32: the same implementation in two slots, each charged to its own seam
   // (`../image-embeddings.ts` says why).

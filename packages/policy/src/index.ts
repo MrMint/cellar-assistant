@@ -185,28 +185,48 @@ export const canSeeTierList = (
   });
 
 /**
- * A `check_ins` row.
+ * A `check_ins` row — one entry in somebody's drink log (X02, D5).
  *
- * `check_ins` has no privacy column of its own: it points at a `cellar_items`
- * row, which belongs to a cellar. Two surfaces read it and they want different
- * things (§2.1 `CellarActor.checkIns`, §2.2 `CheckInsCollectionActor`), so both
- * are allowed here:
+ * `check_ins` has no privacy column of its own. Since X02 a log entry is about
+ * an *item* and only optionally a bottle (`cellar_item_id` is nullable and
+ * survives the bottle as `null`), so the cellar is one of four ways in rather
+ * than the thing every rule hangs off:
  *
- *   - the cellar is visible to the viewer — the cellar's check-in history; or
- *   - the viewer wrote the check-in, or is a friend of whoever did — the item
- *     detail page's "mine + friends'" history, which shows *that* a friend
- *     drank something without naming the cellar it came from.
+ *   1. the viewer is who the entry is about (`user_id`) — your own log;
+ *   2. the viewer is a **companion**: they have their own row in the same
+ *      drinking occasion (`group_id`). The entry names them ("with Sam"), so
+ *      hiding it from Sam would hide a fact about Sam from Sam;
+ *   3. the viewer is a friend of whoever it is about — the item page's and the
+ *      feed's "what my friends drank", which shows *that* a friend drank
+ *      something without naming the cellar it came from;
+ *   4. the entry is from a bottle in a cellar the viewer can see — the
+ *      cellar's own history (`CellarActor.checkIns`). A bottle-less entry, or
+ *      one whose bottle has since been removed, has no cellar and so no fourth
+ *      way in.
  *
- * `bulkCheckIn` writes rows on behalf of friends, so `userId` is the person the
- * check-in is *about*, which is not necessarily who created it.
+ * Everything else is hidden, and callers turn "hidden" into `NotFound` — the
+ * same answer as a row that does not exist, so an id is never an oracle for an
+ * entry's existence.
+ *
+ * `bulkCheckIn` (and a log with companions) writes rows on behalf of friends,
+ * so `userId` is the person the entry is *about*, which is not necessarily who
+ * created it (`createdById`).
  */
 export type CheckInVisibility = {
   /** `check_ins.user_id`. */
   readonly userId: string | null;
-  /** The cellar holding `check_ins.cellar_item_id`. */
-  readonly cellar: CellarVisibility;
+  /**
+   * The cellar holding `check_ins.cellar_item_id`, or `null` for an entry with
+   * no bottle (logged without one, or the bottle was removed since).
+   */
+  readonly cellar: CellarVisibility | null;
   /** Whether the viewer is a friend of `userId`. Compute it with `isFriend`. */
   readonly viewerIsFriendOfCheckInUser: boolean;
+  /**
+   * Whether the viewer has a row of their own in this entry's occasion
+   * (`group_id`). Defaults to `false` — absent is never permission.
+   */
+  readonly viewerIsCompanion?: boolean;
 };
 
 export const canSeeCheckIn = (
@@ -215,9 +235,94 @@ export const canSeeCheckIn = (
 ): boolean => {
   if (bypassesPolicy(ctx)) return true;
   if (isOwner(ctx, checkIn.userId)) return true;
-  if (ctx.viewerId !== null && checkIn.viewerIsFriendOfCheckInUser) return true;
-  return canSeeCellar(ctx, checkIn.cellar);
+  // Both flags are computed by the caller; neither can mean anything for a
+  // signed-out viewer, and this guard makes that a property of the function.
+  if (ctx.viewerId === null) {
+    return checkIn.cellar !== null && canSeeCellar(ctx, checkIn.cellar);
+  }
+  if (checkIn.viewerIsCompanion === true) return true;
+  if (checkIn.viewerIsFriendOfCheckInUser) return true;
+  return checkIn.cellar !== null && canSeeCellar(ctx, checkIn.cellar);
 };
+
+/**
+ * Whether a viewer who may see an entry (`canSeeCheckIn`) also sees what the
+ * drinker *said* about it — the score, note, tags, photo, place and who they
+ * were with.
+ *
+ * Only the personal branches admit that: the drinker, a companion, a friend of
+ * the drinker. The fourth branch — "the bottle sits in a cellar you can see"
+ * — exists so a cellar's history can say a bottle was drunk, and when, and by
+ * whom; that was everything a check-in held before X02, and it is everything a
+ * cellar viewer still gets. A PUBLIC cellar is a collection put on show, not
+ * consent to publish its owner's tasting notes, the bar they were sitting in,
+ * or the friends they were with to every signed-in stranger.
+ */
+export const canSeeCheckInDetails = (
+  ctx: Ctx,
+  checkIn: Omit<CheckInVisibility, "cellar">,
+): boolean => {
+  if (bypassesPolicy(ctx)) return true;
+  if (isOwner(ctx, checkIn.userId)) return true;
+  if (ctx.viewerId === null) return false;
+  return (
+    checkIn.viewerIsCompanion === true || checkIn.viewerIsFriendOfCheckInUser
+  );
+};
+
+/** Who may change a log entry's score, note, tags, place and photo. */
+export type CheckInOwnership = {
+  /** `check_ins.user_id` — whose log it is. */
+  readonly userId: string;
+  /** `check_ins.created_by_id` — who wrote the row. */
+  readonly createdById: string;
+};
+
+/**
+ * Only the person an entry is *about* edits it: the score and the note are
+ * theirs, even on a row a friend wrote for them at the table.
+ */
+export const canEditCheckIn = (ctx: Ctx, checkIn: CheckInOwnership): boolean =>
+  bypassesPolicy(ctx) || isOwner(ctx, checkIn.userId);
+
+/** What removing an entry depends on, beyond whose it is. */
+export type CheckInRemoval = CheckInOwnership & {
+  /**
+   * The drinker has put words of their own on it — a score, note, tags or a
+   * photo ({@link checkInIsClaimed}). A companion row is written without
+   * any, so this is false until the person it is about adds one.
+   */
+  readonly claimedByDrinker: boolean;
+};
+
+/**
+ * Whether a row carries the drinker's own opinion. Companion rows are written
+ * with none of these (`CheckInActor.log`), and only the drinker may add one
+ * (`canEditCheckIn`), so a claimed row about somebody else is theirs, not its
+ * writer's.
+ */
+export const checkInIsClaimed = (row: {
+  readonly score: number | null;
+  readonly note: string | null;
+  readonly tags: readonly string[] | null;
+  readonly photoFileId: string | null;
+}): boolean =>
+  row.score !== null ||
+  (row.note !== null && row.note !== "") ||
+  (row.tags?.length ?? 0) > 0 ||
+  row.photoFileId !== null;
+
+/**
+ * The person it is about may delete it ("I wasn't there"), and so may whoever
+ * wrote it — which is what makes Undo after logging a table's round possible —
+ * but only while the drinker has not made it their own. Once Sam has scored
+ * the glass Ana logged for him, it is Sam's entry: Ana deleting her own log
+ * must not take Sam's note with it.
+ */
+export const canRemoveCheckIn = (ctx: Ctx, checkIn: CheckInRemoval): boolean =>
+  bypassesPolicy(ctx) ||
+  isOwner(ctx, checkIn.userId) ||
+  (isOwner(ctx, checkIn.createdById) && !checkIn.claimedByDrinker);
 
 /**
  * An `item_image` row: `is_public`, or the viewer uploaded it (§2.1

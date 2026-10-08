@@ -38,6 +38,7 @@ import { MODEL_SEAMS } from "../../actors/budget-actor.ts";
 import { placeReviewer } from "../../actors/place-creation-actor.ts";
 import { insightsGenerator } from "../../actors/tier-list-actor.ts";
 import { embedder } from "../embeddings.ts";
+import { flavourTagSuggester } from "../flavour-tags.ts";
 import {
   documentImageEmbedder,
   queryImageEmbedder,
@@ -126,6 +127,8 @@ const ANSWER = {
   instructions: [{ instructionText: "Stir." }],
   // place review
   approved: true,
+  // flavour tags (X02)
+  noteDescribesTaste: true,
 };
 
 const loadImages: ImageLoader = async (_c, ids) =>
@@ -193,6 +196,12 @@ const asImageModel = async <T>(run: () => Promise<T>): Promise<T> => {
 /** Each seam, with an input that gets past its own pre-model gate. */
 const drive: Readonly<Record<string, (c: Ctx) => Promise<unknown>>> = {
   embedding: (c) => embedder()({ text: "pinot noir" }, c),
+  flavour_tags: (c) =>
+    flavourTagSuggester()(c, {
+      note: "dark cherry and smoke",
+      itemType: "WINE",
+      existing: [],
+    }),
   // G32: the two image slots' pre-model gate is the embedding model's
   // capability, which `ENV` (Ollama's text-only model) would refuse before
   // charging — correctly, and `image-embedder.test.ts` holds that. Here the
