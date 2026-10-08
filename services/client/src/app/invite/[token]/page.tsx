@@ -9,6 +9,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { anonymousApiQuery } from "@/lib/api/urql-anonymous";
 import { apiServerQuery } from "@/lib/api/urql-server";
+import { readPasswordMode } from "@/lib/auth/password-mode";
 import { invitePath } from "@/lib/share/routes";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 
@@ -62,7 +63,14 @@ export default async function InvitePage({ params }: Props) {
     return (
       <ShareFrame
         canonicalPath={invitePath(token)}
-        pitch="Free. Sign up with Google, Discord or Facebook."
+        // Name the providers only where /sign-up offers them: with password
+        // sign-up on (`AUTH_PASSWORD_MODE` unset or "enabled") it shows a
+        // form, not the social buttons.
+        pitch={
+          readPasswordMode() === "enabled"
+            ? "Free to join."
+            : "Free. Sign up with Google, Discord or Facebook."
+        }
         cta={`Join to connect with ${preview.inviterDisplayName}`}
       >
         <InviteHero
