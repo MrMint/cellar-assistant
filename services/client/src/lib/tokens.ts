@@ -108,6 +108,14 @@ export const easing = {
 /** Height of the tab bar, before the bottom safe area. */
 export const TAB_BAR_HEIGHT_PX = 49;
 
+/**
+ * How long a loading shell's placeholder blocks wait before they fade in
+ * (design §4.7, X24: "shown only after 120 ms"). A route that answers inside
+ * this window never flashes grey boxes; its shell's static chrome (the title,
+ * the search pill) is visible from the first frame regardless.
+ */
+export const SKELETON_REVEAL_DELAY_MS = 120;
+
 const bezier = (p: readonly number[]) => `cubic-bezier(${p.join(", ")})`;
 
 /**
@@ -153,4 +161,5 @@ export const cssVars: Readonly<Record<string, string>> = {
   "--ca-ease-enter": bezier(easing.enter),
   "--ca-ease-exit": bezier(easing.exit),
   "--ca-tabbar-h": `${TAB_BAR_HEIGHT_PX}px`,
+  "--ca-skeleton-delay": `${SKELETON_REVEAL_DELAY_MS}ms`,
 };
