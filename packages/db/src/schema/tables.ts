@@ -1131,6 +1131,27 @@ export const verification = pgTable("verification", {
 	index("verification_identifier_idx").using("btree", table.identifier.asc().nullsLast()),
 ]);
 
+// X08 (D27 "Save"): the viewer's "Want to try" list for items and recipes.
+// Places keep theirs on `user_place_interactions.want_to_visit` (D11 revives
+// that column rather than duplicating it here). One row per thing saved: the
+// six-column item arc plus `recipe_id` under one `num_nonnulls(...) = 1`
+// check, a unique per user per column, and cascades so a deleted item,
+// recipe or user takes the wish with it. Written only by `UserActor`.
+export const wantToTry = pgTable("want_to_try", {
+	id: uuid().defaultRandom().primaryKey(),
+	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" } ),
+	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
+	beerId: uuid("beer_id").references(() => beers.id, { onDelete: "cascade" } ),
+	wineId: uuid("wine_id").references(() => wines.id, { onDelete: "cascade" } ),
+	spiritId: uuid("spirit_id").references(() => spirits.id, { onDelete: "cascade" } ),
+	coffeeId: uuid("coffee_id").references(() => coffees.id, { onDelete: "cascade" } ),
+	sakeId: uuid("sake_id").references(() => sakes.id, { onDelete: "cascade" } ),
+	teaId: uuid("tea_id").references(() => teas.id, { onDelete: "cascade" } ),
+	recipeId: uuid("recipe_id").references(() => recipes.id, { onDelete: "cascade" } ),
+}, (table) => [
+	index("idx_want_to_try_user_created").using("btree", table.userId.asc().nullsLast(), table.createdAt.asc().nullsLast()),
+	unique("want_to_try_user_id_beer_id_key").on(table.userId, table.beerId),	unique("want_to_try_user_id_coffee_id_key").on(table.userId, table.coffeeId),	unique("want_to_try_user_id_recipe_id_key").on(table.userId, table.recipeId),	unique("want_to_try_user_id_sake_id_key").on(table.userId, table.sakeId),	unique("want_to_try_user_id_spirit_id_key").on(table.userId, table.spiritId),	unique("want_to_try_user_id_tea_id_key").on(table.userId, table.teaId),	unique("want_to_try_user_id_wine_id_key").on(table.userId, table.wineId),check("want_to_try_one_target", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) = 1)`),]);
+
 export const wineStyle = pgTable("wine_style", {
 	value: text().primaryKey(),
 	comment: text(),

@@ -138,6 +138,7 @@ export const TABLE_WRITERS = {
   // UserActor — rows where `user_id` is the actor's user.
   item_favorites: "UserActor",
   user_place_interactions: "UserActor",
+  want_to_try: "UserActor",
   friends: "UserActor",
   friend_requests: "UserActor",
 
