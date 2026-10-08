@@ -477,7 +477,19 @@ Overrides, in order of precedence:
 CELLAR_STACK_SLOT=19 bun run dev:up    # force a slot
 CELLAR_STACK_SLUG=scratch bun run dev:up   # force an identity (two stacks in one worktree)
 bun run dev:up -- --reset              # forget the pin and re-derive
+CELLAR_EXTRA_ORIGINS=http://localhost:3303 bun run dev:up   # also trust another browser origin
 ```
+
+`CELLAR_EXTRA_ORIGINS` (comma-separated) is appended to this stack's
+`AUTH_TRUSTED_ORIGINS` and `FILES_CORS_ALLOWED_ORIGINS`, which otherwise hold
+only `http://localhost:<WEB_PORT>`. It is for serving the app on a second
+origin against this stack — e.g. a container built from
+`services/client/Dockerfile`, published on its own port and pointed at
+`http://host.docker.internal:<API_PORT|ACTORS_PORT>` — whose sign-in would
+otherwise fail better-auth's origin check. Read at actor-host start, so pass it
+on every `up`. A stack started under `CELLAR_STACK_SLUG` is recognised by
+`dev:doctor` in any worktree of this repo (via its `.stack/<slug>` state dir)
+rather than reported as stale.
 
 If all 24 slots are occupied, `dev:up` says so and points at `dev:prune`.
 

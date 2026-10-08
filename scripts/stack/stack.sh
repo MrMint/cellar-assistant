@@ -365,6 +365,18 @@ resolve() { # resolve [--reset]
   # one origin that uploads to this lane's MinIO, so it is the same single
   # origin as AUTH_TRUSTED_ORIGINS, not the base file's 3000/3003 default.
   FILES_CORS_ALLOWED_ORIGINS="http://localhost:$WEB_PORT"
+  # Opt-in: further browser origins served against THIS stack — e.g. a
+  # containerised Next client (services/client/Dockerfile) published on a fixed
+  # host port and pointed at this lane's api/actors through
+  # host.docker.internal. better-auth CSRF-checks the Origin the Next proxy
+  # forwards verbatim, and MinIO's CORS gates browser uploads, so such a client
+  # needs its origin in both lists. Comma-separated, e.g.
+  # `CELLAR_EXTRA_ORIGINS=http://localhost:3303`. Read once at actor-host start
+  # (and at `minio-init`), so it must be set on every `up` of the stack.
+  if [ -n "${CELLAR_EXTRA_ORIGINS:-}" ]; then
+    AUTH_TRUSTED_ORIGINS="$AUTH_TRUSTED_ORIGINS,$CELLAR_EXTRA_ORIGINS"
+    FILES_CORS_ALLOWED_ORIGINS="$FILES_CORS_ALLOWED_ORIGINS,$CELLAR_EXTRA_ORIGINS"
+  fi
   OLLAMA_ENDPOINT="${OLLAMA_ENDPOINT:-http://localhost:11434}"
   ACTORS_APP_ID="actors-$STACK_SLUG"
   API_APP_ID="api-$STACK_SLUG"
@@ -1347,9 +1359,22 @@ port_listener_pid() { # port_listener_pid PORT
 # worktree's stack is somebody else's live environment; a slug with no directory
 # is leftovers. `prune` cannot tell them apart because both compose files exist.
 slug_has_checkout() { # slug_has_checkout SLUG
-  local parent
+  local parent wt
   parent="$(dirname "$REPO_ROOT")"
-  [ -d "$parent/$1" ] || [ "$1" = "$(slugify "$(basename "$REPO_ROOT")")" ]
+  if [ -d "$parent/$1" ] || [ "$1" = "$(slugify "$(basename "$REPO_ROOT")")" ]; then
+    return 0
+  fi
+  # A stack started under `CELLAR_STACK_SLUG=<name>` (documented: two stacks in
+  # one worktree) has no directory of that name, but it does have its state dir
+  # in the checkout that started it. Look in every worktree of this repository,
+  # so a deliberately named stack is not reported as stale — with a teardown
+  # hint — by a sibling worktree's doctor.
+  while IFS= read -r wt; do
+    if [ -n "$wt" ] && [ -d "$wt/.stack/$1" ]; then return 0; fi
+  done <<EOF
+$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
+EOF
+  return 1
 }
 
 psql_in() { # psql_in CONTAINER DB SQL
@@ -2835,6 +2860,8 @@ Commands
 Environment
   CELLAR_STACK_SLUG   override the slug (default: the worktree directory name)
   CELLAR_STACK_SLOT   override the slot (default: hashed from the slug, then pinned)
+  CELLAR_EXTRA_ORIGINS  extra comma-separated browser origins to trust (better-auth +
+                      MinIO CORS), e.g. a containerised client on its own port
 EOF
 }
 
