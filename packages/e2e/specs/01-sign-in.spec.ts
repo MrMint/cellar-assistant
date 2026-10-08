@@ -82,17 +82,10 @@ test("sign out ends the session", async ({ browser }) => {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/cellars/, { timeout: 30_000 });
 
-  // Sign out lives in the side navigation, which is part of the
-  // `(authenticated)` layout — so it needs a page that actually renders. Do not
-  // use `/cellars` here: while its `$first` defect stands it answers 500 and
-  // the layout never mounts, which would make this test fail for the wrong
-  // reason.
-  await page.goto("/search");
-  // The nav bar is rendered twice — a horizontal bar for `xs` and a vertical
-  // one for `sm` and up — and only one is visible at any viewport, so filter on
-  // visibility rather than taking the first in document order.
-  await page.locator('[aria-haspopup="menu"]:visible').first().click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  // Sign out lives on the Me hub (D1: the side navigation and its avatar
+  // menu are gone), a plain button rather than a menu item.
+  await page.goto("/me");
+  await page.getByRole("button", { name: "Sign out" }).click();
 
   // Wait for the cookie to actually go, which is the first of this test's two
   // checks and is observable in ~100ms.

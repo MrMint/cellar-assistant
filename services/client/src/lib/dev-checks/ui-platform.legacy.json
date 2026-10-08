@@ -21,7 +21,6 @@
     "src/app/(authenticated)/search/page.tsx",
     "src/app/(authenticated)/tier-lists/[tierListId]/edit/page.tsx",
     "src/app/(authenticated)/tier-lists/[tierListId]/page.tsx",
-    "src/components/auth/SocialButtons.tsx",
     "src/components/brand/BrandCard.tsx",
     "src/components/brand/BrandDetails.tsx",
     "src/components/brand/BrandDetailsClient.tsx",

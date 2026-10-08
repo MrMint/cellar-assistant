@@ -177,7 +177,7 @@ export function VirtualGrid<T>({
   // Total row count (including unloaded) — drives scrollbar size.
   const totalRows = Math.ceil(total / columnCount);
 
-  // Find the scroll container (ConditionalPaddingWrapper with overflowY: auto).
+  // Find the scroll container (AppShell's <main data-app-scroller>, overflow-y: auto).
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(
     null,

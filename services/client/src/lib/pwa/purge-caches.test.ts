@@ -103,7 +103,8 @@ describe("where the purge runs", () => {
   });
 
   test("an explicit sign-out purges before the server action, which may fail", () => {
-    const nav = source("../../components/common/SideNavigationBar.tsx");
+    // Sign out moved from the old side bar's avatar menu to the Me hub (D1).
+    const nav = source("../../components/user/SignOutButton.tsx");
     const purge = nav.indexOf("await purgeUserCaches();");
     const complete = nav.indexOf("await completeSignOut();");
     assert.ok(purge > 0 && complete > 0, "both calls present");

@@ -195,7 +195,7 @@ export function CellarItemsGrid({
   // Total row count (including unloaded) — drives scrollbar size
   const totalRows = Math.ceil(total / columnCount);
 
-  // Find the scroll container (ConditionalPaddingWrapper with overflowY: auto).
+  // Find the scroll container (AppShell's <main data-app-scroller>, overflow-y: auto).
   // Must be state (not ref) so that setting it triggers a re-render — the virtualizer
   // needs to recalculate visible items once the scroll element is available.
   const sentinelRef = useRef<HTMLDivElement>(null);

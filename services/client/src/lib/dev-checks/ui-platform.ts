@@ -87,6 +87,7 @@ export const COLOUR_ALLOWLIST: readonly RegExp[] = [
   /^src\/app\/manifest\.ts$/,
   /^src\/components\/common\/AnimationShowcase\.tsx$/, // canvas
   /^src\/components\/auth\/LiquidBackground\.tsx$/, // canvas
+  /^src\/components\/auth\/SocialButtons\.tsx$/, // Google's four-colour brand mark
 ];
 
 /** Where motion literals are the point. */
