@@ -61,6 +61,7 @@ import type { ItemType } from "./items.ts";
 import type { ScannedItemType } from "./menu-scans.ts";
 import { SCANNED_ITEM_TYPES } from "./menu-scans.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { PlaceReviewStatus } from "./place-review-status.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Geography                                                                   */
@@ -96,24 +97,11 @@ export const isLngLat = (value: unknown): value is LngLat => {
 /* Review status (X27 / D28)                                                   */
 /* -------------------------------------------------------------------------- */
 
-/**
- * `places.review_status`. `pending` and `rejected` are creator-only;
- * `approved` is shared. Every Overture row, and every user place created
- * before X27 (the synchronous gate had already let it through), is
- * `approved`.
- */
-export const PLACE_REVIEW_STATUSES = [
-  "pending",
-  "approved",
-  "rejected",
-] as const;
-export type PlaceReviewStatus = (typeof PLACE_REVIEW_STATUSES)[number];
-
-export const isPlaceReviewStatus = (
-  value: unknown,
-): value is PlaceReviewStatus =>
-  typeof value === "string" &&
-  (PLACE_REVIEW_STATUSES as readonly string[]).includes(value);
+export {
+  isPlaceReviewStatus,
+  PLACE_REVIEW_STATUSES,
+  type PlaceReviewStatus,
+} from "./place-review-status.ts";
 
 export type PlaceDto = {
   readonly id: string;

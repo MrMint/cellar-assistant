@@ -31,12 +31,13 @@
  * constructed only by `OutboxActor` and job actors and is not derivable from a
  * request.
  */
+
+import type { Ctx } from "@cellar-assistant/contracts/ctx";
+import { isAdmin, isSystem } from "@cellar-assistant/contracts/ctx";
 import {
   PLACE_REVIEW_STATUSES,
   type PlaceReviewStatus,
-} from "@cellar-assistant/contracts";
-import type { Ctx } from "@cellar-assistant/contracts/ctx";
-import { isAdmin, isSystem } from "@cellar-assistant/contracts/ctx";
+} from "@cellar-assistant/contracts/place-review-status";
 
 /** `public.permission_type`. */
 export const PRIVACY_VALUES = ["PUBLIC", "FRIENDS", "PRIVATE"] as const;
