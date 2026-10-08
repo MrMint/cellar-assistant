@@ -277,16 +277,15 @@ describe("the search box survives typing (N01)", () => {
     }
   });
 
-  test("a session pushes until its push lands: the next navigation discards a pending one", async () => {
-    // The App Router discards a navigation that has not committed when the
-    // next one starts (`app-router-instance.js`:
-    // `actionQueue.pending.discarded = true`), history update included. If
-    // the next page is still pending at the next pause, a `replace` there
-    // would overwrite the entry of the view the session started from, and
-    // Back would skip it. So a session keeps pushing until a push has landed.
+  test("a slow push holds the session's typing back, then sends it as one replace", async () => {
+    // Over a push that has not landed, a `replace` may discard it (the App
+    // Router drops a navigation it is still fetching when the next starts,
+    // `app-router-instance.js`: `actionQueue.pending.discarded = true`) and
+    // overwrite the entry of the view the session started from; a second
+    // `push` may land as a second entry (measured on the UX lane: `?q=wi`,
+    // `?q=win`, `?q=wine` each in history). So the box sends neither.
     await resolveResults("merlot");
     deferredIn(shells, "/search?q=z");
-    deferredIn(shells, "/search?q=zin");
     await mount("/search?q=merlot");
     try {
       const box = input();
@@ -295,9 +294,14 @@ describe("the search box survives typing (N01)", () => {
       await settle();
       // `z`'s shell has not arrived when the next pause comes: not landed.
       assert.ok(testId("search-results-skeleton"), "z is still pending");
+      await typeInto(box, "zi");
+      await settle();
       await typeInto(box, "zin");
       await settle();
-      await openShell("/search?q=zin");
+      assert.deepEqual(calls, [["push", "/search?q=z"]], "nothing sent");
+      assert.equal(box.value, "zin", "the text is the user's meanwhile");
+      // `z` lands: what the box holds by then goes as one replace.
+      await openShell("/search?q=z");
       await resolveResults("zin");
       assert.equal(testId("results")?.textContent, "results for zin");
       // Landed: from here the session replaces.
@@ -306,13 +310,43 @@ describe("the search box survives typing (N01)", () => {
       await resolveResults("zinfandel");
       assert.deepEqual(calls, [
         ["push", "/search?q=z"],
-        ["push", "/search?q=zin"],
+        ["replace", "/search?q=zin"],
         ["replace", "/search?q=zinfandel"],
       ]);
       assert.equal(testId("results")?.textContent, "results for zinfandel");
       assert.equal(input(), box);
       assert.equal(document.activeElement, box);
       assert.equal(box.value, "zinfandel");
+    } finally {
+      await unmount();
+    }
+  });
+
+  test("Enter while the push is in flight lands as soon as the push does", async () => {
+    await resolveResults("tempranillo");
+    deferredIn(shells, "/search?q=tem");
+    await mount("/search");
+    try {
+      const box = input();
+      await act(async () => box.focus());
+      await typeInto(box, "tem");
+      await settle();
+      await typeInto(box, "tempranillo");
+      await pressEnter(box);
+      assert.deepEqual(calls, [["push", "/search?q=tem"]], "held back");
+      await openShell("/search?q=tem");
+      assert.deepEqual(calls, [
+        ["push", "/search?q=tem"],
+        ["replace", "/search?q=tempranillo"],
+      ]);
+      assert.equal(testId("results")?.textContent, "results for tempranillo");
+      // The commit closed the session: the next typing pushes its own entry.
+      await typeInto(box, "tempranillo reserva");
+      await settle();
+      assert.deepEqual(calls.at(-1), [
+        "push",
+        "/search?q=tempranillo%20reserva",
+      ]);
     } finally {
       await unmount();
     }
