@@ -12,7 +12,7 @@ import {
   Typography,
 } from "@mui/joy";
 import { useActor } from "@xstate/react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { includes } from "ramda";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
