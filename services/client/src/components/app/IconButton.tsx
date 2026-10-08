@@ -12,7 +12,11 @@ export type IconButtonProps = Omit<ComponentProps<"button">, "aria-label"> & {
    */
   "aria-label": string;
   variant?: VariantProps<typeof buttonVariants>["variant"];
-  /** `default` is 44×44. `sm` draws a 36 px button inside a 44 px hit area. */
+  /**
+   * `default` is 44×44. `sm` draws a 36 px button inside a 44 px hit area —
+   * and keeps the 44 px hit area when a caller draws it smaller still
+   * (`className="size-7"`).
+   */
   size?: "default" | "sm" | "lg";
   asChild?: boolean;
 };
@@ -42,9 +46,10 @@ export function IconButton({
         "rounded-full p-0 has-[>svg]:p-0 [&_svg:not([class*='size-'])]:size-5 [&_svg]:[stroke-width:1.75]",
         size === "default" && "size-11",
         size === "lg" && "size-12",
-        // The visual is 36 px; a pseudo-element keeps the target at 44.
+        // The visual is 36 px (or less); a centred 44 px pseudo-element keeps
+        // the target at 44 whatever size the caller draws.
         size === "sm" &&
-          "relative size-9 after:absolute after:-inset-1 after:content-['']",
+          "relative size-9 after:absolute after:top-1/2 after:left-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']",
         className,
       )}
       {...props}

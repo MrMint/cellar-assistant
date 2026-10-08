@@ -288,7 +288,8 @@ export const MapFilter: FC<MapFilterProps> = ({
                 <ToggleGroupItem
                   value={itemType.id}
                   aria-label={itemType.label}
-                  className="size-9 px-0"
+                  // 44 px: a touch target (design §4.5), not the vendored 36.
+                  className="size-11 px-0"
                 >
                   <TypeGlyph
                     type={

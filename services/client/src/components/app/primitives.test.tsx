@@ -178,7 +178,17 @@ describe("IconButton", () => {
       "icon-button",
     );
     assert.match(cls, /\bsize-9\b/);
-    assert.match(cls, /after:-inset-1/);
+    assert.match(cls, /after:size-11/);
+    assert.match(cls, /after:-translate-x-1\/2/);
+  });
+  test("sm drawn smaller by a caller still has a 44 px target", () => {
+    const cls = classOf(
+      html(<IconButton aria-label="x" size="sm" className="size-7" />),
+      "icon-button",
+    );
+    assert.match(cls, /\bsize-7\b/);
+    assert.doesNotMatch(cls, /(^|\s)size-9\b/);
+    assert.match(cls, /after:size-11/);
   });
 });
 
