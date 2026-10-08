@@ -6,16 +6,19 @@ Decision D20 (`docs/product/decisions.md`); tokens, type and motion from
 `docs/product/design-direction.md` §3–§5. AGENTS.md "UI and styling" has the
 rules; this file has the **how**.
 
-Every primitive here is Joy-free and has tests (`primitives.test.tsx` for the
+Every primitive here has tests (`primitives.test.tsx` for the
 server-rendered ones, `interactive.test.tsx` under happy-dom for the rest).
 Files with no `"use client"` (Link, IconButton, Page, FilterChip, TypeChip,
 Score, EmptyState, AIDraftField, ActionBar, UserAvatar, icons, nav, notify)
 can be rendered from server components.
 
-## Converting a Joy file: the mapping
+## The vocabulary, by the Joy names it replaced
 
-A component is **either Joy or Tailwind, never both** (see "Coexistence"
-below). Convert a file whole.
+MUI Joy, Emotion, `sx` and react-icons were removed in the migration's
+removal step (2026-10-08); `lib/dev-checks/ui-platform.test.ts` and Biome's
+`noRestrictedImports` fail on any return of them. The tables below stay as
+the vocabulary: where the old code (or your memory of it) reaches for the
+left column, use the right.
 
 ### Layout and surfaces
 
@@ -39,7 +42,7 @@ below). Convert a file whole.
 | Joy | Tailwind |
 |---|---|
 | `sx={{ p: 2, gap: 1 }}` | `p-4 gap-2` — Joy is 8 px × n, Tailwind 4 px × n: **double the number** |
-| `{ xs: …, sm: …, md: … }` | base class, `sm:`, `md:` — the breakpoints are already Joy's: `sm` 600, `md` 900, `lg` 1200, `xl` 1536 |
+| `{ xs: …, sm: …, md: … }` | base class, `sm:`, `md:` — the breakpoints are `sm` 600, `md` 900, `lg` 1200, `xl` 1536 |
 | `useMediaQuery(breakpointUp("md"))` | keep it for logic; for styling use `md:` |
 
 ### Typography
@@ -107,9 +110,9 @@ not the brass accent. Brass is `primary` (or `brass`).
 | `Accordion*` | `ui/accordion` |
 | `Breadcrumbs` | `AppBar breadcrumbs` (desktop only) |
 | `ButtonGroup` | `ui/button-group` |
-| `Link` (Joy, `common/Link`) | `app/Link` (`overlay`, `underline`, `className`) |
+| `Link` (Joy) | `app/Link` (`overlay`, `underline`, `className`) |
 | `next/link` for a visible link | `app/Link` too (B05 hooks View Transitions in here) |
-| `Avatar`, `common/UserAvatar` | `app/UserAvatar`; a stack is `flex -space-x-2` with `ring-2 ring-background` on each |
+| `Avatar` | `app/UserAvatar`; a stack is `flex -space-x-2` with `ring-2 ring-background` on each |
 | `Tooltip` | `ui/tooltip` — hover-capable devices only; on touch the `aria-label`/visible label does the job |
 
 ### Overlays and feedback
@@ -288,13 +291,6 @@ never hand vaul the visible fraction). Glass surface, safe-area bottom
 padding, no background scaling; under reduced motion it fades instead of
 sliding (`globals.css`).
 
-**Joy popups do not work inside it.** vaul is a Radix modal: it sets
-`pointer-events: none` on the page, traps focus, and treats a pointer-down
-outside its content as a dismiss. A Joy `Select` / `Autocomplete` / `Menu`
-listbox portals to `<body>`, i.e. outside — so tapping an option closes the
-sheet instead. Put only converted controls (`ui/select`, `ui/command`) in a
-sheet, or give the Joy popup `disablePortal` until its slice converts it.
-
 **`ResponsiveDialog`** — the same props (+ `role="alertdialog"`): a
 `BottomSheet` below `md`, a centred `ui/dialog` from `md`. Use it for every
 former Joy `Modal`.
@@ -304,8 +300,11 @@ former Joy `Modal`.
 don't confirm — they toast with Undo.
 
 **`notify`** — `notify("Removed from Garage", { undo: () => restore() })`.
-5 s with an Undo action; `tone: "success" | "error"`; `id` to update a
-toast in place. The single `<Toaster/>` is mounted in `AppClientProviders`
+5 s with an Undo action; `tone: "success" | "error" | "loading"`; `id` to
+update a toast in place (an update without `undo` drops the earlier
+action); `actionLabel` ("Try again"), `keepOnAction` (the toast stays up
+while the caller reports the action's progress), `onAutoClose` / `onClose`;
+`dismissNotification(id)`. Don't import `sonner` directly. The single `<Toaster/>` is mounted in `AppClientProviders`
 and sits above the tab bar.
 
 **`EmptyState`** — `illustration?`, `title` (one Fraunces line),
@@ -315,8 +314,9 @@ design §3.6.
 ### Controls and display
 
 **`IconButton`** — `<IconButton aria-label="Share"><Share /></IconButton>`;
-`variant` as `Button`, `size` `default` (44) / `sm` (36 visual in a 44 target)
-/ `lg`; `asChild` to wrap an `app/Link`.
+`variant` as `Button`, `size` `default` (44) / `sm` (36 visual — or smaller
+via `className` — in a centred 44 target) / `lg`; `asChild` to wrap an
+`app/Link`.
 
 **`SegmentedControl`**
 
@@ -344,14 +344,12 @@ a glyph never stands without its word.
 tiles; `variant="hero"` the Fraunces numeral; `count?`. One decimal only when
 non-zero; renders nothing when not rated.
 
-**`RatingInput` / `RatingDisplay`** — `RatingInput` has the same props as
-ux/rating's `common/rating/StarRating` (`value`, `onChange`, `onClear?`,
-`disabled?`, `label?`) and the same behaviour (its hook and `rating.ts`), on
-the tokens: switch the import, nothing else. `RatingDisplay` replaces
-`StarRatingDisplay` (`value`, `size?: "sm" | "md"`).
+**`RatingInput` / `RatingDisplay`** — `RatingInput` (`value`, `onChange`,
+`onClear?`, `disabled?`, `label?`) is ux/rating's control on the tokens; its
+behaviour is `common/rating/useStarRatingInput` and `rating.ts`.
+`RatingDisplay` is the read-only row (`value`, `size?: "sm" | "md"`).
 
-**`AIDraftField`** — `common/AIDraftField`'s props with `className` instead
-of `sx`, plus `confidence?: "sure" | "likely" | "check"` (X05). The 2 pt teal
+**`AIDraftField`** — `source`, `drafted`, `className`, plus `confidence?: "sure" | "likely" | "check"` (X05). The 2 pt teal
 rule and the source mark. **Teal enters the UI only here** (and AI progress
 states).
 
@@ -363,32 +361,18 @@ ancestor) + `underline` (`hover` default, `always`, `none`).
 
 **`UserAvatar`** — `avatarUrl`, `displayName`, `size` `sm|md|lg`, `className`.
 
-## Coexistence (until the Joy removal step)
+## Layering (z-index)
 
-- Tailwind's utilities live in cascade layers; Emotion's (Joy's) styles are
-  **unlayered and always win**. A Tailwind class on a Joy component silently
-  loses, and `sx` on a new component is banned. One system per element.
-- Composition across the line is fine: a Tailwind `div` around a Joy `Card`,
-  a Joy `Stack` around a shadcn `Button`.
-- Joy reads the same tokens (`providers/ThemeRegistry.tsx` builds its palette
-  from `lib/tokens.ts`), so unconverted screens already show the brass and the
-  warm surfaces.
-- Preflight sets `svg, img { display: block }`; `globals.css`'s `joy-compat`
-  block reverts that inside Joy markup. A react-icon in a *plain* element
-  outside Joy is block-level now — convert it to `app/icons` (they are meant
-  to be block-in-flex anyway).
-- z-index: shadcn overlays use `z-50`; Joy's popups are `1000`+ (`Modal`
-  1300, `Snackbar` 1400). A Joy popup *draws* above a new sheet, but it is
-  not usable there: Radix modals (BottomSheet, ResponsiveDialog, ui/dialog,
-  ui/sheet) block pointer events outside their own content and dismiss on a
-  pointer-down outside it, and Joy's listboxes portal to `<body>`. Convert
-  the control, or give the Joy popup `disablePortal`. Likewise a new sheet
-  opened over a Joy element with its own large `zIndex` (some map controls)
-  may sit under it — convert that element in the same slice.
-- Old Joy-era shared components with Joy-only props (`common/Link`,
-  `common/UserAvatar`, `common/InteractiveCard`, `common/AIDraftField`,
-  `common/rating/StarRating`) stay until the removal step; switch your own
-  imports to the `app/` version as you convert.
+- App overlays — `BottomSheet`, `ResponsiveDialog`, `ui/dialog`, `ui/sheet`,
+  tooltips, popovers, menus, selects — portal to `<body>` at `z-50`, and
+  need no `z-[…]` of their own anywhere in the app. The tab bar is `z-40`,
+  `ActionBar` `z-30`, in-card stretched links and their buttons `z-10`.
+- The map is the one surface with its own scale (controls, the results list,
+  the place drawer, the pin: `z-[12]` … `z-[1250]`). Its canvas container is
+  `isolate` (`map/maplibre/MapLibreRenderer.tsx`), so all of those order
+  themselves *inside* the map and a `z-50` sheet, tooltip or toast opened
+  from the drawer still draws above it. Keep new map overlays inside that
+  container; don't raise an app overlay to clear one.
 
 ## Not built here (roadmap, design §3.4 of the migration plan)
 

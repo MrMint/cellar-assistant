@@ -43,7 +43,7 @@ way to run the app. See [Optional: AI provider](#optional-ai-provider).
 
 | Layer | Choice | Where |
 |---|---|---|
-| Frontend | Next.js (App Router), MUI Joy, URQL, XState | `services/client` |
+| Frontend | Next.js (App Router), shadcn/ui + Tailwind CSS v4 + motion, URQL, XState | `services/client` |
 | GraphQL API | graphql-yoga + Pothos — **holds no database credentials** | `services/api` |
 | Domain / data | Dapr actors (`@dapr/dapr`), Drizzle ORM | `services/actors` |
 | Auth | better-auth, mounted in the actor host; the API verifies JWTs via JWKS | `services/actors` |

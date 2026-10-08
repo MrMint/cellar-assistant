@@ -1,5 +1,14 @@
 # UI parity — decisions
 
+> **Superseded (2026-10-08).** The visual overhaul this document deferred has
+> happened: decision D20 (`docs/product/decisions.md`) moved the client from MUI
+> Joy to shadcn/ui + Tailwind CSS v4 + `motion`, and the removal step deleted
+> Joy, Emotion, react-icons and the restored Joy-era shared components. The
+> `82450ad1` UI is no longer the spec for look and markup; the UI rules are in
+> `AGENTS.md` ("UI and styling") and `docs/product/design-direction.md`. What
+> still holds from here is the *behavioural* parity (same data, same flows) and
+> the server-side decisions. Kept as history.
+
 **Status:** defaults chosen 2026-10-04 by the orchestrating agent under the user's
 standing instruction, so the restore can proceed without blocking. **Every row
 marked _default_ is open to the user's override**; a row marked _user_ is theirs.

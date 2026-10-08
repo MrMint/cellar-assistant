@@ -260,15 +260,17 @@ XState for complex state machines, React Hook Form for forms, URQL for GraphQL s
 
 The client is **shadcn/ui on Radix + Tailwind CSS v4 + `motion`** (decision D20,
 `docs/product/decisions.md`). Tokens, type, motion language and signature moments come from
-`docs/product/design-direction.md` §3–§5; where it says "Joy", read "the app primitives".
+`docs/product/design-direction.md` §3–§5; where it says "Joy", read "the app primitives". MUI Joy,
+Emotion, `sx`, `react-icons` and `framer-motion` are gone: `ui-platform.test.ts` fails on any use
+of them in any file, and Biome's `noRestrictedImports` bans the imports.
 
 ### Where things live
 - `services/client/src/app/globals.css` is the **only** stylesheet with values: `--ca-*` tokens
   (dark is the default; `data-theme="dark"` on `<html>`), the shadcn semantic mapping in
   `@theme inline`, the `type-*` utilities, and breakpoints (`sm` 600 / `md` 900 / `lg` 1200 /
-  `xl` 1536 — Joy's, so CSS and the JS `useMediaQuery` helpers flip together).
-  `src/lib/tokens.ts` holds the same hex values for code that cannot read CSS variables (the Joy
-  theme until removal, MapLibre paint, canvas, contrast tests); `tokens-parity.test.ts` keeps
+  `xl` 1536 — shared with the JS `useMediaQuery` helpers so CSS and JS flip together).
+  `src/lib/tokens.ts` holds the same hex values for code that cannot read CSS variables (MapLibre
+  paint, canvas, contrast tests); `tokens-parity.test.ts` keeps
   them equal.
 - `src/components/ui/*` is **vendored shadcn**. Don't edit it in feature work. Add a component
   with `bunx --bun shadcn@4.21.0 add <name>` from `services/client` (pin a CLI at least two
@@ -281,8 +283,7 @@ The client is **shadcn/ui on Radix + Tailwind CSS v4 + `motion`** (decision D20,
   InsetSection, ListRow, BottomSheet, ResponsiveDialog, ConfirmSheet, `notify`/Toaster,
   SegmentedControl, FilterChip, TypeChip/TypeGlyph, Score, RatingInput, EmptyState,
   AIDraftField, ActionBar, IconButton, Link, UserAvatar, `icons`. Pages use these first, then
-  `ui/*`, then Tailwind on plain elements. `src/components/app/README.md` has the usage notes
-  and the Joy → shadcn mapping table.
+  `ui/*`, then Tailwind on plain elements. `src/components/app/README.md` has the usage notes.
 - `src/lib/motion.ts` holds the motion tokens (`dur`, `ease`, `spring`, `distance`, `tween`),
   mirrored as `--ca-dur-*` / `--ca-ease-*`. `MotionConfig reducedMotion="user"` wraps the app.
 
@@ -317,17 +318,6 @@ App primitive → `ui/*` component (variants via `cva`) → Tailwind utilities o
 a new token or `@utility` in `globals.css` (last resort, reviewed). There is no CSS-in-JS: no
 `sx`, no Emotion, no `style` objects except for values computed at runtime (positions,
 progress).
-
-### Transition (delete when the Joy removal step lands)
-Until the removal step, some files still use MUI Joy; they are listed in
-`src/lib/dev-checks/ui-platform.legacy.json`, and no other file may import `@mui/*`, use `sx`,
-or import `react-icons`. **Never mix the two systems on one element:** Emotion's styles are
-unlayered and always beat Tailwind's layered utilities, so a Tailwind class on a Joy component
-silently loses. Convert a component whole. Composition across the line (a Tailwind `div` around a
-Joy component, or the reverse) is fine. Joy's theme reads the same tokens
-(`providers/ThemeRegistry.tsx`), so unconverted screens already show the new palette. Each file
-has one owning slice in the migration plan; don't edit another slice's files,
-`src/components/ui/*`, `package.json` or `bun.lock`.
 
 ## Code style
 

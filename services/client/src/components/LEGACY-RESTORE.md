@@ -1,5 +1,14 @@
 # Restored UI building blocks (UI parity wave 1a)
 
+> **Superseded (2026-10-08).** These restored building blocks were Joy-era
+> markup. The Joy → shadcn migration (D20) converted or replaced every one of
+> them, and its removal step deleted the ones that were left — `common/Link`,
+> `common/UserAvatar`, `common/InteractiveCard`, `common/AIDraftField`,
+> `common/AnimatedPlaceholder`, `common/rating/StarRating`, the Joy theme
+> (`providers/ThemeRegistry`) and its Emotion cache. Their successors are the
+> app primitives in `components/app/` (`app/README.md`). Paths and "verbatim"
+> notes below describe the restore as it was, not the tree as it is.
+
 The production UI at `82450ad1` is the spec (`docs/architecture/ui-parity-decisions.md`).
 These are its shared pieces, restored once so each domain wave ports its own
 pages on top of them instead of re-porting them six ways.
