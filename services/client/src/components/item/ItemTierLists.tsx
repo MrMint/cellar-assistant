@@ -72,7 +72,7 @@ export function ItemTierLists({
             {item.tier_list ? (
               <Link
                 href={`/tier-lists/${item.tier_list.id}`}
-                className="type-callout min-w-0 truncate font-semibold text-ink-1"
+                className="type-callout block min-w-0 truncate py-3 font-semibold text-ink-1"
               >
                 {item.tier_list.name}
               </Link>
