@@ -9,7 +9,7 @@
  */
 
 import { Alert, Box, CircularProgress } from "@mui/joy";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import {
   forwardRef,
   useCallback,

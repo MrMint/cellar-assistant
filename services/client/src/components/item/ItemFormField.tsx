@@ -23,7 +23,8 @@ import type { FormEntry } from "./itemFormLayout";
  *
  * N03: a required field says what is wrong — `FormControl error` plus a
  * helper line (`form-errors.ts`) — and its ref is the native input, so the
- * validation that scrolls to it also focuses it.
+ * validation that scrolls to it also focuses it. The control itself carries
+ * `aria-invalid`, so assistive tech hears the error state too.
  */
 export const ItemFormField = ({
   entry,
@@ -48,7 +49,9 @@ export const ItemFormField = ({
               disabled={disabled}
               type="text"
               {...field}
-              slotProps={{ input: { ref } }}
+              slotProps={{
+                input: { ref, "aria-invalid": invalid(fieldState) },
+              }}
             />
             <ErrorText label={entry.label} error={fieldState.error} />
           </FormControl>
@@ -73,7 +76,9 @@ export const ItemFormField = ({
               disabled={disabled}
               minRows={2}
               {...field}
-              slotProps={{ textarea: { ref } }}
+              slotProps={{
+                textarea: { ref, "aria-invalid": invalid(fieldState) },
+              }}
             />
             <ErrorText label={entry.label} error={fieldState.error} />
           </FormControl>
@@ -156,7 +161,9 @@ export const ItemFormField = ({
               minRows={2}
               {...input}
               value={input.value ?? ""}
-              slotProps={{ textarea: { ref } }}
+              slotProps={{
+                textarea: { ref, "aria-invalid": invalid(fieldState) },
+              }}
             />
           ) : (
             <Input
@@ -167,6 +174,7 @@ export const ItemFormField = ({
               slotProps={{
                 input: {
                   ref,
+                  "aria-invalid": invalid(fieldState),
                   ...(isYear
                     ? { min: "1900", max: "2099", step: "1" }
                     : field.kind === "number"
@@ -194,3 +202,7 @@ const ErrorText = ({
   const text = fieldErrorText(label, error);
   return text === undefined ? null : <FormHelperText>{text}</FormHelperText>;
 };
+
+/** `aria-invalid` for a field's control: present only while it holds an error. */
+const invalid = (fieldState: { error?: unknown }): true | undefined =>
+  fieldState.error !== undefined || undefined;

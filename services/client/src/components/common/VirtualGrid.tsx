@@ -272,7 +272,11 @@ export function VirtualGrid<T>({
   }, [scrollContainer]);
 
   const defaultSkeleton = () => (
-    <Card sx={{ overflow: "hidden" }}>
+    <Card
+      data-slot="skeleton-card"
+      aria-hidden="true"
+      sx={{ overflow: "hidden" }}
+    >
       <Skeleton
         variant="rectangular"
         sx={{ aspectRatio: { xs: 1.2, sm: 1 } }}

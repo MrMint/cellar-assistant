@@ -121,7 +121,11 @@ test("the item page is the old TeaDetails", async ({ primary }) => {
   // after hydration — so reading it out of `bodyText` straight after the
   // heading raced the editor (it passed or failed by load). Open the review
   // the way a person would, then wait for the text.
-  await primary.locator(".MuiAccordionSummary-button").first().click();
+  await primary
+    .getByRole("button", { expanded: false })
+    .filter({ has: primary.locator("time") })
+    .first()
+    .click();
   await expect(primary.getByText("E2 lovely")).toBeVisible();
   // One review per viewer: the form opens on the viewer's own review.
   await expect(primary.getByPlaceholder("Edit your Review...")).toBeVisible();
@@ -172,7 +176,9 @@ test("the bottle page: open it, check in, delete it", async ({ primary }) => {
 
   await primary.getByRole("button", { name: "Check In", exact: true }).click();
   // The day row the check-in list adds (reviews carry a <time> too).
-  await expect(primary.locator(".MuiListItem-root time").first()).toBeVisible({
+  await expect(
+    primary.getByRole("list", { name: "Check-ins" }).locator("time").first(),
+  ).toBeVisible({
     timeout: 20_000,
   });
 

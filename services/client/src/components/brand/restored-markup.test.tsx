@@ -32,11 +32,11 @@ const card = {
 describe("BrandCard (restored)", () => {
   test("placeholder art, type chip, linked title, description, item count", () => {
     const html = render(<BrandCard brand={card} href="/brands/b1" />);
-    assert.match(html, /^<div class="MuiCard-root/);
+    assert.match(html, /^(?:<[^>]+>)+<span data-next-image="art"/, "art first");
     assert.match(html, /data-alt="Vietti placeholder"/);
-    assert.match(html, /MuiChip-root[\s\S]*Tea House/);
+    assert.match(html, /data-alt="Vietti placeholder"[\s\S]*>Tea House</);
     assert.match(html, /href="\/brands\/b1"/);
-    assert.match(html, /MuiTypography-title-md[^>]*>Vietti</);
+    assert.match(html, /href="\/brands\/b1"[^>]*>(?:<[^>]+>)*Vietti</);
     assert.match(html, /Barolo producer/);
     assert.match(html, />7 items</);
     assert.doesNotMatch(html, /places/);

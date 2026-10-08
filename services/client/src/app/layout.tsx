@@ -1,18 +1,34 @@
-import "@fontsource/inter";
-import { Box } from "@mui/joy";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Fraunces, Inter } from "next/font/google";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import AppClientProviders from "@/components/providers/AppClientProviders";
 import SerwistClientProvider from "@/components/providers/SerwistClientProvider";
 import { AppleSplashScreens } from "@/components/pwa/AppleSplashScreens";
+import { color } from "@/lib/tokens";
+import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+/**
+ * The two families (design §3.2), each loaded once and exposed as a CSS
+ * variable: Tailwind's `font-sans`/`font-display` and Joy's `fontFamily`
+ * both read them. Both are variable fonts, so no weight list — which is what
+ * ends the faux-bold the old `@fontsource/inter` (400 only) produced.
+ */
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces",
+  axes: ["opsz", "SOFT"],
+  display: "swap",
+});
 
 export const viewport: Viewport = {
-  themeColor: "#111015",
+  themeColor: color.bg,
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
@@ -45,27 +61,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    // Dark is static on <html> (D21): Joy's dark variables and the Tailwind
+    // tokens both apply at first paint, not after a client effect.
+    <html
+      lang="en"
+      data-theme="dark"
+      data-joy-color-scheme="dark"
+      className={`${inter.variable} ${fraunces.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <AppleSplashScreens />
       </head>
-      <body className={inter.className}>
+      <body className="bg-background font-sans text-foreground">
         <SerwistClientProvider>
           <NuqsAdapter>
             <AppClientProviders>
-              <Box
-                sx={{
-                  display: "flex",
-                  height: "100dvh",
-                  width: "100vw",
-                  paddingTop: "env(safe-area-inset-top)",
-                  paddingBottom: "env(safe-area-inset-bottom)",
-                  paddingLeft: "env(safe-area-inset-left)",
-                  paddingRight: "env(safe-area-inset-right)",
-                }}
-              >
+              <div className="flex h-dvh w-screen pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
                 {children}
-              </Box>
+              </div>
             </AppClientProviders>
           </NuqsAdapter>
           <Analytics />

@@ -1,7 +1,8 @@
 /**
- * Render tests for the restored `EnumSelect`: a required-aware Joy
- * `FormControl` with a `FormLabel` and a `Select`, the old "Choose one…" /
- * "Loading…" placeholders, and disabled while loading.
+ * Render tests for the restored `EnumSelect`: a required-aware labelled
+ * select (a `combobox`), the old "Choose one…" / "Loading…" placeholders, and
+ * disabled while loading. Asserted through the label/`for` pairing, roles and
+ * `aria-*`, so the same tests hold for Joy's `Select` and Radix's.
  *
  * `useReferenceOptions` is replaced so the test controls the reference data
  * without a GraphQL server; everything between it and the markup — `useEnum`,
@@ -29,6 +30,7 @@ mock.module("@/components/item-api/useReferenceOptions", () => ({
 }));
 
 const { EnumSelect } = await import("./EnumSelect");
+const { isDisabled, openTag } = await import("@/test-support/markup");
 
 const render = (node: ReactNode) =>
   renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
@@ -56,18 +58,19 @@ describe("EnumSelect (restored)", () => {
   test("FormControl > FormLabel + Select, old placeholder", () => {
     fetching = false;
     const html = render(<Harness enumKey="wineStyle" />);
-    assert.match(html, /^<div class="MuiFormControl-root/);
-    assert.match(html, /<label[^>]*class="MuiFormLabel-root[^"]*"[^>]*>Style</);
-    assert.match(html, /MuiSelect-root/);
+    const id = /<label[^>]*for="([^"]+)"[^>]*>Style</.exec(html)?.[1];
+    assert.ok(id, "the label names its control");
+    assert.match(openTag(html, `id="${id}"`), /\srole="combobox"/);
+    assert.ok(html.indexOf(">Style<") < html.indexOf('role="combobox"'));
     assert.match(html, />Choose one…</);
-    assert.doesNotMatch(html, /Mui-disabled/);
+    assert.equal(isDisabled(openTag(html, 'role="combobox"')), false);
   });
 
   test("loading: Loading… placeholder and disabled", () => {
     fetching = true;
     const html = render(<Harness enumKey="wineStyle" />);
     assert.match(html, />Loading…</);
-    assert.match(html, /MuiSelect-root[^"]*Mui-disabled/);
+    assert.equal(isDisabled(openTag(html, 'role="combobox"')), true);
   });
 
   test("static enums never wait on the reference query", () => {
@@ -79,7 +82,10 @@ describe("EnumSelect (restored)", () => {
   test("required marks the control and label", () => {
     fetching = false;
     const html = render(<Harness enumKey="wineStyle" required />);
-    assert.match(html, /MuiFormLabel-asterisk/);
+    assert.match(
+      html,
+      /<label[^>]*>Style<span[^>]*aria-hidden="true"[^>]*>\s*\*/,
+    );
   });
 
   test("the Controller binds the select to the form field's name", () => {

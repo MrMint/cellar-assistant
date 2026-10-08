@@ -12,7 +12,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/joy";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { type FC, useEffect, useRef, useState } from "react";
 import {
   FaBeer,

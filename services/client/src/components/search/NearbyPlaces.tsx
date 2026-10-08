@@ -12,7 +12,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/joy";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -196,7 +196,7 @@ export function NearbyPlaces({
   const userLng = geo.location?.longitude ?? cachedLocation?.longitude ?? 0;
 
   return (
-    <Stack spacing={1.5}>
+    <Stack component="section" aria-label="Nearby Places" spacing={1.5}>
       <Stack
         direction="row"
         spacing={1}

@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { isDisabled, LOADING, openTag } from "@/test-support/markup";
 import { CameraCapture } from "./CameraCapture";
 
 describe("CameraCapture (N04)", () => {
@@ -18,11 +19,8 @@ describe("CameraCapture (N04)", () => {
   });
 
   test("the shutter waits for a stream", () => {
-    assert.match(html, /MuiCircularProgress-root/);
-    const shutter = html.match(
-      /<button[^>]*aria-label="Take photo"[^>]*>/,
-    )?.[0];
-    assert.match(shutter ?? "", /Mui-disabled/);
+    assert.match(html, LOADING);
+    assert.equal(isDisabled(openTag(html, 'aria-label="Take photo"')), true);
   });
 
   test("a host with its own picker can leave the shutter's out", () => {

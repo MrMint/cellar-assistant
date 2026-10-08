@@ -14,9 +14,12 @@ import { PageLoading } from "./PageLoading";
 const raw = (node: ReactNode) => renderToStaticMarkup(node);
 
 describe("InteractiveCard (restored)", () => {
-  test("a Joy Card with the old hover affordance", () => {
+  test("one card element with the old hover affordance", () => {
     const html = raw(<InteractiveCard>body</InteractiveCard>);
-    assert.match(html, /class="MuiCard-root[^"]*"/);
+    assert.match(
+      html.replace(/<style[^>]*>[^<]*<\/style>/g, ""),
+      /^<div\b[^>]*>body<\/div>$/,
+    );
     // The styled() hover rule: pointer plus the theme's medium shadow. (The
     // border colour comes from the app theme's palette, absent here.)
     assert.match(
@@ -52,12 +55,17 @@ describe("ItemTypeIcon (restored)", () => {
 });
 
 describe("PageLoading (restored)", () => {
-  test("a full-size Box holding a CircularProgress", () => {
+  test("a full-size box holding a loading indicator", () => {
     const html = raw(<PageLoading />);
-    assert.match(html, /height:100%;width:100%/);
+    // Emotion's rule while it is Joy, Tailwind's classes once it is not.
     assert.match(
-      html.replace(/<style[^>]*>[^<]*<\/style>/g, ""),
-      /^<div class="MuiBox-root[^"]*"><span role="progressbar"[^>]*class="MuiCircularProgress-root/,
+      html,
+      /height:100%;width:100%|\b(?:size-full|h-full w-full)\b/,
+    );
+    const markup = html.replace(/<style[^>]*>[^<]*<\/style>/g, "");
+    assert.match(
+      markup,
+      /^<div\b[^>]*><[a-z]+\b[^>]*role="(?:progressbar|status)"/,
     );
   });
 });

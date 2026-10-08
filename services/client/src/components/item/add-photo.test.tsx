@@ -4,8 +4,9 @@
  * with a file input kept beside it, and a capture reaches the upload as a
  * `File` decoded in the browser.
  *
- * Joy's `Modal` renders through a portal, which a static render never mounts,
- * so the test swaps it for its children; `CameraCapture` (react-webcam) is
+ * A modal renders through a portal, which a static render never mounts, so the
+ * open dialog is tested through `AddPhotoBody` (its title and body) and only
+ * the closed one through `AddPhotoModal`; `CameraCapture` (react-webcam) is
  * stubbed to a marker that hands its `onCapture` back to the test.
  */
 import { mock } from "bun:test";
@@ -13,13 +14,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-
-const realJoy = { ...(await import("@mui/joy")) };
-mock.module("@mui/joy", () => ({
-  ...realJoy,
-  Modal: ({ open, children }: { open: boolean; children: ReactNode }) =>
-    open ? children : null,
-}));
 
 let lastOnCapture: ((dataUrl: string) => void) | null = null;
 mock.module("../common/CameraCapture", () => ({
@@ -29,16 +23,14 @@ mock.module("../common/CameraCapture", () => ({
   },
 }));
 
-const { AddPhotoModal } = await import("./AddPhoto");
+const { AddPhotoBody, AddPhotoModal } = await import("./AddPhoto");
 
 const render = (node: ReactNode) =>
   renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
 
 describe("AddPhotoModal (restored, live camera)", () => {
   test("the old title over the live viewfinder, with a file input as fallback", () => {
-    const html = render(
-      <AddPhotoModal open onClose={() => {}} onCapture={async () => {}} />,
-    );
+    const html = render(<AddPhotoBody onCapture={async () => {}} />);
     assert.match(html, />Set a new display image</);
     assert.match(html, /data-testid="camera-capture"/);
     assert.match(html, />Choose a photo</);
@@ -66,9 +58,7 @@ describe("AddPhotoModal (restored, live camera)", () => {
   test("a capture is decoded to a JPEG File and handed to the upload", async () => {
     const uploads: File[] = [];
     render(
-      <AddPhotoModal
-        open
-        onClose={() => {}}
+      <AddPhotoBody
         onCapture={async (file) => {
           uploads.push(file);
         }}
@@ -88,9 +78,7 @@ describe("AddPhotoModal (restored, live camera)", () => {
   test("a capture that is not a data URL is not uploaded", async () => {
     const uploads: File[] = [];
     render(
-      <AddPhotoModal
-        open
-        onClose={() => {}}
+      <AddPhotoBody
         onCapture={async (file) => {
           uploads.push(file);
         }}

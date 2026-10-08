@@ -78,7 +78,7 @@ describe("TierListCard (restored)", () => {
       />,
     );
     assert.match(html, /href="\/tier-lists\/tl-1"/);
-    assert.match(html, /MuiTypography-title-lg[^>]*>Best Bars</);
+    assert.match(html, /href="\/tier-lists\/tl-1"[\s\S]*>Best Bars</);
     assert.match(html, />Wines</);
     assert.match(html, />1 item</);
     assert.match(html, />Pat</);
@@ -122,8 +122,8 @@ describe("TierListView (restored board)", () => {
       assert.match(html, new RegExp(`>${label}<`));
     }
     // Ranks 2..10 sit on trophies; 11 and 12 are plain numbers.
-    assert.match(html, /MuiTypography-body-sm[^>]*>11</);
-    assert.match(html, /MuiTypography-body-sm[^>]*>12</);
+    assert.match(html, />Entry 11<\/a>[\s\S]*?>11<[\s\S]*?"Remove Entry 11"/);
+    assert.match(html, />Entry 12<\/a>[\s\S]*?>12<[\s\S]*?"Remove Entry 12"/);
     // The viewer's own score and the public rating with its count.
     assert.match(html, />4</);
     assert.match(html, />4.6/);
@@ -161,7 +161,7 @@ describe("TierListViewPage (restored header and tabs)", () => {
     const html = render(
       <TierListViewPage data={data} insightsData={insights} />,
     );
-    assert.match(html, /MuiTypography-h3[^>]*>Best Bars</);
+    assert.match(html, /<h3[^>]*>Best Bars</);
     assert.match(html, />Friends</);
     assert.match(html, /aria-label="Add entry"/);
     assert.match(html, /href="\/map\?tierLists=tl-1"/);

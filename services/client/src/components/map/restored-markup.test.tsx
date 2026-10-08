@@ -1,6 +1,9 @@
 /**
- * Render tests for the restored map/place/scan/discovery components,
- * asserting the **old** markup and copy (`82450ad1:src/components/map/*`).
+ * Render tests for the restored map/place/discovery components, asserting
+ * the **old** markup and copy (`82450ad1:src/components/map/*`). The scan
+ * components' tests live in `scanning/restored-markup.test.tsx`, beside the
+ * files they test, so the place pages and the menu scanner can each be
+ * converted without touching the other's test.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -24,9 +27,9 @@ const { GooglePlaceSuggestions } = await import(
 );
 const { PlaceDetailsContent } = await import("./places/PlaceDetailsContent");
 const { CreatePlaceForm } = await import("./places/CreatePlaceForm");
-const { ScanHistory } = await import("./scanning/ScanHistory");
 const { DiscoveryDashboard } = await import("./discovery/DiscoveryDashboard");
 const { menuItemFrom } = await import("./adapter");
+const { LOADING } = await import("../../test-support/markup");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -379,12 +382,8 @@ describe("drawer menu badge counts every line, not the loaded page", () => {
   });
 });
 
-describe("scans and discoveries (restored)", () => {
-  test("ScanHistory starts on the old spinner", () => {
-    assert.match(render(<ScanHistory />), /MuiCircularProgress/);
-  });
-
+describe("discoveries (restored)", () => {
   test("DiscoveryDashboard starts on the old spinner", () => {
-    assert.match(render(<DiscoveryDashboard />), /MuiCircularProgress/);
+    assert.match(render(<DiscoveryDashboard />), LOADING);
   });
 });

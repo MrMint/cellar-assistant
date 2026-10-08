@@ -178,6 +178,8 @@ function QuickLinks() {
   return (
     <StaggerIn>
       <Stack
+        component="nav"
+        aria-label="Quick links"
         direction="row"
         spacing={1}
         flexWrap="wrap"

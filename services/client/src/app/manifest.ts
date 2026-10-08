@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { color } from "@/lib/tokens";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -11,8 +12,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     display_override: ["standalone"],
-    background_color: "#111015",
-    theme_color: "#111015",
+    background_color: color.bg,
+    theme_color: color.bg,
     orientation: "any",
     categories: ["food", "lifestyle", "utilities"],
     launch_handler: {

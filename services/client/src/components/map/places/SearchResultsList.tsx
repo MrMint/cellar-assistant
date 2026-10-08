@@ -10,7 +10,7 @@ import {
   Stack,
   Typography,
 } from "@mui/joy";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useRef, useState } from "react";
 import { MdClose, MdPlace, MdStar } from "react-icons/md";
 import { useMediaQuery } from "@/hooks/useMediaQuery";

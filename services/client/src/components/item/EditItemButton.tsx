@@ -26,7 +26,8 @@ export const EditItemButton = ({
       Edit item
     </Button>
   ) : (
-    <Button startDecorator={<MdEdit />} disabled>
+    // `aria-disabled` too: Joy marks the button `disabled` only after hydration.
+    <Button startDecorator={<MdEdit />} disabled aria-disabled>
       Edit item
     </Button>
   );

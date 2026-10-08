@@ -100,11 +100,11 @@ describe("RichTextDisplay (restored)", () => {
 });
 
 describe("RichTextEditor (restored)", () => {
-  test("an outlined Sheet with an editable surface and the placeholder", () => {
+  test("a framed, editable, empty textbox and the placeholder", () => {
     const html = render(
       <RichTextEditor onChange={() => {}} placeholder="Tell us more" />,
     );
-    assert.match(html, /^<div class="MuiSheet-root MuiSheet-variantOutlined/);
+    assert.match(html, /^<div\b[^>]*><div[^>]*role="textbox"[^>]*><\/div>/);
     assert.match(html, /contentEditable="true"/);
     assert.match(html, />Tell us more</);
   });
