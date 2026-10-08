@@ -40,6 +40,10 @@ export function useWantToGoPlaceIds(): ReadonlySet<string> {
       };
     },
     pageSize: PAGE,
+    // A save on a place page (another route, so the map was unmounted) only
+    // updates that place's interaction in the cache, not this list; cache-
+    // first would re-serve the list from before it on the way back.
+    requestPolicy: "cache-and-network",
   });
 
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(

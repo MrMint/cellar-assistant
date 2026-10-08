@@ -8,7 +8,7 @@
  * while it does, the last complete list stays on screen.
  */
 import { useCallback, useEffect, useState } from "react";
-import type { AnyVariables, DocumentInput } from "urql";
+import type { AnyVariables, DocumentInput, RequestPolicy } from "urql";
 import type { ApiFailure, ApiResult } from "@/lib/api/result";
 import type { Page } from "./paged-connection";
 import { usePagedConnection } from "./use-paged-connection";
@@ -36,11 +36,20 @@ export function useWholeConnection<
   variables,
   select,
   pageSize,
+  requestPolicy,
 }: {
   query: DocumentInput<TData, TVariables>;
   variables: (after: string | null) => TVariables;
   select: (data: TData | undefined) => ApiResult<Page<TRow>>;
   pageSize: number;
+  /**
+   * For every page of the walk — `usePagedConnection`'s option. Unset is
+   * graphcache's cache-first, which answers a remount from whatever an
+   * earlier mount cached; a list that a write elsewhere changes without
+   * touching that cached field wants `"cache-and-network"` (its first
+   * non-stale answer is the network's: `toPromise` skips stale results).
+   */
+  requestPolicy?: RequestPolicy;
 }): UseWholeConnection<TRow> {
   const paged = usePagedConnection({
     query,
@@ -48,6 +57,7 @@ export function useWholeConnection<
     select,
     initial: null,
     initialArgs: null,
+    requestPolicy,
   });
   const { rows, status, failure, hasNextPage, canLoadMore, reset, loadMore } =
     paged;

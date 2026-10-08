@@ -16,7 +16,11 @@ export type ItemDetailsProp = {
   itemId: string;
   /** `Item.isFavorite` — was the viewer's `item_favorites` row id. */
   isFavorite: boolean;
-  /** `Item.isWantToTry` (X08). Omitted: not offered (a bottle you own). */
+  /**
+   * `Item.isWantToTry` (X08). Omitted, no bookmark is drawn. Both item pages
+   * pass it — the bottle page too, since owning a bottle is not having
+   * tasted it.
+   */
   isWantToTry?: boolean;
   type: ApiItemType;
   title: string;

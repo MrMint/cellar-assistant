@@ -12,8 +12,6 @@ import { graphql } from "@/lib/api/graphql";
 
 /** Rows per page on the list. The API caps any `first` at 100. */
 export const WANT_TO_TRY_PAGE_SIZE = 50;
-/** Pages of want-to-go places the map reads for its pins (100 each). */
-export const WANT_TO_GO_PIN_PAGES = 5;
 
 export const SetWantToTryMutation = graphql(
   `
