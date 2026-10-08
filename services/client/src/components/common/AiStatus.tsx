@@ -1,21 +1,25 @@
 "use client";
 
-import { Alert, Button, Typography } from "@mui/joy";
 import { useEffect, useState } from "react";
-import { MdAutoAwesome, MdErrorOutline, MdSchedule } from "react-icons/md";
+import { AI, ErrorIcon, Schedule } from "@/components/app/icons";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import type {
   AiFailureLike,
   AiOutcome,
   AiOutcomeOptions,
 } from "@/lib/ai/outcome";
 import { aiOutcome } from "@/lib/ai/outcome";
+import { cn } from "@/lib/utils";
 
 /**
  * One AI outcome, rendered (N07). The words come from `aiOutcome` in
  * `lib/ai/outcome.ts`; this only lays them out, so the shadcn migration swaps
- * this file and nothing else. Deliberately plain Joy: no new primitive.
+ * this file and nothing else.
  *
- * A limit is a `warning` (amber), never `danger` — nothing is broken.
+ * A limit is never `danger` — nothing is broken: it reads in calm ink with a
+ * clock (there is no amber in the palette), and only a real failure takes the
+ * danger hue. `data-tone` carries the outcome's tone for tests and styling.
  */
 export function AiStatus({
   outcome,
@@ -25,36 +29,36 @@ export function AiStatus({
   /** Shown only when the outcome says retrying the same input can work. */
   onRetry?: () => void;
 }) {
-  const icon =
-    outcome.kind === "user-cap" || outcome.kind === "service-budget" ? (
-      <MdSchedule />
-    ) : outcome.tone === "danger" ? (
-      <MdErrorOutline />
-    ) : (
-      <MdAutoAwesome />
-    );
+  const Icon =
+    outcome.kind === "user-cap" || outcome.kind === "service-budget"
+      ? Schedule
+      : outcome.tone === "danger"
+        ? ErrorIcon
+        : AI;
+  const danger = outcome.tone === "danger";
   return (
     <Alert
-      color={outcome.tone}
-      variant="soft"
-      startDecorator={icon}
-      sx={{ alignItems: "flex-start" }}
-      endDecorator={
-        outcome.canRetry && onRetry !== undefined ? (
-          <Button size="sm" variant="plain" color="neutral" onClick={onRetry}>
-            Try again
-          </Button>
-        ) : undefined
-      }
+      variant={danger ? "destructive" : "default"}
+      data-tone={outcome.tone}
+      className={cn(
+        "border-transparent bg-surface-2",
+        danger && "border-destructive/60",
+      )}
     >
-      <div>
-        <Typography level="title-sm">{outcome.title}</Typography>
-        {/* The alert's own soft colour: body-sm's default tertiary text was
-            muted lavender on a dark amber in a limit notice. */}
-        <Typography level="body-sm" sx={{ color: "inherit" }}>
-          {outcome.message}
-        </Typography>
-      </div>
+      <Icon aria-hidden />
+      <AlertTitle className="line-clamp-none">{outcome.title}</AlertTitle>
+      <AlertDescription className={danger ? undefined : "text-ink-2"}>
+        {outcome.message}
+      </AlertDescription>
+      {outcome.canRetry && onRetry !== undefined && (
+        <Button
+          variant="ghost"
+          className="col-start-2 -ml-3 justify-self-start text-ink-1"
+          onClick={onRetry}
+        >
+          Try again
+        </Button>
+      )}
     </Alert>
   );
 }

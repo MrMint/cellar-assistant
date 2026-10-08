@@ -1,13 +1,5 @@
 "use client";
 
-import {
-  Box,
-  Card,
-  CircularProgress,
-  Grid,
-  Skeleton,
-  Typography,
-} from "@mui/joy";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   type ReactNode,
@@ -18,6 +10,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 
 const SCROLL_STORAGE_KEY = "scroll-restore";
@@ -124,7 +118,10 @@ export interface VirtualGridProps<T> {
   renderSkeleton?: () => ReactNode;
   /** Message shown when items array is empty. */
   emptyMessage?: string;
-  /** MUI Grid breakpoints for each item (e.g. { xs: 6, sm: 6, md: 4, lg: 3, xl: 2 }). */
+  /**
+   * Each item's share of a 12-column row per breakpoint, the old Grid's units
+   * (e.g. { xs: 6, sm: 6, md: 4, lg: 3, xl: 2 } is 2/2/3/4/6 columns).
+   */
   gridBreakpoints: GridBreakpoints;
   /** Async callback to load more items. Called when scroll approaches loaded boundary. */
   onLoadMore?: () => Promise<void>;
@@ -272,21 +269,24 @@ export function VirtualGrid<T>({
   }, [scrollContainer]);
 
   const defaultSkeleton = () => (
-    <Card
+    <div
       data-slot="skeleton-card"
       aria-hidden="true"
-      sx={{ overflow: "hidden" }}
+      className="flex flex-col overflow-hidden rounded-md bg-surface-2"
     >
-      <Skeleton
-        variant="rectangular"
-        sx={{ aspectRatio: { xs: 1.2, sm: 1 } }}
-      />
-      <Skeleton variant="text" sx={{ mx: 1, my: 1 }} />
-      <Skeleton variant="rectangular" height={40} />
-    </Card>
+      <Skeleton className="aspect-6/5 rounded-none sm:aspect-square" />
+      <Skeleton className="mx-2 my-3 h-4" />
+      <Skeleton className="h-10 rounded-none" />
+    </div>
   );
 
   const skeletonRenderer = renderSkeleton ?? defaultSkeleton;
+
+  // One row is a CSS grid of `columnCount` equal tracks, 16 px apart (the old
+  // Grid's spacing={2}); the virtualizer's own `gap` spaces the rows.
+  const rowGrid = {
+    gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+  };
 
   return (
     <>
@@ -295,58 +295,48 @@ export function VirtualGrid<T>({
       <div ref={sentinelRef} style={{ height: 0, overflow: "hidden" }} />
 
       {items.length === 0 ? (
-        <Typography level="body-md" sx={{ textAlign: "center", py: 4 }}>
-          {emptyMessage}
-        </Typography>
+        <p className="type-body py-8 text-center text-ink-2">{emptyMessage}</p>
       ) : (
-        <Box
-          sx={{
-            height: virtualizer.getTotalSize(),
-            width: "100%",
-            position: "relative",
-          }}
+        <div
+          className="relative w-full"
+          style={{ height: virtualizer.getTotalSize() }}
         >
           {virtualRows.map((virtualRow) => {
             const row = loadedRows[virtualRow.index];
             return (
-              <Box
+              <div
                 key={virtualRow.key}
                 ref={virtualizer.measureElement}
                 data-index={virtualRow.index}
-                sx={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+                className="absolute top-0 left-0 w-full"
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
               >
-                <Grid container spacing={2}>
+                <div className="grid gap-4" style={rowGrid}>
                   {row
                     ? row.map((item) => (
-                        <Grid key={getItemKey(item)} {...gridBreakpoints}>
+                        <div key={getItemKey(item)} className="min-w-0">
                           {renderItem(item, saveScrollPosition)}
-                        </Grid>
+                        </div>
                       ))
                     : Array.from({ length: columnCount }, (_, colIndex) => (
-                        <Grid
+                        <div
                           key={`skeleton-${virtualRow.index}-${String(colIndex)}`}
-                          {...gridBreakpoints}
+                          className="min-w-0"
                         >
                           {skeletonRenderer()}
-                        </Grid>
+                        </div>
                       ))}
-                </Grid>
-              </Box>
+                </div>
+              </div>
             );
           })}
-        </Box>
+        </div>
       )}
 
       {isLoadingMore && (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-          <CircularProgress size="sm" />
-        </Box>
+        <div className="flex justify-center py-4">
+          <Spinner className="size-6 text-ink-3" />
+        </div>
       )}
     </>
   );

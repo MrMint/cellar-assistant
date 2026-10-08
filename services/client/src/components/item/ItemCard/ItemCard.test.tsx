@@ -1,6 +1,7 @@
 /**
- * Render tests for the restored `ItemCard`, asserting the **old** card's
- * layout (`82450ad1:src/components/item/ItemCard/index.tsx`): the image, then
+ * Render tests for `ItemCard`, asserting the old card's layout
+ * (`82450ad1:src/components/item/ItemCard/index.tsx`), kept through the move
+ * off Joy: the image, then
  * the linked title block, then the footer of favourite · reviews · score
  * separated by two vertical separators — and each footer section present only
  * when its value is. Read through what a person or assistive tech observes
@@ -29,18 +30,18 @@ import {
 mock.module("next/image", () => nextImageModule("fallback"));
 
 const { ItemCard } = await import("./index");
+const { openTag } = await import("../../../test-support/markup");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
   exchanges: [],
 });
-/** Markup with Emotion's inline `<style>` tags removed — structure only. */
 const render = (node: ReactNode) =>
   renderToStaticMarkup(
     <NextImageConfig>
       <Provider value={client}>{node}</Provider>
     </NextImageConfig>,
-  ).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  );
 
 /**
  * The card's sections, in document order: the image, the title link, the
@@ -66,8 +67,8 @@ const skeleton = (html: string): string[] =>
 
 const base = { id: "bottle-1", itemId: "item-1", name: "Barolo" };
 
-describe("ItemCard (restored)", () => {
-  test("full card: image, linked title, subtitle + type icon, three-part footer", () => {
+describe("ItemCard", () => {
+  test("full card: image, linked title, subtitle + type chip, three-part footer", () => {
     const html = render(
       <ItemCard
         type="WINE"
@@ -96,7 +97,7 @@ describe("ItemCard (restored)", () => {
       "separator",
       "7",
       "separator",
-      "4.26",
+      "4.3",
     ]);
     // The presigned photo goes through the optimizer, as the old card's Nhost
     // URL did: 400 px at 1x, the next configured size (828) at 2x, never the
@@ -113,13 +114,19 @@ describe("ItemCard (restored)", () => {
     assert.match(html, /href="\/cellars\/c1\/wines\/bottle-1"/);
     assert.match(html, />2016 Barolo</);
     assert.match(html, />Vietti · Nebbiolo</);
-    // Footer values; score to two places; gold star because reviewed.
-    assert.match(html, />4<\/p>/);
-    assert.match(html, />7<span/);
-    assert.match(html, />4\.26<span/);
-    assert.match(html, /color:#ffba26/);
-    assert.match(html, /aria-pressed="true"/);
-    assert.match(html, /color:red/);
+    // The type is a chip: its glyph and its word.
+    assert.match(openTag(html, 'data-slot="type-chip"'), /data-type="WINE"/);
+    assert.match(html, /data-slot="type-chip"[^>]*>.*?Wine<\/span>/);
+    // Footer values, each named for assistive tech; the score is `Score`
+    // (one decimal) and marked as reviewed by the viewer.
+    assert.match(html, />4<\/span><span[^>]*> favorites</);
+    assert.match(html, />7<\/span><span[^>]*> reviews</);
+    assert.match(html, /aria-label="Rated 4\.26 out of 5"/);
+    assert.match(html, /data-reviewed="true"/);
+    // Favourited: pressed, and the heart is filled claret.
+    const toggle = openTag(html, 'aria-pressed="true"');
+    assert.match(toggle, /^<button\b/);
+    assert.match(html, /fill-brand/);
   });
 
   test("no image: falls back to the bundled art for the type", () => {
@@ -149,14 +156,14 @@ describe("ItemCard (restored)", () => {
       "separator",
     ]);
     // An empty subtitle keeps its line with a non-breaking space.
-    assert.match(html, /text-overflow:ellipsis"> </);
+    assert.match(html, />\u00a0<\/span>/);
   });
 
   test("a zero review count still shows, as the old aggregate did", () => {
     const html = render(
       <ItemCard type="TEA" href="/teas/i" item={{ ...base, reviewCount: 0 }} />,
     );
-    assert.match(html, />0<span/);
+    assert.match(html, />0<\/span>/);
     assert.deepEqual(skeleton(html), [
       "image",
       "link",
@@ -166,7 +173,7 @@ describe("ItemCard (restored)", () => {
     ]);
   });
 
-  test("unreviewed score uses the icon colour, not gold", () => {
+  test("an unreviewed score is not marked as reviewed", () => {
     const html = render(
       <ItemCard
         type="COFFEE"
@@ -174,10 +181,11 @@ describe("ItemCard (restored)", () => {
         item={{ ...base, score: 3, reviewed: false }}
       />,
     );
-    // The star still follows the score; only its colour drops the gold.
-    // The score is the footer's last section, so any icon after it is its star.
-    assert.match(html, />3\.00<[\s\S]*<svg/);
-    assert.doesNotMatch(html, /#ffba26/);
+    // The star still follows the score (one decimal only when not zero);
+    // only the reviewed mark goes.
+    assert.match(html, />3<svg/);
+    assert.match(html, /aria-label="Rated 3 out of 5"/);
+    assert.doesNotMatch(html, /data-reviewed/);
   });
 
   test("onClick without href: title rendered bare, no link", () => {
@@ -187,12 +195,43 @@ describe("ItemCard (restored)", () => {
     assert.deepEqual(skeleton(html), ["image", "separator", "separator"]);
     assert.doesNotMatch(html, /<a\b/);
     assert.match(html, />Barolo</);
+    // The whole tile is a button named for the item.
+    assert.match(openTag(html, 'aria-label="Barolo"'), /^<button\b/);
+  });
+
+  test("every target in the clipped card rings inside it, and a pending heart keeps the tap", () => {
+    // The card is overflow-hidden, so an outset focus ring on the stretched
+    // link or button (exactly the card's box) would be clipped to nothing.
+    const linked = render(
+      <ItemCard
+        type="WINE"
+        href="/wines/i"
+        item={{ ...base, favoriteCount: 1 }}
+      />,
+    );
+    assert.match(
+      openTag(linked, 'href="/wines/i"'),
+      /focus-visible:after:ring-inset/,
+    );
+    const heart = openTag(linked, "aria-pressed=");
+    assert.match(heart, /focus-visible:ring-inset/);
+    // Disabled while pending, but not click-through: the stretched link
+    // sits underneath it.
+    assert.match(heart, /disabled:pointer-events-auto/);
+    const bare = render(
+      <ItemCard type="SPIRIT" onClick={() => {}} item={base} />,
+    );
+    assert.match(
+      openTag(bare, 'aria-label="Barolo"'),
+      /focus-visible:ring-inset/,
+    );
   });
 
   test("neither href nor onClick: image and footer only", () => {
     const html = render(<ItemCard type="WINE" item={base} />);
     assert.deepEqual(skeleton(html), ["image", "separator", "separator"]);
     assert.doesNotMatch(html, />Barolo</);
+    assert.doesNotMatch(html, /<button\b/);
   });
 
   test("not favourited: outline heart", () => {
@@ -204,6 +243,6 @@ describe("ItemCard (restored)", () => {
       />,
     );
     assert.match(html, /aria-pressed="false"/);
-    assert.doesNotMatch(html, /color:red/);
+    assert.doesNotMatch(html, /fill-brand/);
   });
 });

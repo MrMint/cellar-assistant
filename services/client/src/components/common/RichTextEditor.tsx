@@ -8,9 +8,10 @@ import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
-import { Sheet, styled } from "@mui/joy";
 import type { EditorState } from "lexical";
 import { not } from "ramda";
+import { cn } from "@/lib/utils";
+import { RICH_TEXT_CONTENT } from "./rich-text";
 
 export type RichTextEditorProps = {
   initialText?: string;
@@ -19,27 +20,6 @@ export type RichTextEditorProps = {
   readonly?: boolean;
   onChange: (editorState: string) => void;
 };
-
-const StyledContentEditable = styled(ContentEditable)(({ theme }) => ({
-  padding: "0 1rem",
-  overflow: "hidden",
-  maxHeight: "20rem",
-  overflowY: "auto",
-  borderRadius: theme.radius.sm,
-  ":focus": theme.focus.default,
-}));
-
-const StyledSheet = styled(Sheet)(({ theme }) => ({
-  borderRadius: theme.radius.sm,
-}));
-
-const StyledPlaceholder = styled("div")(() => ({
-  position: "absolute",
-  top: "15px",
-  left: "1rem",
-  userSelect: "none",
-  pointerEvents: "none",
-}));
 
 export const RichTextEditor = ({
   initialText,
@@ -64,14 +44,29 @@ export const RichTextEditor = ({
         } as InitialConfigType
       }
     >
-      <StyledSheet variant="outlined">
+      {/* The field's frame: an input's surface, radius and focus ring. */}
+      <div
+        data-slot="rich-text-editor"
+        className="relative rounded-sm border border-input dark:bg-input/30"
+      >
         <RichTextPlugin
-          contentEditable={<StyledContentEditable />}
-          placeholder={<StyledPlaceholder>{placeholder}</StyledPlaceholder>}
+          contentEditable={
+            <ContentEditable
+              className={cn(
+                RICH_TEXT_CONTENT,
+                "rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              )}
+            />
+          }
+          placeholder={
+            <div className="type-body pointer-events-none absolute top-4 left-4 select-none text-muted-foreground">
+              {placeholder}
+            </div>
+          }
           ErrorBoundary={LexicalErrorBoundary}
         />
         <OnChangePlugin onChange={handleChange} />
-      </StyledSheet>
+      </div>
     </LexicalComposer>
   );
 };

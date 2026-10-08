@@ -1,25 +1,42 @@
 "use client";
 
-import { Box } from "@mui/joy";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { distance, exitOf, tween } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 
 interface AnimatedPlaceholderProps {
   examples: string[];
   enabled?: boolean;
   holdDuration?: number;
+  /**
+   * The input's inner padding, so the text lines up with what the person
+   * types. The default matches a Joy `Input` with a start decorator (its own
+   * CSS variables, falling back to `ui/input`'s 12 px) for unconverted hosts.
+   */
+  className?: string;
 }
+
+/**
+ * What the old overlay read from a Joy `Input` (its padding and placeholder
+ * colour), each with `ui/input`'s value as the fallback. Dropped as soon as a
+ * converted host passes `className`.
+ */
+const JOY_INPUT_HOST = {
+  paddingLeft:
+    "calc(var(--Input-paddingInline, 12px) + var(--Input-decoratorChildHeight, 0px) + var(--Input-gap, 0px))",
+  paddingRight: "var(--Input-paddingInline, 12px)",
+  color: "var(--Input-placeholderColor, var(--color-muted-foreground))",
+} as const;
 
 export function AnimatedPlaceholder({
   examples,
   enabled = true,
   holdDuration = 3000,
+  className,
 }: AnimatedPlaceholderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const prefersReducedMotion = useMediaQuery(
-    "(prefers-reduced-motion: reduce)",
-  );
+  const prefersReducedMotion = useReducedMotion() ?? false;
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
@@ -47,41 +64,35 @@ export function AnimatedPlaceholder({
   }
 
   const text = examples[currentIndex] ?? examples[0];
+  const enter = tween("medium");
+  const leave = { ...enter, duration: exitOf(enter.duration) };
 
   return (
-    <Box
-      sx={{
-        position: "absolute",
-        inset: 0,
-        display: "flex",
-        alignItems: "center",
-        pointerEvents: "none",
-        overflow: "hidden",
-        // Match Joy UI Input inner padding (startDecorator takes ~32px)
-        pl: "calc(var(--Input-paddingInline) + var(--Input-decoratorChildHeight) + var(--Input-gap))",
-        pr: "var(--Input-paddingInline)",
-      }}
+    <div
+      data-slot="animated-placeholder"
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-0 flex items-center overflow-hidden text-muted-foreground",
+        className,
+      )}
+      style={className === undefined ? JOY_INPUT_HOST : undefined}
     >
-      <AnimatePresence mode="wait">
+      {/* `initial={false}`: the first example is there at first paint
+          (visible at rest, and the same markup on server and client); only
+          the swaps animate. Under reduced motion the root MotionConfig drops
+          the slide and keeps the fade, and the effect above stops cycling. */}
+      <AnimatePresence mode="wait" initial={false}>
         <motion.span
-          key={prefersReducedMotion ? "static" : currentIndex}
-          initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+          key={currentIndex}
+          initial={{ opacity: 0, y: distance.list }}
           animate={{ opacity: 1, y: 0 }}
-          exit={prefersReducedMotion ? undefined : { opacity: 0, y: -6 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-          style={{
-            color: "var(--Input-placeholderColor)",
-            fontSize: "inherit",
-            fontFamily: "inherit",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            width: "100%",
-          }}
+          exit={{ opacity: 0, y: -distance.list, transition: leave }}
+          transition={enter}
+          className="w-full truncate"
         >
           {text}
         </motion.span>
       </AnimatePresence>
-    </Box>
+    </div>
   );
 }

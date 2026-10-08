@@ -1,7 +1,7 @@
-import { Box, CircularProgress } from "@mui/joy";
+import { Spinner } from "@/components/ui/spinner";
 
 export const PageLoading = () => (
-  <Box sx={{ height: "100%", width: "100%" }}>
-    <CircularProgress />
-  </Box>
+  <div className="size-full">
+    <Spinner className="size-10 text-ink-3" />
+  </div>
 );

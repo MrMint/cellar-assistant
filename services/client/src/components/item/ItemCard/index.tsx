@@ -1,28 +1,18 @@
 "use client";
 
-import {
-  Button,
-  CardContent,
-  CardOverflow,
-  Divider,
-  Typography,
-} from "@mui/joy";
-import type { SxProps } from "@mui/joy/styles/types";
 import Image from "next/image";
 import { always, cond, equals, isNil, isNotNil } from "ramda";
 import type { MouseEvent } from "react";
 import { useState, useTransition } from "react";
-import {
-  MdFavorite,
-  MdFavoriteBorder,
-  MdOutlineComment,
-  MdStar,
-} from "react-icons/md";
 import { useMutation } from "urql";
+import { Comment, ICON_STROKE, Love } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { Score } from "@/components/app/Score";
+import { TypeChip } from "@/components/app/TypeChip";
 import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemTypes";
-import { InteractiveCard } from "@/components/common/InteractiveCard";
-import { ItemTypeIcon } from "@/components/common/ItemTypeIcon";
-import { Link } from "@/components/common/Link";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 import beer1 from "@/images/beer1.png";
 import coffee1 from "@/images/coffee1.png";
 import sake1 from "@/images/sake1.png";
@@ -31,17 +21,11 @@ import tea1 from "@/images/tea1.png";
 import wine1 from "@/images/wine1.png";
 import { ToggleFavoriteMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
+import { cn } from "@/lib/utils";
 import { formatVintage, getNextPlaceholder } from "@/utilities";
 import type { ItemCardItem } from "./types";
 
 export type { ItemCardItem } from "./types";
-
-const overflowItemStyles: SxProps = {
-  justifyContent: "center",
-  textAlign: "center",
-  flexGrow: 1,
-  py: 1,
-};
 
 const getFallback = (type: ItemTypeValue) =>
   cond([
@@ -63,11 +47,27 @@ export type ItemCardProps = {
   type: ItemTypeValue;
 };
 
+/** One footer section: centred, a third of the row. */
+const FOOTER_CELL =
+  "flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 text-ink-1";
+
 /**
- * `82450ad1:src/components/item/ItemCard/index.tsx`, restored.
+ * The card clips its children (`overflow-hidden`, for the image's corners),
+ * and a focus ring is a shadow drawn *outside* its element — so a ring on
+ * anything flush with the card's edge is clipped away, and the stretched
+ * target (exactly the card's box) would show none at all. Every focusable
+ * thing in the card draws its ring inside instead.
+ */
+const RING_INSIDE = "focus-visible:ring-inset";
+
+/**
+ * `82450ad1:src/components/item/ItemCard/index.tsx`, restored, then moved off
+ * Joy onto the app's tokens: a surface-2 tile (radius 12, no border), the
+ * image, the title block, and the footer of favourite · reviews · score —
+ * same sections, same order, same rules for when each shows.
  *
- * Markup, sections and styles are the old card's. Four substitutions, each
- * listed in `src/components/LEGACY-RESTORE.md`:
+ * Four substitutions from the restore, each listed in
+ * `src/components/LEGACY-RESTORE.md`:
  *
  * 1. **The image** is `next/image` on the presigned `displayImageUrl` rather
  *    than on a Nhost storage URL — same props as before. Presigned reads are
@@ -81,6 +81,17 @@ export type ItemCardProps = {
  *    rebuilt a *relative* `wines/<id>`, which resolved differently per page
  *    (§7, "Relative hrefs everywhere"); callers now pass an absolute href.
  * 4. **`ItemTypeValue`** is the SDL's `ItemType`, not the shared package's.
+ *
+ * And from the shadcn move (design-direction §3): the type is a `TypeChip`
+ * (glyph and word — a glyph never stands alone on touch), the score is
+ * `Score` (one decimal, only when not zero), the heart is claret rather than
+ * `red`, and a score the viewer has reviewed is marked in brass — the colour
+ * of their own stars in `RatingInput` — instead of a literal gold.
+ *
+ * The whole tile is the target. With an `href` that is the title link,
+ * stretched over the card (`overlay`), and `onClick` rides on it (callers use
+ * it to save the scroll position first); with only `onClick`, a stretched
+ * button named for the item. The favourite toggle sits above either.
  */
 export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
   const [isPending, startTransition] = useTransition();
@@ -88,9 +99,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
   const [, toggleFavorite] = useMutation(ToggleFavoriteMutation);
   const fallback = getFallback(type);
 
-  const handleFavoriteClick = (
-    event: MouseEvent<HTMLAnchorElement, globalThis.MouseEvent>,
-  ) => {
+  const handleFavoriteClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     startTransition(async () => {
       const previousFavorite = localFavorite;
@@ -119,22 +128,31 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
   };
 
   const placeholder = getNextPlaceholder(item.placeholder);
+  const title =
+    type === "WINE" ? `${formatVintage(item.vintage)} ${item.name}` : item.name;
+  const handleClick = isNotNil(onClick) ? () => onClick(item.id) : undefined;
+  const interactive = isNotNil(href) || isNotNil(onClick);
+
+  const subtitle = (
+    <div className="type-footnote flex items-center justify-between gap-1">
+      <span className="min-w-0 truncate">{item.subtitle ?? " "}</span>
+      <TypeChip type={type} />
+    </div>
+  );
 
   return (
-    <InteractiveCard
-      onClick={isNotNil(onClick) ? () => onClick(item.id) : undefined}
+    <div
+      data-slot="item-card"
+      className={cn(
+        "relative flex flex-col overflow-hidden rounded-md bg-surface-2 text-ink-1",
+        interactive &&
+          "transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-3",
+      )}
     >
-      <CardOverflow
-        sx={{ aspectRatio: { xs: 1.2, sm: 1 }, padding: 0, overflow: "hidden" }}
-      >
+      <div className="relative aspect-6/5 overflow-hidden sm:aspect-square">
         {isNotNil(item.displayImageUrl) && (
           <Image
-            style={{
-              aspectRatio: "1",
-              objectFit: "cover",
-              height: "auto",
-              width: "auto",
-            }}
+            className="size-full object-cover"
             src={item.displayImageUrl}
             alt={fallback.alt}
             height={400}
@@ -144,137 +162,115 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         )}
         {isNil(item.displayImageUrl) && (
           <Image
+            className="object-cover"
             src={fallback.image}
             alt={fallback.alt}
             fill
             placeholder="blur"
           />
         )}
-      </CardOverflow>
+      </div>
       {isNotNil(href) && (
-        <CardContent>
-          <Link overlay href={href}>
-            <Typography level="title-md" noWrap>
-              {type === "WINE" && `${formatVintage(item.vintage)} ${item.name}`}
-              {type !== "WINE" && item.name}
-            </Typography>
-          </Link>
-          <Typography
-            level="body-xs"
-            noWrap
-            sx={{
-              color: "text.secondary",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 0.5,
-            }}
+        <div className="flex flex-col gap-1 p-3">
+          <Link
+            overlay
+            underline="none"
+            href={href}
+            onClick={handleClick}
+            className="type-headline truncate text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
           >
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-              {item.subtitle ?? " "}
-            </span>
-            <ItemTypeIcon type={type} />
-          </Typography>
-        </CardContent>
+            {title}
+          </Link>
+          {subtitle}
+        </div>
       )}
       {isNil(href) && isNotNil(onClick) && (
-        <>
-          <Typography level="title-md" noWrap>
-            {type === "WINE" && `${formatVintage(item.vintage)} ${item.name}`}
-            {type !== "WINE" && item.name}
-          </Typography>
-          <Typography
-            level="body-xs"
-            noWrap
-            sx={{
-              color: "text.secondary",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 0.5,
-            }}
-          >
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-              {item.subtitle ?? " "}
-            </span>
-            <ItemTypeIcon type={type} />
-          </Typography>
-        </>
+        <div className="flex flex-col gap-1 p-3">
+          <p className="type-headline truncate">{title}</p>
+          {subtitle}
+          <button
+            type="button"
+            aria-label={title}
+            onClick={handleClick}
+            className={cn(
+              "absolute inset-0 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              RING_INSIDE,
+            )}
+          />
+        </div>
       )}
-      <CardOverflow
-        variant="soft"
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          gap: 1,
-          justifyContent: "space-around",
-          overflow: "hidden",
-          alignItems: "center",
-          padding: 0,
-          borderTop: "1px solid",
-          borderColor: "divider",
-        }}
-      >
+      <div className="flex items-center border-line border-t">
         {isNotNil(item.favoriteCount) && (
           <Button
-            sx={{
-              zIndex: 2,
-              flexGrow: 1,
-            }}
+            variant="ghost"
+            // `disabled:pointer-events-auto`: while the toggle is pending it
+            // still takes the tap (a disabled button swallows it) — with the
+            // vendored `pointer-events-none`, a quick second tap on the heart
+            // fell through to the stretched link and left the page.
+            className={cn(
+              FOOTER_CELL,
+              "relative z-10 rounded-none px-2 disabled:pointer-events-auto",
+              RING_INSIDE,
+            )}
             onClick={handleFavoriteClick}
-            variant="soft"
-            color="neutral"
-            size="sm"
-            loading={isPending}
+            disabled={isPending}
+            aria-busy={isPending || undefined}
             aria-pressed={localFavorite}
-            endDecorator={
-              localFavorite ? (
-                <MdFavorite
-                  style={{
-                    color: "red",
-                    fontSize: "2rem",
-                  }}
-                />
-              ) : (
-                <MdFavoriteBorder
-                  style={{
-                    fontSize: "2rem",
-                  }}
-                />
-              )
-            }
           >
-            <Typography level="title-md">{item.favoriteCount}</Typography>
+            <span className="type-headline tabular">{item.favoriteCount}</span>
+            <span className="sr-only"> favorites</span>
+            {isPending ? (
+              <Spinner className="size-6 text-ink-3" />
+            ) : (
+              <Love
+                aria-hidden
+                strokeWidth={ICON_STROKE}
+                className={cn(
+                  "size-6",
+                  localFavorite ? "fill-brand text-brand" : "text-ink-2",
+                )}
+              />
+            )}
           </Button>
         )}
-        <Divider orientation="vertical" />
+        <Separator
+          orientation="vertical"
+          decorative={false}
+          className="data-[orientation=vertical]:h-6"
+        />
         {isNotNil(item.reviewCount) && (
-          <Typography
-            sx={overflowItemStyles}
-            endDecorator={<MdOutlineComment />}
-            level="title-md"
-          >
-            {item.reviewCount}
-          </Typography>
+          <div className={FOOTER_CELL}>
+            <span className="type-headline tabular">{item.reviewCount}</span>
+            <span className="sr-only"> reviews</span>
+            <Comment
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-5 text-ink-2"
+            />
+          </div>
         )}
-        <Divider orientation="vertical" />
+        <Separator
+          orientation="vertical"
+          decorative={false}
+          className="data-[orientation=vertical]:h-6"
+        />
         {isNotNil(item.score) && (
-          <Typography
-            sx={overflowItemStyles}
-            endDecorator={
-              <MdStar
-                style={{
-                  color: item.reviewed ? "#ffba26" : "var(--Icon-color)",
-                  fontSize: "2rem",
-                }}
-              />
-            }
-            level="title-md"
+          <div
+            className={FOOTER_CELL}
+            data-reviewed={item.reviewed === true || undefined}
           >
-            {item.score.toFixed(2)}
-          </Typography>
+            <Score
+              value={item.score}
+              className={cn(
+                "type-headline text-ink-1 [&_svg]:size-5",
+                item.reviewed === true
+                  ? "[&_svg]:text-primary"
+                  : "[&_svg]:text-ink-3",
+              )}
+            />
+          </div>
         )}
-      </CardOverflow>
-    </InteractiveCard>
+      </div>
+    </div>
   );
 };

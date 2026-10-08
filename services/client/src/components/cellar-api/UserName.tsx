@@ -1,7 +1,7 @@
 "use client";
 
-import { Skeleton, Typography } from "@mui/joy";
 import { useQuery } from "urql";
+import { Skeleton } from "@/components/ui/skeleton";
 import { UserNameQuery } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 
@@ -31,19 +31,15 @@ export function UserName({
     pause: isViewer,
   });
 
-  if (isViewer) return <Typography level="body-sm">You</Typography>;
+  if (isViewer) return <p className="type-callout text-ink-1">You</p>;
   if (fetching) {
-    return (
-      <Typography level="body-sm">
-        <Skeleton>Someone</Skeleton>
-      </Typography>
-    );
+    return <Skeleton aria-hidden className="h-4 w-20" />;
   }
 
   const result = unwrapResult(data?.user, "UserProfile");
   return (
-    <Typography level="body-sm">
+    <p className="type-callout text-ink-1">
       {result.ok ? result.data.displayName : userId.slice(0, 8)}
-    </Typography>
+    </p>
   );
 }
