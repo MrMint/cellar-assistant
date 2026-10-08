@@ -1,0 +1,508 @@
+/**
+ * X14 — recipes meet the cellar, on the wire (decisions D9, D18/G29, D23).
+ *
+ * | field | from |
+ * |---|---|
+ * | `RecipeIngredient.availability` | `BarActor.inventory`, once per request, judged by `ingredientAvailability` |
+ * | `Recipe.makeability` | the same inventory and `recipeMakeability` |
+ * | `Recipe.isLoved`, `toggleRecipeLove`, `lovedRecipes` | `UserActor` (D9: Love replaces the heart) |
+ * | `barPantry`, `setBarPantryItem` | `UserActor` (D23) |
+ * | `whatCanIMake` | `BarActor.whatCanIMake` (G29) |
+ * | `Item.cocktails` | `BarActor.cocktailsFor` ("Cocktails with this" / "Use it up") |
+ *
+ * Every field here is the **viewer's** — their bottles, their pantry, their
+ * loves. Nothing takes a user id: the actor is addressed by `ctx.viewerId`,
+ * and an anonymous request gets the empty answer (or a sign-in refusal for a
+ * write), never someone else's bar. The judging itself is the pure code in
+ * `@cellar-assistant/contracts` (`bar.ts`), the same the browser could run.
+ *
+ * One inventory read per request, not per ingredient: a recipe page asks for
+ * a dozen availabilities and a recipe list for a hundred, and each would
+ * otherwise be a sidecar hop to the same actor, run in series (Dapr gives an
+ * actor id one turn at a time). The memo is keyed by the request's own
+ * `ApiContext` object in a `WeakMap`, so it lives exactly as long as the
+ * request.
+ */
+import type {
+  BarInventory,
+  BarKind,
+  BarPantryItemDto,
+  BarRecipeMatch,
+  IngredientAvailability,
+  ItemCocktailsDto,
+  ItemDto,
+  RecipeDto,
+  RecipeIngredientDto,
+  RecipeMakeability,
+  ToggleRecipeLoveResult,
+  WhatCanIMakeDto,
+} from "@cellar-assistant/contracts";
+import {
+  AVAILABILITY_SOURCES,
+  AVAILABILITY_STATUSES,
+  BAR_KINDS,
+  BarActorDescriptor,
+  barActorId,
+  barKindLabel,
+  EMPTY_BAR_INVENTORY,
+  ForbiddenError,
+  ingredientAvailability,
+  ingredientItemType,
+  MAKEABILITY_STATUSES,
+  MAX_PAGE_SIZE,
+  offsetPage,
+  PANTRY_KINDS,
+  RecipeActorDescriptor,
+  recipeMakeability,
+  UserActorDescriptor,
+} from "@cellar-assistant/contracts";
+import type { ApiContext } from "../context.ts";
+import { builder } from "./builder.ts";
+import { ItemInterface } from "./item.ts";
+import { connectionFromPage, toPageArgs } from "./pagination.ts";
+
+/** A judged list as a connection (§1.5: every composite list pages). */
+const matchConnection = (
+  matches: readonly BarRecipeMatch[],
+  args: { first?: number | null; after?: string | null },
+) => connectionFromPage(offsetPage(matches, toPageArgs(args)));
+
+import {
+  IngredientKindEnum,
+  RecipeConnection,
+  RecipeIngredientType_,
+  RecipeType_,
+} from "./recipe.ts";
+
+/* -------------------------------------------------------------------------- */
+/* The request's inventory                                                     */
+/* -------------------------------------------------------------------------- */
+
+const inventories = new WeakMap<ApiContext, Promise<BarInventory>>();
+
+/** The viewer's bar, read once per request; empty for an anonymous one. */
+export const viewerInventory = (context: ApiContext): Promise<BarInventory> => {
+  const viewerId = context.ctx.viewerId;
+  if (viewerId === null) return Promise.resolve(EMPTY_BAR_INVENTORY);
+  let pending = inventories.get(context);
+  if (pending === undefined) {
+    pending = context
+      .actor(BarActorDescriptor, barActorId(viewerId))
+      .inventory();
+    inventories.set(context, pending);
+  }
+  return pending;
+};
+
+const requireViewer = (context: ApiContext, what: string): string => {
+  const viewerId = context.ctx.viewerId;
+  if (viewerId === null) throw new ForbiddenError(`sign in to ${what}`);
+  return viewerId;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Enums                                                                       */
+/* -------------------------------------------------------------------------- */
+
+const AvailabilityStatusEnum = builder.enumType("AvailabilityStatus", {
+  description:
+    "HAVE: a bottle in your cellars, a Bar pantry toggle, or a staple. " +
+    "SUBSTITUTE: something in the same family (rye for bourbon). MISSING: " +
+    "neither. UNKNOWN: the ingredient could not be placed in the bar " +
+    "vocabulary, so nothing honest can be said (shown as Not tracked).",
+  values: AVAILABILITY_STATUSES,
+});
+
+const AvailabilitySourceEnum = builder.enumType("AvailabilitySource", {
+  values: AVAILABILITY_SOURCES,
+});
+
+const MakeabilityStatusEnum = builder.enumType("MakeabilityStatus", {
+  description:
+    "MAKE_NOW: nothing required is missing (substitutes allowed). ONE_AWAY: " +
+    "exactly one required ingredient is (G29's One bottle away). MISSING: " +
+    "two or more. Optional ingredients and garnishes are never required.",
+  values: MAKEABILITY_STATUSES,
+});
+
+/* -------------------------------------------------------------------------- */
+/* Types                                                                       */
+/* -------------------------------------------------------------------------- */
+
+const IngredientAvailabilityType = builder
+  .objectRef<IngredientAvailability>("IngredientAvailability")
+  .implement({
+    description:
+      "Whether the viewer can cover one ingredient, and with what. Computed " +
+      "from their own bottles and Bar pantry — never a guess.",
+    fields: (t) => ({
+      status: t.field({
+        type: AvailabilityStatusEnum,
+        resolve: (answer) => answer.status,
+      }),
+      source: t.field({
+        type: AvailabilitySourceEnum,
+        nullable: true,
+        resolve: (answer) => answer.source,
+      }),
+      via: t.field({
+        type: IngredientKindEnum,
+        nullable: true,
+        description:
+          "The kind that answered — the ingredient's own, or the stand-in's.",
+        resolve: (answer) => answer.via,
+      }),
+      label: t.string({
+        nullable: true,
+        description:
+          "What to say: the bottle's name, or the pantry kind's label.",
+        resolve: (answer) =>
+          answer.bottle?.name ??
+          (answer.source === "PANTRY" ? barKindLabel(answer.via) : null),
+      }),
+      cellarId: t.id({
+        nullable: true,
+        resolve: (answer) => answer.bottle?.cellarId ?? null,
+      }),
+      cellarItemId: t.id({
+        nullable: true,
+        description: "The bottle, when `source` is BOTTLE.",
+        resolve: (answer) => answer.bottle?.cellarItemId ?? null,
+      }),
+      opened: t.boolean({
+        nullable: true,
+        resolve: (answer) => answer.bottle?.opened ?? null,
+      }),
+    }),
+  });
+
+const RecipeMakeabilityType = builder
+  .objectRef<RecipeMakeability>("RecipeMakeability")
+  .implement({
+    description: "One recipe against the viewer's bar (G29).",
+    fields: (t) => ({
+      status: t.field({
+        type: MakeabilityStatusEnum,
+        resolve: (result) => result.status,
+      }),
+      missing: t.stringList({
+        description: "What is missing, by name — what to buy.",
+        resolve: (result) => [...result.missing],
+      }),
+      substituteCount: t.exposeInt("substituteCount"),
+      requiredCount: t.exposeInt("requiredCount"),
+      haveCount: t.exposeInt("haveCount", {
+        description: "Required ingredients covered, substitutes included.",
+      }),
+    }),
+  });
+
+const BarRecipeMatchType = builder
+  .objectRef<BarRecipeMatch>("BarRecipeMatch")
+  .implement({
+    description:
+      "A recipe judged against the viewer's bar — one per recipe group (the " +
+      "version closest to makeable).",
+    fields: (t) => ({
+      recipeId: t.exposeID("recipeId"),
+      recipeGroupId: t.exposeID("recipeGroupId", { nullable: true }),
+      name: t.exposeString("name"),
+      recipe: t.field({
+        type: RecipeType_,
+        resolve: (match) => match.recipeId,
+      }),
+      makeability: t.field({
+        type: RecipeMakeabilityType,
+        resolve: (match) => match.makeability,
+      }),
+    }),
+  });
+
+const BarRecipeMatchConnection = builder.connectionObject(
+  { type: BarRecipeMatchType, name: "BarRecipeMatchConnection" },
+  { name: "BarRecipeMatchEdge" },
+);
+
+const WhatCanIMakeType = builder
+  .objectRef<WhatCanIMakeDto>("WhatCanIMake")
+  .implement({
+    description:
+      "G29 / D18: cocktails the viewer can make now, and the ones one bottle " +
+      "away, from their own cellars plus the Bar pantry.",
+    fields: (t) => ({
+      makeNow: t.field({
+        type: BarRecipeMatchConnection,
+        args: t.arg.connectionArgs(),
+        resolve: (result, args) => matchConnection(result.makeNow, args),
+      }),
+      oneBottleAway: t.field({
+        type: BarRecipeMatchConnection,
+        args: t.arg.connectionArgs(),
+        resolve: (result, args) => matchConnection(result.oneAway, args),
+      }),
+      makeNowCount: t.exposeInt("makeNowCount"),
+      oneBottleAwayCount: t.int({ resolve: (result) => result.oneAwayCount }),
+      bottleCount: t.exposeInt("bottleCount"),
+      pantryCount: t.exposeInt("pantryCount"),
+      scanned: t.exposeInt("scanned", {
+        description: "Cocktail recipes looked at (the newest, up to a cap).",
+      }),
+    }),
+  });
+
+const ItemCocktailsType = builder
+  .objectRef<ItemCocktailsDto>("ItemCocktails")
+  .implement({
+    description:
+      '"Cocktails with this" for an item page — or "Use it up" when the ' +
+      "viewer has an open bottle of it.",
+    fields: (t) => ({
+      kind: t.field({
+        type: IngredientKindEnum,
+        nullable: true,
+        resolve: (result) => result.kind,
+      }),
+      kindLabel: t.string({
+        nullable: true,
+        resolve: (result) => barKindLabel(result.kind),
+      }),
+      useItUp: t.exposeBoolean("useItUp"),
+      total: t.exposeInt("total"),
+      recipes: t.field({
+        type: BarRecipeMatchConnection,
+        args: t.arg.connectionArgs(),
+        resolve: (result, args) => matchConnection(result.recipes, args),
+      }),
+    }),
+  });
+
+const BarPantryEntryType = builder
+  .objectRef<BarPantryItemDto>("BarPantryEntry")
+  .implement({
+    description: "One Bar pantry toggle (D23).",
+    fields: (t) => ({
+      kind: t.field({ type: IngredientKindEnum, resolve: (e) => e.kind }),
+      label: t.string({ resolve: (e) => BAR_KINDS[e.kind].label }),
+      have: t.exposeBoolean("have"),
+    }),
+  });
+
+type BarPantry = { readonly have: readonly BarKind[] };
+
+const BarPantryType = builder.objectRef<BarPantry>("BarPantry").implement({
+  description:
+    "D23: the viewer's Bar pantry. The toggles themselves — their order, " +
+    "labels and sections — are `PANTRY_KINDS` / `PANTRY_SECTIONS` in " +
+    "`@cellar-assistant/contracts`, so this carries only which are on.",
+  fields: (t) => ({
+    have: t.field({
+      type: [IngredientKindEnum],
+      description: "The toggles that are on, in pantry order.",
+      resolve: (pantry) => [...pantry.have],
+    }),
+    kinds: t.field({
+      type: [IngredientKindEnum],
+      description: "Every toggle, in pantry order.",
+      resolve: () => [...PANTRY_KINDS],
+    }),
+  }),
+});
+const ToggleRecipeLovePayload = builder
+  .objectRef<ToggleRecipeLoveResult>("ToggleRecipeLovePayload")
+  .implement({
+    description: "The state of one Love after the toggle.",
+    fields: (t) => ({
+      recipeId: t.exposeID("recipeId"),
+      loved: t.exposeBoolean("loved"),
+      recipe: t.field({ type: RecipeType_, resolve: (r) => r.recipeId }),
+    }),
+  });
+
+/* -------------------------------------------------------------------------- */
+/* Fields on existing types                                                    */
+/* -------------------------------------------------------------------------- */
+
+builder.objectField(RecipeIngredientType_, "availability", (t) =>
+  t.field({
+    type: IngredientAvailabilityType,
+    nullable: true,
+    description:
+      "D9: whether the viewer has this, from their own bottles and Bar " +
+      "pantry. Null for an anonymous viewer. One inventory read per request.",
+    resolve: async (row: RecipeIngredientDto, _args, context) => {
+      if (context.ctx.viewerId === null) return null;
+      const type = ingredientItemType(row.ref);
+      return ingredientAvailability(
+        {
+          kind: row.kind,
+          item: type === null ? null : { type, id: row.ref.id },
+        },
+        await viewerInventory(context),
+      );
+    },
+  }),
+);
+
+builder.objectFields(RecipeType_, (t) => ({
+  makeability: t.field({
+    type: RecipeMakeabilityType,
+    nullable: true,
+    description:
+      "G29: can the viewer make this now, or is it one bottle away? Null for " +
+      "an anonymous viewer.",
+    resolve: async (recipe: RecipeDto, _args, context) => {
+      if (context.ctx.viewerId === null) return null;
+      const [page, inventory] = await Promise.all([
+        context
+          .actor(RecipeActorDescriptor, recipe.id)
+          .ingredients({ first: MAX_PAGE_SIZE, after: null }),
+        viewerInventory(context),
+      ]);
+      return recipeMakeability(
+        page.entries.map(({ node: row }) => {
+          const type = ingredientItemType(row.ref);
+          return {
+            kind: row.kind,
+            role: row.role,
+            isOptional: row.isOptional,
+            item: type === null ? null : { type, id: row.ref.id },
+          };
+        }),
+        inventory,
+      );
+    },
+  }),
+  isLoved: t.loadable({
+    type: "Boolean",
+    description:
+      "D9: Love replaces the old heart. `false` for an anonymous viewer. One " +
+      "batched `UserActor` call per request.",
+    resolve: (recipe: RecipeDto) => recipe.id,
+    load: async (keys: string[], context: ApiContext) => {
+      const viewerId = context.ctx.viewerId;
+      if (viewerId === null) return keys.map(() => false);
+      const loved = new Set(
+        await context
+          .actor(UserActorDescriptor, viewerId)
+          .recipeLoveStates(keys),
+      );
+      return keys.map((key) => loved.has(key));
+    },
+  }),
+}));
+
+builder.interfaceField(ItemInterface, "cocktails", (t) =>
+  t.field({
+    type: ItemCocktailsType,
+    nullable: true,
+    description:
+      'X14: "Cocktails with this" — recipes that use this item or any bottle ' +
+      "of its kind, each judged against the viewer's bar; `useItUp` when they " +
+      "have an open bottle of it. Null for an anonymous viewer.",
+    resolve: (item: ItemDto, _args, context) => {
+      const viewerId = context.ctx.viewerId;
+      if (viewerId === null) return null;
+      return context
+        .actor(BarActorDescriptor, barActorId(viewerId))
+        .cocktailsFor({ type: item.type, id: item.id });
+    },
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* Queries                                                                     */
+/* -------------------------------------------------------------------------- */
+
+builder.queryField("whatCanIMake", (t) =>
+  t.field({
+    type: WhatCanIMakeType,
+    description:
+      "G29: Make now · One bottle away, from the viewer's own cellars and Bar " +
+      "pantry. Signed-in only; there is no argument naming whose bar.",
+    errors: {},
+    args: {
+      limit: t.arg.int({
+        required: false,
+        description: "Rows per section (1–200, default 50).",
+      }),
+    },
+    resolve: (_root, args, context) => {
+      const viewerId = requireViewer(context, "see what you can make");
+      return context
+        .actor(BarActorDescriptor, barActorId(viewerId))
+        .whatCanIMake({ limit: args.limit ?? null });
+    },
+  }),
+);
+
+builder.queryField("barPantry", (t) =>
+  t.field({
+    type: BarPantryType,
+    description:
+      "D23: the viewer's Bar pantry toggles. Cellar bottles are not here — " +
+      "they count automatically.",
+    errors: {},
+    resolve: async (_root, _args, context) => {
+      const viewerId = requireViewer(context, "see your Bar pantry");
+      return {
+        have: await context.actor(UserActorDescriptor, viewerId).barPantry(),
+      };
+    },
+  }),
+);
+
+builder.queryField("lovedRecipes", (t) =>
+  t.field({
+    type: RecipeConnection,
+    description: "D9: the viewer's loved recipes, newest Love first.",
+    errors: {},
+    args: t.arg.connectionArgs(),
+    resolve: async (_root, args, context) => {
+      const viewerId = requireViewer(context, "see your loved recipes");
+      return connectionFromPage(
+        await context
+          .actor(UserActorDescriptor, viewerId)
+          .lovedRecipes(toPageArgs(args)),
+      );
+    },
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* Mutations                                                                   */
+/* -------------------------------------------------------------------------- */
+
+builder.mutationField("setBarPantryItem", (t) =>
+  t.field({
+    type: BarPantryEntryType,
+    description:
+      "D23: turn one Bar pantry toggle on or off. Only the pantry kinds; a " +
+      "spirit is a cellar bottle, not a toggle.",
+    errors: {},
+    args: {
+      kind: t.arg({ type: IngredientKindEnum, required: true }),
+      have: t.arg.boolean({ required: true }),
+    },
+    resolve: async (_root, args, context) => {
+      const viewerId = requireViewer(context, "change your Bar pantry");
+      return context
+        .actor(UserActorDescriptor, viewerId)
+        .setBarPantryItem({ kind: args.kind, have: args.have });
+    },
+  }),
+);
+
+builder.mutationField("toggleRecipeLove", (t) =>
+  t.field({
+    type: ToggleRecipeLovePayload,
+    description: "D9: Love a recipe, or take the Love back.",
+    errors: {},
+    args: { recipeId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) => {
+      const viewerId = requireViewer(context, "love a recipe");
+      return context
+        .actor(UserActorDescriptor, viewerId)
+        .toggleRecipeLove(String(args.recipeId));
+    },
+  }),
+);

@@ -43,12 +43,14 @@
 import { randomUUID } from "node:crypto";
 import type {
   AddRecipeReviewInput as AddRecipeReviewInputType,
+  BarKind,
   CreateRecipeGroupInput as CreateRecipeGroupInputType,
   CreateRecipeInput as CreateRecipeInputType,
   DeletedRecipe,
   DeletedRecipeGroup,
   DeletedRecipeReview,
   GenericItemKind,
+  IngredientRole,
   InstructionType,
   RecipeCategory,
   RecipeDto,
@@ -71,9 +73,13 @@ import type {
   UpdateRecipeReviewInput as UpdateRecipeReviewInputType,
 } from "@cellar-assistant/contracts";
 import {
+  BAR_KIND_KEYS,
+  barKindLabel,
   DEFAULT_RECIPE_GROUP_ORDER,
   genericItemActorId,
+  INGREDIENT_ROLES,
   ItemActorDescriptor,
+  ingredientAmount,
   ingredientItemType,
   itemActorId,
   normalizeRecipeGroupOrder,
@@ -111,6 +117,26 @@ const RecipeIngredientTypeEnum = builder.enumType("RecipeIngredientType", {
     "What one `recipe_ingredients` row points at: one of the six Item types, " +
     "or GENERIC — a `generic_items` row, which is deliberately not an Item.",
   values: RECIPE_INGREDIENT_TYPES,
+});
+
+/** X14: `recipe_ingredients.role`'s check, and the extraction's enum. */
+export const IngredientRoleEnum = builder.enumType("IngredientRole", {
+  description:
+    "What an ingredient does in the drink. A `garnish` never stops a recipe " +
+    "from being makeable.",
+  values: INGREDIENT_ROLES,
+});
+
+/**
+ * X14: the bar vocabulary (`BAR_KINDS` in contracts `bar.ts`) — what an
+ * ingredient is, what a cellar bottle is read as, and the Bar pantry's
+ * toggles, all one closed list so availability is string equality.
+ */
+export const IngredientKindEnum = builder.enumType("IngredientKind", {
+  description:
+    "One kind of bar ingredient — `bourbon`, `sweet_vermouth`, `lime`. The " +
+    "closed list availability compares; `kindLabel` fields carry its words.",
+  values: BAR_KIND_KEYS,
 });
 
 const RecipeVoteTypeEnum = builder.enumType("RecipeVoteType", {
@@ -183,6 +209,38 @@ export const RecipeIngredientType_ = builder
         nullable: true,
       }),
       createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
+      role: t.field({
+        type: IngredientRoleEnum,
+        nullable: true,
+        description:
+          "X14. Stored, else inferred from the recipe's ingredients together " +
+          "(the base is the largest spirit pour).",
+        resolve: (row) => row.role,
+      }),
+      kind: t.field({
+        type: IngredientKindEnum,
+        nullable: true,
+        description:
+          "X14. Stored, else inferred from the referenced item's name. Null " +
+          'when nothing can place it — shown as "Not tracked".',
+        resolve: (row) => row.kind,
+      }),
+      kindLabel: t.string({
+        nullable: true,
+        resolve: (row) => barKindLabel(row.kind),
+      }),
+      quantityText: t.exposeString("quantityText", {
+        nullable: true,
+        description: 'X14: the amount as printed ("¾ oz", "top with").',
+      }),
+      brandMentioned: t.exposeString("brandMentioned", { nullable: true }),
+      amount: t.string({
+        description:
+          "The amount to show, from the one quantity formatter: the printed " +
+          'text with Unicode fractions, else `quantity` + `unit` ("1½ oz"). ' +
+          "Empty when neither is known.",
+        resolve: (row) => ingredientAmount(row),
+      }),
     }),
   });
 
@@ -556,7 +614,7 @@ RecipeType_.implement({
   }),
 });
 
-const RecipeConnection = builder.connectionObject(
+export const RecipeConnection = builder.connectionObject(
   { type: RecipeType_, name: "RecipeConnection" },
   { name: "RecipeEdge" },
 );
@@ -771,6 +829,10 @@ const RecipeIngredientInput = builder.inputType("RecipeIngredientInput", {
     unit: t.string({ required: false }),
     isOptional: t.boolean({ required: false }),
     substitutionNotes: t.string({ required: false }),
+    role: t.field({ type: IngredientRoleEnum, required: false }),
+    kind: t.field({ type: IngredientKindEnum, required: false }),
+    quantityText: t.string({ required: false }),
+    brandMentioned: t.string({ required: false }),
   }),
 });
 
@@ -913,6 +975,10 @@ const toIngredientInput = (input: {
   unit?: string | null;
   isOptional?: boolean | null;
   substitutionNotes?: string | null;
+  role?: IngredientRole | null;
+  kind?: BarKind | null;
+  quantityText?: string | null;
+  brandMentioned?: string | null;
 }): RecipeIngredientInputType => ({
   ...(present(input.ref)
     ? { ref: { type: input.ref.type, id: String(input.ref.id) } }
@@ -933,6 +999,10 @@ const toIngredientInput = (input: {
   unit: input.unit ?? null,
   isOptional: input.isOptional ?? null,
   substitutionNotes: input.substitutionNotes ?? null,
+  role: input.role ?? null,
+  kind: input.kind ?? null,
+  quantityText: input.quantityText ?? null,
+  brandMentioned: input.brandMentioned ?? null,
 });
 
 const toInstructionInput = (input: {

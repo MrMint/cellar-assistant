@@ -294,6 +294,10 @@ describe("mutations", () => {
           unit: "ml",
           isOptional: null,
           substitutionNotes: null,
+          role: null,
+          kind: null,
+          quantityText: null,
+          brandMentioned: null,
         },
         {
           newGenericItem: {
@@ -308,6 +312,10 @@ describe("mutations", () => {
           unit: null,
           isOptional: true,
           substitutionNotes: null,
+          role: null,
+          kind: null,
+          quantityText: null,
+          brandMentioned: null,
         },
       ],
     });
