@@ -19,6 +19,10 @@ import {
  *
  * The assertion that matters is the one at the end: the new band survives a
  * **reload**. A board that only reorders in React state looks identical.
+ *
+ * X23 / D4: the board is read-only until **Arrange**, so the add and the drag
+ * both start there (an empty list's own "Add entry" opens Arrange and the
+ * picker at once), and a picker row is one button — the whole row adds.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -77,7 +81,11 @@ test("adds entries to it", async ({ api, primary }) => {
 
   await primary.goto(`/tier-lists/${tierListId}`);
   for (const item of items.slice(0, 2)) {
-    await primary.getByRole("button", { name: "Add entry" }).click();
+    // The empty list's own button first, then the Arrange bar's: one at a
+    // time either way.
+    await primary
+      .getByRole("button", { name: "Add entry", exact: true })
+      .click();
     const dialog = primary.getByRole("dialog");
     // Each open starts from an empty search — no rows left over from the
     // last one, which used to satisfy the name wait below before this
@@ -105,7 +113,8 @@ test("adds entries to it", async ({ api, primary }) => {
       row.first(),
       `"${item.name}" did not come back in the picker`,
     ).toBeVisible({ timeout: 25_000 });
-    await row.first().getByRole("button", { name: "Add", exact: true }).click();
+    // The whole row is the button (X23); "On this list" rows are disabled.
+    await row.first().getByRole("button").click();
     // A successful add closes the dialog and refreshes the board.
     await expect(dialog).toBeHidden({ timeout: 20_000 });
   }
@@ -133,6 +142,11 @@ test("a drag between bands survives a reload", async ({ api, primary }) => {
   );
 
   await primary.goto(`/tier-lists/${tierListId}`);
+  // Read-only until Arrange (X23/D4): no handles before it.
+  await expect(
+    primary.locator('[aria-roledescription="sortable"]'),
+  ).toHaveCount(0);
+  await primary.getByRole("button", { name: "Arrange", exact: true }).click();
   const handle = primary.locator('[aria-roledescription="sortable"]').first();
   await expect(handle, "no drag handle on the board").toBeVisible({
     timeout: 20_000,
