@@ -17,6 +17,7 @@ import {
   photosFrom,
   tierListEntriesFrom,
 } from "../adapter";
+import type { ReviewStatus } from "../places/place-review";
 import {
   MENU_ITEMS_PAGE_SIZE,
   PLACE_PHOTOS_PAGE_SIZE,
@@ -75,6 +76,12 @@ export type PlaceDetailsData = {
   price_level: number | null;
   rating: number | null;
   review_count: number | null;
+  /** X27: only the creator ever reads PENDING / REJECTED. */
+  review_status: ReviewStatus;
+  rejection_reason: string | null;
+  /** The review's offers — the creator's only; empty for anyone else. */
+  suggested_categories: string[];
+  suggested_description: string | null;
 };
 
 export function usePlaceDetails(placeId: string | undefined) {
@@ -180,6 +187,10 @@ export function usePlaceDetails(placeId: string | undefined) {
       price_level: raw.priceLevel ?? null,
       rating: raw.rating ?? null,
       review_count: raw.reviewCount ?? null,
+      review_status: raw.reviewStatus,
+      rejection_reason: raw.rejectionReason ?? null,
+      suggested_categories: [...raw.suggestedCategories],
+      suggested_description: raw.suggestedDescription ?? null,
     };
     return {
       place,

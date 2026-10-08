@@ -43,6 +43,7 @@ export const KEYLESS_TYPES = [
   "ConfirmedItemOnboarding",
   "ConflictError",
   "CreatePlacePayload",
+  "DeletedPlace",
   "DuplicatePlaceCandidate",
   "DuplicatePlaceConnection",
   "DuplicatePlaceEdge",

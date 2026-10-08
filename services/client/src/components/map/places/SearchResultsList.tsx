@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import type { ViewportInsets } from "../hooks/useViewportInsets";
 import type { ItemType, PlaceResult, SemanticPlaceResult } from "../types";
 import { MOBILE_NAV_HEIGHT, SIDEBAR_WIDTH } from "../utils/layout";
+import { PlaceReviewBadge } from "./PlaceReviewBadge";
 import { formatCategoryName } from "./place-utils";
 
 interface SearchResultsListProps {
@@ -309,6 +310,9 @@ function ResultCard({
         >
           {place.name}
         </span>
+
+        {/* X27: the viewer's own place under review, found by its name */}
+        <PlaceReviewBadge status={place.review_status} className="mb-1" />
 
         <span className="mb-1 flex items-center gap-2">
           {place.rating ? (

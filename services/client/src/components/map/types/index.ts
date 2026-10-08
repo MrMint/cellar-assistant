@@ -89,6 +89,11 @@ export interface PlaceResult {
   hours?: unknown;
   confidence?: number;
   is_verified?: boolean;
+  /**
+   * X27: APPROVED for every shared marker; PENDING / REJECTED only on the
+   * creator's own map, for their own places.
+   */
+  review_status?: "PENDING" | "APPROVED" | "REJECTED";
   viewport_area_km2?: number;
   density_per_km2?: number;
   clustering_applied?: boolean;

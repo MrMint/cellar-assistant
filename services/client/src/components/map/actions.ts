@@ -63,6 +63,7 @@ import {
   MenuScanStatusQuery,
   PlaceByIdQuery,
   PlaceSearchQuery,
+  ResubmitPlaceMutation,
   ReverseGeocodeQuery,
   SEMANTIC_RESULT_LIMIT,
 } from "./queries";
@@ -282,6 +283,11 @@ export interface GooglePlacePrefill {
 export interface CreatePlaceResult {
   success: boolean;
   placeId?: string;
+  /**
+   * X27: a new place is always PENDING — saved, and visible to its creator
+   * alone until the review shares it.
+   */
+  reviewStatus?: "PENDING" | "APPROVED" | "REJECTED";
   error?: string;
   duplicates?: DuplicatePlace[];
 }
@@ -615,7 +621,40 @@ export function usePlaceActions() {
           googlePlaceId: input.google_place_id,
         }).catch(() => undefined);
       }
-      return { success: true, placeId: result.data.place.id };
+      return {
+        success: true,
+        placeId: result.data.place.id,
+        reviewStatus: result.data.place.reviewStatus,
+      };
+    };
+
+    /**
+     * X27: edit a pending or rejected place and send it for review again —
+     * the whole place, validated as a creation is.
+     */
+    const resubmitPlaceAction = async (
+      placeId: string,
+      input: CreatePlaceInput,
+    ): Promise<CreatePlaceResult> => {
+      const invalid = validateCreatePlaceInput(input);
+      if (invalid) return { success: false, error: invalid };
+      const { placeId: _minted, ...fields } = createPlaceMutationInput(input);
+      const response = await client
+        .mutation(ResubmitPlaceMutation, { placeId, input: fields })
+        .toPromise();
+      if (response.error) {
+        return {
+          success: false,
+          error: failureFromTransport(response.error).message,
+        };
+      }
+      const result = unwrapResult(response.data?.resubmitPlace, "Place");
+      if (!result.ok) return { success: false, error: result.error.message };
+      return {
+        success: true,
+        placeId: result.data.id,
+        reviewStatus: result.data.reviewStatus,
+      };
     };
 
     // -- menu scanning (the old `menuScanning.ts`) --------------------------
@@ -674,6 +713,7 @@ export function usePlaceActions() {
       googlePlaceDetailsAction,
       enrichPlaceAction,
       createUserPlaceAction,
+      resubmitPlaceAction,
       uploadAndProcessMenuScan,
       getMenuScanStatus,
     };
