@@ -1,8 +1,4 @@
-import { Box } from "@mui/joy";
-import { ConditionalPaddingWrapper } from "@/components/common/ConditionalPaddingWrapper";
-import { InstallPwaDialog } from "@/components/common/InstallPwaDialog";
-import SideNavigationBar from "@/components/common/SideNavigationBar";
-import { ApiUrqlProvider } from "@/components/providers/ApiUrqlProvider";
+import { AppShell } from "@/components/shell/AppShell";
 import { getServerUser } from "@/utilities/auth-server";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +20,10 @@ export const dynamic = "force-dynamic";
  * `/~offline` talk to better-auth over plain `fetch`, if at all — which is why
  * this sits on the group rather than on the root layout, where it would put a
  * client on the sign-in page for nothing.
+ *
+ * The markup is `AppShell`, shared with the root `not-found.tsx` so an
+ * unmatched URL keeps the tab bar too. This group's own `not-found.tsx` and
+ * `error.tsx` render inside it.
  */
 export default async function AuthenticatedLayout({
   children,
@@ -33,20 +33,5 @@ export default async function AuthenticatedLayout({
   // Server-side authentication check — redirects to /sign-in if not authenticated.
   const user = await getServerUser();
 
-  return (
-    <ApiUrqlProvider>
-      <Box
-        sx={{
-          display: "flex",
-          flexGrow: 1,
-          flexDirection: { xs: "column-reverse", sm: "row" },
-          overflow: "hidden",
-        }}
-      >
-        <InstallPwaDialog />
-        <SideNavigationBar user={user} />
-        <ConditionalPaddingWrapper>{children}</ConditionalPaddingWrapper>
-      </Box>
-    </ApiUrqlProvider>
-  );
+  return <AppShell user={user}>{children}</AppShell>;
 }

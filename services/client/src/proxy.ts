@@ -6,6 +6,7 @@ import {
   hasSessionCookie,
   parseCookieHeader,
 } from "./lib/api/session-cookie";
+import { OFFLINE_PATH } from "./lib/pwa/offline";
 
 /**
  * The signed-in gate, in front of every page.
@@ -43,8 +44,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     path.startsWith("/_next") ||
     path.startsWith("/sign-in") ||
     path.startsWith("/sign-up") ||
-    path.startsWith("/forgot-password") ||
-    path.startsWith("/verify") ||
+    path === OFFLINE_PATH ||
     path.includes(".") // Static files
   ) {
     return NextResponse.next();
@@ -88,7 +88,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - sign-in, sign-up, forgot-password, verify (auth pages)
+     * - sign-in, sign-up (auth pages)
+     * - ~offline (the service worker's offline fallback, which it precaches
+     *   with whatever session the browser has — or none — so it must never
+     *   redirect; see `OFFLINE_PATH` in `src/lib/pwa/offline.ts`)
      * - api/auth, api/graphql (the proxies to Loki)
      *
      * The two `api/` exclusions are load-bearing and guarded by
@@ -97,6 +100,6 @@ export const config = {
      * and `/api/graphql` must answer 401 to its caller rather than 302 to an
      * HTML page, which is not something a GraphQL client can parse.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/auth|api/graphql|sign-in|sign-up|forgot-password|verify).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/auth|api/graphql|sign-in|sign-up|~offline).*)",
   ],
 };

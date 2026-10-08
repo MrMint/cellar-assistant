@@ -1,63 +1,36 @@
 "use client";
 
+import { Box, Button } from "@mui/joy";
+import { useEffect } from "react";
+import { MdRefresh, MdWifiOff } from "react-icons/md";
+import { ShellMessage } from "@/components/shell/ShellMessage";
+import { OFFLINE_COPY } from "@/components/shell/shell-copy";
+import { onceBackOnline } from "@/lib/pwa/connectivity";
+
+/**
+ * The service worker's fallback for a page it cannot fetch (`OFFLINE_PATH`).
+ * It is precached, and public (`src/proxy.ts`), so it is the same page signed
+ * in or out. Themed through Joy like the rest of the app — it used to carry
+ * its own hex colours — and it reloads by itself when the connection returns,
+ * which is the moment the viewer would otherwise have to notice and tap.
+ */
 export default function OfflinePage() {
+  useEffect(() => onceBackOnline(window, () => window.location.reload()), []);
+
   return (
-    <div
-      style={{
-        fontFamily:
-          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        backgroundColor: "#111015",
-        color: "#e0e0e0",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100dvh",
-        width: "100vw",
-        padding: 24,
-      }}
-    >
-      <div style={{ textAlign: "center", maxWidth: 400 }}>
-        <div style={{ fontSize: 64, marginBottom: 24, opacity: 0.6 }}>
-          &#x1F4F6;
-        </div>
-        <h1
-          style={{
-            fontSize: 24,
-            fontWeight: 600,
-            marginBottom: 12,
-            color: "#ffffff",
-          }}
-        >
-          You&apos;re offline
-        </h1>
-        <p
-          style={{
-            fontSize: 16,
-            lineHeight: 1.5,
-            color: "#a0a0a0",
-            marginBottom: 24,
-          }}
-        >
-          It looks like you&apos;ve lost your internet connection. Check your
-          connection and try again.
-        </p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          style={{
-            backgroundColor: "#70a3a9",
-            color: "#111015",
-            border: "none",
-            borderRadius: 8,
-            padding: "12px 24px",
-            fontSize: 16,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Try Again
-        </button>
-      </div>
-    </div>
+    <Box sx={{ display: "flex", flexGrow: 1, minHeight: "100%" }}>
+      <ShellMessage
+        copy={OFFLINE_COPY}
+        icon={<MdWifiOff />}
+        actions={
+          <Button
+            startDecorator={<MdRefresh />}
+            onClick={() => window.location.reload()}
+          >
+            Try again
+          </Button>
+        }
+      />
+    </Box>
   );
 }

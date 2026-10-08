@@ -36,6 +36,7 @@ import {
 } from "react-icons/md";
 import { authClient } from "@/lib/api/auth-client";
 import { completeSignOut } from "@/lib/auth/sign-out";
+import { purgeUserCaches } from "@/lib/pwa/purge-caches";
 import type { ServerUser } from "@/utilities/auth-server";
 import { Link } from "./Link";
 import { UserAvatar } from "./UserAvatar";
@@ -294,6 +295,16 @@ const SideNavigationBar = ({ user }: SideNavigationBarProps) => {
    * `Set-Cookie` on the response the *browser* receives, and a server action
    * would have to forward that header by hand. `completeSignOut` then does the
    * two things only the server can do — see that file.
+   *
+   * Then the service worker's caches: they hold pages, RSC payloads and
+   * photos rendered for this viewer, and would otherwise outlive the session
+   * on a shared device (`@/lib/pwa/purge-caches`). Only after the session is
+   * really gone — a failed sign-out keeps the viewer signed in, and their
+   * cache with them — but straight after it, ahead of `completeSignOut`: a
+   * server action that fails (a dropped connection, a redeploy) must not
+   * leave a signed-out device holding the last viewer's pages. `/sign-in`
+   * purges once more when it mounts (`usePurgeUserCachesOnMount`), which
+   * also catches anything an in-flight request wrote back meanwhile.
    */
   const handleSignOut = async () => {
     try {
@@ -302,6 +313,7 @@ const SideNavigationBar = ({ user }: SideNavigationBarProps) => {
         console.error("Sign out failed:", error.message);
         return;
       }
+      await purgeUserCaches();
       await completeSignOut();
     } catch (error) {
       console.error("Sign out failed:", error);

@@ -132,3 +132,27 @@ describe("sign-up page", () => {
     });
   }
 });
+
+describe("returnTo crosses between sign-in and sign-up (D19)", () => {
+  const returnTo = "/cellars/abc/items";
+  const encoded = 'returnTo=%2Fcellars%2Fabc%2Fitems"';
+
+  test("sign-in's Sign up link carries it", () => {
+    const html = render(<SignInApiClient returnTo={returnTo} />);
+    assert.ok(html.includes(`href="/sign-up?${encoded}`), html);
+  });
+
+  for (const mode of ["enabled", "disabled"] as const) {
+    test(`sign-up (${mode}) links back to sign-in with it`, () => {
+      const html = render(
+        <SignUpApiClient returnTo={returnTo} passwordMode={mode} />,
+      );
+      assert.ok(html.includes(`href="/sign-in?${encoded}`), html);
+    });
+  }
+
+  test("without one, the links stay bare", () => {
+    assert.ok(render(<SignInApiClient />).includes('href="/sign-up"'));
+    assert.ok(render(<SignUpApiClient />).includes('href="/sign-in"'));
+  });
+});

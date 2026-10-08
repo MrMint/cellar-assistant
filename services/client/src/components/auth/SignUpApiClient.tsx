@@ -24,8 +24,10 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
+import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
+import { withReturnTo } from "@/utilities/sanitize-return-to";
 import { SocialButtons, useSocialSignIn } from "./SocialButtons";
 
 /**
@@ -51,16 +53,22 @@ const EMAIL_SHAPED = /[^\s@]+@[^\s@]+\.[^\s@]+/;
  * creates the account on a new user's first social sign-in.
  */
 export function SignUpApiClient({
+  returnTo,
   passwordMode = "enabled",
 }: {
+  /** Already sanitised by the page; where the viewer was going (D19). */
+  returnTo?: string;
   passwordMode?: PasswordMode;
 }) {
-  if (passwordMode !== "enabled") return <SocialSignUp />;
-  return <PasswordSignUp />;
+  usePurgeUserCachesOnMount();
+  if (passwordMode !== "enabled") return <SocialSignUp returnTo={returnTo} />;
+  return <PasswordSignUp returnTo={returnTo} />;
 }
 
-function SocialSignUp() {
-  const { ssoError, redirectingTo, start } = useSocialSignIn("/cellars");
+function SocialSignUp({ returnTo }: { returnTo?: string }) {
+  const { ssoError, redirectingTo, start } = useSocialSignIn(
+    returnTo ?? "/cellars",
+  );
   return (
     <Box
       sx={{
@@ -94,7 +102,8 @@ function SocialSignUp() {
           </Stack>
           <Divider />
           <Typography level="body-sm">
-            Already have an account? <Link href="/sign-in">Sign in</Link>
+            Already have an account?{" "}
+            <Link href={withReturnTo("/sign-in", returnTo)}>Sign in</Link>
           </Typography>
         </Stack>
       </Sheet>
@@ -102,8 +111,9 @@ function SocialSignUp() {
   );
 }
 
-function PasswordSignUp() {
+function PasswordSignUp({ returnTo }: { returnTo?: string }) {
   const router = useRouter();
+  const destination = returnTo ?? "/cellars";
   const [localError, setLocalError] = useState<string | null>(null);
   const { run, pending, error } = useAuthAction(authClient.signUp.email);
 
@@ -131,10 +141,10 @@ function PasswordSignUp() {
       // the email here, which made every such address public (W4 security F2).
       const ok = await run({ email, password, name });
       if (!ok) return;
-      router.replace("/cellars");
+      router.replace(destination);
       router.refresh();
     },
-    [run, router],
+    [run, router, destination],
   );
 
   const formError = localError ?? error?.message ?? null;
@@ -204,7 +214,8 @@ function PasswordSignUp() {
             </Button>
             <Divider />
             <Typography level="body-sm">
-              Already have an account? <Link href="/sign-in">Sign in</Link>
+              Already have an account?{" "}
+              <Link href={withReturnTo("/sign-in", returnTo)}>Sign in</Link>
             </Typography>
           </Stack>
         </form>

@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { withReturnTo } from "../../utilities/sanitize-return-to.ts";
 import type {
   AuthErrorBody,
   AuthSession,
@@ -112,8 +113,13 @@ export const authClient = {
     social: (provider: SocialProvider, callbackPath = "/cellars") =>
       post<{ url: string; redirect: boolean }>(authEndpoint.signInSocial, {
         provider,
+        // One URL for both a returning and a brand-new account
+        // (better-auth's `newUserCallbackURL` falls back to it), so the
+        // destination survives a social *sign-up* as well (D19).
         callbackURL: absolute(callbackPath),
-        errorCallbackURL: absolute("/sign-in"),
+        // A provider error lands back on sign-in with the destination still
+        // attached, rather than dropping it.
+        errorCallbackURL: absolute(withReturnTo("/sign-in", callbackPath)),
       }),
   },
 

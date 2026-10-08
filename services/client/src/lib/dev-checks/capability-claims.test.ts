@@ -48,7 +48,8 @@
  *
  * It does not ban saying a capability is missing. Several such claims in this
  * repo are **true and must stay**: `Query` really has no field that lists items
- * of one type (`src/app/(authenticated)/wines/page.tsx`), `UpdateTierListInput`
+ * of one type (which is why the `/{type}s` pages listed favourites, until D7
+ * removed them), `UpdateTierListInput`
  * really has no `listType` (the list type is create-only in
  * `src/components/tier-list/TierListForm.tsx`),
  * and `services/api/src/schema/user.ts` deliberately withholds an internal

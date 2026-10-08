@@ -63,9 +63,12 @@ export function generateBreadcrumbs(
       );
 
       if (!isCellarItemPath) {
-        // Only add item type breadcrumb for standalone item pages, not cellar item pages
+        // Only add item type breadcrumb for standalone item pages, not cellar
+        // item pages. A label, never a link: D7 removed the `/{type}s` index
+        // pages, so `/wines` is a not-found and a crumb to it would be a
+        // dead end.
         const label = segment.charAt(0).toUpperCase() + segment.slice(1);
-        breadcrumbs.push({ label, href: isLast ? undefined : href });
+        breadcrumbs.push({ label });
       }
     } else if (
       segment.match(/^[0-9a-f-]{36}$/i) &&

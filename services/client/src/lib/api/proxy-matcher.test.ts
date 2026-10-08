@@ -63,3 +63,18 @@ test("it still guards every page", () => {
   assert.equal(runs.test("/friends"), true);
   assert.equal(runs.test("/sign-in"), false);
 });
+
+test("the offline page is public, so the worker never precaches a redirect", () => {
+  // The service worker precaches `/~offline` with whatever session the
+  // browser has. Gated, a signed-out install cached the sign-in page as the
+  // offline fallback (`src/lib/pwa/offline.ts`).
+  assert.equal(matcher().test("/~offline"), false);
+});
+
+test("the dead Nhost auth pages are no longer carved out of the gate", () => {
+  // `/forgot-password` and `/verify` never existed on this stack (D19);
+  // exempting them only made two 404s reachable signed out.
+  const runs = matcher();
+  assert.equal(runs.test("/forgot-password"), true);
+  assert.equal(runs.test("/verify"), true);
+});
