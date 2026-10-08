@@ -22,11 +22,13 @@ export const theme = extendTheme({
         // A disabled slider's filled track is `solidDisabledBg` (neutral 800)
         // and its rail is `background.level2` — both `surface3` here, so the
         // level vanished (a friend's "Remaining: 60%" showed an empty bar).
-        // Lift the track off the rail.
-        root: ({ ownerState }) =>
-          ownerState.disabled
-            ? { "--Slider-trackBackground": joyRamps.neutral[600] }
-            : {},
+        // Lift the track off the rail. (Joy sets the disabled colours under
+        // `&.Mui-disabled`, so the override has to match that selector.)
+        root: {
+          "&.Mui-disabled": {
+            "--Slider-trackBackground": joyRamps.neutral[600],
+          },
+        },
       },
     },
   },
