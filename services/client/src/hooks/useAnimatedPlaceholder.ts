@@ -20,8 +20,10 @@ export function useAnimatedPlaceholder({
 }: UseAnimatedPlaceholderOptions): string {
   const [displayText, setDisplayText] = useState("");
   // motion's own read of the setting (the one the root MotionConfig
-  // honours): false on the server and the first client render, like the
-  // media query it replaces, so hydration agrees.
+  // honours). It is read once, at mount — false on the server, the real
+  // setting on the client's first render — and does not follow a change made
+  // while the page is open (the media query it replaces did). Safe for
+  // hydration only because it is read in the effect below, never in render.
   const prefersReducedMotion = useReducedMotion() ?? false;
 
   const animState = useRef({

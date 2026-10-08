@@ -32,7 +32,10 @@ export function ApiError({
       )}
     >
       <ErrorIcon aria-hidden />
-      {title !== undefined && <AlertTitle>{title}</AlertTitle>}
+      {/* Wraps, as Joy's title did: a brand's name can be long. */}
+      {title !== undefined && (
+        <AlertTitle className="line-clamp-none">{title}</AlertTitle>
+      )}
       <AlertDescription className={forbidden ? "text-ink-2" : undefined}>
         {error.message}
       </AlertDescription>
