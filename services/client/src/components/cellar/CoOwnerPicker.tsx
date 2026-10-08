@@ -20,6 +20,27 @@ import { cn } from "@/lib/utils";
 
 type Friend = { id: string; displayName: string; avatarUrl: string };
 
+/**
+ * The search field's matcher: a friend's name contains what was typed, case
+ * aside. Each item's cmdk `value` is the friend's id (names need not be
+ * unique), and cmdk's default fuzzy filter scores that id too — a uuid holds
+ * most short runs of a-f in order, so "ca" kept nine friends in ten. Only the
+ * `keywords` (the display name) are matched here.
+ */
+export function matchFriendName(
+  _value: string,
+  search: string,
+  keywords: readonly string[] = [],
+): number {
+  const needle = search.trim().toLocaleLowerCase();
+  if (needle === "") return 1;
+  return keywords.some((keyword) =>
+    keyword.toLocaleLowerCase().includes(needle),
+  )
+    ? 1
+    : 0;
+}
+
 export type CoOwnerPickerProps = {
   /** The trigger's id, for the field's `<label htmlFor>`. */
   id?: string;
@@ -107,7 +128,7 @@ export function CoOwnerPicker({
         align="start"
         className="w-(--radix-popover-trigger-width) min-w-64 p-0"
       >
-        <Command>
+        <Command filter={matchFriendName}>
           <CommandInput placeholder="Search friends" />
           <CommandList aria-label="Co-Owners">
             <CommandEmpty>No friends found.</CommandEmpty>
