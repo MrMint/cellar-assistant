@@ -3,8 +3,11 @@ import { ScanHistory } from "@/components/map/scanning/ScanHistory";
 import { Spinner } from "@/components/ui/spinner";
 
 export default function ScanHistoryPage() {
+  // The shell's `<main data-app-scroller>` scrolls this page (D26), so tab
+  // re-tap reaches it; a `100dvh` box of its own was a second scroller,
+  // taller than the space the tab bar leaves.
   return (
-    <div className="h-dvh overflow-auto p-4">
+    <div className="p-4">
       <h1 className="type-title-1 mb-6">Menu Scan History</h1>
 
       <Suspense
