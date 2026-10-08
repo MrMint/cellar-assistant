@@ -9,30 +9,28 @@
  * N07: whether "Generating Insights" shows, whether the page polls, and what
  * is said instead is `insightsView`'s decision, from the server's
  * `insightsStatus` — never inferred from a missing `aiInsights` any more.
+ *
+ * On the app's primitives (D20): tonal sections (no borders), the archetype
+ * on a claret hero wash, the AI-working state in teal (`--ca-ai`, the one
+ * place it belongs), `ui/skeleton` lines.
  */
 
-import {
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  Skeleton,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import {
-  MdAutoAwesome,
-  MdExplore,
-  MdLocalFireDepartment,
-  MdPerson,
-  MdRestaurant,
-  MdUpdate,
-} from "react-icons/md";
-
+  AI,
+  type AppIcon,
+  Explore,
+  ICON_STROKE,
+  Person,
+  Popular,
+  Restaurant,
+  Schedule,
+} from "@/components/app/icons";
 import { AiStatus } from "@/components/common/AiStatus";
 import { Timestamp } from "@/components/common/Timestamp";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { TierListInsightsData } from "../types";
 import { BandDistributionChart } from "./BandDistributionChart";
 import { CategoryDonutChart } from "./CategoryDonutChart";
@@ -48,6 +46,37 @@ import { PalatePassport } from "./PalatePassport";
 
 const POLL_INTERVAL_MS = 15_000;
 const MAX_POLLS = 8;
+
+/** One tonal block of the panel (design §3.3: surface-1, no border). */
+function Section({
+  title,
+  icon: Icon,
+  iconClassName,
+  children,
+}: {
+  title?: string;
+  icon?: AppIcon;
+  iconClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-lg bg-surface-1 p-4">
+      {title !== undefined && (
+        <div className="mb-2 flex items-center gap-2">
+          {Icon !== undefined && (
+            <Icon
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className={cn("size-[18px] shrink-0 text-ink-2", iconClassName)}
+            />
+          )}
+          <h4 className="font-semibold text-ink-1 type-callout">{title}</h4>
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
 
 interface TierListInsightsPanelProps {
   insights: TierListInsightsData;
@@ -109,216 +138,127 @@ export function TierListInsightsPanel({
 
   if (itemCount === 0) {
     return (
-      <Typography level="body-sm" sx={{ color: "text.tertiary", py: 4 }}>
+      <p className="py-8 text-ink-3 type-callout">
         Add items to your tier list to see insights.
-      </Typography>
+      </p>
     );
   }
 
   const isGenerating = view.generating;
 
   return (
-    <Stack spacing={2} sx={{ py: 1 }}>
+    <div className="flex flex-col gap-4 py-2">
       {/* Archetype Hero */}
       {ai?.archetype && (
-        <Card
-          variant="soft"
-          color="primary"
-          sx={{ textAlign: "center", py: 2.5 }}
-        >
-          <CardContent>
-            <Stack spacing={0.5} alignItems="center">
-              <Chip
-                variant="solid"
-                color="primary"
-                size="lg"
-                startDecorator={<MdPerson />}
-              >
-                {ai.archetype}
-              </Chip>
-              {ai.archetypeDescription && (
-                <Typography
-                  level="body-sm"
-                  sx={{ color: "primary.plainColor", mt: 1, maxWidth: 360 }}
-                >
-                  {ai.archetypeDescription}
-                </Typography>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
+        <section className="flex flex-col items-center gap-1 rounded-lg bg-brand/25 px-4 py-5 text-center">
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-brand px-4 font-semibold text-ink-1 type-callout">
+            <Person aria-hidden strokeWidth={ICON_STROKE} className="size-4" />
+            {ai.archetype}
+          </span>
+          {ai.archetypeDescription && (
+            <p className="mt-2 max-w-[360px] text-ink-2 type-callout">
+              {ai.archetypeDescription}
+            </p>
+          )}
+        </section>
       )}
 
       {/* Why there are no (new) insights, when that is the news */}
       {view.notice !== null && <AiStatus outcome={view.notice} />}
       {view.hint !== null && (
-        <Typography level="body-sm" sx={{ color: "text.tertiary" }}>
-          {view.hint}
-        </Typography>
+        <p className="text-ink-3 type-callout">{view.hint}</p>
       )}
 
       {/* Generating indicator */}
       {isGenerating && (
-        <Card variant="outlined">
-          <CardContent>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ mb: 1 }}
-            >
-              <MdAutoAwesome />
-              <Typography level="title-sm">Generating Insights</Typography>
-            </Stack>
-            <Skeleton variant="text" level="body-sm" />
-            <Skeleton variant="text" level="body-sm" />
-            <Skeleton variant="text" level="body-sm" width="60%" />
-            <Typography level="body-xs" sx={{ color: "text.tertiary", mt: 1 }}>
-              Your personalized insights are being generated...
-            </Typography>
-          </CardContent>
-        </Card>
+        <Section title="Generating Insights" icon={AI} iconClassName="text-ai">
+          <div className="flex flex-col gap-2 py-1" aria-hidden>
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-3/5" />
+          </div>
+          <p className="mt-2 type-footnote">
+            Your personalized insights are being generated...
+          </p>
+        </Section>
       )}
 
       {/* Band Distribution */}
-      <Card variant="outlined">
-        <CardContent>
-          <BandDistributionChart distribution={bandDistribution} />
-        </CardContent>
-      </Card>
+      <Section>
+        <BandDistributionChart distribution={bandDistribution} />
+      </Section>
 
       {/* Category Donut */}
       {insights.showPlaceStats && categoryDistribution.length > 1 && (
-        <Card variant="outlined">
-          <CardContent>
-            <CategoryDonutChart distribution={categoryDistribution} />
-          </CardContent>
-        </Card>
+        <Section>
+          <CategoryDonutChart distribution={categoryDistribution} />
+        </Section>
       )}
 
       {/* Hot Take */}
       {ai?.hotTake && (
-        <Card variant="outlined">
-          <CardContent>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ mb: 1 }}
-            >
-              <MdLocalFireDepartment />
-              <Typography level="title-sm">Hot Take</Typography>
-            </Stack>
-            <Box
-              sx={{
-                borderLeft: "3px solid",
-                borderColor: "warning.400",
-                pl: 1.5,
-              }}
-            >
-              <Typography level="body-sm" sx={{ fontStyle: "italic" }}>
-                {ai.hotTake}
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
+        <Section title="Hot Take" icon={Popular}>
+          <blockquote className="border-ink-3/60 border-l-[3px] pl-3">
+            <p className="text-ink-1 italic type-callout">{ai.hotTake}</p>
+          </blockquote>
+        </Section>
       )}
 
       {/* Palate Passport */}
       {insights.showPlaceStats && (
-        <Card variant="outlined">
-          <CardContent>
-            <PalatePassport stats={passportStats} />
-          </CardContent>
-        </Card>
+        <Section>
+          <PalatePassport stats={passportStats} />
+        </Section>
       )}
 
       {/* Country Heatmap */}
       {insights.showPlaceStats && heatmapEntries.length > 0 && (
-        <Card variant="outlined">
-          <CardContent sx={{ "&:last-child": { pb: 2 } }}>
-            <CountryHeatmap entries={heatmapEntries} />
-          </CardContent>
-        </Card>
+        <Section>
+          <CountryHeatmap entries={heatmapEntries} />
+        </Section>
       )}
 
       {/* Palate Profile */}
       {ai && (
-        <Card variant="outlined">
-          <CardContent>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ mb: 1 }}
-            >
-              <MdAutoAwesome />
-              <Typography level="title-sm">Palate Profile</Typography>
-            </Stack>
-            <Typography level="body-sm">{ai.palateProfile}</Typography>
-          </CardContent>
-        </Card>
+        <Section title="Palate Profile" icon={AI}>
+          <p className="text-ink-1 type-callout">{ai.palateProfile}</p>
+        </Section>
       )}
 
       {/* Blind Spots */}
       {ai?.blindSpots && (
-        <Card variant="outlined">
-          <CardContent>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ mb: 1 }}
-            >
-              <MdExplore />
-              <Typography level="title-sm">Blind Spots</Typography>
-            </Stack>
-            <Typography level="body-sm">{ai.blindSpots}</Typography>
-          </CardContent>
-        </Card>
+        <Section title="Blind Spots" icon={Explore}>
+          <p className="text-ink-1 type-callout">{ai.blindSpots}</p>
+        </Section>
       )}
 
       {/* Try This Next */}
       {ai?.recommendation && (
-        <Card variant="outlined">
-          <CardContent>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ mb: 1 }}
-            >
-              <MdRestaurant />
-              <Typography level="title-sm">Try This Next</Typography>
-            </Stack>
-            <Typography level="body-sm">{ai.recommendation}</Typography>
-          </CardContent>
-        </Card>
+        <Section title="Try This Next" icon={Restaurant}>
+          <p className="text-ink-1 type-callout">{ai.recommendation}</p>
+        </Section>
       )}
 
       {/* Footer */}
       {ai?.generatedAt && (
-        <Stack spacing={0.5}>
-          <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
+        <div className="flex flex-col gap-1">
+          <p className="type-footnote">
             Last analyzed: <Timestamp iso={ai.generatedAt} precision="date" />
-          </Typography>
+          </p>
           {view.hint === null &&
             insights.contentUpdatedAt &&
             new Date(insights.contentUpdatedAt) > new Date(ai.generatedAt) && (
-              <Stack
-                direction="row"
-                spacing={0.5}
-                alignItems="center"
-                sx={{ color: "warning.500" }}
-              >
-                <MdUpdate style={{ fontSize: 14 }} />
-                <Typography level="body-xs" sx={{ color: "inherit" }}>
-                  This list has changed since this analysis.
-                </Typography>
-              </Stack>
+              <p className="flex items-center gap-1 text-ink-2 type-footnote">
+                <Schedule
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-3.5 shrink-0"
+                />
+                This list has changed since this analysis.
+              </p>
             )}
-        </Stack>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }

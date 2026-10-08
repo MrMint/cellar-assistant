@@ -1,6 +1,13 @@
 "use client";
 
-import { Stack, Typography, useTheme } from "@mui/joy";
+/**
+ * The band histogram. On the tokens (D20): each bar is its band's
+ * `--ca-band-*` colour (`BAND_COLORS`) beside the band word on the axis, the
+ * axis ink and the hover wash are `--ca-*` roles, and the grow-in runs the
+ * long motion token — none at all under reduced motion.
+ */
+
+import { useReducedMotion } from "motion/react";
 import {
   Bar,
   BarChart,
@@ -10,6 +17,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { dur } from "@/lib/motion";
 import type { BandDistribution } from "./computeInsightsStats";
 
 interface BandDistributionChartProps {
@@ -26,15 +34,7 @@ function CustomTooltip({
   if (!active || !payload?.[0]) return null;
   const d = payload[0].payload;
   return (
-    <div
-      style={{
-        backgroundColor: "var(--joy-palette-background-surface)",
-        border: "1px solid var(--joy-palette-divider)",
-        borderRadius: 8,
-        padding: "6px 10px",
-        fontSize: 13,
-      }}
-    >
+    <div className="surface-glass rounded-md px-2.5 py-1.5 text-ink-1 type-footnote">
       <strong>{d.label}</strong>: {d.count} item{d.count !== 1 ? "s" : ""} (
       {d.percentage}%)
     </div>
@@ -44,19 +44,15 @@ function CustomTooltip({
 export function BandDistributionChart({
   distribution,
 }: BandDistributionChartProps) {
-  const theme = useTheme();
-  const textColor =
-    theme.palette.mode === "dark"
-      ? "rgba(255,255,255,0.6)"
-      : "rgba(0,0,0,0.55)";
+  const reduceMotion = useReducedMotion() ?? false;
 
   // Filter to only bands with items for a cleaner chart, but keep all if <=3 bands have items
   const filledBands = distribution.filter((d) => d.count > 0);
   const chartData = filledBands.length <= 2 ? distribution : filledBands;
 
   return (
-    <Stack spacing={1.5}>
-      <Typography level="title-md">Band Distribution</Typography>
+    <div className="flex flex-col gap-3">
+      <h4 className="text-ink-1 type-headline">Band Distribution</h4>
       <ResponsiveContainer width="100%" height={chartData.length * 40 + 16}>
         <BarChart
           data={chartData}
@@ -71,19 +67,24 @@ export function BandDistributionChart({
             axisLine={false}
             tickLine={false}
             width={90}
-            tick={{ fill: textColor, fontSize: 12 }}
+            tick={{ fill: "var(--ca-ink-2)", fontSize: 12 }}
           />
           <Tooltip
             content={<CustomTooltip />}
-            cursor={{ fill: "var(--joy-palette-background-level1)" }}
+            cursor={{ fill: "var(--ca-surface-2)" }}
           />
-          <Bar dataKey="count" radius={[0, 6, 6, 0]} animationDuration={600}>
+          <Bar
+            dataKey="count"
+            radius={[0, 6, 6, 0]}
+            isAnimationActive={!reduceMotion}
+            animationDuration={dur.long * 1000}
+          >
             {chartData.map((d) => (
               <Cell key={d.band} fill={d.color} />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </Stack>
+    </div>
   );
 }

@@ -1,9 +1,9 @@
-import type { ColorPaletteProp } from "@mui/joy";
-
 /**
  * `82450ad1:src/components/tier-list/constants.ts`, restored. The band tables
  * it re-exported from `@cellar-assistant/shared/constants/bands` (a package
- * that no longer exists) are inlined, byte-for-byte.
+ * that no longer exists) are inlined; the colours are the design tokens now
+ * (design-direction.md §3.1: one claret → brass → ash ramp, Unrated on
+ * surface-3, the band word always printed beside the hue).
  */
 export const BANDS = [5, 4, 3, 2, 1, 0] as const;
 export type Band = (typeof BANDS)[number];
@@ -17,16 +17,76 @@ export const BAND_LABELS: Record<number, string> = {
   0: "Unrated",
 };
 
+/**
+ * Each band's token as a CSS colour, for what takes a colour value rather
+ * than a class: a chart's SVG `fill`, an inline swatch. MapLibre paint cannot
+ * read a variable; it reads `bandColor` from `lib/tokens.ts` instead.
+ */
 export const BAND_COLORS: Record<number, string> = {
-  5: "#2e7d32",
-  4: "#558b2f",
-  3: "#f9a825",
-  2: "#ef6c00",
-  1: "#c62828",
-  0: "#757575",
+  5: "var(--ca-band-5)",
+  4: "var(--ca-band-4)",
+  3: "var(--ca-band-3)",
+  2: "var(--ca-band-2)",
+  1: "var(--ca-band-1)",
+  0: "var(--ca-surface-3)",
 };
 
-export const BAND_JOY_COLORS: Record<number, ColorPaletteProp> = {
+/**
+ * Each band's token as Tailwind classes, spelled out whole so Tailwind sees
+ * them: `rule` (a 3 px edge), `tint` (a wash behind the band word), `swatch`
+ * (a solid chip), `divider` (the line under a band on the board).
+ */
+export const BAND_TONES: Record<
+  number,
+  { rule: string; tint: string; swatch: string; divider: string }
+> = {
+  5: {
+    rule: "border-band-5",
+    tint: "bg-band-5/20",
+    swatch: "bg-band-5",
+    divider: "border-band-5/40",
+  },
+  4: {
+    rule: "border-band-4",
+    tint: "bg-band-4/20",
+    swatch: "bg-band-4",
+    divider: "border-band-4/40",
+  },
+  3: {
+    rule: "border-band-3",
+    tint: "bg-band-3/20",
+    swatch: "bg-band-3",
+    divider: "border-band-3/40",
+  },
+  2: {
+    rule: "border-band-2",
+    tint: "bg-band-2/20",
+    swatch: "bg-band-2",
+    divider: "border-band-2/40",
+  },
+  1: {
+    rule: "border-band-1",
+    tint: "bg-band-1/20",
+    swatch: "bg-band-1",
+    divider: "border-band-1/40",
+  },
+  0: {
+    rule: "border-surface-3",
+    tint: "bg-surface-3/60",
+    swatch: "bg-surface-3",
+    divider: "border-line",
+  },
+};
+
+/**
+ * Joy chip colours per band, for the Joy-era item page (`item/ItemTierLists`)
+ * until its slice converts it; deleted in the removal step once unused. The
+ * union is spelled out so this file needs no Joy import.
+ */
+export const BAND_JOY_COLORS: Record<
+  number,
+  "success" | "primary" | "neutral" | "warning" | "danger"
+> = {
   5: "success",
   4: "primary",
   3: "neutral",

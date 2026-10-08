@@ -1,16 +1,20 @@
 "use client";
 
-import { Box, Stack, Typography } from "@mui/joy";
-import { useColorScheme } from "@mui/joy/styles";
 import * as maplibregl from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MAPLIBRE_WORKER_URL } from "@/components/map/maplibre/workerUrl";
-import { BAND_COLORS } from "../constants";
+import { bandColor, color } from "@/lib/tokens";
+import { cn } from "@/lib/utils";
+import { BAND_LABELS, BAND_TONES } from "../constants";
 import type { CountryHeatmapEntry } from "./computeInsightsStats";
 
-const CARTO_LIGHT =
-  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+/**
+ * The app is dark (D21: the scheme is static, no light mode is built), so the
+ * basemap is CARTO's dark one. MapLibre paint cannot read a CSS variable, so
+ * the fills take the band ramp's hex from `lib/tokens.ts`; the legend beside
+ * the map prints every band's word.
+ */
 const CARTO_DARK =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
@@ -21,7 +25,9 @@ interface CountryHeatmapProps {
 function bandToColor(avgBand: number): string {
   const rounded = Math.round(avgBand);
   const clamped = Math.max(0, Math.min(5, rounded));
-  return BAND_COLORS[clamped] ?? "#757575";
+  return clamped === 0
+    ? color.surface3
+    : bandColor[clamped as 1 | 2 | 3 | 4 | 5];
 }
 
 function buildMatchExpression(
@@ -36,13 +42,7 @@ function buildMatchExpression(
   return parts as unknown as maplibregl.ExpressionSpecification;
 }
 
-const LEGEND_ITEMS = [
-  { label: "Outstanding", band: 5 },
-  { label: "Very Good", band: 4 },
-  { label: "Good", band: 3 },
-  { label: "Mediocre", band: 2 },
-  { label: "Bad", band: 1 },
-];
+const LEGEND_BANDS = [5, 4, 3, 2, 1] as const;
 
 // Approximate country centroids for bounding-box computation
 const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
@@ -69,7 +69,6 @@ const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
 };
 
 export function CountryHeatmap({ entries }: CountryHeatmapProps) {
-  const { mode } = useColorScheme();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -116,7 +115,7 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
     try {
       map = new maplibregl.Map({
         container: mapContainer.current,
-        style: mode === "dark" ? CARTO_DARK : CARTO_LIGHT,
+        style: CARTO_DARK,
         center: mapView.center,
         zoom: mapView.zoom,
         interactive: false,
@@ -156,7 +155,8 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
         type: "line",
         source: "countries",
         paint: {
-          "line-color": mode === "dark" ? "#555" : "#ccc",
+          "line-color": color.ink3,
+          "line-opacity": 0.35,
           "line-width": 0.5,
         },
       });
@@ -169,7 +169,7 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
       mapRef.current = null;
       setLoaded(false);
     };
-  }, [mode, hasEntries, colorMap, mapView.center, mapView.zoom]);
+  }, [hasEntries, colorMap, mapView.center, mapView.zoom]);
 
   // Update colors when entries change without recreating the map
   useEffect(() => {
@@ -186,41 +186,29 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
   if (!hasEntries || unavailable) return null;
 
   return (
-    <Stack spacing={1}>
-      <Typography level="title-md">Where Your Favorites Are</Typography>
-      <Box
+    <section className="flex flex-col gap-2">
+      <h4 className="text-ink-1 type-headline">Where Your Favorites Are</h4>
+      <div
         ref={mapContainer}
-        sx={{
-          width: "100%",
-          height: { xs: 200, sm: 280 },
-          borderRadius: "md",
-          overflow: "hidden",
-        }}
+        className="h-[200px] w-full overflow-hidden rounded-md sm:h-[280px]"
       />
       {/* Legend */}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        {LEGEND_ITEMS.map((item) => (
-          <Stack
-            key={item.band}
-            direction="row"
-            spacing={0.5}
-            alignItems="center"
-          >
-            <Box
-              sx={{
-                width: 12,
-                height: 12,
-                borderRadius: 2,
-                backgroundColor: BAND_COLORS[item.band],
-                flexShrink: 0,
-              }}
+      <ul className="flex flex-wrap gap-x-3 gap-y-1">
+        {LEGEND_BANDS.map((band) => (
+          <li key={band} className="flex items-center gap-1">
+            <span
+              aria-hidden
+              className={cn(
+                "size-3 shrink-0 rounded-[2px]",
+                BAND_TONES[band].swatch,
+              )}
             />
-            <Typography level="body-xs" sx={{ color: "text.secondary" }}>
-              {item.label}
-            </Typography>
-          </Stack>
+            <span className="text-ink-2 type-footnote">
+              {BAND_LABELS[band]}
+            </span>
+          </li>
         ))}
-      </Stack>
-    </Stack>
+      </ul>
+    </section>
   );
 }

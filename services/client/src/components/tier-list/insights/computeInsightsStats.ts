@@ -27,7 +27,7 @@ export function computeBandDistribution(
       band,
       label: BAND_LABELS[band] ?? `Band ${band}`,
       count,
-      color: BAND_COLORS[band] ?? "#757575",
+      color: BAND_COLORS[band] ?? BAND_COLORS[0],
       percentage: Math.round((count / total) * 100),
     };
   });

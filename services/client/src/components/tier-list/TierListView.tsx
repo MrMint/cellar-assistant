@@ -10,6 +10,10 @@
  *   contract; the optimistic map, rollback and `router.refresh()` are as
  *   before.
  * - The server actions come from `useTierListActions` (`actions.ts`).
+ * - On the app's primitives (D20): band colours are the `--ca-band-*` ramp
+ *   (`BAND_TONES`), always beside the band word; the remove confirm is a
+ *   `ConfirmSheet`; a failed save is a `notify` toast. The drag engine is
+ *   untouched.
  */
 
 import {
@@ -36,22 +40,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  Box,
-  Button,
-  Card,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  IconButton,
-  Modal,
-  ModalDialog,
-  Sheet,
-  Snackbar,
-  Typography,
-} from "@mui/joy";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   memo,
@@ -63,12 +51,23 @@ import {
   useRef,
   useState,
 } from "react";
-import { AiFillTrophy } from "react-icons/ai";
-import { FaCrown } from "react-icons/fa";
-import { MdDelete, MdDragIndicator, MdPeople, MdStar } from "react-icons/md";
+import { ConfirmSheet } from "@/components/app/ConfirmSheet";
+import { IconButton } from "@/components/app/IconButton";
+import {
+  Crown,
+  Delete,
+  DragHandle,
+  ICON_STROKE,
+  People,
+  Trophy,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { notify } from "@/components/app/notify";
+import { Score } from "@/components/app/Score";
+import { cn } from "@/lib/utils";
 import { useTierListActions } from "./actions";
 import { reorderCallFor } from "./adapter";
-import { BAND_COLORS, BAND_LABELS, BANDS } from "./constants";
+import { BAND_LABELS, BAND_TONES, BANDS } from "./constants";
 import type { TierListItemDisplay } from "./types";
 
 // =============================================================================
@@ -125,72 +124,43 @@ function parseBandFromContainerId(id: unknown): number | null {
 // Rank Badge — Strava-style: crown for #1, trophies for 2-10, plain for 11+
 // =============================================================================
 
-const TROPHY_COLOR = "#E5A100";
-
-const BADGE_WIDTH = 32;
+/** The badge column's width: every rank lines up whatever its glyph. */
+const BADGE = "flex w-8 shrink-0 items-center justify-center";
 
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) {
+    // Claret for #1 (design §3.4); the rank is said, not only drawn.
     return (
-      <Box
-        sx={{
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: BADGE_WIDTH,
-        }}
-      >
-        <FaCrown style={{ fontSize: 28, color: TROPHY_COLOR }} />
-      </Box>
+      <span className={BADGE}>
+        <Crown
+          aria-hidden
+          strokeWidth={ICON_STROKE}
+          className="size-7 fill-brand text-brand-ink"
+        />
+        <span className="sr-only">Rank 1</span>
+      </span>
     );
   }
 
   if (rank <= 10) {
     return (
-      <Box
-        sx={{
-          position: "relative",
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: BADGE_WIDTH,
-        }}
-      >
-        <AiFillTrophy style={{ fontSize: 32, color: TROPHY_COLOR }} />
-        <Typography
-          level="body-xs"
-          sx={{
-            position: "absolute",
-            fontWeight: 800,
-            fontSize: "0.75rem",
-            lineHeight: 1,
-            color: "#fff",
-            top: "42%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-          }}
-        >
+      <span className={cn(BADGE, "relative")}>
+        <Trophy
+          aria-hidden
+          strokeWidth={ICON_STROKE}
+          className="size-8 fill-brass text-brass"
+        />
+        <span className="tabular absolute top-[42%] left-1/2 -translate-x-1/2 -translate-y-1/2 font-extrabold text-[0.75rem] text-on-brass leading-none">
           {rank}
-        </Typography>
-      </Box>
+        </span>
+      </span>
     );
   }
 
   return (
-    <Typography
-      level="body-sm"
-      sx={{
-        color: "text.secondary",
-        fontWeight: "xl",
-        flexShrink: 0,
-        width: BADGE_WIDTH,
-        textAlign: "center",
-      }}
-    >
+    <span className="tabular w-8 shrink-0 text-center font-bold type-callout text-ink-2">
       {rank}
-    </Typography>
+    </span>
   );
 }
 
@@ -215,101 +185,50 @@ const TierListItemContent = memo(function TierListItemContent({
 }: TierListItemContentProps) {
   return (
     <>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          level="title-sm"
-          component={Link}
+      <div className="min-w-0 flex-1">
+        <Link
           href={item.href}
-          sx={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            display: "block",
-            color: "inherit",
-            textDecoration: "none",
-            "&:hover": {
-              textDecoration: "underline",
-            },
-          }}
+          className="block truncate font-semibold type-callout text-ink-1"
         >
           {item.name}
-        </Typography>
+        </Link>
         {item.subtitle && (
-          <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
-            {item.subtitle}
-          </Typography>
+          <p className="type-footnote truncate">{item.subtitle}</p>
         )}
-      </Box>
+      </div>
 
       {(item.reviewScore != null || item.publicRating != null) && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            flexShrink: 0,
-          }}
-        >
-          {item.reviewScore != null && (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 0.25,
-                color: "warning.500",
-              }}
-            >
-              <MdStar style={{ fontSize: 14 }} />
-              <Typography
-                level="body-xs"
-                sx={{ fontWeight: "lg", color: "inherit" }}
-              >
-                {item.reviewScore}
-              </Typography>
-            </Box>
-          )}
+        <div className="flex shrink-0 items-center gap-2 text-xs">
+          {item.reviewScore != null && <Score value={item.reviewScore} />}
           {item.publicRating != null && (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 0.25,
-                color: "neutral.500",
-              }}
-            >
-              <MdPeople style={{ fontSize: 13 }} />
-              <Typography
-                level="body-xs"
-                sx={{ fontWeight: "md", color: "inherit" }}
-              >
-                {item.publicRating}
-                {item.publicRatingCount != null && (
-                  <Typography
-                    component="span"
-                    level="body-xs"
-                    sx={{ color: "neutral.400", ml: 0.25 }}
-                  >
-                    ({formatRatingCount(item.publicRatingCount)})
-                  </Typography>
-                )}
-              </Typography>
-            </Box>
+            <span className="tabular inline-flex items-center gap-0.5 font-medium text-ink-3">
+              <People
+                aria-hidden
+                strokeWidth={ICON_STROKE}
+                className="size-3.5"
+              />
+              <span className="sr-only">Public rating </span>
+              {item.publicRating}
+              {item.publicRatingCount != null && (
+                <span className="ml-0.5 font-normal">
+                  ({formatRatingCount(item.publicRatingCount)})
+                </span>
+              )}
+            </span>
           )}
-        </Box>
+        </div>
       )}
 
       <RankBadge rank={rank} />
 
       {canEdit && (
         <IconButton
-          variant="plain"
-          color="neutral"
           size="sm"
           onClick={() => onRemove(item.id, item.name)}
           aria-label={`Remove ${item.name}`}
-          sx={{ flexShrink: 0 }}
+          className="shrink-0 text-ink-3"
         >
-          <MdDelete />
+          <Delete />
         </IconButton>
       )}
     </>
@@ -347,8 +266,8 @@ const SortableTierListItem = memo(function SortableTierListItem({
     disabled: !canEdit,
   });
 
-  // Dynamic values change every frame during drag — use inline style to
-  // bypass Emotion's CSS class generation on each animation frame.
+  // Dynamic values change every frame during drag — an inline style, not a
+  // class, so nothing is generated or merged on each animation frame.
   const dynamicStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform) ?? undefined,
     transition: transition ?? undefined,
@@ -362,45 +281,30 @@ const SortableTierListItem = memo(function SortableTierListItem({
   }, [isSelected, item.id]);
 
   return (
-    <Sheet
+    <div
       ref={setNodeRef}
       id={item.id}
-      variant="outlined"
+      data-slot="tier-list-entry"
+      aria-current={isSelected ? "true" : undefined}
       style={dynamicStyle}
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1,
-        px: 1.5,
-        py: 0.75,
-        borderRadius: "sm",
-        boxShadow: "xs",
-        "&:hover": {
-          boxShadow: "sm",
-        },
-        ...(isSelected && {
-          outline: "2px solid",
-          outlineColor: "primary.500",
-          outlineOffset: "2px",
-        }),
-      }}
+      className={cn(
+        "flex min-h-11 items-center gap-2 rounded-md bg-surface-2 px-3 py-1.5 shadow-[inset_0_1px_0_var(--ca-highlight)]",
+        isSelected && "outline-2 outline-ring outline-offset-2 outline-solid",
+      )}
     >
       {canEdit && (
-        <Box
+        <div
           ref={setActivatorNodeRef}
           {...attributes}
           {...listeners}
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            cursor: "grab",
-            touchAction: "none",
-            color: "neutral.400",
-            flexShrink: 0,
-          }}
+          className="-my-1.5 -ml-1 flex shrink-0 cursor-grab touch-none items-center self-stretch rounded-sm px-1 text-ink-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          <MdDragIndicator style={{ fontSize: 20 }} />
-        </Box>
+          <DragHandle
+            aria-hidden
+            strokeWidth={ICON_STROKE}
+            className="size-5"
+          />
+        </div>
       )}
 
       <TierListItemContent
@@ -409,12 +313,12 @@ const SortableTierListItem = memo(function SortableTierListItem({
         canEdit={canEdit}
         onRemove={onRemove}
       />
-    </Sheet>
+    </div>
   );
 });
 
 // =============================================================================
-// DragOverlay item — elevated Card
+// DragOverlay item — the lifted row
 // =============================================================================
 
 const DragOverlayItem = memo(function DragOverlayItem({
@@ -423,40 +327,21 @@ const DragOverlayItem = memo(function DragOverlayItem({
   item: TierListItemDisplay;
 }) {
   return (
-    <Card
-      variant="outlined"
-      size="sm"
-      sx={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 1,
-        px: 1.5,
-        py: 0.75,
-        boxShadow: "lg",
-        cursor: "grabbing",
-      }}
-    >
-      <MdDragIndicator
-        style={{ fontSize: 20, color: "var(--joy-palette-neutral-400)" }}
+    <div className="surface-glass flex cursor-grabbing items-center gap-2 rounded-md px-3 py-1.5">
+      <DragHandle
+        aria-hidden
+        strokeWidth={ICON_STROKE}
+        className="size-5 shrink-0 text-ink-3"
       />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          level="title-sm"
-          sx={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold type-callout text-ink-1">
           {item.name}
-        </Typography>
+        </p>
         {item.subtitle && (
-          <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
-            {item.subtitle}
-          </Typography>
+          <p className="type-footnote truncate">{item.subtitle}</p>
         )}
-      </Box>
-    </Card>
+      </div>
+    </div>
   );
 });
 
@@ -465,42 +350,22 @@ const DragOverlayItem = memo(function DragOverlayItem({
 // =============================================================================
 
 // Static band label — no DnD context dependency, fully memoized by band number.
+// The word is always printed (design §3.1): the hue never carries the meaning.
 const BandLabel = memo(function BandLabel({ band }: { band: number }) {
-  const color = BAND_COLORS[band];
+  const tone = BAND_TONES[band] ?? BAND_TONES[0];
   const label = BAND_LABELS[band];
   return (
-    <Sheet
-      variant="soft"
-      sx={{
-        width: 32,
-        flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRight: "3px solid",
-        borderColor: color,
-        backgroundColor: `${color}14`,
-        py: 0.5,
-        minHeight: 88,
-      }}
+    <div
+      className={cn(
+        "flex min-h-22 w-8 shrink-0 items-center justify-center border-r-[3px] py-1",
+        tone.rule,
+        tone.tint,
+      )}
     >
-      <Typography
-        level="body-xs"
-        sx={{
-          color,
-          fontWeight: "lg",
-          writingMode: "vertical-rl",
-          textOrientation: "mixed",
-          transform: "rotate(180deg)",
-          letterSpacing: "0.05em",
-          textTransform: "uppercase",
-          whiteSpace: "nowrap",
-          userSelect: "none",
-        }}
-      >
+      <span className="rotate-180 select-none whitespace-nowrap text-ink-1 type-overline [writing-mode:vertical-rl]">
         {label}
-      </Typography>
-    </Sheet>
+      </span>
+    </div>
   );
 });
 
@@ -510,7 +375,6 @@ interface TierBandProps {
   itemMap: Map<string, TierListItemDisplay>;
   rankOffset: number;
   canEdit: boolean;
-  isFirst: boolean;
   isLast: boolean;
   selectedItemId?: string;
   onRemove: (itemId: string, name: string) => void;
@@ -522,7 +386,6 @@ const TierBand = memo(function TierBand({
   itemMap,
   rankOffset,
   canEdit,
-  isFirst,
   isLast,
   selectedItemId,
   onRemove,
@@ -531,35 +394,25 @@ const TierBand = memo(function TierBand({
   const { setNodeRef } = useDroppable({ id: `band-${band}` });
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        borderBottom: isLast ? undefined : "2px solid",
-        borderColor: `${BAND_COLORS[band]}66`,
-        borderTopLeftRadius: isFirst ? "lg" : 0,
-        borderTopRightRadius: isFirst ? "lg" : 0,
-        borderBottomLeftRadius: isLast ? "lg" : 0,
-        borderBottomRightRadius: isLast ? "lg" : 0,
-        overflow: "hidden",
-      }}
+    <section
+      aria-label={BAND_LABELS[band]}
+      className={cn(
+        "flex",
+        !isLast && "border-b-2",
+        !isLast && (BAND_TONES[band] ?? BAND_TONES[0]).divider,
+      )}
     >
       <BandLabel band={band} />
 
       {/* Items column */}
-      <Box ref={setNodeRef} sx={{ flex: 1, minWidth: 0 }}>
+      <div ref={setNodeRef} className="min-w-0 flex-1">
         <SortableContext
           id={`band-${band}`}
           items={itemIds}
           strategy={verticalListSortingStrategy}
         >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 0.75,
-              p: 1,
-              minHeight: hasItems ? undefined : 80,
-            }}
+          <div
+            className={cn("flex flex-col gap-1.5 p-2", !hasItems && "min-h-20")}
           >
             {itemIds.map((itemId, index) => {
               const item = itemMap.get(itemId);
@@ -575,10 +428,10 @@ const TierBand = memo(function TierBand({
                 />
               );
             })}
-          </Box>
+          </div>
         </SortableContext>
-      </Box>
-    </Box>
+      </div>
+    </section>
   );
 });
 
@@ -603,7 +456,6 @@ export function TierListView({
     id: string;
     name: string;
   } | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
 
   const { initialBandMap, itemMap } = useMemo(() => {
     const map = new Map<string, TierListItemDisplay>();
@@ -843,7 +695,9 @@ export function TierListView({
           router.refresh();
         } else {
           setBandMap(rollbackMap);
-          setFeedback(result.error ?? "Failed to persist reorder");
+          notify(result.error ?? "Failed to persist reorder", {
+            tone: "error",
+          });
         }
       })();
     },
@@ -895,7 +749,7 @@ export function TierListView({
       router.refresh();
     } else {
       setBandMap(rollbackMap);
-      setFeedback(result.error ?? "Failed to remove item");
+      notify(result.error ?? "Failed to remove item", { tone: "error" });
     }
   }, [removeTarget, tierListId, router, canEdit, removeItemFromTierListAction]);
 
@@ -913,13 +767,9 @@ export function TierListView({
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <Sheet
-          variant="outlined"
-          sx={{
-            borderRadius: "lg",
-            overflow: "hidden",
-            boxShadow: "sm",
-          }}
+        <div
+          data-slot="tier-board"
+          className="overflow-hidden rounded-lg bg-surface-1"
         >
           {BANDS.map((band, index) => {
             // Compute rank offset: count of items in all higher bands
@@ -935,57 +785,34 @@ export function TierListView({
                 itemMap={itemMap}
                 rankOffset={rankOffset}
                 canEdit={canEdit}
-                isFirst={index === 0}
                 isLast={index === BANDS.length - 1}
                 selectedItemId={selectedItemId}
                 onRemove={handleRemoveClick}
               />
             );
           })}
-        </Sheet>
+        </div>
 
         <DragOverlay>
           {activeItem ? <DragOverlayItem item={activeItem} /> : null}
         </DragOverlay>
       </DndContext>
 
-      <Modal open={removeTarget !== null} onClose={() => setRemoveTarget(null)}>
-        <ModalDialog variant="outlined" role="alertdialog">
-          <DialogTitle>Remove from tier list?</DialogTitle>
-          <Divider />
-          <DialogContent>
+      <ConfirmSheet
+        open={removeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        title="Remove from tier list?"
+        description={
+          <>
             Remove <strong>{removeTarget?.name}</strong> from this tier list?
             This won&apos;t delete the item itself.
-          </DialogContent>
-          <DialogActions>
-            <Button
-              variant="solid"
-              color="danger"
-              onClick={handleConfirmRemove}
-            >
-              Remove
-            </Button>
-            <Button
-              variant="plain"
-              color="neutral"
-              onClick={() => setRemoveTarget(null)}
-            >
-              Cancel
-            </Button>
-          </DialogActions>
-        </ModalDialog>
-      </Modal>
-
-      <Snackbar
-        open={feedback !== null}
-        autoHideDuration={3000}
-        onClose={() => setFeedback(null)}
-        color="danger"
-        variant="soft"
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        {feedback}
-      </Snackbar>
+          </>
+        }
+        confirmLabel="Remove"
+        onConfirm={() => void handleConfirmRemove()}
+      />
     </>
   );
 }
