@@ -216,9 +216,7 @@ export const canQuickAdd = ({
   inCellar &&
   defaults !== undefined &&
   (confidence ?? 0) >= CONFIDENCE_THRESHOLDS.HIGH &&
-  match !== null &&
-  match !== undefined &&
-  match.exact;
+  match?.exact === true;
 
 const nonEmpty = (value: string | undefined): string | undefined =>
   value === undefined || value.trim() === "" ? undefined : value;
