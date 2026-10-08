@@ -17,6 +17,7 @@ an injectable seam rather than an AI client of its own:
 | menu extraction, ambiguous-match verification | `MenuExtractionProvider`, `MenuMatchVerifier` | `src/lib/menu-ai.ts` |
 | recipe-photo vision | `RecipePhotoExtractor` | `src/lib/recipe-photo-ai.ts` |
 | review of a user-submitted place | `PlaceReviewer` | `src/actors/place-creation-actor.ts` |
+| flavour chips from a drink log's note (`suggestFlavourTags`, X02) — text only, Ollama is fine | `FlavourTagSuggester` | `src/lib/flavour-tags.ts` |
 | image search (`itemSearch(imageFileId:)`), stored-photo vectors | `ImageEmbedder` (query and document slots) | `src/lib/image-embeddings.ts` |
 
 **Image search needs an embedding that takes images**: `gemini-embedding-2`
