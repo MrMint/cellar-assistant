@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
+import { withReturnTo } from "@/utilities/sanitize-return-to";
 import { LiquidBackground } from "./LiquidBackground";
 import {
   FORMER_PASSWORD_USER_NOTE,
@@ -155,7 +156,8 @@ export function SignInApiClient({
           <Stack gap={1} marginBottom={2}>
             <Typography level="h3">Sign in</Typography>
             <Typography level="body-sm">
-              New to Cellar Assistant? <Link href="/sign-up">Sign up!</Link>
+              New to Cellar Assistant?{" "}
+              <Link href={withReturnTo("/sign-up", returnTo)}>Sign up!</Link>
             </Typography>
           </Stack>
 

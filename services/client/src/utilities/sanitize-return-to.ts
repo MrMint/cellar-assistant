@@ -76,3 +76,21 @@ export function sanitizeReturnTo(
 
   return `${resolved.pathname}${resolved.search}${resolved.hash}`;
 }
+
+/**
+ * `path` carrying `returnTo` along, for the links between `/sign-in` and
+ * `/sign-up` and for the social provider's error redirect (D19): a viewer
+ * bounced to sign-in from a shared link who chooses "Sign up" instead — or
+ * whose provider sends them back with an error — still lands on that link
+ * afterwards. The value is sanitised again here, so a caller cannot launder
+ * an unchecked one through it; anything that fails is simply dropped.
+ */
+export function withReturnTo(
+  path: string,
+  returnTo: string | undefined | null,
+): string {
+  const safe = sanitizeReturnTo(returnTo);
+  return safe === undefined
+    ? path
+    : `${path}?returnTo=${encodeURIComponent(safe)}`;
+}
