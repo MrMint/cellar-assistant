@@ -1048,6 +1048,14 @@ Nine of ten containers are healthy; the tenth never comes up. Three consequences
 but record that the rollback of record is the `82450ad1` checkout, not this directory, and stop
 treating the running containers as a guarantee.
 
+**Update, 2026-10-05: the restart path is gone, so that reason no longer holds.** Every local Nhost
+container and volume (all ten `epic-burnell-4b4be9-*`), the `nhost` CLI and its state, and the
+`mcp-nhost` server were removed from the dev machine. A restart of the rollback stack now means
+a `82450ad1` checkout and a fresh `nhost up` from there, which reads *that* checkout's `nhost/`,
+not this branch's. `run.sh` and `test-db.sh` restore the checked-in baseline by default and the
+fingerprint no longer hashes `nhost/migrations`, so nothing executable on this branch reads the
+directory. Deleting it is now a housekeeping decision rather than a rollback one.
+
 **Blocks E4: no**, but it starts at E4.
 
 ---
@@ -1269,6 +1277,9 @@ during a freeze — these belong to whoever owns each file, not to this document
   shape — silently read the local legacy database on the one Mac where that container exists.
   `cutover.sh` now has no default source and refuses both-set and neither-set; every source phase
   prints the source it reads. `run.sh` keeps its default: it only ever builds dev/test schemas.)*
+  *(2026-10-05: `run.sh` lost its default too, when the container it named was deleted. It now
+  restores the checked-in `nhost-schema.sql` unless given `--dump` and an explicit
+  `SRC_CONTAINER`.)*
 - Also found 2026-09-27, same file: `DST_PASSWORD` defaulted to `cellar` and was absent from the
   README's environment table, and nothing checked the host `node` against `.nvmrc`. A wrong
   password is invisible to every `docker exec` call (the container's local socket is `trust`) and

@@ -330,7 +330,8 @@ the one-shot scripts, and there is nothing to roll back for it.
   What is missing is an *execution*: the branch is unpushed. Nothing structural blocks one —
   every job is `ubuntu-latest` — **provided "one" means a push or a PR, never a merge.** Pushing
   this branch or opening a PR from it is inert outside CI; merging it to `main` is not. A merge
-  to `main` redeploys **production Nhost** (its GitHub app deploys from `main`), and the
+  to `main` redeploys **production Nhost** (its GitHub app deploys from `main` — no longer: the
+  repository was disconnected from the Nhost project on 2026-10-05, decision 15), and the
   release-please PR that merge opens would, once merged, fast-forward `production` and redeploy
   the **production Vercel frontend**. Both are gated in `e4-decisions.md` decision 15 and must be
   in place and confirmed before anything reaches `main` — so "get CI to run" is a push, and the

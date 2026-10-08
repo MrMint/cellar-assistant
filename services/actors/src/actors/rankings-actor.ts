@@ -12,7 +12,7 @@
  * Worth stating plainly because an earlier review of the plan concluded
  * `/rankings` had no backend at all — there is no `item_scores` table, and
  * `grep` finds nothing. It is a Hasura *native query*, declared in
- * `nhost/metadata/databases/databases.yaml` and reached as a GraphQL root
+ * `82450ad1:nhost/metadata/databases/databases.yaml` and reached as a GraphQL root
  * field. Hasura is going away, so it is reimplemented here. The original, for
  * the record:
  *

@@ -7,8 +7,9 @@
 # context7) and is left alone; this file has its own project name so the two
 # never share containers or volumes.
 #
-# Ports (defaults; override in infra/.env) avoid the running Nhost stack, which
-# holds Postgres 5432, and leave 3000 to the user's own `bun run dev`:
+# Ports (defaults; override in infra/.env) stay off Postgres's default 5432 —
+# the pre-migration Nhost stack held it, and a host Postgres may — and leave
+# 3000 to the user's own `bun run dev`:
 #
 #   3001  services/api          GraphQL at /graphql, liveness at /healthz
 #   3002  services/actors       actor host (Dapr calls it) + better-auth at /api/auth/*
