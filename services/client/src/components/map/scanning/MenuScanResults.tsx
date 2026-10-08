@@ -296,7 +296,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
             </Chip>
           </Stack>
 
-          <Typography level="title-md" sx={{ mt: 2 }}>
+          <Typography level="title-md" aria-live="polite" sx={{ mt: 2 }}>
             {headline.text}
           </Typography>
           {headline.toConfirm > 0 && (
@@ -315,7 +315,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
             <Alert
               color="warning"
               size="sm"
-              sx={{ mt: 2 }}
+              sx={{ mt: 2, flexWrap: "wrap", rowGap: 1 }}
               endDecorator={
                 <Button size="sm" variant="soft" onClick={restart}>
                   Check again
@@ -353,7 +353,11 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
         <Card>
           <CardContent sx={{ textAlign: "center", py: 4 }}>
             <Typography level="body-md" sx={{ color: "text.secondary" }}>
-              No items were extracted from this scan.
+              {scan.items_detected > 0
+                ? // Read, but never filed on a place (no place was known, or
+                  // filing failed), so there are no lines to show or match.
+                  "The lines this scan read weren't saved to a place, so there's nothing to show here."
+                : "No items were extracted from this scan."}
             </Typography>
           </CardContent>
         </Card>
@@ -452,6 +456,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                                         variant="outlined"
                                         color="danger"
                                         startDecorator={<MdClose />}
+                                        aria-label={`Reject ${match.suggestion.suggested?.name ?? "suggestion"} for ${item.menu_item_name}`}
                                         onClick={() =>
                                           handleSuggestion(
                                             match.suggestion,
@@ -465,6 +470,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
                                         size="sm"
                                         color="success"
                                         startDecorator={<MdCheck />}
+                                        aria-label={`Accept ${match.suggestion.suggested?.name ?? "suggestion"} for ${item.menu_item_name}`}
                                         onClick={() =>
                                           handleSuggestion(
                                             match.suggestion,

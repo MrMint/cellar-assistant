@@ -113,7 +113,6 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
 
   const progress = progressOf(scanStatus);
   const processingStep = scanPhase(progress);
-  const extracted = progress !== null && isExtractionDone(progress);
   const isComplete = scanStatus?.processing_status === "completed";
   const isFailed = scanStatus?.processing_status === "failed";
   const opensResults =
@@ -123,9 +122,12 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
       itemsDetected: scanStatus.items_detected,
     });
 
-  // Re-read until extraction is done; the results page watches the rest.
+  // Re-read until the whole pipeline has settled, so `onScanComplete` really
+  // fires then. A scan with lines hands off to the results page as soon as
+  // extraction is done, which unmounts this and stops the loop; one with
+  // none is `skipped` at once.
   const { gaveUp, restart } = usePollWhile(
-    scanId !== null && progress !== null && !extracted,
+    scanId !== null && progress !== null && !isScanSettled(progress),
     async () => {
       if (!scanId) return;
       const status = await getMenuScanStatus(scanId);
@@ -378,6 +380,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
               </Stack>
               <Typography
                 level="body-sm"
+                aria-live="polite"
                 sx={{ textAlign: "center", color: "text.secondary" }}
               >
                 {PHASE_LABELS[processingStep] ||
@@ -387,6 +390,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
                 <Alert
                   color="warning"
                   size="sm"
+                  sx={{ flexWrap: "wrap", rowGap: 1 }}
                   endDecorator={
                     <Button size="sm" variant="soft" onClick={restart}>
                       Check again
@@ -409,8 +413,9 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
               ) : opensResults ? (
                 <Alert color="success" startDecorator={<MdCheckCircle />}>
                   <Typography level="body-sm">
-                    Read {scanStatus?.items_detected ?? 0} lines. Opening the
-                    results...
+                    Read {scanStatus?.items_detected ?? 0}{" "}
+                    {scanStatus?.items_detected === 1 ? "line" : "lines"}.
+                    Opening the results...
                   </Typography>
                 </Alert>
               ) : isComplete ? (

@@ -25,6 +25,9 @@ export function usePollWhile(
   // biome-ignore lint/correctness/useExhaustiveDependencies: `epoch` is the restart signal; it is read by being a dependency.
   useEffect(() => {
     if (!active) return;
+    // A new run starts with a fresh clock, so a give-up from an earlier run
+    // (the scanner's previous scan, say) does not show on this one.
+    setGaveUp(false);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();

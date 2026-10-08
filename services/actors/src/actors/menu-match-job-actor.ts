@@ -216,7 +216,8 @@ export class MenuMatchJobActor
     // `place_menu_items` belongs to `PlaceActor` (§1.2). A job actor reads any
     // table (§1.1) but caches none of it — this is a fresh query every batch,
     // which also means a scan whose menu items arrive late (the outbox row for
-    // `addMenuFromScan` still in flight) is simply matched on a later run.
+    // `addMenuFromScan` still in flight) is matched when the outbox retries
+    // the first batch (`#requireFiledMenu`).
     const after = cursor?.lastMenuItemId ?? null;
     const { rows } = await this.db.execute<MenuItemRow>(sql`
       select id, menu_item_name, menu_item_description,

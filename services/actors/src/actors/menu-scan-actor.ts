@@ -32,7 +32,9 @@
  * `outbox.seq` (A7b) gives the two rows `process` writes their first-attempt
  * order, so the menu items exist before `match` looks for them; if they do not
  * — a lost race, a failed `addMenuFromScan` — the matching job's first batch
- * finds nothing and completes, and re-running `match` is free.
+ * finds nothing and throws a retryable `ConflictError` (N06a), so the outbox
+ * runs it again once the lines are filed, and fails the job if they never
+ * are. `matchStatus` reports which of those happened.
  *
  * ## `match` does not match. §8.5 is why
  *
@@ -408,20 +410,31 @@ export class MenuScanActor
       or (o.target_actor = ${start.actorType} and o.method = ${start.method}
         and o.target_id = ${jobId})
     )`;
+    // Each fact is read only when the ones ahead of it in `deriveMatchStatus`
+    // left the answer open: a scan with a job row (every settled scan) costs
+    // one primary-key lookup, and the dead-row check — the one no index
+    // covers — runs only for a scan with no job and nothing live.
     const { rows } = await this.db.execute<{
       job_status: string | null;
-      queued: boolean;
-      dead: boolean;
+      queued: boolean | null;
+      dead: boolean | null;
     }>(sql`
-      select
-        (select status from public.jobs where id = ${jobId}::uuid) as job_status,
-        exists (
-          select 1 from public.outbox o
-          where o.status in ('pending', 'delivering') and ${ours}
-        ) as queued,
-        exists (
+      with job as (
+        select (select status from public.jobs where id = ${jobId}::uuid)
+          as status
+      ), live as (
+        select job.status as job_status,
+          case when job.status is null then exists (
+            select 1 from public.outbox o
+            where o.status in ('pending', 'delivering') and ${ours}
+          ) end as queued
+        from job
+      )
+      select job_status, queued,
+        case when job_status is null and queued = false then exists (
           select 1 from public.outbox o where o.status = 'dead' and ${ours}
-        ) as dead
+        ) end as dead
+      from live
     `);
     const found = rows[0];
     return deriveMatchStatus({
