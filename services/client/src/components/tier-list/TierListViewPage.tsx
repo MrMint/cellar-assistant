@@ -260,8 +260,10 @@ export function TierListViewPage({
               <IconButton
                 variant={isEditingLocked ? "secondary" : "outline"}
                 size="sm"
+                // The name says what a press does ("Unlock editing"), as the
+                // tooltip does; no aria-pressed beside it, or a screen reader
+                // hears "Unlock editing, pressed" and the two contradict.
                 aria-label={lockLabel}
-                aria-pressed={isEditingLocked}
                 className={cn(isEditingLocked && "text-ink-1")}
                 onClick={handleToggleEditingLock}
                 disabled={isSavingEditingLock}

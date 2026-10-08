@@ -258,7 +258,6 @@ export function AddEntryModal({
                       </Badge>
                     ) : (
                       <Button
-                        size="sm"
                         variant="secondary"
                         disabled={busy}
                         onClick={() => onPick(row)}

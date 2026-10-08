@@ -178,6 +178,10 @@ export function PalatePassport({ stats }: PalatePassportProps) {
                         <BadgeIcon aria-hidden strokeWidth={ICON_STROKE} />
                       )}
                       {badge.label}
+                      {/* Dimmed is not a word: say which ones are earned. */}
+                      <span className="sr-only">
+                        {badge.earned ? ", earned" : ", not earned yet"}
+                      </span>
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>{badge.description}</TooltipContent>
