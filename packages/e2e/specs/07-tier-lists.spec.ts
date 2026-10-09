@@ -22,8 +22,15 @@ import {
  *
  * X23 / D4: the board is read-only until **Arrange**, so the add and the drag
  * both start there (an empty list's own "Add from what you've tasted" opens
- * Arrange and the picker at once), and a picker row is one button — the whole
- * row adds.
+ * Arrange and the picker at once), and a picker row is one control — the
+ * whole row.
+ *
+ * X16: the picker opens on suggestion sections and picks several — a row is
+ * a checkbox, and "Add N entries" adds them as one edit — so this spec
+ * searches, ticks the one row it wants and adds it. It also creates its list
+ * empty: the form's "Start with your ratings" is turned off when offered, so
+ * the empty list's own button is there to press (that start is
+ * `mobile/m06-tier-list-without-typing.spec.ts`'s).
  */
 test.describe.configure({ mode: "serial" });
 
@@ -41,6 +48,15 @@ test("creates a tier list", async ({ primary }) => {
   // The old form's default list type is Places; this list ranks wines.
   await primary.getByRole("combobox", { name: "List Type" }).click();
   await primary.getByRole("option", { name: "Wines" }).click();
+  // X16: offered only to an account that has rated a wine; this spec wants
+  // its list empty.
+  const fromRatings = primary.getByRole("switch", {
+    name: /Start with your ratings/,
+  });
+  if (await fromRatings.isVisible()) {
+    await fromRatings.click();
+    await expect(fromRatings).not.toBeChecked();
+  }
   await primary.getByRole("button", { name: /^(Create|Save)/ }).click();
 
   await expect(primary, "did not navigate to the new tier list").toHaveURL(
@@ -94,7 +110,8 @@ test("adds entries to it", async ({ api, primary }) => {
     // Each open starts from an empty search — no rows left over from the
     // last one, which used to satisfy the name wait below before this
     // search had even been sent.
-    await expect(dialog.getByRole("listitem")).toHaveCount(0);
+    const results = dialog.getByRole("list", { name: "Search results" });
+    await expect(results.getByRole("listitem")).toHaveCount(0);
     await dialog
       .getByPlaceholder("Search wines by name or description")
       .fill(item.name);
@@ -110,9 +127,9 @@ test("adds entries to it", async ({ api, primary }) => {
     await searched;
     // Lexical retrieval (N08) brings back every "E2 Wine …" for any one of
     // their names, so pick the row that *is* this item, not the first row.
-    // The name's element carries a screen-reader-only "Add " ahead of it on
-    // a row that can still be added (X23's CandidateRow).
-    const row = dialog.getByRole("listitem").filter({
+    // (The `Add ` prefix is the X23 row's old screen-reader text; X16's
+    // rows are checkboxes named by the item, so the pattern allows both.)
+    const row = results.getByRole("listitem").filter({
       has: primary.getByText(
         new RegExp(`^(Add )?${escapeRegExp(item.name)}$`, "i"),
       ),
@@ -121,8 +138,10 @@ test("adds entries to it", async ({ api, primary }) => {
       row.first(),
       `"${item.name}" did not come back in the picker`,
     ).toBeVisible({ timeout: 25_000 });
-    // The whole row is the button (X23); "On this list" rows are disabled.
-    await row.first().getByRole("button").click();
+    // The whole row is the control (X23), a checkbox since X16; "On this
+    // list" rows are disabled. Ticking it arms the sheet's one action.
+    await row.first().getByRole("checkbox").click();
+    await dialog.getByRole("button", { name: "Add 1 entry" }).click();
     // A successful add closes the dialog and refreshes the board.
     await expect(dialog).toBeHidden({ timeout: 20_000 });
   }
