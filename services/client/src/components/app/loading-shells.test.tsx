@@ -21,6 +21,7 @@ mock.module("next/navigation", () => ({
 const { LoadingShell, ShellBlocks } = await import("./LoadingShell");
 const { TogglePop } = await import("./TogglePop");
 const { CellarsShell } = await import("@/components/cellar/CellarsShell");
+const { CellarHomeShell } = await import("@/components/cellar/CellarHomeShell");
 const { MapShell } = await import("@/components/map/core/MapShell");
 const { PlaceDetailsShell } = await import(
   "@/components/map/places/PlaceDetailsShell"
@@ -69,6 +70,7 @@ describe("the route shells", () => {
   test("every shell is a LoadingShell, with no spinner", () => {
     for (const [name, node] of [
       ["cellars", <CellarsShell key="c" />],
+      ["cellar home", <CellarHomeShell key="ch" />],
       ["map", <MapShell key="m" />],
       ["me", <MeHubShell key="me" />],
       ["home", <SearchLandingShell key="s" />],
@@ -91,6 +93,14 @@ describe("the route shells", () => {
     assert.match(out, /data-slot="cellar-segments"/);
     assert.match(out, /<a[^>]*href="\/recipes"[^>]*>Bar</);
     assert.match(out, />Yours</);
+  });
+
+  test("Cellar home (X04): the shelf with its Pour buttons, four tiles, the trend, then the grid", () => {
+    const out = html(<CellarHomeShell />);
+    assert.match(out, /Loading cellar…/);
+    assert.equal(out.match(/flex w-34 shrink-0/g)?.length, 3);
+    assert.equal(out.match(/h-24 rounded-lg/g)?.length, 4);
+    assert.match(out, /h-40 rounded-lg/);
   });
 
   test("Map: the canvas surface and the search pill, no full-screen message", () => {

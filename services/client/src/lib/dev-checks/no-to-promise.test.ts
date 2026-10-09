@@ -67,14 +67,6 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "move payload does not carry it. Its answer is used once, inside that " +
       "move, and only when it is that move (`movedEditSeq`).",
   },
-  "cellar-api/CellarCheckIns.tsx": {
-    calls: 1,
-    reason:
-      "`Cellar.checkIns` is reachable only through CellarDetailQuery, so 'more' " +
-      "re-reads the cellar with a bigger window and replaces the list — not a " +
-      "cursor walk the hook models. `windowGate` keeps a smaller, older window " +
-      "from landing after a bigger one.",
-  },
   "recipe/RecipePhotoProcessor.tsx": {
     calls: 1,
     reason:

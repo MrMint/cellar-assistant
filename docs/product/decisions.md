@@ -130,10 +130,10 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 ### Pour and the drink-log follow-ups (wave B "pour": X03)
 
 - **Where Pour lives (X03).** The bottle page's ActionBar (Pour, plus Log a
-  drink beside it) and the cellar overview's bottle cards, for the cellar's
-  owners and co-owners while the bottle is not finished. Visitors and
-  finished bottles get Log a drink / Check in only. X04's "Open now" shelf
-  can reuse `pour/PourSheet` as the overview does.
+  drink beside it) and the cellar home's shelves (Open now, Recently added —
+  X04 merged the overview, whose bottle cards had it, into that page), for
+  the cellar's owners and co-owners while the bottle is not finished.
+  Visitors and finished bottles get Log a drink / Check in only.
 - **The first pour opens the bottle**, at the pour's own time (so a
   backdated first pour opens it then). "Open it!" became a quiet "Mark as
   opened" for opening without pouring. A plain Log a drink from the bottle
@@ -175,3 +175,46 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   after the delete, for whoever deleted them. A bottle, place or photo that
   has gone meanwhile comes back as none; an ex-friend's entry does not come
   back.
+
+### Cellar home (wave B "cellarhome": X04, D3, D13)
+
+- **One cellar page (D3).** `/cellars/[id]/items` is the cellar home;
+  `/cellars/[id]` (the old overview) redirects to it. The overview's
+  check-in history (drinker + time, no bottle) is gone: the dashboard's
+  pours-per-month trend replaces it, and who drank what stays on each item's
+  "Your log".
+- **Dashboard order at 390.** Bar and search → Open now (open bottles, most
+  recently opened first, up to 12, each with Pour) → four tiles (in the
+  cellar, with the three biggest types named; open, with how many are still
+  sealed; almost empty, at or under
+  **25%**; finished this month) → pours per month (12 months) → Recently
+  added (last **30 days**, not already on Open now) → the collection. A tile
+  opens the collection with the matching sort or segment. A search hides the
+  dashboard so results sit under the field.
+- **Bottles by type is words, not colour.** The six type hues fail as a
+  chart palette (the dataviz validator: oak/amber ΔE 4.4), so "8 wine · 3
+  spirit" is text in the In-the-cellar tile, and the type chips below carry
+  per-type counts.
+- **Months are the viewer's.** A `ca-tz` cookie (an IANA zone name only)
+  carries the browser's zone to the server; the first visit renders UTC
+  months and re-renders once.
+- **×N.** Identical bottles (one catalog item) are one card, placed where the
+  best-placed bottle sits under the current sort, showing that bottle's state
+  and linking to it. Open now does not group, and under All a finished bottle
+  is its own card rather than part of a live bottle's ×N.
+- **Finished is a diary**: by month finished, latest first, with the date,
+  how long it lasted once open, **your own** logs from it (count, last score,
+  last note — never a co-owner's) and your rating. Its sort is fixed, and a
+  search narrows it without reordering it.
+- **Search narrows.** Names first (pg_trgm, the N08 rule), then meaning
+  matches within cosine distance **0.36** and within **+0.06** of the nearest
+  (tuned on N05 with nomic-embed-text; Gemini not measured), nothing else. A
+  meaning match says "Similar to your search". Without an embedding model the
+  page is names only and says so. **Fan-out** asks your own (created or
+  co-owned) cellars — up to 24, most recently active first, 5 matches each —
+  by name only: "Lagavulin 16 / is in Bar Cart".
+- **Pour** on the shelves is X03's Pour sheet, one for both shelves
+  (`PourScope`), so a pour that moves its bottle between them — the first
+  opens it, the last finishes it — keeps its sheet and toasts. As X03 has
+  it, Pour is for owners and co-owners; anyone else who may see the cellar
+  gets Check in.

@@ -1,0 +1,11 @@
+{
+  "recorded": "2026-10-09, X04: in-cellar search narrows — names (strict_word_similarity >= 0.5), then vectors within 0.36 and within +0.06 of the nearest",
+  "model": "ollama:nomic-embed-text@768/RETRIEVAL_QUERY vs RETRIEVAL_DOCUMENT",
+  "cutoff": { "maxDistance": 0.36, "relativeSpread": 0.06 },
+  "summary": {
+    "hitRate": 0.9796,
+    "recall": 0.9283,
+    "precision": 0.7411,
+    "f1": 0.7824
+  }
+}

@@ -31,17 +31,3 @@ export const sectionPageSize = (
   section: "MINE" | "FRIENDS" | "DISCOVER",
   screenful: number = CELLARS_PAGE_SIZE,
 ): number => (section === "DISCOVER" ? DISCOVER_PAGE_SIZE : screenful);
-
-/**
- * The cellar overview's "Open and recent" preview: a fixed handful, never
- * paged. (The items page's own size is `ITEMS_PAGE_SIZE` in
- * `components/cellar/cellarItemsQuery.ts`, the old 50.)
- */
-export const OVERVIEW_ITEMS_PAGE_SIZE = 8;
-
-/**
- * The preview's order: open bottles first, which is what "open and recent"
- * means. Fixed, and re-read only by a server render, so there is no client
- * ordering for it to disagree with.
- */
-export const OVERVIEW_SORT = "OPEN_FIRST" as const;

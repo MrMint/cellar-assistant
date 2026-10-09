@@ -684,6 +684,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "BottleLogSummary",
+        fields: [
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "firstAt", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "lastAt", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "lastNote", type: { kind: "SCALAR", name: "String" } },
+          { name: "lastScore", type: { kind: "SCALAR", name: "Float" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "Brand",
         fields: [
           { name: "brandType", type: { kind: "ENUM", name: "BrandType" } },
@@ -990,6 +1005,17 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
           {
+            name: "dashboard",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarDashboard" },
+            },
+          },
+          {
+            name: "finishedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -1003,6 +1029,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemTypeCounts" },
+            },
+          },
+          {
+            name: "itemGroups",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemGroupConnection" },
             },
           },
           {
@@ -1061,6 +1094,72 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarDashboard",
+        fields: [
+          {
+            name: "addedRecently",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "almostEmptyAt",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "almostEmptyCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "bottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "currentMonth",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "finishedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "finishedThisMonth",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "logsByMonth",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "Int" },
+                },
+              },
+            },
+          },
+          {
+            name: "openCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "recentDays",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "timeZone",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -1126,6 +1225,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "INTERFACE", name: "Item" },
             },
           },
+          { name: "myLog", type: { kind: "OBJECT", name: "BottleLogSummary" } },
           { name: "openAt", type: { kind: "SCALAR", name: "DateTime" } },
           {
             name: "percentageRemaining",
@@ -1201,6 +1301,102 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "CellarItemGroup",
+        fields: [
+          {
+            name: "bottleIds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "lead",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItem" },
+            },
+          },
+          { name: "match", type: { kind: "ENUM", name: "CellarSearchMatch" } },
+          {
+            name: "openCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarItemGroupConnection",
+        fields: [
+          {
+            name: "bottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "CellarItemGroupEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "meaning",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "CellarSearchMeaning" },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarItemGroupEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemGroup" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "CellarItemSearchConnection",
         fields: [
           {
@@ -1262,6 +1458,76 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarSearchElsewhereConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "CellarSearchElsewhereEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarSearchElsewhereEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarSearchElsewhereHit" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarSearchElsewhereHit",
+        fields: [
+          {
+            name: "cellar",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Cellar" },
+            },
+          },
+          {
+            name: "group",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemGroup" },
             },
           },
         ],
@@ -6172,6 +6438,16 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "cellarSearchElsewhere",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "UNION",
+                name: "QueryCellarSearchElsewhereResult",
+              },
+            },
+          },
+          {
             name: "duplicatePlaces",
             type: {
               kind: "NON_NULL",
@@ -6514,6 +6790,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "Cellar" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryCellarSearchElsewhereResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "CellarSearchElsewhereConnection" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },

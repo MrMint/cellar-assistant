@@ -222,6 +222,10 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
       "Cellar.items",
       { via: ["CellarActor.items"], onlyWithArgument: "semanticQuery" },
     ],
+    [
+      "Cellar.itemGroups",
+      { via: ["CellarActor.itemGroups"], onlyWithArgument: "search" },
+    ],
     // A vision or LLM call inside the request.
     ["Mutation.startItemOnboarding", { via: ["ItemOnboardingActor.start"] }],
     // X02: a typed note's flavour words (`flavour_tags`).

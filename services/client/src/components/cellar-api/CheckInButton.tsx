@@ -29,6 +29,7 @@ export function CheckInButton({
   itemId,
   itemName,
   onCheckedIn,
+  label = "Check in",
 }: {
   cellarId: string;
   cellarItemId: string;
@@ -37,6 +38,8 @@ export function CheckInButton({
   itemId: string;
   itemName: string;
   onCheckedIn?: () => void;
+  /** The button's words: "Check in" on the bottle page, "Pour" on a shelf. */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const onSaved = useDrinkLogFeedback({ itemName, onChanged: onCheckedIn });
@@ -50,7 +53,7 @@ export function CheckInButton({
         onClick={() => setOpen(true)}
       >
         <Cocktail aria-hidden />
-        Check in
+        {label}
       </Button>
       <LogDrinkSheet
         open={open}

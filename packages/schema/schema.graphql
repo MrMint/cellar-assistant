@@ -558,6 +558,21 @@ input BeerAttributesInput {
 }
 
 """
+Your own logs from one bottle (X04's Finished diary). Never a co-owner's or a friend's: their notes stay on their own log.
+"""
+type BottleLogSummary {
+  count: Int!
+  firstAt: DateTime
+  lastAt: DateTime
+
+  """The newest non-empty note among them."""
+  lastNote: String
+
+  """The newest score among them, half stars."""
+  lastScore: Float
+}
+
+"""
 A catalog brand (§2.1 BrandActor) — the owner of one or more items or places. Deduplicated by case-insensitive name through BrandRegistryActor.
 """
 type Brand {
@@ -839,6 +854,21 @@ type Cellar {
   """
   createdBy: UserProfile
   createdById: ID!
+
+  """
+  X04 / D3: open, almost empty, finished this month, recently added, and the logs poured per month.
+  """
+  dashboard(
+    """
+    IANA zone months are cut in (`America/Chicago`). Unknown or absent: UTC.
+    """
+    timeZone: String
+  ): CellarDashboard!
+
+  """
+  Emptied bottles — the status segment's Finished (X04). Not part of `itemCounts`, which counts what is still in the cellar (D13).
+  """
+  finishedCount: Int!
   id: ID!
 
   """
@@ -853,6 +883,40 @@ type Cellar {
   Non-empty bottles per item type (UI parity G1). Bottles, not distinct items: two bottles of one wine count 2.
   """
   itemCounts: ItemTypeCounts!
+
+  """
+  X04: the cellar's grid. Identical bottles are one group (×N), placed where the best-placed of them sits. With `search` the list **narrows**: bottles whose item name matches first, then those whose vector is within the tuned distance cutoff, and nothing else — `items(semanticQuery:)` is the older re-sort of everything.
+  """
+  itemGroups(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """False gives one entry per bottle (the Finished diary)."""
+    group: Boolean = true
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+
+    """
+    Free text that narrows; overrides `sort`, except FINISHED_DESC, which orders what it kept by finish date.
+    """
+    search: String
+    sort: CellarItemSort
+    status: CellarItemStatus = ACTIVE
+    types: [ItemType!]
+  ): CellarItemGroupConnection!
 
   """What is in the cellar."""
   items(
@@ -901,6 +965,44 @@ type CellarConnection {
 
   """Total rows matching the query, or null when counting is not cheap."""
   totalCount: Int
+}
+
+"""The top of a cellar's page (X04, D3). Every count is bottles (D13)."""
+type CellarDashboard {
+  """Still in the cellar and added in the last 30 days."""
+  addedRecently: Int!
+
+  """The percentage `almostEmptyCount` cuts at."""
+  almostEmptyAt: Int!
+
+  """Open, not finished, at or under 25% left."""
+  almostEmptyCount: Int!
+
+  """Bottles still in the cellar."""
+  bottleCount: Int!
+
+  """`YYYY-MM` in `timeZone`."""
+  currentMonth: String!
+
+  """Every finished bottle."""
+  finishedCount: Int!
+
+  """Bottles finished this calendar month, in `timeZone`."""
+  finishedThisMonth: Int!
+
+  """
+  Logs poured from this cellar's bottles per calendar month, the last 12 months, oldest first; the last is `currentMonth`. Everyone's logs, as `checkIns` lists them.
+  """
+  logsByMonth: [Int!]!
+
+  """Open and not finished."""
+  openCount: Int!
+
+  """The window `addedRecently` counts."""
+  recentDays: Int!
+
+  """The IANA zone months were cut in."""
+  timeZone: String!
 }
 
 type CellarEdge {
@@ -954,6 +1056,11 @@ type CellarItem {
   Resolved through the shared item DataLoader — one batched `ItemActor.get` per page, not one per row (§1.5).
   """
   item: Item!
+
+  """
+  X04: your own logs from this bottle. Null for an anonymous viewer. One `CellarActor.myLogsOf` per cellar on the page.
+  """
+  myLog: BottleLogSummary
   openAt: DateTime
   percentageRemaining: Float!
   sourceMenuItemId: ID
@@ -973,6 +1080,42 @@ type CellarItemConnection {
 type CellarItemEdge {
   cursor: String!
   node: CellarItem!
+}
+
+"""
+Identical bottles — every bottle of one catalog item in the list — as one grid cell. The lead is the bottle the list's order put highest. Keyless on purpose: one bottle leads different groups in different lists (grouped, per bottle, a search), so a normalised cache keyed by the lead would let one list's count overwrite another's.
+"""
+type CellarItemGroup {
+  """Every bottle in the group, lead first, in list order."""
+  bottleIds: [ID!]!
+
+  """Bottles in the group."""
+  count: Int!
+  lead: CellarItem!
+
+  """On a `search` page, how the item matched."""
+  match: CellarSearchMatch
+
+  """How many of them are open."""
+  openCount: Int!
+}
+
+type CellarItemGroupConnection {
+  """
+  Bottles across every group of the whole list, not just this page — counts are bottles (decision D13).
+  """
+  bottleCount: Int!
+  edges: [CellarItemGroupEdge!]!
+  meaning: CellarSearchMeaning!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type CellarItemGroupEdge {
+  cursor: String!
+  node: CellarItemGroup!
 }
 
 type CellarItemSearchConnection {
@@ -1005,7 +1148,9 @@ In-cellar ordering. The actor holds every row (§2.1), so these sort a cached li
 enum CellarItemSort {
   ADDED_ASC
   ADDED_DESC
+  FINISHED_DESC
   NAME_ASC
+  OPENED_DESC
   OPEN_FIRST
   PERCENTAGE_ASC
   PERCENTAGE_DESC
@@ -1026,6 +1171,45 @@ enum CellarItemStatus {
   ACTIVE
   ALL
   EMPTY
+  OPEN
+}
+
+type CellarSearchElsewhereConnection {
+  edges: [CellarSearchElsewhereEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type CellarSearchElsewhereEdge {
+  cursor: String!
+  node: CellarSearchElsewhereHit!
+}
+
+"""
+A bottle in another of your cellars whose name matches the phrase — 'Lagavulin is in Bar Cart' (X04).
+"""
+type CellarSearchElsewhereHit {
+  cellar: Cellar!
+  group: CellarItemGroup!
+}
+
+"""
+How a bottle answered an in-cellar search (X04): NAME — the phrase matches the item's name; MEANING — the item's vector is within the tuned distance cutoff of the phrase's.
+"""
+enum CellarSearchMatch {
+  MEANING
+  NAME
+}
+
+"""
+Whether an `itemGroups` page used the vectors. UNAVAILABLE: the phrase could not be embedded (no AI provider, out of allowance, a model error), so the page holds name matches only. NOT_ASKED: no search.
+"""
+enum CellarSearchMeaning {
+  NOT_ASKED
+  UNAVAILABLE
+  USED
 }
 
 """
@@ -4354,6 +4538,33 @@ type Query {
   ): QueryCellarItemSearchResult!
 
   """
+  X04's cross-cellar fan-out: bottles still in **your** other cellars (created or co-owned) whose item name matches `search` — 'Lagavulin is in Bar Cart'. By name only, so no model call; your 24 most recently active cellars, at most 5 matches each, in that cellar order.
+  """
+  cellarSearchElsewhere(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """The cellar being searched, left out of the answer."""
+    excludeCellarId: ID
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    search: String!
+  ): QueryCellarSearchElsewhereResult!
+
+  """
   Nearby places with a similar name — what the create form shows as you type. A name under two characters returns nothing rather than matching everything.
   
   **C1 repointed this at `DuplicatePlaceSearchActor`.** §2.1 said `PlaceCreationActor.findDuplicates` "will delegate to `DuplicatePlaceSearchActor` once that exists"; §8.5 forbids an entity actor calling a search actor synchronously and allows "resolver → any actor", so the delegation happens here instead. The field's name, arguments and shape are unchanged. `PlaceCreationActor` keeps its own copy of the check for use inside the creation lock, which is what makes that one sound.
@@ -4964,6 +5175,8 @@ union QueryBrandsResult = BrandConnection | BudgetExceededError | ConflictError 
 union QueryCellarItemSearchResult = BudgetExceededError | CellarItemSearchConnection | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union QueryCellarResult = BudgetExceededError | Cellar | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
+union QueryCellarSearchElsewhereResult = BudgetExceededError | CellarSearchElsewhereConnection | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union QueryDuplicatePlacesResult = BudgetExceededError | ConflictError | DuplicatePlaceConnection | ForbiddenError | NotFoundError | ValidationError
 

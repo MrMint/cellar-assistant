@@ -36,6 +36,7 @@
  * every ref to exist first.
  */
 import type {
+  BottleLogSummaryDto,
   CappedList,
   CheckInDto,
   ItemImageDto,
@@ -386,7 +387,88 @@ builder.objectFields(CellarType, (t) => ({
 /* G14, G15 — a bottle's check-ins and display image                           */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * X04: the Finished diary's "your log" on a bottle — the viewer's own logs
+ * from it, summarised. Never anyone else's notes.
+ */
+const BottleLogSummaryType = builder
+  .objectRef<BottleLogSummaryDto>("BottleLogSummary")
+  .implement({
+    description:
+      "Your own logs from one bottle (X04's Finished diary). Never a " +
+      "co-owner's or a friend's: their notes stay on their own log.",
+    fields: (t) => ({
+      count: t.exposeInt("count"),
+      firstAt: t.expose("firstAt", { type: "DateTime", nullable: true }),
+      lastAt: t.expose("lastAt", { type: "DateTime", nullable: true }),
+      lastScore: t.exposeFloat("lastScore", {
+        nullable: true,
+        description: "The newest score among them, half stars.",
+      }),
+      lastNote: t.exposeString("lastNote", {
+        nullable: true,
+        description: "The newest non-empty note among them.",
+      }),
+    }),
+  });
+
 builder.objectFields(CellarItemType, (t) => ({
+  myLog: t.loadable({
+    type: BottleLogSummaryType,
+    nullable: true,
+    description:
+      "X04: your own logs from this bottle. Null for an anonymous viewer. " +
+      "One `CellarActor.myLogsOf` per cellar on the page.",
+    resolve: (bottle) => `${bottle.cellarId}/${bottle.id}`,
+    load: async (
+      keys: string[],
+      context: ApiContext,
+    ): Promise<(BottleLogSummaryDto | null | Error)[]> => {
+      if (context.ctx.viewerId === null) return keys.map(() => null);
+      const byCellar = new Map<string, string[]>();
+      for (const key of keys) {
+        const [cellarId, bottleId] = key.split("/");
+        if (cellarId === undefined || bottleId === undefined) continue;
+        byCellar.set(cellarId, [...(byCellar.get(cellarId) ?? []), bottleId]);
+      }
+      const answers = new Map<string, BottleLogSummaryDto | Error>();
+      await Promise.all(
+        [...byCellar].map(async ([cellarId, bottleIds]) => {
+          const distinct = [...new Set(bottleIds)];
+          for (
+            let start = 0;
+            start < distinct.length;
+            start += REVERSE_EDGE_MAX_PARENTS
+          ) {
+            const chunk = distinct.slice(
+              start,
+              start + REVERSE_EDGE_MAX_PARENTS,
+            );
+            try {
+              const summaries = await context
+                .actor(CellarActorDescriptor, cellarId)
+                .myLogsOf(chunk);
+              for (const [index, bottleId] of chunk.entries()) {
+                const summary = summaries[index];
+                answers.set(
+                  `${cellarId}/${bottleId}`,
+                  summary ?? new Error("no result"),
+                );
+              }
+            } catch (cause) {
+              for (const bottleId of chunk) {
+                answers.set(`${cellarId}/${bottleId}`, asError(cause));
+              }
+            }
+          }
+        }),
+      );
+      return keys.map(
+        (key) => answers.get(key) ?? new Error(`unparseable key ${key}`),
+      );
+    },
+  }),
+
   checkIns: t.loadable({
     type: CheckInConnection,
     description:

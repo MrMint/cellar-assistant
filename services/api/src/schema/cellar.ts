@@ -28,9 +28,12 @@
 import { randomUUID } from "node:crypto";
 import type {
   AddCellarItemInput as AddCellarItemInputType,
+  CellarDashboardDto,
   CellarDto,
   CellarItemDto,
+  CellarItemGroupDto,
   CellarItemSource,
+  CellarSearchMeaning,
   CheckInDto,
   CollectionStatsDto,
   CreateCellarInput as CreateCellarInputType,
@@ -45,9 +48,14 @@ import type {
   UpdateCellarItemInput as UpdateCellarItemInputType,
 } from "@cellar-assistant/contracts";
 import {
+  CELLAR_ALMOST_EMPTY_AT,
   CELLAR_ITEM_SORTS,
   CELLAR_ITEM_SOURCES,
   CELLAR_ITEM_STATUSES,
+  CELLAR_LOG_MONTHS,
+  CELLAR_RECENT_DAYS,
+  CELLAR_SEARCH_MATCHES,
+  CELLAR_SEARCH_MEANINGS,
   CellarActorDescriptor,
   CellarsCollectionActorDescriptor,
   CheckInActorDescriptor,
@@ -60,7 +68,11 @@ import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { CollectionSectionEnum, PermissionTypeEnum } from "./enums.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
-import { connectionFromPage, toPageArgs } from "./pagination.ts";
+import {
+  type Connection,
+  connectionFromPage,
+  toPageArgs,
+} from "./pagination.ts";
 import { type PatchPolicy, patch, present } from "./patch.ts";
 import { Viewer } from "./viewer.ts";
 
@@ -121,6 +133,22 @@ const CollectionStatsType = builder
       }),
     }),
   });
+
+const CellarSearchMatchEnum = builder.enumType("CellarSearchMatch", {
+  description:
+    "How a bottle answered an in-cellar search (X04): NAME — the phrase " +
+    "matches the item's name; MEANING — the item's vector is within the " +
+    "tuned distance cutoff of the phrase's.",
+  values: CELLAR_SEARCH_MATCHES,
+});
+
+const CellarSearchMeaningEnum = builder.enumType("CellarSearchMeaning", {
+  description:
+    "Whether an `itemGroups` page used the vectors. UNAVAILABLE: the phrase " +
+    "could not be embedded (no AI provider, out of allowance, a model " +
+    "error), so the page holds name matches only. NOT_ASKED: no search.",
+  values: CELLAR_SEARCH_MEANINGS,
+});
 
 const CellarItemSourceEnum = builder.enumType("CellarItemSource", {
   description: "`cellar_items.source_type` — how the bottle got here.",
@@ -195,6 +223,117 @@ export const CellarItemConnection = builder.connectionObject(
 );
 
 /**
+ * X04's ×N. A connection's `edges` is the only composite list the schema
+ * allows (§1.5); the group's members are ids, a scalar list, and the lead
+ * bottle is the one the card draws.
+ */
+export const CellarItemGroupType = builder
+  .objectRef<CellarItemGroupDto>("CellarItemGroup")
+  .implement({
+    description:
+      "Identical bottles — every bottle of one catalog item in the list — as " +
+      "one grid cell. The lead is the bottle the list's order put highest. " +
+      "Keyless on purpose: one bottle leads different groups in different " +
+      "lists (grouped, per bottle, a search), so a normalised cache keyed by " +
+      "the lead would let one list's count overwrite another's.",
+    fields: (t) => ({
+      lead: t.field({
+        type: CellarItemType,
+        resolve: (group) => group.lead,
+      }),
+      bottleIds: t.idList({
+        description: "Every bottle in the group, lead first, in list order.",
+        resolve: (group) => [...group.bottleIds],
+      }),
+      count: t.exposeInt("count", { description: "Bottles in the group." }),
+      openCount: t.exposeInt("openCount", {
+        description: "How many of them are open.",
+      }),
+      match: t.field({
+        type: CellarSearchMatchEnum,
+        nullable: true,
+        description: "On a `search` page, how the item matched.",
+        resolve: (group) => group.match,
+      }),
+    }),
+  });
+
+type CellarItemGroupConnectionShape = Connection<CellarItemGroupDto> & {
+  readonly bottleCount: number;
+  readonly meaning: CellarSearchMeaning;
+};
+
+export const CellarItemGroupConnection = builder.connectionObject(
+  {
+    type: CellarItemGroupType,
+    name: "CellarItemGroupConnection",
+    fields: (t) => ({
+      bottleCount: t.int({
+        description:
+          "Bottles across every group of the whole list, not just this page " +
+          "— counts are bottles (decision D13).",
+        resolve: (connection) =>
+          (connection as unknown as CellarItemGroupConnectionShape).bottleCount,
+      }),
+      meaning: t.field({
+        type: CellarSearchMeaningEnum,
+        resolve: (connection) =>
+          (connection as unknown as CellarItemGroupConnectionShape).meaning,
+      }),
+    }),
+  },
+  { name: "CellarItemGroupEdge" },
+);
+
+const CellarDashboardType = builder
+  .objectRef<CellarDashboardDto>("CellarDashboard")
+  .implement({
+    description:
+      "The top of a cellar's page (X04, D3). Every count is bottles (D13).",
+    fields: (t) => ({
+      bottleCount: t.exposeInt("bottleCount", {
+        description: "Bottles still in the cellar.",
+      }),
+      openCount: t.exposeInt("openCount", {
+        description: "Open and not finished.",
+      }),
+      almostEmptyCount: t.exposeInt("almostEmptyCount", {
+        description: `Open, not finished, at or under ${CELLAR_ALMOST_EMPTY_AT}% left.`,
+      }),
+      almostEmptyAt: t.int({
+        description: "The percentage `almostEmptyCount` cuts at.",
+        resolve: () => CELLAR_ALMOST_EMPTY_AT,
+      }),
+      finishedThisMonth: t.exposeInt("finishedThisMonth", {
+        description: "Bottles finished this calendar month, in `timeZone`.",
+      }),
+      finishedCount: t.exposeInt("finishedCount", {
+        description: "Every finished bottle.",
+      }),
+      addedRecently: t.exposeInt("addedRecently", {
+        description: `Still in the cellar and added in the last ${CELLAR_RECENT_DAYS} days.`,
+      }),
+      recentDays: t.int({
+        description: "The window `addedRecently` counts.",
+        resolve: () => CELLAR_RECENT_DAYS,
+      }),
+      logsByMonth: t.intList({
+        description:
+          `Logs poured from this cellar's bottles per calendar month, the ` +
+          `last ${CELLAR_LOG_MONTHS} months, oldest first; the last is ` +
+          "`currentMonth`. Everyone's logs, as `checkIns` lists them.",
+        resolve: (dashboard) => [...dashboard.logsByMonth],
+      }),
+      currentMonth: t.exposeString("currentMonth", {
+        description: "`YYYY-MM` in `timeZone`.",
+      }),
+      timeZone: t.exposeString("timeZone", {
+        description: "The IANA zone months were cut in.",
+      }),
+    }),
+  });
+
+/**
  * One batch, N parallel `CellarActor.get` calls — §1.5's "Pothos resolves ids
  * through a DataLoader that batches into parallel entity-actor calls".
  *
@@ -241,6 +380,11 @@ export const CellarType = builder
       }),
       itemCount: t.exposeInt("itemCount", {
         description: "Every bottle, emptied ones included.",
+      }),
+      finishedCount: t.exposeInt("finishedCount", {
+        description:
+          "Emptied bottles — the status segment's Finished (X04). Not part " +
+          "of `itemCounts`, which counts what is still in the cellar (D13).",
       }),
       itemCounts: t.field({
         type: ItemTypeCountsType,
@@ -296,6 +440,74 @@ export const CellarType = builder
               status: args.status ?? "ACTIVE",
             }),
           ),
+      }),
+
+      itemGroups: t.field({
+        type: CellarItemGroupConnection,
+        description:
+          "X04: the cellar's grid. Identical bottles are one group (×N), " +
+          "placed where the best-placed of them sits. With `search` the list " +
+          "**narrows**: bottles whose item name matches first, then those " +
+          "whose vector is within the tuned distance cutoff, and nothing " +
+          "else — `items(semanticQuery:)` is the older re-sort of everything.",
+        args: {
+          ...t.arg.connectionArgs(),
+          sort: t.arg({ type: CellarItemSortEnum, required: false }),
+          search: t.arg.string({
+            required: false,
+            description:
+              "Free text that narrows; overrides `sort`, except " +
+              "FINISHED_DESC, which orders what it kept by finish date.",
+          }),
+          types: t.arg({ type: [ItemTypeEnum], required: false }),
+          status: t.arg({
+            type: CellarItemStatusEnum,
+            required: false,
+            defaultValue: "ACTIVE",
+          }),
+          group: t.arg.boolean({
+            required: false,
+            defaultValue: true,
+            description:
+              "False gives one entry per bottle (the Finished diary).",
+          }),
+        },
+        resolve: async (cellar, args, context) => {
+          const page = await context
+            .actor(CellarActorDescriptor, cellar.id)
+            .itemGroups({
+              page: toPageArgs(args),
+              sort: args.sort ?? null,
+              search: args.search ?? null,
+              types: args.types ?? null,
+              status: args.status ?? "ACTIVE",
+              group: args.group ?? true,
+            });
+          return {
+            ...connectionFromPage(page),
+            bottleCount: page.bottleCount,
+            meaning: page.meaning,
+          };
+        },
+      }),
+
+      dashboard: t.field({
+        type: CellarDashboardType,
+        description:
+          "X04 / D3: open, almost empty, finished this month, recently " +
+          "added, and the logs poured per month.",
+        args: {
+          timeZone: t.arg.string({
+            required: false,
+            description:
+              "IANA zone months are cut in (`America/Chicago`). Unknown or " +
+              "absent: UTC.",
+          }),
+        },
+        resolve: (cellar, args, context) =>
+          context
+            .actor(CellarActorDescriptor, cellar.id)
+            .dashboard({ timeZone: args.timeZone ?? null }),
       }),
 
       checkIns: t.field({
@@ -535,6 +747,99 @@ builder.queryField("myCellars", (t) =>
         )
         .list(toPageArgs(args), args.section ?? null);
       return connectionFromPage(page);
+    },
+  }),
+);
+
+/** X04's fan-out: how many of your cellars a search asks, at most. */
+const ELSEWHERE_CELLARS = 24;
+/** And how many groups each may answer with. */
+const ELSEWHERE_PER_CELLAR = 5;
+
+type ElsewhereHit = {
+  readonly cellarId: string;
+  readonly group: CellarItemGroupDto;
+};
+
+const CellarSearchElsewhereHitType = builder
+  .objectRef<ElsewhereHit>("CellarSearchElsewhereHit")
+  .implement({
+    description:
+      "A bottle in another of your cellars whose name matches the phrase — " +
+      "'Lagavulin is in Bar Cart' (X04).",
+    fields: (t) => ({
+      cellar: t.field({
+        type: CellarType,
+        resolve: (hit) => hit.cellarId,
+      }),
+      group: t.field({
+        type: CellarItemGroupType,
+        resolve: (hit) => hit.group,
+      }),
+    }),
+  });
+
+const CellarSearchElsewhereConnection = builder.connectionObject(
+  {
+    type: CellarSearchElsewhereHitType,
+    name: "CellarSearchElsewhereConnection",
+  },
+  { name: "CellarSearchElsewhereEdge" },
+);
+
+builder.queryField("cellarSearchElsewhere", (t) =>
+  t.field({
+    type: CellarSearchElsewhereConnection,
+    description:
+      "X04's cross-cellar fan-out: bottles still in **your** other cellars " +
+      "(created or co-owned) whose item name matches `search` — 'Lagavulin " +
+      "is in Bar Cart'. By name only, so no model call; your " +
+      `${ELSEWHERE_CELLARS} most recently active cellars, at most ` +
+      `${ELSEWHERE_PER_CELLAR} matches each, in that cellar order.`,
+    errors: {},
+    args: {
+      ...t.arg.connectionArgs(),
+      search: t.arg.string({ required: true }),
+      excludeCellarId: t.arg.id({
+        required: false,
+        description: "The cellar being searched, left out of the answer.",
+      }),
+    },
+    resolve: async (_root, args, context) => {
+      const viewerId = context.ctx.viewerId;
+      if (viewerId === null) throw new ForbiddenError("sign in to search");
+      const paging = toPageArgs(args);
+      const search = args.search.trim();
+      const empty = connectionFromPage(offsetPage<ElsewhereHit>([], paging));
+      if (search === "") return empty;
+      const exclude = present(args.excludeCellarId)
+        ? String(args.excludeCellarId).toLowerCase()
+        : null;
+      const mine = await context
+        .actor(
+          CellarsCollectionActorDescriptor,
+          viewerCollectionActorId(viewerId),
+        )
+        .list({ first: ELSEWHERE_CELLARS + 1, after: null }, "MINE");
+      const cellarIds = mine.entries
+        .map((entry) => entry.node)
+        .filter((id) => id.toLowerCase() !== exclude)
+        .slice(0, ELSEWHERE_CELLARS);
+      const answers = await Promise.all(
+        cellarIds.map(async (cellarId) => {
+          try {
+            const groups = await context
+              .actor(CellarActorDescriptor, cellarId)
+              .nameMatches({ search, limit: ELSEWHERE_PER_CELLAR });
+            return groups.map((group) => ({ cellarId, group }));
+          } catch {
+            // One cellar that vanished (or was unshared) between the list
+            // and the fan-out costs its own answer, not everyone's.
+            return [];
+          }
+        }),
+      );
+      return connectionFromPage(offsetPage(answers.flat(), paging));
     },
   }),
 );

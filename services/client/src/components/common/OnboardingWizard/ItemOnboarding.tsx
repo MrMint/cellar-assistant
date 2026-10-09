@@ -269,7 +269,9 @@ const ItemOnboardingRun = ({
     });
     if (!tracked) return;
     router.push(
-      context.cellarId === undefined ? "/" : `/cellars/${context.cellarId}`,
+      context.cellarId === undefined
+        ? "/"
+        : `/cellars/${context.cellarId}/items`,
     );
   };
 

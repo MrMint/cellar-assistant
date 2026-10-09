@@ -72,8 +72,7 @@ export const CellarItemRowFragment = graphql(`
  * One drink.
  *
  * `CheckIn` carries ids and nothing else — no drinker profile, no item. That is
- * C3's deliberate shape, so the drinker's name is a separate `user(id:)` read
- * (`UserNameQuery`) rather than an inlined profile per row.
+ * C3's deliberate shape: the check-in mutations echo it back.
  */
 export const CheckInRowFragment = graphql(`
   fragment CheckInRow on CheckIn {
@@ -88,67 +87,6 @@ export const CheckInRowFragment = graphql(`
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
-
-/**
- * A cellar with its first bottles and its check-in history. The overview page
- * now reads `GetCellarOverviewQuery` (`components/cellar/fragments.ts`); this
- * one survives as the document `CellarCheckIns`' "Show more" re-reads.
- *
- * The check-ins here are gated on **`canSeeCellar`** (B1): every check-in in a
- * cellar you can see, including a co-owner's, friend or not. The item page uses
- * the looser author-or-friend rule on `Item.checkIns` instead. The two are not
- * the same list and must not be unified.
- */
-export const CellarDetailQuery = graphql(
-  `
-  query CellarDetail(
-    $cellarId: ID!
-    $items: Int!
-    $checkIns: Int!
-    $sort: CellarItemSort
-  ) {
-    cellar(id: $cellarId) {
-      __typename
-      ... on Cellar {
-        ...CellarCard
-        items(first: $items, sort: $sort) {
-          totalCount
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            cursor
-            node {
-              ...CellarItemRow
-            }
-          }
-        }
-        checkIns(first: $checkIns) {
-          totalCount
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            cursor
-            node {
-              ...CheckInRow
-            }
-          }
-        }
-      }
-      ...ActorErrorFields
-    }
-  }
-`,
-  [
-    CellarCardFragment,
-    CellarItemRowFragment,
-    CheckInRowFragment,
-    ActorErrorFieldsFragment,
-  ],
-);
 
 /** One cellar's header fields (`/cellars/[cellarId]/items/add`). */
 export const CellarHeaderQuery = graphql(
@@ -181,30 +119,6 @@ export const ViewerQuery = graphql(`
     }
   }
 `);
-
-/**
- * One display name, for a check-in row.
- *
- * A separate document on purpose: URQL deduplicates identical in-flight
- * operations and the graphcache keys `UserProfile` by id, so a cellar with
- * forty check-ins by three people performs three reads, not forty.
- */
-export const UserNameQuery = graphql(
-  `
-  query UserName($userId: ID!) {
-    user(id: $userId) {
-      __typename
-      ... on UserProfile {
-        id
-        displayName
-        avatarUrl
-      }
-      ...ActorErrorFields
-    }
-  }
-`,
-  [ActorErrorFieldsFragment],
-);
 
 // ---------------------------------------------------------------------------
 // Mutations

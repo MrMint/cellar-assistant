@@ -2,14 +2,15 @@ import { ApiError } from "@/components/cellar-api/ApiError";
 import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemTypes";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
-import { cellarGridItem } from "./adapter";
+import { cellarGroupCell } from "./adapter";
 import { CellarItemsGrid } from "./CellarItemsGrid";
+import { CellarSearchSummary } from "./CellarSearchSummary";
 import {
   type CellarSort,
   type CellarStatus,
   cellarItemsVariables,
 } from "./cellarItemsQuery";
-import { GetCellarItemsQuery } from "./fragments";
+import { GetCellarItemGroupsQuery } from "./fragments";
 
 interface CellarItemsGridServerProps {
   cellarId: string;
@@ -38,7 +39,7 @@ export async function CellarItemsGridServer({
   canAdd,
 }: CellarItemsGridServerProps) {
   const data = await apiServerQuery(
-    GetCellarItemsQuery,
+    GetCellarItemGroupsQuery,
     cellarItemsVariables(cellarId, { search, types, sort, status }, null),
   );
   // The request's instant, so the client's first render of "Open · 8d"
@@ -47,20 +48,30 @@ export async function CellarItemsGridServer({
   const result = unwrapResult(data.cellar, "Cellar");
   if (!result.ok) return <ApiError error={result.error} />;
 
-  const { items } = result.data;
+  const { itemGroups: items } = result.data;
+  const searching = search.trim() !== "";
   return (
-    <CellarItemsGrid
-      initialItems={items.edges.map((edge) => cellarGridItem(edge.node))}
-      initialCursor={items.pageInfo.endCursor ?? null}
-      initialHasNextPage={items.pageInfo.hasNextPage}
-      totalCount={items.totalCount ?? null}
-      cellarId={cellarId}
-      search={search}
-      types={types}
-      sort={sort}
-      status={status}
-      asOf={asOf}
-      canAdd={canAdd}
-    />
+    <>
+      {searching && (
+        <CellarSearchSummary
+          search={search.trim()}
+          bottleCount={items.bottleCount}
+          meaning={items.meaning}
+        />
+      )}
+      <CellarItemsGrid
+        initialItems={items.edges.map((edge) => cellarGroupCell(edge.node))}
+        initialCursor={items.pageInfo.endCursor ?? null}
+        initialHasNextPage={items.pageInfo.hasNextPage}
+        totalCount={items.totalCount ?? null}
+        cellarId={cellarId}
+        search={search}
+        types={types}
+        sort={sort}
+        status={status}
+        asOf={asOf}
+        canAdd={canAdd}
+      />
+    </>
   );
 }

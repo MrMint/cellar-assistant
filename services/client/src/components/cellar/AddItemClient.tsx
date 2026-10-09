@@ -96,7 +96,7 @@ export function AddItemClient({
           You do not have permission to add items to this cellar.{" "}
           {/* The cards are inert here, so this is the page's one control —
               and axe's scrollable-region-focusable needs one in <main>. */}
-          <Link href={`/cellars/${cellarId}`} underline="always">
+          <Link href={`/cellars/${cellarId}/items`} underline="always">
             Back to {cellarName ?? "the cellar"}
           </Link>
         </p>

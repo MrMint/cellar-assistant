@@ -98,3 +98,50 @@ Not recorded yet: a Gemini (`gemini-embedding-2`) baseline — no Vertex or Goog
 AI credentials were available where this was built. The harness takes any
 provider `readAIProviderConfig` accepts; only the reachability probe is
 Ollama-specific.
+
+## In-cellar search (roadmap X04)
+
+`cellar-search-eval.live.test.ts` tunes and holds the cutoff a cellar search
+narrows with (`../../lib/cellar-search.ts`): name matches first, then items
+whose vector is within an absolute distance **and** within a spread of the
+nearest one, and nothing else. Every fixture item goes into one cellar (a
+harder shelf than any real one), each query is asked of it, and a narrowed list
+is scored on what it **keeps** (`cellar-metrics.ts`): hit (kept a right
+bottle), recall, precision, F1, and wrong bottles kept. A second pass takes
+every right bottle off the shelf first ("not in this cellar"), where everything
+kept is noise — the case an absolute cutoff exists for, which the in-catalog
+numbers cannot see. The run then drives the real `CellarActor.itemGroups` with
+the shipped constants and requires it to keep exactly what the sweep computed,
+and to hold `cellar-baseline.json`.
+
+```bash
+CELLAR_EVAL_OUT=/tmp/cellar.json bun run --filter @cellar-assistant/actors eval:retrieval
+```
+
+2026-10-09, `ollama:nomic-embed-text@768`, 158 items in one cellar, 49 queries:
+
+| Rule | hit | recall | precision | F1 | wrong kept / query | not in cellar: kept / query | not in cellar: empty |
+|---|---|---|---|---|---|---|---|
+| the old re-sort (keeps everything) | 100% | 100% | 1.7% | 0.032 | 150.5 | — | — |
+| names only | 67.3% | 65.6% | 50.5% | 0.541 | 0.49 | — | — |
+| absolute 0.34, no spread (best absolute-only F1) | 98.0% | 93.5% | 68.9% | 0.744 | 1.18 | — | — |
+| **0.36, +0.06 (shipped)** | **98.0%** | **92.8%** | **74.1%** | **0.782** | **0.71** | **1.55** | **40.8%** |
+| 0.38, +0.06 | 98.0% | 94.9% | 72.4% | 0.785 | 0.82 | 1.98 | 30.6% |
+| 0.48, +0.05 (best F1 overall) | 100% | 95.3% | 76.0% | 0.801 | 0.73 | 4.02 | 18.4% |
+| 0.56+, any spread | 100% | 95–99.7% | 68–75% | ≤ 0.79 | 0.8–1.6 | 5.7–16 | 0% |
+
+Per kind at the shipped rule: name F1 0.852 (hit 100%), typo 0.914 (100%),
+sibling 0.676 (100% hit; the siblings share a name, so "dassai 23" keeps Dassai
+39 and 45 too, by name, on purpose), brand 0.625 (75%), semantic 0.830 (100%).
+
+Why 0.36 / +0.06 and not the F1 maximum: past ~0.40 the in-catalog numbers stop
+moving (one more brand query, "antinori" → Tignanello, at 0.46) while a search
+for something the cellar does not hold keeps 2.6× as many wrong bottles (4.0 a
+query against 1.55) and comes back empty a third as often. A cellar search is a
+filter over a shelf you know; a list that pads itself with the nearest whisky
+when there is no champagne reads as broken. The one miss, "antinori", is a
+producer the item's name does not carry — universal search (N08) finds it.
+
+Not measured: a Gemini (`gemini-embedding`) cutoff. Distances are
+model-specific; a deployment on another model needs this run before the
+constant means the same thing there.
