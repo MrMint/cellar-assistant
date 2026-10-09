@@ -162,6 +162,7 @@ import type {
   ToggleRecipeLoveResult,
   UpdateProfileInput,
   UserActorInterface,
+  UserCountsDto,
   UserProfileDto,
   WantToTryEntryDto,
   WantToTryKind,
@@ -202,6 +203,7 @@ import type { ActorId, DaprClient } from "@dapr/dapr";
 import { handleForId, isEmailShaped } from "../auth/display-name.ts";
 import { absentRow, EntityActorBase } from "../lib/actor-base.ts";
 import { aiCapabilities } from "../lib/ai/capabilities.ts";
+import { cellarOwnedBySql } from "../lib/cellar-ownership.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import { deliveryOf } from "../lib/delivery.ts";
@@ -1938,6 +1940,58 @@ export class UserActor
       ids.filter((id) => alive.has(id)),
       page,
     );
+  }
+
+  /**
+   * X18: the Me hub's four counts (`UserCountsDto` says what each one means).
+   * One statement of four indexed sub-selects, every one bounded by this
+   * user's own rows, read fresh — the activation's cached rows hold none of
+   * them except the place interactions, and a log or bottle written by
+   * another actor a moment ago must count.
+   *
+   * Self (or admin/system) only, like every other list of "mine" here. The
+   * counts are the owner's whatever the caller is allowed to see: an admin
+   * asking gets *their own* numbers, because this actor is keyed by them.
+   */
+  async counts(ctx: Ctx): Promise<UserCountsDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "see these counts");
+    const me = this.key;
+    const { rows } = await this.db.execute<{
+      bottles: number | string;
+      logs: number | string;
+      places: number | string;
+      tier_lists: number | string;
+    }>(sql`
+      select
+        (select count(*)
+           from public.cellar_items ci
+           join public.cellars c on c.id = ci.cellar_id
+          where ci.empty_at is null and ${cellarOwnedBySql(me, "c")}
+        ) as bottles,
+        (select count(*) from public.check_ins k where k.user_id = ${me}::uuid
+        ) as logs,
+        (select count(distinct been.place_id)
+           from (
+             select upi.place_id from public.user_place_interactions upi
+              where upi.user_id = ${me}::uuid and upi.is_visited = true
+             union
+             select k.place_id from public.check_ins k
+              where k.user_id = ${me}::uuid and k.place_id is not null
+           ) been
+          where ${placeRefVisibleSql(ctx, sql`been.place_id`)}
+        ) as places,
+        (select count(*) from public.tier_lists t
+          where t.created_by_id = ${me}::uuid
+        ) as tier_lists
+    `);
+    const row = rows[0];
+    return {
+      bottles: Number(row?.bottles ?? 0),
+      logs: Number(row?.logs ?? 0),
+      places: Number(row?.places ?? 0),
+      tierLists: Number(row?.tier_lists ?? 0),
+    };
   }
 
   /* ---------------------------------------------------------------------- */

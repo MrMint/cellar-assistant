@@ -508,6 +508,41 @@ export type ActivityEntryDto = {
   readonly checkIn: ItemCheckInDto | null;
 };
 
+/* -------------------------------------------------------------------------- */
+/* A friend's profile — X18                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Whose profile a `profile*` read is about. An object rather than a bare id so
+ * `FriendsCollectionActor`'s one `authorize` can tell it from a
+ * `FriendRequestFilter` (a string) and an `ActivityFilter`.
+ */
+export type ProfileFilter = { readonly profileOf: string };
+
+export const isProfileFilter = (value: unknown): value is ProfileFilter =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as { profileOf?: unknown }).profileOf === "string" &&
+  Object.keys(value).length === 1;
+
+/**
+ * The one answer every refused profile gets — not a friend, no such user,
+ * yourself, or not a user id at all. One message for all of them, so the
+ * answer is never an oracle for whether an account exists (D24).
+ */
+export const PROFILE_NOT_SHARED =
+  "This profile doesn't exist or isn't shared with you.";
+
+/**
+ * A friend, as their profile page opens (X18): who, and since when. The
+ * profile itself is `UserActor.getProfile`, hydrated by the API's loader.
+ */
+export type FriendProfileDto = {
+  readonly userId: string;
+  /** ISO-8601: when the friendship began (the newer of its two rows). */
+  readonly since: string;
+};
+
 /**
  * `FriendsCollectionActor(viewerId)` — collection actor, **C3**.
  *
@@ -552,6 +587,40 @@ export type FriendsCollectionActorInterface = {
     ctx: Ctx,
     filter: ActivityFilter,
   ): Promise<readonly ActivityEntryDto[]>;
+  /**
+   * X18: a friend's profile — `NotFound` ({@link PROFILE_NOT_SHARED}) for
+   * anyone who is not the viewer's friend, the viewer included, and for an
+   * id that names nobody, with the same message.
+   */
+  profile(ctx: Ctx, userId: string): Promise<FriendProfileDto>;
+  /**
+   * **ids** — the friend's own tier lists that `canSeeTierList` admits
+   * (PUBLIC or FRIENDS; never their PRIVATE ones), most recently changed
+   * first. Empty for anyone who is not a friend.
+   */
+  profileTierLists(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<string>>;
+  /**
+   * **ids** — cellars the friend created or co-owns that `canSeeCellar`
+   * admits, newest first. Empty for anyone who is not a friend.
+   */
+  profileCellars(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<string>>;
+  /**
+   * **projection** — the friend's drink log (entries about them), newest
+   * first, filtered by `canSeeCheckIn`. Empty for anyone who is not a friend.
+   */
+  profileLogs(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<ItemCheckInDto>>;
 };
 
 export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollectionActorInterface> =
@@ -562,6 +631,10 @@ export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollection
       friends: {},
       requests: {},
       recentActivity: {},
+      profile: {},
+      profileTierLists: {},
+      profileCellars: {},
+      profileLogs: {},
     },
   };
 
