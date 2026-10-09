@@ -142,20 +142,22 @@ export const AddReview = ({
 
   if (open === false) {
     return (
-      <Input
-        placeholder={editing ? "Edit your Review..." : "Add a Review..."}
-        onClick={() => setOpen(true)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") setOpen(true);
-        }}
-        readOnly
-        className="h-11 cursor-pointer text-base"
-      />
+      <ItemSection id="your-review" title="Your review">
+        <Input
+          placeholder={editing ? "Edit your Review..." : "Add a Review..."}
+          onClick={() => setOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") setOpen(true);
+          }}
+          readOnly
+          className="h-11 cursor-pointer text-base"
+        />
+      </ItemSection>
     );
   }
 
   return (
-    <ItemSection title={editing ? "Edit Review:" : "Add Review:"}>
+    <ItemSection id="your-review" title="Your review">
       <RatingInput
         value={score}
         onChange={handleRatingClick}

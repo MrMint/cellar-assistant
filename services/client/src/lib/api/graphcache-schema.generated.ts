@@ -599,6 +599,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -625,6 +632,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
@@ -1089,6 +1103,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "CellarItem",
         fields: [
+          { name: "cellar", type: { kind: "OBJECT", name: "Cellar" } },
           {
             name: "cellarId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -1427,6 +1442,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -1449,6 +1471,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
@@ -2917,6 +2946,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -2939,6 +2975,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
@@ -8384,6 +8427,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -8406,6 +8456,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
@@ -9011,6 +9068,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -9033,6 +9097,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
@@ -9201,6 +9272,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "flavorProfile", type: { kind: "SCALAR", name: "String" } },
           { name: "form", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
           { name: "harvestYear", type: { kind: "SCALAR", name: "Int" } },
           {
             name: "id",
@@ -9228,6 +9306,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
@@ -10351,6 +10436,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -10373,6 +10465,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },

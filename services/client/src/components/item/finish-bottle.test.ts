@@ -285,42 +285,38 @@ describe("Restore to cellar (after the Undo toast is gone)", () => {
 });
 
 describe("deleteBottleWarning", () => {
-  test("says the check-ins go too, and offers finishing instead", () => {
+  test("keeps the drink log, and offers finishing instead", () => {
     assert.deepEqual(
       deleteBottleWarning({
         itemName: "Castello di Monterosso",
-        checkInCount: 3,
         isFinished: false,
       }),
       {
         body:
-          "Delete Castello di Monterosso from your cellar? Its 3 check-ins " +
-          "will be deleted too. If you drank it, mark it finished instead: " +
-          "it leaves the cellar and keeps its check-ins.",
+          "Delete Castello di Monterosso from your cellar? Drinks you logged " +
+          "from it stay in your log. If you drank it, mark it finished " +
+          "instead: it stays in the cellar's history and can be restored.",
         suggestFinish: true,
       },
     );
   });
 
-  test("one check-in is singular; none is not mentioned", () => {
-    assert.match(
-      deleteBottleWarning({ itemName: "X", checkInCount: 1, isFinished: true })
-        .body,
-      /Its check-in will be deleted too\.$/,
-    );
-    assert.deepEqual(
-      deleteBottleWarning({ itemName: "X", checkInCount: 0, isFinished: true }),
-      { body: "Delete X from your cellar?", suggestFinish: false },
-    );
+  test("never says the logs are deleted (X02 keeps them)", () => {
+    for (const isFinished of [true, false]) {
+      assert.doesNotMatch(
+        deleteBottleWarning({ itemName: "X", isFinished }).body,
+        /deleted too/,
+      );
+    }
+    assert.deepEqual(deleteBottleWarning({ itemName: "X", isFinished: true }), {
+      body: "Delete X from your cellar? Drinks you logged from it stay in your log.",
+      suggestFinish: false,
+    });
   });
 
   test("an unnamed bottle still reads", () => {
     assert.match(
-      deleteBottleWarning({
-        itemName: undefined,
-        checkInCount: 0,
-        isFinished: false,
-      }).body,
+      deleteBottleWarning({ itemName: undefined, isFinished: false }).body,
       /^Delete this bottle from your cellar\?/,
     );
   });

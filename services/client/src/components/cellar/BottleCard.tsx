@@ -14,7 +14,7 @@ import { bottleState } from "./bottle-state";
  * the surface-3 track (a graphic carrying meaning, WCAG 1.4.11) where the
  * deep hue does not for coffee. Written out so Tailwind can see them.
  */
-const LEVEL_FILL: Readonly<Record<ApiItemType, string>> = {
+export const LEVEL_FILL: Readonly<Record<ApiItemType, string>> = {
   WINE: "bg-type-wine-text",
   BEER: "bg-type-beer-text",
   SPIRIT: "bg-type-spirit-text",

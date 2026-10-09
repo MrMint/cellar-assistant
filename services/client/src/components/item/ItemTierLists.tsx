@@ -60,8 +60,8 @@ export function ItemTierLists({
 
   return (
     <ItemSection
-      title="On Lists"
-      icon={<Ranked aria-hidden className="size-5 text-ink-2" />}
+      title="On tier lists"
+      icon={<Ranked aria-hidden className="size-3.5 text-ink-3" />}
     >
       <ul className="flex flex-col gap-2">
         {entries.map((item) => (

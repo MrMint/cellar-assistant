@@ -43,13 +43,35 @@ type AddToCellarActionsProps = {
  * not more; Undo removes exactly those ids. `router.refresh()` re-reads
  * "Located in:", as the old page's revalidation did.
  */
-export const AddToCellarActions = ({
+export const AddToCellarActions = (props: AddToCellarActionsProps) => {
+  const [open, setOpen] = useState(false);
+  if (props.cellars === undefined || props.cellars.length === 0) return null;
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>
+        <Add aria-hidden />
+        Add to Cellar
+      </Button>
+      <AddToCellarSheet {...props} open={open} onOpenChange={setOpen} />
+    </>
+  );
+};
+
+/**
+ * The sheet itself, for a caller that owns the trigger — X09's ActionBar,
+ * whose "Add to cellar" sits beside Log a drink rather than in a header.
+ */
+export const AddToCellarSheet = ({
   itemType,
   itemId,
   cellars,
-}: AddToCellarActionsProps) => {
+  open,
+  onOpenChange: setOpen,
+}: AddToCellarActionsProps & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) => {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [cellarId, setCellarId] = useState<string | null>(
     cellars?.[0]?.id ?? null,
   );
@@ -161,125 +183,117 @@ export const AddToCellarActions = ({
   };
 
   return (
-    <>
-      <Button onClick={() => setOpen(true)}>
-        <Add aria-hidden />
-        Add to Cellar
-      </Button>
-      <ResponsiveDialog
-        open={open}
-        onOpenChange={(next) => {
-          if (!pending) setOpen(next);
-        }}
-        title="Add to cellar"
-        footer={
-          <div className="flex flex-col gap-2">
-            {error !== null && (
-              <p role="alert" className="type-footnote text-destructive">
-                {error}
-              </p>
-            )}
-            <Button
-              onClick={submit}
-              disabled={pending || cellarId === null}
-              aria-busy={pending || undefined}
-            >
-              {pending && <Spinner aria-hidden />}
-              {quantity === 1 ? "Add bottle" : `Add ${quantity} bottles`}
-            </Button>
-          </div>
-        }
-      >
-        <div className="flex flex-col gap-5 pb-2">
-          {cellars.length === 1 ? (
-            <p className="flex min-h-11 items-center gap-3 rounded-lg bg-surface-1 px-4 type-body">
-              <Cellar aria-hidden className="size-5 text-ink-2" />
-              Into <span className="text-ink-1">{cellarName}</span>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!pending) setOpen(next);
+      }}
+      title="Add to cellar"
+      footer={
+        <div className="flex flex-col gap-2">
+          {error !== null && (
+            <p role="alert" className="type-footnote text-destructive">
+              {error}
             </p>
-          ) : (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="type-overline mb-2 px-4 text-ink-3">
-                Into
-              </legend>
-              <RadioGroup
-                value={cellarId ?? ""}
-                onValueChange={setCellarId}
-                className="gap-0 divide-y divide-line overflow-hidden rounded-lg bg-surface-1"
-              >
-                {cellars.map((cellar) => {
-                  const id = `${openId}-${cellar.id}`;
-                  return (
-                    <label
-                      key={cellar.id}
-                      htmlFor={id}
-                      className="flex min-h-11 items-center gap-3 px-4 py-2 type-body text-ink-1 active:bg-surface-3"
-                    >
-                      <RadioGroupItem id={id} value={cellar.id} />
-                      <span className="min-w-0 truncate">{cellar.name}</span>
-                    </label>
-                  );
-                })}
-              </RadioGroup>
-            </fieldset>
           )}
-
-          <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-1">
-            <span id={quantityId} className="type-body text-ink-1">
-              Bottles
-            </span>
-            <fieldset
-              aria-labelledby={quantityId}
-              className="m-0 flex items-center gap-1 border-0 p-0"
-            >
-              <IconButton
-                aria-label="One fewer"
-                variant="secondary"
-                size="sm"
-                disabled={quantity <= 1}
-                onClick={() => setQuantity((n) => Math.max(1, n - 1))}
-              >
-                <Decrease />
-              </IconButton>
-              <output
-                aria-live="polite"
-                className="tabular w-8 text-center type-headline"
-              >
-                {quantity}
-              </output>
-              <IconButton
-                aria-label="One more"
-                variant="secondary"
-                size="sm"
-                disabled={quantity >= MAX_BOTTLES_AT_ONCE}
-                onClick={() =>
-                  setQuantity((n) => Math.min(MAX_BOTTLES_AT_ONCE, n + 1))
-                }
-              >
-                <Add />
-              </IconButton>
-            </fieldset>
-          </div>
-
-          <label
-            htmlFor={openId}
-            className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-2"
+          <Button
+            onClick={submit}
+            disabled={pending || cellarId === null}
+            aria-busy={pending || undefined}
           >
-            <span className="flex flex-col">
-              <span className="type-body text-ink-1">
-                {quantity === 1 ? "Already open?" : "One already open?"}
-              </span>
-              <span className="type-footnote">
-                It starts at today, full — set the level on its page.
-              </span>
-            </span>
-            <Switch
-              id={openId}
-              checked={alreadyOpen}
-              onCheckedChange={setAlreadyOpen}
-            />
-          </label>
+            {pending && <Spinner aria-hidden />}
+            {quantity === 1 ? "Add bottle" : `Add ${quantity} bottles`}
+          </Button>
         </div>
-      </ResponsiveDialog>
-    </>
+      }
+    >
+      <div className="flex flex-col gap-5 pb-2">
+        {cellars.length === 1 ? (
+          <p className="flex min-h-11 items-center gap-3 rounded-lg bg-surface-1 px-4 type-body">
+            <Cellar aria-hidden className="size-5 text-ink-2" />
+            Into <span className="text-ink-1">{cellarName}</span>
+          </p>
+        ) : (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="type-overline mb-2 px-4 text-ink-3">Into</legend>
+            <RadioGroup
+              value={cellarId ?? ""}
+              onValueChange={setCellarId}
+              className="gap-0 divide-y divide-line overflow-hidden rounded-lg bg-surface-1"
+            >
+              {cellars.map((cellar) => {
+                const id = `${openId}-${cellar.id}`;
+                return (
+                  <label
+                    key={cellar.id}
+                    htmlFor={id}
+                    className="flex min-h-11 items-center gap-3 px-4 py-2 type-body text-ink-1 active:bg-surface-3"
+                  >
+                    <RadioGroupItem id={id} value={cellar.id} />
+                    <span className="min-w-0 truncate">{cellar.name}</span>
+                  </label>
+                );
+              })}
+            </RadioGroup>
+          </fieldset>
+        )}
+
+        <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-1">
+          <span id={quantityId} className="type-body text-ink-1">
+            Bottles
+          </span>
+          <fieldset
+            aria-labelledby={quantityId}
+            className="m-0 flex items-center gap-1 border-0 p-0"
+          >
+            <IconButton
+              aria-label="One fewer"
+              variant="secondary"
+              size="sm"
+              disabled={quantity <= 1}
+              onClick={() => setQuantity((n) => Math.max(1, n - 1))}
+            >
+              <Decrease />
+            </IconButton>
+            <output
+              aria-live="polite"
+              className="tabular w-8 text-center type-headline"
+            >
+              {quantity}
+            </output>
+            <IconButton
+              aria-label="One more"
+              variant="secondary"
+              size="sm"
+              disabled={quantity >= MAX_BOTTLES_AT_ONCE}
+              onClick={() =>
+                setQuantity((n) => Math.min(MAX_BOTTLES_AT_ONCE, n + 1))
+              }
+            >
+              <Add />
+            </IconButton>
+          </fieldset>
+        </div>
+
+        <label
+          htmlFor={openId}
+          className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-2"
+        >
+          <span className="flex flex-col">
+            <span className="type-body text-ink-1">
+              {quantity === 1 ? "Already open?" : "One already open?"}
+            </span>
+            <span className="type-footnote">
+              It starts at today, full — set the level on its page.
+            </span>
+          </span>
+          <Switch
+            id={openId}
+            checked={alreadyOpen}
+            onCheckedChange={setAlreadyOpen}
+          />
+        </label>
+      </div>
+    </ResponsiveDialog>
   );
 };

@@ -18,6 +18,8 @@ export type ItemImageProps = {
   fallback: ReactNode;
   /** Was a base64 data URL from `CameraCapture`; now the picked `File`. */
   onCaptureImage?: (image: File) => Promise<void>;
+  /** The tile's shape (X09's hero is 4:3 on a phone); square by default. */
+  className?: string;
 };
 
 /**
@@ -36,6 +38,7 @@ export const ItemImage = ({
   fallback,
   placeholder,
   onCaptureImage,
+  className,
 }: ItemImageProps) => {
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -70,8 +73,10 @@ export const ItemImage = ({
       {!hasImage && <div className="absolute inset-0">{fallback}</div>}
     </>
   );
-  const tile =
-    "relative block aspect-square w-full overflow-hidden rounded-lg bg-surface-1";
+  const tile = cn(
+    "relative block aspect-square w-full overflow-hidden rounded-lg bg-surface-1",
+    className,
+  );
 
   if (!canEdit) {
     return <div className={tile}>{picture}</div>;

@@ -109,7 +109,9 @@ export const ItemBrands = ({
   const otherBrands = brands.filter((b) => !b.is_primary);
 
   return (
-    <ItemSection title={`${title} (${brands.length})`}>
+    <ItemSection
+      title={brands.length > 1 ? `${title} (${brands.length})` : title}
+    >
       <ul className="flex flex-col gap-4">
         {primaryBrand && (
           <li className="flex items-center gap-4">
