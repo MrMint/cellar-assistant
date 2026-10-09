@@ -124,6 +124,8 @@ export const TABLE_WRITERS = {
   // cellar-scoped check-in list) and never writes it; removing a bottle nulls
   // `cellar_item_id` through the foreign key instead of deleting the history.
   check_ins: "CheckInActor",
+  // X03: a removed log, held for its Undo (`CheckInActor.restore`).
+  check_in_trash: "CheckInActor",
 
   // ItemActor — one actor per `type:itemId`; the six physical item tables and
   // their satellites are hidden behind it.
