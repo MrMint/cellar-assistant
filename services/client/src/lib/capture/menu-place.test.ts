@@ -45,24 +45,42 @@ describe("the menu's place (X06)", () => {
     );
   });
 
-  test("a confirmed place is the placeId; the same guess is not repeated", () => {
+  const here = { latitude: 43.07, longitude: -89.38 };
+
+  test("a place around the person is filed with where they stood", () => {
+    assert.deepEqual(
+      menuPlaceHint({ confirmed: cork, nearby: [cork, ember], location: here }),
+      { placeId: "cork", latitude: 43.07, longitude: -89.38 },
+    );
+    // "Somewhere else", then another place nearby: that one, still here.
     assert.deepEqual(
       menuPlaceHint({
-        confirmed: cork,
-        nearest: cork,
-        location: { latitude: 43.07, longitude: -89.38 },
+        confirmed: ember,
+        nearby: [cork, ember],
+        location: here,
       }),
-      { placeId: "cork", latitude: 43.07, longitude: -89.38 },
+      { placeId: "ember", latitude: 43.07, longitude: -89.38 },
     );
   });
 
-  test("a guess passed over rides along only as the estimate", () => {
+  test("a guess passed over is never sent, not even as the estimate", () => {
+    const hint = menuPlaceHint({
+      confirmed: ember,
+      nearby: [cork, ember],
+      location: null,
+    });
+    assert.deepEqual(hint, { placeId: "ember" });
+    assert.equal("estimatedPlaceId" in hint, false);
+  });
+
+  test("a place picked by name, not around the person, gets no position", () => {
+    const elsewhere = { id: "far", name: "Far Away Bar" };
     assert.deepEqual(
-      menuPlaceHint({ confirmed: ember, nearest: cork, location: null }),
-      { placeId: "ember", estimatedPlaceId: "cork" },
+      menuPlaceHint({ confirmed: elsewhere, nearby: [cork], location: here }),
+      { placeId: "far" },
     );
     assert.deepEqual(
-      menuPlaceHint({ confirmed: null, nearest: null, location: null }),
+      menuPlaceHint({ confirmed: null, nearby: [cork], location: here }),
       {},
     );
   });

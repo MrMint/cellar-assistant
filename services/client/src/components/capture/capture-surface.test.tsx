@@ -321,7 +321,7 @@ describe("MenuCapture (X06): a menu from anywhere", () => {
     assert.match(pushed.at(-1) ?? "", /^\/map\/scans\//);
   });
 
-  test("Somewhere else: the others nearest first; the guess rides along as the estimate", async () => {
+  test("Somewhere else: the others nearest first; the passed-over guess is not sent", async () => {
     await render(<MenuCapture initialPhoto={PHOTO} />);
     await settle();
     await click(button("Somewhere else"));
@@ -347,7 +347,6 @@ describe("MenuCapture (X06): a menu from anywhere", () => {
       ?.placeHint;
     assert.deepEqual(hint, {
       placeId: "ember",
-      estimatedPlaceId: "cork",
       latitude: HERE.latitude,
       longitude: HERE.longitude,
     });

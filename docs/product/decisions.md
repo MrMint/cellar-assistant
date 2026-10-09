@@ -146,8 +146,12 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   other places nearby, a search by name, "Not listed? Add the place". The
   shutter never waits: a photo taken first is held, and the tap that
   settles the place sends it. The scan's `placeHint` carries the chosen
-  place, the nearest guess as `estimatedPlaceId` only when it was a
-  different place, and the position. The results page takes over at once.
+  place, plus the position only when that place is one of those around
+  the person (a place picked by name gets none: it is not where that menu
+  is). A guess passed over is not sent even as `estimatedPlaceId` — it is
+  a claim the person said was false, and it would block deleting that
+  place while it is still its creator's. The results page takes over at
+  once.
 - **Recipe mode (X06)** reads a recipe photo at the shutter (the drafter's
   job, shared as `useRecipePhotoJob`) and opens the new recipe when it
   lands.

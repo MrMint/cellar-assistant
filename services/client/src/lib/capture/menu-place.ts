@@ -63,26 +63,32 @@ export type MenuPlaceHint = {
 };
 
 /**
- * The hint a scan is created with. The place the person confirmed is the
- * `placeId`; the nearest guess rides along as `estimatedPlaceId` only when it
- * is a different place (the server files `placeId ?? estimatedPlaceId`, so a
- * guess the person passed over never wins), and the position is sent when
- * there is one.
+ * The hint a scan is created with: the place the person confirmed, and where
+ * they stood **only when that place is one of the places around them** — then
+ * the position is where this menu was photographed. A place picked by name
+ * (a menu snapped at home, say) gets no position: it is not where that menu
+ * is, and it would store where the person was for nothing.
+ *
+ * No `estimatedPlaceId`. The place is always confirmed here, so the server's
+ * `placeId ?? estimatedPlaceId` never reads it; and a guess the person
+ * passed over ("Somewhere else") recorded as an estimate is a claim they
+ * said was false — one that also blocks deleting that place while it is
+ * still the creator's (`PlaceActor.deleteUnshared` counts it as filed).
  */
 export const menuPlaceHint = ({
   confirmed,
-  nearest,
+  nearby,
   location,
 }: {
   confirmed: { readonly id: string } | null;
-  nearest: { readonly id: string } | null;
+  /** The places around the person (`me.nearbyPlaces`). */
+  nearby: readonly { readonly id: string }[];
   location: { readonly latitude: number; readonly longitude: number } | null;
 }): MenuPlaceHint => ({
   ...(confirmed === null ? {} : { placeId: confirmed.id }),
-  ...(nearest !== null && nearest.id !== confirmed?.id
-    ? { estimatedPlaceId: nearest.id }
-    : {}),
-  ...(location === null
+  ...(location === null ||
+  confirmed === null ||
+  !nearby.some((place) => place.id === confirmed.id)
     ? {}
     : { latitude: location.latitude, longitude: location.longitude }),
 });

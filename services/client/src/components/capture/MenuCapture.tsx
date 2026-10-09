@@ -75,7 +75,7 @@ export type MenuCaptureProps = {
  * settled is held, and the tap that settles it sends the scan. Once sent,
  * the results page takes over (`/map/scans/[id]` shows the read and the
  * matching land, N06a). The scan's `placeHint` carries the confirmed place,
- * the nearest guess if it was a different one, and where the person stood
+ * and where the person stood when that place is one of those around them
  * (`lib/capture/menu-place.ts`).
  */
 export function MenuCapture({
@@ -140,7 +140,7 @@ export function MenuCapture({
     setSending({ kind: "sending" });
     const result = await uploadAndProcessMenuScan(
       file,
-      menuPlaceHint({ confirmed: place, nearest, location }),
+      menuPlaceHint({ confirmed: place, nearby, location }),
     );
     if (result.success && result.scanId !== undefined) {
       const href = `/map/scans/${result.scanId}`;
