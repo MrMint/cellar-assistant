@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "urql";
-import { BottomSheet } from "@/components/app/BottomSheet";
 import { EmptyState } from "@/components/app/EmptyState";
 import {
   Check,
@@ -17,6 +16,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { usePlaceActions } from "@/components/map/actions";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import { formatCategoryName } from "@/components/map/places/place-utils";
@@ -535,7 +535,7 @@ function PlacePicker({
   const searchingByName = debounced.length >= 2;
 
   return (
-    <BottomSheet
+    <ResponsiveDialog
       open={open}
       onOpenChange={onOpenChange}
       title="Where's this menu from?"
@@ -623,6 +623,6 @@ function PlacePicker({
           </ul>
         )}
       </div>
-    </BottomSheet>
+    </ResponsiveDialog>
   );
 }
