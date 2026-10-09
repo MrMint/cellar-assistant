@@ -253,9 +253,9 @@ describe("Arrange (X23 / D4)", () => {
     assert.deepEqual(calls, ["undo tl-1", "refresh"]);
   });
 
-  test("an empty list's Add entry opens Arrange and the picker, once", async () => {
+  test("an empty list's Add from what you've tasted opens Arrange and the picker, once", async () => {
     await render({ ...data, items: [], itemCount: 0 });
-    await click(button("Add entry"));
+    await click(button("Add from what you've tasted"));
     assert.ok(document.querySelector('[role="toolbar"]'));
     const adds = [...document.querySelectorAll("button")].filter(
       (el) => el.textContent?.trim() === "Add entry",
