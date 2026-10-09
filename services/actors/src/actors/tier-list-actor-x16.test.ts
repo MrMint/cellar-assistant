@@ -408,6 +408,30 @@ describe.skipIf(skip)("TierListActor — X16", () => {
         ).rejects.toBeInstanceOf(ValidationError);
       });
     });
+
+    it("refuses one row id named for two entries, writing nothing", async () => {
+      await withTestDb(async (db) => {
+        const me = await seedUser(db);
+        const ctx = userCtx(me, "r");
+        const listId = await seedList(db, me);
+        const [a, b] = [
+          await seedWine(db, me, "A"),
+          await seedWine(db, me, "B"),
+        ];
+        const actor = await activate(newActor(listId, db));
+        const id = randomUUID();
+        await expect(
+          actor.addItems(ctx, [
+            { entry: { type: "WINE", id: a }, tierListItemId: id },
+            { entry: { type: "WINE", id: b }, tierListItemId: id },
+          ]),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(
+          (await actor.items(ctx, { first: 50, after: null })).entries,
+        ).toEqual([]);
+        expect((await actor.editHistory(ctx))?.editCount).toBe(0);
+      });
+    });
   });
 
   /* ------------------------------------------------------------------ */

@@ -828,6 +828,11 @@ export class TierListActor
       notes: input.notes ?? null,
       id: requireUuid(input.tierListItemId ?? randomUUID(), "tierListItemId"),
     }));
+    // One id for two asks would record a row the insert's `ON CONFLICT DO
+    // NOTHING` silently dropped, and report the first entry twice.
+    if (new Set(asked.map((ask) => ask.id)).size !== asked.length) {
+      throw new ValidationError("addItems names one tierListItemId twice");
+    }
 
     const existingIds = new Set(aggregate.items.map((row) => row.id));
     const retried = asked.filter((ask) => existingIds.has(ask.id));
