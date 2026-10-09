@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   Drawer,
   DrawerContent,
@@ -14,6 +14,9 @@ import { keepOpenForToasts } from "./toastLayer";
 import { useReturnFocus } from "./useReturnFocus";
 
 export type SheetSnap = "peek" | "half" | "full";
+
+/** vaul's close transition (`TRANSITIONS.DURATION`, 0.5 s). */
+const CLOSE_MS = 500;
 
 /** Snap names → how much of the viewport height the sheet shows. */
 export const SNAP_FRACTION: Readonly<Record<SheetSnap, number>> = {
@@ -100,6 +103,23 @@ export function BottomSheet({
   const [snap, setSnap] = useState<number | string | null | undefined>(initial);
   const returnFocus = useReturnFocus(open);
 
+  // `onClosed` once the close transition is over, **however** the sheet was
+  // closed. vaul's own `onAnimationEnd` fires only for a close vaul started
+  // (drag, backdrop, Escape): a controlled `open={false}` from the parent —
+  // a row that closes the sheet and then wants a dialog — never reached it,
+  // so the dialog never opened. Watching `open` covers both, once; reopening
+  // before the timer cancels it.
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    const closing = wasOpen.current && !open;
+    wasOpen.current = open;
+    if (!closing) return;
+    const timer = window.setTimeout(() => onClosedRef.current?.(), CLOSE_MS);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
   // Re-opening starts from the declared snap, not wherever it was left.
   useEffect(() => {
     if (open) setSnap(initial);
@@ -120,9 +140,6 @@ export function BottomSheet({
       onOpenChange={onOpenChange}
       dismissible={dismissible}
       shouldScaleBackground={false}
-      onAnimationEnd={(nowOpen) => {
-        if (!nowOpen) onClosed?.();
-      }}
       {...snapProps}
     >
       <DrawerContent
