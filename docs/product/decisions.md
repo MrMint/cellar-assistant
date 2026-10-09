@@ -126,3 +126,35 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **Install prompt (N15).** "First save" counts a bottle added to a cellar or
   an item confirmed in the onboarding wizard, announced the moment it happens
   rather than at the next navigation.
+
+### Tier lists without typing (wave B "tierlists2": X16)
+
+- **Add entry's sections.** In your cellars (cellars you made or co-own),
+  Tasted, not ranked (your reviews and drink logs; for a place list "Been
+  there": rated, marked visited, or a drink logged there) and Friends ranked
+  (band 1 and up on lists **a friend created** that you may see — never a
+  stranger's public list, never a private one, never a place under review).
+  An entry is in the first section that has it; at most 30 a section, five
+  shown before "Show N more". Each row says why in words ("In Garage · 2
+  bottles", "Logged twice", "Riley: Outstanding · +1 friend") and where it
+  will land; your verdict is your review, else your newest scored log.
+- **Multi-add is one edit.** Rows are checkboxes and "Add N entries" sends
+  one `addTierListItems`: one history row, so the toast's single Undo takes
+  every one back. Entries already on the list by then are skipped and said.
+- **Templates.** Creating a list of a type you have rated offers "Start with
+  your ratings", **on by default**, with the count. The list lands pre-banded
+  (the shared `bandForScore`), best first, at most 100, as its first edit.
+  Ratings only — a drink log without a review does not seed it. Picking a type
+  names an unnamed list "My wines" until you type a name.
+- **Try this next is grounded and model-free.** Up to six catalog cards,
+  alternating a friend's top-two-band pick you have not had with neighbours
+  of this list's top-two-band entries (or bottles you love) — the stored item
+  vectors and name trigrams fused by rank (N08's arms), at a 0.85-similarity
+  floor. Never something you rated, logged, keep in a cellar or already
+  ranked. Each card's reason is a fact, never a number. Empty is said to the
+  owner as what would fill it, and is nothing at all for anyone else. The
+  model's own suggestion stays, retitled "A style to explore".
+- **The padlock is retired.** `isEditingLocked` is gone from the API and the
+  client (Arrange replaced it in X23). The `is_editing_locked` column stays
+  until a contract-phase migration drops it, so an older image still running
+  during a deploy keeps working.
