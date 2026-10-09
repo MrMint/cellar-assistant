@@ -143,9 +143,12 @@ export function MenuLineRow({
 }: MenuLineRowProps) {
   const name = menuLineText(line.menu_item_name);
   const matchedName = line.matched_item?.name ?? null;
-  const showMatch =
+  const sameName =
     matchedName !== null &&
-    matchedName.trim().toLowerCase() !== name.trim().toLowerCase();
+    matchedName.trim().toLowerCase() === name.trim().toLowerCase();
+  // A caller's `status` (the scan page's) says the match itself — "Matched
+  // to X" — so the row does not say it a second time above it.
+  const showMatch = matchedName !== null && !sameName && status === undefined;
   return (
     <li
       data-slot="menu-line"
@@ -161,7 +164,7 @@ export function MenuLineRow({
           type="button"
           data-slot="menu-line-open"
           aria-haspopup="dialog"
-          aria-label={`${name}${showMatch ? `, matched to ${matchedName}` : ""}`}
+          aria-label={`${name}${matchedName !== null && !sameName ? `, matched to ${matchedName}` : ""}`}
           onClick={onOpen}
           className="absolute inset-0 rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
         />
@@ -169,7 +172,7 @@ export function MenuLineRow({
       <MenuLineGlyph line={line} className="mt-0.5" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-start justify-between gap-3">
-          <p className="type-headline min-w-0 text-ink-1">{name}</p>
+          <p className="type-headline min-w-0 break-words text-ink-1">{name}</p>
           {line.menu_item_price != null && (
             <p className="type-callout tabular shrink-0 font-semibold text-ink-1">
               {formatMenuPrice(line.menu_item_price)}
@@ -177,7 +180,7 @@ export function MenuLineRow({
           )}
         </div>
         {line.menu_item_description && (
-          <p className="type-callout line-clamp-2 text-ink-2">
+          <p className="type-callout line-clamp-2 break-words text-ink-2">
             {line.menu_item_description}
           </p>
         )}
