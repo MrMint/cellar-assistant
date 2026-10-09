@@ -6,14 +6,16 @@ connection.
 
 ## Local AI
 
-Six features are backed by a model, and every one of them reaches it through
-an injectable seam rather than an AI client of its own:
+Every feature backed by a model reaches it through an injectable seam rather
+than an AI client of its own — one row per seam family below, one budget
+endpoint per entry in `MODEL_SEAMS` (`src/actors/budget-actor.ts`):
 
 | feature | seam | module |
 |---|---|---|
 | semantic search (`CellarActor.semanticQuery`, `recipeSearch(semanticQuery:)`, every `*SearchActor`) | `Embedder` | `src/lib/embeddings.ts` |
 | tier-list insights | `InsightsGenerator` | `src/actors/tier-list-actor.ts` |
 | item onboarding label defaults | `ItemDefaultsProvider` | `src/lib/item-defaults.ts` |
+| "Suggest details" on the item edit form (`suggestItemDetails`, X19) — text only, abstains rather than guess | `ItemSuggestionsProvider` | `src/lib/item-suggestions.ts` |
 | menu extraction, ambiguous-match verification | `MenuExtractionProvider`, `MenuMatchVerifier` | `src/lib/menu-ai.ts` |
 | recipe-photo vision | `RecipePhotoExtractor` | `src/lib/recipe-photo-ai.ts` |
 | review of a user-submitted place | `PlaceReviewer` | `src/actors/place-creation-actor.ts` |
@@ -43,10 +45,10 @@ the cached result is gone reads as an expired link. An item's shared vector
 takes in only its newest **public** photo; a private one never shapes it.
 
 `src/index.ts` calls `installAI()` at boot, which installs a real implementation
-behind all seven seams — or, with no provider configured, installs nothing and
+behind every seam — or, with no provider configured, installs nothing and
 leaves each seam throwing an error that names itself.
 
-Every one of those seven model calls is charged to `BudgetActor` before it runs
+Every one of those model calls is charged to `BudgetActor` before it runs
 (`811cad82`). Each seam has a monthly request cap and a cost cap
 (`MODEL_SPENDERS` in `src/actors/budget-actor.ts`). `ollama` and
 `openai-compatible` (whatever it points at) are priced at zero (`FREE_PROVIDERS`)
