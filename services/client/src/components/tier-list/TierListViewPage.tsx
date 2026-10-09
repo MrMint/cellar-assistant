@@ -354,7 +354,10 @@ export function TierListViewPage({
                   </IconButton>
                 </Hint>
               )}
-              {data.privacy !== "PRIVATE" && (
+              {/* X17: a PRIVATE list's owner still gets Share, which says how
+                  to make the list shareable (tierListShareBlock) instead of
+                  handing out a link only they can open. */}
+              {(data.privacy !== "PRIVATE" || data.isOwner) && (
                 <Hint label="Share">
                   <IconButton
                     variant="outline"
