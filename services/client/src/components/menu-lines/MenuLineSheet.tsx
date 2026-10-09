@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
-import { unwrapResult } from "@/lib/api/result";
+import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { formatMenuPrice, menuLineText } from "@/utilities/menu-line-text";
 import { displayItemName } from "@/utilities/smart-title-case";
 import { MenuLineGlyph, MenuLineReasons } from "./MenuLineRow";
@@ -120,7 +120,7 @@ function Candidates({
   canCorrect: boolean;
   onChanged?: () => void;
 }) {
-  const [{ data, fetching }] = useQuery({
+  const [{ data, fetching, error: transportError }, retry] = useQuery({
     query: MenuLineCandidatesQuery,
     variables: { text: candidateQuery(line), itemTypes: [type] },
   });
@@ -128,6 +128,14 @@ function Candidates({
   const result = data
     ? unwrapResult(data.itemSearch, "ItemSearchConnection")
     : null;
+  // A search that failed is not a search that found nothing: saying "nothing
+  // looks like this" after an error would be a claim the app cannot make.
+  const failure =
+    result !== null && !result.ok
+      ? result.error.message
+      : result === null && transportError !== undefined
+        ? failureFromTransport(transportError).message
+        : null;
   const candidates = result?.ok
     ? result.data.edges.map(({ node }) => ({
         id: node.id,
@@ -141,6 +149,22 @@ function Candidates({
       <div aria-busy className="flex flex-col gap-2">
         <Skeleton className="h-11 w-full" />
         <Skeleton className="h-11 w-full" />
+      </div>
+    );
+  }
+  if (failure !== null) {
+    return (
+      <div role="alert" className="flex flex-col items-start gap-2">
+        <p className="type-callout text-ink-2">
+          Couldn&apos;t look this up in the catalog just now.
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => retry({ requestPolicy: "network-only" })}
+        >
+          Try again
+        </Button>
       </div>
     );
   }

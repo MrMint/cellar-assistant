@@ -269,4 +269,28 @@ describe("MenuLineSheet — an unmatched line", () => {
     );
     assert.ok(link, "the candidate opens its item page");
   });
+
+  test("a search that failed says so, rather than claiming nothing matches", async () => {
+    const { client } = recording((sent) =>
+      opName(sent) === "MenuLineCandidates"
+        ? {
+            itemSearch: {
+              __typename: "ConflictError",
+              code: "CONFLICT",
+              reason: null,
+              message: "search is unavailable",
+              retryAt: null,
+            },
+          }
+        : {},
+    );
+    await mount(client, unmatchedLine(true));
+    await flush();
+    const text = document.body.textContent ?? "";
+    assert.match(text, /Couldn't look this up in the catalog/);
+    assert.doesNotMatch(text, /Nothing in the catalog looks like this/);
+    assert.ok(button(/Try again/));
+    // The way forward is still there.
+    assert.ok(button(/Add to catalog/));
+  });
 });
