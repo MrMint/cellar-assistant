@@ -545,3 +545,46 @@ describe("Recipe.makeability names what it cannot place", () => {
     );
   });
 });
+
+describe("Recipe.makeability names what is missing as the recipe does", () => {
+  it("a placed line by its own item's name, not the kind's label", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => recipeDto,
+      "RecipeActor.ingredients": () =>
+        pageOf([
+          ingredient("i1", { kind: "rye", role: "base" }),
+          ingredient("i2", { kind: "lime", role: "acid" }),
+          ingredient("i3", {
+            ref: { type: "SPIRIT", id: GENERIC_ID },
+            kind: "red_bitter",
+            role: "modifier",
+          }),
+          ingredient("i4", { kind: "aromatic_bitters", role: "bitters" }),
+        ]),
+      "BarActor.inventory": () => inventory,
+      "ItemActor.getGeneric": () => ({ id: GENERIC_ID, name: "Lime juice" }),
+      "ItemActor.get": () => ({ id: GENERIC_ID, name: "Campari" }),
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe {
+          makeability { status missing missingKinds }
+      } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({
+      makeability: {
+        status: "MISSING",
+        missing: ["Lime juice", "Campari"],
+        missingKinds: ["lime", "red_bitter"],
+      },
+    });
+    // Only the two missing lines are read — not the rye (a swap) or the
+    // bitters (in the pantry).
+    expect(
+      calls
+        .filter((call) => call.actorType === "ItemActor")
+        .map((call) => call.method),
+    ).toEqual(["getGeneric", "get"]);
+  });
+});

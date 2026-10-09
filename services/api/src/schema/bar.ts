@@ -50,7 +50,7 @@ import {
   ItemActorDescriptor,
   ingredientAvailability,
   ingredientItemType,
-  isBarKind,
+  itemActorId,
   MAKEABILITY_STATUSES,
   MAX_PAGE_SIZE,
   offsetPage,
@@ -384,23 +384,42 @@ builder.objectFields(RecipeType_, (t) => ({
           item: type === null ? null : { type, id: row.ref.id },
         };
       });
-      // An ingredient the vocabulary cannot place is named by what the
-      // recipe calls it ("Crème de violette"), not "An ingredient" — the
-      // same words What can I make uses. Only those lines, and only generic
-      // ones (a catalog bottle always has a kind or a type), so this is a
-      // read or two, not one per ingredient.
+      // Judge first, without names: a verdict with nothing missing, or with
+      // nothing required, needs none.
+      const unnamed = recipeMakeability(
+        lines.map((line) => ({ ...line, name: null })),
+        inventory,
+      );
+      if (unnamed.requiredCount === 0 || unnamed.missing.length === 0) {
+        return unnamed.requiredCount === 0 ? null : unnamed;
+      }
+      // Then name what is missing by what the recipe calls it ("Lime juice",
+      // "Crème de violette") — the same words What can I make uses, which
+      // reads them from the same rows — rather than by its vocabulary label
+      // ("Limes") or "An ingredient". Only the missing required lines are
+      // read, so this is a read or two, not one per ingredient.
       const names = await Promise.all(
-        lines.map(async ({ row, kind, isOptional, role }) => {
-          if (isBarKind(kind) || isOptional || role === "garnish") return null;
-          if (row.ref.type !== "GENERIC") return null;
+        lines.map(async (line) => {
+          if (line.isOptional || line.role === "garnish") return null;
+          const status = ingredientAvailability(line, inventory).status;
+          if (status === "HAVE" || status === "SUBSTITUTE") return null;
           try {
-            const generic = await context
-              .actor(ItemActorDescriptor, genericItemActorId(row.ref.id))
-              .getGeneric();
-            return generic.name;
+            if (line.row.ref.type === "GENERIC") {
+              const generic = await context
+                .actor(ItemActorDescriptor, genericItemActorId(line.row.ref.id))
+                .getGeneric();
+              return generic.name;
+            }
+            if (line.item !== null) {
+              const item = await context
+                .actor(ItemActorDescriptor, itemActorId(line.item))
+                .get();
+              return item.name;
+            }
           } catch {
-            return null;
+            // Unreadable (gone, or hidden): fall back to the kind's label.
           }
+          return null;
         }),
       );
       const result = recipeMakeability(
