@@ -133,9 +133,43 @@ export const GetCellarInfoQuery = graphql(
 );
 
 /**
- * One page of a cellar's bottles for the grid. Empty bottles are hidden by
- * `status`'s ACTIVE default (decision 4), so `totalCount` counts what the old
- * grid counted.
+ * One bottle on a `BottleCard` (N13b): the item's card fields, plus what the
+ * bottle itself knows — opened when, finished when, how full — and its own
+ * chosen photo (G15), which beats the item's first image. The same fields
+ * `CellarItemRow` (`lib/api/cellars.ts`) reads for the bottle page; nothing
+ * here is new to the schema.
+ */
+export const CellarBottleCardFragment = graphql(
+  `
+  fragment CellarBottleCard on CellarItem {
+    __typename
+    id
+    createdAt
+    openAt
+    emptyAt
+    percentageRemaining
+    displayImage {
+      __typename
+      id
+      placeholder
+      file {
+        __typename
+        id
+        url
+      }
+    }
+    item {
+      ...ItemCard
+    }
+  }
+`,
+  [ItemCardFragment],
+);
+
+/**
+ * One page of a cellar's bottles for the grid. `status` is the segment's
+ * (N13b): ACTIVE — not finished, decision 4 — unless asked otherwise, so by
+ * default `totalCount` counts what the old grid counted.
  */
 export const GetCellarItemsQuery = graphql(
   `
@@ -145,6 +179,7 @@ export const GetCellarItemsQuery = graphql(
     $after: String
     $types: [ItemType!]
     $sort: CellarItemSort
+    $status: CellarItemStatus
     $semanticQuery: String
   ) {
     cellar(id: $cellarId) {
@@ -156,6 +191,7 @@ export const GetCellarItemsQuery = graphql(
           after: $after
           types: $types
           sort: $sort
+          status: $status
           semanticQuery: $semanticQuery
         ) {
           totalCount
@@ -166,11 +202,7 @@ export const GetCellarItemsQuery = graphql(
           edges {
             cursor
             node {
-              __typename
-              id
-              item {
-                ...ItemCard
-              }
+              ...CellarBottleCard
             }
           }
         }
@@ -179,7 +211,7 @@ export const GetCellarItemsQuery = graphql(
     }
   }
 `,
-  [ItemCardFragment, ActorErrorFieldsFragment],
+  [CellarBottleCardFragment, ActorErrorFieldsFragment],
 );
 
 /**
@@ -242,11 +274,7 @@ export const GetCellarOverviewQuery = graphql(
           edges {
             cursor
             node {
-              __typename
-              id
-              item {
-                ...ItemCard
-              }
+              ...CellarBottleCard
             }
           }
         }
@@ -270,7 +298,7 @@ export const GetCellarOverviewQuery = graphql(
 `,
   [
     CellarInfoFragment,
-    ItemCardFragment,
+    CellarBottleCardFragment,
     CheckInRowFragment,
     ActorErrorFieldsFragment,
   ],

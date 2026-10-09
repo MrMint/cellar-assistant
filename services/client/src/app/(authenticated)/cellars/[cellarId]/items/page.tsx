@@ -13,7 +13,12 @@ import { ViewerQuery } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
-import { itemsSearchParamsCache, parseItemTypes } from "./searchParams";
+import {
+  itemsSearchParamsCache,
+  parseCellarSort,
+  parseCellarStatus,
+  parseItemTypes,
+} from "./searchParams";
 
 interface CellarItemsPageProps {
   params: Promise<{ cellarId: string }>;
@@ -35,8 +40,11 @@ export default async function CellarItemsPage({
 
   // Parse search params using nuqs cache with validation
   const resolvedSearchParams = await searchParams;
-  const { search, types } = itemsSearchParamsCache.parse(resolvedSearchParams);
+  const parsed = itemsSearchParamsCache.parse(resolvedSearchParams);
+  const { search, types } = parsed;
   const validTypes = parseItemTypes(types);
+  const sort = parseCellarSort(parsed.sort);
+  const status = parseCellarStatus(parsed.status);
 
   // Fetch cellar metadata immediately (for header)
   const [data, viewer] = await Promise.all([
@@ -69,17 +77,22 @@ export default async function CellarItemsPage({
         canAdd={canAdd}
         initialSearch={search}
         initialTypes={validTypes}
+        initialSort={sort}
+        initialStatus={status}
       />
 
       {/* Items grid streams in with Suspense */}
       <Suspense
-        key={`${search}-${JSON.stringify(types)}`}
+        key={`${search}-${JSON.stringify(types)}-${sort}-${status}`}
         fallback={<CellarItemsGridSkeleton />}
       >
         <CellarItemsGridServer
           cellarId={cellarId}
           search={search}
           types={validTypes}
+          sort={sort}
+          status={status}
+          canAdd={canAdd}
         />
       </Suspense>
     </div>

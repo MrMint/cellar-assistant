@@ -4,13 +4,20 @@ import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { cellarGridItem } from "./adapter";
 import { CellarItemsGrid } from "./CellarItemsGrid";
-import { cellarItemsVariables } from "./cellarItemsQuery";
+import {
+  type CellarSort,
+  type CellarStatus,
+  cellarItemsVariables,
+} from "./cellarItemsQuery";
 import { GetCellarItemsQuery } from "./fragments";
 
 interface CellarItemsGridServerProps {
   cellarId: string;
   search: string;
   types: ItemTypeValue[];
+  sort: CellarSort;
+  status: CellarStatus;
+  canAdd: boolean;
 }
 
 /**
@@ -26,11 +33,17 @@ export async function CellarItemsGridServer({
   cellarId,
   search,
   types,
+  sort,
+  status,
+  canAdd,
 }: CellarItemsGridServerProps) {
   const data = await apiServerQuery(
     GetCellarItemsQuery,
-    cellarItemsVariables(cellarId, { search, types }, null),
+    cellarItemsVariables(cellarId, { search, types, sort, status }, null),
   );
+  // The request's instant, so the client's first render of "Open · 8d"
+  // agrees with this one (`useNow`).
+  const asOf = Date.now();
   const result = unwrapResult(data.cellar, "Cellar");
   if (!result.ok) return <ApiError error={result.error} />;
 
@@ -44,6 +57,10 @@ export async function CellarItemsGridServer({
       cellarId={cellarId}
       search={search}
       types={types}
+      sort={sort}
+      status={status}
+      asOf={asOf}
+      canAdd={canAdd}
     />
   );
 }

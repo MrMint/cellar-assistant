@@ -9,7 +9,7 @@ rules; this file has the **how**.
 Every primitive here has tests (`primitives.test.tsx` for the
 server-rendered ones, `interactive.test.tsx` under happy-dom for the rest).
 Files with no `"use client"` (Link, IconButton, Page, FilterChip, TypeChip,
-Score, EmptyState, AIDraftField, ActionBar, UserAvatar, icons, nav, notify)
+Score, EmptyState, AIDraftField, ActionBar, UserAvatar, LabelPlate, icons, nav, notify)
 can be rendered from server components.
 
 ## The vocabulary, by the Joy names it replaced
@@ -335,11 +335,27 @@ via `className` — in a centred 44 target) / `lg`; `asChild` to wrap an
 **`FilterChip`** — `<FilterChip selected={on} onClick={toggle} count={12}>Open</FilterChip>`.
 `aria-pressed`; selected is ink, not brass; zero counts hidden.
 
+**`SortChip`** — `<SortChip options={[{ value: "open", label: "Open first" }, …]} value={sort} onValueChange={setSort} />`.
+"Sort by: Open first ▾", shaped like a `FilterChip`: a sheet of `radio`
+rows on a phone (a tap picks and closes; one tab stop, arrows move between
+rows), a radio menu from `md`.
+`overriddenBy="Best match"` shows that and disables it while something else
+orders the list (a search). `label` (default "Sort by") heads the sheet.
+
 **`TypeChip` / `TypeGlyph` / `itemTypeTokens` / `ITEM_TYPES_IN_ORDER`** —
 `<TypeChip type="WINE" />` is glyph + word on the type's tint;
 `itemTypeTokens[type]` has `label`, `glyph`, `textClass`, `tintClass`,
 `deepClass`. Order is always wine, beer, spirit, sake, coffee, tea. On touch,
 a glyph never stands without its word.
+
+**`LabelPlate` / `VesselSilhouette`** — `<LabelPlate type="WINE" plate={labelPlateFrom(…)} />`
+(N28): what an item looks like with no photo. A deterministic plate — the
+producer in Fraunces small caps, the name, a big Fraunces vintage ("NV" only
+for wine), region · ABV — on the type tint with one vessel per type at 12%.
+It fills its box; the caller sets the aspect. Decorative (`aria-hidden`) by
+default; `labelled` makes it an image named by its text (a detail hero);
+`muted` dims it (a finished bottle). Build the data with `labelPlateFrom`
+(`lib/items/label-plate.ts`) — never invent a field it does not have.
 
 **`Score`** — `<Score value={4.5} />` "4.5★" inline; `variant="pill"` on
 tiles; `variant="hero"` the Fraunces numeral; `count?`. One decimal only when
@@ -381,6 +397,6 @@ ancestor) + `underline` (`hover` default, `always`, `none`).
 
 ## Not built here (roadmap, design §3.4 of the migration plan)
 
-LabelPlate beyond what N28 ships, `ItemTile` density variants, pull-to-refresh,
+LabelPlate beyond N28's six vessels (B03's ~15 by style), `ItemTile` density variants, pull-to-refresh,
 View Transitions (B05 — `app/Link` is where type inference will go), the
 collapsing large title (B02), custom beverage glyphs (B03).

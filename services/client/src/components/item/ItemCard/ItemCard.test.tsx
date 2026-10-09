@@ -65,7 +65,16 @@ const skeleton = (html: string): string[] =>
             : `${number}`,
   );
 
-const base = { id: "bottle-1", itemId: "item-1", name: "Barolo" };
+/**
+ * A card with a photo: most tests below are about the title and the footer,
+ * and a photo keeps the LabelPlate (which prints the name) out of the way.
+ */
+const base = {
+  id: "bottle-1",
+  itemId: "item-1",
+  name: "Barolo",
+  displayImageUrl: "https://files.test/b.jpg?sig=2",
+};
 
 describe("ItemCard", () => {
   test("full card: image, linked title, subtitle + type chip, three-part footer", () => {
@@ -129,10 +138,50 @@ describe("ItemCard", () => {
     assert.match(html, /fill-brand/);
   });
 
-  test("no image: falls back to the bundled art for the type", () => {
-    const html = render(<ItemCard type="SAKE" href="/sakes/i" item={base} />);
-    assert.match(html, /data-next-image="fallback"/);
-    assert.match(html, /data-alt="A sake bottle"/);
+  test("no image: the item's own LabelPlate, not the type's clip art (N28)", () => {
+    const html = render(
+      <ItemCard
+        type="SAKE"
+        href="/sakes/i"
+        item={{
+          ...base,
+          name: "Dassai 23",
+          displayImageUrl: undefined,
+          plate: {
+            producer: "Asahi Shuzo",
+            name: "Dassai 23",
+            vintage: "2021",
+          },
+        }}
+      />,
+    );
+    assert.doesNotMatch(html, /data-next-image=|<img\b/);
+    const plate = openTag(html, 'data-slot="label-plate"');
+    assert.match(plate, /data-type="SAKE"/);
+    // Decorative: the title link already names the item.
+    assert.match(plate, /aria-hidden="true"/);
+    assert.match(html, />Asahi Shuzo</);
+    assert.match(html, />2021</);
+  });
+
+  test("a wine with no vintage is titled by its name alone", () => {
+    const html = render(
+      <ItemCard type="WINE" href="/wines/i" item={{ ...base, name: "Brut" }} />,
+    );
+    assert.match(html, />Brut<\/a>/);
+    assert.doesNotMatch(html, /undefined/);
+  });
+
+  test("no image and no plate data: a name-only plate", () => {
+    const html = render(
+      <ItemCard
+        type="TEA"
+        href="/teas/i"
+        item={{ ...base, name: "Sencha", displayImageUrl: undefined }}
+      />,
+    );
+    assert.match(openTag(html, 'data-slot="label-plate"'), /data-type="TEA"/);
+    assert.match(html, /data-slot="label-plate-name"[^>]*>Sencha</);
   });
 
   test("non-wine titles do not lead with a vintage", () => {

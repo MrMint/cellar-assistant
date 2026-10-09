@@ -21,6 +21,9 @@
  * - the viewer's `user_reviews: reviews_aggregate` → `myReview` (G7, API wave
  *   A): non-null means "you reviewed this", the gold star.
  *
+ * `country`, `region` and `alcoholContentPercentage` feed the LabelPlate
+ * (N28) — the region · ABV line a card shows when the item has no photo.
+ *
  * `style` is aliased per type for the reason `ItemAttributesFragment` gives:
  * the same response name may not carry two types across sibling fragments.
  */
@@ -33,6 +36,7 @@ export const ItemCardFragment = graphql(`
     id
     type
     name
+    country
     isFavorite
     favoriteCount
     myReview {
@@ -77,16 +81,20 @@ export const ItemCardFragment = graphql(`
       __typename
       vintage
       variety
+      region
+      alcoholContentPercentage
     }
     ... on Beer {
       __typename
       vintage
       beerStyle: style
+      alcoholContentPercentage
     }
     ... on Spirit {
       __typename
       vintage
       spiritStyle: style
+      alcoholContentPercentage
     }
     ... on Coffee {
       __typename
@@ -96,10 +104,13 @@ export const ItemCardFragment = graphql(`
       __typename
       vintageYear
       category
+      region
+      alcoholContentPercentage
     }
     ... on Tea {
       __typename
       category
+      region
     }
   }
 `);

@@ -28,12 +28,11 @@ describe("useMediaQuery", () => {
 });
 
 describe("useColumnCount", () => {
-  test("below sm: one column for six or fewer items, else two", () => {
-    function Probe({ n }: { n: number }) {
-      return <>{useColumnCount(n)}</>;
+  test("first paint (and a phone): two columns, however few bottles", () => {
+    function Probe() {
+      return <>{useColumnCount()}</>;
     }
-    assert.equal(renderToStaticMarkup(<Probe n={6} />), "1");
-    assert.equal(renderToStaticMarkup(<Probe n={7} />), "2");
+    assert.equal(renderToStaticMarkup(<Probe />), "2");
   });
 });
 

@@ -14,6 +14,7 @@
 
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
+import { labelPlateFrom } from "@/lib/items/label-plate";
 import {
   buildItemSubtitle,
   formatItemVintage,
@@ -51,6 +52,11 @@ export type ItemCardSource = {
   roastLevel?: string | null;
   /** Sake and tea's subtitle descriptor. */
   category?: string | null;
+  /** The LabelPlate's last line (N28): wine, sake, tea. */
+  region?: string | null;
+  country?: string | null;
+  /** Wine, beer, spirit, sake. */
+  alcoholContentPercentage?: number | null;
   /** G6. */
   favoriteCount?: number | null;
   /** G7. Non-null means the viewer reviewed it. */
@@ -124,6 +130,17 @@ export const itemCardFromItem = (item: ItemCardSource): ItemCardItem => {
     reviewed: reviewedFrom(item),
     favoriteCount: item.favoriteCount ?? null,
     isFavorite: item.isFavorite ?? false,
+    myScore: item.myReview?.score ?? null,
+    plate: labelPlateFrom({
+      type: item.type,
+      name: item.name,
+      producer: primaryBrandName(item),
+      vintage: item.vintage,
+      vintageYear: item.vintageYear,
+      region: item.region,
+      country: item.country,
+      alcoholContentPercentage: item.alcoholContentPercentage,
+    }),
   } satisfies ItemCardItem;
 };
 

@@ -1,3 +1,4 @@
+import { LabelPlate } from "@/components/app/LabelPlate";
 import { ItemCocktails } from "@/components/bar/ItemCocktails";
 import { YourLog } from "@/components/drink-log/YourLog";
 import { AddReview } from "@/components/review/AddReview";
@@ -82,7 +83,9 @@ export function ItemPageView({
           <ItemImage
             url={item.image?.url}
             placeholder={item.image?.placeholder}
-            fallback={config.fallback}
+            fallback={
+              <LabelPlate type={item.type} plate={item.plate} labelled />
+            }
           />
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-4 sm:col-span-2 lg:grid-cols-2">

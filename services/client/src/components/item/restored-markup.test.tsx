@@ -27,6 +27,7 @@ const { CellarItemPageView } = await import("./CellarItemPageView");
 const { ItemForm } = await import("./ItemForm");
 const { ItemImage } = await import("./ItemImage");
 const { itemOverflow } = await import("./header-actions");
+const { openTag } = await import("../../test-support/markup");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -71,6 +72,7 @@ const tea: ItemView = {
   reviewsEndCursor: null,
   reviewsHasNextPage: false,
   myReview: null,
+  plate: { producer: "West Lake", name: "Dragonwell", origin: "China" },
 };
 
 describe("ItemPageView (restored {T}Details)", () => {
@@ -154,8 +156,12 @@ describe("ItemPageView (restored {T}Details)", () => {
     assert.doesNotMatch(other, /aria-label="More actions"/);
   });
 
-  test("the fallback picture when there is no image", () => {
-    assert.match(html, /data-alt="A picture of a glass"/);
+  test("no image: the item's LabelPlate stands in, named by its text (N28)", () => {
+    const plate = openTag(html, 'data-slot="label-plate"');
+    assert.match(plate, /data-type="TEA"/);
+    assert.match(plate, /role="img"/);
+    assert.match(plate, /aria-label="Label: West Lake Dragonwell, China"/);
+    assert.doesNotMatch(html, /data-alt="A picture of a glass"/);
   });
 });
 
@@ -167,7 +173,7 @@ describe("ItemImage (restored)", () => {
         <ItemImage
           url={photo}
           placeholder="png;base64,AAAA"
-          fallback={{ src: "/x.png", width: 1, height: 1 }}
+          fallback={<span data-testid="plate" />}
         />
       </NextImageConfig>,
     );
