@@ -26,6 +26,7 @@ import { activeTab, CAPTURE_OPTIONS, isUnder, TABS } from "./nav";
 import { nextNavStack } from "./nav-history";
 import { InsetSection, ListRow, Page } from "./Page";
 import { formatScore, Score } from "./Score";
+import { MAIN_CONTENT_ID, SkipLink } from "./SkipLink";
 import { ITEM_TYPES_IN_ORDER, itemTypeTokens, TypeChip } from "./TypeChip";
 import { UserAvatar } from "./UserAvatar";
 
@@ -403,5 +404,17 @@ describe("icons", () => {
       );
     }
     assert.ok(Object.keys(rest).length >= 70);
+  });
+});
+
+describe("SkipLink (X21)", () => {
+  test("a link to the main content, hidden until it has keyboard focus", () => {
+    const markup = html(<SkipLink />);
+    assert.match(markup, new RegExp(`href="#${MAIN_CONTENT_ID}"`));
+    assert.match(markup, />Skip to content</);
+    const cls = classOf(markup, "skip-link");
+    assert.match(cls, /(^| )sr-only( |$)/);
+    assert.match(cls, /focus-visible:not-sr-only/);
+    assert.match(cls, /focus-visible:ring-/);
   });
 });

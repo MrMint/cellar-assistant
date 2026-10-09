@@ -25,8 +25,8 @@ import { formatDistance } from "@/lib/items/distance";
 import { distance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { getNextPlaceholder } from "@/utilities";
-import { RichTextDisplay } from "../common/RichTextDisplay";
 import { formatRating } from "../common/rating/rating";
+import { plainTextFromRichText } from "../common/rich-text";
 import type { ActivityEntry, ActivityKind } from "./adapter";
 import { fadeInLeft, fadeShort, staggerContainerFast } from "./search-motion";
 import { useHasMounted, useHydratedReducedMotion } from "./useHasMounted";
@@ -322,10 +322,12 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
                         )}
 
                       {/* Review text snippet */}
+                      {/* One clipped line: plain words, not a read-only
+                          editor (which is a textbox to assistive tech). */}
                       {entry.kind === "reviewed" && entry.reviewText && (
-                        <div className="mt-0.5 max-h-[1.4em] overflow-hidden text-ink-2 text-xs italic [&_[contenteditable]]:max-h-[1.4em] [&_[contenteditable]]:overflow-hidden [&_[contenteditable]]:p-0 [&_p]:m-0">
-                          <RichTextDisplay text={entry.reviewText} />
-                        </div>
+                        <p className="mt-0.5 truncate text-ink-2 text-xs italic">
+                          {plainTextFromRichText(entry.reviewText)}
+                        </p>
                       )}
                     </div>
 

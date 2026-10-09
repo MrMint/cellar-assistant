@@ -104,3 +104,36 @@ export const richTextFromReviewText = (text: unknown): string | null => {
  */
 export const RICH_TEXT_CONTENT =
   "type-body max-h-80 overflow-y-auto overflow-x-hidden px-4 text-ink-1 [&_p]:my-4";
+
+type LexicalNode = { type?: unknown; text?: unknown; children?: unknown };
+
+/** Inline nodes join their neighbours directly; anything else is a block. */
+const INLINE_TYPES = new Set(["text", "link", "autolink", "hashtag"]);
+
+/**
+ * A serialized Lexical state (`richTextFromReviewText`'s output) → its words
+ * on one line, blocks (paragraphs, list items, quotes) separated by a space.
+ * For a one-line preview (Recent Activity), where an editor — even a
+ * read-only one — would be a textbox in the accessibility tree around a
+ * single clipped line. Anything unparsable is returned as it came.
+ */
+export const plainTextFromRichText = (state: string): string => {
+  let root: unknown;
+  try {
+    root = (JSON.parse(state) as { root?: unknown }).root;
+  } catch {
+    return state;
+  }
+  const textOf = (node: unknown): string => {
+    if (typeof node !== "object" || node === null) return "";
+    const { type, text, children } = node as LexicalNode;
+    if (typeof text === "string") return text;
+    if (type === "linebreak") return " ";
+    const inner = Array.isArray(children) ? children.map(textOf).join("") : "";
+    return typeof type === "string" && INLINE_TYPES.has(type)
+      ? inner
+      : ` ${inner} `;
+  };
+  if (typeof root !== "object" || root === null) return "";
+  return textOf(root).replace(/\s+/g, " ").trim();
+};

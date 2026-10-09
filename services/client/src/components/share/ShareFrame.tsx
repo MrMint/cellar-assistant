@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ActionBar } from "@/components/app/ActionBar";
 import { Link } from "@/components/app/Link";
 import { Page } from "@/components/app/Page";
+import { mainContentProps } from "@/components/app/SkipLink";
 import { Button } from "@/components/ui/button";
 import { withReturnTo } from "@/utilities/sanitize-return-to";
 
@@ -10,6 +11,9 @@ import { withReturnTo } from "@/utilities/sanitize-return-to";
  * navigate yet — just the name, a way to sign in, and one brass invitation
  * pinned within thumb reach. Both buttons come back to `canonicalPath`, the
  * URL the viewer is on, through sign-in or a social sign-up (D19).
+ *
+ * Landmarks (X21): the name bar is the page's `header`, everything under it
+ * its `<main>`.
  *
  * The page's own scroller, as the app shell's inner one would be, so the
  * `ActionBar` rides its bottom edge.
@@ -43,7 +47,10 @@ export function ShareFrame({
           </Link>
         </Button>
       </header>
-      <div className="flex flex-1 flex-col px-4 pt-4">
+      <main
+        {...mainContentProps}
+        className="flex flex-1 flex-col px-4 pt-4 outline-none"
+      >
         <Page withActionBar className="flex-1">
           {children}
         </Page>
@@ -65,7 +72,7 @@ export function ShareFrame({
             </Link>
           </Button>
         </ActionBar>
-      </div>
+      </main>
     </div>
   );
 }

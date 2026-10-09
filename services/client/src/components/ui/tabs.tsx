@@ -60,6 +60,8 @@ function TabsTrigger({
   );
 }
 
+// Radix makes a panel a Tab stop when it holds nothing focusable, so it needs
+// a visible focus ring like any control (X21).
 function TabsContent({
   className,
   ...props
@@ -67,7 +69,10 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 outline-none", className)}
+      className={cn(
+        "flex-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        className,
+      )}
       {...props}
     />
   );

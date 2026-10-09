@@ -70,6 +70,7 @@ const { recordNavigation } = await import("./nav-history");
 const { Toaster } = await import("./Toaster");
 const { dismissNotification, notify, UNDO_TOAST_MS } = await import("./notify");
 const { AppShell } = await import("./AppShell");
+const { MAIN_CONTENT_ID } = await import("./SkipLink");
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -438,6 +439,19 @@ describe("AppShell", () => {
     assert.match(main?.className ?? "", /overflow-y-auto/);
     assert.ok(container.querySelector('[data-slot="side-rail"]'));
     assert.ok(container.querySelector('[data-slot="tab-bar"]'));
+  });
+
+  test("X21: the main is the skip link's target, and the navs are named", async () => {
+    pathname = "/cellars";
+    await render(<AppShell>page</AppShell>);
+    const main = container.querySelector("main");
+    assert.equal(main?.id, MAIN_CONTENT_ID);
+    // Focusable by script only, so following the skip link lands focus in it.
+    assert.equal(main?.getAttribute("tabindex"), "-1");
+    const navs = [...container.querySelectorAll("nav")];
+    assert.ok(navs.length >= 2);
+    for (const nav of navs)
+      assert.equal(nav.getAttribute("aria-label"), "Main");
   });
 
   test("records in-app history for AppBar's Back", async () => {
