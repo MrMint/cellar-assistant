@@ -1,3 +1,9 @@
+-- Regenerated at merge as 20261009005024 (was 20261008214058 on wa/tierlists),
+-- so it sorts after X27's 20261008214722/214724, X02's 20261008230209, X08's
+-- 20261008231951, X19's 20261008233536 and X14's 20261008235751 that other
+-- databases already have; the snapshot now chains from X14's
+-- (recipe_ingredient_meta_bar_pantry_recipe_love). The SQL below is unchanged.
+--
 -- D4 (tier lists: "keep a full edit history per tier list so the owner can
 -- undo/redo mistakes"): an append-only log of every change to a list's
 -- entries.
