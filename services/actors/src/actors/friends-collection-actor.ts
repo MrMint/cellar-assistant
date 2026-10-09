@@ -101,7 +101,6 @@ import {
   canSeeSql,
   friendIdsOf,
   type VisibilityScope,
-  visibilityScope,
 } from "../lib/visibility-sql.ts";
 
 type FriendRow = {
@@ -588,8 +587,9 @@ export class FriendsCollectionActor
   }
 
   /**
-   * **ids** — the friend's own tier lists `canSeeTierList` admits: their
-   * PUBLIC and FRIENDS lists, never a PRIVATE one. Ordered like
+   * **ids** — the friend's own tier lists `canSeeTierList` admits for a
+   * friend (`#asFriend`): their PUBLIC and FRIENDS lists, never a PRIVATE
+   * one, whoever is asking. Ordered like
    * `/tier-lists`, by when the contents last moved.
    */
   async profileTierLists(
@@ -599,10 +599,11 @@ export class FriendsCollectionActor
   ): Promise<Page<string>> {
     const sort = sql`t.content_updated_at`;
     const id = sql`t.id`;
+    const asFriend = this.#asFriend(ctx);
     const scope = async (): Promise<PageScope> => ({
       from: sql`public.tier_lists t`,
       where: sql`t.created_by_id = ${filter.profileOf}::uuid and ${canSeeSql(
-        await visibilityScope(this.db, ctx),
+        await asFriend(),
         { createdBy: sql`t.created_by_id`, privacy: sql`t.privacy` },
       )}`,
     });
@@ -642,10 +643,11 @@ export class FriendsCollectionActor
   ): Promise<Page<string>> {
     const sort = sql`c.created_at`;
     const id = sql`c.id`;
+    const asFriend = this.#asFriend(ctx);
     const scope = async (): Promise<PageScope> => ({
       from: sql`public.cellars c`,
       where: sql`${cellarOwnedBySql(filter.profileOf, "c")} and ${canSeeSql(
-        await visibilityScope(this.db, ctx),
+        await asFriend(),
         {
           createdBy: sql`c.created_by_id`,
           privacy: sql`c.privacy`,
@@ -692,10 +694,11 @@ export class FriendsCollectionActor
   ): Promise<Page<ItemCheckInDto>> {
     const sort = sql`ci.created_at`;
     const id = sql`ci.id`;
+    const asFriend = this.#asFriend(ctx);
     const scope = async (): Promise<PageScope> => ({
       from: sql`public.check_ins ci`,
       where: sql`ci.user_id = ${filter.profileOf}::uuid and ${canSeeCheckInSql(
-        await visibilityScope(this.db, ctx),
+        await asFriend(),
         "ci",
       )}`,
     });
@@ -705,7 +708,7 @@ export class FriendsCollectionActor
         filter,
         page,
         async (after, limit) => {
-          const visible = await visibilityScope(this.db, ctx);
+          const visible = await asFriend();
           const { from, where } = await scope();
           const { rows } = await this.db.execute<ProfileLogRow>(sql`
             select ${checkInColumns(
@@ -746,6 +749,34 @@ export class FriendsCollectionActor
     }
     requireActivityFilter(input);
     return "allow";
+  }
+
+  /**
+   * What a profile section is filtered by: the viewer **as a friend** —
+   * never `visibilityScope`'s `"everything"`, even for an admin. A profile is
+   * what someone shares with their friends, and the gate already holds an
+   * admin to friendship (`#authorizeProfile`); listing an admin's friend's
+   * PRIVATE list here would show them, on a social page, something that
+   * friend never shared. Opening a row by its id is still the policy
+   * package's call, unchanged.
+   *
+   * Lazy and read once per turn: the page and its `count(*)` share it, and a
+   * turn `authorize` answered `"empty"` never reads it at all.
+   */
+  #asFriend(ctx: Ctx): () => Promise<VisibilityScope> {
+    let scope: Promise<VisibilityScope> | null = null;
+    return () => {
+      scope ??= (async (): Promise<VisibilityScope> => {
+        const viewer = ctx.viewerId;
+        if (viewer === null) return { kind: "nothing" };
+        return {
+          kind: "viewer",
+          viewer,
+          friendIds: friendIdsOf(viewer, await friendshipsOf(this.db, viewer)),
+        };
+      })();
+      return scope;
+    };
   }
 
   /**

@@ -14,6 +14,7 @@
  *   what they said (`canSeeCheckInDetails`'s friend branch).
  */
 import {
+  adminCtx,
   NotFoundError,
   PROFILE_NOT_SHARED,
   pageArgs,
@@ -131,6 +132,33 @@ describe.skipIf(skip)("FriendsCollectionActor — friend profile (X18)", () => {
         [pub, friendsOnly].sort(),
       );
       expect(page.totalCount).toBe(2);
+    });
+  });
+
+  it("holds an admin to what a friend shares: no PRIVATE list or cellar on the profile", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const friend = await seedUser(db);
+      await seedFriendship(db, viewer, friend);
+      const shared = await seedTierList(db, {
+        createdById: friend,
+        privacy: "FRIENDS",
+      });
+      await seedTierList(db, { createdById: friend, privacy: "PRIVATE" });
+      const open = await seedCellar(db, {
+        createdById: friend,
+        privacy: "FRIENDS",
+      });
+      await seedCellar(db, { createdById: friend, privacy: "PRIVATE" });
+
+      const actor = await actorFor(db, viewer);
+      const ctx = adminCtx(viewer, "r");
+      const filter = { profileOf: friend };
+      const lists = await actor.profileTierLists(ctx, filter, FIRST);
+      expect(lists.entries.map((e) => e.node)).toEqual([shared]);
+      expect(lists.totalCount).toBe(1);
+      const cellars = await actor.profileCellars(ctx, filter, FIRST);
+      expect(cellars.entries.map((e) => e.node)).toEqual([open]);
     });
   });
 
