@@ -5,6 +5,8 @@
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+// A test may import the actor contracts; the client bundle may not.
+import { MAX_BATCH_ADD } from "@cellar-assistant/contracts";
 import {
   type AddEntryCandidate,
   addButtonLabel,
@@ -16,7 +18,7 @@ import {
   togglePick,
   tryNextReason,
 } from "./add-entry";
-import { defaultListName, ratedSummary } from "./TierListForm";
+import { defaultListName, ratedSummary, TEMPLATE_CAP } from "./TierListForm";
 
 const wine = (
   id: string,
@@ -267,5 +269,12 @@ describe("templates on the create form", () => {
     assert.equal(ratedSummary("wine", 12), "12 wines you've rated");
     assert.equal(ratedSummary("place", 1), "1 place you've rated");
     assert.equal(ratedSummary("sake", 3), "3 sake you've rated");
+    // Only the best 100 go on (MAX_BATCH_ADD), so the form says so.
+    assert.equal(TEMPLATE_CAP, MAX_BATCH_ADD);
+    assert.equal(ratedSummary("wine", 100), "100 wines you've rated");
+    assert.equal(
+      ratedSummary("wine", 140),
+      "Your best 100 of the 140 wines you've rated",
+    );
   });
 });

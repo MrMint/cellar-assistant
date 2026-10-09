@@ -75,7 +75,17 @@ export const defaultListName = (listType: string): string => {
   return label === undefined ? "" : `My ${label.label.toLowerCase()}`;
 };
 
-/** "12 wines you've rated", "1 place you've rated". */
+/**
+ * The most a list started from your ratings holds: the server's
+ * `MAX_BATCH_ADD` (`@cellar-assistant/contracts`), which the client bundle
+ * does not import. Past it, the best ones go on, and the form says so.
+ */
+export const TEMPLATE_CAP = 100;
+
+/**
+ * "12 wines you've rated", "1 place you've rated" — and past the cap, "Your
+ * best 100 of the 140 wines you've rated", since only those go on.
+ */
 export const ratedSummary = (listType: string, count: number): string => {
   const label =
     listTypeOptions.find((option) => option.value === listType)?.label ??
@@ -84,7 +94,9 @@ export const ratedSummary = (listType: string, count: number): string => {
     count === 1
       ? (SINGULAR[listType] ?? label.toLowerCase())
       : label.toLowerCase();
-  return `${count} ${noun} you've rated`;
+  return count > TEMPLATE_CAP
+    ? `Your best ${TEMPLATE_CAP} of the ${count} ${noun} you've rated`
+    : `${count} ${noun} you've rated`;
 };
 
 const SINGULAR: Record<string, string> = {
@@ -134,6 +146,9 @@ export function TierListForm({
   const [{ data: templateData }] = useQuery({
     query: TierListTemplatesQuery,
     pause: isEditing,
+    // A rating made since the last visit changes the count (and whether the
+    // switch is offered at all): show the cached answer, then the fresh one.
+    requestPolicy: "cache-and-network",
   });
   const ratedCounts = useMemo(() => {
     const counts = new Map<string, number>();
