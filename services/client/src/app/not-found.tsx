@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MainContent } from "@/components/app/main-content";
 import { AppShell } from "@/components/shell/AppShell";
 import { NotFoundMessage } from "@/components/shell/NotFoundMessage";
 import { getOptionalServerUser } from "@/utilities/auth-server";
@@ -16,7 +17,13 @@ export const metadata: Metadata = { title: "Not found" };
  */
 export default async function NotFound() {
   const user = await getOptionalServerUser();
-  if (user === null) return <NotFoundMessage signedIn={false} />;
+  if (user === null)
+    return (
+      // No shell to give it one: the message is the page's main (X21).
+      <MainContent className="flex min-w-0 flex-1 flex-col">
+        <NotFoundMessage signedIn={false} />
+      </MainContent>
+    );
   return (
     <AppShell>
       <NotFoundMessage />

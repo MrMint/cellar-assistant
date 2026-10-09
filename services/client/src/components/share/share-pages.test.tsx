@@ -10,6 +10,7 @@ import { inviteShareRequest } from "./InviteFriendsCard";
 import { acceptFailureCopy, InviteHero, inviteCopy } from "./InviteHero";
 import { recipeDescription, tierListDescription } from "./metadata";
 import { SharedItemView, sharedItemSubtitle } from "./SharedItemView";
+import { SharedNotFound } from "./SharedNotFound";
 import {
   formatAmount,
   recipeFacts,
@@ -54,6 +55,23 @@ describe("ShareFrame", () => {
     assert.match(html, />Join Cellar Assistant</);
     // No tab bar: there is no app to navigate yet.
     assert.doesNotMatch(html, /data-slot="tab-bar"/);
+  });
+});
+
+describe("X21: a main landmark, the skip link's target", () => {
+  test("the share frame's content is the page's main", () => {
+    const html = renderToStaticMarkup(
+      <ShareFrame canonicalPath="/tier-lists/abc" cta="Join">
+        <p>content</p>
+      </ShareFrame>,
+    );
+    assert.equal(html.match(/<main\b/g)?.length, 1);
+    assert.match(html, /<main[^>]*id="main-content"[^>]*tabindex="-1"/i);
+  });
+
+  test("so is a shared link's not-found message, which has no frame", () => {
+    const html = renderToStaticMarkup(<SharedNotFound />);
+    assert.match(html, /<main[^>]*id="main-content"/);
   });
 });
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ICON_STROKE, NoResults } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { MainContent } from "@/components/app/main-content";
 import { ShellMessage } from "@/components/shell/ShellMessage";
 import { NOT_FOUND_COPY } from "@/components/shell/shell-copy";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,8 @@ export function SharedNotFound() {
     setHere(`${window.location.pathname}${window.location.search}`);
   }, []);
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    // The page's whole frame, so it is the skip link's target too (X21).
+    <MainContent className="flex min-w-0 flex-1 flex-col">
       <ShellMessage
         copy={NOT_FOUND_COPY}
         icon={<NoResults strokeWidth={ICON_STROKE} />}
@@ -38,6 +40,6 @@ export function SharedNotFound() {
           </Button>
         }
       />
-    </div>
+    </MainContent>
   );
 }

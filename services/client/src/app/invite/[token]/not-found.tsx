@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ICON_STROKE, People } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { MainContent } from "@/components/app/main-content";
 import { AppShell } from "@/components/shell/AppShell";
 import { ShellMessage } from "@/components/shell/ShellMessage";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,9 @@ export default async function InviteNotFound() {
     />
   );
   return viewer === null ? (
-    <div className="flex min-w-0 flex-1 flex-col">{message}</div>
+    <MainContent className="flex min-w-0 flex-1 flex-col">
+      {message}
+    </MainContent>
   ) : (
     <AppShell>{message}</AppShell>
   );
