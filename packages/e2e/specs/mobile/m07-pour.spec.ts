@@ -9,8 +9,9 @@ import { Gql } from "../../fixtures/test.ts";
  * One sealed tea in a fresh private cellar, and a tier list it sits on in
  * Good:
  *
- * 1. The bottle page offers Pour **before** the bottle is opened, in the
- *    ActionBar inside the viewport. Dragging the liquid moves the level (a
+ * 1. The bottle URL (X09's item page with that bottle selected) offers Pour
+ *    **before** the bottle is opened, as the ActionBar's primary inside the
+ *    viewport. Dragging the liquid moves the level (a
  *    slider); a preset sets it exactly; the pour logs a drink, opens the
  *    bottle and sets the level in one tap; the toast's Undo seals it again
  *    and takes the log back.
@@ -130,7 +131,7 @@ test("a sealed bottle pours: the first pour opens it, and Undo seals it again", 
 
   // Before the bottle is opened, Pour is the page's primary action — in the
   // thumb zone, above the tab bar, without scrolling.
-  const bar = page.getByRole("toolbar", { name: "This bottle" });
+  const bar = page.getByRole("toolbar", { name: "Item actions" });
   const pour = bar.getByRole("button", { name: "Pour", exact: true });
   await expect(pour).toBeVisible({ timeout: 20_000 });
   const viewport = page.viewportSize();
@@ -201,9 +202,13 @@ test("a sealed bottle pours: the first pour opens it, and Undo seals it again", 
   await expect(page.getByText("Remaining: 97%")).toBeVisible({
     timeout: 20_000,
   });
-  await expect(
-    page.getByRole("list", { name: "Check-ins" }).locator("time").first(),
-  ).toBeVisible({ timeout: 20_000 });
+  // The pour logged the drink: it is in "Your log".
+  const log = page
+    .locator("section", {
+      has: page.getByRole("heading", { name: "Your log" }),
+    })
+    .locator('[data-slot="drink-log-entry"]');
+  await expect(log).toHaveCount(1, { timeout: 20_000 });
 
   // Undo: the log goes, the level comes back, the seal too.
   await page.getByRole("button", { name: "Undo" }).click();
@@ -213,7 +218,7 @@ test("a sealed bottle pours: the first pour opens it, and Undo seals it again", 
   await expect(
     page.getByRole("button", { name: "Mark as opened" }),
   ).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("list", { name: "Check-ins" })).toHaveCount(0);
+  await expect(log).toHaveCount(0, { timeout: 20_000 });
 
   expect(noise.pageErrors).toEqual([]);
 });

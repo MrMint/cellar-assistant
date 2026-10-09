@@ -628,6 +628,16 @@ export type ItemActorInterface = {
   /** Computed in memory from the loaded reviews; replaces `_aggregate` (§2.1). */
   score(ctx: Ctx): Promise<ItemScoreDto>;
   /**
+   * X09: the item page's taste header, "Friends" — the same average as
+   * `score`, over the reviews of the viewer's friends only. The friend set is
+   * read inside the actor from the viewer's own `friends` rows (as
+   * `RankingsActor`'s `FRIENDS` scope is), never accepted from a caller, so
+   * no one can average over a social graph they cannot read. The viewer's own
+   * review is not in it; no friends (or an anonymous or `system` ctx) is
+   * `{ average: null, count: 0 }`.
+   */
+  friendsScore(ctx: Ctx): Promise<ItemScoreDto>;
+  /**
    * UI parity G7: the viewer's own newest review of this item, or `null` —
    * the old card's gold star (`user_reviews` aggregate) and the tier-list
    * row's score. Read from the reviews this actor already holds. Anonymous is
@@ -710,6 +720,7 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     deleteReview: {},
     reviews: {},
     score: {},
+    friendsScore: {},
     myReview: {},
     reviewBy: {},
     // Each enqueues `regenerateVector` (N08): the item's brands are part of

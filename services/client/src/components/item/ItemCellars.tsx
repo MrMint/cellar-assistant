@@ -34,7 +34,7 @@ type ItemCellarsProps = {
  */
 export const ItemCellars = ({ cellars, total }: ItemCellarsProps) => {
   return (
-    <ItemSection title="Located in:">
+    <ItemSection title="Located in">
       {cellars.length > 0 && (
         <ul className="-mx-4 flex flex-col divide-y divide-line border-line border-t">
           {cellars.map((cellar) => (
@@ -65,8 +65,8 @@ export const ItemCellars = ({ cellars, total }: ItemCellarsProps) => {
         </ul>
       )}
       {cellars.length === 0 && (
-        <p className="type-body p-4 text-center text-ink-2">
-          Not in any cellars, variety is the spice of life!
+        <p className="type-callout text-ink-2">
+          Not in any cellar you can see.
         </p>
       )}
       <HeldBackNote shown={cellars.length} total={total} noun="cellars" />

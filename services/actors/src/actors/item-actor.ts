@@ -166,6 +166,8 @@ import {
   type StoredVector,
   storedVector,
 } from "../lib/vectors.ts";
+import { friendshipsOf } from "../lib/visibility.ts";
+import { friendIdsOf } from "../lib/visibility-sql.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Rows                                                                        */
@@ -579,6 +581,39 @@ export class ItemActor
     const aggregate = this.#requireItem();
     requireSignedIn(ctx, "view an item score");
     return scoreOf(aggregate.reviews);
+  }
+
+  /**
+   * X09: {@link scoreOf} over the reviews of the viewer's friends — the item
+   * page's taste header, "Friends".
+   *
+   * The friend set is read here, fresh, from the viewer's own `friends` rows
+   * (either direction, as `friendshipsOf` matches: an acceptance is two rows
+   * delivered by the outbox), never taken from the caller — `RankingsActor`'s
+   * `FRIENDS` scope, applied to one item. `friends` belongs to another actor,
+   * so it is not cached across turns (§1.3). The reviews are this actor's own
+   * and already world-readable to a signed-in viewer (`reviews`), so the
+   * answer reveals nothing a viewer could not page through; what the server
+   * owns is *whose* reviews count.
+   */
+  async friendsScore(ctx: Ctx): Promise<ItemScoreDto> {
+    const aggregate = this.#requireItem();
+    requireSignedIn(ctx, "view an item score");
+    const viewer = ctx.viewerId;
+    if (viewer === null) return scoreOf([]);
+    const friendIds = new Set(
+      friendIdsOf(viewer, await friendshipsOf(this.db, viewer)),
+    );
+    // One review per friend: the newest, as `myReview` reads the viewer's own
+    // (`item_reviews` has no one-per-user constraint; the cache is newest
+    // first), so a friend who reviewed twice is not counted twice.
+    const seen = new Set<string>();
+    const counted = aggregate.reviews.filter((row) => {
+      if (!friendIds.has(row.userId) || seen.has(row.userId)) return false;
+      seen.add(row.userId);
+      return true;
+    });
+    return scoreOf(counted);
   }
 
   /**

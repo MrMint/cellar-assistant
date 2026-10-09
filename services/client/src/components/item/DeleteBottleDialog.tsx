@@ -5,33 +5,23 @@ import { useEffect, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import { AddToTierListButton } from "@/components/tier-list/AddToTierListButton";
-import type { TierListEntityType } from "@/components/tier-list/constants";
 import { Button } from "@/components/ui/button";
 import { RemoveItemFromCellarMutation } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 import { formatItemType } from "@/utilities";
 import { FinishBottleDialogs } from "./FinishBottleDialogs";
 import { deleteBottleWarning } from "./finish-bottle";
-import { ItemAppBar } from "./ItemAppBar";
 import { LoadingButton } from "./LoadingButton";
 import { useFinishBottle } from "./useFinishBottle";
 
-type CellarItemHeaderProps = {
-  /** The bottle (`cellar_items.id`). */
-  itemId: string;
-  /** The underlying catalog item id (wine/beer/…), used for tier lists. */
-  entityId: string;
-  itemName: string | undefined;
+export type DeleteBottleDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   itemType: ApiItemType;
+  itemName: string | undefined;
   cellarId: string;
-  cellarName: string | undefined;
-  isOwner: boolean;
-  /** The edit page, for the item's creator; `null` leaves "Edit item" out. */
-  editHref: string | null;
-  /** Every check-in on this bottle — the ones a delete takes with it. */
-  checkInCount: number;
-  /** The bottle's state, for "Mark finished instead" and its Undo (N13a). */
+  /** The bottle (`cellar_items.id`). */
+  bottleId: string;
   bottle: {
     openAt: string | null;
     emptyAt: string | null;
@@ -40,51 +30,46 @@ type CellarItemHeaderProps = {
 };
 
 /**
- * `82450ad1:src/components/item/CellarItemHeader.tsx`, restored.
+ * "Delete bottle" behind the item page's `⋯` (X09; design §2: Delete last,
+ * with a confirm behind it) — the old `CellarItemHeader`'s dialog, lifted
+ * out when the bottle page became the item page with a bottle selected.
  *
- * `deleteCellarItemAction` → `removeItemFromCellar` (which also removes the
- * bottle's check-ins — `check_ins` is `ON DELETE RESTRICT`), then the old
- * `router.replace` to the cellar's items. A refusal is shown in the dialog
- * rather than leaving the spinner to stop silently. "Add to Tier List" is the
- * tier-lists wave's restored button, keyed on the catalog item.
- *
- * The header is `ItemAppBar` (N26, D7): Back to the cellar, the old crumbs
- * from `md` up, Share, and `⋯` with "Edit item" (the item's creator) and
- * "Delete item" last (the cellar's owner). The Joy header showed both as
- * buttons, disabled for anyone they did not apply to; the overflow leaves
- * them out instead. Delete opens the sheet below — a bottom sheet on phones.
- *
- * N13a: the dialog says how many check-ins the delete takes with it and, for
- * a bottle still in the cellar, offers "Mark finished instead" — which keeps
- * them and comes with the same Undo as finishing from the slider.
+ * `removeItemFromCellar`, then back to the cellar (the bottle's URL no
+ * longer names anything). For a bottle still in the cellar it offers "Mark
+ * finished instead" first (N13a), which is almost always what someone who
+ * drank it meant, with the same Undo as finishing from the slider. A refusal
+ * stays in the dialog rather than stopping a spinner silently.
  */
-export const CellarItemHeader = ({
+export function DeleteBottleDialog({
+  open,
+  onOpenChange,
   itemType,
-  itemId,
-  entityId,
   itemName,
   cellarId,
-  cellarName,
-  isOwner,
-  editHref,
-  checkInCount,
+  bottleId,
   bottle,
-}: CellarItemHeaderProps) => {
+}: DeleteBottleDialogProps) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [hasDeleted, setHasDeleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, removeItem] = useMutation(RemoveItemFromCellarMutation);
-  const finish = useFinishBottle({ cellarId, cellarItemId: itemId });
+  const finish = useFinishBottle({ cellarId, cellarItemId: bottleId });
   const isFinishing = finish.state.phase === "finishing";
 
   const isDisabled = isPending || hasDeleted || isFinishing;
   const warning = deleteBottleWarning({
     itemName,
-    checkInCount,
     isFinished: bottle.emptyAt !== null,
   });
+
+  // The dialog closes once the bottle is finished; a refusal stays in it.
+  const finishPhase = finish.state.phase;
+  const finishError = finish.state.phase === "idle" ? finish.state.error : null;
+  const shownError = error ?? finishError;
+  useEffect(() => {
+    if (finishPhase === "finished") onOpenChange(false);
+  }, [finishPhase, onOpenChange]);
 
   const handleFinishInstead = () => {
     setError(null);
@@ -94,18 +79,10 @@ export const CellarItemHeader = ({
     });
   };
 
-  // The dialog closes once the bottle is finished; a refusal stays in it.
-  const finishPhase = finish.state.phase;
-  const finishError = finish.state.phase === "idle" ? finish.state.error : null;
-  const shownError = error ?? finishError;
-  useEffect(() => {
-    if (finishPhase === "finished") setOpen(false);
-  }, [finishPhase]);
-
-  const handleDeleteClick = () => {
+  const handleDelete = () => {
     startTransition(async () => {
       setError(null);
-      const response = await removeItem({ cellarId, cellarItemId: itemId });
+      const response = await removeItem({ cellarId, cellarItemId: bottleId });
       const result = unwrapResult(
         response.data?.removeItemFromCellar,
         "RemovedCellarItem",
@@ -121,28 +98,11 @@ export const CellarItemHeader = ({
 
   return (
     <>
-      <div className="flex flex-col gap-3">
-        <ItemAppBar
-          parent={`/cellars/${cellarId}/items`}
-          cellarName={cellarName}
-          itemName={itemName}
-          share={{ itemId: entityId, itemType }}
-          editHref={editHref}
-          onDelete={isOwner ? () => setOpen(true) : undefined}
-        />
-        <div className="flex flex-wrap items-start gap-2">
-          <AddToTierListButton
-            entityId={entityId}
-            entityType={itemType.toLowerCase() as TierListEntityType}
-            entityName={itemName ?? "this item"}
-          />
-        </div>
-      </div>
       <ResponsiveDialog
         role="alertdialog"
         open={open}
         onOpenChange={(next) => {
-          if (!isDisabled) setOpen(next);
+          if (!isDisabled) onOpenChange(next);
         }}
         dismissible={!isDisabled}
         title="Delete this bottle?"
@@ -166,7 +126,7 @@ export const CellarItemHeader = ({
                 variant="destructive"
                 disabled={isDisabled}
                 loading={isPending}
-                onClick={handleDeleteClick}
+                onClick={handleDelete}
               >
                 Delete {formatItemType(itemType)}
               </LoadingButton>
@@ -177,7 +137,7 @@ export const CellarItemHeader = ({
                 data-tone="danger"
                 disabled={isDisabled}
                 loading={isPending}
-                onClick={handleDeleteClick}
+                onClick={handleDelete}
                 className="bg-destructive text-background hover:bg-destructive/90 focus-visible:ring-destructive/40"
               >
                 Delete {formatItemType(itemType)}
@@ -186,7 +146,7 @@ export const CellarItemHeader = ({
             <Button
               variant="ghost"
               disabled={isDisabled}
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
@@ -202,4 +162,4 @@ export const CellarItemHeader = ({
       <FinishBottleDialogs finish={finish} itemName={itemName} />
     </>
   );
-};
+}

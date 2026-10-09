@@ -91,7 +91,7 @@ export const ItemReviews = ({
   const canPage = itemId !== undefined && type !== undefined;
 
   return (
-    <ItemSection title="Reviews:">
+    <ItemSection id="reviews" title="Reviews">
       {!hasReviews && (
         <p className="type-body p-4 text-center text-ink-2">
           No reviews yet! Want to add one?

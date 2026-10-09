@@ -215,6 +215,18 @@ export type CellarsCollectionActorInterface = {
     ctx: Ctx,
     refs: readonly ItemRef[],
   ): Promise<readonly CappedList<string>[]>;
+  /**
+   * X09 — where "Your bottles" are: for each ref, the ids of the cellars the
+   * viewer **created or co-owns** (privacy plays no part, as in `stats`)
+   * holding a bottle of it — a finished one too when `includeFinished` — by
+   * cellar name. Aligned to `refs`; one statement for the batch. Never anyone
+   * else's cellar, however visible: these are the bottles you can pour.
+   */
+  ownContaining(
+    ctx: Ctx,
+    refs: readonly ItemRef[],
+    includeFinished?: boolean | null,
+  ): Promise<readonly CappedList<string>[]>;
 };
 
 /** {@link CellarsCollectionActorInterface.stats}. */
@@ -237,6 +249,7 @@ export const CellarsCollectionActorDescriptor: ActorDescriptor<CellarsCollection
       list: {},
       stats: {},
       containing: {},
+      ownContaining: {},
     },
   };
 

@@ -2,29 +2,25 @@ import { notFound, redirect } from "next/navigation";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
-import {
-  bottleHref,
-  cellarItemRedirect,
-  checkInFromNode,
-  isCellarOwner,
-  itemRecipesFromFragment,
-  itemViewFromFragment,
-  recipeIngredientsTotal,
-} from "./adapter";
-import { CellarItemPageView } from "./CellarItemPageView";
+import { cellarItemRedirect, isCellarOwner } from "./adapter";
 import { CellarBottleForQuery, CellarItemPageQuery } from "./fragments";
-import { allFriends, allItemBrands } from "./page-lists";
+import { ItemPage } from "./ItemPage";
 
 /**
- * `/cellars/[cellarId]/{type}s/[id]` for all six types — one **bottle**, the
- * old `getCellarItemData` + `Cellar{T}Details` pair.
+ * `/cellars/[cellarId]/{type}s/[id]` for all six types — one **bottle**.
  *
- * Decision 1: the id is a `cellar_items.id` again (`Cellar.item(id)`, G10).
+ * X09: the bottle route *is* the item page now, with this bottle selected —
+ * the URL keeps its meaning (D-gating answer 1: a bottle id means a bottle;
+ * decision 1: the id is a `cellar_items.id`), so every link and bookmark
+ * minted for the old bottle page still opens it, and Back still goes to the
+ * cellar. What used to be a second, different page is the item's page with
+ * the bottle marked in "Your bottles", its level inline, its photo in the
+ * hero, and "Delete bottle" in `⋯`.
+ *
  * An id that is not a bottle of this type here goes through
- * `cellarItemRedirect`: a bottle of another type to its own segment, a
- * catalog item id with one bottle here (`Cellar.bottleFor`) to that bottle,
- * anything else to the item page — so links minted while the URL meant the
- * item id keep working.
+ * `cellarItemRedirect`, as before: a bottle of another type to its own
+ * segment, a catalog item id with one bottle here (`Cellar.bottleFor`) to
+ * that bottle, anything else to the item page.
  */
 export async function CellarItemPage({
   type,
@@ -62,43 +58,33 @@ export async function CellarItemPage({
     bottleForId = found.ok ? (found.data.bottleFor?.id ?? null) : null;
   }
 
-  const view = bottle === null ? null : itemViewFromFragment(bottle.item);
   const target = cellarItemRedirect({
     cellarId,
     type,
     id,
     bottle:
-      bottle === null || view === null
+      bottle === null
         ? null
-        : { id: bottle.id, itemType: view.type },
+        : { id: bottle.id, itemType: bottle.item.type as ApiItemType },
     bottleForId,
   });
   if (target !== null) redirect(target);
-  if (bottle === null || view === null) notFound();
+  if (bottle === null) notFound();
 
   const viewerId = data.me?.id ?? null;
-  const friendsResult = unwrapResult(data.myFriends, "FriendConnection");
-  // The old page read brands and friends unbounded: read the rest first.
-  const [brands, friends] = await Promise.all([
-    allItemBrands(apiServerQuery, bottle.item, {
-      itemId: view.itemId,
-      type: view.type,
-    }),
-    friendsResult.ok
-      ? allFriends(apiServerQuery, friendsResult.data)
-      : Promise.resolve([]),
-  ]);
-
   return (
-    <CellarItemPageView
-      item={{ ...view, brands }}
-      recipes={itemRecipesFromFragment(bottle.item)}
-      recipesTotal={recipeIngredientsTotal(bottle.item)}
-      bottle={{
+    <ItemPage
+      type={type}
+      itemId={bottle.item.id}
+      parent={`/cellars/${cellarId}/items`}
+      selected={{
         id: bottle.id,
-        openAt: bottle.openAt ?? null,
-        emptyAt: bottle.emptyAt ?? null,
+        cellarId,
+        cellarName: cellar.name,
+        openAt: (bottle.openAt as string | null) ?? null,
+        emptyAt: (bottle.emptyAt as string | null) ?? null,
         percentageRemaining: bottle.percentageRemaining,
+        isOwner: isCellarOwner(cellar, viewerId),
         displayImage:
           bottle.displayImage === null || bottle.displayImage === undefined
             ? null
@@ -107,16 +93,6 @@ export async function CellarItemPage({
                 placeholder: bottle.displayImage.placeholder ?? null,
               },
       }}
-      cellar={{ id: cellar.id, name: cellar.name }}
-      checkIns={bottle.checkIns.edges.map((edge) => checkInFromNode(edge.node))}
-      checkInsTotal={bottle.checkIns.totalCount ?? null}
-      friends={friends}
-      isOwner={isCellarOwner(cellar, viewerId)}
-      editHref={
-        viewerId !== null && view.createdById === viewerId
-          ? `${bottleHref(cellarId, view.type, bottle.id)}/edit`
-          : null
-      }
     />
   );
 }

@@ -222,31 +222,25 @@ export function finishToastCopy(state: FinishState): string | null {
 }
 
 /**
- * The delete dialog's text. Deleting a bottle deletes its check-ins
- * (`removeItemFromCellar`); finishing it keeps them, which is almost always
- * what someone who drank it wants.
+ * The delete dialog's text. Since X02 a bottle's drink logs outlive it
+ * (`check_ins.cellar_item_id` is `ON DELETE SET NULL`), so deleting no longer
+ * takes them — the dialog used to say it did. What finishing keeps that
+ * deleting does not is the bottle itself: a finished bottle stays in the
+ * cellar's history and its Finished filter, and can be restored.
  */
 export function deleteBottleWarning({
   itemName,
-  checkInCount,
   isFinished,
 }: {
   itemName: string | undefined;
-  checkInCount: number;
   isFinished: boolean;
 }): { body: string; suggestFinish: boolean } {
   const name =
     itemName === undefined || itemName === "" ? "this bottle" : itemName;
-  const checkIns =
-    checkInCount === 0
-      ? ""
-      : checkInCount === 1
-        ? " Its check-in will be deleted too."
-        : ` Its ${checkInCount} check-ins will be deleted too.`;
-  const body = `Delete ${name} from your cellar?${checkIns}`;
+  const body = `Delete ${name} from your cellar? Drinks you logged from it stay in your log.`;
   if (isFinished) return { body, suggestFinish: false };
   return {
-    body: `${body} If you drank it, mark it finished instead: it leaves the cellar and keeps its check-ins.`,
+    body: `${body} If you drank it, mark it finished instead: it stays in the cellar's history and can be restored.`,
     suggestFinish: true,
   };
 }

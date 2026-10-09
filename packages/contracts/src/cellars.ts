@@ -384,6 +384,51 @@ export type CellarNameMatchesArgs = {
   readonly limit: number;
 };
 
+/**
+ * Whether a bottle passes a {@link CellarItemStatus} filter: `ACTIVE` is
+ * still in the cellar (`emptyAt` null), `EMPTY` is finished, `ALL` is both.
+ */
+export const bottleMatchesStatus = (
+  bottle: { readonly emptyAt: string | null },
+  status: CellarItemStatus,
+): boolean =>
+  status === "ALL" ||
+  (status === "ACTIVE" ? bottle.emptyAt === null : bottle.emptyAt !== null);
+
+/**
+ * X09: the order "Your bottles" lists a person's bottles of one item in —
+ * what they are most likely to pour from first.
+ *
+ * 1. **Open** bottles (opened, not finished), most recently opened first;
+ * 2. **sealed** ones, most recently added first;
+ * 3. **finished** ones, most recently finished first.
+ *
+ * Ties (the same instant) fall back to the id, so the order is total and two
+ * reads of the same rows agree. Pure, and shared by the actor (one cellar)
+ * and the API (merging several cellars' answers).
+ */
+export const orderOwnBottles = <
+  T extends {
+    readonly id: string;
+    readonly openAt: string | null;
+    readonly emptyAt: string | null;
+    readonly createdAt: string;
+  },
+>(
+  bottles: readonly T[],
+): T[] => {
+  const rank = (bottle: T): number =>
+    bottle.emptyAt !== null ? 2 : bottle.openAt !== null ? 0 : 1;
+  const when = (bottle: T): number =>
+    Date.parse(bottle.emptyAt ?? bottle.openAt ?? bottle.createdAt);
+  return [...bottles].sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      when(b) - when(a) ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+};
+
 export type DeletedCellar = { readonly id: string };
 export type RemovedCellarItem = { readonly id: string };
 
@@ -458,6 +503,18 @@ export type CellarActorInterface = {
    * count.
    */
   bottleFor(ctx: Ctx, item: ItemRef): Promise<CellarItemDto | null>;
+  /**
+   * X09 — "Your bottles" on the item page: every bottle of each item in this
+   * cellar, aligned to `items`, in {@link orderOwnBottles}' order and filtered
+   * by `status` (default `ACTIVE`). Gated like `item` (the cellar's
+   * visibility); the API only asks it of cellars the viewer created or
+   * co-owns (`CellarsCollectionActor.ownContaining`).
+   */
+  bottlesOf(
+    ctx: Ctx,
+    items: readonly ItemRef[],
+    status?: CellarItemStatus | null,
+  ): Promise<readonly (readonly CellarItemDto[])[]>;
   /**
    * UI parity G14 — check-ins per bottle, newest first, aligned to
    * `cellarItemIds`. Gated exactly as `checkIns` (the cellar's visibility);
@@ -552,6 +609,7 @@ export const CellarActorDescriptor: ActorDescriptor<
     checkIns: {},
     item: {},
     bottleFor: {},
+    bottlesOf: {},
     checkInsOf: {},
     // Only with `search`, which embeds it (`MODEL_BACKED_FIELDS`).
     itemGroups: { modelBacked: true },

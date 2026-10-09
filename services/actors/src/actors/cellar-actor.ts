@@ -137,6 +137,7 @@ import {
   isItemType,
   NotFoundError,
   offsetPage,
+  orderOwnBottles,
   REVERSE_EDGE_CAP,
   requireReverseEdgeBatch,
   STARTER_CELLAR_NAME,
@@ -346,6 +347,39 @@ export class CellarActor
     const pool = active.length > 0 ? active : bottles;
     const [only, ...more] = pool;
     return only === undefined || more.length > 0 ? null : toItemDto(only, null);
+  }
+
+  /**
+   * X09 "Your bottles": every bottle of each item here, aligned to `items`,
+   * from the cached aggregate — the same rows `bottleFor` picks one from —
+   * filtered by `status` (default `ACTIVE`, as `items` defaults) and in
+   * {@link orderOwnBottles}' order: open, then sealed, then finished.
+   */
+  async bottlesOf(
+    ctx: Ctx,
+    items: readonly ItemRef[],
+    status?: CellarItemStatus | null,
+  ): Promise<readonly (readonly CellarItemDto[])[]> {
+    requireReverseEdgeBatch(items, "bottlesOf items");
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    for (const item of items) {
+      if (!isItemType(item.type)) {
+        throw new ValidationError(`not an item type: ${String(item.type)}`);
+      }
+    }
+    const rows = filtered(aggregate.items, null, status);
+    return items.map((item) => {
+      const wanted = String(item.id).toLowerCase();
+      return orderOwnBottles(
+        rows
+          .filter((row) => {
+            const ref = itemRefOf(row);
+            return ref.type === item.type && ref.id === wanted;
+          })
+          .map((row) => toItemDto(row, null)),
+      );
+    });
   }
 
   /**

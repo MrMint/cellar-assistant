@@ -7,18 +7,17 @@ import {
   itemRecipesFromFragment,
   itemRelationsFromFragment,
   itemViewFromFragment,
-  recipeIngredientsTotal,
+  yourBottlesFromFragment,
 } from "./adapter";
 import { ItemPageQuery } from "./fragments";
-import { ItemPageView } from "./ItemPageView";
+import { ItemPageView, type SelectedBottle } from "./ItemPageView";
 import { allAddableCellars, allItemBrands, allItemCellars } from "./page-lists";
 
 /**
- * `/{type}s/[itemId]` for all six types — the old per-type `page.tsx` +
- * `{T}Details` pair, as one server component: one `ItemPageQuery`, the
- * adapter, the restored view. Client leaves mutate through URQL and then
- * `router.refresh()`, which re-runs this — the old pages did the same with
- * server actions and `revalidatePath`.
+ * `/{type}s/[itemId]` for all six types — and, since X09, the bottle route
+ * too (`CellarItemPage` renders this with the bottle `selected`): one
+ * `ItemPageQuery`, the adapter, one view. Client leaves mutate through URQL
+ * and then `router.refresh()`, which re-runs this.
  *
  * `NotFoundError` (no such item, or not yours to see, §1.6) is the old
  * `notFound()`.
@@ -26,9 +25,15 @@ import { allAddableCellars, allItemBrands, allItemCellars } from "./page-lists";
 export async function ItemPage({
   type,
   itemId,
+  selected = null,
+  parent = "/",
 }: {
   type: ApiItemType;
   itemId: string;
+  /** The bottle a bottle URL names. */
+  selected?: SelectedBottle | null;
+  /** Back's target on a cold deep link: Home, or the bottle's cellar. */
+  parent?: string;
 }) {
   const data = await apiServerQuery(ItemPageQuery, { itemId, type });
   const result = unwrapResult(data.item, "QueryItemSuccess");
@@ -54,16 +59,20 @@ export async function ItemPage({
       : Promise.resolve([]),
   ]);
   const item = { ...itemViewFromFragment(node), brands };
+  const { bottles, total } = yourBottlesFromFragment(node);
 
   return (
     <ItemPageView
       item={item}
+      bottles={bottles}
+      bottlesTotal={total}
+      selected={selected}
+      parent={parent}
       cellars={located.cellars}
       cellarsTotal={located.total}
       tierLists={relations.tierLists}
       tierListsTotal={relations.tierListsTotal}
       recipes={itemRecipesFromFragment(node)}
-      recipesTotal={recipeIngredientsTotal(node)}
       addableCellars={addable}
       editHref={
         viewerId !== null && item.createdById === viewerId

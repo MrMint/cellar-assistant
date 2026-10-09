@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { IconButton } from "@/components/app/IconButton";
@@ -11,6 +11,7 @@ import { InsetSection } from "@/components/app/Page";
 import { Score } from "@/components/app/Score";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { Timestamp } from "@/components/common/Timestamp";
+import { useItemActions } from "@/components/item/ItemActions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
@@ -130,7 +131,23 @@ export function YourLog({
   const rows = connection?.edges.map((edge) => drinkLogRow(edge.node)) ?? [];
   const total = connection?.totalCount ?? rows.length;
 
+  // X09: on the item page one "Log a drink" sheet serves the whole page —
+  // the ActionBar, the bottle rows and this section — and says when a log
+  // landed, so this list re-reads whichever of them wrote it.
+  const actions = useItemActions();
+  const logVersion = actions?.logVersion ?? 0;
+  const seenVersion = useRef(logVersion);
+  useEffect(() => {
+    if (logVersion === seenVersion.current) return;
+    seenVersion.current = logVersion;
+    reexecute({ requestPolicy: "network-only" });
+  }, [logVersion, reexecute]);
+
   const openNew = () => {
+    if (actions !== null) {
+      actions.logDrink();
+      return;
+    }
     setMode({ kind: "new" });
     setSheetOpen(true);
   };
@@ -175,6 +192,7 @@ export function YourLog({
   return (
     <>
       <InsetSection
+        id="your-log"
         label="Your log"
         className={className}
         action={

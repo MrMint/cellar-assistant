@@ -1325,6 +1325,49 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
       });
     });
 
+    it("X09: bottlesOf lists every bottle of each item, open then sealed then finished", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const cellarId = await seedCellar(db, { createdById: owner });
+        const actor = await activate(newCellarActor(cellarId, db));
+        const ctx = userCtx(owner, "r");
+        const wine = await seedWine(db, owner, "wine");
+        const other = await seedWine(db, owner, "other");
+
+        const sealed = await actor.addItem(ctx, { item: wine });
+        const opened = await actor.addItem(ctx, { item: wine });
+        await actor.openItem(ctx, opened.id);
+        const done = await actor.addItem(ctx, { item: wine });
+        await actor.emptyItem(ctx, done.id);
+        await actor.addItem(ctx, { item: other });
+
+        const [live, none] = await actor.bottlesOf(ctx, [
+          wine,
+          { type: "BEER", id: wine.id },
+        ]);
+        expect(live?.map((b) => b.id)).toEqual([opened.id, sealed.id]);
+        expect(none).toEqual([]);
+
+        const [all] = await actor.bottlesOf(ctx, [wine], "ALL");
+        expect(all?.map((b) => b.id)).toEqual([opened.id, sealed.id, done.id]);
+        const [finished] = await actor.bottlesOf(ctx, [wine], "EMPTY");
+        expect(finished?.map((b) => b.id)).toEqual([done.id]);
+
+        // Gated like `item`: a PRIVATE cellar is not the stranger's to read
+        // (refused as `get` refuses them, whichever error that is).
+        const refusal = await actor
+          .bottlesOf(userCtx(stranger, "r"), [wine])
+          .then(
+            () => null,
+            (cause: unknown) => cause,
+          );
+        expect(
+          refusal instanceof ForbiddenError || refusal instanceof NotFoundError,
+        ).toBe(true);
+      });
+    });
+
     it("G14: checkInsOf is per bottle, aligned, and gated on the cellar", async () => {
       await withTestDb(async (db) => {
         const { owner, friend, stranger, actor, itemId } = await seedScenario(

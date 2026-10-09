@@ -39,6 +39,7 @@ import {
 } from "@/utilities/formatters";
 import { displayItemName } from "@/utilities/smart-title-case";
 import {
+  ItemPageBottlesFragment,
   ItemPageItemFragment,
   ItemPageRecipesFragment,
   ItemPageRelationsFragment,
@@ -49,6 +50,12 @@ import type { ItemCellar, ItemCellarUser } from "./ItemCellars";
 import type { ItemRecipeIngredient } from "./ItemRecipes";
 import type { Review } from "./ItemReviews";
 import type { ItemTierListEntry } from "./ItemTierLists";
+import {
+  type Fact,
+  itemFacts,
+  type ScoreSummary,
+  type YourBottle,
+} from "./item-page-model";
 
 /* -------------------------------------------------------------------------- */
 /* Routes                                                                      */
@@ -524,7 +531,8 @@ export type ItemView = {
   /** X08: on the viewer's Want to try list. */
   isWantToTry: boolean;
   subTitlePhrases: Array<string | undefined>;
-  characteristics: Characteristic[];
+  /** X09: the fact sheet — every recorded attribute, for all six types. */
+  facts: Fact[];
   flavorProfile: string | null;
   ingredients: string | null;
   image: { url: string; placeholder: string | null } | null;
@@ -533,6 +541,10 @@ export type ItemView = {
   reviewsEndCursor: string | null;
   reviewsHasNextPage: boolean;
   myReview: { id: string; score: number; text: string | null } | null;
+  /** X09's taste header: everyone's average (`Item.score`)… */
+  everyone: ScoreSummary;
+  /** …and the viewer's friends' (`Item.friendsScore`). */
+  friends: ScoreSummary;
   /** The hero's LabelPlate when there is no photo (N28). */
   plate: LabelPlateData;
 };
@@ -585,7 +597,7 @@ export const itemViewFromFragment = (
     isFavorite: item.isFavorite,
     isWantToTry: item.isWantToTry,
     subTitlePhrases: itemSubtitlePhrases(type, core, attributes),
-    characteristics: itemCharacteristics(type, attributes),
+    facts: itemFacts(type, core, attributes),
     flavorProfile: tea.flavorProfile,
     ingredients: tea.ingredients,
     image:
@@ -599,7 +611,33 @@ export const itemViewFromFragment = (
     reviewsEndCursor: item.reviews.pageInfo.endCursor ?? null,
     reviewsHasNextPage: item.reviews.pageInfo.hasNextPage,
     myReview: myReviewFromRow(item.myReview),
+    everyone: {
+      average: core.score.average ?? null,
+      count: core.score.count,
+    },
+    friends: {
+      average: item.friendsScore.average ?? null,
+      count: item.friendsScore.count,
+    },
     plate: itemPlate(type, core, attributes, brands),
+  };
+};
+
+/** `...ItemPageBottles` → X09's "Your bottles", in the API's order. */
+export const yourBottlesFromFragment = (
+  data: FragmentOf<typeof ItemPageBottlesFragment>,
+): { bottles: YourBottle[]; total: number | null } => {
+  const connection = readFragment(ItemPageBottlesFragment, data).myBottles;
+  return {
+    bottles: connection.edges.map(({ node }) => ({
+      id: node.id,
+      cellarId: node.cellarId,
+      cellarName: node.cellar?.name ?? null,
+      openAt: (node.openAt as string | null) ?? null,
+      emptyAt: (node.emptyAt as string | null) ?? null,
+      percentageRemaining: node.percentageRemaining,
+    })),
+    total: connection.totalCount ?? null,
   };
 };
 

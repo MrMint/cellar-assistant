@@ -38,6 +38,8 @@
 import type {
   BottleLogSummaryDto,
   CappedList,
+  CellarItemDto,
+  CellarItemStatus,
   CheckInDto,
   ItemImageDto,
   ItemRef,
@@ -58,6 +60,7 @@ import {
   itemActorId,
   mapPage,
   NotFoundError,
+  orderOwnBottles,
   parseItemActorId,
   REVERSE_EDGE_MAX_PARENTS,
   RecipeGroupsCollectionActorDescriptor,
@@ -70,6 +73,8 @@ import { Brand } from "./brand.ts";
 import { builder } from "./builder.ts";
 import {
   CellarConnection,
+  CellarItemConnection,
+  CellarItemStatusEnum,
   CellarItemType,
   CellarType,
   CheckInConnection,
@@ -292,6 +297,218 @@ builder.interfaceField(ItemInterface, "cellars", (t) =>
           .containing(refs.filter((ref): ref is ItemRef => ref !== null)),
       );
     },
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* X09 — "Your bottles": the viewer's own bottles of an item                   */
+/* -------------------------------------------------------------------------- */
+
+type OwnBottlesKey = {
+  readonly ref: ItemRef;
+  readonly status: CellarItemStatus;
+  readonly args: ConnectionArgs;
+};
+
+const ownBottlesKey = (
+  itemKey: string,
+  status: CellarItemStatus,
+  args: ConnectionArgs,
+): string =>
+  JSON.stringify([
+    itemKey,
+    status,
+    args.first ?? null,
+    args.after ?? null,
+    args.last ?? null,
+    args.before ?? null,
+  ]);
+
+const parseOwnBottlesKey = (key: string): OwnBottlesKey | null => {
+  const [itemKey, status, first, after, last, before] = JSON.parse(key) as [
+    string,
+    CellarItemStatus,
+    number | null,
+    string | null,
+    number | null,
+    string | null,
+  ];
+  const ref = parseItemActorId(itemKey);
+  return ref === null
+    ? null
+    : { ref, status, args: { first, after, last, before } };
+};
+
+/**
+ * Two hops for a tick's worth of items, both batched: **one**
+ * `CellarsCollectionActor.ownContaining` per status family (chunked at
+ * `REVERSE_EDGE_MAX_PARENTS`) names the viewer's own cellars holding each
+ * item, then **one** `CellarActor.bottlesOf` per (cellar, status) reads every
+ * bottle of every asked-for item there from that actor's cache, re-checking
+ * the cellar's visibility. Each key's bottles are then merged across cellars
+ * in `orderOwnBottles`' order. A cellar that refuses (it vanished between the
+ * hops) fails only the keys that needed it.
+ */
+const loadOwnBottles = async (
+  keys: readonly string[],
+  context: ApiContext,
+): Promise<(Connection<CellarItemDto> | Error)[]> => {
+  const viewerId = context.ctx.viewerId;
+  if (viewerId === null) return emptyEdges<CellarItemDto>(keys);
+  const parsed = keys.map(parseOwnBottlesKey);
+  const collection = context.actor(
+    CellarsCollectionActorDescriptor,
+    viewerCollectionActorId(viewerId),
+  );
+
+  // Hop 1: which of my cellars hold each item.
+  const cellarsOf = new Map<string, readonly string[] | Error>();
+  for (const includeFinished of [false, true]) {
+    const wanted = [
+      ...new Map(
+        parsed
+          .filter(
+            (key): key is OwnBottlesKey =>
+              key !== null && (key.status !== "ACTIVE") === includeFinished,
+          )
+          .map((key) => [`${itemActorId(key.ref)}|${key.status}`, key]),
+      ).values(),
+    ];
+    for (
+      let start = 0;
+      start < wanted.length;
+      start += REVERSE_EDGE_MAX_PARENTS
+    ) {
+      const chunk = wanted.slice(start, start + REVERSE_EDGE_MAX_PARENTS);
+      try {
+        const lists = await collection.ownContaining(
+          chunk.map((key) => key.ref),
+          includeFinished,
+        );
+        for (const [index, key] of chunk.entries()) {
+          cellarsOf.set(
+            `${itemActorId(key.ref)}|${key.status}`,
+            lists[index]?.nodes ?? [],
+          );
+        }
+      } catch (cause) {
+        for (const key of chunk) {
+          cellarsOf.set(
+            `${itemActorId(key.ref)}|${key.status}`,
+            asError(cause),
+          );
+        }
+      }
+    }
+  }
+
+  // Hop 2: per (cellar, status), every bottle of the items it holds.
+  const asks = new Map<
+    string,
+    { cellarId: string; status: CellarItemStatus; refs: ItemRef[] }
+  >();
+  for (const key of parsed) {
+    if (key === null) continue;
+    const cellars = cellarsOf.get(`${itemActorId(key.ref)}|${key.status}`);
+    if (cellars === undefined || cellars instanceof Error) continue;
+    for (const cellarId of cellars) {
+      const ask = asks.get(`${cellarId}|${key.status}`) ?? {
+        cellarId,
+        status: key.status,
+        refs: [],
+      };
+      if (!ask.refs.some((ref) => itemActorId(ref) === itemActorId(key.ref))) {
+        ask.refs.push(key.ref);
+      }
+      asks.set(`${cellarId}|${key.status}`, ask);
+    }
+  }
+  const bottles = new Map<string, readonly CellarItemDto[] | Error>();
+  await Promise.all(
+    [...asks.values()].map(async ({ cellarId, status, refs }) => {
+      try {
+        const lists = await context
+          .actor(CellarActorDescriptor, cellarId)
+          .bottlesOf(refs, status);
+        for (const [index, ref] of refs.entries()) {
+          bottles.set(
+            `${cellarId}|${status}|${itemActorId(ref)}`,
+            lists[index] ?? [],
+          );
+        }
+      } catch (cause) {
+        for (const ref of refs) {
+          bottles.set(
+            `${cellarId}|${status}|${itemActorId(ref)}`,
+            asError(cause),
+          );
+        }
+      }
+    }),
+  );
+
+  return parsed.map((key, index) => {
+    if (key === null) return new Error(`unparseable key ${keys[index]}`);
+    const cellars =
+      cellarsOf.get(`${itemActorId(key.ref)}|${key.status}`) ?? [];
+    if (cellars instanceof Error) return cellars;
+    const merged: CellarItemDto[] = [];
+    for (const cellarId of cellars) {
+      const found =
+        bottles.get(`${cellarId}|${key.status}|${itemActorId(key.ref)}`) ?? [];
+      if (found instanceof Error) return found;
+      merged.push(...found);
+    }
+    const ordered = orderOwnBottles(merged);
+    try {
+      return connectionFromPage(
+        cappedPage(
+          { nodes: ordered, totalCount: ordered.length },
+          toPageArgs(key.args),
+        ),
+      );
+    } catch (cause) {
+      return asError(cause);
+    }
+  });
+};
+
+builder.interfaceField(ItemInterface, "myBottles", (t) =>
+  t.loadable({
+    type: CellarItemConnection,
+    description:
+      'X09 — "Your bottles": every bottle of this in a cellar you created or ' +
+      "co-own (never anyone else's, however visible), open ones first (most " +
+      "recently opened), then sealed (most recently added), then finished " +
+      "(most recently finished). `status` defaults to ACTIVE: bottles still " +
+      "in the cellar. `totalCount` exact. Empty for an anonymous viewer. Two " +
+      "batched hops per request, however many items ask.",
+    args: {
+      ...t.arg.connectionArgs(),
+      status: t.arg({
+        type: CellarItemStatusEnum,
+        required: false,
+        defaultValue: "ACTIVE",
+      }),
+    },
+    resolve: (item, args) =>
+      ownBottlesKey(itemActorId(item), args.status ?? "ACTIVE", args),
+    load: (keys: string[], context: ApiContext) =>
+      loadOwnBottles(keys, context),
+  }),
+);
+
+/** The cellar a bottle sits in — so "Your bottles" can name it in one query. */
+builder.objectField(CellarItemType, "cellar", (t) =>
+  t.field({
+    type: CellarType,
+    nullable: true,
+    description:
+      "The cellar this bottle is in, through the `Cellar` loader — whose " +
+      "actor applies `canSeeCellar` again, so a cellar that stopped being " +
+      "visible between reads nulls this field, not the page. One batched " +
+      "`CellarActor.get` per distinct cellar.",
+    resolve: (bottle) => bottle.cellarId,
   }),
 );
 

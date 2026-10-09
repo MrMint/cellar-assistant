@@ -1694,6 +1694,57 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
     });
   });
 
+  describe("friendsScore (X09: the taste header's Friends)", () => {
+    it("averages friends' reviews only, one per friend, newest", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, actor } = await seedScenario(db);
+        const second = await seedUser(db);
+        // The other direction of the pair: an acceptance writes both.
+        await seedFriendship(db, second, owner);
+        await actor.addReview(userCtx(owner, "r"), { score: 5 });
+        await actor.addReview(userCtx(friend, "r"), { score: 2 });
+        await actor.addReview(userCtx(friend, "r"), { score: 4 });
+        await actor.addReview(userCtx(second, "r"), { score: 3 });
+        await actor.addReview(userCtx(stranger, "r"), { score: 0.5 });
+
+        const result = await actor.friendsScore(userCtx(owner, "r"));
+        // The viewer's own 5 and the stranger's 0.5 are not in it, and the
+        // friend counts once — by one review (the newest; two written inside
+        // one test transaction share `now()`, so which is newer is the id's
+        // tiebreak, and either average is that friend counted once).
+        expect(result.count).toBe(2);
+        expect([2.5, 3.5]).toContain(result.average);
+        // Everyone's score is unchanged by the new read.
+        expect((await actor.score(userCtx(owner, "r"))).count).toBe(5);
+      });
+    });
+
+    it("is null, not zero, for a viewer whose friends have not rated it", async () => {
+      await withTestDb(async (db) => {
+        const { owner, stranger, actor } = await seedScenario(db);
+        await actor.addReview(userCtx(owner, "r"), { score: 4 });
+        // The stranger has no friends at all; the owner's friend wrote nothing.
+        expect(await actor.friendsScore(userCtx(stranger, "r"))).toEqual({
+          average: null,
+          count: 0,
+        });
+        expect(await actor.friendsScore(userCtx(owner, "r"))).toEqual({
+          average: null,
+          count: 0,
+        });
+      });
+    });
+
+    it("refuses an anonymous viewer, as every read here does", async () => {
+      await withTestDb(async (db) => {
+        const { actor } = await seedScenario(db);
+        await expect(actor.friendsScore(anonymousCtx("r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+      });
+    });
+  });
+
   /* ------------------------------------------------------------------ */
   /* getShared — the X17 share page's read                               */
   /* ------------------------------------------------------------------ */

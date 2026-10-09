@@ -20,6 +20,8 @@ interface ItemImageWithCaptureClientProps {
   itemType: ApiItemType;
   cellarId: string;
   cellarItemId: string;
+  /** Passed to `ItemImage`: the tile's shape. */
+  className?: string;
 }
 
 /**
@@ -40,6 +42,7 @@ export function ItemImageWithCaptureClient({
   itemType,
   cellarId,
   cellarItemId,
+  className,
 }: ItemImageWithCaptureClientProps) {
   const client = useClient();
   const router = useRouter();
@@ -100,6 +103,7 @@ export function ItemImageWithCaptureClient({
       placeholder={placeholder}
       fallback={fallback}
       onCaptureImage={handleCaptureImage}
+      className={className}
     />
   );
 }

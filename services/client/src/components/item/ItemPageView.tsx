@@ -1,150 +1,302 @@
 import { LabelPlate } from "@/components/app/LabelPlate";
+import { Link } from "@/components/app/Link";
+import { InsetSection, ListRow, Page } from "@/components/app/Page";
 import { ItemCocktails } from "@/components/bar/ItemCocktails";
 import { YourLog } from "@/components/drink-log/YourLog";
 import { AddReview } from "@/components/review/AddReview";
 import type { ItemView } from "./adapter";
 import { ChangeBrand } from "./ChangeBrand";
+import { ItemActionBar } from "./ItemActionBar";
+import { ItemActionsProvider } from "./ItemActions";
+import { ItemAppBar } from "./ItemAppBar";
 import { ItemBrands, shownItemBrand } from "./ItemBrands";
 import { type ItemCellar, ItemCellars } from "./ItemCellars";
-import { ItemCharacteristics } from "./ItemCharacteristics";
-import ItemDetails from "./ItemDetails";
-import { ItemHeaderServer } from "./ItemHeaderServer";
+import { ItemFacts } from "./ItemFacts";
+import { ItemHero } from "./ItemHero";
 import { ItemImage } from "./ItemImage";
+import { ItemImageWithCaptureClient } from "./ItemImageWithCaptureClient";
 import { type ItemRecipeIngredient, ItemRecipes } from "./ItemRecipes";
 import { ItemReviews } from "./ItemReviews";
 import { type ItemTierListEntry, ItemTierLists } from "./ItemTierLists";
-import { ITEM_VIEW_CONFIG } from "./itemViewConfig";
+import {
+  bottleStateLine,
+  cookingRecipes,
+  defaultLogBottle,
+  producerTitle,
+  tasteCells,
+  type YourBottle,
+} from "./item-page-model";
+import { TasteHeader } from "./TasteHeader";
+import { YourBottles } from "./YourBottles";
+
+/** The bottle a bottle URL names (`/cellars/<c>/<type>s/<bottleId>`). */
+export type SelectedBottle = YourBottle & {
+  /** Creator or co-owner of its cellar: may pour, log from, delete it. */
+  isOwner: boolean;
+  displayImage: { url: string; placeholder: string | null } | null;
+};
 
 export type ItemPageViewProps = {
   item: ItemView;
+  /** X09 "Your bottles": yours, still in your cellars, open first. */
+  bottles: YourBottle[];
+  bottlesTotal?: number | null;
+  /** The bottle the URL names, on a bottle's URL; null on the item's. */
+  selected?: SelectedBottle | null;
+  /** Where Back goes on a cold deep link. */
+  parent: string;
+  /** "Located in" — cellars you may see holding a bottle (G9). */
   cellars: ItemCellar[];
   /** Exact counts where the API stops a list at 100 rows (null: unknown). */
   cellarsTotal?: number | null;
   tierLists: ItemTierListEntry[];
   tierListsTotal?: number | null;
   recipes: ItemRecipeIngredient[];
-  recipesTotal?: number | null;
-  /** The viewer's cellars "Add to Cellar" offers. */
+  /** The viewer's cellars "Add to cellar" offers. */
   addableCellars: { id: string; name: string }[];
+  /** The creator's edit page (D7), or null. */
   editHref: string | null;
 };
 
 /**
- * The six `82450ad1:src/components/{wine,…}/{T}Details.tsx`, as one view over
- * `ITEM_VIEW_CONFIG` (inventory §5). Same grid: the image on the left third
- * (Share, which sat under it, is the header bar's action now — N26);
- * details, characteristics, "Located in:" and "On Lists" in the middle;
- * review form, reviews, brands and recipes on the right — with each type's
- * brands heading and column, and recipes only where the old page had them.
+ * X09 — **one item page**. The item route and the bottle route both render
+ * this; on a bottle's URL that bottle is *selected* (marked in "Your
+ * bottles", its level inline, its photo in the hero, Delete in `⋯`) — a
+ * bottle id keeps meaning a bottle (D-gating answer 1), it just stops being
+ * a different page.
+ *
+ * One column, phone first (design §2 "Detail screens"): the hero, the taste
+ * header (You · Friends · Everyone), "Your bottles" with Pour and Log, "Your
+ * log" (D8: `Item.checkIns(scope: MINE)`), the fact sheet for all six types,
+ * "Cocktails with this" (X14 — so spirits show recipes), food recipes, your
+ * review and everyone's, the producer under one title per type (with D8's
+ * one-tap brand change for the creator), where it is, and the lists it is
+ * on. The ActionBar — Log a drink · Add to cellar · Want to try · `⋯` — rides
+ * 12 pt above the tab bar, in flow after the last section so nothing hides
+ * under it.
  */
 export function ItemPageView({
   item,
+  bottles,
+  bottlesTotal,
+  selected = null,
+  parent,
   cellars,
   cellarsTotal,
   tierLists,
   tierListsTotal,
   recipes,
-  recipesTotal,
   addableCellars,
   editHref,
 }: ItemPageViewProps) {
-  const config = ITEM_VIEW_CONFIG[item.type];
-  // D8: the creator — the one person `editHref` is set for — can correct the
-  // brand from here in one tap.
-  const brands = (
-    <ItemBrands
-      brands={item.brands}
-      title={config.brandTitle}
-      change={
-        editHref === null ? undefined : (
-          <ChangeBrand
-            type={item.type}
-            itemId={item.itemId}
-            itemName={item.name}
-            shown={shownItemBrand(item.brands)}
-            linkedBrandIds={item.brands.map((link) => link.brand.id)}
-          />
-        )
+  const producer = shownItemBrand(item.brands);
+  const owned = selected?.isOwner;
+  // A selected bottle of yours leads the list — a finished one too (the list
+  // itself holds bottles still in the cellar), so its Restore is where its
+  // row is — and the others follow in the API's open-first order.
+  const shownBottles = owned
+    ? [selected, ...bottles.filter((bottle) => bottle.id !== selected.id)]
+    : bottles;
+  const logBottle = defaultLogBottle(shownBottles, owned ? selected.id : null);
+
+  const plate = (
+    <LabelPlate
+      type={item.type}
+      plate={item.plate}
+      labelled
+      muted={selected !== null && selected.emptyAt !== null}
+    />
+  );
+  const heroShape = "aspect-[4/3] sm:aspect-square";
+  const picture = selected?.isOwner ? (
+    <ItemImageWithCaptureClient
+      url={selected.displayImage?.url ?? item.image?.url}
+      placeholder={
+        selected.displayImage?.placeholder ?? item.image?.placeholder
       }
+      fallback={plate}
+      itemId={item.itemId}
+      itemType={item.type}
+      cellarId={selected.cellarId}
+      cellarItemId={selected.id}
+      className={heroShape}
+    />
+  ) : (
+    <ItemImage
+      url={selected?.displayImage?.url ?? item.image?.url}
+      placeholder={
+        selected?.displayImage?.placeholder ?? item.image?.placeholder
+      }
+      fallback={plate}
+      className={heroShape}
     />
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <ItemHeaderServer
-        itemId={item.itemId}
-        itemName={item.name}
-        itemType={item.type}
-        cellars={addableCellars}
-        editHref={editHref}
-      />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="flex min-w-0 flex-col gap-2">
-          <ItemImage
-            url={item.image?.url}
-            placeholder={item.image?.placeholder}
-            fallback={
-              <LabelPlate type={item.type} plate={item.plate} labelled />
-            }
-          />
-        </div>
-        <div className="grid min-w-0 grid-cols-1 gap-4 sm:col-span-2 lg:grid-cols-2">
-          <div className="flex min-w-0 flex-col gap-4">
-            <ItemDetails
-              itemId={item.itemId}
-              type={item.type}
-              isFavorite={item.isFavorite}
-              isWantToTry={item.isWantToTry}
-              title={item.name}
-              subTitlePhrases={item.subTitlePhrases}
-              description={item.description}
+    <ItemActionsProvider
+      subject={{
+        itemType: item.type,
+        itemId: item.itemId,
+        itemName: item.name,
+      }}
+      defaultBottle={
+        logBottle === null
+          ? null
+          : { cellarId: logBottle.cellarId, cellarItemId: logBottle.id }
+      }
+    >
+      <Page className="gap-5">
+        <ItemAppBar
+          parent={parent}
+          cellarName={selected?.cellarName ?? undefined}
+          itemName={item.name}
+          share={{ itemId: item.itemId, itemType: item.type }}
+        />
+        <ItemHero
+          itemId={item.itemId}
+          type={item.type}
+          name={item.name}
+          isFavorite={item.isFavorite}
+          producer={producer}
+          subtitle={item.subTitlePhrases}
+          picture={picture}
+          stateLine={
+            selected === null ? undefined : (
+              <p data-testid="selected-bottle" className="type-footnote">
+                This bottle · {selected.cellarName ?? "a cellar"} ·{" "}
+                {bottleStateLine(selected)}
+              </p>
+            )
+          }
+        />
+        <TasteHeader
+          cells={tasteCells({
+            mine: item.myReview?.score ?? null,
+            friends: item.friends,
+            everyone: item.everyone,
+          })}
+        />
+
+        {selected !== null && !selected.isOwner && (
+          // A bottle in someone else's cellar you may see: what it is and
+          // where, read-only — pouring and logging from it are its owner's.
+          <InsetSection label="This bottle">
+            <ListRow
+              title={
+                <Link
+                  href={`/cellars/${selected.cellarId}/items`}
+                  overlay
+                  underline="none"
+                >
+                  {selected.cellarName ?? "Their cellar"}
+                </Link>
+              }
+              description={bottleStateLine(selected)}
             />
-            <ItemCharacteristics
-              title={config.characteristicsTitle}
-              characteristics={item.characteristics}
-              flavorProfile={item.flavorProfile}
-              ingredients={item.ingredients}
-            />
-            {/* X14: "Cocktails with this" — every type; renders nothing
-                when no cocktail uses it. */}
-            <ItemCocktails itemId={item.itemId} type={item.type} />
-            {/* D8: check-ins restored as "Your log" (X02's drink log). */}
-            <YourLog
-              subject={{
-                itemType: item.type,
-                itemId: item.itemId,
-                itemName: item.name,
-              }}
-            />
-            <ItemCellars cellars={cellars} total={cellarsTotal} />
-            {config.brandsColumn === "left" && brands}
-            <ItemTierLists entries={tierLists} total={tierListsTotal} />
-          </div>
-          <div className="flex min-w-0 flex-col gap-4">
-            <AddReview
-              itemId={item.itemId}
-              type={item.type}
-              myReview={item.myReview}
-            />
-            <ItemReviews
-              reviews={item.reviews}
-              itemId={item.itemId}
-              type={item.type}
-              endCursor={item.reviewsEndCursor}
-              hasNextPage={item.reviewsHasNextPage}
-            />
-            {config.brandsColumn === "right" && brands}
-            {config.recipes && (
-              <ItemRecipes
-                recipeIngredients={recipes}
-                title="Used in Recipes"
+          </InsetSection>
+        )}
+        <YourBottles
+          itemType={item.type}
+          itemName={item.name}
+          bottles={shownBottles}
+          total={
+            bottlesTotal === null || bottlesTotal === undefined
+              ? null
+              : // `myBottles` counts bottles still in the cellar, so only a
+                // finished selected bottle is one it did not count. (Comparing
+                // list lengths would also count an active selected bottle
+                // that sits past the first page as an extra one.)
+                bottlesTotal + (owned && selected.emptyAt !== null ? 1 : 0)
+          }
+          selectedId={owned ? selected.id : null}
+        />
+        <YourLog
+          subject={{
+            itemType: item.type,
+            itemId: item.itemId,
+            itemName: item.name,
+          }}
+        />
+        <ItemFacts
+          facts={item.facts}
+          description={item.description}
+          flavorProfile={item.flavorProfile}
+          ingredients={item.ingredients}
+        />
+        {/* X14: "Cocktails with this" / "Use it up" — every type, spirits
+            first among them; renders nothing when no cocktail uses it. */}
+        <ItemCocktails itemId={item.itemId} type={item.type} />
+        <ItemRecipes
+          recipeIngredients={cookingRecipes(recipes)}
+          title="Cook with this"
+          itemName={item.name}
+          // Only the food recipes are drawn, so `recipeIngredients`'
+          // totalCount (every recipe) is not this list's total; a held-back
+          // page is past 100 recipes using this one item.
+          total={null}
+        />
+        <AddReview
+          itemId={item.itemId}
+          type={item.type}
+          myReview={item.myReview}
+        />
+        <ItemReviews
+          reviews={item.reviews}
+          itemId={item.itemId}
+          type={item.type}
+          endCursor={item.reviewsEndCursor}
+          hasNextPage={item.reviewsHasNextPage}
+        />
+        <ItemBrands
+          brands={item.brands}
+          title={producerTitle(item.type, item.brands.length)}
+          change={
+            // D8: the creator — the one person `editHref` is set for — can
+            // correct the brand from here in one tap.
+            editHref === null ? undefined : (
+              <ChangeBrand
+                type={item.type}
+                itemId={item.itemId}
                 itemName={item.name}
-                total={recipesTotal}
+                shown={producer}
+                linkedBrandIds={item.brands.map((link) => link.brand.id)}
               />
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+            )
+          }
+        />
+        <ItemCellars cellars={cellars} total={cellarsTotal} />
+        <ItemTierLists entries={tierLists} total={tierListsTotal} />
+
+        <ItemActionBar
+          itemId={item.itemId}
+          itemType={item.type}
+          itemName={item.name}
+          isWantToTry={item.isWantToTry}
+          addableCellars={addableCellars}
+          editHref={editHref}
+          pourable={
+            owned && selected.emptyAt === null
+              ? {
+                  cellarId: selected.cellarId,
+                  cellarItemId: selected.id,
+                  openAt: selected.openAt,
+                  percentageRemaining: selected.percentageRemaining,
+                }
+              : null
+          }
+          deletable={
+            owned
+              ? {
+                  cellarId: selected.cellarId,
+                  bottleId: selected.id,
+                  openAt: selected.openAt,
+                  emptyAt: selected.emptyAt,
+                  percentageRemaining: selected.percentageRemaining,
+                }
+              : null
+          }
+        />
+      </Page>
+    </ItemActionsProvider>
   );
 }

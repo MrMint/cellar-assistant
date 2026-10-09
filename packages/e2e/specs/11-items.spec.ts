@@ -4,11 +4,10 @@ import { deleteCellarWithContents } from "../fixtures/db.ts";
 import { bodyText, expect, test, watch } from "../fixtures/test.ts";
 
 /**
- * The restored item pages (UI parity wave 3a): the item page, the edit form
- * and the **bottle** page, asserted against the production copy at
- * `82450ad1` — "Located in:", "Reviews:", "Tea Characteristics", "Open it!"
- * (Pour since X03, whose first pour opens the bottle), "Log a drink",
- * "Delete item".
+ * X09's one item page: the item URL, the edit form, and the **bottle** URL —
+ * which is the same page with that bottle selected ("Your bottles" marks it
+ * and carries its level; Pour, X03's, is the ActionBar's primary there;
+ * Delete bottle is in `⋯`).
  *
  * A tea, because sake and tea are the two types `createItem` can write
  * without the onboarding flow (`item_onboarding_id NOT NULL` on the other
@@ -99,30 +98,47 @@ test("fixtures: a cellar, a tea with attributes, a bottle of it", async ({
   expect(review.addItemReview.__typename).toBe("ItemReview");
 });
 
-test("the item page is the old TeaDetails", async ({ primary }) => {
+test("the item page: hero, taste header, fact sheet, Your bottles, ActionBar", async ({
+  primary,
+}) => {
   const noise = watch(primary);
   const response = await primary.goto(`/teas/${teaId}`);
   expect(response?.status()).toBeLessThan(400);
 
   await expect(primary.getByRole("heading", { name: teaName })).toBeVisible();
+
+  // You · Friends · Everyone: the viewer's own review is the "You" score.
+  const ratings = primary.getByRole("navigation", { name: "Ratings" });
+  await expect(
+    ratings.getByRole("link", { name: /^You: rated 4\.5 out of 5/ }),
+  ).toBeVisible();
+  await expect(
+    ratings.getByRole("link", { name: /^Everyone: rated .* \d+ ratings?$/ }),
+  ).toBeVisible();
+
+  // The fact sheet, for every type now: labelled rows.
+  const facts = primary.getByTestId("item-facts");
+  await expect(facts.getByText("Organic", { exact: true })).toBeVisible();
+  await expect(facts.getByText("80°C", { exact: true })).toBeVisible();
+  await expect(facts.getByText("Toasted chestnut")).toBeVisible();
+
+  // The bottle is the viewer's, still in the cellar: one row, Pour and Log.
+  const bottles = primary.locator("section", {
+    has: primary.getByRole("heading", { name: "Your bottles" }),
+  });
+  await expect(bottles.getByRole("link", { name: cellarName })).toBeVisible();
+  await expect(bottles.getByText("Sealed")).toBeVisible();
+  await expect(
+    bottles.getByRole("button", { name: `Pour from ${cellarName}` }),
+  ).toBeVisible();
+
   const text = await bodyText(primary);
-  for (const copy of [
-    "Tea Characteristics",
-    "Organic: Yes",
-    "Steep Temp: 80°C",
-    "Flavor Profile",
-    "Toasted chestnut",
-    "Located in:",
-    cellarName,
-    "Reviews:",
-  ]) {
+  for (const copy of ["Located in", cellarName, "Reviews", "Tea house"]) {
     expect(text, `the item page is missing "${copy}"`).toContain(copy);
   }
-  // The old list (82450ad1 ItemReviews) collapses each review in an
-  // Accordion, and the text is a read-only Lexical editor that only fills in
-  // after hydration — so reading it out of `bodyText` straight after the
-  // heading raced the editor (it passed or failed by load). Open the review
-  // the way a person would, then wait for the text.
+  // The review list collapses each review in an Accordion, and the text is a
+  // read-only Lexical editor that only fills in after hydration — open the
+  // review the way a person would, then wait for the text.
   await primary
     .getByRole("button", { expanded: false })
     .filter({ has: primary.locator("time") })
@@ -131,19 +147,32 @@ test("the item page is the old TeaDetails", async ({ primary }) => {
   await expect(primary.getByText("E2 lovely")).toBeVisible();
   // One review per viewer: the form opens on the viewer's own review.
   await expect(primary.getByPlaceholder("Edit your Review...")).toBeVisible();
+
+  const bar = primary.getByRole("toolbar", { name: "Item actions" });
+  await expect(bar.getByRole("button", { name: "Log a drink" })).toBeVisible();
+  await expect(
+    bar.getByRole("button", { name: "Add to cellar" }),
+  ).toBeVisible();
+  await expect(
+    bar.getByRole("button", { name: `Want to try ${teaName}` }),
+  ).toBeVisible();
+  await expect(bar.getByRole("button", { name: "More actions" })).toBeVisible();
   await expect(primary.getByRole("button", { name: "Share" })).toBeVisible();
   expect(noise.pageErrors).toEqual([]);
 });
 
 /**
- * Edit and Delete live behind the AppBar's ⋯ (N26): a dropdown of menuitems
- * at md+, a BottomSheet of buttons on a phone.
+ * Edit, Share, Add to tier list and Delete bottle live behind the
+ * ActionBar's ⋯ (X09): a sheet of buttons.
  */
 async function overflowAction(page: Page, name: string) {
-  await page.getByRole("button", { name: "More actions" }).click();
   await page
-    .getByRole("menuitem", { name })
-    .or(page.getByRole("dialog").getByRole("button", { name }))
+    .getByRole("toolbar", { name: "Item actions" })
+    .getByRole("button", { name: "More actions" })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name, exact: true })
     .click();
 }
 
@@ -162,9 +191,9 @@ test("the edit form saves an attribute and returns to the item", async ({
   await expect(primary).toHaveURL(new RegExp(`/teas/${teaId}$`), {
     timeout: 20_000,
   });
-  await expect(primary.getByText("Steep Temp: 85°C")).toBeVisible({
-    timeout: 20_000,
-  });
+  await expect(
+    primary.getByTestId("item-facts").getByText("85°C", { exact: true }),
+  ).toBeVisible({ timeout: 20_000 });
 });
 
 test("an item id at the cellar URL redirects to its one bottle (decision 1)", async ({
@@ -176,17 +205,29 @@ test("an item id at the cellar URL redirects to its one bottle (decision 1)", as
   );
 });
 
-test("the bottle page: pour it (which opens it), log a drink, delete it", async ({
+test("the bottle URL is the item page with that bottle selected: pour it (which opens it), log from it, delete it", async ({
   primary,
 }) => {
   const noise = watch(primary);
   await primary.goto(`/cellars/${cellarId}/teas/${bottleId}`);
   await expect(primary.getByRole("heading", { name: teaName })).toBeVisible();
-  // No "Located in:" on a bottle page (the old layout).
-  expect(await bodyText(primary)).not.toContain("Located in:");
+  // The same page: the taste header and "Located in" are here too now.
+  await expect(
+    primary.getByRole("navigation", { name: "Ratings" }),
+  ).toBeVisible();
+  expect(await bodyText(primary)).toContain("Located in");
+  await expect(primary.getByTestId("selected-bottle")).toContainText(
+    cellarName,
+  );
+  const bottles = primary.locator("section", {
+    has: primary.getByRole("heading", { name: "Your bottles" }),
+  });
+  // The selected bottle is marked.
+  await expect(bottles.locator('[aria-current="page"]')).toHaveText(cellarName);
 
-  // X03: Pour is there before the bottle is opened; the first pour opens it.
-  const bar = primary.getByRole("toolbar", { name: "This bottle" });
+  // X03: on a bottle of yours, Pour is the ActionBar's primary — there
+  // before the bottle is opened, since the first pour opens it.
+  const bar = primary.getByRole("toolbar", { name: "Item actions" });
   await bar.getByRole("button", { name: "Pour", exact: true }).click();
   const sheet = primary.getByRole("dialog", { name: "Pour" });
   await sheet.getByRole("button", { name: /^Cup/ }).click();
@@ -195,23 +236,41 @@ test("the bottle page: pour it (which opens it), log a drink, delete it", async 
     timeout: 20_000,
   });
 
-  // X02: "Log a drink" opens the sheet; "Log it" alone is the old "Check In".
-  await bar.getByRole("button", { name: "Log a drink" }).click();
+  // A plain log from the selected bottle is its row's Log.
+  await bottles
+    .getByRole("button", { name: `Log a drink from ${cellarName}` })
+    .click();
   await primary
     .getByRole("dialog", { name: "Log a drink" })
     .getByRole("button", { name: "Log it" })
     .click();
-  // The day row the check-in list adds (reviews carry a <time> too).
-  await expect(
-    primary.getByRole("list", { name: "Check-ins" }).locator("time").first(),
-  ).toBeVisible({
-    timeout: 20_000,
+  const log = primary.locator("section", {
+    has: primary.getByRole("heading", { name: "Your log" }),
   });
+  await expect(
+    log.locator('[data-slot="drink-log-entry"]').first(),
+  ).toBeVisible({ timeout: 20_000 });
 
-  await overflowAction(primary, "Delete item");
+  await overflowAction(primary, "Delete bottle");
   await primary.getByRole("button", { name: "Delete Tea" }).click();
   await expect(primary).toHaveURL(new RegExp(`/cellars/${cellarId}/items$`), {
     timeout: 20_000,
   });
   expect(noise.pageErrors).toEqual([]);
+});
+
+test("the log outlives the bottle: the item page still lists it", async ({
+  primary,
+}) => {
+  await primary.goto(`/teas/${teaId}`);
+  const log = primary.locator("section", {
+    has: primary.getByRole("heading", { name: "Your log" }),
+  });
+  await expect(
+    log.locator('[data-slot="drink-log-entry"]').first(),
+  ).toBeVisible({ timeout: 20_000 });
+  // …and the bottle is gone from Your bottles (the section is not drawn).
+  await expect(
+    primary.getByRole("heading", { name: "Your bottles" }),
+  ).toHaveCount(0);
 });
