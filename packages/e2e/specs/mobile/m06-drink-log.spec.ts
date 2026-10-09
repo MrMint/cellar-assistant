@@ -159,7 +159,12 @@ test("log a drink from the item page, undo it, log again, delete it", async ({
   await expect(log.getByText("Nothing logged yet.")).toBeVisible({
     timeout: 20_000,
   });
-  await page.getByRole("button", { name: "Undo" }).click();
+  // The second log's own "Logged …" toast (with its Undo) can still be up.
+  await page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: "Log deleted" })
+    .getByRole("button", { name: "Undo" })
+    .click();
   await expect(entry).toHaveCount(1, { timeout: 20_000 });
   await entry
     .first()
