@@ -22,7 +22,7 @@
  * precisely a check that ran once and then stopped running.
  *
  * B4's `UserActor.favorites` answers the same question for the same rows and
- * stays: it is the aggregate's own read, and `toggleFavorite` needs to be able
+ * stays: it is the aggregate's own read, and `setFavorite` needs to be able
  * to return the state it just wrote. This is the *page*, keyset-paged and
  * holding nothing, which is what `/favorites` scrolls.
  */

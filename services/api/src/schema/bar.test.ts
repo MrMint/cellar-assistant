@@ -218,13 +218,14 @@ describe("recipe availability (D9)", () => {
 });
 
 describe("Love (D9)", () => {
-  it("reads isLoved in one batch, and toggles through the viewer's own actor", async () => {
+  it("reads isLoved in one batch, and sets it through the viewer's own actor", async () => {
     const { invoke, calls } = stubSidecar({
       "RecipeActor.get": () => recipeDto,
       "UserActor.recipeLoveStates": (_id, _ctx, ids) => ids,
-      "UserActor.toggleRecipeLove": (_id, _ctx, recipeId) => ({
+      "UserActor.setRecipeLove": (_id, _ctx, recipeId, loved) => ({
         recipeId,
-        loved: false,
+        loved,
+        changed: false,
       }),
     });
     const read = await run(
@@ -234,30 +235,38 @@ describe("Love (D9)", () => {
     expect(read.errors).toBeUndefined();
     expect(read.data?.recipe).toEqual({ isLoved: true });
 
-    const toggled = await run(
-      `mutation { toggleRecipeLove(recipeId: "${RECIPE_ID}") {
-          __typename ... on ToggleRecipeLovePayload { recipeId loved }
+    const set = await run(
+      `mutation { setRecipeLove(recipeId: "${RECIPE_ID}", loved: true) {
+          __typename ... on SetRecipeLovePayload { recipeId loved changed }
       } }`,
       testContext(invoke, viewer),
     );
-    expect(toggled.data?.toggleRecipeLove).toEqual({
-      __typename: "ToggleRecipeLovePayload",
+    expect(set.data?.setRecipeLove).toEqual({
+      __typename: "SetRecipeLovePayload",
       recipeId: RECIPE_ID,
-      loved: false,
+      loved: true,
+      changed: false,
     });
-    const toggle = calls.find((call) => call.method === "toggleRecipeLove");
-    expect(toggle?.actorId).toBe(viewer.id);
+    // The asked-for state reaches the actor: a set, never a flip.
+    const call = calls.find((entry) => entry.method === "setRecipeLove");
+    expect(call?.actorId).toBe(viewer.id);
+    expect(call?.args.slice(1)).toEqual([RECIPE_ID, true]);
   });
 
-  it("refuses an anonymous toggle as a typed error", async () => {
+  it("refuses an anonymous Love as a typed error, and a Love with no state as invalid", async () => {
     const { invoke } = stubSidecar({});
     const result = await run(
-      `mutation { toggleRecipeLove(recipeId: "${RECIPE_ID}") { __typename } }`,
+      `mutation { setRecipeLove(recipeId: "${RECIPE_ID}", loved: true) { __typename } }`,
       testContext(invoke, null),
     );
-    expect(result.data?.toggleRecipeLove).toEqual({
+    expect(result.data?.setRecipeLove).toEqual({
       __typename: "ForbiddenError",
     });
+    const missing = await run(
+      `mutation { setRecipeLove(recipeId: "${RECIPE_ID}") { __typename } }`,
+      testContext(invoke, viewer),
+    );
+    expect(missing.errors?.[0]?.message).toMatch(/loved/);
   });
 });
 

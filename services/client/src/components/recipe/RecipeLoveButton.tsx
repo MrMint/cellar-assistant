@@ -5,7 +5,7 @@ import { useMutation } from "urql";
 import { IconButton } from "@/components/app/IconButton";
 import { Love } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
-import { ToggleRecipeLoveMutation } from "@/components/bar/queries";
+import { SetRecipeLoveMutation } from "@/components/bar/queries";
 import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * this is the real one, on `recipe_favorites` through `UserActor`.
  *
  * Optimistic: the fill flips on the tap and settles to the server's answer
- * (`loved` after the toggle), and a refusal flips it back with a toast — the
+ * (`loved` after the call), and a refusal flips it back with a toast — the
  * same contract `ItemDetails`' heart keeps. Claret when set (design §3.1,
  * never a pure red heart).
  */
@@ -30,19 +30,22 @@ export function RecipeLoveButton({
 }) {
   const [isLoved, setIsLoved] = useState(loved);
   const [isPending, startTransition] = useTransition();
-  const [, toggleLove] = useMutation(ToggleRecipeLoveMutation);
+  // A set, not a toggle: the tap names the state it wants, so a retried
+  // request lands on it instead of taking the Love back (wave B).
+  const [, setLove] = useMutation(SetRecipeLoveMutation);
 
   // A server refresh (another tab, the versions page) is the newer truth.
   useEffect(() => setIsLoved(loved), [loved]);
 
   const toggle = () => {
     const before = isLoved;
-    setIsLoved(!before);
+    const next = !before;
+    setIsLoved(next);
     startTransition(async () => {
-      const response = await toggleLove({ recipeId });
+      const response = await setLove({ recipeId, loved: next });
       const result = unwrapResult(
-        response.data?.toggleRecipeLove,
-        "ToggleRecipeLovePayload",
+        response.data?.setRecipeLove,
+        "SetRecipeLovePayload",
       );
       if (result.ok) {
         setIsLoved(result.data.loved);

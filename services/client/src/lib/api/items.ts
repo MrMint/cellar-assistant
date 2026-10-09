@@ -681,18 +681,20 @@ export const DeleteItemReviewMutation = graphql(
 );
 
 /**
- * Add or remove one item from the viewer's favourites.
+ * Put one item in the viewer's favourites, or take it out — the state asked
+ * for, so a retried request cannot flip it back (it replaced the flipping
+ * `toggleFavorite`).
  *
- * `favorited` in the payload is the state *after* the toggle, so the star does
+ * `favorited` in the payload is the state *after* the call, so the heart does
  * not have to guess. `item` is not selected: the payload resolves it through
- * the item DataLoader, and the star already has everything it needs.
+ * the item DataLoader, and the heart already has everything it needs.
  */
-export const ToggleFavoriteMutation = graphql(
+export const SetFavoriteMutation = graphql(
   `
-  mutation ToggleItemFavorite($itemId: ID!, $type: ItemType!) {
-    toggleFavorite(itemId: $itemId, type: $type) {
+  mutation SetItemFavorite($itemId: ID!, $type: ItemType!, $favorited: Boolean!) {
+    setFavorite(itemId: $itemId, type: $type, favorited: $favorited) {
       __typename
-      ... on ToggleFavoritePayload {
+      ... on SetFavoritePayload {
         favorited
         itemId
         itemType

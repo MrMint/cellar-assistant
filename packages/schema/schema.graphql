@@ -3523,6 +3523,11 @@ type Mutation {
   setCellarItemPercentage(cellarId: ID!, cellarItemId: ID!, percentageRemaining: Float!): SetCellarItemPercentageResult!
 
   """
+  Put one item in the viewer's favourites, or take it out. Idempotent: asking for the current state changes nothing, so a retried request cannot flip it back (it replaced the flipping `toggleFavorite`).
+  """
+  setFavorite(favorited: Boolean!, itemId: ID!, type: ItemType!): SetFavoriteResult!
+
+  """
   Replaces the recipe's complete ingredient list in one transaction. An ingredient naming a `newGenericItem` is find-or-created through `ItemActor`, the single writer of `generic_items`.
   """
   setRecipeIngredients(
@@ -3535,6 +3540,11 @@ type Mutation {
   Replaces the recipe's complete instruction list in one transaction. Steps are numbered 1..n from the order you send.
   """
   setRecipeInstructions(instructions: [RecipeInstructionInput!]!, recipeId: ID!): SetRecipeInstructionsResult!
+
+  """
+  D9: Love a recipe (`loved: true`), or take the Love back. Idempotent: asking for the current state changes nothing, so a retried request cannot flip it back (it replaced the flipping `toggleRecipeLove`).
+  """
+  setRecipeLove(loved: Boolean!, recipeId: ID!): SetRecipeLoveResult!
 
   """
   Put an item, recipe or place on the viewer's Want to try list, or take it off. Idempotent: asking for the current state changes nothing.
@@ -3575,12 +3585,6 @@ type Mutation {
   X19 “Suggest details”: a text-only model pass over the item's name and brand, for the details still empty. The creator only. May abstain; writes nothing.
   """
   suggestItemDetails(input: SuggestItemDetailsInput!, itemId: ID!, type: ItemType!): SuggestItemDetailsResult!
-
-  """Add or remove one item from the viewer's favourites."""
-  toggleFavorite(itemId: ID!, type: ItemType!): ToggleFavoriteResult!
-
-  """D9: Love a recipe, or take the Love back."""
-  toggleRecipeLove(recipeId: ID!): ToggleRecipeLoveResult!
 
   """
   D4: takes back the latest edit not already undone (an add, a removal, a move) and records that in the list's append-only history. Creator only; nothing to undo is a `ConflictError`.
@@ -6121,9 +6125,36 @@ union SetBrandParentResult = Brand | BudgetExceededError | ConflictError | Forbi
 
 union SetCellarItemPercentageResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+"""The state of one favourite after `setFavorite`."""
+type SetFavoritePayload {
+  """
+  False when the favourite already was what was asked — a repeat or a retry.
+  """
+  changed: Boolean!
+  favorited: Boolean!
+
+  """Resolved through the item DataLoader (§1.5)."""
+  item: Item!
+  itemId: ID!
+  itemType: ItemType!
+}
+
+union SetFavoriteResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SetFavoritePayload | ValidationError
+
 union SetRecipeIngredientsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeIngredientsPayload | ValidationError
 
 union SetRecipeInstructionsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeInstructionsPayload | ValidationError
+
+"""The state of one Love after `setRecipeLove`."""
+type SetRecipeLovePayload {
+  """False when the Love already was what was asked — a repeat or a retry."""
+  changed: Boolean!
+  loved: Boolean!
+  recipe: Recipe!
+  recipeId: ID!
+}
+
+union SetRecipeLoveResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SetRecipeLovePayload | ValidationError
 
 """
 The state after the call. Select the target's own field (`item { isWantToTry }`, `recipe { isWantToTry }`, `place { myInteraction { wantToVisit } }`) and a normalised cache updates itself.
@@ -7075,27 +7106,6 @@ type TierListItemEdge {
   cursor: String!
   node: TierListItem!
 }
-
-"""The state of one favourite after the toggle."""
-type ToggleFavoritePayload {
-  favorited: Boolean!
-
-  """Resolved through the item DataLoader (§1.5)."""
-  item: Item!
-  itemId: ID!
-  itemType: ItemType!
-}
-
-union ToggleFavoriteResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ToggleFavoritePayload | ValidationError
-
-"""The state of one Love after the toggle."""
-type ToggleRecipeLovePayload {
-  loved: Boolean!
-  recipe: Recipe!
-  recipeId: ID!
-}
-
-union ToggleRecipeLoveResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ToggleRecipeLovePayload | ValidationError
 
 union UndoTierListEditResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListHistoryStep | ValidationError
 

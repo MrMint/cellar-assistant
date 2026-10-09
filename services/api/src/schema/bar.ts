@@ -5,7 +5,7 @@
  * |---|---|
  * | `RecipeIngredient.availability` | `BarActor.inventory`, once per request, judged by `ingredientAvailability` |
  * | `Recipe.makeability` | the same inventory and `recipeMakeability` |
- * | `Recipe.isLoved`, `toggleRecipeLove`, `lovedRecipes` | `UserActor` (D9: Love replaces the heart) |
+ * | `Recipe.isLoved`, `setRecipeLove`, `lovedRecipes` | `UserActor` (D9: Love replaces the heart) |
  * | `barPantry`, `setBarPantryItem` | `UserActor` (D23) |
  * | `whatCanIMake` | `BarActor.whatCanIMake` (G29) |
  * | `Item.cocktails` | `BarActor.cocktailsFor` ("Cocktails with this" / "Use it up") |
@@ -34,7 +34,7 @@ import type {
   RecipeDto,
   RecipeIngredientDto,
   RecipeMakeability,
-  ToggleRecipeLoveResult,
+  SetRecipeLoveResult,
   WhatCanIMakeDto,
 } from "@cellar-assistant/contracts";
 import {
@@ -319,13 +319,17 @@ const BarPantryType = builder.objectRef<BarPantry>("BarPantry").implement({
     }),
   }),
 });
-const ToggleRecipeLovePayload = builder
-  .objectRef<ToggleRecipeLoveResult>("ToggleRecipeLovePayload")
+const SetRecipeLovePayload = builder
+  .objectRef<SetRecipeLoveResult>("SetRecipeLovePayload")
   .implement({
-    description: "The state of one Love after the toggle.",
+    description: "The state of one Love after `setRecipeLove`.",
     fields: (t) => ({
       recipeId: t.exposeID("recipeId"),
       loved: t.exposeBoolean("loved"),
+      changed: t.exposeBoolean("changed", {
+        description:
+          "False when the Love already was what was asked — a repeat or a retry.",
+      }),
       recipe: t.field({ type: RecipeType_, resolve: (r) => r.recipeId }),
     }),
   });
@@ -552,17 +556,23 @@ builder.mutationField("setBarPantryItem", (t) =>
   }),
 );
 
-builder.mutationField("toggleRecipeLove", (t) =>
+builder.mutationField("setRecipeLove", (t) =>
   t.field({
-    type: ToggleRecipeLovePayload,
-    description: "D9: Love a recipe, or take the Love back.",
+    type: SetRecipeLovePayload,
+    description:
+      "D9: Love a recipe (`loved: true`), or take the Love back. Idempotent: " +
+      "asking for the current state changes nothing, so a retried request " +
+      "cannot flip it back (it replaced the flipping `toggleRecipeLove`).",
     errors: {},
-    args: { recipeId: t.arg.id({ required: true }) },
+    args: {
+      recipeId: t.arg.id({ required: true }),
+      loved: t.arg.boolean({ required: true }),
+    },
     resolve: (_root, args, context) => {
       const viewerId = requireViewer(context, "love a recipe");
       return context
         .actor(UserActorDescriptor, viewerId)
-        .toggleRecipeLove(String(args.recipeId));
+        .setRecipeLove(String(args.recipeId), args.loved);
     },
   }),
 );

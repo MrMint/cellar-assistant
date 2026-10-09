@@ -6,7 +6,7 @@ import { useMutation } from "urql";
 import { IconButton } from "@/components/app/IconButton";
 import { Love } from "@/components/app/icons";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import { ToggleFavoriteMutation } from "@/lib/api/items";
+import { SetFavoriteMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { WantToTryButton } from "../want-to-try/WantToTryButton";
@@ -32,8 +32,9 @@ export type ItemDetailsProp = {
  * `82450ad1:src/components/item/ItemDetails.tsx`, restored.
  *
  * `addFavoriteAction` / `deleteFavoriteAction(favoriteId)` →
- * `toggleFavorite(itemId, type)`, which reports the state after the toggle;
- * the heart trusts that over its own guess, as `ItemCard` does.
+ * `setFavorite(itemId, type, favorited)`, which sets the state the tap asked
+ * for (a retry cannot flip it back) and reports it; the heart trusts that
+ * over its own guess, as `ItemCard` does.
  *
  * The heart is the brand claret when set (design §3.1: never a pure red
  * heart), an outline otherwise. D27 names it Love — "Favorites" survives
@@ -52,20 +53,21 @@ const ItemDetails = ({
 }: ItemDetailsProp) => {
   const [isPending, startTransition] = useTransition();
   const [localFavorite, setLocalFavorite] = useState(isFavorite);
-  const [, toggleFavorite] = useMutation(ToggleFavoriteMutation);
+  const [, setFavorite] = useMutation(SetFavoriteMutation);
 
   const handleFavoriteClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
+    const next = !localFavorite;
     startTransition(async () => {
-      const response = await toggleFavorite({ itemId, type });
+      const response = await setFavorite({ itemId, type, favorited: next });
       const result = unwrapResult(
-        response.data?.toggleFavorite,
-        "ToggleFavoritePayload",
+        response.data?.setFavorite,
+        "SetFavoritePayload",
       );
       if (result.ok) {
         setLocalFavorite(result.data.favorited);
       } else {
-        console.error("Failed to toggle favorite:", result.error.message);
+        console.error("Failed to set favorite:", result.error.message);
       }
     });
   };

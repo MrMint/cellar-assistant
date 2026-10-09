@@ -157,9 +157,9 @@ import type {
   PlaceInteractionDto,
   RecordPlaceInteractionInput,
   SetBarPantryItemInput,
+  SetFavoriteResult,
+  SetRecipeLoveResult,
   SetWantToTryResult,
-  ToggleFavoriteResult,
-  ToggleRecipeLoveResult,
   UpdateProfileInput,
   UserActorInterface,
   UserProfileDto,
@@ -307,7 +307,7 @@ const wishTarget = (row: WantToTryRow): WantToTryTarget | null => {
 /**
  * A target with its ids canonical (lower-case uuids) and its kind checked —
  * the cached rows are compared with `===`, so an upper-case id would miss an
- * existing row and fail on the unique constraint (the `toggleFavorite` bug).
+ * existing row and fail on the unique constraint (the old `toggleFavorite` bug).
  */
 const canonicalTarget = (target: WantToTryTarget): WantToTryTarget => {
   const kind: unknown = target?.kind;
@@ -1335,7 +1335,11 @@ export class UserActor
   }
 
   /**
-   * Add or remove one favourite, returning the state after the toggle.
+   * Favourite one item, or stop: `favorited` is the state asked for, and a
+   * request for the state already held writes nothing and answers
+   * `changed: false` (wave B hardening). It used to be `toggleFavorite`,
+   * which flipped — so a retried request, or one whose answer was lost and
+   * was sent again, put the heart back the way it was.
    *
    * Read-then-write is safe here because Dapr runs one turn at a time per
    * actor id and every `item_favorites` row this touches has
@@ -1349,12 +1353,16 @@ export class UserActor
    * violation instead of leaving a duplicate row — not be absorbed as an
    * idempotent toggle.
    */
-  async toggleFavorite(
+  async setFavorite(
     ctx: Ctx,
     requested: ItemRef,
-  ): Promise<ToggleFavoriteResult> {
+    favorited: boolean,
+  ): Promise<SetFavoriteResult> {
     const aggregate = this.requireAggregate();
     this.#requireSelf(ctx, "change these favourites");
+    if (typeof favorited !== "boolean") {
+      throw new ValidationError("favorited must be true or false");
+    }
     if (typeof requested?.type !== "string" || !isItemType(requested.type)) {
       throw new ValidationError(`not an item type: ${String(requested?.type)}`);
     }
@@ -1373,13 +1381,15 @@ export class UserActor
       );
     });
 
-    if (existing !== undefined) {
+    if (!favorited) {
+      if (existing === undefined) return { ref, favorited, changed: false };
       await this.tx(async (tx) => {
         await tx.delete(itemFavorites).where(eq(itemFavorites.id, existing.id));
       });
       await this.reload();
-      return { ref, favorited: false };
+      return { ref, favorited, changed: true };
     }
+    if (existing !== undefined) return { ref, favorited, changed: false };
 
     if (!(await this.#itemExists(ref))) {
       throw new NotFoundError(`${ref.type.toLowerCase()} ${ref.id} not found`);
@@ -1388,7 +1398,7 @@ export class UserActor
       await tx.insert(itemFavorites).values(favoriteValues(this.key, ref));
     });
     await this.reload();
-    return { ref, favorited: true };
+    return { ref, favorited, changed: true };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1703,7 +1713,7 @@ export class UserActor
    * never flip it the wrong way.
    *
    * Items and recipes are `want_to_try` rows; read-then-write is safe for the
-   * reason `toggleFavorite` gives (one turn at a time, and every row here is
+   * reason `setFavorite` gives (one turn at a time, and every row here is
    * this key's), and the per-column unique constraints make a duplicate fail
    * loudly rather than stick. A place goes through `recordPlaceInteraction`,
    * which owns `user_place_interactions`' upsert — one writer of that row.
@@ -1866,28 +1876,35 @@ export class UserActor
   }
 
   /**
-   * Love on, or off. Same turn-lock argument as `toggleFavorite`, and the
-   * same database backstop: `recipe_favorites_user_id_recipe_id_key`.
+   * Love on, or off — the state asked for, so a retry cannot flip it back
+   * (`setFavorite`'s reason). Same turn-lock argument as `setFavorite`, and
+   * the same database backstop: `recipe_favorites_user_id_recipe_id_key`.
    */
-  async toggleRecipeLove(
+  async setRecipeLove(
     ctx: Ctx,
     requested: string,
-  ): Promise<ToggleRecipeLoveResult> {
+    loved: boolean,
+  ): Promise<SetRecipeLoveResult> {
     const aggregate = this.requireAggregate();
     this.#requireSelf(ctx, "love recipes as this user");
     const recipeId = requireUuid(requested, "recipeId");
+    if (typeof loved !== "boolean") {
+      throw new ValidationError("loved must be true or false");
+    }
     const existing = aggregate.recipeLoves.find(
       (row) => row.recipeId === recipeId,
     );
-    if (existing !== undefined) {
+    if (!loved) {
+      if (existing === undefined) return { recipeId, loved, changed: false };
       await this.tx(async (tx) => {
         await tx
           .delete(recipeFavorites)
           .where(eq(recipeFavorites.id, existing.id));
       });
       await this.reload();
-      return { recipeId, loved: false };
+      return { recipeId, loved, changed: true };
     }
+    if (existing !== undefined) return { recipeId, loved, changed: false };
     const [found] = await this.db
       .select({ id: recipes.id })
       .from(recipes)
@@ -1904,7 +1921,7 @@ export class UserActor
         .values({ userId: this.key, recipeId, createdAt: new Date() });
     });
     await this.reload();
-    return { recipeId, loved: true };
+    return { recipeId, loved, changed: true };
   }
 
   /**

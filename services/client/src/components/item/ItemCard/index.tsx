@@ -16,7 +16,7 @@ import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemT
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
-import { ToggleFavoriteMutation } from "@/lib/api/items";
+import { SetFavoriteMutation } from "@/lib/api/items";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { formatItemVintage, getNextPlaceholder } from "@/utilities";
@@ -96,16 +96,17 @@ export const shownFavoriteCount = (
  *    than on a Nhost storage URL — same props as before. Presigned reads are
  *    stable per window now, so the optimizer's cache can hit
  *    (`next.config.mjs`, `imagesConfig`).
- * 2. **The favourite toggle** is `toggleFavorite` (one mutation that reports
- *    the state after the toggle) instead of the add/delete server actions
+ * 2. **The favourite toggle** is `setFavorite` (one mutation that sets the
+ *    state asked for and reports it) instead of the add/delete server actions
  *    keyed on a favourite row id. The flip is optimistic for real now (X24):
  *    the old one set its state inside the async transition that awaited the
  *    write, so the heart held — behind a spinner — until the server answered.
  *    `useOptimisticToggle` draws the tapped state (and the count with it) in
  *    the tap's frame, pops the heart, and falls back with a toast if the
- *    write is refused. `toggleFavorite` flips rather than sets, which the
- *    hook allows for: it never overlaps two writes, and writes again only if
- *    the payload's `favorited` is not the last tapped state.
+ *    write is refused. It sets rather than flips (wave B: the old
+ *    `toggleFavorite` flipped, so a retried request undid itself), and the
+ *    hook still writes again only if the payload's `favorited` is not the
+ *    last tapped state.
  * 3. **The link** goes to `href` as given. The old card ignored the value and
  *    rebuilt a *relative* `wines/<id>`, which resolved differently per page
  *    (§7, "Relative hrefs everywhere"); callers now pass an absolute href.
@@ -123,11 +124,16 @@ export const shownFavoriteCount = (
  * button named for the item. The favourite toggle sits above either.
  */
 export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
-  const [, toggleFavorite] = useMutation(ToggleFavoriteMutation);
+  const [, setFavorite] = useMutation(SetFavoriteMutation);
   const wasFavorite = item.isFavorite ?? false;
 
-  const commitFavorite = useCallback(async () => {
-    const response = await toggleFavorite({ itemId: item.itemId, type });
+  const commitFavorite = useCallback(
+    async (next: boolean) => {
+    const response = await setFavorite({
+      itemId: item.itemId,
+      type,
+      favorited: next,
+    });
     if (response.error) {
       return {
         ok: false as const,
@@ -135,14 +141,16 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
       };
     }
     const result = unwrapResult(
-      response.data?.toggleFavorite,
-      "ToggleFavoritePayload",
+      response.data?.setFavorite,
+      "SetFavoritePayload",
     );
-    // The payload is the state *after* the toggle; trust it over the guess.
+    // The payload is the state *after* the call; trust it over the guess.
     return result.ok
       ? { ok: true as const, value: result.data.favorited }
       : { ok: false as const, message: result.error.message };
-  }, [toggleFavorite, item.itemId, type]);
+    },
+    [setFavorite, item.itemId, type],
+  );
   const favorite = useOptimisticToggle({
     value: wasFavorite,
     commit: commitFavorite,

@@ -416,8 +416,9 @@ the tap's own frame; `commit(next)` resolves `{ ok: true, value? }` or `{ ok:
 false, message }`; a refusal falls back to what the server last confirmed and
 calls `onError` (toast it). One write at a time: taps during a write flip
 what is drawn, and the hook writes again only if the last tapped state is not
-what the server then holds — safe over a mutation that flips rather than sets
-(`toggleFavorite`). The state is per subject: key a component that is reused
+what the server then holds — safe even over a mutation that flips rather than
+sets, though every write wired to it sets (`setFavorite`,
+`recordPlaceInteraction`), so a retry can never flip one back. The state is per subject: key a component that is reused
 for another item or place (the map drawer keys its content by place id).
 Never disable the control while `pending` (`aria-busy` only) and never swap
 its glyph for a spinner. Used by ItemCard's heart and the place Save / Visited

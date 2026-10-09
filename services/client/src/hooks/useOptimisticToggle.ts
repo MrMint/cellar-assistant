@@ -52,9 +52,10 @@ const MAX_MISSES = 2;
  * three quick taps cost at most two writes, a late answer can never undo a
  * later tap, and an earlier write that landed is never mistaken for one that
  * did not (a refusal falls back to what the server actually holds, not to
- * the state before the first tap). It also makes the hook safe over a write
- * that *flips* rather than sets (`toggleFavorite`): writes never overlap, so
- * each one is sent knowing the state it flips from.
+ * the state before the first tap). It also keeps the hook safe over a write
+ * that *flips* rather than sets: writes never overlap, so each one is sent
+ * knowing the state it flips from. Every toggle wired to it today sets
+ * (`setFavorite`, `recordPlaceInteraction`), so a retry cannot flip either.
  *
  * A new `value` from the page (a refetch, a re-render with fresh props)
  * replaces the confirmed state. The hook's state belongs to one subject:
