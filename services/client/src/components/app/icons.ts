@@ -107,6 +107,7 @@ export {
   Wand as AutoFill,
   Warehouse as Cellar,
   WifiOff as Offline,
+  Wine as Pour,
   X as Close,
 } from "lucide-react";
 
