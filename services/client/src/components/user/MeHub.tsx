@@ -19,7 +19,9 @@ import { cn } from "@/lib/utils";
 import type { ServerUser } from "@/utilities/auth-server";
 import {
   badgeText,
+  countTiles,
   EMPTY_ME_HUB,
+  type MeCounts,
   type MeHubData,
   type PinnedTierList,
 } from "./me-hub-data";
@@ -29,6 +31,8 @@ export type MeLink = {
   label: string;
   href: string;
   icon: AppIcon;
+  /** A second line under the label ("Drinks and recipes"). */
+  description?: string;
   /** A count waiting on the viewer, shown as a badge (hidden at 0). */
   badge?: number;
   /** What the badge counts, for assistive tech: "2 friend requests". */
@@ -53,7 +57,12 @@ export const ME_SECTIONS: readonly {
     label: "Lists",
     links: [
       { label: "Top rated", href: "/rankings", icon: Leaderboard },
-      { label: "Loved", href: "/favorites", icon: Love },
+      {
+        label: "Loved",
+        href: "/favorites",
+        icon: Love,
+        description: "Drinks and recipes",
+      },
       { label: "Want to try", href: "/want-to-try", icon: WantToTry },
     ],
   },
@@ -74,6 +83,13 @@ export const ME_SECTIONS: readonly {
     links: [{ label: "Scans", href: "/map/scans", icon: Scan }],
   },
 ];
+
+/**
+ * The account's section: Edit profile and Sign out. "Settings" since X18 —
+ * it is where anything about the app itself (not your collection) goes. No
+ * theme switch: dark is the default and light ships only on evidence (D21).
+ */
+export const SETTINGS_LABEL = "Settings";
 
 const Chevron = () => (
   <ChevronRight aria-hidden className="size-5" strokeWidth={1.75} />
@@ -103,7 +119,7 @@ function LinkRow({
   badge = 0,
   badgeLabel,
   description,
-}: MeLink & { description?: string }) {
+}: MeLink) {
   return (
     <ListRow
       leading={<Icon aria-hidden className="size-5" strokeWidth={1.75} />}
@@ -125,6 +141,39 @@ function LinkRow({
         </>
       }
     />
+  );
+}
+
+/**
+ * The header's count row (X18): bottles, logs, places, tier lists — each the
+ * viewer's own, each naming its noun, a zero left out (design §3.7). A
+ * summary, not a menu: every one of them has a row or a tab of its own, so
+ * the tiles are not links. A `dl`, so each number is read with its noun.
+ */
+export function MeCountRow({
+  counts,
+}: {
+  counts: MeCounts | null | undefined;
+}) {
+  const tiles = countTiles(counts);
+  if (tiles.length === 0) return null;
+  return (
+    <dl
+      aria-label="Your numbers"
+      data-slot="me-counts"
+      className="flex divide-x divide-line rounded-lg bg-surface-1 py-3"
+    >
+      {tiles.map((tile) => (
+        <div
+          key={tile.key}
+          data-count={tile.key}
+          className="flex min-w-0 flex-1 flex-col-reverse items-center gap-0.5 px-1"
+        >
+          <dt className="type-footnote truncate">{tile.noun}</dt>
+          <dd className="type-title-1 tabular text-ink-1">{tile.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -170,8 +219,9 @@ function TierListRows({
 }
 
 /**
- * The `/me` hub: who you are, then grouped rows into everything that is
- * yours, then the account (Edit profile, Sign out). A tab root, so no Back.
+ * The `/me` hub: who you are and your numbers, then grouped rows into
+ * everything that is yours, then Settings (Edit profile, Sign out). A tab
+ * root, so no Back.
  */
 export function MeHub({
   user,
@@ -203,6 +253,7 @@ export function MeHub({
           )}
         </div>
       </header>
+      <MeCountRow counts={data.counts} />
       {ME_SECTIONS.map((section) => (
         <InsetSection key={section.label} label={section.label}>
           {section.label === "Lists" && (
@@ -216,8 +267,13 @@ export function MeHub({
           ))}
         </InsetSection>
       ))}
-      <InsetSection label="Account">
-        <LinkRow label="Edit profile" href="/users/edit" icon={Edit} />
+      <InsetSection label={SETTINGS_LABEL}>
+        <LinkRow
+          label="Edit profile"
+          href="/users/edit"
+          icon={Edit}
+          description="Your name, as friends see it"
+        />
         <SignOutButton />
       </InsetSection>
     </Page>
@@ -242,6 +298,9 @@ export function MeHubShell() {
             <Skeleton className="h-4 w-[45%]" />
           </div>
         </ShellBlocks>
+        {/* The count row's height, so the sections do not jump when it lands
+            (an account with nothing yet has no row, and that is the rarer case). */}
+        <ShellBlocks className="h-[76px] rounded-lg bg-surface-1" />
         {ME_SECTIONS.map((section) => (
           <InsetSection key={section.label} label={section.label}>
             {section.label === "Lists" && (
@@ -257,8 +316,13 @@ export function MeHubShell() {
             ))}
           </InsetSection>
         ))}
-        <InsetSection label="Account">
-          <LinkRow label="Edit profile" href="/users/edit" icon={Edit} />
+        <InsetSection label={SETTINGS_LABEL}>
+          <LinkRow
+            label="Edit profile"
+            href="/users/edit"
+            icon={Edit}
+            description="Your name, as friends see it"
+          />
           <ShellBlocks className="flex min-h-11 items-center px-4 py-2.5">
             <Skeleton className="h-5 w-20" />
           </ShellBlocks>

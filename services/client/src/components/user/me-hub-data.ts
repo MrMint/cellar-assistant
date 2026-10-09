@@ -1,11 +1,12 @@
 /**
- * What the `/me` hub reads beyond the session (D1): the viewer's own tier
- * lists, pinned at the top of Lists, and the friend requests waiting on them,
- * for the badge on Friends.
+ * What the `/me` hub reads beyond the session (D1, X18): the viewer's counts
+ * (bottles, logs, places, tier lists), their own tier lists, pinned at the
+ * top of Lists, and the friend requests waiting on them, for the badge on
+ * Friends.
  *
- * One document, so the hub is one round trip. Both halves are optional to
- * the page: a failure in either renders the plain row it would have shown
- * anyway (`meHubFromResult`), never an error over the hub.
+ * One document, so the hub is one round trip. Every part is optional to the
+ * page: a failure in any renders what it would have shown anyway — no count
+ * row, plain rows (`meHubFromResult`) — never an error over the hub.
  */
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql, type ResultOf } from "@/lib/api/graphql";
@@ -19,6 +20,15 @@ export const FRIEND_REQUESTS_PAGE = 100;
 export const MeHubQuery = graphql(
   `
   query MeHub($pinned: Int!, $requests: Int!) {
+    me {
+      id
+      counts {
+        bottles
+        logs
+        places
+        tierLists
+      }
+    }
     myTierLists(first: $pinned, section: MINE) {
       __typename
       ... on TierListConnection {
@@ -52,7 +62,17 @@ export const MeHubQuery = graphql(
 
 export type PinnedTierList = { id: string; name: string; itemCount: number };
 
+/** `Viewer.counts` (X18): each the viewer's own. */
+export type MeCounts = {
+  bottles: number;
+  logs: number;
+  places: number;
+  tierLists: number;
+};
+
 export type MeHubData = {
+  /** The header's counts, or `null` when they could not be read. */
+  counts?: MeCounts | null;
   /** The viewer's own tier lists, most recently changed first. */
   pinnedTierLists: PinnedTierList[];
   /** How many tier lists the viewer owns in all, when known. */
@@ -62,6 +82,7 @@ export type MeHubData = {
 };
 
 export const EMPTY_ME_HUB: MeHubData = {
+  counts: null,
   pinnedTierLists: [],
   tierListCount: null,
   pendingFriendRequests: 0,
@@ -76,6 +97,7 @@ export const meHubFromResult = (
   const listConnection =
     lists?.__typename === "TierListConnection" ? lists : null;
   return {
+    counts: data?.me?.counts ?? null,
     pinnedTierLists:
       listConnection?.edges.map(({ node }) => ({
         id: node.id,
@@ -93,3 +115,32 @@ export const meHubFromResult = (
 /** The badge's text: the count, capped where the page read stops. */
 export const badgeText = (count: number): string =>
   count >= FRIEND_REQUESTS_PAGE ? `${FRIEND_REQUESTS_PAGE - 1}+` : `${count}`;
+
+/** One tile of the header's count row: the number, and its noun. */
+export type CountTile = { key: keyof MeCounts; value: number; noun: string };
+
+const NOUNS: Record<keyof MeCounts, readonly [string, string]> = {
+  bottles: ["bottle", "bottles"],
+  logs: ["log", "logs"],
+  places: ["place", "places"],
+  tierLists: ["tier list", "tier lists"],
+};
+
+/**
+ * The count row (design §3.7): each count names its noun, and a count of zero
+ * is not shown — a new account's Me has no row of zeros. Fixed order, so a
+ * tile never moves when another one appears.
+ */
+export const countTiles = (counts: MeCounts | null | undefined): CountTile[] =>
+  counts === null || counts === undefined
+    ? []
+    : (Object.keys(NOUNS) as (keyof MeCounts)[])
+        .filter((key) => counts[key] > 0)
+        .map((key) => {
+          const [one, many] = NOUNS[key];
+          return {
+            key,
+            value: counts[key],
+            noun: counts[key] === 1 ? one : many,
+          };
+        });
