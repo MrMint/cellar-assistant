@@ -102,7 +102,6 @@ import {
   beers,
   brands as brandsTable,
   coffees,
-  friends,
   genericItems,
   itemBrands,
   itemImage,
@@ -115,7 +114,7 @@ import {
   teas,
   wines,
 } from "@cellar-assistant/db";
-import { and, eq, inArray, or, sql } from "@cellar-assistant/db/orm";
+import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import {
   bypassesPolicy,
   canSeeItemImage,
@@ -167,6 +166,8 @@ import {
   type StoredVector,
   storedVector,
 } from "../lib/vectors.ts";
+import { friendshipsOf } from "../lib/visibility.ts";
+import { friendIdsOf } from "../lib/visibility-sql.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Rows                                                                        */
@@ -600,14 +601,8 @@ export class ItemActor
     requireSignedIn(ctx, "view an item score");
     const viewer = ctx.viewerId;
     if (viewer === null) return scoreOf([]);
-    const rows = await this.db
-      .select({ userId: friends.userId, friendId: friends.friendId })
-      .from(friends)
-      .where(or(eq(friends.userId, viewer), eq(friends.friendId, viewer)));
     const friendIds = new Set(
-      rows
-        .map((row) => (row.userId === viewer ? row.friendId : row.userId))
-        .filter((id) => id !== viewer),
+      friendIdsOf(viewer, await friendshipsOf(this.db, viewer)),
     );
     // One review per friend: the newest, as `myReview` reads the viewer's own
     // (`item_reviews` has no one-per-user constraint; the cache is newest
