@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Page } from "@playwright/test";
 import { createCellar, unique } from "../../fixtures/data.ts";
 import {
   deleteCellarWithContents,
@@ -46,6 +47,12 @@ const placeName = unique("E2 Capture Bar").replace(/[^A-Za-z0-9 ]/g, "");
 let cellarId = "";
 let cellarName = "";
 
+/** The tab bar's brass ＋ ("Add cellar" and friends are links too). */
+const plus = (page: Page) =>
+  page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Add", exact: true });
+
 test.beforeAll(async () => {
   insertPlace({
     id: placeId,
@@ -76,7 +83,7 @@ test("＋ opens the camera, not a chooser; the mode row remembers; Close goes ba
   test.setTimeout(90_000);
   await stubCamera(context, "denied");
   await page.goto("/cellars");
-  await page.getByRole("link", { name: "Add" }).tap();
+  await plus(page).tap();
   await page.waitForURL(/\/add$/);
 
   // The camera surface itself: no sheet over the page, no tab bar under it.
@@ -104,7 +111,7 @@ test("＋ opens the camera, not a chooser; the mode row remembers; Close goes ba
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 
   // Back through ＋: the last mode used.
-  await page.getByRole("link", { name: "Add" }).tap();
+  await plus(page).tap();
   await page.waitForURL(/\/add$/);
   await expect(
     page
