@@ -13,9 +13,16 @@ import { SearchDiscoverySkeleton } from "./SearchResultsSkeleton";
 export function SearchLandingShell() {
   return (
     <LoadingShell label="home" className="flex flex-col gap-6 pt-4 sm:pt-8">
+      {/* The hero's own boxes: the greeting's 36 px line (min-h-9) and the
+          collection line's 24 px (min-h-6), 12 px apart, so the box below
+          lands where the page puts it. */}
       <ShellBlocks className="flex flex-col items-center gap-3">
-        <Skeleton className="h-8 w-56" />
-        <Skeleton className="h-5 w-44" />
+        <div className="flex min-h-9 items-center">
+          <Skeleton className="h-8 w-56" />
+        </div>
+        <div className="flex min-h-6 items-center">
+          <Skeleton className="h-5 w-44" />
+        </div>
       </ShellBlocks>
       <div className="w-full max-w-150 self-center">
         <div className="flex h-12 items-center gap-2 rounded-md bg-surface-2 px-3">

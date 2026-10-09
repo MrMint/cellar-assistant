@@ -15,7 +15,7 @@ const SECTION = "rounded-lg bg-surface-1 p-4";
 /**
  * A place page while it loads (X24), in `PlaceDetails`' own sections: the
  * hero (category tile, name, the rating and address lines), the action grid
- * (Directions, then two rows of two), then the tabbed menu.
+ * (Directions, three rows of two, Add to Tier List), then the tabbed menu.
  *
  * With a `hero` the tile and the name are real — the server's existence check
  * already read them — so the page's one stable element is on screen as soon
@@ -54,12 +54,14 @@ export function PlaceDetailsShell({ hero }: { hero?: PlaceHero }) {
         </section>
         <ShellBlocks className={`flex flex-col gap-3 ${SECTION}`}>
           <Skeleton className="h-11 w-full" />
-          {["contact", "toggles", "share"].map((row) => (
+          {["contact", "want-visited", "love-share"].map((row) => (
             <div key={row} className="flex gap-2">
               <Skeleton className="h-11 flex-1" />
               <Skeleton className="h-11 flex-1" />
             </div>
           ))}
+          {/* Add to Tier List, full width. */}
+          <Skeleton className="h-11 w-full" />
         </ShellBlocks>
         <ShellBlocks className="flex flex-col rounded-lg bg-surface-1">
           <div className="flex h-11 items-center gap-4 border-line border-b px-5">
