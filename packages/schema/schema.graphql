@@ -5250,7 +5250,9 @@ One drink, with its versions. `canonicalRecipeId` is derived from votes — high
 type RecipeGroup {
   baseSpirit: String
 
-  """Resolved through the `Recipe` DataLoader."""
+  """
+  Resolved through the `Recipe` DataLoader. Null when the viewer may not see it (X15: another person's private version).
+  """
   canonicalRecipe: Recipe
   canonicalRecipeId: ID
   category: RecipeCategory!
