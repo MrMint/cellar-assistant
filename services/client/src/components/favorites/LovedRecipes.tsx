@@ -65,7 +65,9 @@ export function LovedRecipes({
   });
 
   return (
-    <Page>
+    // gap-4, as the drinks half spaces its bar and segment: the segment sits
+    // at the same height in both halves.
+    <Page className="gap-4">
       <AppBar title="Loved" parent="/me" />
       <LovedSegment value="recipes" />
       {list.failure !== null && <ApiError error={list.failure} title="Loved" />}
@@ -73,7 +75,7 @@ export function LovedRecipes({
         <EmptyState
           illustration={<Love aria-hidden strokeWidth={1.5} />}
           title="No recipes loved yet."
-          description="Tap the heart on a recipe you love, and it waits here."
+          description="Love a recipe in the Bar, and it waits here."
           action={
             <Button asChild variant="secondary">
               <Link href="/recipes">Open the Bar</Link>
@@ -106,7 +108,11 @@ export function LovedRecipes({
                 }
                 description={row.description}
                 trailing={
-                  <RecipeLoveButton recipeId={row.id} loved={row.loved} />
+                  <RecipeLoveButton
+                    recipeId={row.id}
+                    loved={row.loved}
+                    name={row.name}
+                  />
                 }
               />
             ))}

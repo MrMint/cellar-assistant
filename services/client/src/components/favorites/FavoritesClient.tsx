@@ -86,15 +86,15 @@ export function FavoritesClient({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Reached from the Me hub (D1): Back goes there on a cold open. */}
-        <AppBar title="Loved" parent="/me" className="min-w-0 flex-1" />
-        <div className="flex flex-row gap-4">
-          <CellarItemsFilter types={types} onTypesChange={setTypes} />
-        </div>
-      </div>
-      {/* X18: Loved holds recipes too (D9); this is the drinks half. */}
+      {/* Reached from the Me hub (D1): Back goes there on a cold open. */}
+      <AppBar title="Loved" parent="/me" />
+      {/* X18: Loved holds recipes too (D9); this is the drinks half. Straight
+          under the bar, where the recipes half draws it, so the segment does
+          not move under the thumb when it switches halves. */}
       <LovedSegment value="drinks" />
+      <div className="flex flex-row gap-4">
+        <CellarItemsFilter types={types} onTypesChange={setTypes} />
+      </div>
       {list.failure !== null && <ApiError error={list.failure} title="Loved" />}
       <VirtualGrid
         items={items}
