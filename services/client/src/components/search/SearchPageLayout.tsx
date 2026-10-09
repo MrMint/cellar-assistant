@@ -10,6 +10,11 @@ type SearchPageLayoutProps = {
   /** The `?q=` this render is for (trimmed), or null. */
   urlQuery: string | null;
   /**
+   * Drawn above everything in both views (X10: the sheet's title and Close).
+   * Like every slot here, it keeps its place whichever view renders.
+   */
+  header?: ReactNode;
+  /**
    * The landing view's hero (greeting and collection line, above the box), or
    * null for the results view. (The quick-link chips that sat under the box
    * went in X01: each one duplicated a tab or a Me row.)
@@ -35,12 +40,14 @@ type SearchPageLayoutProps = {
  */
 export function SearchPageLayout({
   urlQuery,
+  header,
   landing,
   children,
 }: SearchPageLayoutProps) {
   return (
     <SearchNavigationProvider>
       <div className={cn("flex flex-col gap-6", landing && "pt-4 sm:pt-8")}>
+        {header ?? null}
         {landing ? landing.hero : null}
         {/* The same element in both views — only its classes change — so
             the box below it is never remounted. */}

@@ -22,31 +22,3 @@ export function SearchResultsSkeleton() {
     </div>
   );
 }
-
-/** Placeholder rows for the landing view's activity feed. */
-const DISCOVERY_ROWS = [1, 2, 3, 4];
-
-/**
- * The landing view's discovery section while it streams: clearing the box
- * used to leave the region empty for a second or more between the results
- * skeleton and Recent Activity (UX lane, 2026-10-08).
- */
-export function SearchDiscoverySkeleton() {
-  return (
-    <div
-      data-testid="search-discovery-skeleton"
-      className="flex flex-col gap-4"
-    >
-      <Skeleton className="h-6 w-45" />
-      {DISCOVERY_ROWS.map((i) => (
-        <div key={i} className="flex items-center gap-4">
-          <Skeleton className="size-12 shrink-0" />
-          <div className="flex flex-1 flex-col gap-1">
-            <Skeleton className="h-4 w-[70%]" />
-            <Skeleton className="h-3.5 w-[40%]" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}

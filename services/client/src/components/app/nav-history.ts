@@ -56,6 +56,23 @@ export function recordNavigation(path: string): void {
   write(nextNavStack(read(), path));
 }
 
+/**
+ * The page the person was on before they opened `path` — the nearest entry
+ * below the top of the stack that is not `path` itself — or `null` on a cold
+ * open. For a full-screen sheet with a URL of its own (`/search`, X10),
+ * whose Close returns to where it was opened from however many queries were
+ * typed inside it.
+ */
+export function previousPathOutside(path: string): string | null {
+  if (typeof window === "undefined") return null;
+  const stack = read();
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const entry = stack[index];
+    if (entry !== undefined && entry !== path) return entry;
+  }
+  return null;
+}
+
 /** Whether an in-app page sits behind the current one. */
 export function canGoBack(): boolean {
   if (typeof window === "undefined") return false;

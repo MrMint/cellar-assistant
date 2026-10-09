@@ -38,7 +38,6 @@ mock.module("@/components/map/hooks/useGeolocation", () => ({
 }));
 
 const { ClientSearchInterface } = await import("./ClientSearchInterface");
-const { RecentActivity } = await import("./RecentActivity");
 const { NearbyPlaces } = await import("./NearbyPlaces");
 const { SearchNearbyPlacesQuery, NEARBY_PLACES_LIMIT } = await import(
   "./queries"
@@ -108,83 +107,6 @@ const assertVisibleAtRest = (html: string) => {
   assert.doesNotMatch(html, /opacity:\s*0[;"]/);
   assert.doesNotMatch(html, /translateY\(10px\)|translateX\(-12px\)/);
 };
-
-const NOW = "2026-10-05T12:00:00.000Z";
-const person = {
-  userId: "u2",
-  userName: "Fran Friend",
-  userAvatar: null,
-};
-
-const FEED = [
-  {
-    kind: "added" as const,
-    id: "added-b1",
-    timestamp: NOW,
-    itemName: "2016 Barolo",
-    itemType: "WINE",
-    itemImageUrl: "https://files.test/w1?sig",
-    itemPlaceholder: null,
-    itemHref: "/wines/w1",
-    ...person,
-    cellarName: "Home",
-  },
-  {
-    kind: "reviewed" as const,
-    id: "review-r1",
-    timestamp: NOW,
-    itemName: "Hazy IPA",
-    itemType: "BEER",
-    itemHref: "/beers/b1",
-    ...person,
-    score: 4.5,
-    reviewText: null,
-  },
-  {
-    kind: "tier-listed" as const,
-    id: "tier-t1",
-    timestamp: NOW,
-    itemName: "Corner Bar",
-    itemType: "PLACE",
-    itemHref: "/tier-lists/l1?item=t1",
-    ...person,
-    tierListName: "Best bars",
-    rank: 2,
-  },
-];
-
-describe("RecentActivity (restored, G31)", () => {
-  test("the old heading, filters and one card per entry, linked as before", () => {
-    const html = render(<RecentActivity feed={FEED} selectedKinds={[]} />);
-    const words = text(html);
-    assert.match(words, /Recent Activity/);
-    for (const label of ["Added", "Reviews", "Tier Lists"]) {
-      assert.match(html, new RegExp(`aria-label="${label}"`));
-    }
-    assert.match(html, /aria-label="Activity type filters"/);
-    assert.match(words, /2016 Barolo/);
-    assert.match(words, /Added to Home/);
-    assert.match(words, /Rated 4\.5/);
-    assert.match(words, /#2 in Best bars/);
-    assert.match(html, /href="\/wines\/w1"/);
-    assert.match(html, /href="\/tier-lists\/l1\?item=t1"/);
-    // The presigned thumbnail through next/image; the others fall back.
-    assert.match(html, /data-next-image="art" data-alt="2016 Barolo"/);
-    assertVisibleAtRest(html);
-  });
-
-  test("no activity and no filter renders nothing, as before", () => {
-    assert.equal(render(<RecentActivity feed={[]} selectedKinds={[]} />), "");
-  });
-
-  test("a filter with nothing in it says so", () => {
-    const words = text(
-      render(<RecentActivity feed={[]} selectedKinds={["reviewed"]} />),
-    );
-    assert.match(words, /Recent Activity/);
-    assert.match(words, /No recent activity for the selected filters/);
-  });
-});
 
 const PLACE = {
   id: "p1",
