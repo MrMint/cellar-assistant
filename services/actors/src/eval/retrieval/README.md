@@ -14,6 +14,7 @@ anecdote taken against whatever the development database held that day.
 | `seed-testing.ts` | Writes the catalog through `itemInsertValues`, brands through `item_brands`. |
 | `retrieval-eval.live.test.ts` | The harness: seeds, embeds every item as `regenerateVector` would, then drives `ItemSearchActor` and `MenuMatchJobActor` over it. |
 | `baseline.json` | The numbers a run is held to. |
+| `like-you-rated.live.test.ts` | X07: what the menu line's "Like the X you rated" rule admits (`MENU_LINE_LIKE_MAX_DISTANCE` plus the same-kind rule) over the same catalog — the share of same-type pairs and every admitted pair. `LIKE_EVAL_OUT=<file>` writes them. |
 
 ## Running it
 

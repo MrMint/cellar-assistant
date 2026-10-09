@@ -152,7 +152,7 @@ export function MenuLineRow({
       data-group={menuGroupOf(line)}
       data-matched={line.matched_item ? "" : undefined}
       className={cn(
-        "relative flex gap-3 px-4 py-3 transition-colors duration-(--ca-dur-micro) has-[>button[data-slot=menu-line-open]:active]:bg-surface-3",
+        "relative flex gap-3 px-4 py-3 transition-colors duration-(--ca-dur-micro) has-[>button:active]:bg-surface-3",
         className,
       )}
     >

@@ -200,8 +200,38 @@ const readFriendsWhoLoved = async (
 };
 
 /**
- * For each item, the nearest item of the same type the viewer rated at least
- * {@link MENU_LINE_LIKE_MIN_SCORE}, when it is within
+ * What an item *is* within its type, for "like": a wine's style and grape, a
+ * spirit's type, a beer's style; nothing for coffee, sake or tea, which are
+ * held to the distance alone. Two subqueries on the item's own row — the
+ * per-type tables are what `ItemActor` writes, read here, never written.
+ */
+export const likeKindColumns = (type: SQL, id: SQL): SQL => sql`
+  case ${type}
+    when 'WINE' then (select w.style from public.wines w where w.id = ${id})
+    when 'SPIRIT' then (select s.type from public.spirits s where s.id = ${id})
+    when 'BEER' then (select b.style from public.beers b where b.id = ${id})
+  end as kind,
+  case ${type}
+    when 'WINE' then (select w.variety from public.wines w where w.id = ${id})
+  end as variety`;
+
+/**
+ * Two rows carrying {@link likeKindColumns} are alike enough to compare: the
+ * same kind (both unknown counts as the same), and — when both name a grape
+ * — the same grape. La Crema's Chardonnay and its Pinot Noir are a
+ * cosine distance of 0.079 apart; this is what keeps them apart.
+ */
+export const likeComparable = (a: string, b: string): SQL => {
+  const ka = sql.identifier(a);
+  const kb = sql.identifier(b);
+  return sql`(${ka}.kind is not distinct from ${kb}.kind
+    and (${ka}.variety is null or ${kb}.variety is null
+         or ${ka}.variety = ${kb}.variety))`;
+};
+
+/**
+ * For each item, the nearest item of the same type and kind the viewer rated
+ * at least {@link MENU_LINE_LIKE_MIN_SCORE}, when it is within
  * {@link MENU_LINE_LIKE_MAX_DISTANCE}. Both vectors must come from the same
  * embedding model: a distance across two models' spaces means nothing.
  */
@@ -225,19 +255,24 @@ const readLikeYouRated = async (
       where score >= ${MENU_LINE_LIKE_MIN_SCORE}
     ),
     rated_vectors as (
-      select r.item_type, r.item_id, r.score, v.vector, v.embedding_model
+      select r.item_type, r.item_id, r.score, v.vector, v.embedding_model,
+             ${likeKindColumns(sql`r.item_type`, sql`r.item_id`)}
       from rated r
       join public.item_vectors v
         on ${vec.typeExpr("v")} = r.item_type
        and ${vec.idExpr("v")} = r.item_id
       where v.vector is not null
     ),
-    target as (
+    target_rows as (
       select ${vec.typeExpr("t")} as item_type,
              ${vec.idExpr("t")} as item_id,
              t.vector, t.embedding_model
       from public.item_vectors t
       where t.vector is not null and (${arcMatch(vec, "t", refs)})
+    ),
+    target as (
+      select tr.*, ${likeKindColumns(sql`tr.item_type`, sql`tr.item_id`)}
+      from target_rows tr
     )
     select target.item_type, target.item_id,
            best.item_type as like_type, best.item_id as like_id, best.score
@@ -248,6 +283,7 @@ const readLikeYouRated = async (
       from rated_vectors rv
       where rv.item_type = target.item_type
         and rv.item_id <> target.item_id
+        and ${likeComparable("rv", "target")}
         and rv.embedding_model is not distinct from target.embedding_model
       order by rv.vector <=> target.vector, rv.item_id
       limit 1

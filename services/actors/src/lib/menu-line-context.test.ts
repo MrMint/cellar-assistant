@@ -304,6 +304,32 @@ describe.skipIf(skip)("MenuScansCollectionActor.lineContext", () => {
     });
   });
 
+  it("never likens across kinds: another wine style is no reason, however close", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const { placeId, scanId, actor } = await setUp(db, viewer, viewer);
+      const red = await seedWine(db, viewer, "Barolo");
+      const white = await seedWine(db, viewer, "Gavi");
+      await db.execute(
+        sql`insert into public.wine_style (value) values ('WHITE') on conflict do nothing`,
+      );
+      await db.execute(
+        sql`update public.wines set style = 'WHITE' where id = ${white.id}::uuid`,
+      );
+      await seedItemVector(db, red, unitVector(0));
+      await seedItemVector(db, white, blendedVector(0, 1, 0.01));
+      await seedItemReview(db, viewer, white, 5);
+      const line = await seedLine(db, {
+        placeId,
+        scanId,
+        name: "Barolo",
+        match: red,
+      });
+      const [context] = await actor.lineContext(userCtx(viewer, "r"), [line]);
+      expect(context?.forYou?.likeYouRated).toBeNull();
+    });
+  });
+
   it("answers its own viewer only, and refuses a malformed id before reading", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
