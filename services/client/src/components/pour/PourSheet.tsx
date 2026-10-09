@@ -515,7 +515,7 @@ function GlassPresets({
     (preset) => levelAfterPreset(type, from, preset) > 0,
   );
   return (
-    <ul aria-label="Pour a" className="flex flex-col items-start gap-2">
+    <ul aria-label="How much" className="flex flex-col items-start gap-2">
       {presets.map((preset) => {
         const to = levelAfterPreset(type, from, preset);
         return (
