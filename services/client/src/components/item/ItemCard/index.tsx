@@ -129,25 +129,25 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
 
   const commitFavorite = useCallback(
     async (next: boolean) => {
-    const response = await setFavorite({
-      itemId: item.itemId,
-      type,
-      favorited: next,
-    });
-    if (response.error) {
-      return {
-        ok: false as const,
-        message: failureFromTransport(response.error).message,
-      };
-    }
-    const result = unwrapResult(
-      response.data?.setFavorite,
-      "SetFavoritePayload",
-    );
-    // The payload is the state *after* the call; trust it over the guess.
-    return result.ok
-      ? { ok: true as const, value: result.data.favorited }
-      : { ok: false as const, message: result.error.message };
+      const response = await setFavorite({
+        itemId: item.itemId,
+        type,
+        favorited: next,
+      });
+      if (response.error) {
+        return {
+          ok: false as const,
+          message: failureFromTransport(response.error).message,
+        };
+      }
+      const result = unwrapResult(
+        response.data?.setFavorite,
+        "SetFavoritePayload",
+      );
+      // The payload is the state *after* the call; trust it over the guess.
+      return result.ok
+        ? { ok: true as const, value: result.data.favorited }
+        : { ok: false as const, message: result.error.message };
     },
     [setFavorite, item.itemId, type],
   );

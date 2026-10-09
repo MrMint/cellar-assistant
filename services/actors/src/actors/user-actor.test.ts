@@ -1548,14 +1548,14 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const ref = { type: "TEA", id: teaId } as const;
 
         const actor = await userActor(alice, db);
-        expect(
-          await actor.setFavorite(userCtx(alice, "r"), ref, true),
-        ).toEqual({ ref, favorited: true, changed: true });
+        expect(await actor.setFavorite(userCtx(alice, "r"), ref, true)).toEqual(
+          { ref, favorited: true, changed: true },
+        );
         // A retried request (its first answer lost) lands on the same state:
         // it used to be a toggle, and a retry un-favourited.
-        expect(
-          await actor.setFavorite(userCtx(alice, "r"), ref, true),
-        ).toEqual({ ref, favorited: true, changed: false });
+        expect(await actor.setFavorite(userCtx(alice, "r"), ref, true)).toEqual(
+          { ref, favorited: true, changed: false },
+        );
         expect(
           nodes(await actor.favorites(userCtx(alice, "r"), firstPage)),
         ).toEqual([ref]);
