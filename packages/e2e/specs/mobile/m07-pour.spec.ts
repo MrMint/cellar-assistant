@@ -263,10 +263,21 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
   const lists = page.getByRole("dialog", { name: "On your lists" });
   await expect(lists).toBeVisible({ timeout: 20_000 });
   await expect(lists.getByText(listName)).toBeVisible();
-  await lists.getByRole("button", { name: "Move to Outstanding" }).click();
-  await expect(
-    page.getByText(`Moved ${teaName} to Outstanding on ${listName}`),
-  ).toBeVisible({ timeout: 20_000 });
+  const moveTo = lists.getByRole("button", { name: "Move to Outstanding" });
+  await moveTo.click();
+  const moved = page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: `Moved ${teaName} to Outstanding on ${listName}` });
+  await expect(moved).toBeVisible({ timeout: 20_000 });
+  await expect(moveTo).toBeHidden();
+
+  // The toast's Undo is tappable over the open sheet (a modal holds body at
+  // pointer-events: none) and takes back this move; the sheet stays open.
+  await moved.getByRole("button", { name: "Undo" }).click();
+  await expect(lists).toBeVisible();
+  await expect(moveTo).toBeVisible({ timeout: 20_000 });
+  await moveTo.click();
+  await expect(moveTo).toBeHidden({ timeout: 20_000 });
   await lists.getByRole("button", { name: "Done" }).click();
 
   const state = await bottleState();
