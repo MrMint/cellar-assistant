@@ -20,6 +20,7 @@ import {
   favoritesVariables,
 } from "./adapter";
 import { FavoritesQuery } from "./fragments";
+import { LovedSegment } from "./LovedSegment";
 
 interface FavoritesClientProps {
   /** The server's first page, for the filter it was rendered with. */
@@ -92,6 +93,8 @@ export function FavoritesClient({
           <CellarItemsFilter types={types} onTypesChange={setTypes} />
         </div>
       </div>
+      {/* X18: Loved holds recipes too (D9); this is the drinks half. */}
+      <LovedSegment value="drinks" />
       {list.failure !== null && <ApiError error={list.failure} title="Loved" />}
       <VirtualGrid
         items={items}

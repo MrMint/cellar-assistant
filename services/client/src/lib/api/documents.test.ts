@@ -65,10 +65,12 @@ import * as cellarFragments from "@/components/cellar/fragments";
 import * as onboardingQueries from "@/components/common/OnboardingWizard/queries";
 import * as drinkLogQueries from "@/components/drink-log/queries";
 import * as favoritesFragments from "@/components/favorites/fragments";
+import * as lovedRecipes from "@/components/favorites/loved-recipes";
 import * as friendFragments from "@/components/friend/fragments";
 import * as itemFragments from "@/components/item/fragments";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
 import * as mapQueries from "@/components/map/queries";
+import * as profileQueries from "@/components/profile/queries";
 import * as rankingFragments from "@/components/ranking/fragments";
 import * as recipeFragments from "@/components/recipe/fragments";
 import * as recipeQueries from "@/components/recipe/queries";
@@ -103,10 +105,12 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/common/OnboardingWizard/queries.ts": onboardingQueries,
   "components/drink-log/queries.ts": drinkLogQueries,
   "components/favorites/fragments.ts": favoritesFragments,
+  "components/favorites/loved-recipes.ts": lovedRecipes,
   "components/friend/fragments.ts": friendFragments,
   "components/item/ItemCard/fragments.ts": itemCardFragments,
   "components/item/fragments.ts": itemFragments,
   "components/map/queries.ts": mapQueries,
+  "components/profile/queries.ts": profileQueries,
   "components/ranking/fragments.ts": rankingFragments,
   "components/recipe/fragments.ts": recipeFragments,
   "components/recipe/queries.ts": recipeQueries,
