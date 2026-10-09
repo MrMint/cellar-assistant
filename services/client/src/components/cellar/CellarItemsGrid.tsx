@@ -231,6 +231,14 @@ export function CellarItemsGrid({
         const data = readScrollData();
         if (data) {
           el.scrollTop = data.scrollTop;
+        } else if (el.scrollTop > 0) {
+          // The page was already scrolled when the grid mounted — a
+          // dashboard tile's `#collection` (X04) lands while the grid is
+          // still suspended. The virtualizer took its offset (0) before it had
+          // a container and scrolls the container to it on attach, which
+          // threw the reader back to the top; the restore below puts them
+          // back where they landed, before paint.
+          setScrollData({ scrollTop: el.scrollTop });
         }
         setScrollContainer(el);
         break;
