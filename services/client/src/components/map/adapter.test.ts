@@ -229,10 +229,49 @@ describe("one place", () => {
       id: "s1",
       name: "Kubota",
       type: "sake",
+      is_want_to_try: false,
     });
-    // The pipeline's own matching key is not a menu attribute.
+    // The pipeline's own matching key is not a menu attribute — but it is
+    // what X07's candidate search asks for.
     assert.deepEqual(line.extracted_attributes, { region: "Niigata" });
-    assert.equal(menuItemFrom({ id: "l2", name: "x" }).matched_item, null);
+    assert.equal(line.search_name, "junmai");
+    const bare = menuItemFrom({ id: "l2", name: "x" });
+    assert.equal(bare.matched_item, null);
+    assert.equal(bare.search_name, null);
+    assert.equal(bare.can_correct_match, false);
+    assert.equal(bare.for_you, null);
+  });
+
+  test("menuItemFrom carries X07's reasons, with the liked item's name cased", () => {
+    const line = menuItemFrom({
+      id: "l3",
+      name: "LAPHROAIG 10",
+      canCorrectMatch: true,
+      matchedItem: {
+        id: "w1",
+        type: "SPIRIT",
+        item: { id: "w1", name: "LAPHROAIG 10", isWantToTry: true },
+      },
+      forYou: {
+        yourScore: null,
+        friendsWhoLovedNames: ["Sam"],
+        friendsWhoLovedCount: 2,
+        cellar: { id: "c1", name: "Bar Cart" },
+        likeYouRated: {
+          score: 4.5,
+          item: { id: "w2", name: "LAGAVULIN 16" },
+        },
+      },
+    });
+    assert.equal(line.can_correct_match, true);
+    assert.equal(line.matched_item?.is_want_to_try, true);
+    assert.deepEqual(line.for_you, {
+      your_score: null,
+      cellar: { id: "c1", name: "Bar Cart" },
+      friends_who_loved: ["Sam"],
+      friends_who_loved_count: 2,
+      like_you_rated: { name: "Lagavulin 16", score: 4.5 },
+    });
   });
 
   test("matchedItemHref only for item types with a page", () => {

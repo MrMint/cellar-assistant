@@ -261,6 +261,10 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
       { via: ["ItemOnboardingActor.suggestDetails"] },
     ],
     [
+      "Mutation.suggestNewItemDetails",
+      { via: ["ItemOnboardingActor.suggestNewItem"] },
+    ],
+    [
       "Mutation.confirmItemOnboarding",
       { via: ["ItemOnboardingActor.confirm"] },
     ],

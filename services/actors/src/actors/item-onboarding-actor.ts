@@ -87,10 +87,12 @@ import type {
   ItemRef,
   ItemType,
   OnboardingStatus,
+  OpenDraftInput,
   ReprocessResult,
   RereadLabelInput,
   StartOnboardingInput,
   SuggestItemDetailsInput,
+  SuggestNewItemDetailsInput,
 } from "@cellar-assistant/contracts";
 import {
   BarcodeActorDescriptor,
@@ -547,6 +549,51 @@ export class ItemOnboardingActor
     return onboardingRowToDto(this.requireAggregate().row);
   }
 
+  /**
+   * X07: a session with nothing to read, so `confirm` can create an item the
+   * person typed or carried over from a menu line — wine, beer, spirit and
+   * coffee rows require an `item_onboarding_id`. No photograph, no barcode,
+   * no model call: the row stays `START`, which is exactly what it is, rather
+   * than going through `start` and being marked `FAILED` for having nothing
+   * to read. Idempotent on the key; the same id opened as another type is a
+   * caller mistake, refused before anything is written.
+   */
+  async openDraft(ctx: Ctx, input: OpenDraftInput): Promise<ItemOnboardingDto> {
+    requireUuid(this.key, "onboardingId");
+    const userId = ctx.viewerId;
+    if (userId === null) {
+      throw new ForbiddenError("sign in to add an item to the catalog");
+    }
+    if (!isItemType(input.itemType)) {
+      throw new ValidationError(`"${input.itemType}" is not an item type`);
+    }
+    const existing = this.aggregate;
+    if (existing === null) {
+      await this.tx(async (tx) => {
+        await tx
+          .insert(itemOnboardings)
+          .values({
+            id: this.key,
+            userId,
+            itemType: input.itemType,
+            status: "START",
+          })
+          .onConflictDoNothing({ target: itemOnboardings.id });
+      });
+      await this.reload();
+    }
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const dto = onboardingRowToDto(aggregate.row);
+    if (dto.itemType !== input.itemType) {
+      throw new ValidationError(
+        `onboarding ${this.key} was opened as a ${dto.itemType.toLowerCase()}, ` +
+          `not a ${input.itemType.toLowerCase()}; open a new draft for another type`,
+      );
+    }
+    return dto;
+  }
+
   /** The stored proposal. Never calls the model — that is `start`'s job. */
   async defaults(ctx: Ctx): Promise<ItemOnboardingDto> {
     const aggregate = this.requireAggregate();
@@ -860,7 +907,49 @@ export class ItemOnboardingActor
     input: SuggestItemDetailsInput,
   ): Promise<ItemDetailSuggestions> {
     await this.#requireCorrectable(ctx, input.item);
-    const type = input.item.type;
+    return await this.#suggest(ctx, input.item.type, input);
+  }
+
+  /**
+   * X07 "Add to catalog": the same pass for a draft that is not an item yet
+   * — an unmatched menu line, say. No item to be the creator of, so the gate
+   * is the signed-in caller; the key is a draft id the client minted, and one
+   * that already names an onboarding must be the caller's (answered as absent
+   * otherwise, like every other read of a row here). Writes nothing — the
+   * draft card's Add is `openDraft` then `confirm`, on the person's tap.
+   */
+  async suggestNewItem(
+    ctx: Ctx,
+    input: SuggestNewItemDetailsInput,
+  ): Promise<ItemDetailSuggestions> {
+    requireUuid(this.key, "draftId");
+    if (ctx.viewerId === null) {
+      throw new ForbiddenError("sign in to ask for details about a new item");
+    }
+    if (!isItemType(input.itemType)) {
+      throw new ValidationError(`"${input.itemType}" is not an item type`);
+    }
+    // A draft with no name gives the model nothing to look up: refused before
+    // a metered call, not answered with a guess about an empty string.
+    if (typeof input.name !== "string" || input.name.trim() === "") {
+      throw new ValidationError("a draft needs a name to suggest details for");
+    }
+    const existing = this.aggregate;
+    if (existing !== null) await this.requireVisible(ctx, existing);
+    return await this.#suggest(ctx, input.itemType, input);
+  }
+
+  /** The text-only call behind both, on the form's values as context. */
+  async #suggest(
+    ctx: Ctx,
+    type: ItemType,
+    input: {
+      readonly name: string;
+      readonly brandName?: string | null;
+      readonly country?: string | null;
+      readonly attributes?: Record<string, unknown> | null;
+    },
+  ): Promise<ItemDetailSuggestions> {
     const bagKey = ITEM_TYPE_SPECS[type].bag;
     // The form's values go into the prompt as context, so only what the form
     // could hold does: the type's own attributes, as scalars, each short. A

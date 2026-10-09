@@ -498,3 +498,90 @@ export const MENU_MATCH_JOB_ACTOR_TYPE = "MenuMatchJobActor";
 
 /** `MenuScanActor.match` derives the job id from the scan id (§8.4). */
 export const MENU_MATCH_JOB_NAMESPACE = "menu-match";
+
+/* -------------------------------------------------------------------------- */
+/* X07 — what a menu line means to the viewer                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A friend's rating at or above this is "loved it" on a menu line. Half
+ * stars, so 4.5 and 5.
+ */
+export const MENU_LINE_FRIEND_LOVED_MIN_SCORE = 4.5;
+
+/**
+ * Only items the viewer rated at least this well can be named in "Like the
+ * Lagavulin 16 you rated ★4.5": a chip that recommends by comparison to
+ * something the viewer did not enjoy would be a strange reason to order.
+ */
+export const MENU_LINE_LIKE_MIN_SCORE = 4;
+
+/**
+ * The cosine distance (`<=>`, 0–2) between two `item_vectors` under which a
+ * matched line's item counts as "like" one the viewer rated — and only
+ * between items of the same kind (`menu-line-context.ts`: a wine's style and
+ * grape, a spirit's type, a beer's style). Deliberately tight — a miss is a
+ * missing chip, a false hit is a claim the viewer can see is wrong — and never
+ * shown: the chip names the item and the viewer's own score, not a similarity
+ * number (X07: no affinity percentages).
+ *
+ * Measured on N05's catalog with `nomic-embed-text`
+ * (`eval/retrieval/like-you-rated.live.test.ts`): of 2,699 same-type pairs,
+ * 0.2 admitted 15% (413) — Lagavulin beside The Macallan, any two Napa
+ * Cabernets. 0.1 with the kind rule admits 58 (2.15%), every one a sibling
+ * or a true neighbour: Ardbeg 10 ~ Laphroaig 10 at 0.090, Catena ~ Alamos
+ * Malbec, Patrón ~ Don Julio Blanco. The kind rule is what removed La Crema
+ * Chardonnay ~ La Crema Pinot Noir (0.079) and Cantillon Gueuze ~ Kriek; the
+ * cost is a few near-misses such as Lagavulin 16 ~ Laphroaig 10 (0.106).
+ */
+export const MENU_LINE_LIKE_MAX_DISTANCE = 0.1;
+
+/** How many friends' names a line carries for "Sam loved it". */
+export const MENU_LINE_FRIEND_NAMES = 3;
+
+/**
+ * X07's grounded reasons for one matched menu line, each a fact read from the
+ * viewer's own rows or their friends' public ratings — never a score the
+ * system made up. Every field is optional on its own; a line with none of them
+ * draws no chip.
+ */
+export type MenuLineForYouDto = {
+  /**
+   * A cellar the viewer created or co-owns that holds an unfinished bottle of
+   * the matched item — the one stocked most recently ("In Bar Cart").
+   */
+  readonly cellarId: string | null;
+  /** The viewer's own newest review score of the matched item ("You ★4.5"). */
+  readonly yourScore: number | null;
+  /**
+   * Friends whose newest review of the matched item is at least
+   * {@link MENU_LINE_FRIEND_LOVED_MIN_SCORE}, most recent first, at most
+   * {@link MENU_LINE_FRIEND_NAMES} of them ("Sam loved it").
+   */
+  readonly lovedByFriendNames: readonly string[];
+  /** How many friends that is in all ("Sam and 2 friends loved it"). */
+  readonly lovedByFriendCount: number;
+  /**
+   * The item of the same type the viewer rated at least
+   * {@link MENU_LINE_LIKE_MIN_SCORE} whose vector is nearest the matched
+   * item's, within {@link MENU_LINE_LIKE_MAX_DISTANCE} — and only when the
+   * viewer has not rated the matched item itself.
+   */
+  readonly likeYouRated: {
+    readonly item: ItemRef;
+    readonly score: number;
+  } | null;
+};
+
+/** One menu line, as the viewer sees it (X07). */
+export type MenuLineContextDto = {
+  readonly lineId: string;
+  /**
+   * The viewer scanned the menu this line came from, so they may correct its
+   * match (`PlaceActor.verifyMenuItemMatch`'s own rule, answered early so the
+   * UI only offers "Not this" to someone it will not refuse).
+   */
+  readonly canCorrectMatch: boolean;
+  /** `null` when the line has no matched item: nothing grounded to say. */
+  readonly forYou: MenuLineForYouDto | null;
+};

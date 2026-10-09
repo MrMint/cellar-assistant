@@ -237,4 +237,109 @@ describe.skipIf(skip)("ItemOnboardingActor — X19 corrections", () => {
       expect(seen).toHaveLength(0);
     });
   });
+
+  it("suggestNewItem (X07) asks about a draft that is no item yet, for any signed-in caller, and writes nothing", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const draftId = randomUUID();
+      const seen: ItemSuggestionsRequest[] = [];
+      const actor = await activate(
+        actorFor(db, draftId, reading([]), suggesting(seen)),
+      );
+      const result = await actor.suggestNewItem(userCtx(viewer, "r"), {
+        itemType: "WINE",
+        name: " Lytton Springs ",
+        brandName: "Ridge",
+        attributes: { style: "RED", notes: "dropped" },
+      });
+      expect(result.abstained).toBe(false);
+      expect(JSON.parse(result.defaults)).toEqual({
+        wine: { variety: "ZINFANDEL" },
+      });
+      expect(seen[0]).toMatchObject({
+        itemType: "WINE",
+        name: "Lytton Springs",
+        brandName: "Ridge",
+      });
+      expect(seen[0]?.known).toEqual({
+        country: null,
+        wine: { style: "RED" },
+      });
+      // No onboarding row was made for the draft.
+      expect(await statusOf(db, draftId)).toBeUndefined();
+    });
+  });
+
+  it("suggestNewItem refuses an anonymous caller, a non-type, a blank name, and someone else's onboarding id", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const stranger = await seedUser(db);
+      const { onboardingId } = await seedCorrectable(db, owner);
+      const seen: ItemSuggestionsRequest[] = [];
+      const draft = await activate(
+        actorFor(db, randomUUID(), reading([]), suggesting(seen)),
+      );
+      await expect(
+        draft.suggestNewItem(
+          { ...userCtx(owner, "r"), viewerId: null },
+          { itemType: "WINE", name: "x" },
+        ),
+      ).rejects.toThrow(ForbiddenError);
+      await expect(
+        draft.suggestNewItem(userCtx(owner, "r"), {
+          itemType: "COCKTAIL" as never,
+          name: "Negroni",
+        }),
+      ).rejects.toThrow(ValidationError);
+      await expect(
+        draft.suggestNewItem(userCtx(owner, "r"), {
+          itemType: "WINE",
+          name: "   ",
+        }),
+      ).rejects.toThrow(ValidationError);
+      const theirs = await activate(
+        actorFor(db, onboardingId, reading([]), suggesting(seen)),
+      );
+      await expect(
+        theirs.suggestNewItem(userCtx(stranger, "r"), {
+          itemType: "WINE",
+          name: "Lytton Springs",
+        }),
+      ).rejects.toThrow(NotFoundError);
+      expect(seen).toHaveLength(0);
+    });
+  });
+
+  it("openDraft (X07) opens a START row with no model call, idempotently, and confirm creates from it", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const stranger = await seedUser(db);
+      const draftId = randomUUID();
+      const seen: ItemDefaultsRequest[] = [];
+      const actor = await activate(
+        actorFor(db, draftId, reading(seen), suggesting([])),
+      );
+      const opened = await actor.openDraft(userCtx(viewer, "r"), {
+        itemType: "SAKE",
+      });
+      expect(opened).toMatchObject({
+        id: draftId,
+        userId: viewer,
+        status: "START",
+        itemType: "SAKE",
+        defaults: null,
+      });
+      // Again: the same row, not a second one or an error.
+      expect(
+        await actor.openDraft(userCtx(viewer, "r"), { itemType: "SAKE" }),
+      ).toMatchObject({ id: draftId, status: "START" });
+      await expect(
+        actor.openDraft(userCtx(viewer, "r"), { itemType: "WINE" }),
+      ).rejects.toThrow(ValidationError);
+      await expect(
+        actor.openDraft(userCtx(stranger, "r"), { itemType: "SAKE" }),
+      ).rejects.toThrow(NotFoundError);
+      expect(seen).toHaveLength(0);
+    });
+  });
 });

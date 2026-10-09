@@ -111,6 +111,8 @@ export const KEYLESS_TYPES = [
   "MatchSuggestionActionPayload",
   "MatchSuggestionConnection",
   "MatchSuggestionEdge",
+  "MenuLineForYou",
+  "MenuLineLikeYouRated",
   "MenuScanConnection",
   "MenuScanEdge",
   "MenuScanMatchCounts",

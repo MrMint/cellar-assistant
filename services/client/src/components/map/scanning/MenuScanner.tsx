@@ -2,7 +2,8 @@
 
 /**
  * `82450ad1:src/components/map/scanning/MenuScanner.tsx`, restored — the
- * place page's "Camera Scan" tab, which is where scanning a menu starts.
+ * place page's "Scan menu" tab, which is where scanning a menu starts. X07:
+ * its copy names every type a line can be read as.
  *
  * `uploadAndProcessMenuScan(formData)` (a server action that uploaded to
  * Nhost and fired `processMenuScan` with the webhook secret) →
@@ -237,12 +238,12 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-xl bg-surface-1 p-4">
-        <h2 className="type-title-2 mb-4">Scan Menu with Camera</h2>
+        <h2 className="type-title-2 mb-4">Scan the drinks menu</h2>
 
         <p className="type-body mb-6 text-ink-2">
-          Photograph the drinks menu and we&apos;ll read each line — wine, beer,
-          spirits, cocktails, sake, tea and coffee — and match it to the
-          catalog.
+          Photograph the drinks menu and we&apos;ll read every line — wine,
+          beer, spirits, cocktails, sake, tea and coffee — sort it by type, and
+          match what we can to the catalog.
         </p>
 
         {showCaptureButtons && (
@@ -432,7 +433,8 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
             Take multiple photos if the menu spans several pages
           </p>
           <p className="type-callout">
-            Focus on beverage sections (wine list, beer menu, cocktails)
+            Include every drinks section — wine, beer, spirits, cocktails, sake,
+            tea and coffee
           </p>
         </div>
       </section>

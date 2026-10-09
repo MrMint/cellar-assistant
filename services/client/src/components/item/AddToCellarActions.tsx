@@ -23,13 +23,34 @@ import {
 } from "@/lib/capture/capture-prefs";
 import { addedMessage, MAX_BOTTLES_AT_ONCE } from "./add-to-cellar";
 
+type CellarChoice = { id: string; name: string };
+
 type AddToCellarActionsProps = {
   itemId: string;
   itemType: ApiItemType;
-  cellars?: {
-    id: string;
-    name: string;
-  }[];
+  cellars?: CellarChoice[];
+};
+
+/**
+ * Where a bottle was found, when it was not on a shelf at home — X07's "Add
+ * to cellar" from a menu line records the place and the line
+ * (`cellar_items.source_*`).
+ */
+export type AddToCellarSource = {
+  readonly placeId: string;
+  readonly menuItemId: string;
+};
+
+export type AddToCellarSheetProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  itemId: string;
+  itemType: ApiItemType;
+  /** The viewer's own and co-owned cellars; `undefined` while loading. */
+  cellars: readonly CellarChoice[] | undefined;
+  /** Reading the cellars failed: said as such, not as "no cellar yet". */
+  loadError?: string | null;
+  source?: AddToCellarSource;
 };
 
 /**
@@ -52,25 +73,32 @@ export const AddToCellarActions = (props: AddToCellarActionsProps) => {
         <Add aria-hidden />
         Add to Cellar
       </Button>
-      <AddToCellarSheet {...props} open={open} onOpenChange={setOpen} />
+      <AddToCellarSheet
+        open={open}
+        onOpenChange={setOpen}
+        itemId={props.itemId}
+        itemType={props.itemType}
+        cellars={props.cellars}
+      />
     </>
   );
 };
 
 /**
- * The sheet itself, for a caller that owns the trigger — X09's ActionBar,
- * whose "Add to cellar" sits beside Log a drink rather than in a header.
+ * The sheet itself, controlled — for a caller that owns the trigger: X09's
+ * ActionBar, whose "Add to cellar" sits beside Log a drink rather than in a
+ * header, and X07's menu line actions. With no cellar of the viewer's it says
+ * so instead of offering nothing.
  */
 export const AddToCellarSheet = ({
+  open,
+  onOpenChange: setOpen,
   itemType,
   itemId,
   cellars,
-  open,
-  onOpenChange: setOpen,
-}: AddToCellarActionsProps & {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) => {
+  loadError = null,
+  source,
+}: AddToCellarSheetProps) => {
   const router = useRouter();
   const [cellarId, setCellarId] = useState<string | null>(
     cellars?.[0]?.id ?? null,
@@ -98,7 +126,29 @@ export const AddToCellarSheet = ({
     minted.current = null;
   }, [open, cellars]);
 
-  if (cellars === undefined || cellars.length === 0) return null;
+  if (cellars === undefined || cellars.length === 0) {
+    return (
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Add to cellar"
+      >
+        <p className="type-body pb-4 text-ink-2">
+          {loadError !== null ? (
+            <span role="alert" className="text-destructive">
+              Couldn&apos;t read your cellars: {loadError}
+            </span>
+          ) : cellars === undefined ? (
+            <span className="inline-flex items-center gap-2">
+              <Spinner aria-hidden /> Finding your cellars…
+            </span>
+          ) : (
+            "You don't have a cellar yet. Make one from the Cellar tab, then add this to it."
+          )}
+        </p>
+      </ResponsiveDialog>
+    );
+  }
 
   const cellarName =
     cellars.find((cellar) => cellar.id === cellarId)?.name ?? "your cellar";
@@ -145,6 +195,13 @@ export const AddToCellarSheet = ({
           input: {
             cellarItemId,
             item: { id: itemId, type: itemType },
+            ...(source === undefined
+              ? {}
+              : {
+                  sourceType: "menu_scan" as const,
+                  sourcePlaceId: source.placeId,
+                  sourceMenuItemId: source.menuItemId,
+                }),
             // "Already open?": the first bottle is the open one.
             ...(alreadyOpen && index === 0 ? { openAt: now } : {}),
           },

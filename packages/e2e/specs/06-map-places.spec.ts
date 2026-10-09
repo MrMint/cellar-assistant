@@ -198,7 +198,7 @@ test("creates a place through the form", async ({ primary }) => {
     `the place page never showed the name (body: ${(await bodyText(primary)).slice(0, 200)})`,
   ).toBeVisible({ timeout: 20_000 });
   await expect(primary.getByRole("tab", { name: /Menu/ })).toBeVisible();
-  await expect(primary.getByRole("tab", { name: "Camera Scan" })).toBeVisible();
+  await expect(primary.getByRole("tab", { name: "Scan menu" })).toBeVisible();
   expect(noise.pageErrors, "the place page threw").toEqual([]);
 });
 

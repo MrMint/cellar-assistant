@@ -170,3 +170,62 @@ describe("replaceItemBrand", () => {
     });
   });
 });
+
+describe("suggestNewItemDetails (X07)", () => {
+  const DRAFT_ID = "66666666-6666-4666-8666-666666666666";
+
+  it("asks the draft's own onboarding actor, with the draft's values", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemOnboardingActor.suggestNewItem": () => ({
+        abstained: true,
+        note: "Not a product I know.",
+        defaults: "{}",
+        model: "m",
+      }),
+    });
+    const result = await run(
+      `mutation { suggestNewItemDetails(draftId: "${DRAFT_ID}", type: SPIRIT, input: {
+           name: "House Old Fashioned Rye"
+         }) {
+         __typename
+         ... on ItemDetailSuggestions { abstained note defaults }
+       } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.suggestNewItemDetails).toEqual({
+      __typename: "ItemDetailSuggestions",
+      abstained: true,
+      note: "Not a product I know.",
+      defaults: {},
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.actorType).toBe("ItemOnboardingActor");
+    expect(calls[0]?.actorId).toBe(DRAFT_ID);
+    expect(calls[0]?.args[1]).toEqual({
+      itemType: "SPIRIT",
+      name: "House Old Fashioned Rye",
+      brandName: null,
+      country: null,
+      attributes: null,
+    });
+  });
+
+  it("a refusal is the field's typed error, not a top-level failure", async () => {
+    const { invoke } = stubSidecar({
+      "ItemOnboardingActor.suggestNewItem": () => {
+        throw new ForbiddenError("sign in to ask for details about a new item");
+      },
+    });
+    const result = await run(
+      `mutation { suggestNewItemDetails(draftId: "${DRAFT_ID}", type: WINE, input: { name: "x" }) {
+         __typename
+       } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.suggestNewItemDetails).toEqual({
+      __typename: "ForbiddenError",
+    });
+  });
+});

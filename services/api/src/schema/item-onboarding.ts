@@ -176,6 +176,26 @@ builder.queryField("itemOnboarding", (t) =>
   }),
 );
 
+builder.mutationField("openItemDraft", (t) =>
+  t.field({
+    type: ItemOnboardingType,
+    description:
+      "X07: open an onboarding with nothing to read — a draft typed by hand " +
+      "or carried over from a menu line — so `confirmItemOnboarding` can " +
+      "create its item. No model call. Idempotent on `draftId`; the same id " +
+      "with another type is a `ValidationError`.",
+    errors: {},
+    args: {
+      draftId: t.arg.id({ required: true }),
+      type: t.arg({ type: ItemTypeEnum, required: true }),
+    },
+    resolve: (_root, args, context) =>
+      context
+        .actor(ItemOnboardingActorDescriptor, String(args.draftId))
+        .openDraft({ itemType: args.type }),
+  }),
+);
+
 builder.mutationField("startItemOnboarding", (t) =>
   t.field({
     type: ItemOnboardingType,

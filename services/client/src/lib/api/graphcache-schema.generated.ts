@@ -4493,6 +4493,51 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "MenuLineForYou",
+        fields: [
+          { name: "cellar", type: { kind: "OBJECT", name: "Cellar" } },
+          {
+            name: "friendsWhoLovedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsWhoLovedNames",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
+            name: "likeYouRated",
+            type: { kind: "OBJECT", name: "MenuLineLikeYouRated" },
+          },
+          { name: "yourScore", type: { kind: "SCALAR", name: "Float" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "MenuLineLikeYouRated",
+        fields: [
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          {
+            name: "score",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "MenuScan",
         fields: [
           { name: "confidenceScore", type: { kind: "SCALAR", name: "Float" } },
@@ -4951,6 +4996,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "openItemDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "OpenItemDraftResult" },
+            },
+          },
+          {
             name: "ping",
             type: {
               kind: "NON_NULL",
@@ -5158,6 +5210,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SuggestItemDetailsResult" },
+            },
+          },
+          {
+            name: "suggestNewItemDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SuggestNewItemDetailsResult" },
             },
           },
           {
@@ -5414,6 +5473,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "CellarItem" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "OpenItemDraftResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -6013,6 +6084,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "PlaceMenuItem",
         fields: [
+          {
+            name: "canCorrectMatch",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
           { name: "confidenceScore", type: { kind: "SCALAR", name: "Float" } },
           { name: "createdAt", type: { kind: "SCALAR", name: "DateTime" } },
           { name: "description", type: { kind: "SCALAR", name: "String" } },
@@ -6024,6 +6102,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             name: "extractedAttributes",
             type: { kind: "SCALAR", name: "JSON" },
           },
+          { name: "forYou", type: { kind: "OBJECT", name: "MenuLineForYou" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -9655,6 +9734,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       {
         kind: "UNION",
         name: "SuggestItemDetailsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemDetailSuggestions" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SuggestNewItemDetailsResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "ConflictError" },

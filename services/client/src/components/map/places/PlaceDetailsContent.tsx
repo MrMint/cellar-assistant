@@ -206,6 +206,7 @@ export function PlaceDetailsContent({
   variant,
   drawerState,
   onClose,
+  refetch,
   setInteraction,
   enrichment,
   isEnriching,
@@ -583,7 +584,9 @@ export function PlaceDetailsContent({
             >
               <PlaceMenuItems
                 placeId={place.id}
+                placeName={mergedPlace.name}
                 userId={userId}
+                onChanged={refetch}
                 menuItems={menuItems}
                 hasMore={hasMoreMenuItems}
                 loadingMore={loadingMoreMenuItems}
