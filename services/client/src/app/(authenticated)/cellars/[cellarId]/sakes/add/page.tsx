@@ -7,10 +7,19 @@ import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboard
  */
 export default async function AddSake({
   params,
+  searchParams,
 }: {
   params: Promise<{ cellarId: string }>;
+  searchParams: Promise<{ draft?: string | string[] }>;
 }) {
   const { cellarId } = await params;
+  const { draft } = await searchParams;
 
-  return <ItemOnboarding type="SAKE" cellarId={cellarId} />;
+  return (
+    <ItemOnboarding
+      type="SAKE"
+      cellarId={cellarId}
+      resumeId={typeof draft === "string" ? draft : undefined}
+    />
+  );
 }

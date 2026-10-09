@@ -1,4 +1,5 @@
 import { fromPromise } from "xstate";
+import { captureDrafts } from "@/components/capture/drafts";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { readFragment } from "@/lib/api/graphql";
 import {
@@ -40,57 +41,73 @@ import type { DefaultValuesResult, FetchDefaultsInput } from "./types";
  * `BarcodeActor.ensure` never refuses on a type difference
  * (`lib/items/barcode.ts` §2). A typed code takes the other path.
  */
-export const fetchDefaults = fromPromise(
-  async ({
-    input: {
-      urqlClient,
-      itemType,
-      itemOnboardingId,
-      barcode,
-      frontLabelFileId,
-      backLabelFileId,
-    },
-  }: {
-    input: FetchDefaultsInput;
-  }): Promise<DefaultValuesResult> => {
-    const response = await urqlClient
-      .mutation(StartItemOnboardingMutation, {
-        onboardingId: itemOnboardingId,
-        input: {
-          itemType,
-          barcode: barcode?.text ?? null,
-          barcodeType: barcode?.type ?? null,
-          frontLabelImageId: frontLabelFileId ?? null,
-          backLabelImageId: backLabelFileId ?? null,
-        },
-      })
-      .toPromise();
-    const result = unwrapResult(
-      response.data?.startItemOnboarding,
-      "ItemOnboarding",
-    );
-    if (!result.ok) {
-      if (result.error.code === "TRANSPORT")
-        throw new Error(result.error.message);
-      return {
-        defaults: emptyDefaults(),
-        itemOnboardingId,
-        confidence: 0,
-        // N07/D25: no provider is not news to the person adding a bottle.
-        ...(result.error.reason === "AI_UNCONFIGURED"
-          ? {}
-          : {
-              extractionError: aiOutcome(result.error, {
-                fallback: "fill in the details yourself below",
-              }),
-            }),
-      };
-    }
-    const onboarding = readFragment(ItemOnboardingFragment, result.data);
+export const readDefaults = async ({
+  urqlClient,
+  itemType,
+  itemOnboardingId,
+  barcode,
+  frontLabelFileId,
+  backLabelFileId,
+}: FetchDefaultsInput): Promise<DefaultValuesResult> => {
+  const response = await urqlClient
+    .mutation(StartItemOnboardingMutation, {
+      onboardingId: itemOnboardingId,
+      input: {
+        itemType,
+        barcode: barcode?.text ?? null,
+        barcodeType: barcode?.type ?? null,
+        frontLabelImageId: frontLabelFileId ?? null,
+        backLabelImageId: backLabelFileId ?? null,
+      },
+    })
+    .toPromise();
+  const result = unwrapResult(
+    response.data?.startItemOnboarding,
+    "ItemOnboarding",
+  );
+  const sent = frontLabelFileId !== undefined || backLabelFileId !== undefined;
+  if (!result.ok) {
+    if (result.error.code === "TRANSPORT")
+      throw new Error(result.error.message);
     return {
-      defaults: formDefaultsFromOnboarding(itemType, onboarding.defaults),
-      itemOnboardingId: onboarding.id,
-      confidence: onboarding.confidence ?? 0,
+      defaults: emptyDefaults(),
+      itemOnboardingId,
+      confidence: 0,
+      labelSent: sent,
+      // N07/D25: no provider is not news to the person adding a bottle.
+      ...(result.error.reason === "AI_UNCONFIGURED"
+        ? {}
+        : {
+            extractionError: aiOutcome(result.error, {
+              fallback: "fill in the details yourself below",
+            }),
+          }),
     };
-  },
+  }
+  const onboarding = readFragment(ItemOnboardingFragment, result.data);
+  return {
+    defaults: formDefaultsFromOnboarding(itemType, onboarding.defaults),
+    itemOnboardingId: onboarding.id,
+    confidence: onboarding.confidence ?? 0,
+    // A resumed draft sends no ids; the session remembers what it read.
+    labelSent:
+      sent ||
+      onboarding.frontLabelImageId !== null ||
+      onboarding.backLabelImageId !== null,
+  };
+};
+
+/**
+ * {@link readDefaults} as the machine's actor. With `draft`, the read is
+ * tracked in `captureDrafts` (X05): a read already tracked under this session
+ * id — still running, or settled while the person was away — is adopted
+ * rather than asked again.
+ */
+export const fetchDefaults = fromPromise(
+  ({ input }: { input: FetchDefaultsInput }): Promise<DefaultValuesResult> =>
+    input.draft === undefined
+      ? readDefaults(input)
+      : captureDrafts.track(input.itemOnboardingId, input.draft, () =>
+          readDefaults(input),
+        ),
 );

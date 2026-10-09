@@ -60,6 +60,7 @@ import {
 import ts from "typescript";
 import * as barQueries from "@/components/bar/queries";
 import * as brandQueries from "@/components/brand/queries";
+import * as captureQueries from "@/components/capture/queries";
 import * as cellarFragments from "@/components/cellar/fragments";
 import * as onboardingQueries from "@/components/common/OnboardingWizard/queries";
 import * as drinkLogQueries from "@/components/drink-log/queries";
@@ -94,6 +95,7 @@ const SCHEMA_PATH = fileURLToPath(
 const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/bar/queries.ts": barQueries,
   "components/brand/queries.ts": brandQueries,
+  "components/capture/queries.ts": captureQueries,
   "components/cellar/fragments.ts": cellarFragments,
   "components/common/OnboardingWizard/queries.ts": onboardingQueries,
   "components/drink-log/queries.ts": drinkLogQueries,

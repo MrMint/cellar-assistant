@@ -101,6 +101,17 @@ describe("aiOutcome", () => {
     assert.equal(outcome.canRetry, false);
   });
 
+  test("LOOKS_LIKE_MENU offers the menu scan, not a retry (X05)", () => {
+    const outcome = aiOutcome(
+      failure({ code: "VALIDATION", reason: "LOOKS_LIKE_MENU" }),
+      opts,
+    );
+    assert.equal(outcome.kind, "looks-like-menu");
+    assert.equal(outcome.title, "Looks like a menu");
+    assert.equal(outcome.canRetry, false);
+    assert.notEqual(outcome.tone, "danger");
+  });
+
   test("a transport failure or a transient CONFLICT is retryable", () => {
     assert.equal(aiOutcome(failure({ code: "TRANSPORT" })).canRetry, true);
     assert.equal(aiOutcome(failure({ code: "CONFLICT" })).kind, "retryable");
@@ -121,6 +132,7 @@ describe("aiOutcome", () => {
       "USER_CAP",
       "SERVICE_BUDGET",
       "NOTHING_READ",
+      "LOOKS_LIKE_MENU",
     ] as const) {
       for (const code of [
         "CONFLICT",

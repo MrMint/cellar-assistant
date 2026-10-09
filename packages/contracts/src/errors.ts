@@ -130,6 +130,17 @@ export const ACTOR_ERROR_REASONS = [
    * `VALIDATION` when the model abstained, `CONFLICT` when no image was sent.
    */
   "NOTHING_READ",
+  /**
+   * X05: a label read abstained (`NOTHING_READ`'s case) and the model's own
+   * `surfaceKind` said the photograph is a menu or drinks list — the one
+   * near-miss a person can do something better with than retake. A client
+   * offers "Looks like a menu — scan it as a menu?" instead of "try a sharper
+   * shot". Learned at zero extra model calls: the verdict and the surface come
+   * out of the same completion (`itemDefaultsSchema`), never a classifier.
+   * `VALIDATION`. A client that does not know it falls back on its code, as
+   * for any unknown reason.
+   */
+  "LOOKS_LIKE_MENU",
 ] as const;
 
 export type ActorErrorReason = (typeof ACTOR_ERROR_REASONS)[number];

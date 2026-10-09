@@ -7,10 +7,19 @@ import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboard
  */
 export default async function AddBeer({
   params,
+  searchParams,
 }: {
   params: Promise<{ cellarId: string }>;
+  searchParams: Promise<{ draft?: string | string[] }>;
 }) {
   const { cellarId } = await params;
+  const { draft } = await searchParams;
 
-  return <ItemOnboarding type="BEER" cellarId={cellarId} />;
+  return (
+    <ItemOnboarding
+      type="BEER"
+      cellarId={cellarId}
+      resumeId={typeof draft === "string" ? draft : undefined}
+    />
+  );
 }

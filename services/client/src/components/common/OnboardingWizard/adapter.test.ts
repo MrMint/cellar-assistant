@@ -4,6 +4,7 @@ import {
   addAnotherHref,
   canQuickAdd,
   confirmInputFrom,
+  draftConfidences,
   emptyDefaults,
   finishedHref,
   formDefaultsFromOnboarding,
@@ -328,5 +329,52 @@ describe("where the final prompt goes", () => {
     assert.equal(finishedHref({ type: "WINE", itemId: "i" }), "/wines/i");
     assert.equal(addAnotherHref("c"), "/cellars/c/items/add");
     assert.equal(addAnotherHref(), "/add");
+  });
+});
+
+describe("per-field confidence (X05: Sure · Likely · Check this)", () => {
+  test("model keys map to the form's paths; the bag's keys become attributes", () => {
+    assert.deepEqual(
+      draftConfidences("WINE", {
+        name: "x",
+        fieldConfidence: {
+          name: "sure",
+          brandName: "likely",
+          vintage: "check",
+          region: "likely",
+        },
+      }),
+      {
+        name: "sure",
+        brandName: "likely",
+        "attributes.vintage": "check",
+        "attributes.region": "likely",
+      },
+    );
+  });
+
+  test("anything but the three words, or a field the form lacks, is dropped", () => {
+    assert.deepEqual(
+      draftConfidences("BEER", {
+        fieldConfidence: {
+          name: 0.92,
+          style: "92%",
+          variety: "sure",
+          internationalBitternessUnit: "likely",
+        },
+      }),
+      { "attributes.internationalBitternessUnit": "likely" },
+    );
+    assert.deepEqual(draftConfidences("WINE", null), {});
+    assert.deepEqual(draftConfidences("WINE", { fieldConfidence: [] }), {});
+  });
+
+  test("the read's defaults carry them; an empty draft has none", () => {
+    const read = formDefaultsFromOnboarding("WINE", {
+      ...wineDefaults,
+      fieldConfidence: { name: "sure" },
+    });
+    assert.deepEqual(read.confidences, { name: "sure" });
+    assert.deepEqual(emptyDefaults().confidences, {});
   });
 });

@@ -361,6 +361,42 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
       });
     });
 
+    it("answers a closed session as it stands: no model call, no reopening", async () => {
+      await withOnboardingDb(async (db) => {
+        const user = await seedUser(db);
+        const ai = provider() as ItemDefaultsProvider & { calls: number };
+        const confirmed = randomUUID();
+        await (await activate(newOnboardingActor(confirmed, db, ai))).start(
+          userCtx(user, "r"),
+          { itemType: "WINE" },
+        );
+        await db.execute(
+          sql`update public.item_onboardings set status = 'CONFIRMED' where id = ${confirmed}::uuid`,
+        );
+        const matched = randomUUID();
+        const matchedActor = await activate(
+          newOnboardingActor(matched, db, ai),
+        );
+        await matchedActor.start(userCtx(user, "r"), { itemType: "WINE" });
+        await matchedActor.closeAsMatched(userCtx(user, "r"));
+        expect(ai.calls).toBe(2);
+
+        // X05's `?draft=` resume asks again, with no label ids at all.
+        const again = await (
+          await activate(newOnboardingActor(confirmed, db, ai))
+        ).start(userCtx(user, "r2"), { itemType: "WINE" });
+        expect(again.status).toBe("CONFIRMED");
+        expect(
+          (
+            await (
+              await activate(newOnboardingActor(matched, db, ai))
+            ).start(userCtx(user, "r2"), { itemType: "WINE" })
+          ).status,
+        ).toBe("MATCHED");
+        expect(ai.calls).toBe(2);
+      });
+    });
+
     it("records FAILED and rethrows when the provider fails", async () => {
       await withOnboardingDb(async (db) => {
         const user = await seedUser(db);

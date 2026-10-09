@@ -1,8 +1,7 @@
 /**
- * Render tests for the restored onboarding wizard, asserting the **old**
- * markup and copy (`82450ad1:src/components/common/OnboardingWizard/*`,
- * `common/QuickAddCard.tsx`, `{type}/{T}Onboarding.tsx`, `{T}Form.tsx` in
- * create mode).
+ * Render tests for the onboarding flow: the snap-once capture (X05, N21) and
+ * the restored pieces it kept — `common/QuickAddCard.tsx` and the old
+ * `{T}Form.tsx` in create mode (`82450ad1`).
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -23,11 +22,6 @@ mock.module("next/navigation", () => ({
 }));
 
 const { ItemOnboarding } = await import("./ItemOnboarding");
-const { BarcodeStep } = await import("./BarcodeStep");
-const { PictureStep } = await import("./PictureStep");
-const { DisplayPictureStep } = await import("./DisplayPictureStep");
-const { FinalPrompt } = await import("./FinalPrompt");
-const { ExistingItems } = await import("./ExistingItems");
 const { OnboardingItemForm } = await import("./OnboardingItemForm");
 const { QuickAddCard } = await import("../QuickAddCard");
 const { formDefaultsFromOnboarding, quickAddDefaultsFrom } = await import(
@@ -46,87 +40,32 @@ const render = (node: ReactNode) =>
 const text = (html: string) => html.replace(/<[^>]+>/g, " ");
 const noop = () => {};
 
-describe("ItemOnboarding (restored {T}Onboarding)", () => {
-  test("opens on 'Add Wine' and the barcode step, as the old wizard did", () => {
-    const html = text(render(<ItemOnboarding type="WINE" />));
-    assert.match(html, /Add Wine/);
-    assert.match(html, /Lets start by scanning the barcode/);
-    assert.match(html, /Skip/);
+describe("ItemOnboarding (snap-once, X05/N21)", () => {
+  test("opens on 'Add Wine' and the one camera, with no step to skip", () => {
+    const html = render(<ItemOnboarding type="WINE" />);
+    const words = text(html);
+    assert.match(words, /Add Wine/);
+    assert.match(html, /data-slot="capture-camera"/);
+    assert.match(words, /Fill the frame with the front label/);
+    assert.match(words, /Type it in instead/);
+    // N21: the old step copy and the scanner's debug line are gone.
+    assert.doesNotMatch(words, /Lets |Scanning \(|used for display/);
   });
 
   test("the heading names the type", () => {
     assert.match(text(render(<ItemOnboarding type="TEA" />)), /Add Tea/);
   });
-});
 
-describe("the picture steps", () => {
-  test("BarcodeStep: title, Skip and the three tips", () => {
-    const html = text(
-      render(
-        <BarcodeStep
-          barcode={undefined}
-          onBarcodeChange={noop}
-          onSkip={noop}
-        />,
-      ),
-    );
-    assert.match(html, /Lets start by scanning the barcode/);
-    assert.match(html, /Tips/);
-    assert.match(html, /Make sure the barcode is horizontal/);
-    assert.match(html, /Adjust the distance so your camera is able to focus/);
-  });
-
-  test("PictureStep: header, Back/Skip, label tips", () => {
-    const html = text(
-      render(
-        <PictureStep
-          header="Lets take a picture of the front label"
-          picture={undefined}
-          onCapture={noop}
-          onSkip={noop}
-          onBack={noop}
-        />,
-      ),
-    );
-    assert.match(html, /Lets take a picture of the front label/);
-    assert.match(html, /Back/);
-    assert.match(html, /This picture will be used to generate the product/);
-  });
-
-  test("DisplayPictureStep", () => {
-    const html = text(
-      render(
-        <DisplayPictureStep onCapture={noop} onSkip={noop} onBack={noop} />,
-      ),
-    );
-    assert.match(html, /Lets take a photo that will be used for display/);
-  });
-
-  test("ExistingItems: 'Create New' and one card per match", () => {
-    const html = text(
-      render(
-        <ExistingItems
-          items={[
-            {
-              type: "BEER",
-              item: { id: "b1", itemId: "b1", name: "Pliny the Elder" },
-            },
-          ]}
-          onClickItem={noop}
-          onSkip={noop}
-        />,
-      ),
-    );
-    assert.match(html, /Don&#x27;t see what you are looking for\?/);
-    assert.match(html, /Create New/);
-    assert.match(html, /Pliny the Elder/);
-  });
-
-  test("FinalPrompt", () => {
-    const html = text(render(<FinalPrompt onYes={noop} onNo={noop} />));
-    assert.match(html, /Would you like to add another item\?/);
-    assert.match(html, /No/);
-    assert.match(html, /Yes/);
+  test("a generic entry asks the type, and offers the three modes", () => {
+    const html = render(<ItemOnboarding type="WINE" chooseType showModes />);
+    const words = text(html);
+    assert.match(words, /Add a bottle/);
+    assert.match(html, /aria-label="What are you adding\?"/);
+    for (const type of ["Wine", "Beer", "Spirit", "Sake", "Coffee", "Tea"]) {
+      assert.match(words, new RegExp(`\\b${type}\\b`));
+    }
+    assert.match(html, /aria-label="What are you capturing\?"/);
+    assert.match(words, /Bottle[\s\S]*Menu[\s\S]*Recipe/);
   });
 });
 

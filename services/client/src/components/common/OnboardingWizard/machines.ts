@@ -6,12 +6,17 @@ import {
   enqueueActions,
   type PromiseActorLogic,
 } from "xstate";
-import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import {
+  type ApiItemType,
+  itemTypeLabel,
+} from "@/components/cellar-api/itemTypes";
 import type { Barcode } from "@/constants";
 import type { AiOutcome } from "@/lib/ai/outcome";
 import { closeOnboarding } from "./actors/closeOnboarding";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
+import { openCellarItem } from "./actors/openCellarItem";
+import { rereadLabels } from "./actors/rereadLabels";
 import { searchByBarcode } from "./actors/searchByBarcode";
 import { searchByImage } from "./actors/searchByImage";
 import { searchCatalog } from "./actors/searchCatalog";
@@ -21,6 +26,10 @@ import type {
   FetchDefaultsInput,
   InsertCellarItemInput,
   InsertCellarItemResult,
+  OpenCellarItemInput,
+  RereadLabelsInput,
+  RereadLabelsResult,
+  SearchByImageInput,
   SearchCatalogInput,
   UploadItemImageInput,
   UploadItemImageResult,
@@ -48,50 +57,74 @@ export const CATALOG_MATCH_TIMEOUT_MS = 8000;
 /** `router.push` is all the machine needs of Next's router. */
 type Navigate = { push: (href: string) => void };
 
+/** What the page tells the read about itself, to track it (X05). */
+type DraftInput = {
+  /** Where "Review" goes for this session id and type. */
+  readonly resumeHref: (
+    itemOnboardingId: string,
+    itemType: ApiItemType,
+  ) => string;
+};
+
 /**
- * `82450ad1:src/components/common/OnboardingWizard/machines.ts`, ported with
- * its states, events and transitions intact. What changed:
+ * The add-a-bottle flow, snap-once (X05, N21) over `82450ad1`'s machine.
  *
- * - **Actors** are the new API's (see `actors/*`): presigned label uploads,
+ * **One photo, and the read starts at the shutter.** The capture step
+ * (`index.tsx`, `pictureOnboardingMachine`) is one live camera that reads a
+ * barcode while you frame the label; the shutter's photo is the front label,
+ * and it is also the display photo (N21) and the photo-search query (G32,
+ * D12). `COMPLETE` goes straight to `upload` → `analyze`, while the photo
+ * search runs beside the read (`imageSearch`, spawned at the shutter, never
+ * waited for). The back label is an optional re-read from the draft card
+ * (`form.rereading`), never a step in the way.
+ *
+ * What carried over from the restored machine, unchanged in meaning:
+ *
+ * - **Actors** are the new API's: presigned label uploads,
  *   `startItemOnboarding`, `barcode(code).items`, `attachItemImage`,
- *   `addItemToCellar`. All six types share them, so they are provided here
- *   rather than per type, and `itemType` is an `ApiItemType` (`WINE`), not a
- *   route segment.
- * - **No `userId`** in input or context: the API reads the viewer from the
- *   session (C4: never send one).
- * - **`itemOnboardingId` and `cellarItemId` are minted once**, so a retried
- *   analysis reuses the session and a retried add files one bottle.
- * - **Quick add (Q7)** is entered only through `canQuickAdd`: a label was
- *   actually photographed and read, confidence ≥ 0.9 — the E2c guard — and
- *   (N02) the catalogue already holds that item at that vintage and the
- *   wizard is filing into a cellar. Its `CONFIRM` files a bottle of the
- *   matched item; it never creates one, so the 15 s countdown cannot add a
- *   catalogue row (D25).
- * - **`matching` (N19)** sits between `analyze` and the form: the name read
- *   goes to `itemSearch` and, if the catalogue already holds that item at
- *   that vintage, the form leads with "Is it this one? +1 bottle"
- *   (`USE_MATCH`). Items the person declined in the barcode chooser are never
- *   offered back.
- * - **`searchingByImage` / `chooseExistingImage` are gone** from the picture
- *   machine: image search is a chosen drop (G32, e4 §6a), so a display photo
- *   goes straight to `done`.
- * - **`analyze` failures that are answers** (no label, not a label, no
- *   provider) resolve with empty defaults and the server's message instead of
- *   throwing; only a transport failure takes the old `retryAnalyze` path.
- * - `uploadImage` failing still lands on `finalPrompt`, as before, but now
- *   keeps the message (`imageError`) so the prompt can say the photo was not
- *   saved; `addItemToCellar` failing shows its message instead of hanging.
+ *   `addItemToCellar`. No `userId` anywhere (C4).
+ * - **`itemOnboardingId` and the cellar-item id are minted once**, so a
+ *   retried analysis reuses the session and a retried add files one bottle.
+ * - **Quick add (Q7, N02)** is entered only through `canQuickAdd`: a label
+ *   photographed and read at ≥ 0.9, an *exact* catalogue match, a cellar to
+ *   file into. Its `CONFIRM` files a bottle of the matched item — it never
+ *   creates one (D25: nothing new enters the catalogue without a tap).
+ * - **`matching` (N19)**: the name read goes to `itemSearch`; a match leads
+ *   the draft card with "Is it this one? +1 bottle".
+ * - **`analyze` failures that are answers** (no label, a menu, no provider)
+ *   resolve with empty defaults and words for the person (N07); only a
+ *   transport failure takes `retryAnalyze`.
+ *
+ * New here:
+ *
+ * - The read is **tracked outside the component** (`components/capture/
+ *   drafts.ts`) when `draft` is given, so "Keep going in the background"
+ *   can leave the page without losing it, and `resumeId` reopens the draft
+ *   on the same session — no second model call.
+ * - The type and the cellar can change before the bottle is filed
+ *   (`SET_TYPE` while framing, `SET_CELLAR` until it is filed), because they
+ *   are defaults (last used), not route facts, on the generic add page.
+ * - The ending is a success sheet (`finalPrompt`): Snap another · Open it
+ *   now · the bottle (N21).
  */
 export const OnboardingMachine = createMachine(
   {
     id: "onboarding-wizard",
-    initial: "wizard",
+    initial: "init",
     types: {} as {
       input: {
         urqlClient: Client;
-        cellarId?: string;
+        cellarId?: string | null;
         router: Navigate;
         itemType: ApiItemType;
+        /** Track the read for background continuation (X05). */
+        draft?: DraftInput;
+        /** Reopen this onboarding's draft rather than starting a new one. */
+        resumeId?: string;
+        /** The resumed draft's photo, when the page still has it. */
+        resumePhoto?: string;
+        /** "Snap another": start over in place. Default: `addAnotherHref`. */
+        onRestart?: () => void;
       };
       context: {
         urqlClient: Client;
@@ -102,6 +135,8 @@ export const OnboardingMachine = createMachine(
         backLabelFileId?: string;
         displayImageDataUrl?: string;
         itemOnboardingId: string;
+        /** Whether a label photograph actually reached the read. */
+        labelSent: boolean;
         defaults?: OnboardingDefaults;
         /**
          * Why nothing was read, as words for a person (N07: chosen by
@@ -109,13 +144,24 @@ export const OnboardingMachine = createMachine(
          */
         extractionError?: AiOutcome;
         existingItemId?: string;
-        /** Items the person said no to in the picture wizard's choosers. */
+        /** The filed item's name, for the success sheet. */
+        itemName?: string;
+        /** Items the person said no to — never offered back. */
         declinedItemIds: readonly string[];
         /** N19: the catalogue item the label names, if there is one. */
         catalogMatch?: CatalogMatch;
+        /** G32/D12: what the front photo looks like in the catalogue. */
+        imageMatches: readonly ExistingItem[];
         /**
-         * The bottle being filed is the catalogue match (quick-add CONFIRM or
-         * USE_MATCH), so the onboarding `analyze` opened is closed as
+         * X05: a back-label re-read's answer, for the draft card to fill
+         * into fields the person has not touched. `id` changes per re-read.
+         */
+        refill?: { id: string; defaults: OnboardingDefaults };
+        /** The back-label re-read could not be made. */
+        rereadError?: AiOutcome | string;
+        /**
+         * The bottle being filed is a catalogue item (quick-add, a match, a
+         * photo match), so the onboarding `analyze` opened is closed as
          * `MATCHED` once it is filed rather than left open forever.
          */
         filedMatch?: boolean;
@@ -131,6 +177,9 @@ export const OnboardingMachine = createMachine(
         /** Whether quick add mode is enabled for this session */
         quickAddEnabled: boolean;
         itemType: ApiItemType;
+        draft?: DraftInput;
+        resumed: boolean;
+        onRestart?: () => void;
         /** Why the last step failed, when it did (upload, add to cellar). */
         error?: string;
         /** The display photo could not be saved; the item was. */
@@ -141,19 +190,32 @@ export const OnboardingMachine = createMachine(
             type: "COMPLETE";
             barcode?: Barcode;
             frontLabel?: string;
-            backLabel?: string;
             existingItemId?: string;
+            /** The chosen existing item's type and name (barcode chooser). */
+            existingItemType?: ApiItemType;
+            existingItemName?: string;
             displayImageDataUrl?: string;
             declinedItemIds?: readonly string[];
           }
-        | { type: "CREATED"; itemId: string }
+        | { type: "SET_TYPE"; itemType: ApiItemType }
+        | { type: "SET_CELLAR"; cellarId: string | null }
+        | { type: "CREATED"; itemId: string; name?: string }
         | { type: "USE_MATCH" }
         | { type: "DISMISS_MATCH" }
-        | { type: "ADD_ANOTHER" }
+        | { type: "USE_IMAGE_MATCH"; item: ExistingItem }
+        | { type: "DISMISS_IMAGE_MATCHES" }
+        | { type: "BACK_LABEL"; image: string }
+        | { type: "SNAP_ANOTHER" }
+        | { type: "OPEN_NOW" }
         | { type: "DONE" }
         | { type: "CONFIRM" }
         | { type: "EDIT" }
-        | { type: "RETRY" };
+        | { type: "RETRY" }
+        | {
+            type: "xstate.done.actor.imageSearch";
+            output: ExistingItem[];
+          }
+        | { type: "xstate.error.actor.imageSearch"; error: unknown };
       actors:
         | {
             src: "uploadFiles";
@@ -175,11 +237,23 @@ export const OnboardingMachine = createMachine(
             logic: PromiseActorLogic<CatalogMatch | null, SearchCatalogInput>;
           }
         | {
+            src: "searchByImage";
+            logic: PromiseActorLogic<ExistingItem[], SearchByImageInput>;
+          }
+        | {
+            src: "rereadLabels";
+            logic: PromiseActorLogic<RereadLabelsResult, RereadLabelsInput>;
+          }
+        | {
             src: "uploadItemImage";
             logic: PromiseActorLogic<
               UploadItemImageResult,
               UploadItemImageInput
             >;
+          }
+        | {
+            src: "openCellarItem";
+            logic: PromiseActorLogic<boolean, OpenCellarItemInput>;
           }
         | {
             src: "closeOnboarding";
@@ -188,48 +262,85 @@ export const OnboardingMachine = createMachine(
       delays: "catalogMatchTimeout";
     },
     context: ({ input }) => ({
-      itemOnboardingId: crypto.randomUUID(),
+      itemOnboardingId: input.resumeId ?? crypto.randomUUID(),
       newCellarItemId: crypto.randomUUID(),
       urqlClient: input.urqlClient,
-      cellarId: input.cellarId,
+      cellarId: input.cellarId ?? undefined,
       router: input.router,
       retryCount: 0,
       quickAddEnabled: true, // Enable quick add by default
       declinedItemIds: [],
+      imageMatches: [],
+      labelSent: false,
       itemType: input.itemType,
+      draft: input.draft,
+      resumed: input.resumeId !== undefined,
+      frontLabel: input.resumePhoto,
+      displayImageDataUrl: input.resumePhoto,
+      onRestart: input.onRestart,
     }),
+    on: {
+      // The photo search runs beside the read and lands whenever it lands
+      // (a late answer still leads the draft card). Never waited for.
+      "xstate.done.actor.imageSearch": {
+        actions: assign({
+          imageMatches: ({ event, context }) =>
+            event.output.filter(
+              (match) => !context.declinedItemIds.includes(match.item.itemId),
+            ),
+        }),
+      },
+      // A photo search that failed is one with nothing to offer — never the
+      // flow's failure (an unhandled child error would stop the machine).
+      "xstate.error.actor.imageSearch": {},
+      // Until the bottle is filed, the cellar is a default the person can
+      // change (X05: defaulted, not asked).
+      SET_CELLAR: {
+        guard: ({ context }) => isNil(context.cellarItemId),
+        actions: assign({
+          cellarId: ({ event }) => event.cellarId ?? undefined,
+        }),
+      },
+    },
     states: {
+      init: {
+        always: [
+          { guard: ({ context }) => context.resumed, target: "analyze" },
+          { target: "wizard" },
+        ],
+      },
       wizard: {
         on: {
+          SET_TYPE: {
+            actions: assign({ itemType: ({ event }) => event.itemType }),
+          },
           COMPLETE: [
             {
               guard: ({ event }) => isNil(event.existingItemId),
-              actions: assign({
-                barcode: ({ event }) => event.barcode,
-                frontLabel: ({ event }) => event.frontLabel,
-                backLabel: ({ event }) => event.backLabel,
-                displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
-                declinedItemIds: ({ event }) => event.declinedItemIds ?? [],
-                defaults: undefined,
-                catalogMatch: undefined,
-              }),
+              actions: [
+                assign({
+                  barcode: ({ event }) => event.barcode,
+                  frontLabel: ({ event }) => event.frontLabel,
+                  // N21: the display photo is the front label.
+                  displayImageDataUrl: ({ event }) => event.frontLabel,
+                  declinedItemIds: ({ event }) => event.declinedItemIds ?? [],
+                  defaults: undefined,
+                  catalogMatch: undefined,
+                }),
+                // G32/D12: the same photo is the photo-search query.
+                "startImageSearch",
+              ],
               target: "upload",
             },
             {
               guard: ({ event, context }) =>
                 isNotNil(event.existingItemId) && isNotNil(context.cellarId),
-              actions: assign({
-                existingItemId: ({ event }) => event.existingItemId,
-                displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
-              }),
+              actions: "chooseExisting",
               target: "addItemToCellar",
             },
             {
               guard: ({ event }) => isNotNil(event.existingItemId),
-              actions: assign({
-                existingItemId: ({ event }) => event.existingItemId,
-                displayImageDataUrl: ({ event }) => event.displayImageDataUrl,
-              }),
+              actions: "chooseExisting",
               target: "uploadImage",
             },
           ],
@@ -250,7 +361,6 @@ export const OnboardingMachine = createMachine(
               frontLabelFileId: ({ event }) => event.output.frontLabelFileId,
             }),
           },
-          // New: the old actor's failure left the wizard spinning forever.
           // The photos could not be stored, so read nothing and go on to the
           // form — the session still opens, and the reason is shown.
           onError: {
@@ -296,6 +406,8 @@ export const OnboardingMachine = createMachine(
               barcode,
               backLabelFileId,
               frontLabelFileId,
+              draft,
+              frontLabel,
             },
           }) => ({
             urqlClient,
@@ -304,6 +416,14 @@ export const OnboardingMachine = createMachine(
             barcode,
             backLabelFileId,
             frontLabelFileId,
+            draft:
+              draft === undefined
+                ? undefined
+                : {
+                    label: itemTypeLabel(itemType).toLowerCase(),
+                    resumeHref: draft.resumeHref(itemOnboardingId, itemType),
+                    ...(frontLabel === undefined ? {} : { photo: frontLabel }),
+                  },
           }),
           onError: {
             target: "retryAnalyze",
@@ -315,6 +435,10 @@ export const OnboardingMachine = createMachine(
               defaults: ({ event }) => event.output.defaults,
               confidence: ({ event }) => event.output.confidence,
               extractionError: ({ event }) => event.output.extractionError,
+              labelSent: ({ event, context }) =>
+                event.output.labelSent ??
+                (isNotNil(context.frontLabelFileId) ||
+                  isNotNil(context.backLabelFileId)),
             }),
           },
         },
@@ -343,9 +467,7 @@ export const OnboardingMachine = createMachine(
               guard: ({ context, event }) =>
                 context.quickAddEnabled &&
                 canQuickAdd({
-                  labelSent:
-                    isNotNil(context.frontLabelFileId) ||
-                    isNotNil(context.backLabelFileId),
+                  labelSent: context.labelSent,
                   confidence: context.confidence,
                   defaults: context.defaults,
                   match: event.output,
@@ -372,16 +494,23 @@ export const OnboardingMachine = createMachine(
         // The QuickAddCard counts down and sends CONFIRM. Only ever a bottle
         // of the matched catalogue item (N02): nothing here creates an item.
         on: {
-          CONFIRM: {
-            guard: ({ context }) =>
-              isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
-            actions: assign({
-              existingItemId: ({ context }) =>
-                context.catalogMatch?.item.itemId,
-              filedMatch: true,
-            }),
-            target: "addItemToCellar",
-          },
+          CONFIRM: [
+            {
+              guard: ({ context }) =>
+                isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
+              actions: "useCatalogMatch",
+              target: "addItemToCellar",
+            },
+            // The "Into" row was switched to "No cellar" while the card was
+            // up (X05: the cellar is a default, changeable here): the match
+            // is still the item — show it, file no bottle. Without this
+            // branch the CONFIRM was dropped and the card sat on "Adding…".
+            {
+              guard: ({ context }) => isNotNil(context.catalogMatch),
+              actions: "useCatalogMatch",
+              target: "uploadImage",
+            },
+          ],
           // "Not this one": the form, without the match and without offering
           // it again.
           EDIT: {
@@ -401,26 +530,19 @@ export const OnboardingMachine = createMachine(
         },
       },
       form: {
+        initial: "idle",
         on: {
           // N19: "Is it this one? +1 bottle" — the person tapped it.
           USE_MATCH: [
             {
               guard: ({ context }) =>
                 isNotNil(context.catalogMatch) && isNotNil(context.cellarId),
-              actions: assign({
-                existingItemId: ({ context }) =>
-                  context.catalogMatch?.item.itemId,
-                filedMatch: true,
-              }),
+              actions: "useCatalogMatch",
               target: "addItemToCellar",
             },
             {
               guard: ({ context }) => isNotNil(context.catalogMatch),
-              actions: assign({
-                existingItemId: ({ context }) =>
-                  context.catalogMatch?.item.itemId,
-                filedMatch: true,
-              }),
+              actions: "useCatalogMatch",
               target: "uploadImage",
             },
           ],
@@ -436,21 +558,101 @@ export const OnboardingMachine = createMachine(
                     ],
             }),
           },
+          // G32/D12: one of the photo matches, tapped. Like USE_MATCH, it
+          // files (or shows) a catalogue item; it never creates one.
+          USE_IMAGE_MATCH: [
+            {
+              guard: ({ context }) => isNotNil(context.cellarId),
+              actions: "useImageMatch",
+              target: "addItemToCellar",
+            },
+            { actions: "useImageMatch", target: "uploadImage" },
+          ],
+          DISMISS_IMAGE_MATCHES: {
+            actions: assign({
+              imageMatches: [],
+              declinedItemIds: ({ context }) => [
+                ...context.declinedItemIds,
+                ...context.imageMatches.map((match) => match.item.itemId),
+              ],
+            }),
+          },
           CREATED: [
             {
               guard: ({ context }) => isNotNil(context.cellarId),
               actions: assign({
                 existingItemId: ({ event }) => event.itemId,
+                itemName: ({ event }) => event.name,
               }),
               target: "addItemToCellar",
             },
             {
               actions: assign({
                 existingItemId: ({ event }) => event.itemId,
+                itemName: ({ event }) => event.name,
               }),
               target: "uploadImage",
             },
           ],
+        },
+        states: {
+          idle: {
+            on: {
+              // X05/N21: the optional back label, read together with the
+              // front under a fresh session (`start` is idempotent per id).
+              BACK_LABEL: {
+                target: "rereading",
+                actions: assign({
+                  backLabel: ({ event }) => event.image,
+                  rereadError: undefined,
+                }),
+              },
+            },
+          },
+          rereading: {
+            invoke: {
+              src: "rereadLabels",
+              input: ({ context }) => ({
+                urqlClient: context.urqlClient,
+                itemType: context.itemType,
+                barcode: context.barcode,
+                frontLabelFileId: context.frontLabelFileId,
+                backLabel: context.backLabel ?? "",
+              }),
+              onDone: {
+                target: "idle",
+                actions: assign(({ event, context }) =>
+                  event.output.extractionError !== undefined
+                    ? {
+                        rereadError: event.output.extractionError,
+                        backLabelFileId: event.output.backLabelFileId,
+                      }
+                    : {
+                        itemOnboardingId: event.output.itemOnboardingId,
+                        backLabelFileId: event.output.backLabelFileId,
+                        confidence: event.output.confidence,
+                        labelSent: true,
+                        refill: {
+                          id: event.output.itemOnboardingId,
+                          defaults: event.output.defaults,
+                        },
+                        extractionError: context.labelSent
+                          ? context.extractionError
+                          : undefined,
+                      },
+                ),
+              },
+              onError: {
+                target: "idle",
+                actions: assign({
+                  rereadError: ({ event }) =>
+                    event.error instanceof Error
+                      ? event.error.message
+                      : "The back label could not be read.",
+                }),
+              },
+            },
+          },
         },
       },
       addItemToCellar: {
@@ -532,28 +734,39 @@ export const OnboardingMachine = createMachine(
           },
         },
       },
+      // N21's real ending: the success sheet.
       finalPrompt: {
         on: {
-          ADD_ANOTHER: {
+          SNAP_ANOTHER: {
             actions: ({ context }) => {
-              context.router.push(addAnotherHref(context.cellarId));
+              if (context.onRestart !== undefined) context.onRestart();
+              else context.router.push(addAnotherHref(context.cellarId));
             },
             target: "done",
+          },
+          OPEN_NOW: {
+            guard: ({ context }) =>
+              isNotNil(context.cellarId) && isNotNil(context.cellarItemId),
+            target: "openingNow",
           },
           DONE: {
-            actions: ({ context }) => {
-              // Redirect to cellar item page if added to cellar, otherwise item page
-              context.router.push(
-                finishedHref({
-                  type: context.itemType,
-                  itemId: context.existingItemId ?? "",
-                  cellarId: context.cellarId,
-                  cellarItemId: context.cellarItemId,
-                }),
-              );
-            },
+            actions: "goToResult",
             target: "done",
           },
+        },
+      },
+      // "Open it now": the bottle is uncorked as it is filed, then shown.
+      // Opening failing still shows the bottle — its own "Open it" is there.
+      openingNow: {
+        invoke: {
+          src: "openCellarItem",
+          input: ({ context }) => ({
+            urqlClient: context.urqlClient,
+            cellarId: context.cellarId ?? "",
+            cellarItemId: context.cellarItemId ?? "",
+          }),
+          onDone: { target: "done", actions: "goToResult" },
+          onError: { target: "done", actions: "goToResult" },
         },
       },
       done: {
@@ -566,9 +779,59 @@ export const OnboardingMachine = createMachine(
       catalogMatchTimeout: CATALOG_MATCH_TIMEOUT_MS,
     },
     actions: {
+      chooseExisting: assign(({ event }) =>
+        event.type === "COMPLETE"
+          ? {
+              existingItemId: event.existingItemId,
+              displayImageDataUrl: event.displayImageDataUrl,
+              itemName: event.existingItemName,
+              filedMatch: false,
+              ...(event.existingItemType === undefined
+                ? {}
+                : { itemType: event.existingItemType }),
+            }
+          : {},
+      ),
+      useCatalogMatch: assign(({ context }) => ({
+        existingItemId: context.catalogMatch?.item.itemId,
+        itemName: context.catalogMatch?.item.name,
+        filedMatch: true,
+      })),
+      useImageMatch: assign(({ event }) =>
+        event.type === "USE_IMAGE_MATCH"
+          ? {
+              existingItemId: event.item.item.itemId,
+              itemName: event.item.item.name,
+              itemType: event.item.type,
+              filedMatch: true,
+            }
+          : {},
+      ),
+      startImageSearch: enqueueActions(({ context, event, enqueue }) => {
+        if (event.type !== "COMPLETE" || isNil(event.frontLabel)) return;
+        enqueue.spawnChild("searchByImage", {
+          id: "imageSearch",
+          input: {
+            displayImage: event.frontLabel,
+            urqlClient: context.urqlClient,
+            itemType: context.itemType,
+          },
+        });
+      }),
+      goToResult: ({ context }) => {
+        // In a cellar, the bottle; otherwise the item.
+        context.router.push(
+          finishedHref({
+            type: context.itemType,
+            itemId: context.existingItemId ?? "",
+            cellarId: context.cellarId,
+            cellarItemId: context.cellarItemId,
+          }),
+        );
+      },
       // Fire and forget: the bottle is filed, and closing the session is
       // bookkeeping the person need not wait on (`closeOnboarding` never
-      // throws). Only when the bottle was the catalogue match — a created
+      // throws). Only when the bottle was a catalogue match — a created
       // item's session is closed by `confirmItemOnboarding` itself, and a
       // barcode-chooser pick never opened one.
       closeMatchedOnboarding: enqueueActions(({ context, enqueue }) => {
@@ -585,44 +848,56 @@ export const OnboardingMachine = createMachine(
       uploadFiles,
       fetchDefaults,
       searchCatalog,
+      searchByImage,
+      rereadLabels,
       insertCellarItem,
       uploadItemImage,
+      openCellarItem,
       closeOnboarding,
     },
   },
 );
 
+/**
+ * The capture step (X05): one live camera, framing the label while a barcode
+ * is read off the same picture.
+ *
+ * - `framing`: a `BARCODE` is looked up (`searching`); the shutter
+ *   (`CAPTURED`) is the front label and ends the step at once — the read
+ *   starts there. `MANUAL` ends it with no photo (fill it in by hand).
+ * - A barcode that names catalogue items opens the chooser
+ *   (`chooseExisting`); picking one asks for an optional photo of it
+ *   (`photo`), since it needs no read. "None of these" goes back to framing
+ *   with those items declined.
+ * - The shutter still works while a barcode lookup is in flight: the photo
+ *   wins, and the lookup's late answer is dropped with the state.
+ */
 export const pictureOnboardingMachine = createMachine(
   {
     id: "onboarding-wizard-sub",
-    initial: "barcode",
+    initial: "framing",
     types: {} as {
       input: { urqlClient: Client; itemType?: ApiItemType };
       context: {
         barcode?: Barcode;
         frontLabelDataUrl?: string;
-        backLabelDataUrl?: string;
         displayImageDataUrl?: string;
         existingItems?: ExistingItem[];
-        existingItemId?: string;
-        /** Matches the person passed over with "Create New" — never re-offered. */
+        chosen?: ExistingItem;
+        /** Matches the person passed over with "None of these". */
         declinedItemIds: string[];
         urqlClient: Client;
         itemType?: ApiItemType;
       };
       events:
-        | {
-            type: "FOUND";
-            barcode?: Barcode;
-          }
+        | { type: "BARCODE"; barcode: Barcode }
+        | { type: "CAPTURED"; image: string }
+        | { type: "MANUAL" }
         | { type: "SKIP" }
         | { type: "BACK" }
-        | { type: "CHOOSE_ITEM"; existingItemId: string }
-        | { type: "CAPTURED"; image: string };
+        | { type: "CHOOSE_ITEM"; item: ExistingItem };
       actions: { type: "handleDone" };
-      actors:
-        | { src: "searchByBarcode"; logic: typeof searchByBarcode }
-        | { src: "searchByImage"; logic: typeof searchByImage };
+      actors: { src: "searchByBarcode"; logic: typeof searchByBarcode };
     },
     context: ({ input }) => ({
       urqlClient: input.urqlClient,
@@ -630,18 +905,31 @@ export const pictureOnboardingMachine = createMachine(
       declinedItemIds: [],
     }),
     states: {
-      barcode: {
+      framing: {
         on: {
-          FOUND: {
-            actions: assign({
-              barcode: ({ event }) => event.barcode,
-            }),
+          BARCODE: {
+            actions: assign({ barcode: ({ event }) => event.barcode }),
             target: "searching",
           },
-          SKIP: "clearing",
+          CAPTURED: {
+            actions: assign({
+              frontLabelDataUrl: ({ event }) => event.image,
+            }),
+            target: "done",
+          },
+          MANUAL: "done",
         },
       },
       searching: {
+        on: {
+          CAPTURED: {
+            actions: assign({
+              frontLabelDataUrl: ({ event }) => event.image,
+            }),
+            target: "done",
+          },
+          MANUAL: "done",
+        },
         invoke: {
           src: "searchByBarcode",
           input: ({ context: { barcode, urqlClient } }) => ({
@@ -656,25 +944,21 @@ export const pictureOnboardingMachine = createMachine(
                 existingItems: ({ event }) => event.output,
               }),
             },
-            {
-              target: "clearing",
-            },
+            { target: "framing" },
           ],
           // A lookup that failed outright is treated like one that found
           // nothing: go on and photograph the label.
-          onError: { target: "clearing" },
+          onError: { target: "framing" },
         },
       },
       chooseExisting: {
         on: {
           CHOOSE_ITEM: {
-            actions: assign({
-              existingItemId: ({ event }) => event.existingItemId,
-            }),
-            target: "display",
+            actions: assign({ chosen: ({ event }) => event.item }),
+            target: "photo",
           },
           SKIP: {
-            target: "back",
+            target: "framing",
             actions: assign({
               declinedItemIds: ({ context }) => [
                 ...context.declinedItemIds,
@@ -684,105 +968,16 @@ export const pictureOnboardingMachine = createMachine(
           },
         },
       },
-      clearing: {
-        after: {
-          // We need to delay a bit to give time for the camera to deal with new video constraints
-          50: { target: "back" },
-        },
-      },
-      back: {
+      photo: {
         on: {
           CAPTURED: {
             actions: assign({
-              backLabelDataUrl: ({ event }) => event.image,
+              displayImageDataUrl: ({ event }) => event.image,
             }),
-            target: "front",
+            target: "done",
           },
-          BACK: "barcode",
-          SKIP: "front",
-        },
-      },
-      front: {
-        on: {
-          CAPTURED: {
-            actions: assign({
-              frontLabelDataUrl: ({ event }) => event.image,
-            }),
-            target: "display",
-          },
-          BACK: "back",
-          SKIP: "display",
-        },
-      },
-      display: {
-        on: {
-          // A photo of an item already chosen (by barcode) is just its
-          // display image; a photo of a new one is first matched against
-          // the catalogue (G32).
-          CAPTURED: [
-            {
-              guard: ({ context }) => isNotNil(context.existingItemId),
-              actions: assign({
-                displayImageDataUrl: ({ event }) => event.image,
-              }),
-              target: "done",
-            },
-            {
-              guard: ({ context }) => isNil(context.existingItemId),
-              actions: assign({
-                displayImageDataUrl: ({ event }) => event.image,
-              }),
-              target: "searchingByImage",
-            },
-          ],
-          BACK: "front",
           SKIP: "done",
-        },
-      },
-      searchingByImage: {
-        invoke: {
-          src: "searchByImage",
-          input: ({
-            context: { displayImageDataUrl, urqlClient, itemType },
-          }) => ({
-            displayImage: displayImageDataUrl,
-            urqlClient,
-            itemType,
-          }),
-          onDone: [
-            {
-              guard: ({ event }) => not(isEmpty(event.output)),
-              target: "chooseExistingImage",
-              actions: assign({
-                existingItems: ({ event }) => event.output,
-              }),
-            },
-            {
-              target: "done",
-            },
-          ],
-          // An upload or search that failed outright is treated like one that
-          // found nothing: the photo is kept and the wizard finishes.
-          onError: { target: "done" },
-        },
-      },
-      chooseExistingImage: {
-        on: {
-          CHOOSE_ITEM: {
-            actions: assign({
-              existingItemId: ({ event }) => event.existingItemId,
-            }),
-            target: "done",
-          },
-          SKIP: {
-            target: "done",
-            actions: assign({
-              declinedItemIds: ({ context }) => [
-                ...context.declinedItemIds,
-                ...(context.existingItems ?? []).map((x) => x.item.itemId),
-              ],
-            }),
-          },
+          BACK: "chooseExisting",
         },
       },
       done: {
@@ -791,5 +986,5 @@ export const pictureOnboardingMachine = createMachine(
       },
     },
   },
-  { actors: { searchByBarcode, searchByImage } },
+  { actors: { searchByBarcode } },
 );

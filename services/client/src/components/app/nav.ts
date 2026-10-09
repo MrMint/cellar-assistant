@@ -100,7 +100,8 @@ export const CAPTURE_OPTIONS: readonly CaptureOption[] = [
     key: "bottle",
     label: "Bottle",
     description: "Snap a label or scan a barcode",
-    href: "/add",
+    // Explicit: the capture surface otherwise opens on the last-used mode.
+    href: "/add?mode=bottle",
     icon: Camera,
   },
   {

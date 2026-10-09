@@ -3,7 +3,8 @@ import { expect, test, watch } from "../fixtures/test.ts";
 
 /**
  * Image search (G32), through the real camera path: `/search`'s Photo button
- * and the onboarding wizard's display-photo match.
+ * and the add flow's front-label photo (D12: the same photo is the read, the
+ * display photo and the match).
  *
  * Chromium's fake camera (as in 04b and 13) supplies a test pattern, so this
  * drives capture → data URL decoded in the browser → presigned `image-search`
@@ -142,26 +143,14 @@ test("another person's search photo is not searchable by you", async ({
   );
 });
 
-test("onboarding: a display photo of a new item is matched against the catalogue first", async ({
+test("onboarding: the front-label photo is matched against the catalogue beside the read", async ({
   primary,
   api,
 }) => {
   test.setTimeout(150_000);
   const { imageSearch } = await aiCapabilities(api);
+  // X05/D12: one camera; the front photo is the photo-search query too.
   await primary.goto("/add/beers");
-  await primary.getByRole("button", { name: "Skip" }).click(); // barcode
-  await expect(
-    primary.getByText("Lets take a picture of the back label"),
-  ).toBeVisible();
-  await primary.getByRole("button", { name: "Skip" }).click(); // back
-  await expect(
-    primary.getByText("Lets take a picture of the front label"),
-  ).toBeVisible();
-  await primary.getByRole("button", { name: "Skip" }).click(); // front
-
-  await expect(
-    primary.getByText("Lets take a photo that will be used for display"),
-  ).toBeVisible();
   await expect(primary.locator("video")).toBeVisible();
   await primary.waitForFunction(
     () => (document.querySelector("video")?.readyState ?? 0) >= 2,
@@ -191,12 +180,11 @@ test("onboarding: a display photo of a new item is matched against the catalogue
     expect(body.variables?.itemTypes).toEqual(["BEER"]);
   }
 
-  // No match (a test pattern), or photo search not offered: the wizard
-  // finishes with the photo kept and moves on, as the old one did on an
-  // empty result — it does not stall on the search.
+  // No match (a test pattern), or photo search not offered: the search runs
+  // beside the read and never holds it — the draft card opens either way.
   await expect(
-    primary.getByText("Lets take a photo that will be used for display"),
-  ).toBeHidden({ timeout: 60_000 });
+    primary.getByRole("main").getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible({ timeout: 120_000 });
   if (!imageSearch) {
     expect(
       matchRequests,

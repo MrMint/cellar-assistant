@@ -95,7 +95,16 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
     reason:
       "An xstate promise actor (the restored OnboardingMachine's `analyze`): " +
       "one startItemOnboarding per invocation, and xstate drops the result of " +
-      "an actor whose state has been left, which is the gate.",
+      "an actor whose state has been left, which is the gate. X05 tracks it " +
+      "by session id in `captureDrafts`, so a remount or a resume adopts the " +
+      "read in flight instead of sending a second one.",
+  },
+  "common/OnboardingWizard/actors/openCellarItem.ts": {
+    calls: 1,
+    reason:
+      "An xstate promise actor (N21's success sheet, `openingNow`): one " +
+      "openCellarItem for the bottle just filed, idempotent server-side, and " +
+      "the machine leaves for the bottle page whatever it answers.",
   },
   "common/OnboardingWizard/actors/insertCellarItem.ts": {
     calls: 1,

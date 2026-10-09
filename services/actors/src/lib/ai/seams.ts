@@ -46,9 +46,13 @@ import type {
 import {
   BASE_SPIRIT_KINDS,
   ConflictError,
+  FIELD_CONFIDENCE_KEY,
   INGREDIENT_ROLES,
+  ITEM_ATTRIBUTE_KEY,
+  type ItemType,
   isRecipeType,
   RECIPE_TYPES,
+  sanitiseFieldConfidence,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import type { InsightsGenerator } from "../../actors/tier-list-actor.ts";
@@ -309,7 +313,35 @@ export const providerInsightsGenerator =
  * it. They are the model's working, not the item's attributes, so they never
  * reach `item_onboardings.defaults`.
  */
-const ANSWER_GROUNDING = new Set(["imageDescription", "labelIsLegible"]);
+const ANSWER_GROUNDING = new Set([
+  "imageDescription",
+  "labelIsLegible",
+  // X05: what the photo is of, not a value for the item. Read by
+  // `requireLegibleLabel` on an abstention; kept in `raw` like the other two.
+  "surfaceKind",
+]);
+
+/**
+ * Whether the answer proposes a value for `field` — at the top level (`name`,
+ * `brandName`, `country`, `region`) or in the per-type bag (`vintage`).
+ */
+const proposesValue = (
+  type: ItemType,
+  defaults: Record<string, unknown>,
+  field: string,
+): boolean => {
+  const bag = defaults[ITEM_ATTRIBUTE_KEY[type]];
+  const value =
+    defaults[field] ??
+    (typeof bag === "object" && bag !== null && !Array.isArray(bag)
+      ? (bag as Record<string, unknown>)[field]
+      : undefined);
+  return (
+    value !== undefined &&
+    value !== null &&
+    !(typeof value === "string" && value.trim() === "")
+  );
+};
 
 /**
  * Four things happen here that did not before E2c/E2g, in this order and for
@@ -379,6 +411,7 @@ export const providerItemDefaults =
       // keep in step, so the one polarity is the only one.
       labelIsLegible: bool(answer.labelIsLegible),
       imageDescription: str(answer.imageDescription),
+      surfaceKind: str(answer.surfaceKind),
     });
 
     /*
@@ -405,6 +438,19 @@ export const providerItemDefaults =
       vocabulary,
     );
     requireInVocabulary(request.itemType, defaults, vocabulary);
+    // X05: the per-field confidences are kept to their three words, and only
+    // for fields the answer actually filled — a judgement about a value that
+    // is not there is noise the form would have to explain.
+    if (FIELD_CONFIDENCE_KEY in defaults) {
+      const judged = sanitiseFieldConfidence(defaults[FIELD_CONFIDENCE_KEY]);
+      const kept = Object.fromEntries(
+        Object.entries(judged).filter(([field]) =>
+          proposesValue(request.itemType, defaults, field),
+        ),
+      );
+      if (Object.keys(kept).length === 0) delete defaults[FIELD_CONFIDENCE_KEY];
+      else defaults[FIELD_CONFIDENCE_KEY] = kept;
+    }
     const result: ItemDefaultsResult = {
       defaults,
       raw: content,

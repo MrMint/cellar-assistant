@@ -14,6 +14,7 @@
     "./errors": "./src/errors.ts",
     "./item-types": "./src/item-types.ts",
     "./items": "./src/items.ts",
+    "./onboarding": "./src/onboarding.ts",
     "./page": "./src/page.ts",
     "./place-categories": "./src/place-categories.ts",
     "./place-review-status": "./src/place-review-status.ts",

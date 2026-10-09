@@ -26,33 +26,23 @@ import {
  */
 
 /**
- * Open the wizard's first label photo step, and prove that step asked for the
- * camera itself.
+ * Open the add flow's camera, and prove it asked for the camera itself.
  *
- * The barcode step before it has its own scanner, which calls `getUserMedia`
- * too (`useBarcodeScanner`) — so "the page asked for the camera" is already
- * true before the label step exists, and would let a label step that never
- * tried pass. Only calls made after Skip count. (The label step's camera
- * mounts with its header, so the count cannot be reset once the header shows.)
- *
- * The header is matched loosely on purpose: N21 reorders the steps to front
- * first and fixes the "Lets" copy, and neither is what this spec is about.
+ * Since X05 there is one camera and no step before it: `/add/wines` opens on
+ * the live viewfinder that reads a barcode while it frames the label. So
+ * the page asking for the camera *is* the label camera asking.
  */
 async function openLabelCamera(page: Page): Promise<void> {
   await page.goto("/add/wines");
-  const skip = page.getByRole("button", { name: "Skip" });
-  await expect(skip).toBeEnabled();
-  const beforeLabelStep = await cameraCalls(page);
-  await skip.tap();
   await expect(
-    page.getByText(/picture of the (front|back) label/i),
-    "the onboarding wizard did not reach the label photo step",
+    page.getByRole("button", { name: "Type it in instead" }),
+    "the add flow did not open on its camera",
   ).toBeVisible();
   await expect
     .poll(() => cameraCalls(page), {
-      message: "the label step never asked for the camera",
+      message: "the label camera never asked for the camera",
     })
-    .toBeGreaterThan(beforeLabelStep);
+    .toBeGreaterThan(0);
 }
 
 const library = (page: Page) =>

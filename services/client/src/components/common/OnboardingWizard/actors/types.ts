@@ -2,6 +2,7 @@ import type { Client } from "urql";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { Barcode } from "@/constants";
 import type { AiOutcome } from "@/lib/ai/outcome";
+import type { DraftMeta } from "@/lib/capture/draft-store";
 import type { OnboardingDefaults } from "../adapter";
 
 /**
@@ -58,6 +59,33 @@ export type FetchDefaultsInput = {
   barcode?: Barcode;
   frontLabelFileId?: string;
   backLabelFileId?: string;
+  /**
+   * X05: track the read in `captureDrafts` under the session id, so it
+   * survives leaving the page ("Keep going in the background") and a return
+   * adopts it instead of asking again.
+   */
+  draft?: DraftMeta;
+};
+
+/** X05/N21: the optional back label, read with the front under a new session. */
+export type RereadLabelsInput = {
+  urqlClient: Client;
+  itemType: ApiItemType;
+  barcode?: Barcode;
+  /** The front label already uploaded at the shutter, if it was. */
+  frontLabelFileId?: string;
+  /** The back-label capture, as a data URL. */
+  backLabel: string;
+};
+
+export type RereadLabelsResult = DefaultValuesResult & {
+  backLabelFileId?: string;
+};
+
+export type OpenCellarItemInput = {
+  urqlClient: Client;
+  cellarId: string;
+  cellarItemId: string;
 };
 
 /** N19: the read label, looked up in the catalogue. */
@@ -80,6 +108,11 @@ export interface DefaultValuesResult {
    * which is what makes typing it in by hand a real path.
    */
   extractionError?: AiOutcome;
+  /**
+   * Whether a label photograph reached the read — from the session itself
+   * when it answered (so a resumed draft knows), else from what was sent.
+   */
+  labelSent?: boolean;
 }
 
 export type UploadItemImageInput = {

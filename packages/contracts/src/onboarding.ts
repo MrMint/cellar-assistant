@@ -83,6 +83,53 @@ export type ItemOnboardingDto = {
   readonly updatedAt: string;
 };
 
+/**
+ * X05 · what the photographed text is printed on, as the label read itself
+ * says (`itemDefaultsSchema`'s `surfaceKind`). Answered in the same
+ * completion as the verdict — never a separate classifier call (D25) — and
+ * consulted only when the verdict is "no label": a `menu` then becomes the
+ * `LOOKS_LIKE_MENU` refusal, so the client can offer to scan it as a menu.
+ */
+export const LABEL_SURFACE_KINDS = ["label", "menu", "other"] as const;
+export type LabelSurfaceKind = (typeof LABEL_SURFACE_KINDS)[number];
+
+/**
+ * X05 · how sure the read is of one field, in words (design §3.8: "Sure ·
+ * Likely · Check this", never a percentage). The model answers them in
+ * `defaults.fieldConfidence`, declared *after* the values in the schema so
+ * each judgement is made about a value already written.
+ */
+export const FIELD_CONFIDENCES = ["sure", "likely", "check"] as const;
+export type FieldConfidence = (typeof FIELD_CONFIDENCES)[number];
+
+/** Where `defaults` carries the per-field confidences. */
+export const FIELD_CONFIDENCE_KEY = "fieldConfidence";
+
+/**
+ * `defaults.fieldConfidence`, kept to what it may hold: a flat map from a
+ * field the read proposed (`name`, `brandName`, `country`, or a per-type
+ * attribute key such as `vintage`) to one of {@link FIELD_CONFIDENCES}.
+ * Anything else — a number, an unknown word, a nested object — is dropped,
+ * not coerced: an invented "92%" must never reach the form as a confidence.
+ */
+export const sanitiseFieldConfidence = (
+  value: unknown,
+): Record<string, FieldConfidence> => {
+  const out: Record<string, FieldConfidence> = {};
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return out;
+  }
+  for (const [key, level] of Object.entries(value)) {
+    if (
+      typeof level === "string" &&
+      (FIELD_CONFIDENCES as readonly string[]).includes(level)
+    ) {
+      out[key] = level as FieldConfidence;
+    }
+  }
+  return out;
+};
+
 export type StartOnboardingInput = {
   readonly itemType: ItemType;
   /** `files.id`, both optional — a barcode-only onboarding has neither. */

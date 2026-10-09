@@ -47,11 +47,14 @@ import type { ItemType, ScannedItemType } from "@cellar-assistant/contracts";
 import {
   BASE_SPIRIT_KINDS,
   ConflictError,
+  FIELD_CONFIDENCE_KEY,
+  FIELD_CONFIDENCES,
   INGREDIENT_ROLES,
   ITEM_ATTRIBUTE_KEY,
   ITEM_TYPE_SPECS,
   ITEM_TYPES,
   itemAttributeEntries,
+  LABEL_SURFACE_KINDS,
   NON_VINTAGE,
   PLACE_CATEGORIES,
   RECIPE_CATEGORIES,
@@ -595,6 +598,21 @@ export const itemDefaultsSchema = (
         "phone screen. Those say what somebody sells or wrote about; only " +
         "the container's own label says what is inside it.",
     },
+    // X05: third, after the verdict and before any value. Behind the verdict
+    // on purpose — E2g/E2h measured `imageDescription` → `labelIsLegible` as
+    // the order that keeps a menu from being read as a label, and nothing
+    // here may sit between them. It is the one field still answered when the
+    // verdict is false: it is what lets a refusal say "looks like a menu".
+    surfaceKind: {
+      type: "string",
+      enum: [...LABEL_SURFACE_KINDS],
+      description:
+        "Answer this even when labelIsLegible is false. What the text in " +
+        "the image is printed on, from the description you gave: `label` " +
+        `for a ${type.toLowerCase()} container's own label; \`menu\` for a ` +
+        "menu, a drinks or wine list, or a price list; `other` for " +
+        "anything else (a page, a screen, a receipt, a blank image).",
+    },
     name: string_("The product name exactly as printed on the label."),
     description: string_("2-3 sentences describing the product."),
     brandName: string_(
@@ -617,6 +635,39 @@ export const itemDefaultsSchema = (
   for (const field of inputFields) {
     properties[field.field] = string_(notNull(field.column));
   }
+
+  /**
+   * X05 · **Last, after every value it judges** — property order is
+   * generation order, so each confidence is decided about a value already
+   * written rather than promised ahead of it (a confidence decoded first
+   * would be a commitment the transcription then has to live up to). Words,
+   * not a number (design §3.8; the seams rule against invented figures):
+   * `sure` / `likely` / `check`, one per field the answer filled in. Never
+   * required — leaving it out costs a mark on the form, nothing more.
+   */
+  const confidenceOf = (field: string): JsonSchema => ({
+    type: "string",
+    enum: [...FIELD_CONFIDENCES],
+    description: `How sure you are of ${field} as you transcribed it.`,
+  });
+  const judged: Record<string, JsonSchema> = {
+    name: confidenceOf("name"),
+    brandName: confidenceOf("brandName"),
+    region: confidenceOf("region"),
+    country: confidenceOf("country"),
+  };
+  for (const field of Object.keys(bagProperties)) {
+    judged[field] ??= confidenceOf(field);
+  }
+  properties[FIELD_CONFIDENCE_KEY] = {
+    type: "object",
+    description:
+      "Only for the fields you filled in above, and only once they are " +
+      "written: `sure` when the label prints it clearly, `likely` when it " +
+      "is partly legible or abbreviated, `check` when you are unsure and " +
+      "the person should look. Leave out any field you did not fill in.",
+    properties: judged,
+  };
 
   return {
     type: "object",
@@ -695,8 +746,11 @@ Return the fields in the schema. Rules:
   you what somebody sells or wrote about, not what is inside the container in
   front of you. That is \`labelIsLegible\` **false**, however legible the text
   is — and however certain you are which ${type} it names.
-- **When \`labelIsLegible\` is false, leave every other field out. That is a
-  correct and useful answer, not a failure.** "We could not read a label in
+- \`surfaceKind\` says what the text is printed on (\`label\`, \`menu\` or
+  \`other\`). Answer it whatever \`labelIsLegible\` is.
+- **When \`labelIsLegible\` is false, leave every other field out (all but
+  \`imageDescription\` and \`surfaceKind\`). That is a correct and useful
+  answer, not a failure.** "We could not read a label in
   that photo" is exactly what the person needs to hear; a plausible bottle
   they never photographed is the worst thing you can give them.
 - Transcribe what is printed. Do not translate or tidy the product name.
@@ -707,7 +761,9 @@ Return the fields in the schema. Rules:
 - Do not infer a value from what is typical for this producer, this region or
   this category. You are transcribing a label, not recalling a catalogue.
 - \`confidence\` is your honest overall confidence, 0 to 1. A blurry or partial
-  label should score low. Do not inflate it.`;
+  label should score low. Do not inflate it.
+- \`fieldConfidence\` comes last: for each field you filled in, \`sure\`,
+  \`likely\` or \`check\` — how clearly the label shows it. Words only.`;
 };
 
 /* -------------------------------------------------------------------------- */

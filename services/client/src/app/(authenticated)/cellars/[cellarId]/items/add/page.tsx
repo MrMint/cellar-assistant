@@ -2,6 +2,11 @@ import { notFound } from "next/navigation";
 import { AddItemClient } from "@/components/cellar/AddItemClient";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import {
+  type ApiItemType,
+  ITEM_TYPES,
+} from "@/components/cellar-api/itemTypes";
+import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboarding";
+import {
   CellarCardFragment,
   CellarHeaderQuery,
   ViewerQuery,
@@ -11,15 +16,21 @@ import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
 /**
- * `/cellars/[cellarId]/items/add` — the old `AddItemClient` (`82450ad1`),
- * with the cellar's name and owners read here rather than by a client query.
+ * `/cellars/[cellarId]/items/add` — the capture surface (X05) filing into
+ * this cellar: one camera, the type defaulted to the last used. A viewer who
+ * may not add here gets the old `AddItemClient` note instead.
  */
 export const dynamic = "force-dynamic";
 
 export default async function Add({
   params,
+  searchParams,
 }: {
   params: Promise<{ cellarId: string }>;
+  searchParams: Promise<{
+    draft?: string | string[];
+    type?: string | string[];
+  }>;
 }) {
   const { cellarId } = await params;
   const [header, viewer] = await Promise.all([
@@ -38,11 +49,28 @@ export default async function Add({
   }
   const cellar = readFragment(CellarCardFragment, result.data);
 
+  if (!canAddToCellar(cellar, viewer.me?.id ?? null)) {
+    // The old page's note, with inert cards: nothing here can be filed.
+    return (
+      <AddItemClient
+        cellarId={cellarId}
+        cellarName={cellar.name}
+        canAdd={false}
+      />
+    );
+  }
+  const { draft, type } = await searchParams;
+  const explicit =
+    typeof type === "string" &&
+    (ITEM_TYPES as readonly string[]).includes(type);
   return (
-    <AddItemClient
+    <ItemOnboarding
+      type={explicit ? (type as ApiItemType) : "WINE"}
+      typeExplicit={explicit}
+      chooseType
       cellarId={cellarId}
       cellarName={cellar.name}
-      canAdd={canAddToCellar(cellar, viewer.me?.id ?? null)}
+      resumeId={typeof draft === "string" ? draft : undefined}
     />
   );
 }
