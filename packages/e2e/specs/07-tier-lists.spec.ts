@@ -106,8 +106,12 @@ test("adds entries to it", async ({ api, primary }) => {
     await searched;
     // Lexical retrieval (N08) brings back every "E2 Wine …" for any one of
     // their names, so pick the row that *is* this item, not the first row.
+    // The name's element carries a screen-reader-only "Add " ahead of it on
+    // a row that can still be added (X23's CandidateRow).
     const row = dialog.getByRole("listitem").filter({
-      has: primary.getByText(new RegExp(`^${escapeRegExp(item.name)}$`, "i")),
+      has: primary.getByText(
+        new RegExp(`^(Add )?${escapeRegExp(item.name)}$`, "i"),
+      ),
     });
     await expect(
       row.first(),

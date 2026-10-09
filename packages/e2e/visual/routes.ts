@@ -639,10 +639,18 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       states: [
         {
           name: "add-entry",
+          // X23: Add entry lives in the Arrange bar now; the read-only board
+          // has none.
           open: (page) =>
-            clickThenWait(page, () =>
-              page.getByRole("button", { name: "Add entry" }).first().click(),
-            ),
+            clickThenWait(page, async () => {
+              await page
+                .getByRole("button", { name: "Arrange", exact: true })
+                .click();
+              await page
+                .getByRole("toolbar", { name: "Arrange" })
+                .getByRole("button", { name: "Add entry" })
+                .click();
+            }),
         },
       ],
     },
