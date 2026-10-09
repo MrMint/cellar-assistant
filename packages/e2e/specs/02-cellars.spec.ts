@@ -156,8 +156,10 @@ test("an empty cellar renders its detail page without erroring", async ({
   const cellar = conn.edges[0]?.node;
   test.skip(cellar === undefined, "no cellar to open");
 
+  // `/cellars/[id]` redirects to the cellar home (X04), whose content streams
+  // in behind its loading shell: poll for it rather than read the body once.
   await primary.goto(`/cellars/${cellar.id}`);
+  await expect.poll(() => bodyText(primary)).toContain(cellar.name);
   const text = await bodyText(primary);
-  expect(text).toContain(cellar.name);
   expect(text).not.toMatch(/Something went wrong|Unexpected error/i);
 });
