@@ -309,6 +309,18 @@ export const AddItemToTierListMutation = graphql(
           band
           position
           entryType
+          # Which edit the add recorded, so its toast's Undo names exactly it
+          # (undoTierListEdit's expectedSeq) — read in the same request.
+          tierList {
+            id
+            editHistory {
+              undo {
+                seq
+                kind
+                entryId
+              }
+            }
+          }
         }
         ...ActorErrorFields
       }

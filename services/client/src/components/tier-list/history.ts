@@ -96,6 +96,26 @@ export function stepSeq(
 }
 
 /**
+ * The `seq` of the add just made, read back with it: the list's newest
+ * undoable edit, when that is an ADD of this very entry. Anything else (an
+ * edit from another device landed in between, or the history is hidden) is
+ * null, and the add's toast then has no Undo to offer rather than one that
+ * could take back something else.
+ */
+export function addedEditSeq(
+  undo:
+    | { seq: number; kind: string; entryId?: string | null }
+    | null
+    | undefined,
+  entityId: string,
+): number | null {
+  if (undo === null || undo === undefined || undo.kind !== "ADD") return null;
+  return undo.entryId?.toLowerCase() === entityId.toLowerCase()
+    ? undo.seq
+    : null;
+}
+
+/**
  * Why a step was refused, in the person's words. The one refusal they can
  * meet is another tab or device having changed the list since this page read
  * it (`TIER_LIST_HISTORY_MOVED`): the step it named is no longer the one on

@@ -250,10 +250,13 @@ export function TierListViewPage({
       if (expectedSeq === null) {
         steppingRef.current = false;
         setStepping(false);
-        notify(`Still saving your last change. Try ${direction === "undo" ? "Undo" : "Redo"} again.`, {
-          tone: "error",
-          id: TIER_LIST_EDIT_TOAST,
-        });
+        notify(
+          `Still saving your last change. Try ${direction === "undo" ? "Undo" : "Redo"} again.`,
+          {
+            tone: "error",
+            id: TIER_LIST_EDIT_TOAST,
+          },
+        );
         router.refresh();
         return;
       }
@@ -323,9 +326,12 @@ export function TierListViewPage({
       }
       setAddOpen(false);
       markEdited();
+      // The add's own edit, read back with it: the toast's Undo takes back
+      // exactly that, or is not offered (`addedEditSeq`).
+      const editSeq = result.editSeq ?? null;
       notify(`Added ${candidate.name} to ${BAND_LABELS[band]}`, {
         id: TIER_LIST_EDIT_TOAST,
-        undo: () => void step("undo"),
+        ...(editSeq === null ? {} : { undo: () => void step("undo", editSeq) }),
       });
       router.refresh();
     },

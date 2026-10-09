@@ -36,6 +36,7 @@ import { unwrapResult } from "@/lib/api/result";
 import { addEntryFailureMessage, entryTypeOf } from "./adapter";
 import type { TierListEntityType } from "./constants";
 import {
+  addedEditSeq,
   historyStepFailure,
   type TierListEditView,
   type TierListHistoryView,
@@ -101,6 +102,11 @@ export type TierListResult = {
 export type TierListItemResult = {
   success: boolean;
   tierListItemId?: string;
+  /**
+   * The add's own edit, for its toast's Undo (`expectedSeq`); null when the
+   * list's history no longer has it on top (`addedEditSeq`).
+   */
+  editSeq?: number | null;
   error?: string;
 };
 
@@ -236,7 +242,14 @@ export function useTierListActions() {
         "TierListItem",
       );
       return result.ok
-        ? { success: true, tierListItemId: result.data.id }
+        ? {
+            success: true,
+            tierListItemId: result.data.id,
+            editSeq: addedEditSeq(
+              result.data.tierList?.editHistory?.undo,
+              entityId,
+            ),
+          }
         : { success: false, error: addEntryFailureMessage(result.error) };
     },
     [addItem],
