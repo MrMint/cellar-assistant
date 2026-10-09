@@ -83,7 +83,6 @@ export type TierListCoreNode = {
   createdById: string;
   privacy: string;
   listType: string;
-  isEditingLocked: boolean;
   aiInsights: unknown;
   contentUpdatedAt: string | null;
   /** N07; optional so a fixture written before it still adapts. */
@@ -293,7 +292,6 @@ export function tierListDataFrom(
       privacy: core.privacy,
       listType: core.listType,
       isOwner,
-      isEditingLocked: core.isEditingLocked,
       itemCount: items.length,
       items,
       history: isOwner ? history : null,

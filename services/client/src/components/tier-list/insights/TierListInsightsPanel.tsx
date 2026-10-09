@@ -10,6 +10,12 @@
  * is said instead is `insightsView`'s decision, from the server's
  * `insightsStatus` — never inferred from a missing `aiInsights` any more.
  *
+ * X16: **Try this next** is grounded now — catalog cards from friends' top
+ * bands and the catalog neighbours of this list's best (`TryNextCards`), with
+ * no model involved, so it shows whatever the AI provider. The model's own
+ * suggestion, a style rather than a bottle, keeps its section as "A style to
+ * explore", with X08's catalog lookup under it.
+ *
  * On the app's primitives (D20): tonal sections (no borders), the archetype
  * on a claret hero wash, the AI-working state in teal (`--ca-ai`, the one
  * place it belongs), `ui/skeleton` lines.
@@ -33,6 +39,7 @@ import { Timestamp } from "@/components/common/Timestamp";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TryThisNext } from "@/components/want-to-try/TryThisNext";
 import { cn } from "@/lib/utils";
+import { TryNextCards } from "../TryNextCards";
 import type { TierListInsightsData } from "../types";
 import { BandDistributionChart } from "./BandDistributionChart";
 import { CategoryDonutChart } from "./CategoryDonutChart";
@@ -89,11 +96,17 @@ interface TierListInsightsPanelProps {
    * style), or where the page does not offer it.
    */
   tryNext?: { itemType: ApiItemType; onList: ReadonlySet<string> } | null;
+  /**
+   * X16's grounded cards: the list, and whether the viewer owns it (the
+   * reasons are worded for them). Absent where the page does not offer them.
+   */
+  grounded?: { tierListId: string; isOwner: boolean } | null;
 }
 
 export function TierListInsightsPanel({
   insights,
   tryNext = null,
+  grounded = null,
 }: TierListInsightsPanelProps) {
   const router = useRouter();
   const pollCount = useRef(0);
@@ -198,6 +211,16 @@ export function TierListInsightsPanel({
         <BandDistributionChart distribution={bandDistribution} />
       </Section>
 
+      {/* Try this next — grounded catalog cards (X16) */}
+      {grounded !== null && (
+        <Section title="Try this next" icon={Explore}>
+          <TryNextCards
+            tierListId={grounded.tierListId}
+            isOwner={grounded.isOwner}
+          />
+        </Section>
+      )}
+
       {/* Category Donut */}
       {insights.showPlaceStats && categoryDistribution.length > 1 && (
         <Section>
@@ -242,9 +265,9 @@ export function TierListInsightsPanel({
         </Section>
       )}
 
-      {/* Try This Next */}
+      {/* The model's suggestion: a style, not a bottle */}
       {ai?.recommendation && (
-        <Section title="Try This Next" icon={Restaurant}>
+        <Section title="A style to explore" icon={Restaurant}>
           <div className="flex flex-col">
             <p className="text-ink-1 type-callout">{ai.recommendation}</p>
             {tryNext !== null && (

@@ -9,8 +9,8 @@
  *   their camelCase SDL names.
  * - `items_aggregate { aggregate { count } }` → `itemCount`.
  * - `createdBy { id displayName avatarUrl }` → the same, on `UserProfile` (G4).
- * - `is_editing_locked` (read by a hand-parsed second query, because the
- *   generated types predated the column) → `isEditingLocked`, here.
+ * - `is_editing_locked` → nothing: the padlock is retired (X16; X23's
+ *   Arrange replaced it), and the API no longer serves the flag.
  * - Seven nullable per-table relations (`place`, `wine`, … `tea`) →
  *   `entryType` plus `item: Item` / `place: Place`, exactly one non-null.
  * - The page's separate `GetUserItemReviews` round trip (the viewer's own
@@ -60,7 +60,6 @@ export const TierListCoreFragment = graphql(`
     privacy
     listType
     itemCount
-    isEditingLocked
     aiInsights
     insightsGeneratedAt
     insightsStatus
@@ -162,6 +161,7 @@ export const TierListRecordedEditFragment = graphql(`
     entryName
     fromBand
     toBand
+    entryCount
   }
 `);
 

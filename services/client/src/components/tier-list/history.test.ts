@@ -105,3 +105,46 @@ describe("history wording", () => {
     );
   });
 });
+
+describe("history wording for several entries at once (X16)", () => {
+  const many = (overrides: Partial<TierListEditView>) =>
+    edit({
+      kind: "ADD",
+      entryName: null,
+      fromBand: null,
+      entryCount: 4,
+      ...overrides,
+    });
+
+  test("a multi-add across bands is counted, not named", () => {
+    assert.equal(editPhrase(many({ toBand: null })), "added 4 entries");
+    assert.equal(
+      historyActionLabel("undo", many({ toBand: null })),
+      "Undo: added 4 entries",
+    );
+    assert.equal(
+      historyStepMessage("undo", many({ toBand: null })),
+      "Took 4 entries off the list",
+    );
+    assert.equal(
+      historyStepMessage("redo", many({ toBand: null })),
+      "Added 4 entries again",
+    );
+  });
+
+  test("into one band, it says which", () => {
+    assert.equal(
+      editPhrase(many({ toBand: 5 })),
+      "added 4 entries to Outstanding",
+    );
+  });
+
+  test("a single add still names its entry", () => {
+    assert.equal(
+      editPhrase(
+        edit({ kind: "ADD", fromBand: null, toBand: 3, entryCount: 1 }),
+      ),
+      "added Barolo Riserva to Good",
+    );
+  });
+});

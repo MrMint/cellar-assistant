@@ -4,6 +4,7 @@
  * pickers and their tests all say the same thing.
  */
 
+import { bandForScore as sharedBandForScore } from "@cellar-assistant/contracts/bands";
 import { displayItemName } from "@/utilities/smart-title-case";
 import { BAND_LABELS, type Band } from "./constants";
 
@@ -13,17 +14,13 @@ import { BAND_LABELS, type Band } from "./constants";
  * 3 Good, 2 Mediocre, 1 Bad (each half step rounds up into the band above,
  * as 4.5 reads "outstanding" and not "very good"). No rating is Unrated, as
  * every add was before.
+ *
+ * The rule itself lives in `@cellar-assistant/contracts` since X16, so a list
+ * the server starts from your ratings bands each bottle exactly as Add entry
+ * would.
  */
 export function bandForScore(score: number | null | undefined): Band {
-  if (score === null || score === undefined || !Number.isFinite(score)) {
-    return 0;
-  }
-  if (score >= 4.5) return 5;
-  if (score >= 3.5) return 4;
-  if (score >= 2.5) return 3;
-  if (score >= 1.5) return 2;
-  if (score > 0) return 1;
-  return 0;
+  return sharedBandForScore(score) as Band;
 }
 
 /** One recorded edit, as the page reads `TierListEdit`. */
@@ -33,6 +30,11 @@ export type TierListEditView = {
   entryName: string | null;
   fromBand: number | null;
   toBand: number | null;
+  /**
+   * X16: entries the edit added or removed — several for a multi-add or a
+   * list started from your ratings. Optional so an older response reads as 1.
+   */
+  entryCount?: number;
 };
 
 /** `TierList.editHistory`, as the page reads it. Null for a non-owner. */
@@ -46,10 +48,21 @@ export type TierListHistoryView = {
 const band = (value: number | null): string =>
   value === null ? "the list" : (BAND_LABELS[value] ?? "the list");
 
-const nameOf = (edit: TierListEditView): string =>
-  edit.entryName === null
+/** "3 entries", for an edit that added or removed several at once. */
+const countOf = (edit: TierListEditView): number | null =>
+  (edit.kind === "ADD" || edit.kind === "REMOVE") &&
+  edit.entryCount !== undefined &&
+  edit.entryCount > 1
+    ? edit.entryCount
+    : null;
+
+const nameOf = (edit: TierListEditView): string => {
+  const count = countOf(edit);
+  if (count !== null) return `${count} entries`;
+  return edit.entryName === null
     ? "an entry"
     : (displayItemName(edit.entryName) ?? edit.entryName);
+};
 
 const isBandChange = (edit: TierListEditView) =>
   edit.fromBand !== null &&
@@ -60,7 +73,10 @@ const isBandChange = (edit: TierListEditView) =>
 export function editPhrase(edit: TierListEditView): string {
   switch (edit.kind) {
     case "ADD":
-      return `added ${nameOf(edit)} to ${band(edit.toBand)}`;
+      // A multi-add across several bands names none of them.
+      return countOf(edit) !== null && edit.toBand === null
+        ? `added ${nameOf(edit)}`
+        : `added ${nameOf(edit)} to ${band(edit.toBand)}`;
     case "REMOVE":
       return `removed ${nameOf(edit)}`;
     case "MOVE":
@@ -98,7 +114,9 @@ export function historyStepMessage(
       case "ADD":
         return `Took ${name} off the list`;
       case "REMOVE":
-        return `Put ${name} back in ${band(edit.fromBand)}`;
+        return countOf(edit) !== null && edit.fromBand === null
+          ? `Put ${name} back`
+          : `Put ${name} back in ${band(edit.fromBand)}`;
       case "MOVE":
         if (edit.entryName === null && edit.fromBand === null) {
           return "Put the list back in order";
@@ -110,7 +128,9 @@ export function historyStepMessage(
   }
   switch (edit.kind) {
     case "ADD":
-      return `Added ${name} to ${band(edit.toBand)} again`;
+      return countOf(edit) !== null && edit.toBand === null
+        ? `Added ${name} again`
+        : `Added ${name} to ${band(edit.toBand)} again`;
     case "REMOVE":
       return `Removed ${name} again`;
     case "MOVE":

@@ -120,7 +120,6 @@ const data = {
   privacy: "PRIVATE",
   listType: "wine",
   isOwner: true,
-  isEditingLocked: true,
   itemCount: items.length,
   items,
   history: { canUndo: true, canRedo: false, undo: edit, redo: null },
