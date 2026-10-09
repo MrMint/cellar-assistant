@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useNavHistoryTracker } from "./nav-history";
+import { usePointerDownPrefetch } from "./prefetch";
 import { SideRail } from "./SideRail";
 import { TabBar } from "./TabBar";
 
@@ -27,11 +28,14 @@ export function contentLayout(pathname: string): {
  * which is what tab re-tap and (later) pull-to-refresh act on.
  *
  * Layout only. The GraphQL provider, the install prompt and the viewer are
- * the caller's (`components/shell/AppShell.tsx` wraps this).
+ * the caller's (`components/shell/AppShell.tsx` wraps this). It also starts a
+ * route's prefetch at the pointerdown on any in-app link inside it (X24,
+ * `prefetch.ts`).
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
   useNavHistoryTracker();
+  usePointerDownPrefetch();
   const { padded, scrolls } = contentLayout(pathname);
 
   return (

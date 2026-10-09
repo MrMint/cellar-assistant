@@ -36,7 +36,14 @@ export type Tab = {
 
 /** The four tabs, in bar order; the capture ＋ sits between Cellar and Map. */
 export const TABS: readonly Tab[] = [
-  { key: "home", label: "Home", href: "/", icon: Home, also: ["/search"] },
+  /**
+   * `/search`, not `/`: until X10 gives `/` a page of its own (D1), `/` only
+   * redirects here, and a tab that pointed at it paid that redirect's round
+   * trip on every tap — about 400 ms at 150 ms RTT with the old page frozen
+   * on screen, and no loading shell, since the shell belongs to `/search`
+   * (X24, measured on the UX lane). X10 points it back at `/`.
+   */
+  { key: "home", label: "Home", href: "/search", icon: Home, also: ["/"] },
   {
     key: "cellar",
     label: "Cellar",

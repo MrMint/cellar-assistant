@@ -65,6 +65,8 @@
   --ca-ease-enter: cubic-bezier(0, 0, 0, 1);
   --ca-ease-exit: cubic-bezier(0.3, 0, 1, 1);
   --ca-tabbar-h: 49px;
+  /* Loading shells: placeholder blocks appear only after this (X24). */
+  --ca-skeleton-delay: 120ms;
   /* shadcn's base radius, used by a few vendored calc()s; = --radius-md. */
   --radius: 12px;
 }
@@ -233,6 +235,14 @@
   box-shadow:
     inset 0 1px 0 var(--ca-highlight),
     0 12px 32px rgb(0 0 0 / 0.55);
+}
+/* A loading shell's placeholder blocks (X24, design §4.7): invisible for
+   the first 120 ms, then a short fade, so a route that answers quickly never
+   flashes grey boxes. Opacity only; under reduced motion the fade is a
+   crossfade of 160 ms or less, which §4.9 keeps. */
+@utility skeleton-reveal {
+  animation: ca-fade-in var(--ca-dur-short) var(--ca-ease-enter)
+    var(--ca-skeleton-delay) both;
 }
 /* Touch hygiene (design §4.5): cards, the nav and sheet headers. */
 @utility touch-none-select {

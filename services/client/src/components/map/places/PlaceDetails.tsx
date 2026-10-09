@@ -49,12 +49,12 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { announceWantToTry } from "@/components/want-to-try/changes";
 import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
 import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
 import { cn } from "@/lib/utils";
 import { AddToTierListModal } from "../../tier-list/AddToTierListModal";
 import { usePlaceDetails } from "../hooks/usePlaceDetails";
+import { usePlaceToggles } from "../hooks/usePlaceToggles";
 import { MenuScanner } from "../scanning/MenuScanner";
 import { GoogleAttribution } from "./GoogleAttribution";
 import {
@@ -62,14 +62,13 @@ import {
   PlaceCategoryTile,
   VisitedToggleButton,
 } from "./PlaceActionButtons";
+import { PlaceDetailsShell, type PlaceHero } from "./PlaceDetailsShell";
 import { PlaceMenuItems } from "./PlaceMenuItems";
 import { PlaceReviewPanel } from "./PlaceReviewPanel";
 import {
   formatCategoryName,
   formatTimeString,
   getPriceLevelText,
-  loveToastText,
-  visitToastText,
 } from "./place-utils";
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -233,17 +232,24 @@ function ContactRow({
 
 interface PlaceDetailsProps {
   placeId: string;
+  /**
+   * The name and category the server already read (X24): drawn in the
+   * loading shell while the full read is on its way.
+   */
+  hero?: PlaceHero;
   /** The old `getServerUserId()`; unused — the API knows the viewer. */
   userId?: string;
 }
 
-export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
+export function PlaceDetails({
+  placeId,
+  hero,
+  userId = "",
+}: PlaceDetailsProps) {
   const [activeTab, setActiveTab] = useState<PlaceTab>("menu");
   // N07/D25: menu scanning is hidden, not refused, where no AI can read one.
   // A tab picked before the answer arrived falls back to Menu if it hides.
   const menuScanOffered = isOffered(useAiCapabilities(), "menuScan");
-  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
-  const [isMarkingVisited, setIsMarkingVisited] = useState(false);
   const [tierListModalOpen, setTierListModalOpen] = useState(false);
 
   const {
@@ -266,6 +272,14 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     setInteraction,
   } = usePlaceDetails(placeId);
   const currentMenu = menuItems.length > 0;
+  // Love / Mark Visited flip on the tap (X24); a refusal puts them back.
+  const { love, visit } = usePlaceToggles({
+    placeId: placeData?.id,
+    loved: !!userInteraction?.is_favorite,
+    visited: !!userInteraction?.is_visited,
+    wantToTry: userInteraction?.want_to_visit === true,
+    setInteraction,
+  });
 
   // ── Action Handlers ────────────────────────────────────────────────
 
@@ -319,62 +333,11 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     }
   };
 
-  const handleToggleFavorite = async () => {
-    if (!placeData) return;
-    setIsTogglingFavorite(true);
-    try {
-      const error = await setInteraction({
-        isFavorite: !userInteraction?.is_favorite,
-      });
-      if (error) {
-        notify("Couldn't update Love. Try again.", { tone: "error" });
-      } else {
-        notify(loveToastText(!userInteraction?.is_favorite), {
-          tone: "success",
-        });
-      }
-    } catch {
-      notify("Couldn't update Love. Try again.", { tone: "error" });
-    } finally {
-      setIsTogglingFavorite(false);
-    }
-  };
-
-  const handleMarkVisited = async () => {
-    if (!placeData) return;
-    setIsMarkingVisited(true);
-    const willBeVisited = !userInteraction?.is_visited;
-    const wasWantToTry = userInteraction?.want_to_visit === true;
-    try {
-      const error = await setInteraction({ isVisited: willBeVisited });
-      if (error) {
-        notify("Failed to update visited status", { tone: "error" });
-      } else {
-        const toast = visitToastText(willBeVisited, wasWantToTry);
-        // The server took it off Want to try; tell the map's pins too.
-        if (willBeVisited && wasWantToTry && placeData.id) {
-          announceWantToTry({ kind: "PLACE", placeId: placeData.id }, false);
-        }
-        notify(toast.message, {
-          tone: "success",
-          description: toast.description,
-        });
-      }
-    } catch {
-      notify("Failed to update visited status", { tone: "error" });
-    } finally {
-      setIsMarkingVisited(false);
-    }
-  };
-
   // ── Loading / Error ────────────────────────────────────────────────
 
   if (fetching) {
-    return (
-      <div className="flex justify-center p-8">
-        <Spinner className="size-10 text-ink-2" />
-      </div>
-    );
+    // The route's shell, now with the real hero (X24) — not a spinner.
+    return <PlaceDetailsShell hero={hero} />;
   }
 
   // "Not found" and "not yours to see" are one state (§1.6).
@@ -620,18 +583,18 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
             className="flex-1"
           />
           <VisitedToggleButton
-            on={!!userInteraction?.is_visited}
-            pending={isMarkingVisited}
-            onClick={() => void handleMarkVisited()}
+            on={visit.on}
+            pending={visit.pending}
+            onClick={visit.toggle}
             className="flex-1"
           />
         </div>
 
         <div className="flex flex-row gap-2">
           <LoveToggleButton
-            on={!!userInteraction?.is_favorite}
-            pending={isTogglingFavorite}
-            onClick={() => void handleToggleFavorite()}
+            on={love.on}
+            pending={love.pending}
+            onClick={love.toggle}
             className="flex-1"
           />
           <Button

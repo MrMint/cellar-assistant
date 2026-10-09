@@ -17,6 +17,7 @@ import { LocationPrePrompt } from "../core/LocationPrePrompt";
 import { MapBottomStack } from "../core/MapBottomStack";
 import { MapControls } from "../core/MapControls";
 import { MapErrorBanner } from "../core/MapErrorBanner";
+import { MapShell } from "../core/MapShell";
 import {
   LOCATION_DENIED_MESSAGE,
   locationButtonAction,
@@ -408,16 +409,9 @@ export function MapLibreRenderer({
 
   // Location loading state
   if (!isLocationReady) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-surface-1">
-        <p
-          role="status"
-          className="type-callout rounded-md bg-surface-2 px-4 py-3 text-ink-1"
-        >
-          Getting your location...
-        </p>
-      </div>
-    );
+    // The route's shell with a line over it (X24): the same frame the tap
+    // showed, so waiting on the location changes words, not layout.
+    return <MapShell status="Getting your location..." />;
   }
 
   return (

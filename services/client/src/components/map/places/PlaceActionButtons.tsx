@@ -11,6 +11,11 @@
  * D27 renamed the heart: it is Love ("Loved"), no longer Save — Save is now
  * the Want to try bookmark (`want-to-try/WantToTryButton`, X08), which these
  * pages draw beside it.
+ *
+ * Both toggles are optimistic (X24): `on` is the tapped state from
+ * `usePlaceToggles`, the glyph pops as it turns on, and `pending` only marks
+ * the write in flight (`aria-busy`) — the button is never disabled and never
+ * swaps its glyph for a spinner.
  */
 
 import type React from "react";
@@ -23,9 +28,9 @@ import {
   Success,
   Unrated,
 } from "@/components/app/icons";
+import { TogglePop } from "@/components/app/TogglePop";
 import { TypeGlyph } from "@/components/app/TypeChip";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 /** The glyph for a place's main category (the old `getCategoryIcon`). */
@@ -97,19 +102,17 @@ export function LoveToggleButton({
     <Button
       variant={on ? "secondary" : "outline"}
       onClick={onClick}
-      disabled={pending}
+      aria-pressed={on}
       aria-busy={pending || undefined}
       className={className}
     >
-      {pending ? (
-        <Spinner />
-      ) : (
+      <TogglePop on={on} pop={pending}>
         <Love
           aria-hidden
           strokeWidth={ICON_STROKE}
           className={on ? "fill-brand text-brand" : undefined}
         />
-      )}
+      </TogglePop>
       {on ? "Loved" : "Love"}
     </Button>
   );
@@ -126,21 +129,21 @@ export function VisitedToggleButton({
     <Button
       variant={on ? "secondary" : "outline"}
       onClick={onClick}
-      disabled={pending}
+      aria-pressed={on}
       aria-busy={pending || undefined}
       className={className}
     >
-      {pending ? (
-        <Spinner />
-      ) : on ? (
-        <Success
-          aria-hidden
-          strokeWidth={ICON_STROKE}
-          className="text-success"
-        />
-      ) : (
-        <Unrated aria-hidden strokeWidth={ICON_STROKE} />
-      )}
+      <TogglePop on={on} pop={pending}>
+        {on ? (
+          <Success
+            aria-hidden
+            strokeWidth={ICON_STROKE}
+            className="text-success"
+          />
+        ) : (
+          <Unrated aria-hidden strokeWidth={ICON_STROKE} />
+        )}
+      </TogglePop>
       {on ? "Visited" : "Mark Visited"}
     </Button>
   );

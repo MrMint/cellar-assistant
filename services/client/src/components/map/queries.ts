@@ -273,17 +273,22 @@ export const PlaceInteractionFragment = graphql(`
 `);
 
 /**
- * Whether the viewer may see a place at all — the place page asks this on the
- * server, so a missing or hidden place is a 404 (D24) rather than a 200 with
- * the client's own message.
+ * Whether the viewer may see a place at all, and its hero — the place page
+ * asks this on the server, so a missing or hidden place is a 404 (D24) rather
+ * than a 200 with the client's own message, and the name and category are on
+ * screen before the client's full read lands (X24: the hero stays outside the
+ * wait, design §4.4).
  */
-export const PlaceExistsQuery = graphql(
+export const PlaceHeroQuery = graphql(
   `
-  query PlaceExists($id: ID!) {
+  query PlaceHero($id: ID!) {
     place(id: $id) {
       __typename
       ... on Place {
         id
+        name
+        primaryCategory
+        categories
       }
       ...ActorErrorFields
     }

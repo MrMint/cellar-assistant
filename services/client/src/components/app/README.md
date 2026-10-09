@@ -9,7 +9,8 @@ rules; this file has the **how**.
 Every primitive here has tests (`primitives.test.tsx` for the
 server-rendered ones, `interactive.test.tsx` under happy-dom for the rest).
 Files with no `"use client"` (Link, IconButton, Page, FilterChip, TypeChip,
-Score, EmptyState, AIDraftField, ActionBar, UserAvatar, LabelPlate, icons, nav, notify)
+Score, EmptyState, AIDraftField, ActionBar, UserAvatar, LabelPlate, LoadingShell,
+icons, nav, notify)
 can be rendered from server components.
 
 ## The vocabulary, by the Joy names it replaced
@@ -381,6 +382,62 @@ sticky 12 pt above the tab bar on glass. Give the page `withActionBar`.
 ancestor) + `underline` (`hover` default, `always`, `none`).
 
 **`UserAvatar`** — `avatarUrl`, `displayName`, `size` `sm|md|lg`, `className`.
+
+### Loading and optimistic state (X24)
+
+**`LoadingShell` + `ShellBlocks`** — a route's `loading.tsx` (or a Suspense
+fallback) drawn in the page's own frame, so a tap commits into it at once
+(design §4.7, §4.10):
+
+```tsx
+<LoadingShell label="cellars">           {/* sr-only status: "Loading cellars…" */}
+  <p className="type-headline">Cellars</p>  {/* chrome: real, from frame one */}
+  <ShellBlocks className="grid gap-4">    {/* placeholders: after 120 ms, faded in */}
+    <Skeleton className="h-24" />
+  </ShellBlocks>
+</LoadingShell>
+```
+
+Chrome the page will certainly draw (a tab root's title, the map's search
+pill, the Me hub's rows, a place's server-read name) goes in as itself;
+anything that waits on data goes in `ShellBlocks`, which stays invisible for
+`--ca-skeleton-delay` (120 ms) so a fast route never flashes grey. One
+shimmer: `ui/skeleton`'s pulse. The shells are `CellarsShell`, `MapShell`
+(every map stage: route, Suspense, the lazy renderer, the location wait),
+`MeHubShell`, `SearchLandingShell` and `PlaceDetailsShell` (with a `hero`, the
+real name and category tile). Scope a `loading.tsx` to one page with a route
+group when the folder has child routes (`cellars/(list)/`, `map/(canvas)/`),
+and keep a missing-row `notFound()` in a `layout.tsx` above it — thrown inside
+the boundary it arrives as a 200 (`places/[placeId]/layout.tsx`).
+
+**`useOptimisticToggle`** (`@/hooks/useOptimisticToggle`) — `{ value,
+commit, onError }` → `{ on, pending, toggle }`. `on` is the tapped state from
+the tap's own frame; `commit(next)` resolves `{ ok: true, value? }` or `{ ok:
+false, message }`; a refusal falls back to what the server last confirmed and
+calls `onError` (toast it). One write at a time: taps during a write flip
+what is drawn, and the hook writes again only if the last tapped state is not
+what the server then holds — safe over a mutation that flips rather than sets
+(`toggleFavorite`). The state is per subject: key a component that is reused
+for another item or place (the map drawer keys its content by place id).
+Never disable the control while `pending` (`aria-busy` only) and never swap
+its glyph for a spinner. Used by ItemCard's heart and the place Save / Visited
+toggles (`usePlaceToggles`). Check-ins are not toggles: they go through the
+drink-log sheet (X02), which mints the log's id so a retry is the same log,
+and answers with a toast that carries Undo.
+
+**`TogglePop`** — `<TogglePop on={on} pop={pending}><Love … /></TogglePop>`:
+the glyph pops 1 → 1.18 → 1 on `spring.celebrate` when the user turns a
+toggle on (not off, not on mount, and not when data arriving turns it on —
+`pop` is the toggle's `pending`); reduced motion keeps only the colour
+change.
+
+**Prefetch on pointerdown** (`prefetch.ts`) — `AppShell` installs one
+capture-phase `pointerdown` listener that `router.prefetch`es the nearest
+in-app anchor, so a route's shell is on its way ~100 ms before the click.
+It covers every `app/Link` (tabs included) without making `Link` a client
+component. Opt a link out with `data-prefetch="false"`. Buttons that navigate
+warm their destination themselves: AppBar's Back (its `parent` on a cold deep
+link) and ＋ (`prefetchCaptureDestinations`).
 
 ## Layering (z-index)
 

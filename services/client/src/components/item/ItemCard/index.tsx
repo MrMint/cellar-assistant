@@ -3,19 +3,21 @@
 import Image from "next/image";
 import { isNil, isNotNil } from "ramda";
 import type { MouseEvent } from "react";
-import { useState, useTransition } from "react";
+import { useCallback } from "react";
 import { useMutation } from "urql";
 import { Comment, ICON_STROKE, Love } from "@/components/app/icons";
 import { LabelPlate } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
+import { notify } from "@/components/app/notify";
 import { Score } from "@/components/app/Score";
+import { TogglePop } from "@/components/app/TogglePop";
 import { TypeChip } from "@/components/app/TypeChip";
 import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemTypes";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Spinner } from "@/components/ui/spinner";
+import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { ToggleFavoriteMutation } from "@/lib/api/items";
-import { unwrapResult } from "@/lib/api/result";
+import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { formatItemVintage, getNextPlaceholder } from "@/utilities";
 import type { ItemCardItem } from "./types";
@@ -72,6 +74,16 @@ const FooterSeparator = () => (
 const RING_INSIDE = "focus-visible:ring-inset";
 
 /**
+ * The favourite count to draw: the server's, moved by one when the drawn
+ * state differs from the state that count was taken in. Never below zero.
+ */
+export const shownFavoriteCount = (
+  count: number,
+  wasFavorite: boolean,
+  isFavorite: boolean,
+): number => Math.max(0, count + Number(isFavorite) - Number(wasFavorite));
+
+/**
  * `82450ad1:src/components/item/ItemCard/index.tsx`, restored, then moved off
  * Joy onto the app's tokens: a surface-2 tile (radius 12, no border), the
  * image, the title block, and the footer of favourite · reviews · score —
@@ -86,8 +98,14 @@ const RING_INSIDE = "focus-visible:ring-inset";
  *    (`next.config.mjs`, `imagesConfig`).
  * 2. **The favourite toggle** is `toggleFavorite` (one mutation that reports
  *    the state after the toggle) instead of the add/delete server actions
- *    keyed on a favourite row id. The optimistic flip and revert are the old
- *    ones.
+ *    keyed on a favourite row id. The flip is optimistic for real now (X24):
+ *    the old one set its state inside the async transition that awaited the
+ *    write, so the heart held — behind a spinner — until the server answered.
+ *    `useOptimisticToggle` draws the tapped state (and the count with it) in
+ *    the tap's frame, pops the heart, and falls back with a toast if the
+ *    write is refused. `toggleFavorite` flips rather than sets, which the
+ *    hook allows for: it never overlaps two writes, and writes again only if
+ *    the payload's `favorited` is not the last tapped state.
  * 3. **The link** goes to `href` as given. The old card ignored the value and
  *    rebuilt a *relative* `wines/<id>`, which resolved differently per page
  *    (§7, "Relative hrefs everywhere"); callers now pass an absolute href.
@@ -105,36 +123,39 @@ const RING_INSIDE = "focus-visible:ring-inset";
  * button named for the item. The favourite toggle sits above either.
  */
 export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
-  const [isPending, startTransition] = useTransition();
-  const [localFavorite, setLocalFavorite] = useState(item.isFavorite ?? false);
   const [, toggleFavorite] = useMutation(ToggleFavoriteMutation);
+  const wasFavorite = item.isFavorite ?? false;
+
+  const commitFavorite = useCallback(async () => {
+    const response = await toggleFavorite({ itemId: item.itemId, type });
+    if (response.error) {
+      return {
+        ok: false as const,
+        message: failureFromTransport(response.error).message,
+      };
+    }
+    const result = unwrapResult(
+      response.data?.toggleFavorite,
+      "ToggleFavoritePayload",
+    );
+    // The payload is the state *after* the toggle; trust it over the guess.
+    return result.ok
+      ? { ok: true as const, value: result.data.favorited }
+      : { ok: false as const, message: result.error.message };
+  }, [toggleFavorite, item.itemId, type]);
+  const favorite = useOptimisticToggle({
+    value: wasFavorite,
+    commit: commitFavorite,
+    onError: (message) =>
+      notify("Couldn't update your favourites", {
+        tone: "error",
+        description: message,
+      }),
+  });
 
   const handleFavoriteClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    startTransition(async () => {
-      const previousFavorite = localFavorite;
-      // Optimistic update: show the new state immediately
-      setLocalFavorite(!previousFavorite);
-      try {
-        const response = await toggleFavorite({ itemId: item.itemId, type });
-        const result = unwrapResult(
-          response.data?.toggleFavorite,
-          "ToggleFavoritePayload",
-        );
-        if (result.ok) {
-          // The payload is the state *after* the toggle; trust it over the guess.
-          setLocalFavorite(result.data.favorited);
-        } else {
-          // Revert on failure
-          setLocalFavorite(previousFavorite);
-          console.error("Failed to toggle favorite:", result.error.message);
-        }
-      } catch (error) {
-        // Revert on unexpected error
-        setLocalFavorite(previousFavorite);
-        console.error("Error toggling favorite:", error);
-      }
-    });
+    favorite.toggle();
   };
 
   const placeholder = getNextPlaceholder(item.placeholder);
@@ -214,34 +235,36 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         {hasFavorites && (
           <Button
             variant="ghost"
-            // `disabled:pointer-events-auto`: while the toggle is pending it
-            // still takes the tap (a disabled button swallows it) — with the
-            // vendored `pointer-events-none`, a quick second tap on the heart
-            // fell through to the stretched link and left the page.
+            // Never disabled: a quick second tap is a second toggle, not a
+            // tap that falls through to the stretched link and leaves the
+            // page (a disabled button would swallow it).
             className={cn(
               FOOTER_CELL,
-              "relative z-10 rounded-none has-[>svg]:px-0 disabled:pointer-events-auto",
+              "relative z-10 rounded-none has-[>svg]:px-0",
               RING_INSIDE,
             )}
             onClick={handleFavoriteClick}
-            disabled={isPending}
-            aria-busy={isPending || undefined}
-            aria-pressed={localFavorite}
+            aria-busy={favorite.pending || undefined}
+            aria-pressed={favorite.on}
           >
-            <span className="type-headline tabular">{item.favoriteCount}</span>
+            <span className="type-headline tabular">
+              {shownFavoriteCount(
+                item.favoriteCount ?? 0,
+                wasFavorite,
+                favorite.on,
+              )}
+            </span>
             <span className="sr-only"> loves</span>
-            {isPending ? (
-              <Spinner className="size-6 text-ink-3" />
-            ) : (
+            <TogglePop on={favorite.on} pop={favorite.pending}>
               <Love
                 aria-hidden
                 strokeWidth={ICON_STROKE}
                 className={cn(
-                  "size-6",
-                  localFavorite ? "fill-brand text-brand" : "text-ink-2",
+                  "size-6 transition-colors duration-(--ca-dur-micro) ease-standard",
+                  favorite.on ? "fill-brand text-brand" : "text-ink-2",
                 )}
               />
-            )}
+            </TogglePop>
           </Button>
         )}
         {hasFavorites && hasReviews && <FooterSeparator />}
