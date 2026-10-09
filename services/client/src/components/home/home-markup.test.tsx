@@ -214,6 +214,26 @@ describe("ContinueSection", () => {
     assert.equal(html.match(/aria-label="Pour Wine b"/g)?.length, 1);
   });
 
+  test("the shelf holds a dozen; Drink soon ranks the longest open past it", () => {
+    // Newest opened first, as `me.openBottles` reads: the overdue red is the
+    // fourteenth, past the shelf's dozen — exactly the one Drink soon is for.
+    const recent = Array.from({ length: 13 }, (_, index) =>
+      bottle(`n${index}`, null, 0),
+    );
+    const html = render(
+      <ContinueSection
+        bottles={[...recent, bottle("old", "RED", 9)]}
+        total={20}
+        serverNow={NOW}
+      />,
+    );
+    assert.equal(html.match(/data-slot="open-bottle"/g)?.length, 12);
+    assert.match(text(html), /20 open/);
+    assert.match(text(html), /Drink soon/);
+    assert.equal(html.match(/aria-label="Pour Wine old"/g)?.length, 1);
+    assert.match(text(html), /Open 9 days · Typical for red wine/);
+  });
+
   test("nothing open, nothing drawn", () => {
     assert.equal(render(<ContinueSection bottles={[]} serverNow={NOW} />), "");
   });

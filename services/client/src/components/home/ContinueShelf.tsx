@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { getNextPlaceholder } from "@/utilities";
 import type { OpenBottle } from "./continue";
 import { drinkSoonList, typicalLine } from "./drink-soon";
+import { CONTINUE_LIMIT } from "./queries";
 
 /**
  * `now` for ages and windows: the server's request instant first, so the
@@ -74,15 +75,24 @@ const usePour = () => {
  */
 export function ContinueSection({
   bottles,
+  total = bottles.length,
   serverNow,
 }: {
+  /**
+   * Every open bottle Home read, newest opened first. The shelf shows the
+   * first {@link CONTINUE_LIMIT}; Drink soon ranks all of them, since the
+   * bottles open longest — the ones it exists for — are the shelf's last.
+   */
   bottles: readonly OpenBottle[];
+  /** How many are open in all (the connection's count), for "N open". */
+  total?: number;
   serverNow: number;
 }) {
   const now = useNow(serverNow);
   const { pour, sheet } = usePour();
   const soon = drinkSoonList(bottles, now);
   if (bottles.length === 0) return null;
+  const shelf = bottles.slice(0, CONTINUE_LIMIT);
 
   return (
     <>
@@ -94,10 +104,12 @@ export function ContinueSection({
           <h2 id="continue-heading" className="type-overline text-ink-3">
             Continue
           </h2>
-          <span className="type-footnote">{bottles.length} open</span>
+          <span className="type-footnote">
+            {Math.max(total, bottles.length)} open
+          </span>
         </div>
         <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {bottles.map((bottle) => (
+          {shelf.map((bottle) => (
             <li key={bottle.id} className="w-36 shrink-0 snap-start">
               <OpenBottleCard
                 bottle={bottle}

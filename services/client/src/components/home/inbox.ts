@@ -17,7 +17,7 @@
  * finished, so insights generated again come back; `seen-cookie.ts`). Matches and requests need no such
  * memory: answering them is what removes them.
  *
- * Pure — `inbox.test.ts`.
+ * Pure — `ai-jobs.test.ts` ("buildInbox").
  */
 import type { AiJob } from "./ai-jobs";
 import { aiJobHref } from "./ai-jobs";

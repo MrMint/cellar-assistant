@@ -10,7 +10,7 @@
  * bytes on each request. Losing it costs nothing but a result waiting again
  * until its three-day window ends (`AI_JOB_SETTLED_WINDOW_MS`).
  *
- * Pure apart from `writeSeenCookie` — `seen-cookie.test.ts`.
+ * Pure apart from `writeSeenCookie` — `ai-jobs.test.ts` ("seen cookie").
  */
 
 export const SEEN_COOKIE_NAME = "ca_home_seen";

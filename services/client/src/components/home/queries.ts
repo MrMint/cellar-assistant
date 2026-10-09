@@ -5,8 +5,14 @@
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 
-/** How many open bottles Continue shows; Drink soon reads the same page. */
+/** How many open bottles the Continue shelf shows (newest opened first). */
 export const CONTINUE_LIMIT = 12;
+/**
+ * How many open bottles Home reads: Drink soon ranks the **longest** open,
+ * and the page comes newest-opened first, so it reads well past the shelf's
+ * dozen — the connection's cap, which no home bar is likely to reach.
+ */
+export const OPEN_BOTTLES_READ = 100;
 /** One page of the friends feed. */
 export const FEED_PAGE_SIZE = 20;
 /** Friends ranked: a card, not a list. */

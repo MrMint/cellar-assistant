@@ -33,13 +33,13 @@ import type { IncomingRequest, PendingSuggestion } from "./inbox";
 import { NearbySection } from "./NearbySection";
 import {
   AiJobFieldsFragment,
-  CONTINUE_LIMIT,
   FEED_PAGE_SIZE,
   FRIENDS_RANKED_LIMIT,
   HomeContinueQuery,
   HomeFriendsFeedQuery,
   HomeFriendsRankedQuery,
   HomeInboxQuery,
+  OPEN_BOTTLES_READ,
 } from "./queries";
 import { parseSeenCookie, SEEN_COOKIE_NAME } from "./seen-cookie";
 
@@ -121,7 +121,7 @@ export async function InboxSection() {
  */
 export async function ContinueSectionServer() {
   const [data, stats] = await Promise.all([
-    apiServerQuery(HomeContinueQuery, { first: CONTINUE_LIMIT }).catch(
+    apiServerQuery(HomeContinueQuery, { first: OPEN_BOTTLES_READ }).catch(
       () => null,
     ),
     apiServerQuery(SearchCollectionStatsQuery)
@@ -151,7 +151,13 @@ export async function ContinueSectionServer() {
       </div>
     );
   }
-  return <ContinueSection bottles={bottles} serverNow={Date.now()} />;
+  return (
+    <ContinueSection
+      bottles={bottles}
+      total={data?.me?.openBottles.totalCount ?? bottles.length}
+      serverNow={Date.now()}
+    />
+  );
 }
 
 /** D1: friends' tier lists, the card Home keeps for them. */

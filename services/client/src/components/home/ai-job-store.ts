@@ -11,7 +11,7 @@
  * before its parent's, so Home's tray kicks before the shell's watcher is
  * listening); it is held until the watcher takes it.
  *
- * Plain module, no React — `ai-job-store.test.ts`.
+ * Plain module, no React — `ai-jobs.test.ts` ("aiJobStore").
  */
 import type { AiJob } from "./ai-jobs";
 
