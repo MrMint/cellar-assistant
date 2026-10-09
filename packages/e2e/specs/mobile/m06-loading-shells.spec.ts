@@ -14,8 +14,10 @@ import { bottomNav, expect, test } from "../../fixtures/mobile.ts";
  * place, with the tab bar still there and the tapped tab lit.
  *
  * Then the place page's hero (name and category, read on the server) is on
- * screen while the client's full read is still held, and Save flips the
- * moment it is tapped, before `recordPlaceInteraction` answers.
+ * screen while the client's full read is still held, and Love flips the
+ * moment it is tapped, before `recordPlaceInteraction` answers. (Love is the
+ * heart since D27; "Save" is now the Want to try bookmark, a different
+ * mutation.)
  *
  * One place per run, inserted directly (no `createPlace`: no AI review, no
  * 25/day quota) and deleted afterwards, its interactions with it.
@@ -167,11 +169,11 @@ test.describe("a place", () => {
     ).toBeVisible();
   });
 
-  test("Save flips on the tap, before the write answers", async ({ page }) => {
+  test("Love flips on the tap, before the write answers", async ({ page }) => {
     await page.goto(`/places/${place.id}`);
-    const save = page.getByRole("button", { name: /^Save(d)?$/ }).first();
-    await expect(save).toBeVisible({ timeout: 20_000 });
-    await expect(save).toHaveAttribute("aria-pressed", "false");
+    const love = page.getByRole("button", { name: /^Love(d)?$/ }).first();
+    await expect(love).toBeVisible({ timeout: 20_000 });
+    await expect(love).toHaveAttribute("aria-pressed", "false");
 
     await holdGraphql(page, "MapRecordPlaceInteraction");
     const written = page.waitForResponse(
@@ -181,27 +183,27 @@ test.describe("a place", () => {
       { timeout: 30_000 },
     );
     const tappedAt = Date.now();
-    await save.tap();
+    await love.tap();
 
-    await expect(save).toHaveAttribute("aria-pressed", "true", {
+    await expect(love).toHaveAttribute("aria-pressed", "true", {
       timeout: 1_000,
     });
-    await expect(save).toHaveText("Saved");
+    await expect(love).toHaveText("Loved");
     expect(
       Date.now() - tappedAt,
       "the flip came before the held write could have answered",
     ).toBeLessThan(HOLD_MS);
-    await expect(save, "never disabled while it writes").toBeEnabled();
+    await expect(love, "never disabled while it writes").toBeEnabled();
 
     await written;
     // Confirmed: still on once the page has refetched the interaction.
-    await expect(save).toHaveAttribute("aria-pressed", "true");
+    await expect(love).toHaveAttribute("aria-pressed", "true");
     await page.waitForLoadState("networkidle");
-    await expect(save).toHaveAttribute("aria-pressed", "true");
+    await expect(love).toHaveAttribute("aria-pressed", "true");
 
     // And back off, which is what a second tap means.
-    await save.tap();
-    await expect(save).toHaveAttribute("aria-pressed", "false", {
+    await love.tap();
+    await expect(love).toHaveAttribute("aria-pressed", "false", {
       timeout: 1_000,
     });
   });

@@ -86,6 +86,11 @@ describe("the route shells", () => {
     assert.match(out, />Cellars</);
     assert.match(out, /<a[^>]*href="\/cellars\/add"[^>]*>.*Add cellar/);
     assert.equal(out.match(/rounded-lg bg-surface-1 p-4/g)?.length, 5);
+    // The page's Cellars | Bar segment (X11) and its Yours section title,
+    // so the cards land where the shell drew them.
+    assert.match(out, /data-slot="cellar-segments"/);
+    assert.match(out, /<a[^>]*href="\/recipes"[^>]*>Bar</);
+    assert.match(out, />Yours</);
   });
 
   test("Map: the canvas surface and the search pill, no full-screen message", () => {
