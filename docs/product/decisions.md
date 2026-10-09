@@ -126,3 +126,48 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **Install prompt (N15).** "First save" counts a bottle added to a cellar or
   an item confirmed in the onboarding wizard, announced the moment it happens
   rather than at the next navigation.
+
+### Recipes: editor, drafts and privacy (wave B "recipesedit": X15, D22, D9)
+
+- **Privacy is the cellar/tier-list one (D22).** `recipes.privacy` is a
+  `permission_type` — Private · Friends · Public — read by the same
+  four-branch rule (`canSeeRecipe`). New recipes start **Private**; every
+  recipe that existed before the column is **Public**, so nothing visible
+  yesterday disappeared. Friends was kept rather than offering two choices,
+  because every other privacy picker in the app has three.
+- **A draft is its author's alone, whatever its privacy.** `recipes.is_draft`
+  marks what the AI read off a photo or out of pasted text. The job writes it
+  Private and a draft; only Save in the editor clears it, and a published
+  recipe cannot become a draft again.
+- **Hidden means "not found", everywhere.** A recipe you may not see is
+  `NotFound` on its page, its reviews, Love, Want to try, search, the Bar's
+  "What can I make", an item's "Used in" and "Cocktails with this", and its
+  share URL (which answers exactly like a made-up id, author included). A
+  recipe made private after you Loved or saved it drops out of those lists
+  and comes back if it is shared again.
+- **Groups are as visible as their versions.** A group is listed for you when
+  you created it or can see a version in it; its count, its versions, its
+  votes and its search terms are only the versions you can see. The canonical
+  is chosen from the most widely shared versions first (Public, then
+  Friends), and **only a Public canonical renames the group**, so a private
+  recipe's name never becomes a group's name.
+- **The menu matcher proposes Public recipes only**: its suggestion lands on
+  a place's menu, which every visitor reads.
+- **New recipe is Photo · Paste · Type.** Photo opens the picker from the
+  sheet's row and reading starts the moment a photo is chosen — no second
+  button. Paste reads text through the same job, schema and abstention as a
+  photo (a shopping list is refused, not turned into a recipe). Type is a
+  blank form. `/recipes/ai-generator` redirects to Photo.
+- **Ingredient matches wait on the person.** In a draft, each line the search
+  matched to a catalog bottle wears the AI mark with **Keep** / **Not this**;
+  Save stays blocked until none is left. "Keep all" is one explicit tap.
+  Not this turns the line into the bar word for it ("Gin") when there is one.
+  Typed lines are plain ingredients by name — the editor never guesses a
+  catalog bottle.
+- **Loved recipes live on Loved (D9).** Me › Lists › Loved shows the recipes
+  you Love above the bottles (three, then Show all); a type filter hides them,
+  since it is about bottles.
+- **The Bar page.** `/recipes` is titled **Bar** (the segment's word), with
+  New recipe where Cellars has Add cellar; then Your drafts, Your recipes,
+  What can I make, and All recipes. "Recipe Groups" and the paragraph about
+  community voting are gone. The nested 800 px list scroller is gone too.
