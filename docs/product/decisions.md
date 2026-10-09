@@ -126,3 +126,34 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **Install prompt (N15).** "First save" counts a bottle added to a cellar or
   an item confirmed in the onboarding wizard, announced the moment it happens
   rather than at the next navigation.
+
+### Me hub v1 (wave B "me": X18)
+
+- **Counts.** Under the Me header: bottles, logs, places, tier lists — each
+  the viewer's own. Bottles is D13's number (still in a cellar you created or
+  co-own); logs are drink-log entries *about* you, including one a friend
+  wrote for you at the table; places are the distinct places you have been
+  (marked Visited, or named on one of your logs), leaving out someone else's
+  place still under review (X27); tier lists are the ones you made, whatever
+  their privacy. Each names its noun, a zero is not shown, and an account
+  with nothing yet has no count row. The tiles are a summary, not links:
+  each has a row or a tab of its own.
+- **Settings.** The Account section is renamed Settings: Edit profile and
+  Sign out. **No theme switch** — dark is the default and light ships only
+  on evidence (D21), so a placeholder would promise something that is not
+  coming.
+- **Loved holds recipes (D9).** Loved gains a Drinks · Recipes segment held
+  in `?kind=recipes`; no `kind` is drinks, so every old `/favorites` link
+  lands where it did. Each loved recipe keeps its Love toggle; un-Loving
+  leaves the row in place until the next visit.
+- **A friend's profile (`/users/<id>`).** Reached from a friend's row on
+  Friends. Read-only: who, "Friends since <month year>", then the tier lists
+  of theirs you may open (PUBLIC and FRIENDS — never PRIVATE), the cellars
+  they created or co-own that you may open, and their drink log (entries
+  about them, newest first, with what they said; Show more). Sections with
+  nothing in them are not drawn; a friend who shares nothing gets "Nothing
+  shared yet." Only friends: a stranger, an id that names nobody and a
+  malformed id all get the same "doesn't exist or isn't shared with you"
+  (D24), decided server-side with one message, and the page reads nothing
+  before that gate answers. Your own id redirects to Me. `/users` (the old
+  dead "Profile" crumb) redirects to Me.
