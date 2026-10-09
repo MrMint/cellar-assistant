@@ -126,3 +126,41 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **Install prompt (N15).** "First save" counts a bottle added to a cellar or
   an item confirmed in the onboarding wizard, announced the moment it happens
   rather than at the next navigation.
+
+### Cellar home (wave B "cellarhome": X04, D3, D13)
+
+- **One cellar page (D3).** `/cellars/[id]/items` is the cellar home;
+  `/cellars/[id]` (the old overview) redirects to it. The overview's
+  check-in history (drinker + time, no bottle) is gone: the dashboard's
+  pours-per-month trend replaces it, and who drank what stays on each item's
+  "Your log".
+- **Dashboard order at 390.** Bar and search → Open now (open bottles, most
+  recently opened first, up to 12, each with Pour) → four tiles (in the
+  cellar, with the three biggest types named; open; almost empty, at or under
+  **25%**; finished this month) → pours per month (12 months) → Recently
+  added (last **30 days**, not already on Open now) → the collection. A tile
+  opens the collection with the matching sort or segment. A search hides the
+  dashboard so results sit under the field.
+- **Bottles by type is words, not colour.** The six type hues fail as a
+  chart palette (the dataviz validator: oak/amber ΔE 4.4), so "8 wine · 3
+  spirit" is text in the In-the-cellar tile, and the type chips below carry
+  per-type counts.
+- **Months are the viewer's.** A `ca-tz` cookie (an IANA zone name only)
+  carries the browser's zone to the server; the first visit renders UTC
+  months and re-renders once.
+- **×N.** Identical bottles (one catalog item) are one card, placed where the
+  best-placed bottle sits under the current sort, showing that bottle's state
+  and linking to it. Open now does not group.
+- **Finished is a diary**: by month finished, latest first, with the date,
+  how long it lasted once open, **your own** logs from it (count, last score,
+  last note — never a co-owner's) and your rating. Its sort is fixed.
+- **Search narrows.** Names first (pg_trgm, the N08 rule), then meaning
+  matches within cosine distance **0.36** and within **+0.06** of the nearest
+  (tuned on N05 with nomic-embed-text; Gemini not measured), nothing else. A
+  meaning match says "Similar to your search". Without an embedding model the
+  page is names only and says so. **Fan-out** asks your own (created or
+  co-owned) cellars — up to 24, most recently active first, 5 matches each —
+  by name only: "Lagavulin 16 / is in Bar Cart".
+- **Pour** opens the X02 drink-log sheet until X03's Pour sheet lands
+  (`TODO(X03)` in `PourButton`); anyone who may see the cellar may pour, as
+  Check in allowed.

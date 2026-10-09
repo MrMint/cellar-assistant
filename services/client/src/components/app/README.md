@@ -331,7 +331,9 @@ via `className` — in a centred 44 target) / `lg`; `asChild` to wrap an
 />
 ```
 
-`radiogroup` of `radio`s; the current segment cannot be tapped off.
+`radiogroup` of `radio`s; the current segment cannot be tapped off. An
+option's `count` prints after its label in `ink-3` ("Finished 12") and is
+part of its name.
 
 **`FilterChip`** — `<FilterChip selected={on} onClick={toggle} count={12}>Open</FilterChip>`.
 `aria-pressed`; selected is ink, not brass; zero counts hidden.
