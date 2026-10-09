@@ -54,8 +54,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         // tab bar's glass runs under the home indicator. It has to be this
         // element: the shell clips (overflow-hidden), so a negative margin
         // on the tab bar itself was cut off at the shell's edge. Nothing
-        // between the root layout and here may clip either.
-        "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
+        // between the root layout and here may clip either. Without a tab
+        // bar (the search sheet, X10) there is no glass to run under it, so
+        // the root layout's padding stays and results clear the indicator.
+        tabBar && "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
       )}
     >
       <SideRail className="hidden sm:flex" />
