@@ -174,7 +174,10 @@ describe("AddItemClient (restored)", () => {
       html,
       /You do not have permission to add items to this cellar\./,
     );
-    assert.doesNotMatch(html, /href="\/cellars\/c1\//);
+    // No card links to an add flow; the one link is back to the cellar home
+    // (X04: `/items`, not the old overview's redirect).
+    assert.doesNotMatch(html, /href="\/cellars\/c1\/[a-z]+\/add"/);
+    assert.match(html, /href="\/cellars\/c1\/items"/);
   });
 
   test("off a cellar it is /add's chooser", () => {

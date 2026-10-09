@@ -71,11 +71,11 @@ export function PourTrend({
         </p>
       </div>
 
-      <p
-        aria-live="polite"
-        data-slot="pour-trend-readout"
-        className="flex items-baseline gap-2"
-      >
+      {/*
+        Not a live region: scrubbing would read out every month a finger
+        crosses, and the range below already speaks its month on each step.
+      */}
+      <p data-slot="pour-trend-readout" className="flex items-baseline gap-2">
         <span className="font-semibold text-[1.75rem] leading-none tracking-tight">
           {shown?.count ?? 0}
         </span>
@@ -123,7 +123,12 @@ export function PourTrend({
           className="block h-14 w-full touch-pan-y"
           onPointerMove={pick}
           onPointerDown={pick}
-          onPointerLeave={() => setSelected(last)}
+          onPointerLeave={(event) => {
+            // A mouse leaving the chart puts it back to this month. A finger
+            // lifting is also a "leave", and there the month it chose should
+            // stay readable after the finger is gone.
+            if (event.pointerType === "mouse") setSelected(last);
+          }}
         >
           <line
             x1={0}

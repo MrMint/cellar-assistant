@@ -205,6 +205,7 @@ test("the old overview lands on the cellar home, and its top is a dashboard", as
   await expect(tile(page, "in-cellar")).toContainText("3");
   await expect(tile(page, "in-cellar")).toContainText("3 tea");
   await expect(tile(page, "open")).toContainText("1");
+  await expect(tile(page, "open")).toContainText("2 sealed");
   await expect(tile(page, "almost-empty")).toContainText("1");
   await expect(tile(page, "finished")).toContainText("1");
 

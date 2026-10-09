@@ -127,9 +127,10 @@ export type StatTile = {
 };
 
 /**
- * The four tiles: what is in the cellar (by type), what is open, what is
- * almost gone, what you finished this month. Each one opens the collection
- * below with the matching sort or segment, at the collection.
+ * The four tiles: what is in the cellar (by type), what is open (and how
+ * much is still sealed), what is almost gone, what you finished this month.
+ * Each one opens the collection below with the matching sort or segment, at
+ * the collection.
  */
 export const dashboardTiles = (
   cellarId: string,
@@ -149,9 +150,12 @@ export const dashboardTiles = (
       key: "open",
       label: "Open",
       value: data.openCount,
+      // What is *not* open, so the tile says something about opening. (It
+      // used to carry "N added in 30 days", which under "Open" read as N
+      // opened; the Recently added shelf says that, with its own window.)
       detail:
-        data.addedRecently > 0
-          ? `${data.addedRecently} added in ${data.recentDays} days`
+        data.bottleCount > data.openCount
+          ? `${data.bottleCount - data.openCount} sealed`
           : null,
       href: `${base}?sort=open#collection`,
     },

@@ -74,9 +74,13 @@ export function SegmentedControl<V extends string>({
           {option.icon}
           <span className="truncate">{option.label}</span>
           {option.count !== undefined && (
-            <span data-slot="segment-count" className="tabular text-ink-3">
-              {option.count}
-            </span>
+            <>
+              {/* A space for the accessible name ("Finished 12", not
+                  "Finished12"); between flex items it draws nothing. */}{" "}
+              <span data-slot="segment-count" className="tabular text-ink-3">
+                {option.count}
+              </span>
+            </>
           )}
         </ToggleGroupPrimitive.Item>
       ))}

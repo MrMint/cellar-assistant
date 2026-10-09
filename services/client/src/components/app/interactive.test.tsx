@@ -316,6 +316,25 @@ describe("SegmentedControl", () => {
       "still selected",
     );
   });
+
+  test("a count is part of the segment's name, a word apart (X04)", async () => {
+    await render(
+      <SegmentedControl
+        aria-label="Status"
+        value="in"
+        onValueChange={() => {}}
+        options={[
+          { value: "in", label: "In cellar" },
+          { value: "finished", label: "Finished", count: 12 },
+        ]}
+      />,
+    );
+    const radios = [...container.querySelectorAll('[role="radio"]')];
+    assert.deepEqual(
+      radios.map((radio) => radio.textContent),
+      ["In cellar", "Finished 12"],
+    );
+  });
 });
 
 describe("TabBar", () => {

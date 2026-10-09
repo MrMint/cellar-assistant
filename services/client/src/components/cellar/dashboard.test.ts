@@ -60,7 +60,7 @@ describe("the cellar dashboard's numbers (X04, D3)", () => {
       ],
     );
     assert.equal(tiles[0]?.detail, "12 wine");
-    assert.equal(tiles[1]?.detail, "4 added in 30 days");
+    assert.equal(tiles[1]?.detail, "9 sealed");
     assert.equal(tiles[3]?.detail, "9 in the diary");
   });
 

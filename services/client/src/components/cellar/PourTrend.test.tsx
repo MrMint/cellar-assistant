@@ -78,6 +78,46 @@ describe("PourTrend", () => {
     assert.equal(readout(), "9pours in June 2026");
     assert.equal(range.getAttribute("aria-valuetext"), "June 2026: 9 pours");
   });
+
+  test("a finger's month stays after it lifts; a mouse leaving resets", async () => {
+    await act(async () =>
+      root.render(<PourTrend logsByMonth={LOGS} currentMonth="2026-10" />),
+    );
+    const svg = container.querySelector("svg");
+    assert.ok(svg);
+    // happy-dom lays nothing out: give the chart 120 px, 10 px a month.
+    svg.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 120, height: 56 }) as DOMRect;
+    const pointer = (type: string, pointerType: string, clientX = 0) =>
+      act(async () => {
+        svg.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerType,
+            clientX,
+            // React's onPointerLeave is built from pointerout to outside.
+            relatedTarget: document.body,
+          }),
+        );
+      });
+
+    await pointer("pointerdown", "touch", 75); // the eighth month: June
+    assert.equal(readout(), "9pours in June 2026");
+    await pointer("pointerout", "touch");
+    assert.equal(readout(), "9pours in June 2026", "still June after a lift");
+
+    await pointer("pointermove", "mouse", 25); // the third: January
+    assert.equal(readout(), "1pour in January 2026");
+    await pointer("pointerout", "mouse");
+    assert.equal(readout(), "5pours in this month");
+    assert.equal(
+      container
+        .querySelector('[data-slot="pour-trend-readout"]')
+        ?.getAttribute("aria-live"),
+      null,
+      "not a live region: the range speaks the month",
+    );
+  });
 });
 
 describe("StatTiles", () => {
@@ -109,7 +149,7 @@ describe("StatTiles", () => {
       links.map((link) => [link.getAttribute("href"), link.textContent]),
       [
         ["/cellars/c1/items#collection", "In the cellar32 wine · 1 tea"],
-        ["/cellars/c1/items?sort=open#collection", "Open1"],
+        ["/cellars/c1/items?sort=open#collection", "Open12 sealed"],
         [
           "/cellars/c1/items?sort=almost-empty#collection",
           "Almost empty025% left or less",
