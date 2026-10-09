@@ -135,6 +135,72 @@ describe.skipIf(skip)("UserSearchActor (§2.3, §1.5)", () => {
     });
   });
 
+  describe("everyone, for universal search's People (X12)", () => {
+    it("finds friends and requests too, connected first, each with its relation", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const input: UserSearchInput = { term: "al", includeConnected: true };
+        const hits = await newActor(input, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          input,
+        );
+        expect(hits.map((hit) => [hit.displayName, hit.relation])).toEqual([
+          ["Alfred", "FRIEND"],
+          ["Alonzo", "REQUEST_RECEIVED"],
+          ["Alma", "REQUEST_SENT"],
+          ["Alberta", "NONE"],
+        ]);
+      });
+    });
+
+    it("never returns the viewer, and fills the limit with strangers after", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const input: UserSearchInput = {
+          term: "al",
+          includeConnected: true,
+          limit: 2,
+        };
+        const hits = await newActor(input, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          input,
+        );
+        expect(hits.map((hit) => hit.displayName)).toEqual([
+          "Alfred",
+          "Alonzo",
+        ]);
+        const wide: UserSearchInput = { term: "ali", includeConnected: true };
+        const self = await newActor(wide, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          wide,
+        );
+        expect(self).toEqual([]);
+      });
+    });
+
+    it("matches connected people by the same rule as the store", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const input: UserSearchInput = { term: "FRED", includeConnected: true };
+        const hits = await newActor(input, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          input,
+        );
+        expect(hits.map((hit) => hit.userId)).toEqual([s.friend]);
+      });
+    });
+
+    it("joins the key only when set", () => {
+      const viewer = crypto.randomUUID();
+      expect(
+        userSearchActorId({ term: "al", includeConnected: false }, viewer),
+      ).toBe(userSearchActorId({ term: "al" }, viewer));
+      expect(
+        userSearchActorId({ term: "al", includeConnected: true }, viewer),
+      ).not.toBe(userSearchActorId({ term: "al" }, viewer));
+    });
+  });
+
   it("gives two viewers different answers — hence the viewer in the key", async () => {
     await withTestDb(async (db) => {
       const s = await scenario(db);

@@ -213,6 +213,42 @@ export type CellarsCollectionActorInterface = {
     ctx: Ctx,
     refs: readonly ItemRef[],
   ): Promise<readonly CappedList<string>[]>;
+  /**
+   * X12 — universal search's "Your bottles": open bottles in cellars the
+   * viewer **created or co-owns** (`stats`' set, not `list`'s — a friend's
+   * bottle is not yours) whose item name matches the term, one hit per item
+   * per cellar. Matched by name only — substring, or pg_trgm word
+   * similarity for a typo — so it answers the same with or without an AI
+   * provider.
+   */
+  findBottles(ctx: Ctx, input: BottleSearchInput): Promise<BottleSearchDto>;
+};
+
+/** {@link CellarsCollectionActorInterface.findBottles}. */
+export type BottleSearchInput = {
+  readonly term: string;
+  /** 1 to {@link BOTTLE_SEARCH_RESULT_CAP}; defaults to it. */
+  readonly limit?: number | null;
+};
+
+/** How many hits `findBottles` returns at most. */
+export const BOTTLE_SEARCH_RESULT_CAP = 50;
+
+export type BottleSearchHit = {
+  /** The oldest open bottle of the item in that cellar: where a tap goes. */
+  readonly cellarItemId: string;
+  readonly cellarId: string;
+  readonly cellarName: string;
+  readonly item: ItemRef;
+  readonly itemName: string;
+  /** Open bottles of the item in that cellar, at least 1. */
+  readonly bottleCount: number;
+};
+
+export type BottleSearchDto = {
+  readonly hits: readonly BottleSearchHit[];
+  /** Every matching (item, cellar) pair, not only the ones returned. */
+  readonly totalCount: number;
 };
 
 /** {@link CellarsCollectionActorInterface.stats}. */
@@ -235,6 +271,7 @@ export const CellarsCollectionActorDescriptor: ActorDescriptor<CellarsCollection
       list: {},
       stats: {},
       containing: {},
+      findBottles: {},
     },
   };
 

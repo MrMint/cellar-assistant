@@ -52,6 +52,8 @@ import type {
   RecipeSearchInput,
 } from "@cellar-assistant/contracts";
 import {
+  RECIPE_HYBRID_DISTANCE_GAP,
+  RECIPE_HYBRID_MAX_DISTANCE,
   RECIPE_SEARCH_MAX_DISTANCE,
   RECIPE_SEARCH_RESULT_CAP,
   RecipeSearchActorDescriptor,
@@ -69,6 +71,7 @@ import { withHnswScan } from "../lib/hnsw.ts";
 import { SearchActorBase } from "../lib/search-actor-base.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
 import { escapeLike } from "./brand-search-actor.ts";
+import { embeddingUnavailable } from "./item-search-actor.ts";
 
 type Row = {
   readonly id: string;
@@ -135,6 +138,17 @@ export class RecipeSearchActor
       input.maxDistance ?? RECIPE_SEARCH_MAX_DISTANCE,
     );
 
+    if (input.hybrid === true) {
+      return this.#hybrid(ctx, {
+        term,
+        type,
+        limit,
+        maxDistance: requireDistance(
+          input.maxDistance ?? RECIPE_HYBRID_MAX_DISTANCE,
+        ),
+      });
+    }
+
     const pattern = term === "" ? null : `%${escapeLike(term)}%`;
     const lexical =
       pattern === null
@@ -185,7 +199,99 @@ export class RecipeSearchActor
     );
     return rows.map(toHit);
   }
+
+  /**
+   * X12 / D9 — universal search's Recipes: the recipes whose **name**
+   * contains the term, then the ones whose meaning is near it.
+   *
+   * Names only in the lexical half: a description match on a short term is
+   * mostly noise ("gin" is in "ginger"), and the semantic half finds the
+   * recipes a description makes relevant. The semantic half is cut twice —
+   * at `maxDistance`, and at {@link RECIPE_HYBRID_DISTANCE_GAP} past the
+   * nearest recipe — so a phrase about something else entirely returns
+   * nothing rather than the least-unrelated recipes.
+   */
+  async #hybrid(
+    ctx: Ctx,
+    q: {
+      readonly term: string;
+      readonly type: string;
+      readonly limit: number;
+      readonly maxDistance: number;
+    },
+  ): Promise<readonly RecipeSearchHit[]> {
+    if (q.term === "") {
+      throw new ValidationError("a hybrid recipe search needs a term");
+    }
+    const contains = `%${escapeLike(q.term)}%`;
+    const startsWith = `${escapeLike(q.term)}%`;
+    const typeFilter = q.type === "" ? sql`true` : sql`r.type = ${q.type}`;
+    const { rows: named } = await this.db.execute<Row>(sql`
+      select r.id, r.name, r.description, r.type, r.recipe_group_id,
+             null::float8 as distance
+      from public.recipes r
+      where r.name ilike ${contains} escape '\\' and ${typeFilter}
+      order by (lower(r.name) = ${q.term.toLowerCase()}) desc,
+               (r.name ilike ${startsWith} escape '\\') desc,
+               length(r.name) asc,
+               lower(r.name) asc,
+               r.id asc
+      limit ${q.limit}
+    `);
+
+    let vector: readonly number[];
+    try {
+      vector = await this.#embed(ctx, q.term);
+    } catch (error) {
+      if (!embeddingUnavailable(error)) throw error;
+      // D25 parity: the names still answer. Not cached — the embedding may
+      // be back on the next turn.
+      this.doNotCache();
+      return named.map(toHit);
+    }
+    const literal = toVectorLiteral(vector);
+    const { rows: near } = await withHnswScan(this.db, (tx) =>
+      tx.execute<Row>(sql`
+        with nearest as materialized (
+          select r.id, r.name, r.description, r.type, r.recipe_group_id,
+                 (rv.vector <=> ${literal}::halfvec)::float8 as distance
+          from public.recipe_vectors rv
+          join public.recipes r on r.id = rv.recipe_id
+          where rv.vector is not null and ${typeFilter}
+          order by rv.vector <=> ${literal}::halfvec
+          limit ${q.limit}
+        )
+        select id, name, description, type, recipe_group_id, distance
+        from nearest
+        where distance <= ${q.maxDistance}
+        order by distance asc, lower(name) asc, id asc
+      `),
+    );
+    return mergeHybridRecipes(named.map(toHit), near.map(toHit), q.limit);
+  }
 }
+
+/**
+ * The name matches, then the semantic hits within
+ * {@link RECIPE_HYBRID_DISTANCE_GAP} of the nearest one that are not
+ * already listed, capped at `limit`. Pure, for `recipe-search-actor.test.ts`.
+ */
+export const mergeHybridRecipes = (
+  named: readonly RecipeSearchHit[],
+  near: readonly RecipeSearchHit[],
+  limit: number,
+): RecipeSearchHit[] => {
+  const nearest = near[0]?.distance ?? null;
+  const listed = new Set(named.map((hit) => hit.recipeId));
+  const semantic = near.filter(
+    (hit) =>
+      !listed.has(hit.recipeId) &&
+      nearest !== null &&
+      hit.distance !== null &&
+      hit.distance <= nearest + RECIPE_HYBRID_DISTANCE_GAP,
+  );
+  return [...named, ...semantic].slice(0, limit);
+};
 
 const toHit = (row: Row): RecipeSearchHit => ({
   recipeId: row.id,

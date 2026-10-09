@@ -535,6 +535,54 @@ describe("UI parity wave A: counts, filters, stats", () => {
     ]);
   });
 
+  it("X12: me.bottleSearch is one call to the viewer's own collection actor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarsCollectionActor.findBottles": () => ({
+        hits: [
+          {
+            cellarItemId: "ci-1",
+            cellarId: "c-1",
+            cellarName: "Bar Cart",
+            item: { type: "SPIRIT", id: "s-1" },
+            itemName: "Lagavulin 16",
+            bottleCount: 2,
+          },
+        ],
+        totalCount: 4,
+      }),
+    });
+    const result = await run(
+      `{ me { bottleSearch(term: "lagavulin", limit: 3, first: 3) {
+           totalCount edges { node { cellarItemId cellarId cellarName bottleCount } }
+         } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.me).toEqual({
+      bottleSearch: {
+        totalCount: 4,
+        edges: [
+          {
+            node: {
+              cellarItemId: "ci-1",
+              cellarId: "c-1",
+              cellarName: "Bar Cart",
+              bottleCount: 2,
+            },
+          },
+        ],
+      },
+    });
+    expect(calls).toMatchObject([
+      {
+        actorType: "CellarsCollectionActor",
+        actorId: viewer.id,
+        method: "findBottles",
+      },
+    ]);
+    expect(calls[0]?.args.at(-1)).toEqual({ term: "lagavulin", limit: 3 });
+  });
+
   it("G36: an anonymous viewer has no `me`, so no stats call", async () => {
     const { invoke, calls } = stubSidecar({});
     const result = await run(

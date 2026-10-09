@@ -509,7 +509,37 @@ export type RecipeSearchInput = {
   readonly type?: string | null;
   readonly maxDistance?: number | null;
   readonly limit?: number | null;
+  /**
+   * X12 / D9: universal search's Recipes section. `term` is matched against
+   * recipe **names** (the lexical half, first) and is also embedded and
+   * ranked by `recipe_vectors` distance (the semantic half, after), cut at
+   * `maxDistance` (default {@link RECIPE_HYBRID_MAX_DISTANCE}) and at
+   * {@link RECIPE_HYBRID_DISTANCE_GAP} past the nearest. With no embedding
+   * (no AI provider, a spent budget) it answers with the name matches alone
+   * rather than failing. `semanticQuery` is ignored. Part of the key only
+   * when set.
+   */
+  readonly hybrid?: boolean | null;
 };
+
+/**
+ * X12 / D9: a hybrid recipe search's default cutoff. `RECIPE_SEARCH_MAX_DISTANCE`
+ * (0.8) passes every recipe in the catalog for any phrase with
+ * `nomic-embed-text`. Measured 2026-10-09 on 15 hand-written recipe texts in
+ * `RecipeActor`'s embedding format and 16 phrases — **not** an eval set; the
+ * N05 harness has no recipes: right answers sat at 0.28–0.45, a phrase with
+ * no recipe ("lagavulin 16", "duvel") found its nearest at 0.60, one about
+ * wine ("barolo", "pinot noir") at 0.44–0.48.
+ */
+export const RECIPE_HYBRID_MAX_DISTANCE = 0.45;
+
+/**
+ * X12 / D9: how far past the nearest recipe a hybrid search still reaches.
+ * Same measurement: every second right answer was within 0.044 of the first
+ * ("something with ginger": Penicillin 0.404, Moscow Mule 0.448), the
+ * nearest wrong one often within 0.06 ("tequila": Mojito at +0.053).
+ */
+export const RECIPE_HYBRID_DISTANCE_GAP = 0.05;
 
 export type RecipeSearchHit = {
   readonly recipeId: string;
@@ -553,6 +583,8 @@ export const recipeSearchActorId = (
     type: normaliseText(input.type),
     maxDistance: input.maxDistance ?? RECIPE_SEARCH_MAX_DISTANCE,
     limit: input.limit ?? RECIPE_SEARCH_RESULT_CAP,
+    // Absent unless set, so every key minted before X12 is unchanged.
+    ...(input.hybrid === true ? { hybrid: true } : {}),
   });
 
 /* -------------------------------------------------------------------------- */
@@ -564,12 +596,34 @@ export const USER_SEARCH_RESULT_CAP = 10;
 export type UserSearchInput = {
   readonly term: string;
   readonly limit?: number | null;
+  /**
+   * X12: universal search's People section, which looks for *anyone* by
+   * name — your friends first, then people with a request open either way,
+   * then everyone else — where the default (the `/friends` "Add friends"
+   * box) leaves out everyone you are already connected to. Every hit then
+   * says how it is connected (`relation`). Part of the key only when set.
+   */
+  readonly includeConnected?: boolean | null;
 };
+
+/** How a person in a search answer is connected to the viewer. */
+export const PERSON_RELATIONS = [
+  "FRIEND",
+  "REQUEST_RECEIVED",
+  "REQUEST_SENT",
+  "NONE",
+] as const;
+export type PersonRelation = (typeof PERSON_RELATIONS)[number];
 
 export type UserSearchHit = {
   readonly userId: string;
   readonly displayName: string;
   readonly avatarUrl: string | null;
+  /**
+   * X12: set on an `includeConnected` search only; a default search returns
+   * no one but `NONE`s and leaves it absent.
+   */
+  readonly relation?: PersonRelation;
 };
 
 export type UserSearchActorInterface = {
@@ -606,6 +660,8 @@ export const userSearchActorId = (
     term: normaliseText(input.term),
     limit: input.limit ?? USER_SEARCH_RESULT_CAP,
     viewerId,
+    // Absent unless set, so every key minted before X12 is unchanged.
+    ...(input.includeConnected === true ? { includeConnected: true } : {}),
   });
 
 /* -------------------------------------------------------------------------- */
