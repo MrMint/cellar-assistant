@@ -232,6 +232,11 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
           >
             {feed.map((entry) => {
               const timeAgo = timeAgoText(entry.timestamp, now);
+              // A state with only empty paragraphs has no words to show.
+              const reviewPreview =
+                entry.kind === "reviewed" && entry.reviewText
+                  ? plainTextFromRichText(entry.reviewText)
+                  : "";
               const blurDataURL = getNextPlaceholder(entry.itemPlaceholder);
 
               return (
@@ -324,9 +329,9 @@ export function RecentActivity({ feed, selectedKinds }: RecentActivityProps) {
                       {/* Review text snippet */}
                       {/* One clipped line: plain words, not a read-only
                           editor (which is a textbox to assistive tech). */}
-                      {entry.kind === "reviewed" && entry.reviewText && (
+                      {reviewPreview !== "" && (
                         <p className="mt-0.5 truncate text-ink-2 text-xs italic">
-                          {plainTextFromRichText(entry.reviewText)}
+                          {reviewPreview}
                         </p>
                       )}
                     </div>
