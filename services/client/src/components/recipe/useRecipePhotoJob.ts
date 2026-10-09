@@ -93,16 +93,25 @@ export function useRecipePhotoJob({
   useEffect(() => {
     if (jobId === null) return;
     let cancelled = false;
+    // One poll at a time: a slow answer must not overlap the next tick, or
+    // two of them can both see the job done and call `onDone` twice (two
+    // navigations to the same recipe).
+    let polling = false;
     const startedAt = Date.now();
 
     const tick = async (): Promise<void> => {
+      if (polling || cancelled) return;
+      polling = true;
       const response = await client
         .query(
           RecipePhotoJobQuery,
           { jobId },
           { requestPolicy: "network-only" },
         )
-        .toPromise();
+        .toPromise()
+        .finally(() => {
+          polling = false;
+        });
       if (cancelled) return;
 
       const result = unwrapResult(
@@ -115,6 +124,8 @@ export function useRecipePhotoJob({
       }
       const job = result.data;
       if (job.progress.done) {
+        // Settled: nothing after this answer may act on the job again.
+        cancelled = true;
         setPhase({ kind: "done", recipeId: job.progress.recipeId });
         done.current?.(job.progress.recipeId);
         return;
