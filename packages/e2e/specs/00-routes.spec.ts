@@ -39,6 +39,8 @@ import {
 
 /** Static routes only. Dynamic ones are covered by the flows that create rows. */
 const ROUTES = [
+  // X10: Home "Today".
+  "/",
   "/cellars",
   "/cellars/add",
   "/add",
@@ -51,8 +53,6 @@ const ROUTES = [
   "/want-to-try",
   "/map",
   "/map/create-place",
-  "/map/scans",
-  "/discoveries",
   "/recipes",
   "/recipes/ai-generator",
   // X14: What can I make (G29) and the Bar pantry (D23).

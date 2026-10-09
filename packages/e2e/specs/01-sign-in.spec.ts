@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 import { ACCOUNTS, BASE_URL, storageStatePath } from "../fixtures/accounts.ts";
 import { newContext } from "../fixtures/test.ts";
 
+/** `/` — Home (X10) — with no path after the origin. */
+const HOME_URL = /^https?:\/\/[^/]+\/(?:\?.*)?$/;
+
 /**
  * Sign in, stay signed in, sign out.
  *
@@ -27,8 +30,9 @@ test("signs in through the form and lands on Home (X01)", async ({
   // `components/auth/landing.test.tsx`: here the sign-in is too quick to
   // observe without racing it.)
 
-  // Every landing goes to `/`, which shows search until X10 (D1).
-  await expect(page).toHaveURL(/\/search(?:\?|$)/, { timeout: 30_000 });
+  // Every landing goes to `/`, Home "Today" since X10 (D1).
+  await expect(page).toHaveURL(HOME_URL, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
   // The cookie is what every later request depends on; assert it directly so a
   // failure says "no session cookie" rather than "some page did not render".
@@ -87,7 +91,7 @@ test("sign out ends the session", async ({ browser }) => {
   await page.getByLabel("Email").fill(ACCOUNTS.primary.email);
   await page.getByLabel("Password").fill(ACCOUNTS.primary.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/search(?:\?|$)/, { timeout: 30_000 });
+  await expect(page).toHaveURL(HOME_URL, { timeout: 30_000 });
 
   // Sign out lives on the Me hub (D1: the side navigation and its avatar
   // menu are gone), a plain button rather than a menu item.
@@ -173,6 +177,6 @@ test("a signed-in visit to /sign-in goes Home", async ({ browser }) => {
   });
   const page = await ctx.newPage();
   await page.goto("/sign-in");
-  await expect(page).toHaveURL(/\/search(?:\?|$)/);
+  await expect(page).toHaveURL(HOME_URL);
   await ctx.close();
 });

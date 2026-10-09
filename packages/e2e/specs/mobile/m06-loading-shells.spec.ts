@@ -80,10 +80,12 @@ const TABS = [
   },
   { from: "/cellars", tab: "Me", path: "/me", content: "h1" },
   {
+    // X10: Home is `/` ("Today"), and its search field is a link into the
+    // search sheet — the shell draws it as plain text, so the link is the page.
     from: "/cellars",
     tab: "Home",
-    path: "/search",
-    content: 'input[aria-label="Search your collection"]',
+    path: "/",
+    content: 'a[aria-label="Search bottles, places and recipes"]',
   },
 ] as const;
 

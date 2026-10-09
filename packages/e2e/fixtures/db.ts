@@ -173,6 +173,30 @@ export function deleteCellarWithContents(cellarId: string): void {
 }
 
 /**
+ * Pretend a bottle was opened `days` ago (X10's Drink soon reads `open_at`
+ * against a style table, and nothing in the API backdates it). The bottle
+ * must already be open; its cellar's own cleanup removes it.
+ */
+export function backdateOpened(cellarItemId: string, days: number): void {
+  if (!UUID_PATTERN.test(cellarItemId)) {
+    throw new Error(`backdateOpened: not a uuid: ${cellarItemId}`);
+  }
+  if (!Number.isInteger(days) || days < 0 || days > 3650) {
+    throw new Error(`backdateOpened: days must be 0..3650, got ${days}`);
+  }
+  const output = psql(
+    `with moved as (update cellar_items set open_at = now() - interval '${days} days' ` +
+      `where id = '${cellarItemId}' and open_at is not null returning 1) ` +
+      "select count(*) from moved",
+  );
+  if (output !== "1") {
+    throw new Error(
+      `backdateOpened: expected one open bottle ${cellarItemId}, psql said ${JSON.stringify(output)}`,
+    );
+  }
+}
+
+/**
  * Insert one active place at a point, for a spec that needs a place *near*
  * somewhere without `createPlace`'s synchronous AI review and its 25/day
  * quota (`/search`'s Nearby Places, G31). Remove it with {@link deletePlace}.
