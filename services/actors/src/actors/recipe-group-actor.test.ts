@@ -230,9 +230,7 @@ describe.skipIf(skip)("RecipeGroupActor", () => {
         );
         expect(await seen(friend)).toEqual([shared, forFriends].sort());
         expect(await seen(stranger)).toEqual([shared]);
-        expect(
-          (await actor.get(userCtx(stranger, "r"))).recipeCount,
-        ).toBe(1);
+        expect((await actor.get(userCtx(stranger, "r"))).recipeCount).toBe(1);
 
         // A stranger cannot vote on a version hidden from them: it is
         // answered exactly like a recipe that is not in the group.

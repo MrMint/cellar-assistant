@@ -114,7 +114,10 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
         name: `${prefix}-negroni`,
         baseSpirit: "gin",
       });
-      await seedGroup(db, viewer, { name: `${prefix}-daiquiri`, baseSpirit: "rum" });
+      await seedGroup(db, viewer, {
+        name: `${prefix}-daiquiri`,
+        baseSpirit: "rum",
+      });
       const recipe = await seedRecipe(db, { name: `${prefix} v1` });
       await db.execute(sql`
         update public.recipes set recipe_group_id = ${negroni}::uuid
@@ -143,7 +146,9 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
       const viewer = await seedUser(db);
       const tag = crypto.randomUUID().slice(0, 8);
       const byName = await seedGroup(db, viewer, { name: `Negroni ${tag}` });
-      const byDescription = await seedGroup(db, viewer, { name: `Americano ${tag}x` });
+      const byDescription = await seedGroup(db, viewer, {
+        name: `Americano ${tag}x`,
+      });
       await db.execute(sql`
         update public.recipe_groups
         set description = ${`a cousin of the BOULEVARDIER-${tag}`}
@@ -441,9 +446,9 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
           db,
         ),
       );
-      expect(
-        await walk(searching, userCtx(viewer, "r"), term, keep),
-      ).toEqual([]);
+      expect(await walk(searching, userCtx(viewer, "r"), term, keep)).toEqual(
+        [],
+      );
       expect(
         (await walk(searching, userCtx(author, "r"), term, keep)).map(
           (row) => row.name,

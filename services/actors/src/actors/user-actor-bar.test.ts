@@ -203,8 +203,14 @@ describe.skipIf(skip)("UserActor — recipe privacy (X15 / D22)", () => {
     await withTestDb(async (db) => {
       const me = await seedUser(db);
       const author = await seedUser(db);
-      const kept = await seedRecipe(db, { name: "Martinez", createdById: author });
-      const hidden = await seedRecipe(db, { name: "Bijou", createdById: author });
+      const kept = await seedRecipe(db, {
+        name: "Martinez",
+        createdById: author,
+      });
+      const hidden = await seedRecipe(db, {
+        name: "Bijou",
+        createdById: author,
+      });
       const actor = await actorOf(me, db);
       const ctx = userCtx(me);
       await actor.toggleRecipeLove(ctx, kept);

@@ -420,9 +420,16 @@ describe.skipIf(skip)("RecipePhotoJobActor — target-stack §7 IDOR", () => {
       };
       const { write, calls } = recordingWriter();
       // A verifier that fails loudly: nothing on the text path may ask it.
-      const actor = await jobActor(db, jobId, extract, noHits, write, async () => {
-        throw new Error("the text path verified a file");
-      });
+      const actor = await jobActor(
+        db,
+        jobId,
+        extract,
+        noHits,
+        write,
+        async () => {
+          throw new Error("the text path verified a file");
+        },
+      );
       await actor.start(userCtx(owner, "req"), {
         text: "Negroni: 1 oz gin, 1 oz Campari, 1 oz sweet vermouth. Stir.",
       });
