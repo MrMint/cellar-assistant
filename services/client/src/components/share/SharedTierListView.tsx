@@ -8,6 +8,7 @@ import {
 import { BAND_LABELS, BAND_TONES } from "@/components/tier-list/constants";
 import { groupByBand, type RankedEntry } from "@/lib/share/tier-bands";
 import { cn } from "@/lib/utils";
+import { formatCountry } from "@/utilities/formatters";
 
 export type SharedTierListEntryView = {
   id: string;
@@ -19,6 +20,21 @@ export type SharedTierListEntryView = {
   location: string | null;
   imageUrl: string | null;
 };
+
+/**
+ * The actor joins an item's region and its `country` **enum** ("Sonoma,
+ * UNITED_STATES"); the in-app list formats the country client-side
+ * (`tier-list/adapter.ts`), so the share page does the same. Only a segment
+ * shaped like an enum value is touched — a place's two-letter country code
+ * and a free-text region pass through as written.
+ */
+export const displayLocation = (location: string): string =>
+  location
+    .split(", ")
+    .map((part) =>
+      /^[A-Z]{3,}(_[A-Z]+)*$/.test(part) ? (formatCountry(part) ?? part) : part,
+    )
+    .join(", ");
 
 export type SharedTierListViewProps = {
   name: string;
@@ -84,7 +100,9 @@ function EntryRow({ entry }: { entry: RankedEntry<SharedTierListEntryView> }) {
           {entry.name ?? "Unavailable"}
         </p>
         {entry.location !== null && (
-          <p className="type-footnote truncate">{entry.location}</p>
+          <p className="type-footnote truncate">
+            {displayLocation(entry.location)}
+          </p>
         )}
         {entry.notes !== null && entry.notes.trim() !== "" && (
           <p className="type-callout line-clamp-3 text-ink-2 italic">

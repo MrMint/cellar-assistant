@@ -16,7 +16,7 @@ import {
   SharedRecipeView,
   safeImageUrl,
 } from "./SharedRecipeView";
-import { SharedTierListView } from "./SharedTierListView";
+import { displayLocation, SharedTierListView } from "./SharedTierListView";
 import { ShareFrame } from "./ShareFrame";
 
 const entry = (
@@ -58,6 +58,17 @@ describe("ShareFrame", () => {
 });
 
 describe("SharedTierListView", () => {
+  test("a country enum in an entry's location reads as words, as in the app", () => {
+    assert.equal(displayLocation("UNITED_STATES"), "United States");
+    assert.equal(
+      displayLocation("Sonoma, UNITED_STATES"),
+      "Sonoma, United States",
+    );
+    // A place's two-letter code and free text pass through untouched.
+    assert.equal(displayLocation("Madison, WI, US"), "Madison, WI, US");
+    assert.equal(displayLocation("Champagne"), "Champagne");
+  });
+
   const html = renderToStaticMarkup(
     <SharedTierListView
       name="Fridge beers"
