@@ -40,6 +40,7 @@ import {
   MENU_LINE_LIKE_MIN_SCORE,
 } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
+import { handleForId, isEmailShaped } from "../auth/display-name.ts";
 import { uuidArray } from "./collection-sql.ts";
 import type { DbOrTx } from "./db.ts";
 import { ARCS } from "./item-arcs.ts";
@@ -182,9 +183,10 @@ const readFriendsWhoLoved = async (
   const { rows } = await db.execute<{
     item_type: string;
     item_id: string;
+    user_id: string;
     name: string;
   }>(sql`
-    select theirs.item_type, theirs.item_id, u.name
+    select theirs.item_type, theirs.item_id, theirs.user_id, u.name
     from ${newestReviews(friendIds, refs)} theirs
     join public."user" u on u.id = theirs.user_id
     where theirs.score >= ${MENU_LINE_FRIEND_LOVED_MIN_SCORE}
@@ -194,7 +196,15 @@ const readFriendsWhoLoved = async (
   const byItem = new Map<string, string[]>();
   for (const row of rows) {
     const key = `${row.item_type}:${row.item_id}`;
-    byItem.set(key, [...(byItem.get(key) ?? []), row.name]);
+    // The display name is public, an email is not: the backfill rewrote
+    // email-shaped names, and this read, like `share-reads.ts`, does not
+    // rely on that alone (`auth/display-name.ts`).
+    const trimmed = row.name.trim();
+    const name =
+      trimmed === "" || isEmailShaped(trimmed)
+        ? handleForId(row.user_id)
+        : trimmed;
+    byItem.set(key, [...(byItem.get(key) ?? []), name]);
   }
   return byItem;
 };

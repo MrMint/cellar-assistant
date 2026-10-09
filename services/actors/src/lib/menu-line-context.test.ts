@@ -18,6 +18,7 @@ import { files } from "@cellar-assistant/db";
 import { sql } from "@cellar-assistant/db/orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { MenuScansCollectionActor } from "../actors/menu-scans-collection-actor.ts";
+import { handleForId } from "../auth/display-name.ts";
 import type { DbOrTx } from "./db.ts";
 import { ARCS } from "./item-arcs.ts";
 import {
@@ -247,6 +248,26 @@ describe.skipIf(skip)("MenuScansCollectionActor.lineContext", () => {
         "Kim",
         "Sam",
       ]);
+    });
+  });
+
+  it("never names a friend by an email address, even one a row still holds", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const pat = await seedUser(db, { displayName: "pat@example.com" });
+      await seedFriendship(db, viewer, pat);
+      const { placeId, scanId, actor } = await setUp(db, viewer, viewer);
+      const wine = await seedWine(db, viewer, "Barolo");
+      const line = await seedLine(db, {
+        placeId,
+        scanId,
+        name: "Barolo",
+        match: wine,
+      });
+      await seedItemReview(db, pat, wine, 5);
+
+      const [context] = await actor.lineContext(userCtx(viewer, "r"), [line]);
+      expect(context?.forYou?.lovedByFriendNames).toEqual([handleForId(pat)]);
     });
   });
 
