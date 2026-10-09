@@ -9,6 +9,7 @@ import {
   type MenuLineShape,
   menuGroupOf,
   menuLineReasons,
+  recipeQuery,
   starText,
 } from "./menu-lines";
 
@@ -185,6 +186,30 @@ describe("starText / candidateQuery", () => {
         line("LAGAVULIN 16YR", "spirit", { search_name: "lagavulin 16" }),
       ),
       "lagavulin 16",
+    );
+  });
+});
+
+describe("recipeQuery", () => {
+  test("a cocktail line searches the drink's name, not the spec after the dash", () => {
+    assert.equal(
+      recipeQuery(line("OLD FASHIONED — Buffalo Trace, demerara", "cocktail")),
+      "Old Fashioned",
+    );
+    assert.equal(
+      recipeQuery(line("NEGRONI - gin, campari, sweet vermouth", "cocktail")),
+      "Negroni",
+    );
+    assert.equal(recipeQuery(line("Paper Plane", "cocktail")), "Paper Plane");
+  });
+  test("the pipeline's search name wins when there is one", () => {
+    assert.equal(
+      recipeQuery(
+        line("OLD FASHIONED — Buffalo Trace", "cocktail", {
+          search_name: "old fashioned",
+        }),
+      ),
+      "old fashioned",
     );
   });
 });

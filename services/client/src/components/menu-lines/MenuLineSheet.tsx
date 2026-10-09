@@ -30,6 +30,7 @@ import {
   lineItemType,
   MENU_GROUP_LABEL,
   menuGroupOf,
+  recipeQuery,
 } from "./menu-lines";
 import {
   MenuLineCandidatesQuery,
@@ -405,7 +406,7 @@ export function MenuLineSheet({
             </p>
             <Button variant="outline" asChild>
               <Link
-                href={`/recipes?q=${encodeURIComponent(name)}`}
+                href={`/recipes?q=${encodeURIComponent(recipeQuery(current))}`}
                 underline="none"
               >
                 <Recipe aria-hidden strokeWidth={ICON_STROKE} />

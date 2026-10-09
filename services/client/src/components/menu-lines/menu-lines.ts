@@ -211,3 +211,19 @@ const hasReasons = (line: MenuLineShape): boolean =>
 /** What the catalog is searched for when a line has no match yet. */
 export const candidateQuery = (line: MenuLineShape): string =>
   line.search_name ?? menuLineText(line.menu_item_name);
+
+/**
+ * What "Find a recipe" searches for on a cocktail line: the pipeline's search
+ * name, else the drink's own name — the segment before the menu's dash, so
+ * "OLD FASHIONED — Buffalo Trace, demerara" searches "Old Fashioned". The
+ * recipe search matches a group's name, and the spec after the dash is never
+ * part of it ("No recipe groups found" for the whole line).
+ */
+export const recipeQuery = (line: MenuLineShape): string => {
+  if (line.search_name !== null && line.search_name.trim() !== "") {
+    return line.search_name;
+  }
+  const text = menuLineText(line.menu_item_name);
+  const head = text.split(/\s+[—–-]\s+/)[0]?.trim() ?? "";
+  return head === "" ? text : head;
+};
