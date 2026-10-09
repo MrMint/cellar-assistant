@@ -95,8 +95,8 @@ export const RecipeDetails = ({
         recipeType={recipe.type}
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-2">
           <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-1">
             {isNotNil(recipe.image_url) ? (
               // biome-ignore lint/performance/noImgElement: a free-form URL; next/image would need its host allowlisted.
@@ -117,8 +117,8 @@ export const RecipeDetails = ({
           <RecipeShare recipeId={recipe.id} recipeType={recipe.type} />
         </div>
 
-        <div className="grid gap-4 sm:col-span-2 lg:grid-cols-2">
-          <div className="flex flex-col gap-4">
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:col-span-2 lg:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-4">
             <RecipeDetailsCard
               recipeId={recipe.id}
               title={recipe.name}
@@ -196,7 +196,7 @@ export const RecipeDetails = ({
             </section>
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-4">
             {/* Instructions */}
             <section className="rounded-lg bg-surface-1 p-4">
               <h2 className="mb-4 type-title-2">Instructions</h2>
