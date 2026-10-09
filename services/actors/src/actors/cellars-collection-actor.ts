@@ -315,6 +315,74 @@ export class CellarsCollectionActor
   }
 
   /**
+   * X09 — the cellars "Your bottles" come from: per ref, the viewer's own
+   * cellars (created or co-owned — `ownedBy`, as `stats` counts; privacy plays
+   * no part) holding a bottle of it, a finished one too when
+   * `includeFinished`. One statement for the batch, one row per (item,
+   * cellar) however many bottles, by cellar name, capped per item. Ids,
+   * hydrated by `CellarActor.bottlesOf`, which re-checks visibility.
+   */
+  async ownContaining(
+    ctx: Ctx,
+    refs: readonly ItemRef[],
+    includeFinished?: boolean | null,
+  ): Promise<readonly CappedList<string>[]> {
+    requireReverseEdgeBatch(refs, "ownContaining refs");
+    for (const ref of refs) {
+      if (!isItemType(ref.type)) {
+        throw new ValidationError(`not an item type: ${ref.type}`);
+      }
+    }
+    const none = refs.map(() => ({ nodes: [], totalCount: 0 }));
+    return await this.batch(ctx, null, none, async () => {
+      const viewer = ctx.viewerId;
+      if (refs.length === 0 || viewer === null) return none;
+      const arc = ARCS.cellarItems;
+      const live =
+        includeFinished === true ? sql`true` : sql`ci.empty_at is null`;
+      const { rows } = await this.db.execute<ContainingRow>(sql`
+        select cellar_id, item_type, item_id, total from (
+          select c.id as cellar_id, c.name, held.item_type, held.item_id,
+                 row_number() over (
+                   partition by held.item_type, held.item_id
+                   order by c.name asc, c.id asc
+                 ) as rn,
+                 (count(*) over (
+                   partition by held.item_type, held.item_id
+                 ))::int as total
+          from (
+            select distinct ci.cellar_id,
+                   ${arc.typeExpr("ci")} as item_type,
+                   ${arc.idExpr("ci")} as item_id
+            from public.cellar_items ci
+            where ${live} and (${bottleMatch(refs)})
+          ) held
+          join public.cellars c on c.id = held.cellar_id
+          where ${ownedBy(viewer)}
+        ) ranked
+        where rn <= ${REVERSE_EDGE_CAP}
+        order by rn
+      `);
+      const byRef = new Map<string, { nodes: string[]; total: number }>();
+      for (const row of rows) {
+        if (row.item_type === null) {
+          throw new ConflictError(
+            `a cellar_items row in ${row.cellar_id} names no item`,
+          );
+        }
+        const key = `${row.item_type}:${row.item_id}`;
+        const bucket = byRef.get(key) ?? { nodes: [], total: row.total };
+        bucket.nodes.push(row.cellar_id);
+        byRef.set(key, bucket);
+      }
+      return refs.map((ref) => {
+        const bucket = byRef.get(`${ref.type}:${String(ref.id).toLowerCase()}`);
+        return { nodes: bucket?.nodes ?? [], totalCount: bucket?.total ?? 0 };
+      });
+    });
+  }
+
+  /**
    * Shared by the page and its `count(*)` — see `PageScope`. A `section`
    * narrows the visibility clause (D2); it never replaces it.
    */

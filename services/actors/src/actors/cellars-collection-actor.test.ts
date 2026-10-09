@@ -607,6 +607,64 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
       });
     });
 
+    /**
+     * X09 "Your bottles": only cellars the viewer created or co-owns —
+     * never a friend's or a stranger's, however visible — and a finished
+     * bottle's cellar only when asked for.
+     */
+    it("ownContaining: your own and co-owned cellars only, by name", async () => {
+      await withTestDb(async (db) => {
+        const me = await seedUser(db);
+        const friend = await seedUser(db);
+        await befriend(db, me, friend);
+        const wine = await seedWineRow(db, me);
+
+        const mine = await seedCellar(db, me, "PRIVATE", "b mine");
+        const coOwned = await seedCellar(db, friend, "PRIVATE", "a shared");
+        await db.execute(sql`
+          insert into public.cellar_owners (cellar_id, user_id)
+          values (${coOwned}::uuid, ${me}::uuid)
+        `);
+        const friendsPublic = await seedCellar(
+          db,
+          friend,
+          "PUBLIC",
+          "c theirs",
+        );
+        const finishedOnly = await seedCellar(db, me, "PRIVATE", "d finished");
+        await bottle(db, mine, me, wine);
+        await bottle(db, coOwned, friend, wine);
+        await bottle(db, friendsPublic, friend, wine);
+        await bottle(db, finishedOnly, me, wine, true);
+
+        const actor = await activate(
+          createActor(CellarsCollectionActor, me, db),
+        );
+        const [live] = await actor.ownContaining(userCtx(me), [
+          { type: "WINE", id: wine },
+        ]);
+        expect(live).toEqual({ nodes: [coOwned, mine], totalCount: 2 });
+
+        const [all] = await actor.ownContaining(
+          userCtx(me),
+          [{ type: "WINE", id: wine }],
+          true,
+        );
+        expect(all).toEqual({
+          nodes: [coOwned, mine, finishedOnly],
+          totalCount: 3,
+        });
+        // The friend sees their own two — never "b mine", which they may not.
+        const theirs = await activate(
+          createActor(CellarsCollectionActor, friend, db),
+        );
+        const [forFriend] = await theirs.ownContaining(userCtx(friend), [
+          { type: "WINE", id: wine },
+        ]);
+        expect(forFriend?.nodes).toEqual([coOwned, friendsPublic]);
+      });
+    });
+
     it("refuses another viewer before reading", async () => {
       await withTestDb(async (db) => {
         const me = await seedUser(db);
@@ -614,6 +672,11 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
         const actor = await activate(
           createActor(CellarsCollectionActor, me, db),
         );
+        await expect(
+          actor.ownContaining(userCtx(other), [
+            { type: "WINE", id: "00000000-0000-4000-8000-000000000001" },
+          ]),
+        ).rejects.toThrow(ForbiddenError);
         await expect(
           actor.containing(userCtx(other), [
             { type: "WINE", id: "00000000-0000-4000-8000-000000000001" },
