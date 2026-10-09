@@ -22,6 +22,7 @@ import {
   canSeeCheckInDetails,
   canSeeItemImage,
   canSeePlace,
+  canSeeRecipe,
   canSeeTierList,
   canShareAnonymously,
   canShareItemImageAnonymously,
@@ -32,11 +33,12 @@ import {
   isFriend,
   isOwner,
   isPlaceShared,
+  isRecipeShared,
   PLACE_REVIEW_STATUSES,
   type PlaceReviewStatus,
   PRIVACY_VALUES,
   type Privacy,
-  RECIPE_PRIVACY_WITHOUT_A_COLUMN,
+  type RecipeVisibility,
 } from "./index.ts";
 
 const OWNER = "11111111-1111-1111-1111-111111111111";
@@ -518,12 +520,19 @@ describe("anonymous sharing (X17)", () => {
     }
   });
 
-  it("recipes: shareable while they carry no privacy column (until D22)", () => {
-    expect(RECIPE_PRIVACY_WITHOUT_A_COLUMN).toBe("PUBLIC");
+  it("recipes: PUBLIC and not a draft, and nothing else (D22)", () => {
     expect(
-      canShareRecipeAnonymously({ privacy: RECIPE_PRIVACY_WITHOUT_A_COLUMN }),
+      canShareRecipeAnonymously({ privacy: "PUBLIC", isDraft: false }),
     ).toBe(true);
-    expect(canShareRecipeAnonymously({ privacy: "PRIVATE" })).toBe(false);
+    expect(
+      canShareRecipeAnonymously({ privacy: "PUBLIC", isDraft: true }),
+    ).toBe(false);
+    expect(
+      canShareRecipeAnonymously({ privacy: "FRIENDS", isDraft: false }),
+    ).toBe(false);
+    expect(
+      canShareRecipeAnonymously({ privacy: "PRIVATE", isDraft: false }),
+    ).toBe(false);
   });
 
   it("item images: public ones only, even the uploader's own private photo is not", () => {
@@ -533,5 +542,75 @@ describe("anonymous sharing (X17)", () => {
     expect(canSeeItemImage(owner, { userId: OWNER, isPublic: false })).toBe(
       true,
     );
+  });
+});
+
+describe("canSeeRecipe (X15 / D22)", () => {
+  const recipe = (
+    privacy: Privacy,
+    isDraft = false,
+    overrides: Partial<RecipeVisibility> = {},
+  ): RecipeVisibility => ({
+    createdById: OWNER,
+    privacy,
+    isDraft,
+    viewerIsFriendOfCreator: false,
+    ...overrides,
+  });
+  const recipeFor = (ctx: Ctx, privacy: Privacy, isDraft = false) =>
+    recipe(privacy, isDraft, {
+      viewerIsFriendOfCreator: isFriend(ctx, OWNER, FRIENDSHIPS),
+    });
+
+  it("is the four-branch rule for a published recipe", () => {
+    for (const privacy of PRIVACY_VALUES) {
+      for (const ctx of [owner, friend, stranger, anonymous]) {
+        expect(canSeeRecipe(ctx, recipeFor(ctx, privacy))).toBe(
+          canSee(ctx, {
+            privacy,
+            ownerIds: [OWNER],
+            viewerIsFriendOfCreator: isFriend(ctx, OWNER, FRIENDSHIPS),
+          }),
+        );
+      }
+    }
+  });
+
+  it("a draft is its creator's alone, whatever its privacy", () => {
+    for (const privacy of PRIVACY_VALUES) {
+      expect(canSeeRecipe(owner, recipeFor(owner, privacy, true))).toBe(true);
+      expect(canSeeRecipe(friend, recipeFor(friend, privacy, true))).toBe(
+        false,
+      );
+      expect(canSeeRecipe(stranger, recipeFor(stranger, privacy, true))).toBe(
+        false,
+      );
+      expect(canSeeRecipe(anonymous, recipeFor(anonymous, privacy, true))).toBe(
+        false,
+      );
+    }
+  });
+
+  it("admin and system see everything, drafts included", () => {
+    expect(
+      canSeeRecipe(adminCtx(STRANGER, "req"), recipe("PRIVATE", true)),
+    ).toBe(true);
+    expect(canSeeRecipe(systemCtx("req"), recipe("PRIVATE", true))).toBe(true);
+  });
+
+  it("a recipe whose author is gone is seen by its privacy alone", () => {
+    const orphan = recipe("PRIVATE", false, { createdById: null });
+    expect(canSeeRecipe(owner, orphan)).toBe(false);
+    expect(canSeeRecipe(owner, { ...orphan, privacy: "PUBLIC" })).toBe(true);
+  });
+
+  it("isRecipeShared is what an anonymous viewer may see", () => {
+    for (const privacy of PRIVACY_VALUES) {
+      for (const isDraft of [false, true]) {
+        expect(isRecipeShared({ privacy, isDraft })).toBe(
+          canSeeRecipe(anonymous, recipe(privacy, isDraft)),
+        );
+      }
+    }
   });
 });

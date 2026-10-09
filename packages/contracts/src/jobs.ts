@@ -416,6 +416,9 @@ export type RecipePhotoStage = (typeof RECIPE_PHOTO_STAGES)[number];
 export const isRecipePhotoStage = (value: string): value is RecipePhotoStage =>
   (RECIPE_PHOTO_STAGES as readonly string[]).includes(value);
 
+/** X15: the longest pasted recipe the text path reads. */
+export const RECIPE_TEXT_MAX = 8000;
+
 /**
  * What starts a recipe-photo job.
  *
@@ -424,8 +427,16 @@ export const isRecipePhotoStage = (value: string): value is RecipePhotoStage =>
  * `ViewerlessJobPayload` and `assertNoCallerSuppliedUser` keep it closed.
  */
 export type RecipePhotoJobPayload = ViewerlessJobPayload & {
-  /** `files.id` of the photo, already verified by `FileActor`. */
-  readonly fileId: string;
+  /**
+   * `files.id` of the photo, already verified by `FileActor`. Absent for a
+   * pasted recipe (`text`, X15) — exactly one of the two is set.
+   */
+  readonly fileId?: string | null;
+  /**
+   * X15's Paste: recipe text the user pasted, read by the same chain with no
+   * image. At most {@link RECIPE_TEXT_MAX} characters.
+   */
+  readonly text?: string | null;
   /** Optional second page / back of card. */
   readonly additionalFileIds?: readonly string[];
   /** Free-text hint the user typed alongside the photo. */

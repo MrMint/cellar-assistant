@@ -414,22 +414,62 @@ export const canShareTierListAnonymously = (tierList: {
 }): boolean => canShareAnonymously(tierList);
 
 /**
- * A recipe, by the privacy its caller states.
- *
- * `recipes` has **no privacy column** yet: every recipe is catalog data that
- * any signed-in user can read (`RecipeActor`'s module doc), so its one caller
- * passes `RECIPE_PRIVACY_WITHOUT_A_COLUMN`. Decision D22 makes recipes
- * private-first (roadmap X15); when that column lands, `RecipeActor.getShared`
- * must pass the row's value here instead, and nothing else has to change.
- * The parameter is required, not optional, so the change cannot be forgotten
- * into a silent "public".
+ * A recipe's share page (X17): PUBLIC, and not a draft — exactly
+ * {@link isRecipeShared}. Takes no `ctx`, like every share read: the author
+ * of a PRIVATE recipe cannot reach it through `/share/recipes/<id>` either.
  */
 export const canShareRecipeAnonymously = (recipe: {
   readonly privacy: Privacy;
-}): boolean => canShareAnonymously(recipe);
+  readonly isDraft: boolean;
+}): boolean => canShareAnonymously(recipe) && !recipe.isDraft;
 
-/** See {@link canShareRecipeAnonymously}: what every recipe is until D22. */
-export const RECIPE_PRIVACY_WITHOUT_A_COLUMN: Privacy = "PUBLIC";
+/* -------------------------------------------------------------------------- */
+/* Recipes (X15 / D22)                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A `recipes` row, as far as visibility goes.
+ *
+ * D22 made recipes **private first**: `recipes.privacy` is the same
+ * `permission_type` cellars and tier lists carry, and it is read with the
+ * same four-branch {@link canSee}. Recipes written before the column read
+ * PUBLIC (the migration backfills them), so nothing visible yesterday hides.
+ *
+ * One rule on top: a **draft** — what the AI read off a photo or out of
+ * pasted text, before its creator has reviewed it — is its creator's alone
+ * whatever `privacy` says. AI output is never published by the model.
+ *
+ * `createdById` is nullable (`ON DELETE SET NULL`): a recipe whose author is
+ * gone has no owner branch, so only its privacy can admit anyone.
+ */
+export type RecipeVisibility = {
+  readonly createdById: string | null;
+  readonly privacy: Privacy;
+  readonly isDraft: boolean;
+  /** Whether the viewer is a friend of the creator. Compute it with `isFriend`. */
+  readonly viewerIsFriendOfCreator: boolean;
+};
+
+export const canSeeRecipe = (ctx: Ctx, recipe: RecipeVisibility): boolean => {
+  if (bypassesPolicy(ctx)) return true;
+  if (isOwner(ctx, recipe.createdById)) return true;
+  if (recipe.isDraft) return false;
+  return canSee(ctx, {
+    privacy: recipe.privacy,
+    ownerIds: [recipe.createdById],
+    viewerIsFriendOfCreator: recipe.viewerIsFriendOfCreator,
+  });
+};
+
+/**
+ * Shared with everyone: PUBLIC and not a draft. What a read with no viewer of
+ * its own may use — a share page, and the menu matcher, whose answer lands
+ * on a place's menu where any visitor reads it.
+ */
+export const isRecipeShared = (recipe: {
+  readonly privacy: Privacy;
+  readonly isDraft: boolean;
+}): boolean => recipe.privacy === "PUBLIC" && !recipe.isDraft;
 
 /**
  * An `item_image` on a share page: public ones only. `canSeeItemImage` also

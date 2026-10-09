@@ -480,6 +480,17 @@ export type UserActorInterface = {
   toggleRecipeLove(ctx: Ctx, recipeId: string): Promise<ToggleRecipeLoveResult>;
   /** Loved recipe ids, newest first. Self only. */
   lovedRecipes(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
+  /**
+   * X15: the recipes this user wrote, newest change first — `drafts: true`
+   * for the AI drafts waiting on review, `false` for the published ones,
+   * omitted for both. Self only: a draft is nobody else's business, and
+   * someone else's recipes are reached through search and their groups.
+   */
+  myRecipes(
+    ctx: Ctx,
+    page: PageArgs,
+    drafts?: boolean | null,
+  ): Promise<Page<string>>;
 };
 
 export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
@@ -519,5 +530,6 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     recipeLoveStates: {},
     toggleRecipeLove: {},
     lovedRecipes: {},
+    myRecipes: {},
   },
 };

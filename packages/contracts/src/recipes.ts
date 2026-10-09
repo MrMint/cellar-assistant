@@ -86,7 +86,11 @@
 import type { ActorDescriptor } from "./actors.ts";
 import type { BarKind, IngredientRole } from "./bar.ts";
 import type { Ctx } from "./ctx.ts";
-import type { InstructionType, RecipeCategory } from "./enums.ts";
+import type {
+  InstructionType,
+  PermissionType,
+  RecipeCategory,
+} from "./enums.ts";
 import { ValidationError } from "./errors.ts";
 import {
   type CreateGenericItemInput,
@@ -197,6 +201,18 @@ export type RecipeDto = {
    */
   readonly ingredientCount: number;
   readonly instructionCount: number;
+  /**
+   * X15 / D22: who may see it, by the four-branch rule (`canSeeRecipe` in
+   * `@cellar-assistant/policy`). New recipes start `PRIVATE`; every recipe
+   * from before the column is `PUBLIC`.
+   */
+  readonly privacy: PermissionType;
+  /**
+   * AI output nobody has reviewed yet — its creator's alone, whatever
+   * `privacy` says. Saving it in the editor (`update` with `isDraft: false`)
+   * publishes it at its privacy.
+   */
+  readonly isDraft: boolean;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
 };
@@ -350,6 +366,10 @@ export type CreateRecipeInput = {
   readonly prepTimeMinutes?: number | null;
   readonly servingSize?: number | null;
   readonly imageUrl?: string | null;
+  /** Defaults to `PRIVATE` (D22: private first). */
+  readonly privacy?: PermissionType | null;
+  /** Defaults to `false`. The recipe-photo job writes `true` (AI output). */
+  readonly isDraft?: boolean | null;
 };
 
 export type UpdateRecipeInput = {
@@ -361,6 +381,9 @@ export type UpdateRecipeInput = {
   readonly prepTimeMinutes?: number | null;
   readonly servingSize?: number | null;
   readonly imageUrl?: string | null;
+  readonly privacy?: PermissionType;
+  /** `false` publishes a draft. A published recipe cannot become a draft. */
+  readonly isDraft?: boolean;
 };
 
 /**
