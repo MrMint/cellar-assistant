@@ -3523,6 +3523,7 @@ type Mutation {
 
   """D9: Love a recipe, or take the Love back."""
   toggleRecipeLove(recipeId: ID!): ToggleRecipeLoveResult!
+
   """
   D4: takes back the latest edit not already undone (an add, a removal, a move) and records that in the list's append-only history. Creator only; nothing to undo is a `ConflictError`.
   """
