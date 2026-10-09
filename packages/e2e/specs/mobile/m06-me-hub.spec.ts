@@ -15,13 +15,17 @@ import { Gql } from "../../fixtures/test.ts";
  *   "doesn't exist or isn't shared with you" (D24); your own id is `/me`.
  *
  * Creates two tier lists and one catalog item as `test2@test.com`, and one
- * log; deletes the lists and the log afterwards. No places.
+ * log; one PRIVATE tier list as `test@test.com`, so the count row has
+ * something to draw however the suite is run; deletes the lists and the log
+ * afterwards. No places.
  */
 test.describe.configure({ mode: "serial" });
 
 let api: Gql;
 let api2: Gql;
 const lists: string[] = [];
+let ownList: string | null = null;
+const ownName = unique("E2 Me Count");
 let logId: string | null = null;
 const sharedName = unique("E2 Profile Shared");
 const privateName = unique("E2 Profile Private");
@@ -49,6 +53,17 @@ test.beforeAll(async () => {
     );
     lists.push(data.createTierList.id);
   }
+
+  const own = await api.query(
+    `mutation T($input: CreateTierListInput!) {
+       createTierList(input: $input) {
+         __typename ... on TierList { id } ... on Error { message }
+       }
+     }`,
+    { input: { name: ownName, privacy: "PRIVATE", listType: "item" } },
+  );
+  expect(own.createTierList.__typename, JSON.stringify(own)).toBe("TierList");
+  ownList = own.createTierList.id;
 
   const ref = await api2.query(
     `query { referenceData(kind: TEA_CATEGORY, first: 1) {
@@ -102,6 +117,12 @@ test.afterAll(async () => {
       { id },
     );
   }
+  if (ownList !== null) {
+    await api.query(
+      `mutation D($id: ID!) { deleteTierList(tierListId: $id) { __typename } }`,
+      { id: ownList },
+    );
+  }
   if (logId !== null) {
     await api2.query(
       `mutation D($id: ID!) { deleteDrinkLog(id: $id) { __typename } }`,
@@ -126,8 +147,8 @@ test("Me: counts, Lists, Friends and Settings fit the phone", async ({
   await page.goto("/me");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-  // The account has bottles and tier lists from every other spec, so the
-  // count row is drawn; each tile names its noun.
+  // The account has at least the tier list made above, so the count row is
+  // drawn; each tile names its noun.
   const row = page.locator('[data-slot="me-counts"]');
   await expect(row).toBeVisible();
   const viewport = page.viewportSize();
