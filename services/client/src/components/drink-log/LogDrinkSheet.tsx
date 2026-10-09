@@ -28,6 +28,7 @@ import { type ApiFailure, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import {
   addTag,
+  type DraftPlace,
   EMPTY_DRAFT,
   type FlavourSuggestion,
   type LogDraft,
@@ -80,6 +81,12 @@ export type LogDrinkSheetProps = {
    */
   friends?: readonly DrinkLogFriend[];
   /**
+   * X07: where a new log starts — the place whose menu "I'm having this"
+   * was tapped on. Only a starting value: the person can clear or change it.
+   * Ignored in edit mode, which starts from the entry itself.
+   */
+  defaultPlace?: DraftPlace | null;
+  /**
    * After a write: the new entry's id and how many drinkers it wrote, so the
    * caller can toast and refresh. The sheet has already closed.
    */
@@ -117,10 +124,16 @@ export function LogDrinkSheet({
   subject,
   mode = { kind: "new" },
   friends,
+  defaultPlace = null,
   onSaved,
 }: LogDrinkSheetProps) {
   const isNew = mode.kind === "new";
-  const initial = mode.kind === "edit" ? mode.initial : EMPTY_DRAFT;
+  const initial: LogDraft =
+    mode.kind === "edit"
+      ? mode.initial
+      : defaultPlace === null
+        ? EMPTY_DRAFT
+        : { ...EMPTY_DRAFT, place: defaultPlace };
   const [draft, setDraft] = useState<LogDraft>(initial);
   // The id `logDrink` is addressed by: minted once per opening, so a retry
   // after a dropped response is the same log, and Undo knows what to delete.
@@ -134,12 +147,18 @@ export function LogDrinkSheet({
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open && !wasOpen.current) {
-      setDraft(mode.kind === "edit" ? mode.initial : EMPTY_DRAFT);
+      setDraft(
+        mode.kind === "edit"
+          ? mode.initial
+          : defaultPlace === null
+            ? EMPTY_DRAFT
+            : { ...EMPTY_DRAFT, place: defaultPlace },
+      );
       setLogId(mode.kind === "edit" ? mode.entryId : mintId());
       setError(null);
     }
     wasOpen.current = open;
-  }, [open, mode]);
+  }, [open, mode, defaultPlace]);
 
   const [logState, logDrink] = useMutation(LogDrinkMutation);
   const [updateState, updateDrinkLog] = useMutation(UpdateDrinkLogMutation);

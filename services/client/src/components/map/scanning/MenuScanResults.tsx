@@ -26,6 +26,12 @@
  *   learn the match through an outbox hop (and for a cocktail it never
  *   does), so the line re-rendered "not yet matched". Accept / Reject stays
  *   the one way to confirm an AI match (decision D6).
+ *
+ * X07: the lines are the shared `MenuLineList` — grouped by type, cased for
+ * reading, each opening the same actions as on the place page — with the
+ * suggestion's Accept / Reject as the row's status. The suggestion is asked
+ * as a question ("Is it Barolo 2016?") with no percentage, and the read's
+ * detection confidence is no longer printed under every line.
  */
 
 import { type ReactNode, useCallback, useMemo, useState } from "react";
@@ -36,20 +42,18 @@ import {
   Close,
   ErrorIcon,
   Help,
-  ICON_STROKE,
-  Price,
   Success,
   Warning,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
 import { Timestamp } from "@/components/common/Timestamp";
+import { MenuLineList } from "@/components/menu-lines/MenuLineList";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
+import { menuLineText } from "@/utilities/menu-line-text";
 import {
   type MenuItemView,
   matchedItemHref,
@@ -77,34 +81,6 @@ import { usePollWhile } from "./use-poll-while";
 
 interface MenuScanResultsProps {
   scanId: string;
-}
-
-const ITEM_TYPES = ["BEER", "WINE", "SPIRIT", "COFFEE", "SAKE", "TEA"] as const;
-type LineItemType = (typeof ITEM_TYPES)[number];
-
-const lineType = (type?: string | null): LineItemType | null => {
-  const upper = type?.toUpperCase();
-  return ITEM_TYPES.find((t) => t === upper) ?? null;
-};
-
-/** The line's type glyph on its type's tint; a question mark otherwise. */
-function LineTypeMark({ type }: { type?: string | null }) {
-  const known = lineType(type);
-  const token = known ? itemTypeTokens[known] : null;
-  return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-sm p-2",
-        token ? [token.tintClass, token.textClass] : "bg-surface-3 text-ink-2",
-      )}
-    >
-      {known ? (
-        <TypeGlyph type={known} className="size-5" />
-      ) : (
-        <Help aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
-      )}
-    </span>
-  );
 }
 
 /** One chip for both halves of the pipeline. */
@@ -304,16 +280,69 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     if (!complete) refresh();
   };
 
-  // Group items by category
-  const itemsByCategory = items.reduce(
-    (acc, item) => {
-      const category = item.menu_category || "Other";
-      if (!acc[category]) acc[category] = [];
-      acc[category].push(item);
-      return acc;
-    },
-    {} as Record<string, MenuItemView[]>,
-  );
+  /** Under each line: its match, or the suggestion to accept or reject. */
+  const lineStatus = (item: MenuItemView): ReactNode => {
+    const match = matchByLine.get(item.id) ?? { kind: "new" as const };
+    if (match.kind === "matched") {
+      return (
+        <p className="type-footnote inline-flex flex-wrap items-center gap-1 text-success">
+          <Success aria-hidden className="size-4 shrink-0" />
+          Matched
+          {match.href ? (
+            <>
+              {" to "}
+              <Link href={match.href} underline="always" className="text-ink-1">
+                {match.name}
+              </Link>
+            </>
+          ) : (
+            <span className="text-ink-1"> to {match.name}</span>
+          )}
+        </p>
+      );
+    }
+    if (match.kind === "suggested") {
+      const suggestedName =
+        match.suggestion.suggested?.name ?? "a catalog item";
+      const lineName = menuLineText(item.menu_item_name);
+      return (
+        <Notice
+          tone="ai"
+          action={
+            <div className="flex flex-row flex-wrap gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                aria-label={`Reject ${suggestedName} for ${lineName}`}
+                onClick={() => handleSuggestion(match.suggestion, "REJECT")}
+              >
+                <Close aria-hidden />
+                Reject
+              </Button>
+              <Button
+                size="sm"
+                aria-label={`Accept ${suggestedName} for ${lineName}`}
+                onClick={() => handleSuggestion(match.suggestion, "ACCEPT")}
+              >
+                <Check aria-hidden />
+                Accept
+              </Button>
+            </div>
+          }
+        >
+          <span className="inline-flex flex-wrap items-center gap-1">
+            <Help aria-hidden className="size-4 shrink-0 text-ai" />
+            Is it {suggestedName}?
+          </span>
+        </Notice>
+      );
+    }
+    return (
+      <p className="type-footnote text-ink-3">
+        {settled ? "Not in the catalog yet" : "Matching…"}
+      </p>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -394,149 +423,12 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
           </p>
         </section>
       ) : (
-        Object.entries(itemsByCategory).map(([category, categoryItems]) => (
-          <section key={category}>
-            <h2 className="type-title-2 mb-4">{category}</h2>
-
-            <ul className="flex flex-col gap-4">
-              {categoryItems.map((item) => {
-                const match = matchByLine.get(item.id) ?? {
-                  kind: "new" as const,
-                };
-                const suggestedName =
-                  match.kind === "suggested"
-                    ? (match.suggestion.suggested?.name ?? "suggestion")
-                    : "";
-
-                return (
-                  <li key={item.id} className="rounded-xl bg-surface-1 p-4">
-                    <div className="flex items-start gap-4">
-                      <LineTypeMark type={item.detected_item_type} />
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="type-headline min-w-0 flex-1">
-                            {item.menu_item_name}
-                          </h3>
-                          {item.menu_item_price != null && (
-                            <p className="type-callout tabular flex shrink-0 items-center gap-1 font-semibold">
-                              <Price
-                                aria-hidden
-                                strokeWidth={ICON_STROKE}
-                                className="size-5 text-ink-2"
-                              />
-                              ${item.menu_item_price}
-                            </p>
-                          )}
-                        </div>
-
-                        {item.menu_item_description && (
-                          <p className="type-callout mt-1 text-ink-2">
-                            {item.menu_item_description}
-                          </p>
-                        )}
-
-                        {item.extracted_attributes &&
-                          Object.keys(item.extracted_attributes).length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {Object.entries(item.extracted_attributes).map(
-                                ([key, value]) => (
-                                  <Badge
-                                    key={key}
-                                    variant="secondary"
-                                    className="whitespace-normal"
-                                  >
-                                    {key}: {String(value)}
-                                  </Badge>
-                                ),
-                              )}
-                            </div>
-                          )}
-
-                        {match.kind === "matched" ? (
-                          <Notice tone="success" className="mt-2">
-                            <span className="inline-flex flex-wrap items-center gap-1">
-                              <Success
-                                aria-hidden
-                                className="size-4 shrink-0"
-                              />
-                              Matched to:{" "}
-                              {match.href ? (
-                                <Link
-                                  href={match.href}
-                                  underline="always"
-                                  className="text-ink-1"
-                                >
-                                  {match.name}
-                                </Link>
-                              ) : (
-                                match.name
-                              )}
-                            </span>
-                          </Notice>
-                        ) : match.kind === "suggested" ? (
-                          <Notice
-                            tone="ai"
-                            className="mt-2"
-                            action={
-                              <div className="flex flex-row flex-wrap gap-2">
-                                <Button
-                                  variant="destructive"
-                                  aria-label={`Reject ${suggestedName} for ${item.menu_item_name}`}
-                                  onClick={() =>
-                                    handleSuggestion(match.suggestion, "REJECT")
-                                  }
-                                >
-                                  <Close aria-hidden />
-                                  Reject
-                                </Button>
-                                <Button
-                                  aria-label={`Accept ${suggestedName} for ${item.menu_item_name}`}
-                                  onClick={() =>
-                                    handleSuggestion(match.suggestion, "ACCEPT")
-                                  }
-                                >
-                                  <Check aria-hidden />
-                                  Accept
-                                </Button>
-                              </div>
-                            }
-                          >
-                            <span className="inline-flex flex-wrap items-center gap-1">
-                              <Help
-                                aria-hidden
-                                className="size-4 shrink-0 text-ai"
-                              />
-                              Suggested match:{" "}
-                              {match.suggestion.suggested?.name ?? "Unknown"} (
-                              {(
-                                match.suggestion.confidence_score * 100
-                              ).toFixed(0)}
-                              % confidence)
-                            </span>
-                          </Notice>
-                        ) : (
-                          <Notice tone="neutral" className="mt-2">
-                            {settled
-                              ? "New item - not yet matched"
-                              : "Matching..."}
-                          </Notice>
-                        )}
-
-                        {item.confidence_score != null && (
-                          <p className="type-footnote tabular mt-1 text-ink-2">
-                            Detection confidence:{" "}
-                            {(item.confidence_score * 100).toFixed(0)}%
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))
+        <MenuLineList
+          lines={items}
+          place={scan.place}
+          renderStatus={lineStatus}
+          onChanged={refresh}
+        />
       )}
 
       {/* Back button */}

@@ -2,7 +2,7 @@
 
 /**
  * `82450ad1:src/components/map/places/PlaceDetails.tsx`, restored — the
- * `/places/[placeId]` page (Menu / Camera Scan / Info tabs).
+ * `/places/[placeId]` page (Menu / Scan menu / Info tabs).
  *
  * Data: one `PlaceDetailsQuery` through `usePlaceDetails` (adapter.ts) in
  * place of `GET_PLACE_DETAILS` + the server page's `GET_PLACE_ENRICHMENT`.
@@ -673,7 +673,7 @@ export function PlaceDetails({
             </TabsTrigger>
             {menuScanOffered && (
               <TabsTrigger value="scan" className="flex-none px-3">
-                Camera Scan
+                Scan menu
               </TabsTrigger>
             )}
             <TabsTrigger value="info" className="flex-none px-3">
@@ -685,7 +685,9 @@ export function PlaceDetails({
             {currentMenu ? (
               <PlaceMenuItems
                 placeId={placeData.id}
+                placeName={placeData.name}
                 userId={userId}
+                onChanged={refetch}
                 menuItems={menuItems}
                 hasMore={hasMoreMenuItems}
                 loadingMore={loadingMoreMenuItems}
@@ -704,8 +706,9 @@ export function PlaceDetails({
                 </h2>
                 {menuScanOffered && (
                   <p className="type-body text-ink-2">
-                    Scan a menu at this location using the &quot;Camera
-                    Scan&quot; tab above.
+                    Scan its drinks menu with the &quot;Scan menu&quot; tab
+                    above — wine, beer, spirits, cocktails, sake, tea and
+                    coffee.
                   </p>
                 )}
               </div>

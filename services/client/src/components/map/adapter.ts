@@ -415,8 +415,36 @@ export type MenuLineNode = {
   readonly matchedItem?: {
     readonly id: string;
     readonly type: string;
-    readonly item?: { readonly id: string; readonly name: string } | null;
+    readonly item?: {
+      readonly id: string;
+      readonly name: string;
+      readonly isWantToTry?: boolean | null;
+    } | null;
   } | null;
+  readonly canCorrectMatch?: boolean | null;
+  readonly forYou?: {
+    readonly yourScore?: number | null;
+    readonly friendsWhoLovedNames?: readonly string[] | null;
+    readonly friendsWhoLovedCount?: number | null;
+    readonly cellar?: { readonly id: string; readonly name: string } | null;
+    readonly likeYouRated?: {
+      readonly score: number;
+      readonly item?: { readonly id: string; readonly name: string } | null;
+    } | null;
+  } | null;
+};
+
+/**
+ * X07: the grounded reasons a matched line matters to the viewer
+ * (`PlaceMenuItem.forYou`), each one a fact — `menu-lines/menu-lines.ts`
+ * turns them into chips. Never a score the app made up.
+ */
+export type MenuLineForYou = {
+  your_score: number | null;
+  cellar: { id: string; name: string } | null;
+  friends_who_loved: string[];
+  friends_who_loved_count: number;
+  like_you_rated: { name: string; score: number } | null;
 };
 
 /**
@@ -435,7 +463,23 @@ export type MenuItemView = {
   is_available: boolean | null;
   created_at: string | null;
   extracted_attributes: Record<string, unknown> | null;
-  matched_item: { id: string; name: string; type: string } | null;
+  matched_item: {
+    id: string;
+    name: string;
+    type: string;
+    /** X08's Save state for the matched item (`Item.isWantToTry`). */
+    is_want_to_try: boolean;
+  } | null;
+  /**
+   * The pipeline's normalised name for matching (`search_name`, kept out of
+   * `extracted_attributes` because it is not a menu fact) — what X07's
+   * candidate search asks the catalog for. Null when the read gave none.
+   */
+  search_name: string | null;
+  /** X07: the viewer scanned this menu, so may set or clear its match. */
+  can_correct_match: boolean;
+  /** X07: null for an unmatched line, or when nothing grounded applies. */
+  for_you: MenuLineForYou | null;
 };
 
 /**
@@ -452,6 +496,31 @@ const extractedAttributesFrom = (
     ([key, v]) => key !== "search_name" && v !== null && v !== undefined,
   );
   return entries.length > 0 ? Object.fromEntries(entries) : null;
+};
+
+const searchNameFrom = (value: unknown): string | null => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const name = (value as Record<string, unknown>).search_name;
+  return typeof name === "string" && name.trim() !== "" ? name.trim() : null;
+};
+
+const forYouFrom = (forYou: MenuLineNode["forYou"]): MenuLineForYou | null => {
+  if (forYou == null) return null;
+  const like = forYou.likeYouRated;
+  return {
+    your_score: forYou.yourScore ?? null,
+    cellar: forYou.cellar
+      ? { id: forYou.cellar.id, name: forYou.cellar.name }
+      : null,
+    friends_who_loved: [...(forYou.friendsWhoLovedNames ?? [])],
+    friends_who_loved_count: forYou.friendsWhoLovedCount ?? 0,
+    like_you_rated:
+      like?.item != null
+        ? { name: displayItemName(like.item.name), score: like.score }
+        : null,
+  };
 };
 
 export function menuItemFrom(node: MenuLineNode): MenuItemView {
@@ -473,8 +542,12 @@ export function menuItemFrom(node: MenuLineNode): MenuItemView {
             id: matched.item.id,
             name: displayItemName(matched.item.name),
             type: matched.type.toLowerCase(),
+            is_want_to_try: matched.item.isWantToTry === true,
           }
         : null,
+    search_name: searchNameFrom(node.extractedAttributes),
+    can_correct_match: node.canCorrectMatch === true,
+    for_you: forYouFrom(node.forYou),
   };
 }
 

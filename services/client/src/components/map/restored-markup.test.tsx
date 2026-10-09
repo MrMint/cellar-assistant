@@ -63,28 +63,37 @@ const unmatched = menuItemFrom({
   detectedItemType: "wine",
 });
 
-describe("PlaceMenuItems (restored)", () => {
-  test("lines by category, the old match badges, price and actions", () => {
+describe("PlaceMenuItems (X07)", () => {
+  test("lines grouped by type — not all under Other — cased, priced, and each one a tap target", () => {
     const html = render(
-      <PlaceMenuItems placeId="p1" menuItems={[matched, unmatched]} />,
+      <PlaceMenuItems
+        placeId="p1"
+        placeName="Cork & Barrel"
+        menuItems={[matched, unmatched]}
+      />,
     );
+    // `unmatched` has no menu_category; its type puts it under Wine.
+    assert.match(html, />Wine</);
     assert.match(html, />Sake</);
-    assert.match(html, />Other</);
-    assert.match(html, /Matched to: Kubota Senju/);
-    assert.match(html, /\$14/);
-    assert.match(html, /region: Niigata/);
-    assert.match(html, /View Details/);
-    // A matched line's "Add to Cellar" opens the item; an unmatched one has
-    // no pretend button and no promise that adding creates an item.
-    assert.match(html, /href="\/sakes\/s1"[^>]*>.*Add to Cellar/s);
-    assert.equal(html.match(/Add to Cellar/g)?.length, 1);
-    assert.match(html, /New item - not yet matched/);
-    assert.doesNotMatch(html, /will be created when added/);
+    assert.doesNotMatch(html, />Other</);
+    assert.match(html, /Matched to <span[^>]*>Kubota Senju<\/span>/);
+    // The menu's own number, with no currency the read never recorded.
+    assert.match(html, />14</);
+    assert.doesNotMatch(html, /\$14/);
+    // Raw key: value badges and percentages are gone from the line.
+    assert.doesNotMatch(html, /region: Niigata/);
+    assert.doesNotMatch(html, /%/);
+    // The whole row opens the line's actions.
+    assert.match(
+      html,
+      /<button[^>]*aria-label="Kubota Junmai, matched to Kubota Senju"/,
+    );
+    assert.match(html, /Not in the catalog yet/);
   });
 
   test("empty state", () => {
     assert.match(
-      render(<PlaceMenuItems placeId="p1" menuItems={[]} />),
+      render(<PlaceMenuItems placeId="p1" placeName="Bar" menuItems={[]} />),
       /No menu items available/,
     );
   });
@@ -93,6 +102,7 @@ describe("PlaceMenuItems (restored)", () => {
     const more = render(
       <PlaceMenuItems
         placeId="p1"
+        placeName="Bar"
         menuItems={[matched]}
         hasMore
         onLoadMore={() => {}}
@@ -102,6 +112,7 @@ describe("PlaceMenuItems (restored)", () => {
     const done = render(
       <PlaceMenuItems
         placeId="p1"
+        placeName="Bar"
         menuItems={[matched]}
         hasMore={false}
         onLoadMore={() => {}}
@@ -112,6 +123,7 @@ describe("PlaceMenuItems (restored)", () => {
       render(
         <PlaceMenuItems
           placeId="p1"
+          placeName="Bar"
           menuItems={[matched]}
           loadMoreError="The server did not answer."
         />,

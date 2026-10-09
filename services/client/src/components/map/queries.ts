@@ -241,6 +241,7 @@ export const MenuLineFragment = graphql(`
     isAvailable
     createdAt
     extractedAttributes
+    canCorrectMatch
     matchedItem {
       id
       type
@@ -248,6 +249,25 @@ export const MenuLineFragment = graphql(`
         __typename
         id
         name
+        isWantToTry
+      }
+    }
+    forYou {
+      yourScore
+      friendsWhoLovedNames
+      friendsWhoLovedCount
+      cellar {
+        __typename
+        id
+        name
+      }
+      likeYouRated {
+        score
+        item {
+          __typename
+          id
+          name
+        }
       }
     }
   }
