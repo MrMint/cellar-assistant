@@ -381,6 +381,8 @@ export class CellarActor
    * X04: the grid's list. The same filter as `items` (G2), then either the
    * sort or — with `search` — the narrowing (`../lib/cellar-search.ts`): name
    * matches, then meaning matches inside the tuned cutoff, and nothing else.
+   * A search overrides the sort, except FINISHED_DESC (the diary), which
+   * orders what the search kept by date.
    * Then identical bottles fold into one group ("×3"), which sits where its
    * best-placed bottle sat. Paged by group; `bottleCount` counts bottles.
    *
@@ -408,10 +410,18 @@ export class CellarActor
     } else {
       const searched = await this.#narrowed(ctx, rows, query);
       meaning = searched.meaning;
-      ordered = searched.matches.map((hit) => ({
+      const hits = searched.matches.map((hit) => ({
         dto: toItemDto(hit.value, hit.distance),
         match: hit.match,
       }));
+      // The narrowing decides *which* bottles; the diary still reads by date,
+      // so a search of Finished keeps its month headings in calendar order
+      // (by relevance they came out as "March 2026", "October 2026", and so
+      // on). Every other sort steps aside for the search's order: names first.
+      ordered =
+        args.sort === "FINISHED_DESC"
+          ? [...hits].sort((a, b) => finishedDesc(a.dto, b.dto))
+          : hits;
     }
 
     const groups = toGroups(ordered, args.group ?? true);
@@ -1269,11 +1279,7 @@ const sorted = (
     case "FINISHED_DESC":
       // Finished bottles, most recently finished first, then the rest newest
       // first — the diary's order.
-      return copy.sort(
-        (a, b) =>
-          Number(a.emptyAt === null) - Number(b.emptyAt === null) ||
-          instantDesc(a.emptyAt, b.emptyAt),
-      );
+      return copy.sort(finishedDesc);
     case "NAME_ASC":
       // Needs names, which `#sorted` reads before it gets here; reaching this
       // arm means a caller skipped that, so say so rather than guess.
@@ -1293,6 +1299,11 @@ const instantDesc = (a: string | null, b: string | null): number => {
   if (b === null) return -1;
   return Date.parse(b) - Date.parse(a);
 };
+
+/** FINISHED_DESC: finished first, the latest finish first; stable on ties. */
+const finishedDesc = (a: CellarItemDto, b: CellarItemDto): number =>
+  Number(a.emptyAt === null) - Number(b.emptyAt === null) ||
+  instantDesc(a.emptyAt, b.emptyAt);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -1319,14 +1330,23 @@ type Matched = {
   readonly match: CellarItemGroupDto["match"];
 };
 
-/** X04's ×N over an ordered list (`groupInOrder`). */
+/**
+ * X04's ×N over an ordered list (`groupInOrder`). Identical means one catalog
+ * item *and* the same side of finished: under "All" a finished bottle is its
+ * own card, never one of a "×3" whose lead is still on the shelf — the card
+ * links to its lead only, so a folded-in finished bottle could not be reached
+ * from the grid, and the "×3" would count bottles that are gone.
+ */
 const toGroups = (
   ordered: readonly Matched[],
   group: boolean,
 ): CellarItemGroupDto[] =>
   groupInOrder(
     ordered,
-    (entry) => `${entry.dto.item.type}:${entry.dto.item.id}`,
+    (entry) =>
+      `${entry.dto.item.type}:${entry.dto.item.id}:${
+        entry.dto.emptyAt === null ? "here" : "finished"
+      }`,
     group,
   ).map(({ lead, members }) => ({
     lead: lead.dto,

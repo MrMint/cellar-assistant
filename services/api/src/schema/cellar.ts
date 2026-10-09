@@ -455,7 +455,9 @@ export const CellarType = builder
           sort: t.arg({ type: CellarItemSortEnum, required: false }),
           search: t.arg.string({
             required: false,
-            description: "Free text that narrows; overrides `sort`.",
+            description:
+              "Free text that narrows; overrides `sort`, except " +
+              "FINISHED_DESC, which orders what it kept by finish date.",
           }),
           types: t.arg({ type: [ItemTypeEnum], required: false }),
           status: t.arg({

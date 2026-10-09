@@ -908,7 +908,9 @@ type Cellar {
     """
     last: Int
 
-    """Free text that narrows; overrides `sort`."""
+    """
+    Free text that narrows; overrides `sort`, except FINISHED_DESC, which orders what it kept by finish date.
+    """
     search: String
     sort: CellarItemSort
     status: CellarItemStatus = ACTIVE

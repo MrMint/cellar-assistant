@@ -1645,6 +1645,65 @@ describe.skipIf(skip)("CellarActor — the cellar home (X04)", () => {
     });
   });
 
+  it("a search of the diary keeps finish order; ALL never folds a finished bottle into a live one", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const cellarId = await seedCellar(db, { createdById: owner });
+      // No embedder: names only, so the order below is the name arm's.
+      const actor = await activate(newCellarActor(cellarId, db));
+      const ctx = userCtx(owner, "r");
+
+      const exact = await actor.addItem(ctx, {
+        item: await seedWine(db, owner, "Lagavulin"),
+      });
+      const longer = await actor.addItem(ctx, {
+        item: await seedWine(db, owner, "Lagavulin 16 Year Old"),
+      });
+      await actor.updateItem(ctx, exact.id, {
+        emptyAt: "2026-01-10T00:00:00.000Z",
+      });
+      await actor.updateItem(ctx, longer.id, {
+        emptyAt: "2026-03-10T00:00:00.000Z",
+      });
+      const diary = async (sort?: "FINISHED_DESC") =>
+        (
+          await actor.itemGroups(ctx, {
+            page,
+            status: "EMPTY",
+            search: "lagavulin",
+            group: false,
+            ...(sort === undefined ? {} : { sort }),
+          })
+        ).entries.map((entry) => entry.node.lead.id);
+      // By relevance the exact name leads; the diary reads by date instead.
+      expect(await diary()).toEqual([exact.id, longer.id]);
+      expect(await diary("FINISHED_DESC")).toEqual([longer.id, exact.id]);
+
+      const barolo = await seedWine(db, owner, "Barolo");
+      const here = await actor.addItem(ctx, { item: barolo });
+      const gone = await actor.addItem(ctx, { item: barolo });
+      await actor.emptyItem(ctx, gone.id);
+      const all = await actor.itemGroups(ctx, { page, status: "ALL" });
+      const barolos = all.entries
+        .map((entry) => entry.node)
+        .filter((group) => group.lead.item.id === barolo.id);
+      expect(barolos.map((group) => [group.bottleIds, group.count])).toEqual(
+        expect.arrayContaining([
+          [[here.id], 1],
+          [[gone.id], 1],
+        ]),
+      );
+      expect(barolos).toHaveLength(2);
+      expect(all.bottleCount).toBe(4);
+      // In the cellar, the live bottle alone.
+      const active = await actor.itemGroups(ctx, { page });
+      expect(
+        active.entries.find((entry) => entry.node.lead.item.id === barolo.id)
+          ?.node.count,
+      ).toBe(1);
+    });
+  });
+
   it("the dashboard counts bottles, and logs per month in the viewer's zone", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
