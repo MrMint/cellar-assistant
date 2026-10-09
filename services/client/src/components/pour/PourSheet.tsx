@@ -317,7 +317,7 @@ export function PourSheet({
     onChanged?.();
     const id = logId;
     const snapshot = before;
-    notify(`Poured · a drop left`, {
+    notify("Poured · a drop left", {
       tone: "success",
       undo: () => void undoPour(id, snapshot),
     });
