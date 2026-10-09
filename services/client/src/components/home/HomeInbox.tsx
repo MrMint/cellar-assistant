@@ -2,13 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import {
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation } from "urql";
 import { IconButton } from "@/components/app/IconButton";
 import {
@@ -61,14 +55,24 @@ const KIND_ICON: Readonly<Record<AiJob["kind"], AppIcon>> = {
   TIER_LIST_INSIGHTS: Ranked,
 };
 
-/** The latest jobs: the watcher's, once it has polled; the page's until then. */
+/**
+ * The latest jobs: this page's read first, then whatever is published after
+ * it — the page's own read (below), then the watcher's polls. Never what the
+ * store held before this page arrived: on a client navigation back to Home
+ * that would draw an older answer (or, after a sign-out and sign-in on one
+ * tab, someone else's) until the page's read was published over it.
+ */
 const useJobs = (initial: readonly AiJob[]): readonly AiJob[] => {
-  const live = useSyncExternalStore(
-    aiJobStore.subscribe,
-    aiJobStore.getSnapshot,
-    () => null,
+  const [jobs, setJobs] = useState(initial);
+  useEffect(
+    () =>
+      aiJobStore.subscribe(() => {
+        const next = aiJobStore.getSnapshot();
+        if (next !== null) setJobs(next);
+      }),
+    [],
   );
-  return live ?? initial;
+  return jobs;
 };
 
 /**

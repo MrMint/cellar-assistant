@@ -30,6 +30,12 @@ export type AiJobStore = {
    * now on, and once at once if one arrived before anyone was listening.
    */
   listen(onKick: () => void): () => void;
+  /**
+   * Forget everything: the jobs and any held kick. The watcher calls it when
+   * the signed-in shell goes away (sign-out), so the next person to sign in
+   * on this tab never sees — even for a frame — the last one's AI work.
+   */
+  reset(): void;
 };
 
 export const createAiJobStore = (): AiJobStore => {
@@ -66,6 +72,11 @@ export const createAiJobStore = (): AiJobStore => {
       return () => {
         kickListeners.delete(onKick);
       };
+    },
+    reset() {
+      heldKick = false;
+      jobs = null;
+      for (const listener of Array.from(listeners)) listener();
     },
   };
 };

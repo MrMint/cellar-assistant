@@ -101,6 +101,8 @@ export function AiJobWatcher() {
     return () => {
       unlisten();
       stop();
+      // The shell is going (sign-out): this viewer's jobs go with it.
+      aiJobStore.reset();
     };
   }, [client, router]);
 

@@ -278,6 +278,19 @@ describe("aiJobStore", () => {
     assert.equal(told, 1);
     assert.equal(store.getSnapshot()?.length, 1);
   });
+
+  test("reset (sign-out) forgets the jobs and a held kick", () => {
+    const store = createAiJobStore();
+    store.publish([job({})]);
+    store.kick();
+    store.reset();
+    assert.equal(store.getSnapshot(), null);
+    let kicks = 0;
+    store.listen(() => {
+      kicks += 1;
+    });
+    assert.equal(kicks, 0);
+  });
 });
 
 describe("seen cookie", () => {
