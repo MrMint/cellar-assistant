@@ -58,6 +58,15 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "to page. Both are behind one `searchGate`, so a resubmit retires the " +
       "search before it.",
   },
+  "pour/PourSheet.tsx": {
+    calls: 1,
+    reason:
+      "After the band move (a submit-driven write behind the row's `moving` " +
+      "flag, so one at a time), one network-only read of the list's top edit " +
+      "names the move's `seq` for its toast's Undo (D4 `expectedSeq`) — the " +
+      "move payload does not carry it. Its answer is used once, inside that " +
+      "move, and only when it is that move (`movedEditSeq`).",
+  },
   "cellar-api/CellarCheckIns.tsx": {
     calls: 1,
     reason:
