@@ -31,6 +31,9 @@ describe("menuLineText", () => {
     // Lower case for style.
     ["negroni", "Negroni"],
     ["house red", "House Red"],
+    // …and a measure in it keeps the menu's own case, not `175ML`.
+    ["glass of house red 175ml", "Glass of House Red 175ml"],
+    ["sake - junmai daiginjo 300ml", "Sake - Junmai Daiginjo 300ml"],
     // Numbers and units alone are left as printed.
     ["12 YR", "12 YR"],
     ["2016", "2016"],

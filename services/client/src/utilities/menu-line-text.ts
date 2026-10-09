@@ -80,10 +80,21 @@ const whispers = (segment: string): boolean => {
   return chars.some(isLower) && !chars.some(isUpper);
 };
 
+/**
+ * A whispered segment in capitals, so `titleCaseWords` can case it and spot
+ * its acronyms (`ipa` → `IPA`) — except a word with a digit in it, which
+ * `titleCaseWords` leaves exactly as given: `175ml` stays `175ml` rather
+ * than coming back `175ML`.
+ */
+const raise = (segment: string): string =>
+  segment
+    .split(/(\s+)/)
+    .map((word) => (/[0-9]/.test(word) ? word : word.toUpperCase()))
+    .join("");
+
 const caseSegment = (segment: string): string => {
   if (shouts(segment)) return titleCaseWords(segment);
-  // Upper-cased first, so the acronyms in it are recognised (`ipa` → `IPA`).
-  if (whispers(segment)) return titleCaseWords(segment.toUpperCase());
+  if (whispers(segment)) return titleCaseWords(raise(segment));
   return segment;
 };
 
