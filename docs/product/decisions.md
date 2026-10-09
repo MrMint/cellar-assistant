@@ -126,3 +126,65 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **Install prompt (N15).** "First save" counts a bottle added to a cellar or
   an item confirmed in the onboarding wizard, announced the moment it happens
   rather than at the next navigation.
+
+### Home "Today" and the AI inbox (wave B "home": X10, D1)
+
+- **`/` is Home.** The redirect to `/search` is gone; the Home tab points at
+  `/` (and still lights on `/search`). Sections, top to bottom: greeting and
+  search field; the AI job tray and **Waiting on you**; **Continue** and
+  **Drink soon**; **Friends ranked**; **Friends**; **Nearby**. Each section
+  streams and fails on its own; a failed read draws nothing rather than an
+  error over the page (every row has a full page that shows errors properly).
+- **Search is a full-screen sheet at `/search`**, not an overlay above Home:
+  a title and Close in place of the tab bar, the box, then a one-line hint
+  or the results. Close returns to wherever the sheet was opened from (the
+  in-app history, however many queries were typed), Home on a cold open. The
+  URL keeps working on its own. "The tab bar search" is a second tap on Home
+  at its root and scrolled to the top, the one tap that used to do nothing.
+  The search landing's greeting, collection line, Recent Activity and Nearby
+  Places moved to Home; `/search?activity=` is no longer read.
+- **Waiting on you** lists, in this order: menu matches to confirm (one row
+  per scan, into the scan's results), capture drafts to check (a label read
+  that finished and was never added or closed, within three days, into
+  `/add?draft=`), friend requests (Accept inline), then finished insights,
+  read menus and read recipes. A finished result leaves the list once it is
+  opened or dismissed, remembered per browser in a small cookie of hashes so
+  the server renders without it (no flash); matches and requests leave when
+  answered.
+- **The AI job tray** shows work still running (label reads under 15 min,
+  menu scans, recipe photos, insights being generated) and failures not yet
+  dismissed, worded by N07's mapper from the typed failure; a limit reads
+  calm, never red. A watcher in the shell polls `me.aiJobs` every 4 s **only
+  while something runs** (woken by Home, a menu scan or a recipe photo;
+  never on a timer of its own; at most 15 min) and toasts what settles, with
+  Open / Review / Try again — except on the screen already showing it, and
+  never for a label read (the add flow announces those).
+- **Continue** is open bottles across cellars you created or co-own (not a
+  friend's — not yours to pour), newest opened first, up to 12. **Pour**
+  opens the X02 drink-log sheet with the bottle; X03's Pour sheet replaces
+  what it opens when it lands.
+- **Drink soon** is the opened-bottle table only (D29): a style's typical
+  life once open, labelled "Typical for <style> once open: <span>", listed
+  once a bottle has been open the shortest span, most overdue first. Beer
+  (1–2 days) and coffee beans (2–4 weeks) apply to any style; wine, sake,
+  spirits and tea by their style field; matcha by its form. A style the
+  table lacks shows no window. Per-bottle dates and the user's own
+  drink-from/until stay L02.
+- **Friends** is friends only (your own activity is the rest of Home), in
+  sentences ("Sam rated Barolo ★4.5", "Sam had Pliny · with you · at Old
+  Mill"), with bursts folded: the same person, kind and cellar or list,
+  each entry within 3 h of the one before, become one line ("added 12
+  bottles to Garage") with the first three names under it. Paged 20 at a
+  time with Show more; a burst cut by a page boundary joins up. With no
+  friends at all it is N15's "Taste is better compared." and Invite.
+- **Friends ranked** is up to three of your friends' tier lists, most
+  recently changed, with See all into `/tier-lists`.
+- **Nearby** follows D14 on Home too: when the browser has not been asked,
+  one line of why with "Use my location" (which raises the browser prompt)
+  and "Not now" (shared with the map for the session); refused shows
+  nothing.
+- **`/discoveries` and the `/map/scans` list redirect to `/#waiting`**; each
+  scan's own page stays, and Me › More › Scans goes. Discoveries' Saved
+  Places tab and the full scan history are not on Home; their components
+  stay in the tree, unrouted, for X20's Map sheet (Loved · Been · Want · My
+  scans).
