@@ -1,3 +1,9 @@
+-- Regenerated at merge as 20261009032150 (was 20261008214452 on wa/share), so
+-- it sorts after X27's 20261008214722/214724, X02's 20261008230209, X08's
+-- 20261008231951, X19's 20261008233536, X14's 20261008235751 and D4's
+-- 20261009005024 that other databases already have; the snapshot now chains
+-- from D4's (tier_list_history). The SQL below is unchanged.
+--
 -- X17 friend invites: one live invite secret per user.
 --
 -- An invite link is `/invite/<token>`, where the token packs the inviter's id
