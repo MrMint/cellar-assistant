@@ -574,6 +574,43 @@ export const buildSections = (
   });
 };
 
+/**
+ * Whether a section's search answered at all — found something or found
+ * nothing — as opposed to failing: a rejected read (`undefined`), or a root
+ * field that answered one of its error types (a spent budget, a refusal)
+ * instead of a connection.
+ */
+export const sectionAnswered = (
+  section: SearchSection,
+  data: SectionData,
+): boolean => {
+  switch (section) {
+    case "bottles":
+      return data.bottles?.me?.bottleSearch !== undefined;
+    case "items":
+      return data.items?.itemSearch.__typename === "ItemSearchConnection";
+    case "places":
+      return data.places?.placeSearch.__typename === "PlaceSearchConnection";
+    case "recipes":
+      return data.recipes?.recipeSearch.__typename === "RecipeSearchConnection";
+    case "people":
+      return data.people?.userSearch.__typename === "UserSearchConnection";
+    case "brands":
+      return data.brands?.brandSearch.__typename === "BrandSearchConnection";
+  }
+};
+
+/**
+ * Every section asked for failed: the page cannot say "Nothing called …"
+ * — it does not know — so it says the search is not answering instead.
+ * One section answering, even with nothing, is enough to be believed.
+ */
+export const searchUnanswered = (
+  asked: readonly SearchSection[],
+  data: SectionData,
+): boolean =>
+  asked.length > 0 && asked.every((section) => !sectionAnswered(section, data));
+
 /** Whether a previewed section needs "See all": it holds more than it shows. */
 export const hasMore = (model: SectionModel): boolean =>
   model.total > SECTION_PREVIEW_SIZE;

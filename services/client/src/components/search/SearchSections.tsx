@@ -3,6 +3,7 @@ import { EmptyState } from "@/components/app/EmptyState";
 import {
   Back,
   ChevronRight,
+  CloudOff,
   ICON_STROKE,
   NoResults,
   Place,
@@ -18,6 +19,7 @@ import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { cn } from "@/lib/utils";
 import { AddFriendButton } from "./AddFriendButton";
 import { AddItemLink } from "./NoSearchResults";
+import { RetrySearchButton } from "./RetrySearchButton";
 import {
   allResultsHref,
   hasMore,
@@ -165,10 +167,12 @@ function OpenSection({
   section,
   model,
   query,
+  unanswered,
 }: {
   section: SearchSection;
   model: SectionModel | undefined;
   query: string;
+  unanswered: boolean;
 }) {
   const label = SECTION_LABELS[section];
   return (
@@ -188,7 +192,9 @@ function OpenSection({
       </div>
       {model === undefined ? (
         <p className="type-body py-6 text-center text-ink-2">
-          No {label.toLowerCase()} for &ldquo;{query}&rdquo;.
+          {unanswered
+            ? `Couldn't search ${label.toLowerCase()} just now. Try again in a moment.`
+            : `No ${label.toLowerCase()} for “${query}”.`}
         </p>
       ) : (
         <InsetSection data-search-section={section}>
@@ -220,6 +226,7 @@ export function SearchSections({
   sections,
   focus,
   semanticSearch,
+  unanswered = false,
 }: {
   query: string;
   sections: readonly SectionModel[];
@@ -227,6 +234,11 @@ export function SearchSections({
   focus: SearchSection | null;
   /** D25: false says the deployment matches names only. */
   semanticSearch: boolean | null;
+  /**
+   * Every search asked for failed (`searchUnanswered`): an error, not
+   * "nothing called …", which the page cannot know.
+   */
+  unanswered?: boolean;
 }) {
   if (focus !== null) {
     return (
@@ -234,6 +246,18 @@ export function SearchSections({
         section={focus}
         model={sections.find((model) => model.section === focus)}
         query={query}
+        unanswered={unanswered}
+      />
+    );
+  }
+
+  if (sections.length === 0 && unanswered) {
+    return (
+      <EmptyState
+        illustration={<CloudOff aria-hidden strokeWidth={1.5} />}
+        title="Search isn't answering right now"
+        description="That's on our side, not a missing bottle. Trying again usually fixes it."
+        action={<RetrySearchButton />}
       />
     );
   }

@@ -17,7 +17,9 @@ mock.module("next/navigation", () => ({
 }));
 
 const { SearchSections } = await import("./SearchSections");
-const { addFriendOutcome } = await import("./AddFriendButton");
+const { ADD_FRIEND_SETTLED, addFriendOutcome } = await import(
+  "./AddFriendButton"
+);
 const { textOf } = await import("@/test-support/markup");
 
 type Model = import("./universal-search").SectionModel;
@@ -126,6 +128,37 @@ describe("SearchSections", () => {
     assert.equal(html.match(/<a /g)?.length, 1);
   });
 
+  test("when no search answered, it says so instead of 'Nothing called'", () => {
+    const html = renderToStaticMarkup(
+      <SearchSections
+        query="Copper Lantern"
+        sections={[]}
+        focus={null}
+        semanticSearch={null}
+        unanswered
+      />,
+    );
+    const text = textOf(html);
+    assert.match(text, /Search isn(?:'|&#x27;)t answering right now/);
+    assert.doesNotMatch(text, /Nothing called/);
+    assert.match(text, /Try again/);
+    assert.doesNotMatch(html, /href="\/add"/);
+
+    const opened = textOf(
+      renderToStaticMarkup(
+        <SearchSections
+          query="zzz"
+          sections={[]}
+          focus="people"
+          semanticSearch={null}
+          unanswered
+        />,
+      ),
+    );
+    assert.match(opened, /Couldn(?:'|&#x27;)t search people just now/);
+    assert.doesNotMatch(opened, /No people for/);
+  });
+
   test("a person you could ask ends in Add; a row with a score shows it", () => {
     const html = renderToStaticMarkup(
       <SearchSections
@@ -169,16 +202,30 @@ describe("SearchSections", () => {
 });
 
 describe("addFriendOutcome", () => {
-  test("sent, already connected, or a real failure", () => {
+  test("sent, where things already stand, or a real failure", () => {
     assert.equal(addFriendOutcome({ ok: true }), "sent");
     assert.equal(
       addFriendOutcome({ ok: false, reason: "FRIEND_REQUEST_ALREADY_SENT" }),
-      "already",
+      "already-sent",
+    );
+    assert.equal(
+      addFriendOutcome({
+        ok: false,
+        reason: "FRIEND_REQUEST_ALREADY_RECEIVED",
+      }),
+      "already-received",
     );
     assert.equal(
       addFriendOutcome({ ok: false, reason: "ALREADY_FRIENDS" }),
-      "already",
+      "already-friends",
     );
     assert.equal(addFriendOutcome({ ok: false, reason: null }), "failed");
+  });
+
+  test("a request they sent first, or a friendship, is not called Requested", () => {
+    assert.equal(ADD_FRIEND_SETTLED.sent, "Requested");
+    assert.equal(ADD_FRIEND_SETTLED["already-sent"], "Requested");
+    assert.equal(ADD_FRIEND_SETTLED["already-received"], "Wants to be friends");
+    assert.equal(ADD_FRIEND_SETTLED["already-friends"], "Friend");
   });
 });

@@ -18,6 +18,8 @@ import {
   recipeRows,
   SEARCH_SECTIONS,
   SECTION_PREVIEW_SIZE,
+  searchUnanswered,
+  sectionAnswered,
   sectionFromParam,
   seeAllHref,
   semanticSearchFrom,
@@ -385,6 +387,41 @@ describe("rows", () => {
         ["New", undefined, "/brands/b2"],
       ],
     );
+  });
+});
+
+describe("answered, or failed", () => {
+  const emptyPeople = {
+    userSearch: { __typename: "UserSearchConnection", edges: [] },
+  } as never;
+
+  test("a connection answers, even an empty one; a rejection or an error type does not", () => {
+    assert.equal(sectionAnswered("people", { people: emptyPeople }), true);
+    assert.equal(sectionAnswered("people", {}), false);
+    assert.equal(
+      sectionAnswered("items", {
+        items: {
+          itemSearch: { __typename: "BudgetExceededError", message: "spent" },
+        } as never,
+      }),
+      false,
+    );
+    assert.equal(
+      sectionAnswered("bottles", { bottles: { me: null } as never }),
+      false,
+    );
+  });
+
+  test("the page is unanswered only when every section it asked failed", () => {
+    assert.equal(searchUnanswered(SEARCH_SECTIONS, {}), true);
+    // One empty answer is an answer: then "Nothing called …" is true.
+    assert.equal(
+      searchUnanswered(SEARCH_SECTIONS, { people: emptyPeople }),
+      false,
+    );
+    // An opened section is judged on its own read.
+    assert.equal(searchUnanswered(["items"], { people: emptyPeople }), true);
+    assert.equal(searchUnanswered([], {}), false);
   });
 });
 

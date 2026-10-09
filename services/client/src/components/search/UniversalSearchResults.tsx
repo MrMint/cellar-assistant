@@ -4,6 +4,7 @@ import { SearchSections } from "./SearchSections";
 import {
   boundsAround,
   buildSections,
+  SEARCH_SECTIONS,
   SECTION_LIMITS,
   SearchBottlesQuery,
   SearchBrandsSectionQuery,
@@ -12,6 +13,7 @@ import {
   SearchPlacesSectionQuery,
   SearchRecipesSectionQuery,
   type SearchSection,
+  searchUnanswered,
   semanticSearchFrom,
 } from "./universal-search";
 
@@ -105,15 +107,14 @@ export async function UniversalSearchResults({
       : undefined,
   ]);
 
+  const data = { bottles, items, places, recipes, people, brands };
   return (
     <SearchSections
       query={query}
       focus={focus}
       semanticSearch={semanticSearchFrom(bottles)}
-      sections={buildSections(
-        { bottles, items, places, recipes, people, brands },
-        { bounded: bounds !== null },
-      )}
+      unanswered={searchUnanswered(SEARCH_SECTIONS.filter(wants), data)}
+      sections={buildSections(data, { bounded: bounds !== null })}
     />
   );
 }
