@@ -273,3 +273,129 @@ export function holdPlaceInReview(
     );
   }
 }
+
+/** What `insertScannedMenu` accepts in a line's text: no quotes to escape. */
+const MENU_TEXT = /^[A-Za-z0-9 .,&—–'-]+$/;
+const MENU_TYPES = [
+  "wine",
+  "beer",
+  "spirit",
+  "coffee",
+  "sake",
+  "tea",
+  "cocktail",
+  "unknown",
+] as const;
+const MATCH_TYPES = [
+  "wine",
+  "beer",
+  "spirit",
+  "coffee",
+  "sake",
+  "tea",
+] as const;
+
+export type ScannedMenuLine = {
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly price?: number;
+  readonly type: (typeof MENU_TYPES)[number];
+  /** The catalog item the line is already matched to. */
+  readonly match?: {
+    readonly type: (typeof MATCH_TYPES)[number];
+    readonly id: string;
+  };
+};
+
+const quoted = (value: string): string => `'${value.replace(/'/g, "''")}'`;
+
+/**
+ * X07: a menu scanned at `placeId` by `userId`, without the vision pipeline —
+ * so a spec about what the lines *look like* and *do* does not depend on a
+ * model reading a photograph, or spend the shared account's menu budget.
+ *
+ * One `files` row (never uploaded: the foreign key is all a scan row needs),
+ * one `completed` `menu_scans` row, and its lines with `menu_category` left
+ * null — which is what a real read leaves on most menus, and the case X07's
+ * grouping exists for. A line's `match` sets its item column directly, as an
+ * accepted suggestion would have. Every id is the caller's (checked as a
+ * uuid) and every text value is checked against a plain-text pattern before
+ * it is interpolated. Remove it with {@link deleteScannedMenu} before the
+ * place.
+ *
+ * Insert it before the place page is first opened in the run: `PlaceActor`
+ * caches a place's lines when it activates.
+ */
+export function insertScannedMenu(input: {
+  scanId: string;
+  fileId: string;
+  placeId: string;
+  userId: string;
+  lines: readonly ScannedMenuLine[];
+}): void {
+  for (const id of [input.scanId, input.fileId, input.placeId, input.userId]) {
+    if (!UUID_PATTERN.test(id)) {
+      throw new Error(`insertScannedMenu: not a uuid: ${id}`);
+    }
+  }
+  const values = input.lines.map((line) => {
+    if (!UUID_PATTERN.test(line.id)) {
+      throw new Error(`insertScannedMenu: not a uuid: ${line.id}`);
+    }
+    for (const text of [line.name, line.description ?? "x"]) {
+      if (!MENU_TEXT.test(text)) {
+        throw new Error(
+          `insertScannedMenu: unsafe text ${JSON.stringify(text)}`,
+        );
+      }
+    }
+    if (!MENU_TYPES.includes(line.type)) {
+      throw new Error(`insertScannedMenu: not a menu type: ${line.type}`);
+    }
+    if (line.price !== undefined && !Number.isFinite(line.price)) {
+      throw new Error(`insertScannedMenu: not a price: ${line.price}`);
+    }
+    const match = line.match;
+    if (
+      match !== undefined &&
+      (!MATCH_TYPES.includes(match.type) || !UUID_PATTERN.test(match.id))
+    ) {
+      throw new Error(`insertScannedMenu: bad match ${JSON.stringify(match)}`);
+    }
+    const column = (type: string) =>
+      match !== undefined && match.type === type ? `'${match.id}'` : "null";
+    return (
+      `('${line.id}', '${input.placeId}', '${input.scanId}', ${quoted(line.name)}, ` +
+      `${line.description === undefined ? "null" : quoted(line.description)}, ` +
+      `${line.price ?? "null"}, '${line.type}', ` +
+      MATCH_TYPES.map(column).join(", ") +
+      ")"
+    );
+  });
+  psql(
+    "insert into files (id, key) values " +
+      `('${input.fileId}', 'e2e/menu-${input.fileId}.png'); ` +
+      "insert into menu_scans (id, user_id, place_id, original_image_id, " +
+      "processing_status, items_detected) values " +
+      `('${input.scanId}', '${input.userId}', '${input.placeId}', ` +
+      `'${input.fileId}', 'completed', ${input.lines.length}); ` +
+      "insert into place_menu_items (id, place_id, menu_scan_id, menu_item_name, " +
+      "menu_item_description, menu_item_price, detected_item_type, " +
+      `${MATCH_TYPES.map((type) => `${type}_id`).join(", ")}) values ` +
+      `${values.join(", ")}`,
+  );
+}
+
+/** Undo {@link insertScannedMenu}: the scan (its lines cascade) and its file. */
+export function deleteScannedMenu(scanId: string, fileId: string): void {
+  for (const id of [scanId, fileId]) {
+    if (!UUID_PATTERN.test(id)) {
+      throw new Error(`deleteScannedMenu: not a uuid: ${id}`);
+    }
+  }
+  psql(
+    `delete from menu_scans where id = '${scanId}'; ` +
+      `delete from files where id = '${fileId}'`,
+  );
+}
