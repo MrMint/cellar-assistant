@@ -3,31 +3,23 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useClient, useMutation, useQuery } from "urql";
 import { AIDraftField } from "@/components/app/AIDraftField";
-import { FilterChip } from "@/components/app/FilterChip";
 import { IconButton } from "@/components/app/IconButton";
-import {
-  Add,
-  Camera,
-  Check,
-  Close,
-  People,
-  Place,
-} from "@/components/app/icons";
+import { Add, Camera, Check, Close, Place } from "@/components/app/icons";
 import { RatingInput } from "@/components/app/RatingInput";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
-import { UserAvatar } from "@/components/app/UserAvatar";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { aiOutcome } from "@/lib/ai/outcome";
-import { MyFriendsQuery } from "@/lib/api/cellars";
 import { uploadFile } from "@/lib/api/files";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
+import { CompanionPicker, type DrinkLogFriend } from "./CompanionPicker";
 import {
   addTag,
+  companionsChanged,
   EMPTY_DRAFT,
   type FlavourSuggestion,
   type LogDraft,
@@ -44,9 +36,13 @@ import {
 import {
   DrinkLogPlacePickerQuery,
   LogDrinkMutation,
+  SetDrinkLogCompanionsMutation,
   SuggestFlavourTagsMutation,
   UpdateDrinkLogMutation,
 } from "./queries";
+import { WhenPicker } from "./WhenPicker";
+
+export type { DrinkLogFriend } from "./CompanionPicker";
 
 /** How long the note must sit still before its flavours are asked for. */
 const SUGGEST_AFTER_MS = 1200;
@@ -60,14 +56,13 @@ export type LogDrinkMode =
       readonly entryId: string;
       readonly initial: LogDraft;
       readonly photoUrl?: string | null;
+      /**
+       * The entry is yours and you logged it, so "Who with" can still be
+       * changed (`setDrinkLogCompanions`). A friend's entry about you is
+       * not yours to re-staff.
+       */
+      readonly canEditCompanions?: boolean;
     };
-
-/** A friend "Who with" can offer. */
-export type DrinkLogFriend = {
-  readonly id: string;
-  readonly displayName: string;
-  readonly avatarUrl: string | null;
-};
 
 export type LogDrinkSheetProps = {
   open: boolean;
@@ -143,24 +138,50 @@ export function LogDrinkSheet({
 
   const [logState, logDrink] = useMutation(LogDrinkMutation);
   const [updateState, updateDrinkLog] = useMutation(UpdateDrinkLogMutation);
-  const saving = logState.fetching || updateState.fetching;
+  const [companionsState, setCompanions] = useMutation(
+    SetDrinkLogCompanionsMutation,
+  );
+  const saving =
+    logState.fetching || updateState.fetching || companionsState.fetching;
+  const [whenProblem, setWhenProblem] = useState<string | null>(null);
+  const canEditCompanions = mode.kind === "edit" && mode.canEditCompanions;
 
   const save = async () => {
     setError(null);
     if (mode.kind === "edit") {
       const patch = updateInput(mode.initial, draft);
-      if (Object.keys(patch).length === 0) {
+      const restaffed =
+        canEditCompanions === true &&
+        companionsChanged(mode.initial.companionIds, draft.companionIds);
+      if (Object.keys(patch).length === 0 && !restaffed) {
         onOpenChange(false);
         return;
       }
-      const result = unwrapResult(
-        (await updateDrinkLog({ id: mode.entryId, input: patch })).data
-          ?.updateDrinkLog,
-        "ItemCheckIn",
-      );
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      if (Object.keys(patch).length > 0) {
+        const result = unwrapResult(
+          (await updateDrinkLog({ id: mode.entryId, input: patch })).data
+            ?.updateDrinkLog,
+          "ItemCheckIn",
+        );
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+      }
+      if (restaffed) {
+        const result = unwrapResult(
+          (
+            await setCompanions({
+              id: mode.entryId,
+              companionIds: [...draft.companionIds],
+            })
+          ).data?.setDrinkLogCompanions,
+          "ItemCheckIn",
+        );
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
       }
       onOpenChange(false);
       onSaved?.({ entryId: mode.entryId, drinkerCount: 1, kind: "edit" });
@@ -202,7 +223,7 @@ export function LogDrinkSheet({
             Cancel
           </Button>
           <Button
-            disabled={saving}
+            disabled={saving || whenProblem !== null}
             aria-busy={saving || undefined}
             onClick={() => void save()}
           >
@@ -218,7 +239,9 @@ export function LogDrinkSheet({
           onChange={setDraft}
           subject={subject}
           logId={logId}
-          allowCompanions={isNew}
+          allowCompanions={isNew || canEditCompanions === true}
+          isNew={isNew}
+          onWhenProblem={setWhenProblem}
           friends={friends}
           initialPhotoUrl={
             mode.kind === "edit" ? (mode.photoUrl ?? null) : null
@@ -236,6 +259,9 @@ type FormProps = {
   subject: LogSubject;
   logId: string;
   allowCompanions: boolean;
+  /** A new log defaults to now; an edit shows the entry's own time. */
+  isNew?: boolean;
+  onWhenProblem?: (problem: string | null) => void;
   friends?: readonly DrinkLogFriend[];
   initialPhotoUrl: string | null;
   error: ApiFailure | null;
@@ -251,6 +277,8 @@ export function LogDrinkForm({
   subject,
   logId,
   allowCompanions,
+  isNew = true,
+  onWhenProblem,
   friends,
   initialPhotoUrl,
   error,
@@ -280,6 +308,13 @@ export function LogDrinkForm({
         onChange={onChange}
         subject={subject}
         logId={logId}
+      />
+
+      <WhenPicker
+        value={draft.drankAt}
+        onChange={(drankAt) => patch({ drankAt })}
+        allowNow={isNew}
+        onProblem={onWhenProblem}
       />
 
       <PlacePicker place={draft.place} onChange={(place) => patch({ place })} />
@@ -628,76 +663,6 @@ function PlacePicker({
             </ul>
           )}
         </>
-      )}
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Who with                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function CompanionPicker({
-  preloaded,
-  selected,
-  onToggle,
-}: {
-  preloaded?: readonly DrinkLogFriend[];
-  selected: readonly string[];
-  onToggle: (id: string) => void;
-}) {
-  const ids = useId();
-  const [{ data, fetching }] = useQuery({
-    query: MyFriendsQuery,
-    variables: { first: 100 },
-    pause: preloaded !== undefined,
-  });
-  const result = unwrapResult(data?.myFriends, "FriendConnection");
-  const friends: readonly DrinkLogFriend[] =
-    preloaded ??
-    (result.ok ? result.data.edges.map((edge) => edge.node.user) : []);
-
-  return (
-    <section className="flex flex-col gap-2" aria-labelledby={`${ids}-who`}>
-      <h3 id={`${ids}-who`} className="type-callout font-semibold">
-        Who with
-      </h3>
-      {fetching && friends.length === 0 ? (
-        <p className="type-footnote">Loading friends…</p>
-      ) : friends.length === 0 ? (
-        <p className="type-footnote flex items-center gap-2">
-          <People aria-hidden className="size-4" />
-          Just you. Friends you add show up here.
-        </p>
-      ) : (
-        <ul
-          aria-labelledby={`${ids}-who`}
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1"
-        >
-          {friends.map((friend) => (
-            <li key={friend.id}>
-              <FilterChip
-                selected={selected.includes(friend.id)}
-                onClick={() => onToggle(friend.id)}
-                icon={
-                  <UserAvatar
-                    avatarUrl={friend.avatarUrl}
-                    displayName={friend.displayName}
-                    size="sm"
-                    className="-ml-2 size-6 text-[10px]"
-                  />
-                }
-              >
-                {friend.displayName}
-              </FilterChip>
-            </li>
-          ))}
-        </ul>
-      )}
-      {selected.length > 0 && (
-        <p className="type-footnote">
-          Each friend gets this drink in their own log.
-        </p>
       )}
     </section>
   );

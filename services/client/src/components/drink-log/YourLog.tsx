@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
-import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { IconButton } from "@/components/app/IconButton";
 import { Add, Cocktail, Delete, Edit, More } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
@@ -15,7 +14,7 @@ import { Timestamp } from "@/components/common/Timestamp";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
-import { type ApiFailure, unwrapResult } from "@/lib/api/result";
+import { unwrapResult } from "@/lib/api/result";
 import { type LogDrinkMode, LogDrinkSheet } from "./LogDrinkSheet";
 import {
   draftFromEntry,
@@ -27,6 +26,7 @@ import {
   DeleteDrinkLogMutation,
   DrinkLogEntryFragment,
   ItemDrinkLogQuery,
+  RestoreDrinkLogMutation,
 } from "./queries";
 import { useDrinkLogFeedback } from "./useDrinkLogFeedback";
 
@@ -42,6 +42,8 @@ export type DrinkLogRow = {
   context: string;
   photoUrl: string | null;
   canEdit: boolean;
+  /** Yours, and you logged it: "Who with" can still change. */
+  canEditCompanions: boolean;
   canRemove: boolean;
   draft: LogDraft;
 };
@@ -67,6 +69,7 @@ export const drinkLogRow = (
     }),
     photoUrl: entry.photo?.url ?? null,
     canEdit: entry.isMine,
+    canEditCompanions: entry.isMine && entry.createdById === entry.userId,
     canRemove: entry.canRemove,
     draft: draftFromEntry({
       score: entry.score,
@@ -74,6 +77,8 @@ export const drinkLogRow = (
       tags: entry.tags,
       place,
       photo: entry.photo,
+      createdAt: entry.createdAt as string,
+      companionIds: entry.companionIds,
     }),
   };
 };
@@ -86,6 +91,12 @@ export const drinkLogRow = (
  * Reads `Item.checkIns(scope: MINE)` itself rather than through the page's
  * server query, so a log, an edit or an Undo re-reads just this section; the
  * page is refreshed too, for anything else that counts drinks.
+ *
+ * Deleting an entry does not ask first (X03): it goes at once, with **Undo**
+ * on the toast (design §4.7 — a reversible removal gets Undo, not a confirm).
+ * Undo is `restoreDrinkLog`, which puts back the same entries — ids, dates and
+ * the companions' entries the delete took with it — so nothing about the
+ * log reads differently afterwards.
  */
 export function YourLog({
   subject,
@@ -98,8 +109,6 @@ export function YourLog({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mode, setMode] = useState<LogDrinkMode>({ kind: "new" });
   const [actionsFor, setActionsFor] = useState<DrinkLogRow | null>(null);
-  const [deleting, setDeleting] = useState<DrinkLogRow | null>(null);
-  const [deleteError, setDeleteError] = useState<ApiFailure | null>(null);
 
   const [{ data, fetching, error }, reexecute] = useQuery({
     query: ItemDrinkLogQuery,
@@ -113,7 +122,8 @@ export function YourLog({
     itemName: subject.itemName,
     onChanged: refresh,
   });
-  const [deleteState, deleteDrinkLog] = useMutation(DeleteDrinkLogMutation);
+  const [, deleteDrinkLog] = useMutation(DeleteDrinkLogMutation);
+  const [, restoreDrinkLog] = useMutation(RestoreDrinkLogMutation);
 
   const result = unwrapResult(data?.item, "QueryItemSuccess");
   const connection = result.ok ? result.data.data.checkIns : null;
@@ -125,20 +135,41 @@ export function YourLog({
     setSheetOpen(true);
   };
 
-  const confirmDelete = async () => {
-    if (deleting === null) return;
-    setDeleteError(null);
+  const restore = async (id: string) => {
+    const restored = unwrapResult(
+      (await restoreDrinkLog({ id })).data?.restoreDrinkLog,
+      "RestoredDrinkLogPayload",
+    );
+    if (!restored.ok) {
+      notify("Couldn't bring that log back", {
+        tone: "error",
+        description: restored.error.message,
+      });
+      return;
+    }
+    notify("Log restored", { tone: "success" });
+    refresh();
+  };
+
+  const remove = async (row: DrinkLogRow) => {
     const removed = unwrapResult(
-      (await deleteDrinkLog({ id: deleting.id })).data?.deleteDrinkLog,
+      (await deleteDrinkLog({ id: row.id })).data?.deleteDrinkLog,
       "DeletedDrinkLogPayload",
     );
     if (!removed.ok) {
-      setDeleteError(removed.error);
+      notify("Couldn't delete that log", {
+        tone: "error",
+        description: removed.error.message,
+      });
       return;
     }
-    setDeleting(null);
-    notify("Log deleted");
     refresh();
+    notify(
+      removed.data.ids.length > 1
+        ? `Log deleted, with ${removed.data.ids.length - 1} for friends`
+        : "Log deleted",
+      { undo: () => void restore(row.id) },
+    );
   };
 
   return (
@@ -283,6 +314,7 @@ export function YourLog({
                   entryId: row.id,
                   initial: row.draft,
                   photoUrl: row.photoUrl,
+                  canEditCompanions: row.canEditCompanions,
                 });
                 setSheetOpen(true);
               }}
@@ -298,8 +330,7 @@ export function YourLog({
               onClick={() => {
                 const row = actionsFor;
                 setActionsFor(null);
-                setDeleteError(null);
-                setDeleting(row);
+                void remove(row);
               }}
             >
               <Delete aria-hidden />
@@ -308,20 +339,6 @@ export function YourLog({
           )}
         </div>
       </BottomSheet>
-
-      <ConfirmSheet
-        open={deleting !== null}
-        onOpenChange={(open) => {
-          if (!open && !deleteState.fetching) setDeleting(null);
-        }}
-        title="Delete this log?"
-        description="It comes off your log, and off the logs of friends you logged it for — unless they've added to theirs."
-        confirmLabel="Delete"
-        pending={deleteState.fetching}
-        onConfirm={() => void confirmDelete()}
-      >
-        {deleteError !== null && <ApiError error={deleteError} />}
-      </ConfirmSheet>
     </>
   );
 }

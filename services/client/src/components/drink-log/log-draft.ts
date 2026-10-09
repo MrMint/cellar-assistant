@@ -14,6 +14,7 @@ import {
   MAX_CHECK_IN_TAGS,
   MIN_FLAVOUR_NOTE_LENGTH,
   normaliseCheckInTag,
+  parseDrankAt,
 } from "@cellar-assistant/contracts/check-ins";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 
@@ -37,10 +38,15 @@ export type LogDraft = {
   readonly note: string;
   readonly tags: readonly string[];
   readonly place: DraftPlace | null;
-  /** Friend user ids; only on a new log (companions are written once). */
+  /**
+   * Friend user ids. On a new log they are written with it; on your own log
+   * they are changed afterwards with `setDrinkLogCompanions`.
+   */
   readonly companionIds: readonly string[];
   /** A verified upload of the viewer's own. */
   readonly photoFileId: string | null;
+  /** When it was drunk, as an ISO instant; `null` is "now" (a new log). */
+  readonly drankAt: string | null;
 };
 
 export const EMPTY_DRAFT: LogDraft = {
@@ -50,6 +56,7 @@ export const EMPTY_DRAFT: LogDraft = {
   place: null,
   companionIds: [],
   photoFileId: null,
+  drankAt: null,
 };
 
 /** The fields an existing entry brings into edit mode. */
@@ -63,6 +70,8 @@ export type EditableEntry = {
     readonly displayName?: string | null;
   } | null;
   readonly photo: { readonly id: string } | null;
+  readonly createdAt: string;
+  readonly companionIds: readonly string[];
 };
 
 export const draftFromEntry = (entry: EditableEntry): LogDraft => ({
@@ -76,8 +85,9 @@ export const draftFromEntry = (entry: EditableEntry): LogDraft => ({
           id: entry.place.id,
           name: entry.place.displayName ?? entry.place.name,
         },
-  companionIds: [],
+  companionIds: [...entry.companionIds],
   photoFileId: entry.photo?.id ?? null,
+  drankAt: entry.createdAt,
 });
 
 export type TagResult =
@@ -185,6 +195,7 @@ export type LogDrinkVariables = {
   placeId?: string;
   photoFileId?: string;
   companionIds?: string[];
+  drankAt?: string;
 };
 
 /** `logDrink`'s input: only what was given, the bottle when there is one. */
@@ -204,6 +215,7 @@ export const logInput = (
     ...(draft.companionIds.length === 0
       ? {}
       : { companionIds: [...draft.companionIds] }),
+    ...(draft.drankAt === null ? {} : { drankAt: draft.drankAt }),
   };
 };
 
@@ -213,6 +225,7 @@ export type UpdateDrinkLogVariables = {
   tags?: string[];
   placeId?: string | null;
   photoFileId?: string | null;
+  drankAt?: string;
 };
 
 const sameTags = (a: readonly string[], b: readonly string[]): boolean =>
@@ -237,7 +250,109 @@ export const updateInput = (
   if (before.photoFileId !== after.photoFileId) {
     patch.photoFileId = after.photoFileId;
   }
+  if (after.drankAt !== null && before.drankAt !== after.drankAt) {
+    patch.drankAt = after.drankAt;
+  }
   return patch;
+};
+
+/**
+ * Whether "Who with" changed in edit mode — a set, so the order friends were
+ * tapped in does not matter. Changed means one `setDrinkLogCompanions` call
+ * with the whole new set.
+ */
+export const companionsChanged = (
+  before: readonly string[],
+  after: readonly string[],
+): boolean => {
+  const was = new Set(before);
+  const now = new Set(after);
+  return was.size !== now.size || after.some((id) => !was.has(id));
+};
+
+/* -------------------------------------------------------------------------- */
+/* When                                                                        */
+/* -------------------------------------------------------------------------- */
+
+const pad = (value: number): string => String(value).padStart(2, "0");
+
+/**
+ * An instant as `<input type="datetime-local">` holds it — the device's own
+ * wall clock, to the minute: "2026-10-08T19:30".
+ */
+export const toLocalInputValue = (instant: Date | string): string => {
+  const at = typeof instant === "string" ? new Date(instant) : instant;
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+};
+
+/** The picker's local wall-clock value back to an ISO instant; `null` if it is not one. */
+export const fromLocalInputValue = (value: string): string | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+  if (match === null) return null;
+  const [, year, month, day, hour, minute] = match.map(Number);
+  const at = new Date(
+    year ?? 0,
+    (month ?? 1) - 1,
+    day ?? 1,
+    hour ?? 0,
+    minute ?? 0,
+  );
+  return Number.isNaN(at.getTime()) ? null : at.toISOString();
+};
+
+/**
+ * Why the server would refuse this time (the shared `parseDrankAt`), or
+ * `null` — so the sheet says so before the tap rather than after.
+ */
+export const drankAtProblem = (
+  drankAt: string | null,
+  now: Date,
+): string | null => {
+  try {
+    parseDrankAt(drankAt, now);
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    return message === ""
+      ? "That time can't be used."
+      : `${message[0]?.toUpperCase() ?? ""}${message.slice(1)}.`;
+  }
+};
+
+const sameDay = (a: Date, b: Date): boolean =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+/**
+ * The "When" chip: "Now", "Today, 19:30", "Yesterday, 21:05", "Sat 4 Oct,
+ * 19:30", and the year once it is not this one. Device-local, through `Intl`
+ * — the sheets that show it render their bodies only once opened, in the
+ * browser, so it never meets hydration (the `Timestamp` rule).
+ */
+export const whenLabel = (
+  drankAt: string | null,
+  now: Date,
+  locale?: string,
+): string => {
+  if (drankAt === null) return "Now";
+  const at = new Date(drankAt);
+  if (Number.isNaN(at.getTime())) return "Now";
+  const time = new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(at);
+  if (sameDay(at, now)) return `Today, ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(at, yesterday)) return `Yesterday, ${time}`;
+  const day = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    ...(at.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  }).format(at);
+  return `${day}, ${time}`;
 };
 
 /* -------------------------------------------------------------------------- */
