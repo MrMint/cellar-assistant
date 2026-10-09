@@ -26,7 +26,10 @@ export const RecipeEditQuery = graphql(
         createdBy {
           id
         }
-        ingredients(first: 50) {
+        ingredients(first: 100) {
+          pageInfo {
+            hasNextPage
+          }
           edges {
             node {
               id
@@ -56,6 +59,9 @@ export const RecipeEditQuery = graphql(
           }
         }
         instructions(first: 100) {
+          pageInfo {
+            hasNextPage
+          }
           edges {
             node {
               id

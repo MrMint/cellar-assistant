@@ -31,6 +31,19 @@ export default async function EditRecipePage({
   const recipe = result.data;
   const viewer = data.me?.id ?? null;
   if (viewer === null || recipe.createdBy?.id !== viewer) notFound();
+  // Saving replaces the whole ingredient list and method, so an editor that
+  // held only the first page would delete the rest. Refuse rather than truncate.
+  if (
+    recipe.ingredients.pageInfo.hasNextPage ||
+    recipe.instructions.pageInfo.hasNextPage
+  ) {
+    return (
+      <p className="type-body text-ink-2">
+        This recipe has more ingredients or steps than the editor can hold, so
+        it can't be edited here without losing some of them.
+      </p>
+    );
+  }
 
   return (
     <RecipeEditor
