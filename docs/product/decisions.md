@@ -155,5 +155,7 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   shared yet." Only friends: a stranger, an id that names nobody and a
   malformed id all get the same "doesn't exist or isn't shared with you"
   (D24), decided server-side with one message, and the page reads nothing
-  before that gate answers. Your own id redirects to Me. `/users` (the old
+  before that gate answers. An admin is held to the same rules here: the
+  profile lists what a friend shares with friends, never a PRIVATE list or
+  cellar, even though an admin could open one by its link. Your own id redirects to Me. `/users` (the old
   dead "Profile" crumb) redirects to Me.

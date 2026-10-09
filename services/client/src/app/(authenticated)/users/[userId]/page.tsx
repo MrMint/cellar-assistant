@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { AppBar } from "@/components/app/AppBar";
+import { Page } from "@/components/app/Page";
+import { ApiError } from "@/components/cellar-api/ApiError";
 import { friendProfileView } from "@/components/profile/adapter";
 import { FriendProfile } from "@/components/profile/FriendProfile";
 import {
@@ -45,10 +48,13 @@ export default async function FriendProfilePage({
   const result = unwrapResult(data.friendProfile, "FriendProfile");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
+    // Anything else (a session that ended, a budget, a fault) is said in the
+    // page's own frame, with Back, rather than as a bare line.
     return (
-      <p role="alert" className="type-body text-destructive">
-        {result.error.message}
-      </p>
+      <Page>
+        <AppBar parent="/friends" />
+        <ApiError error={result.error} title="Couldn't open this profile" />
+      </Page>
     );
   }
   return <FriendProfile view={friendProfileView(result.data)} />;
