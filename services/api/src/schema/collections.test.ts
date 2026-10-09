@@ -168,7 +168,6 @@ describe("myTierLists (§2.2 → ids → TierListActor.get)", () => {
         createdById: viewer.id,
         privacy: "PUBLIC",
         listType: "place",
-        isEditingLocked: false,
         itemCount: 7,
         aiInsights: null,
         insightsGeneratedAt: null,

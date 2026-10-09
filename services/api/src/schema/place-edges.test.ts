@@ -141,7 +141,6 @@ const tierList = {
   createdById: viewer.id,
   privacy: "PUBLIC" as const,
   listType: "place",
-  isEditingLocked: false,
   itemCount: 4,
   aiInsights: null,
   insightsGeneratedAt: null,

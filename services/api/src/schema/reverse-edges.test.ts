@@ -81,7 +81,6 @@ const tierList = (id: string) => ({
   createdById: viewer.id,
   privacy: "PUBLIC" as const,
   listType: "wine",
-  isEditingLocked: false,
   itemCount: 1,
   aiInsights: null,
   insightsGeneratedAt: null,

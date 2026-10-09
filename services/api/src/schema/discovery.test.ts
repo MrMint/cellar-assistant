@@ -151,7 +151,6 @@ const tierList = {
   createdById: FRIEND,
   privacy: "FRIENDS" as const,
   listType: "place",
-  isEditingLocked: false,
   itemCount: 1,
   aiInsights: null,
   insightsGeneratedAt: null,

@@ -89,6 +89,45 @@ export type TierListEntryRef = {
 export const MIN_BAND = 0;
 export const MAX_BAND = 5;
 
+/**
+ * X23 / X16: "band defaults from your verdict" — a rating, in half stars (an
+ * item review) or whole ones (a place rating), to the band whose word matches
+ * it: 4.5 and 5 are Outstanding, 4 Very Good, 3 Good, 2 Mediocre, 1 Bad (a
+ * half step rounds up into the band above, as 4.5 reads "outstanding" and not
+ * "very good"). No rating is Unrated (0).
+ *
+ * One rule for the server's pre-banded templates and the client's Add entry,
+ * so a template and a hand-picked add of the same bottle land in one band.
+ */
+export const bandForScore = (score: number | null | undefined): number => {
+  if (score === null || score === undefined || !Number.isFinite(score)) {
+    return MIN_BAND;
+  }
+  if (score >= 4.5) return 5;
+  if (score >= 3.5) return 4;
+  if (score >= 2.5) return 3;
+  if (score >= 1.5) return 2;
+  if (score > 0) return 1;
+  return MIN_BAND;
+};
+
+/**
+ * `tier_lists.list_type` (free text: `'place'`, `'wine'`, …) → the entry type
+ * its entries carry, or `null` for a value that names none. Every list made
+ * through the app carries one of the seven; an older free-text value is not
+ * guessed at.
+ */
+export const entryTypeOfListType = (
+  listType: string,
+): TierListEntryType | null => {
+  const upper = listType.trim().toUpperCase();
+  return isTierListEntryType(upper) ? upper : null;
+};
+
+/** The inverse: `WINE` → `'wine'`. */
+export const listTypeOfEntryType = (type: TierListEntryType): string =>
+  type.toLowerCase();
+
 /* -------------------------------------------------------------------------- */
 /* Wire shapes                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -101,7 +140,6 @@ export type TierListDto = {
   readonly privacy: PermissionType;
   /** `tier_lists.list_type` — free text (`'place'` by default), not an enum. */
   readonly listType: string;
-  readonly isEditingLocked: boolean;
   /** Cheap: `loadAggregate` reads every `tier_list_items` row on activate. */
   readonly itemCount: number;
   /** `ai_insights`, `generateInsights`'s output. `null` until first generated. */
@@ -216,6 +254,13 @@ export type TierListEditDto = {
   readonly fromBand: number | null;
   /** The band it landed in; `null` for a `REMOVE`. */
   readonly toBand: number | null;
+  /**
+   * X16: how many entries the edit added or removed — more than one for a
+   * multi-add from Add entry or a list started from your ratings, which
+   * Undo takes back whole. `1` for a single add or removal; for a MOVE, the
+   * entries that changed band or place.
+   */
+  readonly entryCount: number;
   readonly at: string;
 };
 
@@ -250,14 +295,24 @@ export type CreateTierListInput = {
    *  the Hasura permissions this replaces never allowed changing it later,
    *  and `UpdateTierListInput` below preserves that. */
   readonly listType?: string;
+  /**
+   * X16: `RATINGS` starts the list pre-banded — every entry of its type you
+   * have rated (an item review, a place rating), each in the band
+   * `bandForScore` gives it, best first, at most {@link MAX_BATCH_ADD}. One
+   * edit in the list's history, so a single Undo empties it again.
+   * Omitted (or `EMPTY`), the list starts empty, as before.
+   */
+  readonly startFrom?: TierListStart;
 };
+
+export const TIER_LIST_STARTS = ["EMPTY", "RATINGS"] as const;
+export type TierListStart = (typeof TIER_LIST_STARTS)[number];
 
 /** Every field is optional; only the present ones are written. Creator only. */
 export type UpdateTierListInput = {
   readonly name?: string;
   readonly description?: string | null;
   readonly privacy?: PermissionType;
-  readonly isEditingLocked?: boolean;
 };
 
 export type AddTierListItemInput = {
@@ -273,6 +328,123 @@ export type AddTierListItemInput = {
    * uuid.
    */
   readonly tierListItemId?: string;
+};
+
+/**
+ * X16: the most entries one `addItems` (or a `RATINGS` start) writes — the
+ * same 100 the API caps every page at, so a list made in one call can be
+ * read back in one page.
+ */
+export const MAX_BATCH_ADD = 100;
+
+/** X16's multi-add: what went on, and how many asks were passed over. */
+export type AddTierListItemsResult = {
+  readonly added: readonly TierListItemDto[];
+  /**
+   * Entries not added: already on the list, named twice in the call, or no
+   * longer readable (a place you cannot see, an item that is gone).
+   */
+  readonly skipped: number;
+};
+
+/* -------------------------------------------------------------------------- */
+/* X16 — adding without typing, and what to try next                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Add entry's sections, in the order the sheet draws them. An entry is in
+ * the first section that claims it, so no row appears twice:
+ *
+ *  - `IN_CELLARS` — items of the list's type in a cellar you made or
+ *    co-own (never a place list);
+ *  - `TASTED` — what you have rated or logged (a review, a drink log; for a
+ *    place list, a place you rated, marked visited or logged a drink at);
+ *  - `FRIENDS_RANKED` — what your friends ranked (band 1 and up) on their
+ *    own lists you may see — never a stranger's, however public.
+ *
+ * None of it is on the list already.
+ */
+export const TIER_LIST_SUGGESTION_SECTIONS = [
+  "IN_CELLARS",
+  "TASTED",
+  "FRIENDS_RANKED",
+] as const;
+export type TierListSuggestionSection =
+  (typeof TIER_LIST_SUGGESTION_SECTIONS)[number];
+
+/** One row of Add entry's sections, with the facts that say why it is there. */
+export type TierListSuggestionDto = {
+  readonly section: TierListSuggestionSection;
+  readonly entry: TierListEntryRef;
+  /**
+   * Your own verdict, which picks the band it lands in: your newest review's
+   * score (a place: your rating), else the score on your newest drink log
+   * that has one. `null` when you have given neither.
+   */
+  readonly myScore: number | null;
+  /** IN_CELLARS: the cellar you touched it in most recently. */
+  readonly cellarName: string | null;
+  /** IN_CELLARS: bottles of it not finished, across your cellars. */
+  readonly bottleCount: number | null;
+  /** TASTED: your drink logs of it (at it, for a place). */
+  readonly logCount: number | null;
+  /** TASTED: when you last rated, logged or visited it. */
+  readonly lastTastedAt: string | null;
+  /** FRIENDS_RANKED: the friend who ranked it highest (newest list on a tie). */
+  readonly friendId: string | null;
+  /** FRIENDS_RANKED: that friend's band for it. */
+  readonly friendBand: number | null;
+  /** FRIENDS_RANKED: how many friends rank it. */
+  readonly friendCount: number | null;
+};
+
+/** At most this many rows per section. */
+export const SUGGESTIONS_PER_SECTION = 30;
+
+/**
+ * Why "Try this next" shows a card — each reason a fact the viewer can
+ * check, never a score:
+ *
+ *  - `FRIEND_RANKED` — a friend put it in one of their top two bands;
+ *  - `LIKE_TOP` — it sits next to one of this list's top-two-band entries in
+ *    the catalog (N08's retrieval: the stored item vectors and the names'
+ *    trigrams, fused by rank);
+ *  - `LIKE_LOVED` — the same, next to an item you love.
+ *
+ * Never something you have rated, logged, keep in a cellar, or that is on
+ * the list.
+ */
+export const TRY_NEXT_REASONS = [
+  "FRIEND_RANKED",
+  "LIKE_TOP",
+  "LIKE_LOVED",
+] as const;
+export type TryNextReason = (typeof TRY_NEXT_REASONS)[number];
+
+export type TierListTryNextDto = {
+  readonly reason: TryNextReason;
+  readonly entry: TierListEntryRef;
+  /** FRIEND_RANKED: who, their band, and how many friends rank it that high. */
+  readonly friendId: string | null;
+  readonly friendBand: number | null;
+  readonly friendCount: number | null;
+  /** LIKE_TOP / LIKE_LOVED: the entry it is like, by name as it reads now. */
+  readonly likeName: string | null;
+  /** LIKE_TOP: that entry's band on this list. */
+  readonly likeBand: number | null;
+};
+
+/** At most this many cards. */
+export const TRY_NEXT_LIMIT = 6;
+
+/**
+ * X16's templates: for each entry type, how many of them you have rated —
+ * what a list started from your ratings would hold.
+ */
+export type TierListTemplateDto = {
+  readonly listType: string;
+  readonly entryType: TierListEntryType;
+  readonly ratedCount: number;
 };
 
 export type DeletedTierList = { readonly id: string };
@@ -333,6 +505,35 @@ export type TierListActorInterface = {
    * already present throws `ConflictError` rather than silently duplicating.
    */
   addItem(ctx: Ctx, input: AddTierListItemInput): Promise<TierListItemDto>;
+  /**
+   * X16's multi-add: several entries in one transaction and **one** history
+   * edit, so the toast's Undo takes them all back. Each is appended to the
+   * end of its band, in the order given. Entries already on the list, named
+   * twice, or unreadable are skipped and counted, never refused — a sheet of
+   * suggestions can be stale by the time it is sent. At most
+   * {@link MAX_BATCH_ADD}; none at all is a `ValidationError`.
+   */
+  addItems(
+    ctx: Ctx,
+    inputs: readonly AddTierListItemInput[],
+  ): Promise<AddTierListItemsResult>;
+  /**
+   * X16: Add entry's sections ({@link TierListSuggestionSection}) for the
+   * list's own type, none of them already on it. Creator only: anyone else
+   * who may see the list gets `[]`. A list whose type names no entry type
+   * gets `[]`.
+   */
+  addSuggestions(ctx: Ctx): Promise<readonly TierListSuggestionDto[]>;
+  /**
+   * X16's grounded "Try this next", for the viewer: at most `limit` (default
+   * {@link TRY_NEXT_LIMIT}) entries of the list's type, each with the fact
+   * that put it there ({@link TryNextReason}). Deterministic — no model call
+   * — and empty rather than padded when nothing qualifies.
+   */
+  tryNext(
+    ctx: Ctx,
+    limit?: number | null,
+  ): Promise<readonly TierListTryNextDto[]>;
   removeItem(ctx: Ctx, tierListItemId: string): Promise<RemovedTierListItem>;
   /**
    * One transaction. `orderedIds` is the **complete** post-reorder membership
@@ -387,11 +588,16 @@ export const TierListActorDescriptor: ActorDescriptor<TierListActorInterface> =
     methods: {
       get: {},
       getShared: {},
-      create: {},
+      // X16: a list started from your ratings has entries, which enqueues
+      // `generateInsights` like any other edit.
+      create: { modelBacked: true },
       update: {},
       delete: {},
       items: {},
       addItem: { modelBacked: true },
+      addItems: { modelBacked: true },
+      addSuggestions: {},
+      tryNext: {},
       removeItem: { modelBacked: true },
       reorderBand: { modelBacked: true },
       editHistory: {},

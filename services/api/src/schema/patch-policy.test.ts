@@ -197,7 +197,6 @@ const FIELDS: ReadonlyArray<
   ["updateTierList", "name", "keep", `"N"`, "N"],
   ["updateTierList", "description", "clearable", `"D"`, "D"],
   ["updateTierList", "privacy", "keep", "PRIVATE", "PRIVATE"],
-  ["updateTierList", "isEditingLocked", "keep", "true", true],
 
   ["updateRecipe", "name", "keep", `"N"`, "N"],
   ["updateRecipe", "description", "clearable", `"D"`, "D"],

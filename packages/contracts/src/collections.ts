@@ -98,7 +98,11 @@ import type { CappedList, Page, PageArgs } from "./page.ts";
 import type { PlaceBrandDto, PlaceMenuItemDto } from "./places.ts";
 import type { RecipeGroupDto, RecipeIngredientDto } from "./recipes.ts";
 import { searchHash } from "./search.ts";
-import type { TierListEntryRef, TierListItemDto } from "./tier-lists.ts";
+import type {
+  TierListEntryRef,
+  TierListItemDto,
+  TierListTemplateDto,
+} from "./tier-lists.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Keys                                                                        */
@@ -349,6 +353,14 @@ export type TierListsCollectionActorInterface = {
     ctx: Ctx,
     refs: readonly TierListEntryRef[],
   ): Promise<readonly CappedList<TierListItemDto>[]>;
+  /**
+   * X16's templates: for each of the seven entry types, in
+   * `TIER_LIST_ENTRY_TYPES` order, how many you have rated — distinct items
+   * you reviewed, places you rated (and may still see). What a list
+   * `createTierList(startFrom: RATINGS)` would hold, before the
+   * `MAX_BATCH_ADD` cap.
+   */
+  templates(ctx: Ctx): Promise<readonly TierListTemplateDto[]>;
 };
 
 export const TierListsCollectionActorDescriptor: ActorDescriptor<TierListsCollectionActorInterface> =
@@ -358,6 +370,7 @@ export const TierListsCollectionActorDescriptor: ActorDescriptor<TierListsCollec
     methods: {
       list: {},
       entriesOf: {},
+      templates: {},
     },
   };
 

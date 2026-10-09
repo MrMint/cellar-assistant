@@ -149,6 +149,7 @@ import { randomUUID } from "node:crypto";
 import type {
   ActorCategory,
   AddTierListItemInput,
+  AddTierListItemsResult,
   CreateTierListInput,
   Ctx,
   DeletedTierList,
@@ -165,19 +166,24 @@ import type {
   TierListEntryRef,
   TierListHistoryStepResult,
   TierListItemDto,
+  TierListSuggestionDto,
+  TierListTryNextDto,
   UpdateTierListInput,
 } from "@cellar-assistant/contracts";
 import {
   ConflictError,
+  entryTypeOfListType,
   ForbiddenError,
   formatStoredFailure,
   isActorError,
   isTierListEntryType,
   MAX_BAND,
+  MAX_BATCH_ADD,
   MIN_BAND,
   NotFoundError,
   offsetPage,
   TierListActorDescriptor,
+  TRY_NEXT_LIMIT,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
@@ -218,17 +224,26 @@ import type {
   MoveSubject,
 } from "../lib/tier-list-history.ts";
 import {
+  appendedSnapshots,
   historyStacks,
   insertAt,
   isEditKind,
+  movedCount,
   movedEntry,
   parseChange,
   planBandOrders,
 } from "../lib/tier-list-history.ts";
 import { tierListInsightsStatus } from "../lib/tier-list-insights-status.ts";
+import {
+  addSuggestionsFor,
+  ratedEntries,
+  tryNextFor,
+  viewerScopeOf,
+} from "../lib/tier-list-suggestions.ts";
 import { hiddenPlaceIds, placeIsVisible } from "../lib/unshared-places.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import { tierListVisibility } from "../lib/visibility.ts";
+import { visibilityScope } from "../lib/visibility-sql.ts";
 
 type TierListRow = typeof tierLists.$inferSelect;
 type TierListItemRow = typeof tierListItems.$inferSelect;
@@ -595,6 +610,31 @@ export class TierListActor
       throw new ConflictError(`tier list ${this.key} already exists`);
     }
     const name = requireName(input.name);
+    const startFrom = input.startFrom ?? "EMPTY";
+    if (startFrom !== "EMPTY" && startFrom !== "RATINGS") {
+      throw new ValidationError(`not a way to start a list: ${startFrom}`);
+    }
+    // X16: a list started from your ratings. The column default is
+    // `'place'`, so an omitted `listType` is a place list here too.
+    let seed: readonly EntrySnapshot[] = [];
+    if (startFrom === "RATINGS") {
+      const type = entryTypeOfListType(input.listType ?? "place");
+      if (type === null) {
+        throw new ValidationError(
+          `a list of "${input.listType}" cannot start from your ratings`,
+        );
+      }
+      const rated = await ratedEntries(this.db, creator, type);
+      seed = appendedSnapshots(
+        [],
+        rated.map((row) => ({
+          entry: row.entry,
+          band: row.band,
+          notes: null,
+          id: randomUUID(),
+        })),
+      );
+    }
 
     await this.tx(async (tx) => {
       await tx.insert(tierLists).values({
@@ -605,6 +645,18 @@ export class TierListActor
         ...(input.privacy === undefined ? {} : { privacy: input.privacy }),
         ...(input.listType === undefined ? {} : { listType: input.listType }),
       });
+      if (seed.length === 0) return;
+      await this.#insertSnapshots(tx, seed);
+      // The list's first edit, so `seq` 1: one Undo empties it again.
+      await tx.insert(tierListHistory).values({
+        tierListId: this.key,
+        seq: 1,
+        kind: "ADD",
+        targetSeq: null,
+        change: { kind: "ADD", rows: seed },
+        userId: creator,
+      });
+      await this.#bumpContentAndEnqueueInsights(tx, ctx);
     });
     await this.reload();
     return await this.#dtoFor(ctx, this.requireAggregate());
@@ -619,14 +671,10 @@ export class TierListActor
       name?: string;
       description?: string | null;
       privacy?: PermissionType;
-      isEditingLocked?: boolean;
     } = {};
     if (input.name !== undefined) patch.name = requireName(input.name);
     if (input.description !== undefined) patch.description = input.description;
     if (input.privacy !== undefined) patch.privacy = input.privacy;
-    if (input.isEditingLocked !== undefined) {
-      patch.isEditingLocked = input.isEditingLocked;
-    }
     if (Object.keys(patch).length === 0)
       return await this.#dtoFor(ctx, aggregate);
 
@@ -736,20 +784,166 @@ export class TierListActor
       if (inserted.length > 0) {
         await this.#record(tx, ctx, {
           kind: "ADD",
-          row: {
-            id: tierListItemId,
-            entry,
-            band,
-            position,
-            notes,
-            createdAt: createdAt.toISOString(),
-          },
+          rows: [
+            {
+              id: tierListItemId,
+              entry,
+              band,
+              position,
+              notes,
+              createdAt: createdAt.toISOString(),
+            },
+          ],
         });
       }
       await this.#bumpContentAndEnqueueInsights(tx, ctx);
     });
     await this.reload();
     return toItemDto(this.#requireItem(tierListItemId));
+  }
+
+  /**
+   * X16's multi-add — see the contracts interface doc. One transaction, one
+   * `ADD` history row holding every row added, so Undo takes them back
+   * together. Idempotent on each `tierListItemId` like `addItem`: a retry
+   * whose rows are already there reports them added again, not skipped.
+   */
+  async addItems(
+    ctx: Ctx,
+    inputs: readonly AddTierListItemInput[],
+  ): Promise<AddTierListItemsResult> {
+    const aggregate = this.requireAggregate();
+    await this.#requireCreator(ctx, aggregate, "add to this tier list");
+    if (inputs.length === 0) {
+      throw new ValidationError("addItems needs at least one entry");
+    }
+    if (inputs.length > MAX_BATCH_ADD) {
+      throw new ValidationError(
+        `addItems takes at most ${MAX_BATCH_ADD} entries, got ${inputs.length}`,
+      );
+    }
+    const asked = inputs.map((input) => ({
+      entry: requireEntry(input.entry),
+      band: input.band === undefined ? MIN_BAND : requireBand(input.band),
+      notes: input.notes ?? null,
+      id: requireUuid(input.tierListItemId ?? randomUUID(), "tierListItemId"),
+    }));
+
+    const existingIds = new Set(aggregate.items.map((row) => row.id));
+    const retried = asked.filter((ask) => existingIds.has(ask.id));
+    const fresh = asked.filter((ask) => !existingIds.has(ask.id));
+
+    // What can still be added: readable (an item that exists, a place this
+    // viewer may see — X27), not on the list, and not asked for twice.
+    const found = await resolveTierListEntries(
+      this.db,
+      fresh.map((ask) => ask.entry),
+    );
+    const hidden = await hiddenPlaceIds(
+      this.db,
+      ctx,
+      fresh.flatMap((ask) =>
+        ask.entry.type === "PLACE" ? [ask.entry.id] : [],
+      ),
+    );
+    const onList = new Set(
+      aggregate.items.map((row) => entryKey(entryRefOf(row))),
+    );
+    const addable = fresh.filter((ask) => {
+      const key = entryKey(ask.entry);
+      const readable =
+        found.has(key) &&
+        !(ask.entry.type === "PLACE" && hidden.has(ask.entry.id));
+      if (!readable || onList.has(key)) return false;
+      onList.add(key);
+      return true;
+    });
+    const snapshots = appendedSnapshots(aggregate.items, addable);
+
+    if (snapshots.length > 0) {
+      await this.#recordedTx(async (tx) => {
+        await this.#insertSnapshots(tx, snapshots);
+        await this.#record(tx, ctx, { kind: "ADD", rows: snapshots });
+        await this.#bumpContentAndEnqueueInsights(tx, ctx);
+      });
+      await this.reload();
+    }
+
+    const added = [...retried, ...addable].map((ask) =>
+      toItemDto(this.#requireItem(ask.id)),
+    );
+    return { added, skipped: asked.length - added.length };
+  }
+
+  /**
+   * X16: Add entry's sections — creator only (`[]` for anyone else who may
+   * see the list), for the list's own type, none of them on it already.
+   */
+  async addSuggestions(ctx: Ctx): Promise<readonly TierListSuggestionDto[]> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    if (!isOwner(ctx, aggregate.tierList.createdById)) return [];
+    const type = entryTypeOfListType(aggregate.tierList.listType);
+    if (type === null) return [];
+    const scope = viewerScopeOf(await visibilityScope(this.db, ctx));
+    if (scope === null) return [];
+    const onList = aggregate.items
+      .map(entryRefOf)
+      .filter((ref) => ref.type === type)
+      .map((ref) => ref.id);
+    return await addSuggestionsFor(this.db, scope, type, onList);
+  }
+
+  /**
+   * X16: "Try this next" for the viewer — anyone who may see the list and is
+   * signed in; seeded from what they may see of it. See `tryNextFor`.
+   */
+  async tryNext(
+    ctx: Ctx,
+    limit?: number | null,
+  ): Promise<readonly TierListTryNextDto[]> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const n = limit ?? TRY_NEXT_LIMIT;
+    if (!Number.isInteger(n) || n < 1 || n > TRY_NEXT_LIMIT * 2) {
+      throw new ValidationError(
+        `limit must be an integer between 1 and ${TRY_NEXT_LIMIT * 2}`,
+      );
+    }
+    const type = entryTypeOfListType(aggregate.tierList.listType);
+    if (type === null) return [];
+    const scope = viewerScopeOf(await visibilityScope(this.db, ctx));
+    if (scope === null) return [];
+    const entries = (await this.#visibleItems(ctx, aggregate)).map((row) => ({
+      entry: entryRefOf(row),
+      band: row.band,
+      position: row.position,
+    }));
+    return await tryNextFor(this.db, scope, type, entries, n);
+  }
+
+  /** Inserts recorded rows as they are (ids, bands, positions). */
+  async #insertSnapshots(
+    tx: DbOrTx,
+    snapshots: readonly EntrySnapshot[],
+  ): Promise<void> {
+    for (const snapshot of snapshots) {
+      const createdAt =
+        snapshot.createdAt === null ? new Date() : new Date(snapshot.createdAt);
+      await tx
+        .insert(tierListItems)
+        .values({
+          id: snapshot.id,
+          tierListId: this.key,
+          band: snapshot.band,
+          position: snapshot.position,
+          notes: snapshot.notes,
+          createdAt,
+          updatedAt: createdAt,
+          [entryProperty(snapshot.entry.type)]: snapshot.entry.id,
+        })
+        .onConflictDoNothing({ target: tierListItems.id });
+    }
   }
 
   /**
@@ -778,7 +972,10 @@ export class TierListActor
         .delete(tierListItems)
         .where(eq(tierListItems.id, tierListItemId));
       await this.#writePositions(tx, item.band, remaining);
-      await this.#record(tx, ctx, { kind: "REMOVE", row: snapshotOf(item) });
+      await this.#record(tx, ctx, {
+        kind: "REMOVE",
+        rows: [snapshotOf(item)],
+      });
       await this.#bumpContentAndEnqueueInsights(tx, ctx);
     });
     await this.reload();
@@ -942,6 +1139,7 @@ export class TierListActor
       entryName: null,
       fromBand: null,
       toBand: null,
+      entryCount: 0,
       at: target.createdAt.toISOString(),
     };
     const change = parseChange(target.kind, target.change);
@@ -988,66 +1186,89 @@ export class TierListActor
     const putBack =
       (change.kind === "ADD" && way === "forth") ||
       (change.kind === "REMOVE" && way === "back");
-    if (putBack) await this.#putBack(tx, change.row);
-    else await this.#takeOut(tx, change.row.id);
+    if (putBack) await this.#putBack(tx, change.rows);
+    else
+      await this.#takeOut(
+        tx,
+        change.rows.map((row) => row.id),
+      );
   }
 
-  /** Removes the row if it is still there, and closes its band's gap. */
-  async #takeOut(tx: DbOrTx, tierListItemId: string): Promise<void> {
+  /** Removes those rows still there, and closes their bands' gaps. */
+  async #takeOut(
+    tx: DbOrTx,
+    tierListItemIds: readonly string[],
+  ): Promise<void> {
     const items = this.requireAggregate().items;
-    const row = items.find((item) => item.id === tierListItemId);
-    if (row === undefined) return;
-    await tx.delete(tierListItems).where(eq(tierListItems.id, row.id));
-    const rest = items.filter((item) => item.id !== row.id);
+    const wanted = new Set(tierListItemIds);
+    const rows = items.filter((item) => wanted.has(item.id));
+    if (rows.length === 0) return;
+    await tx.delete(tierListItems).where(
+      inArray(
+        tierListItems.id,
+        rows.map((row) => row.id),
+      ),
+    );
+    const rest = items.filter((item) => !wanted.has(item.id));
+    const bands = [...new Set(rows.map((row) => row.band))];
     await this.#writeOrders(
       tx,
-      new Map([[row.band, bandOrderOf(rest, row.band)]]),
+      new Map(bands.map((band) => [band, bandOrderOf(rest, band)])),
       rest,
     );
   }
 
   /**
-   * Re-inserts a recorded row under its own id, at its recorded band and
-   * position (clamped to the band's length now). Skipped when the row, or
-   * the same entry under another id, is already on the list, or when what it
-   * ranked can no longer be read.
+   * Re-inserts recorded rows under their own ids, each at its recorded band
+   * and position (clamped to the band's length by then), in the order
+   * recorded. A row is skipped when it, or the same entry under another id,
+   * is already on the list, or when what it ranked can no longer be read.
    */
-  async #putBack(tx: DbOrTx, snapshot: EntrySnapshot): Promise<void> {
+  async #putBack(
+    tx: DbOrTx,
+    snapshots: readonly EntrySnapshot[],
+  ): Promise<void> {
     const items = this.requireAggregate().items;
-    if (items.some((row) => row.id === snapshot.id)) return;
-    const alreadyPresent = items.some((row) => {
-      const ref = entryRefOf(row);
-      return ref.type === snapshot.entry.type && ref.id === snapshot.entry.id;
-    });
-    if (alreadyPresent) return;
-    const found = await resolveTierListEntries(tx, [snapshot.entry]);
-    if (!found.has(entryKey(snapshot.entry))) return;
-
-    const order = insertAt(
-      bandOrderOf(items, snapshot.band),
-      snapshot.id,
-      snapshot.position,
+    const known: { id: string; band: number; position: number }[] = [...items];
+    const present = new Set(items.map((row) => entryKey(entryRefOf(row))));
+    const ids = new Set(items.map((row) => row.id));
+    const found = await resolveTierListEntries(
+      tx,
+      snapshots.map((snapshot) => snapshot.entry),
     );
-    const position = order.indexOf(snapshot.id);
-    const createdAt =
-      snapshot.createdAt === null ? new Date() : new Date(snapshot.createdAt);
-    await tx
-      .insert(tierListItems)
-      .values({
-        id: snapshot.id,
-        tierListId: this.key,
-        band: snapshot.band,
-        position,
-        notes: snapshot.notes,
-        createdAt,
-        updatedAt: new Date(),
-        [entryProperty(snapshot.entry.type)]: snapshot.entry.id,
-      })
-      .onConflictDoNothing({ target: tierListItems.id });
-    await this.#writeOrders(tx, new Map([[snapshot.band, order]]), [
-      ...items,
-      { id: snapshot.id, band: snapshot.band, position },
-    ]);
+    const orders = new Map<number, string[]>();
+    for (const snapshot of snapshots) {
+      const key = entryKey(snapshot.entry);
+      if (ids.has(snapshot.id) || present.has(key) || !found.has(key)) {
+        continue;
+      }
+      const order = insertAt(
+        orders.get(snapshot.band) ?? bandOrderOf(known, snapshot.band),
+        snapshot.id,
+        snapshot.position,
+      );
+      const position = order.indexOf(snapshot.id);
+      const createdAt =
+        snapshot.createdAt === null ? new Date() : new Date(snapshot.createdAt);
+      await tx
+        .insert(tierListItems)
+        .values({
+          id: snapshot.id,
+          tierListId: this.key,
+          band: snapshot.band,
+          position,
+          notes: snapshot.notes,
+          createdAt,
+          updatedAt: new Date(),
+          [entryProperty(snapshot.entry.type)]: snapshot.entry.id,
+        })
+        .onConflictDoNothing({ target: tierListItems.id });
+      orders.set(snapshot.band, order);
+      known.push({ id: snapshot.id, band: snapshot.band, position });
+      ids.add(snapshot.id);
+      present.add(key);
+    }
+    if (orders.size > 0) await this.#writeOrders(tx, orders, known);
   }
 
   /**
@@ -1187,20 +1408,22 @@ export class TierListActor
       const change = parseChange(row.kind, row.change);
       return change === null ? [] : [{ row, change }];
     });
+    const soleEntry = (change: EditChange): TierListEntryRef | null =>
+      change.kind === "MOVE"
+        ? (change.subject?.entry ?? null)
+        : change.rows.length === 1
+          ? (change.rows[0]?.entry ?? null)
+          : null;
     const refs = parsed.flatMap(({ change }) => {
-      const ref =
-        change.kind === "MOVE" ? change.subject?.entry : change.row.entry;
-      return ref === undefined ? [] : [ref];
+      const ref = soleEntry(change);
+      return ref === null ? [] : [ref];
     });
     const names =
       refs.length === 0
         ? new Map()
         : await resolveTierListEntries(this.db, refs);
     return parsed.map(({ row, change }): TierListEditDto => {
-      const entry =
-        change.kind === "MOVE"
-          ? (change.subject?.entry ?? null)
-          : change.row.entry;
+      const entry = soleEntry(change);
       const name =
         entry === null ? null : (names.get(entryKey(entry))?.name ?? null);
       const at = row.createdAt.toISOString();
@@ -1212,16 +1435,24 @@ export class TierListActor
           entryName: name,
           fromBand: change.subject?.fromBand ?? null,
           toBand: change.subject?.toBand ?? null,
+          entryCount:
+            change.subject === null
+              ? movedCount(change.before, change.after)
+              : 1,
           at,
         };
       }
+      // A multi-add names one band only when every row went to it.
+      const bands = new Set(change.rows.map((snapshot) => snapshot.band));
+      const band = bands.size === 1 ? (change.rows[0]?.band ?? null) : null;
       return {
         seq: row.seq,
         kind: change.kind,
         entry,
         entryName: name,
-        fromBand: change.kind === "REMOVE" ? change.row.band : null,
-        toBand: change.kind === "ADD" ? change.row.band : null,
+        fromBand: change.kind === "REMOVE" ? band : null,
+        toBand: change.kind === "ADD" ? band : null,
+        entryCount: change.rows.length,
         at,
       };
     });
@@ -1596,7 +1827,6 @@ export class TierListActor
       createdById: aggregate.tierList.createdById,
       privacy: aggregate.tierList.privacy,
       listType: aggregate.tierList.listType,
-      isEditingLocked: aggregate.tierList.isEditingLocked,
       itemCount: aggregate.items.length,
       aiInsights:
         (aggregate.tierList.aiInsights as Record<string, unknown> | null) ??
