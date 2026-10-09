@@ -129,6 +129,9 @@ const GUARDED: readonly Guarded[] = [
       ...SHARED_IMPORTS,
       "../lib/embedding-client.ts",
       "../lib/file-verification.ts",
+      // X09: `friendshipsOf` / `friendIdsOf` for `friendsScore` — Drizzle
+      // reads of `friends`, guarded below.
+      "../lib/visibility.ts",
     ],
     // §8.5's "entity → FileActor, BudgetActor, EmbeddingActor,
     // BrandRegistryActor, BarcodeActor". `ItemActor` uses two of the five,
@@ -209,6 +212,21 @@ const GUARDED: readonly Guarded[] = [
       "@cellar-assistant/db/orm",
       "./db.ts",
       "./item-arcs.ts",
+    ],
+    sidecarTargets: [],
+  },
+  {
+    // The visibility inputs read from Postgres (`friendshipsOf`, the pure
+    // `friendIdsOf`): Drizzle reads and `packages/policy`, no client, no
+    // actor — guarded so `ItemActor.friendsScore` cannot grow an edge
+    // through it.
+    file: "../lib/visibility.ts",
+    imports: [
+      "@cellar-assistant/contracts",
+      "@cellar-assistant/db",
+      "@cellar-assistant/db/orm",
+      "@cellar-assistant/policy",
+      "./db.ts",
     ],
     sidecarTargets: [],
   },

@@ -166,8 +166,7 @@ import {
   type StoredVector,
   storedVector,
 } from "../lib/vectors.ts";
-import { friendshipsOf } from "../lib/visibility.ts";
-import { friendIdsOf } from "../lib/visibility-sql.ts";
+import { friendIdsOf, friendshipsOf } from "../lib/visibility.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Rows                                                                        */
