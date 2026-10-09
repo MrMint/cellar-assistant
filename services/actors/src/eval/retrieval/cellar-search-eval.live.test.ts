@@ -243,6 +243,8 @@ const line = (label: string, summary: NarrowingSummary): string =>
   `empty ${summary.empty}`;
 
 const BASELINE = new URL("./cellar-baseline.json", import.meta.url);
+/** Half the last recorded decimal of `cellar-baseline.json`. */
+const ROUNDING = 5e-5;
 type Baseline = {
   readonly hitRate: number;
   readonly recall: number;
@@ -439,12 +441,13 @@ describe.skipIf(skip)(
 
         const baseline = readBaseline();
         if (baseline !== null) {
-          expect(shipped.hitRate).toBeGreaterThanOrEqual(baseline.hitRate);
-          expect(shipped.recall).toBeGreaterThanOrEqual(baseline.recall - 1e-9);
-          expect(shipped.precision).toBeGreaterThanOrEqual(
-            baseline.precision - 1e-9,
-          );
-          expect(shipped.f1).toBeGreaterThanOrEqual(baseline.f1 - 1e-9);
+          // The baseline is recorded to four decimals.
+          const held = (value: number, floor: number) =>
+            expect(value).toBeGreaterThanOrEqual(floor - ROUNDING);
+          held(shipped.hitRate, baseline.hitRate);
+          held(shipped.recall, baseline.recall);
+          held(shipped.precision, baseline.precision);
+          held(shipped.f1, baseline.f1);
         }
       });
     }, 600_000);
