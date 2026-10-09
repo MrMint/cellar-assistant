@@ -200,6 +200,7 @@ directly in feature code. Stroke 1.75 (`ICON_STROKE`).
 | MdSchedule, MdUpdate | `Schedule` |
 | MdHourglassEmpty | `Pending` |
 | MdHistory | `History` |
+| (new, X03) a pour from a bottle | `Pour` |
 | MdLock / MdLockOpen | `Lock` / `Unlock` |
 | MdVisibility | `Visible` |
 | MdPublic, MdLanguage | `Public` |

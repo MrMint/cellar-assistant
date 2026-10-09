@@ -34,6 +34,47 @@ export function FinishBottleDialogs({
   const name =
     itemName === undefined || itemName === "" ? "This bottle" : itemName;
 
+  useFinishToast(finish);
+
+  return (
+    <ResponsiveDialog
+      role="alertdialog"
+      open={asking}
+      onOpenChange={(open) => {
+        if (!open && state.phase === "confirming") finish.cancel();
+      }}
+      title="Finished it?"
+      description={`${name} leaves the cellar. Its check-ins stay, and you can undo this.`}
+      dismissible={state.phase === "confirming"}
+      footer={
+        <div className="flex w-full flex-col gap-2 md:flex-row-reverse md:justify-start">
+          <LoadingButton
+            loading={state.phase === "finishing"}
+            onClick={finish.confirm}
+          >
+            Finished
+          </LoadingButton>
+          <Button
+            variant="ghost"
+            disabled={state.phase === "finishing"}
+            onClick={finish.cancel}
+          >
+            Not yet
+          </Button>
+        </div>
+      }
+    />
+  );
+}
+
+/**
+ * N13a's Undo toast alone, for a surface that asks "Finished?" its own way —
+ * the Pour sheet asks inside itself after the last pour (X03), then calls
+ * `finish.finishNow`. The same toast as the slider's: "Finished. Moved out of
+ * the cellar." with Undo, "Putting it back…", the refusal with "Try again".
+ */
+export function useFinishToast(finish: FinishBottle): void {
+  const { state } = finish;
   const toastId = useId();
   // The toast's callbacks outlive the render that raised them: read the
   // hook's current commands, whose phase checks are then up to date.
@@ -76,34 +117,4 @@ export function FinishBottleDialogs({
   // Leaving the page takes the toast with it: its Undo would act on a bottle
   // no longer on screen.
   useEffect(() => () => dismissNotification(toastId), [toastId]);
-
-  return (
-    <ResponsiveDialog
-      role="alertdialog"
-      open={asking}
-      onOpenChange={(open) => {
-        if (!open && state.phase === "confirming") finish.cancel();
-      }}
-      title="Finished it?"
-      description={`${name} leaves the cellar. Its check-ins stay, and you can undo this.`}
-      dismissible={state.phase === "confirming"}
-      footer={
-        <div className="flex w-full flex-col gap-2 md:flex-row-reverse md:justify-start">
-          <LoadingButton
-            loading={state.phase === "finishing"}
-            onClick={finish.confirm}
-          >
-            Finished
-          </LoadingButton>
-          <Button
-            variant="ghost"
-            disabled={state.phase === "finishing"}
-            onClick={finish.cancel}
-          >
-            Not yet
-          </Button>
-        </div>
-      }
-    />
-  );
 }

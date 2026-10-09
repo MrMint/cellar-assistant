@@ -51,6 +51,7 @@ export {
   Eye as Visible,
   Filter,
   Flame as Popular,
+  GlassWater as Pour,
   Globe as Public,
   GripVertical as DragHandle,
   Heart as Love,
