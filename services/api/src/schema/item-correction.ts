@@ -215,6 +215,35 @@ builder.mutationField("suggestItemDetails", (t) =>
   }),
 );
 
+builder.mutationField("suggestNewItemDetails", (t) =>
+  t.field({
+    type: ItemDetailSuggestionsType,
+    description:
+      "X07 “Add to catalog”: the `suggestItemDetails` pass for a draft that " +
+      "is not an item yet — a menu line nobody has filed. Any signed-in " +
+      "viewer; `draftId` is minted by the client (an id that names someone " +
+      "else's onboarding is not found). May abstain; writes nothing — the " +
+      "draft becomes an item only through `createItem`.",
+    errors: {},
+    args: {
+      draftId: t.arg.id({ required: true }),
+      type: t.arg({ type: ItemTypeEnum, required: true }),
+      input: t.arg({ type: SuggestItemDetailsInput, required: true }),
+    },
+    resolve: async (_root, args, context) =>
+      await context
+        .actor(ItemOnboardingActorDescriptor, String(args.draftId))
+        .suggestNewItem({
+          itemType: args.type,
+          name: args.input.name,
+          brandName: args.input.brandName ?? null,
+          country: args.input.country ?? null,
+          attributes:
+            (args.input.attributes as Record<string, unknown> | null) ?? null,
+        }),
+  }),
+);
+
 builder.mutationField("replaceItemBrand", (t) =>
   t.field({
     type: ItemBrandType,

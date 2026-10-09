@@ -365,6 +365,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   startItemOnboarding: STARTS,
   startRecipePhotoJob: STARTS,
   suggestItemDetails: ASKS,
+  suggestNewItemDetails: ASKS,
 };
 
 /** A name that says "change what is there" cannot be classified away. */

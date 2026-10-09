@@ -533,3 +533,141 @@ describe("MatchSuggestion.place / placeMenuItem (G20)", () => {
     expect(JSON.stringify(result.data)).not.toContain(L1);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* X07                                                                         */
+/* -------------------------------------------------------------------------- */
+
+describe("PlaceMenuItem.canCorrectMatch / forYou (X07)", () => {
+  const CELLAR = "f0000002-0000-4000-8000-000000000002";
+  const lines = [
+    line(L1, "Barolo", { type: "wine", id: WINE }),
+    line(L2, "House white"),
+    line(L3, "Pilsner", { type: "beer", id: BEER }),
+  ];
+  const context = (lineId: string) =>
+    lineId === L1
+      ? {
+          lineId,
+          canCorrectMatch: true,
+          forYou: {
+            cellarId: CELLAR,
+            yourScore: 4.5,
+            lovedByFriendNames: ["Sam"],
+            lovedByFriendCount: 3,
+            likeYouRated: null,
+          },
+        }
+      : lineId === L3
+        ? {
+            lineId,
+            canCorrectMatch: true,
+            forYou: {
+              cellarId: null,
+              yourScore: null,
+              lovedByFriendNames: [],
+              lovedByFriendCount: 0,
+              likeYouRated: { item: { type: "WINE", id: WINE }, score: 4 },
+            },
+          }
+        : { lineId, canCorrectMatch: false, forYou: null };
+
+  const sidecar = () =>
+    stubSidecar({
+      "MenuScanActor.get": () => scanDto,
+      "MenuScanActor.menuItems": (_id, _ctx, args) => page(lines, args),
+      "MenuScansCollectionActor.lineContext": (_id, _ctx, ids) =>
+        (ids as string[]).map(context),
+      "CellarActor.get": (id) => ({
+        id,
+        name: "Bar Cart",
+        privacy: "PRIVATE",
+        createdById: viewer.id,
+        coOwnerIds: [],
+        itemCount: 1,
+        itemCounts: {
+          total: 1,
+          byType: { WINE: 1, BEER: 0, SPIRIT: 0, COFFEE: 0, SAKE: 0, TEA: 0 },
+        },
+        createdAt: stamp,
+        updatedAt: stamp,
+      }),
+      "ItemActor.get": (id) => wine(String(id).split(":")[1] ?? ""),
+    });
+
+  const DOC = `{ menuScan(id: "${SCAN}") { ... on MenuScan {
+    menuItems(first: 10) { edges { node {
+      id canCorrectMatch
+      forYou {
+        yourScore friendsWhoLovedCount
+        cellar { name }
+        friendsWhoLovedNames
+        likeYouRated { score item { name } }
+      }
+    } } }
+  } } }`;
+
+  it("answers a page of lines with one lineContext call, keyed by the viewer", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(DOC, testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+
+    const batched = callsTo(calls, "lineContext");
+    expect(batched).toHaveLength(1);
+    expect(batched[0]?.actorType).toBe("MenuScansCollectionActor");
+    expect(batched[0]?.actorId).toBe(viewerCollectionActorId(viewer.id));
+    expect(batched[0]?.args[1]).toEqual([L1, L2, L3]);
+
+    const nodes = (
+      result.data as {
+        menuScan: { menuItems: { edges: { node: unknown }[] } };
+      }
+    ).menuScan.menuItems.edges.map((edge) => edge.node);
+    expect(nodes).toEqual([
+      {
+        id: L1,
+        canCorrectMatch: true,
+        forYou: {
+          yourScore: 4.5,
+          friendsWhoLovedCount: 3,
+          cellar: { name: "Bar Cart" },
+          friendsWhoLovedNames: ["Sam"],
+          likeYouRated: null,
+        },
+      },
+      { id: L2, canCorrectMatch: false, forYou: null },
+      {
+        id: L3,
+        canCorrectMatch: true,
+        forYou: {
+          yourScore: null,
+          friendsWhoLovedCount: 0,
+          cellar: null,
+          friendsWhoLovedNames: [],
+          likeYouRated: { score: 4, item: { name: wine(WINE).name } },
+        },
+      },
+    ]);
+  });
+
+  it("an anonymous viewer gets nothing, and costs no call", async () => {
+    const { invoke, calls } = stubSidecar({
+      "PlaceActor.get": (id) => placeDto(id),
+      "PlaceActor.menuItems": (_id, _ctx, args) => page(lines, args),
+      "MenuScansCollectionActor.lineContext": () => {
+        throw new Error("must not be called");
+      },
+    });
+    const result = await run(
+      `{ place(id: "${P1}") { ... on Place {
+         menuItems(first: 10) { edges { node { canCorrectMatch forYou { yourScore } } } }
+       } } }`,
+      testContext(invoke, null),
+    );
+    expect(callsTo(calls, "lineContext")).toEqual([]);
+    expect(JSON.stringify(result.data ?? {})).not.toContain('"yourScore"');
+    expect(JSON.stringify(result.data ?? {})).not.toContain(
+      '"canCorrectMatch":true',
+    );
+  });
+});

@@ -43,6 +43,8 @@
 import type {
   ItemType,
   MenuItemMatch,
+  MenuLineContextDto,
+  MenuLineForYouDto,
   PlaceInteractionDto,
   PlaceMenuItemDto,
 } from "@cellar-assistant/contracts";
@@ -50,13 +52,18 @@ import {
   isItemType,
   itemActorId,
   MatchSuggestionsCollectionActorDescriptor,
+  MENU_LINE_FRIEND_LOVED_MIN_SCORE,
+  MENU_LINE_LIKE_MIN_SCORE,
   MenuScanActorDescriptor,
+  MenuScansCollectionActorDescriptor,
   REVERSE_EDGE_MAX_PARENTS,
   UserActorDescriptor,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
+import DataLoader from "dataloader";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
+import { CellarType } from "./cellar.ts";
 import { ItemInterface } from "./item.ts";
 import { MatchSuggestionType, MenuScanType } from "./menu-scan.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
@@ -226,5 +233,144 @@ builder.objectFields(MatchSuggestionType, (t) => ({
       }
       return keys.map((key) => found.get(key) ?? null);
     },
+  }),
+}));
+
+/* -------------------------------------------------------------------------- */
+/* X07 — what a menu line means to the viewer                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One `MenuScansCollectionActor.lineContext` call per request for every line
+ * on the page, whichever of `canCorrectMatch` and `forYou` asked — a plain
+ * request-scoped DataLoader (as `want-to-try.ts` does) rather than two
+ * `t.loadable`s, which would cost a call each.
+ */
+const contextByRequest = new WeakMap<
+  ApiContext,
+  DataLoader<string, MenuLineContextDto | null>
+>();
+
+const lineContext = (
+  context: ApiContext,
+  lineId: string,
+): Promise<MenuLineContextDto | null> => {
+  let loader = contextByRequest.get(context);
+  if (loader === undefined) {
+    loader = new DataLoader<string, MenuLineContextDto | null>(
+      async (keys) => {
+        const viewerId = context.ctx.viewerId;
+        if (viewerId === null) return keys.map(() => null);
+        const found = new Map<string, MenuLineContextDto | Error>();
+        for (const chunk of chunksOf(keys)) {
+          try {
+            const answers = await context
+              .actor(
+                MenuScansCollectionActorDescriptor,
+                viewerCollectionActorId(viewerId),
+              )
+              .lineContext(chunk);
+            for (const [index, id] of chunk.entries()) {
+              const answer = answers[index];
+              if (answer !== undefined) found.set(id, answer);
+            }
+          } catch (cause) {
+            for (const id of chunk) found.set(id, asError(cause));
+          }
+        }
+        return keys.map((key) => found.get(key) ?? null);
+      },
+      { maxBatchSize: REVERSE_EDGE_MAX_PARENTS },
+    );
+    contextByRequest.set(context, loader);
+  }
+  return loader.load(lineId);
+};
+
+type LikeYouRated = NonNullable<MenuLineForYouDto["likeYouRated"]>;
+
+const MenuLineLikeYouRatedType = builder
+  .objectRef<LikeYouRated>("MenuLineLikeYouRated")
+  .implement({
+    description:
+      "An item you rated well that this line's item is close to — named, " +
+      "with your own score, never with a similarity number.",
+    fields: (t) => ({
+      item: t.field({
+        type: ItemInterface,
+        nullable: true,
+        description:
+          "Through the `Item` loader. Null if the item has gone since.",
+        resolve: (like) => itemActorId(like.item),
+      }),
+      score: t.exposeFloat("score", {
+        description: "Your own newest score for it, half stars.",
+      }),
+    }),
+  });
+
+const MenuLineForYouType = builder
+  .objectRef<MenuLineForYouDto>("MenuLineForYou")
+  .implement({
+    description:
+      "X07: why a matched menu line might matter to you, each reason a fact " +
+      "from your own rows or a friend's published rating — never a score or " +
+      "percentage the system made up. Any field may be empty; a line with " +
+      "none of them has nothing to say.",
+    fields: (t) => ({
+      cellar: t.field({
+        type: CellarType,
+        nullable: true,
+        description:
+          "A cellar you created or co-own that holds an unfinished bottle " +
+          'of this item — the one stocked most recently ("In Bar Cart").',
+        resolve: (forYou) => forYou.cellarId,
+      }),
+      yourScore: t.exposeFloat("yourScore", {
+        nullable: true,
+        description: 'Your own newest review score of this item ("You ★4.5").',
+      }),
+      friendsWhoLovedNames: t.stringList({
+        description:
+          `Display names of friends whose newest review of this item is ${MENU_LINE_FRIEND_LOVED_MIN_SCORE}★ ` +
+          "or more, most recent first — at most three. Reviews are public on " +
+          "the item page; favourites, which are private, are not read.",
+        resolve: (forYou) => [...forYou.lovedByFriendNames],
+      }),
+      friendsWhoLovedCount: t.exposeInt("lovedByFriendCount", {
+        description:
+          "How many friends that is in all, for “Sam and 2 friends loved it”.",
+      }),
+      likeYouRated: t.field({
+        type: MenuLineLikeYouRatedType,
+        nullable: true,
+        description:
+          `The item of the same type you rated ${MENU_LINE_LIKE_MIN_SCORE}★ or more ` +
+          "that this one is nearest to, when it is close enough to say so — " +
+          "and only when you have not rated this item yourself.",
+        resolve: (forYou) => forYou.likeYouRated,
+      }),
+    }),
+  });
+
+builder.objectFields(PlaceMenuItemType, (t) => ({
+  canCorrectMatch: t.boolean({
+    description:
+      "You scanned the menu this line came from, so `verifyMenuItemMatch` " +
+      "will let you set or clear its match (“Not this”). False for everyone " +
+      "else, and for an anonymous viewer. One batched call per request, " +
+      "shared with `forYou`.",
+    resolve: async (line, _args, context) =>
+      (await lineContext(context, line.id))?.canCorrectMatch ?? false,
+  }),
+  forYou: t.field({
+    type: MenuLineForYouType,
+    nullable: true,
+    description:
+      "X07's grounded reasons this line might matter to you. Null for an " +
+      "unmatched line and for an anonymous viewer. One batched call per " +
+      "request, shared with `canCorrectMatch`.",
+    resolve: async (line, _args, context) =>
+      (await lineContext(context, line.id))?.forYou ?? null,
   }),
 }));

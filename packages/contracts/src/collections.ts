@@ -93,7 +93,7 @@ import type {
   ItemReviewDto,
   ItemType,
 } from "./items.ts";
-import type { MatchSuggestionDto } from "./menu-scans.ts";
+import type { MatchSuggestionDto, MenuLineContextDto } from "./menu-scans.ts";
 import type { CappedList, Page, PageArgs } from "./page.ts";
 import type { PlaceBrandDto, PlaceMenuItemDto } from "./places.ts";
 import type { RecipeGroupDto, RecipeIngredientDto } from "./recipes.ts";
@@ -588,6 +588,19 @@ export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollection
 export type MenuScansCollectionActorInterface = {
   /** **ids** — `menu_scans.id` for the viewer, most recently scanned first. */
   list(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
+  /**
+   * X07 — what each of a page of menu lines means to the viewer: whether they
+   * scanned it (and so may correct its match), and the grounded reasons a
+   * matched line might matter to them (`MenuLineForYouDto`). Aligned to
+   * `lineIds`; an id that names no line answers `canCorrectMatch: false` and
+   * no reasons. Reads only the viewer's own rows and their friends' ratings,
+   * so it says nothing about a line the viewer could not already see. At most
+   * `REVERSE_EDGE_MAX_PARENTS` ids per call.
+   */
+  lineContext(
+    ctx: Ctx,
+    lineIds: readonly string[],
+  ): Promise<readonly MenuLineContextDto[]>;
 };
 
 export const MenuScansCollectionActorDescriptor: ActorDescriptor<MenuScansCollectionActorInterface> =
@@ -596,6 +609,7 @@ export const MenuScansCollectionActorDescriptor: ActorDescriptor<MenuScansCollec
     category: "collection",
     methods: {
       list: {},
+      lineContext: {},
     },
   };
 

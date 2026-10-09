@@ -223,6 +223,26 @@ export type SuggestItemDetailsInput = {
   readonly attributes?: Record<string, unknown> | null;
 };
 
+/** X07: the type a text-only draft will create. */
+export type OpenDraftInput = {
+  readonly itemType: ItemType;
+};
+
+/**
+ * X07 "Add to catalog": the same text-only pass for an item that does not
+ * exist yet — a menu line nobody has filed, drafted into a card the person
+ * confirms. The type and the details the draft already holds are context;
+ * every empty suggestible field is asked for. Nothing is written.
+ */
+export type SuggestNewItemDetailsInput = {
+  readonly itemType: ItemType;
+  readonly name: string;
+  readonly brandName?: string | null;
+  readonly country?: string | null;
+  /** The per-type bag as the draft holds it now, by wire key. */
+  readonly attributes?: Record<string, unknown> | null;
+};
+
 /**
  * What the text-only pass came back with. `defaults` is shaped like a label
  * read's (`country` and the per-type bag) so the client merges both the same
@@ -260,6 +280,14 @@ export type ItemOnboardingActorInterface = {
   start(ctx: Ctx, input: StartOnboardingInput): Promise<ItemOnboardingDto>;
   /** The stored `defaults`, without re-running the model. */
   defaults(ctx: Ctx): Promise<ItemOnboardingDto>;
+  /**
+   * X07: open a session with nothing to read — a draft the person types or
+   * carries over from a menu line — so `confirm` can create its item (four
+   * of the six types cannot exist outside an onboarding). Inserts the `START`
+   * row and calls no model. Idempotent on the key; a repeat with a different
+   * type is refused, since the row's type is what `confirm` creates.
+   */
+  openDraft(ctx: Ctx, input: OpenDraftInput): Promise<ItemOnboardingDto>;
   confirm(
     ctx: Ctx,
     input: ConfirmOnboardingInput,
@@ -285,6 +313,18 @@ export type ItemOnboardingActorInterface = {
     ctx: Ctx,
     input: SuggestItemDetailsInput,
   ): Promise<ItemDetailSuggestions>;
+  /**
+   * X07: `suggestDetails` for an item not created yet — a draft card's
+   * "Suggest details" (a menu line's "Add to catalog"). Keyed by a draft id
+   * the client mints; any signed-in caller, and an id that already names an
+   * onboarding must be the caller's. Abstains rather than guesses; stores
+   * nothing, and never creates the item — the person's confirm does that,
+   * through `createItem`.
+   */
+  suggestNewItem(
+    ctx: Ctx,
+    input: SuggestNewItemDetailsInput,
+  ): Promise<ItemDetailSuggestions>;
 };
 
 /**
@@ -308,6 +348,8 @@ export const ItemOnboardingActorDescriptor: ActorDescriptor<
     // on a vision model's defaults inside the request.
     start: { timeoutMs: 120_000, modelBacked: true },
     defaults: {},
+    // One insert, no model (X07).
+    openDraft: {},
     // Enqueues the new item's `regenerateVector` (an embedding).
     confirm: { modelBacked: true },
     // One status write; no model, no outbox.
@@ -318,6 +360,8 @@ export const ItemOnboardingActorDescriptor: ActorDescriptor<
     // A short text-only answer; nothing like a label read, but a local model
     // on a busy laptop still takes tens of seconds.
     suggestDetails: { timeoutMs: 60_000, modelBacked: true },
+    // The same call for a draft that is not an item yet (X07).
+    suggestNewItem: { timeoutMs: 60_000, modelBacked: true },
   },
   internalMethods: {
     // A vision call per row, from `OnboardingReprocessJobActor`; "over a

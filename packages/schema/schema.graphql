@@ -3069,6 +3069,43 @@ enum MenuItemType {
 }
 
 """
+X07: why a matched menu line might matter to you, each reason a fact from your own rows or a friend's published rating — never a score or percentage the system made up. Any field may be empty; a line with none of them has nothing to say.
+"""
+type MenuLineForYou {
+  """
+  A cellar you created or co-own that holds an unfinished bottle of this item — the one stocked most recently ("In Bar Cart").
+  """
+  cellar: Cellar
+
+  """How many friends that is in all, for “Sam and 2 friends loved it”."""
+  friendsWhoLovedCount: Int!
+
+  """
+  Display names of friends whose newest review of this item is 4.5★ or more, most recent first — at most three. Reviews are public on the item page; favourites, which are private, are not read.
+  """
+  friendsWhoLovedNames: [String!]!
+
+  """
+  The item of the same type you rated 4★ or more that this one is nearest to, when it is close enough to say so — and only when you have not rated this item yourself.
+  """
+  likeYouRated: MenuLineLikeYouRated
+
+  """Your own newest review score of this item ("You ★4.5")."""
+  yourScore: Float
+}
+
+"""
+An item you rated well that this line's item is close to — named, with your own score, never with a similarity number.
+"""
+type MenuLineLikeYouRated {
+  """Through the `Item` loader. Null if the item has gone since."""
+  item: Item
+
+  """Your own newest score for it, half stars."""
+  score: Float!
+}
+
+"""
 One photographed menu. Visible to the person who scanned it and nobody else — not friends, not the public (§2.1).
 """
 type MenuScan {
@@ -3438,6 +3475,11 @@ type Mutation {
   openCellarItem(cellarId: ID!, cellarItemId: ID!): OpenCellarItemResult!
 
   """
+  X07: open an onboarding with nothing to read — a draft typed by hand or carried over from a menu line — so `confirmItemOnboarding` can create its item. No model call. Idempotent on `draftId`; the same id with another type is a `ValidationError`.
+  """
+  openItemDraft(draftId: ID!, type: ItemType!): OpenItemDraftResult!
+
+  """
   The `<Command>Result` template (§8.3): the payload, or one of the five typed errors.
   """
   ping(actorId: String, message: String): PingResult!
@@ -3576,6 +3618,11 @@ type Mutation {
   """
   suggestItemDetails(input: SuggestItemDetailsInput!, itemId: ID!, type: ItemType!): SuggestItemDetailsResult!
 
+  """
+  X07 “Add to catalog”: the `suggestItemDetails` pass for a draft that is not an item yet — a menu line nobody has filed. Any signed-in viewer; `draftId` is minted by the client (an id that names someone else's onboarding is not found). May abstain; writes nothing — the draft becomes an item only through `createItem`.
+  """
+  suggestNewItemDetails(draftId: ID!, input: SuggestItemDetailsInput!, type: ItemType!): SuggestNewItemDetailsResult!
+
   """Add or remove one item from the viewer's favourites."""
   toggleFavorite(itemId: ID!, type: ItemType!): ToggleFavoriteResult!
 
@@ -3713,6 +3760,8 @@ enum OnboardingStatus {
 }
 
 union OpenCellarItemResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
+union OpenItemDraftResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
 
 type PageInfo {
   endCursor: String
@@ -4065,11 +4114,20 @@ type PlaceMenuEdge {
 
 """One line from a menu, matched or not."""
 type PlaceMenuItem {
+  """
+  You scanned the menu this line came from, so `verifyMenuItemMatch` will let you set or clear its match (“Not this”). False for everyone else, and for an anonymous viewer. One batched call per request, shared with `forYou`.
+  """
+  canCorrectMatch: Boolean!
   confidenceScore: Float
   createdAt: DateTime
   description: String
   detectedItemType: MenuItemType
   extractedAttributes: JSON
+
+  """
+  X07's grounded reasons this line might matter to you. Null for an unmatched line and for an anonymous viewer. One batched call per request, shared with `canCorrectMatch`.
+  """
+  forYou: MenuLineForYou
   id: ID!
   isAvailable: Boolean!
   matchVerifiedAt: DateTime
@@ -6601,6 +6659,8 @@ input SuggestItemDetailsInput {
 }
 
 union SuggestItemDetailsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemDetailSuggestions | NotFoundError | ValidationError
+
+union SuggestNewItemDetailsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemDetailSuggestions | NotFoundError | ValidationError
 
 type Tea implements Item {
   barcode: String
