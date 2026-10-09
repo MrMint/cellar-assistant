@@ -184,26 +184,32 @@ test.describe("onboard → cellar → check in", () => {
       "the cellar page does not show its new item",
     ).toMatch(/E2 Wine/);
 
-    // "Check in" opens the drink-log sheet (X02); "Log it" with nothing
-    // filled in is the old "Just me".
-    const checkIn = primary.getByRole("button", { name: "Check in" });
-    await expect(
-      checkIn.first(),
-      "no check-in control on the cellar page",
-    ).toBeVisible({ timeout: 20_000 });
-    await checkIn.first().click();
+    // X04 merged the overview into the cellar home: a bottle added a moment
+    // ago is on the dashboard's "Recently added" shelf, with Pour — which
+    // opens the drink-log sheet (X02) until X03's Pour sheet lands. "Log it"
+    // with nothing filled in is the old "Just me".
+    const pour = primary
+      .locator('[data-slot="recent-shelf"]')
+      .getByRole("button", { name: "Pour" });
+    await expect(pour.first(), "no Pour on the cellar page").toBeVisible({
+      timeout: 20_000,
+    });
+    await pour.first().click();
     await primary
       .getByRole("dialog", { name: "Log a drink" })
       .getByRole("button", { name: "Log it" })
       .click();
 
-    // The check-in list is written by `CheckInActor` and read back through
-    // the cellar; a check-in that only turned a spinner off has not been
-    // proved.
+    // The log is written by `CheckInActor` and read back through the cellar:
+    // the toast says so, and the dashboard's pours count it after the page
+    // re-reads (with the API check-in above, it is not the month's first).
     await expect(
-      primary.getByText(/check.?in/i).first(),
-      "the check-in did not produce any visible result",
+      primary.getByText(/^Logged /).first(),
+      "the log did not produce any visible result",
     ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      primary.locator('[data-slot="pour-trend-readout"]'),
+    ).toContainText(/^[1-9]\d*\s*pours? in this month/, { timeout: 20_000 });
   });
 });
 

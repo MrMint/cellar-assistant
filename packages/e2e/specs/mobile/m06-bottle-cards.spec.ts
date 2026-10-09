@@ -14,7 +14,7 @@ import { Gql, settleNetwork } from "../../fixtures/test.ts";
  * - a bottle with no photo shows its LabelPlate, not the type's clip art;
  * - the sort chip (Open first by default → A–Z) reorders, through a sheet;
  * - the status segment hides finished bottles by default and shows them
- *   under Finished and All.
+ *   under Finished (the X04 diary) and All.
  *
  * Teas, because `createItem` writes a tea without the onboarding flow
  * (`11-items.spec.ts` says why). Items have no delete, so the three teas
@@ -132,8 +132,10 @@ test.afterAll(() => {
   if (cellarId !== undefined) deleteCellarWithContents(cellarId);
 });
 
+// The collection's grid only: since X04 the dashboard's shelves above it
+// draw BottleCards too.
 const cards = (page: import("@playwright/test").Page) =>
-  page.locator('[data-slot="bottle-card"]');
+  page.locator('[data-slot="cellar-grid"] [data-slot="bottle-card"]');
 const titles = (page: import("@playwright/test").Page) =>
   cards(page).locator("a").allTextContents();
 
@@ -228,13 +230,16 @@ test("the status segment: In cellar by default, then Finished, then All", async 
   ).toHaveAttribute("aria-checked", "true");
   await expect(cards(page)).toHaveCount(2, { timeout: 30_000 });
 
-  await segment.getByRole("radio", { name: "Finished" }).click();
+  // X04: Finished is a diary — a row per finished bottle, with its date —
+  // and the segment carries the count.
+  const finishedSegment = segment.getByRole("radio", { name: /^Finished/ });
+  await expect(finishedSegment).toHaveText(/Finished\s*1/);
+  await finishedSegment.click();
   await expect(page).toHaveURL(/[?&]status=finished/);
-  await expect(cards(page)).toHaveCount(1, { timeout: 20_000 });
-  const finished = cards(page).first();
-  await expect(finished).toHaveAttribute("data-state", "finished");
-  await expect(finished).toContainText(names.finished);
-  await expect(finished).toContainText("Finished");
+  const entries = page.locator('[data-slot="diary-entry"]');
+  await expect(entries).toHaveCount(1, { timeout: 20_000 });
+  await expect(entries.first()).toContainText(names.finished);
+  await expect(entries.first()).toContainText(/Finished \d{1,2} [A-Z][a-z]{2}/);
 
   await segment.getByRole("radio", { name: "All" }).click();
   await expect(page).toHaveURL(/[?&]status=all/);
