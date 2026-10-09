@@ -33,7 +33,9 @@ export type ItemRemainingSliderProps = {
 /**
  * `82450ad1:src/components/item/ItemRemainingSlider.tsx`, restored.
  *
- * - `openCellarItemAction` → `openCellarItem`;
+ * - `openCellarItemAction` → `openCellarItem`, behind "Mark as opened" (it
+ *   was "Open it!", the page's main action until X03's Pour, whose first
+ *   pour opens the bottle);
  *   `updateCellarItemPercentageAction` → `setCellarItemPercentage`, still
  *   debounced 400 ms (a local hook instead of `@uidotdev/usehooks`). The old
  *   action stamped `empty_at` the moment the slider reached 0. Now 0% asks
@@ -132,9 +134,15 @@ export const ItemRemainingSlider = ({
 
   return (
     <ItemSection>
+      {/* X03: the first Pour opens a bottle (the page's ActionBar); this
+          is for opening one without pouring — for cooking, say. */}
       {isCellarOwner && !isOpened && (
-        <LoadingButton loading={isPending} onClick={handleOpen}>
-          Open it!
+        <LoadingButton
+          variant="outline"
+          loading={isPending}
+          onClick={handleOpen}
+        >
+          Mark as opened
         </LoadingButton>
       )}
       {isOpened && !isEmptied && (
