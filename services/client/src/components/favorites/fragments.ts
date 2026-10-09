@@ -48,7 +48,8 @@ export const FavoritesQuery = graphql(
 /**
  * D9 / X15: the recipes you Love, newest Love first — Me › Lists › Loved
  * shows them above the bottles. Fifty is a screenful of rows and more than
- * anyone Loves in a sitting; "Show all" pages on from the client.
+ * anyone Loves in a sitting; "Show all" expands to these fifty — it does not
+ * page past them (a follow-up if anyone Loves more).
  */
 export const LOVED_RECIPES_PAGE_SIZE = 50;
 
