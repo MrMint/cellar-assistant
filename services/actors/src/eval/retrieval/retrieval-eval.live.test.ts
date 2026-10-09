@@ -76,10 +76,16 @@ import type {
   GuardedBaseline,
   MenuLineOutcome,
   MenuSummary,
+  NarrowingSummary,
   RankedQuery,
   SearchSummary,
 } from "./metrics.ts";
-import { regressions, summariseMenus, summariseSearch } from "./metrics.ts";
+import {
+  regressions,
+  summariseMenus,
+  summariseNarrowing,
+  summariseSearch,
+} from "./metrics.ts";
 import type { QueryKind } from "./queries.ts";
 import { QUERIES } from "./queries.ts";
 import type { SeededCatalog } from "./seed-testing.ts";
@@ -181,17 +187,29 @@ const seedVectors = async (db: DbOrTx, seeded: SeededCatalog) => {
 /* Search                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/** One query's answer, with each hit's two scores (for tuning, in the output). */
+type SearchRun = RankedQuery & {
+  readonly kind: QueryKind;
+  readonly hits: readonly {
+    readonly key: string;
+    readonly distance: number | null;
+    readonly lexical: number | null;
+  }[];
+};
+
 const runSearch = async (
   db: DbOrTx,
   ctx: Ctx,
   seeded: SeededCatalog,
-): Promise<(RankedQuery & { readonly kind: QueryKind })[]> => {
-  const out: (RankedQuery & { readonly kind: QueryKind })[] = [];
+  narrow = false,
+): Promise<SearchRun[]> => {
+  const out: SearchRun[] = [];
   for (const query of QUERIES) {
     const input: ItemSearchInput = {
       text: query.text,
       itemTypes: query.itemTypes ?? null,
       limit: 10,
+      ...(narrow ? { narrow: true } : {}),
     };
     const hits = await searchActor(db, input).all(ctx, input);
     out.push({
@@ -199,6 +217,11 @@ const runSearch = async (
       kind: query.kind,
       relevant: query.relevant,
       ranked: hits.map((hit) => seeded.keyOf.get(hit.id) ?? `?${hit.id}`),
+      hits: hits.map((hit) => ({
+        key: seeded.keyOf.get(hit.id) ?? `?${hit.id}`,
+        distance: hit.distance,
+        lexical: hit.lexicalSimilarity ?? null,
+      })),
     });
   }
   return out;
@@ -368,6 +391,7 @@ const report = (
   search: SearchSummary,
   byKind: Record<string, SearchSummary>,
   menus: MenuSummary,
+  narrowed: NarrowingSummary,
 ): string =>
   [
     `retrieval eval — ${MODEL_KEY}, ${CATALOG.length} items, ` +
@@ -381,6 +405,10 @@ const report = (
         `${pct(s.hitAt1)}  hit@3 ${pct(s.hitAt3)}  MRR ${s.mrr.toFixed(3)}`,
     ),
     `  misses@3: ${search.missesAt3.join(", ") || "none"}`,
+    `narrowed (X12) ${narrowed.narrowed}/${narrowed.queries} queries  ` +
+      `hit@1 ${pct(narrowed.hitAt1)}  recall@10 ${pct(narrowed.recallAt10)}  ` +
+      `irrelevant ${narrowed.irrelevantBefore} -> ${narrowed.irrelevantAfter}  ` +
+      `(in narrowed queries ${narrowed.paddingBefore} -> ${narrowed.paddingAfter})`,
     `menus   match ${pct(menus.matchRate)}  candidate recall ` +
       `${pct(menus.candidateRecall)}  auto ${menus.autoSuggested} ` +
       `(precision ${pct(menus.autoPrecision)})  rejections ` +
@@ -415,6 +443,14 @@ describe.skipIf(skip)(`retrieval eval (N05), live at ${ENDPOINT}`, () => {
         seeded,
       );
       const search = summariseSearch(ranked);
+      // X12: the same queries as universal search asks them.
+      const narrowedRanked = await runSearch(
+        db,
+        { viewerId: userId, kind: "user", requestId: "eval-narrow" },
+        seeded,
+        true,
+      );
+      const narrowed = summariseNarrowing(ranked, narrowedRanked);
       const kinds = [...new Set(ranked.map((query) => query.kind))];
       const byKind = Object.fromEntries(
         kinds.map((kind) => [
@@ -425,7 +461,7 @@ describe.skipIf(skip)(`retrieval eval (N05), live at ${ENDPOINT}`, () => {
       const lines = await runMenus(db, userId, seeded);
       const menus = summariseMenus(lines);
 
-      console.log(report(search, byKind, menus));
+      console.log(report(search, byKind, menus, narrowed));
       const out = process.env.RETRIEVAL_EVAL_OUT;
       if (out !== undefined && out !== "") {
         writeFileSync(
@@ -437,7 +473,9 @@ describe.skipIf(skip)(`retrieval eval (N05), live at ${ENDPOINT}`, () => {
               search,
               byKind,
               menus,
+              narrowed,
               ranked,
+              narrowedRanked,
               lines,
               verifierErrors,
             },
@@ -454,7 +492,7 @@ describe.skipIf(skip)(`retrieval eval (N05), live at ${ENDPOINT}`, () => {
         baseline !== null &&
         process.env.RETRIEVAL_EVAL_VERIFIER !== "model"
       ) {
-        expect(regressions(baseline, { search, menus })).toEqual([]);
+        expect(regressions(baseline, { search, menus, narrowed })).toEqual([]);
       }
     });
   }, 600_000);

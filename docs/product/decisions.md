@@ -265,3 +265,39 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   ("Cook with this"), since every cocktail is already in X14's section.
 - **Deleting a bottle keeps its drink logs** (X02's `ON DELETE SET NULL`); the
   confirm no longer says they are deleted with it.
+
+### Search (wave B "search": X12, D9, D10)
+
+- **One page of sections (D10).** A text search shows Your bottles · Items ·
+  Places · Recipes · People · Brands in that fixed order, three rows each, a
+  section drawn only when it found something. Nothing anywhere is one empty
+  state ("Nothing called "…" yet.", Add an item). The six searches run side by
+  side and the page renders once, so it does not reflow six times under the
+  thumb; a failed section is simply absent.
+- **See all.** Bottles, Items, Recipes and People open in place
+  (`/search?q=…&in=<section>`, every row the search held, "All results" back),
+  so the box and its text stay. Places open on the map (`/map?search=`),
+  Brands on `/brands?q=` (the same search with the index around it). Typing a
+  new query returns to every section.
+- **Your bottles.** Open bottles in cellars you created or co-own (never a
+  friend's, however visible), matched by item name, one row per item per
+  cellar ("Bar Cart · 2 bottles"); a tap opens the bottle already opened, else
+  the oldest. Name only, so it works without AI.
+- **Items narrow (X12).** When the phrase names an item, Items keeps the name
+  matches and the bottles the embedding puts right beside the named one
+  (`itemSearch(narrow: true)`, strong name 0.6, gap 0.03 — tuned on N05:
+  recall@10 unchanged at 100%, irrelevant hits in the 29 narrowed queries
+  241 → 24). A description is never narrowed. The menu matcher does not use it.
+- **Recipes (D9).** Names first, then meaning (`recipeSearch(hybrid: true)`),
+  one row per recipe group, with "You can make this" / "Missing Campari" from
+  your bar. The meaning half is cut at 0.45 and 0.05 past the nearest, measured
+  on hand-written recipes (the N05 set has none) — re-measure when it has some.
+- **People.** Anyone by name: friends first, then requests either way, then
+  everyone else with an Add button that sends the request in place. Friends
+  and requests open Friends (there is no profile page).
+- **Places.** Searched within about 30 km of your last known position (the
+  location cookie the map and Home write). Without one, only places whose name
+  matched are shown — a category-only match would be a bar anywhere on earth.
+- **No AI.** Every section answers by name when the phrase cannot be embedded
+  (places and recipes gained that fallback here), and the page says "Matching
+  names only: search by meaning is off." when `semanticSearch` is false.

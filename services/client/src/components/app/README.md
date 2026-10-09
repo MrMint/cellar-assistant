@@ -177,6 +177,7 @@ directly in feature code. Stroke 1.75 (`ICON_STROKE`).
 | MdDirections | `Directions` |
 | MdLayers | `Layers` |
 | MdPerson | `Person` |
+| MdPersonAdd | `PersonAdd` |
 | MdPeople, MdGroup | `People` |
 | MdCameraAlt, MdCamera, MdPhotoCamera, BsCamera | `Camera` |
 | MdPhotoLibrary, BsImages | `PhotoLibrary` |

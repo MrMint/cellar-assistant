@@ -12,11 +12,18 @@ import {
   ForbiddenError,
   type PermissionType,
   pageArgs,
+  ValidationError,
 } from "@cellar-assistant/contracts";
 import { sql } from "@cellar-assistant/db/orm";
 import { canSeeCellar } from "@cellar-assistant/policy";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
+import {
+  seedCellarItem,
+  seedBeer as seedNamedBeer,
+  seedWine as seedNamedWine,
+  seedCellar as seedOwnedCellar,
+} from "../lib/search-testing.ts";
 import {
   activate,
   closeTestDb,
@@ -511,6 +518,127 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
         await expect(actor.stats(userCtx(null))).rejects.toThrow(
           ForbiddenError,
         );
+      });
+    });
+  });
+
+  /**
+   * X12 — universal search's "Your bottles": your own and co-owned cellars
+   * only, open bottles only, by name, one hit per item per cellar.
+   */
+  describe("findBottles", () => {
+    const find = async (
+      db: DbOrTx,
+      viewerId: string,
+      term: string,
+      limit?: number,
+    ) =>
+      (
+        await activate(createActor(CellarsCollectionActor, viewerId, db))
+      ).findBottles(userCtx(viewerId), { term, limit });
+
+    it("finds your open bottles by name, grouped per cellar, and nobody else's", async () => {
+      await withTestDb(async (db) => {
+        const me = await seedUser(db);
+        const friend = await seedUser(db);
+        await befriend(db, me, friend);
+        const bar = await seedOwnedCellar(db, {
+          createdById: me,
+          name: "Bar Cart",
+        });
+        const shared = await seedOwnedCellar(db, {
+          createdById: friend,
+          name: "Shared",
+          coOwnerIds: [me],
+        });
+        const friends = await seedOwnedCellar(db, {
+          createdById: friend,
+          privacy: "FRIENDS",
+          name: "Friend's",
+        });
+        const lagavulin = await seedNamedWine(db, me, "Lagavulin 16");
+        const other = await seedNamedWine(db, me, "Lagavulin 8");
+        const unrelated = await seedNamedBeer(db, me, "Duvel");
+
+        const first = await seedCellarItem(db, bar, me, lagavulin);
+        const second = await seedCellarItem(db, bar, me, lagavulin);
+        await seedCellarItem(db, shared, friend, lagavulin);
+        const finished = await seedCellarItem(db, bar, me, other);
+        await db.execute(sql`
+          update public.cellar_items set empty_at = now() where id = ${finished}::uuid
+        `);
+        await seedCellarItem(db, bar, me, unrelated);
+        // A friend's cellar is visible to me, but its bottles are not mine.
+        await seedCellarItem(db, friends, friend, lagavulin);
+
+        const result = await find(db, me, "lagavulin");
+        expect(result.totalCount).toBe(2);
+        expect(
+          result.hits.map((hit) => [
+            hit.cellarName,
+            hit.itemName,
+            hit.bottleCount,
+          ]),
+        ).toEqual([
+          ["Bar Cart", "Lagavulin 16", 2],
+          ["Shared", "Lagavulin 16", 1],
+        ]);
+        // One of Bar Cart's two (`now()` ties inside the test's transaction).
+        expect([first, second]).toContain(result.hits[0]?.cellarItemId);
+        expect(result.hits[0]?.item).toEqual(lagavulin);
+      });
+    });
+
+    it("puts the exact name first, finds a typo, and counts past the limit", async () => {
+      await withTestDb(async (db) => {
+        const me = await seedUser(db);
+        const cellar = await seedOwnedCellar(db, { createdById: me });
+        for (const name of ["Duvel Tripel Hop", "Duvel", "Laphroaig 10"]) {
+          await seedCellarItem(
+            db,
+            cellar,
+            me,
+            await seedNamedBeer(db, me, name),
+          );
+        }
+        const duvel = await find(db, me, "duvel", 1);
+        expect(duvel.hits.map((hit) => hit.itemName)).toEqual(["Duvel"]);
+        expect(duvel.totalCount).toBe(2);
+        const typo = await find(db, me, "laphroig");
+        expect(typo.hits.map((hit) => hit.itemName)).toEqual(["Laphroaig 10"]);
+        // `%` is a character, not a wildcard.
+        expect((await find(db, me, "%")).hits).toEqual([]);
+      });
+    });
+
+    it("prefers a bottle already opened as the one a tap opens", async () => {
+      await withTestDb(async (db) => {
+        const me = await seedUser(db);
+        const cellar = await seedOwnedCellar(db, { createdById: me });
+        const wine = await seedNamedWine(db, me, "Barolo");
+        await seedCellarItem(db, cellar, me, wine);
+        const opened = await seedCellarItem(db, cellar, me, wine);
+        await db.execute(sql`
+          update public.cellar_items set open_at = now() where id = ${opened}::uuid
+        `);
+        const result = await find(db, me, "barolo");
+        expect(result.hits[0]?.cellarItemId).toBe(opened);
+        expect(result.hits[0]?.bottleCount).toBe(2);
+      });
+    });
+
+    it("refuses another viewer, a blank term and an out-of-range limit", async () => {
+      await withTestDb(async (db) => {
+        const me = await seedUser(db);
+        const other = await seedUser(db);
+        const actor = await activate(
+          createActor(CellarsCollectionActor, me, db),
+        );
+        await expect(
+          actor.findBottles(userCtx(other), { term: "x" }),
+        ).rejects.toThrow(ForbiddenError);
+        await expect(find(db, me, "  ")).rejects.toThrow(ValidationError);
+        await expect(find(db, me, "x", 51)).rejects.toThrow(ValidationError);
       });
     });
   });

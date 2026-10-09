@@ -121,6 +121,24 @@ const FIELDS: readonly {
     viewerScoped: false,
   },
   {
+    // X12: `narrow` joins the key, and only when it is set.
+    actorType: "ItemSearchActor",
+    document: `{ itemSearch(text: "pinot noir", narrow: true, first: 2) { ... on ItemSearchConnection { edges { cursor } } } }`,
+    key: (ctx) =>
+      itemSearchActorId(
+        {
+          text: "pinot noir",
+          vector: null,
+          itemTypes: null,
+          maxDistance: null,
+          limit: null,
+          narrow: true,
+        },
+        ctx.viewerId,
+      ),
+    viewerScoped: false,
+  },
+  {
     actorType: "CellarItemSearchActor",
     document: `{ cellarItemSearch(cellarId: "${CELLAR}", query: "oaky", first: 2) { ... on CellarItemSearchConnection { edges { cursor } } } }`,
     key: (ctx) =>
@@ -154,9 +172,38 @@ const FIELDS: readonly {
     viewerScoped: false,
   },
   {
+    // X12 / D9: universal search's Recipes — `hybrid` joins the key.
+    actorType: "RecipeSearchActor",
+    document: `{ recipeSearch(term: "negroni", hybrid: true, first: 2) { ... on RecipeSearchConnection { edges { cursor } } } }`,
+    key: (ctx) =>
+      recipeSearchActorId(
+        {
+          term: "negroni",
+          semanticQuery: null,
+          type: null,
+          maxDistance: null,
+          limit: null,
+          hybrid: true,
+        },
+        ctx.viewerId,
+      ),
+    viewerScoped: false,
+  },
+  {
     actorType: "UserSearchActor",
     document: `{ userSearch(term: "jar", first: 2) { ... on UserSearchConnection { edges { cursor } } } }`,
     key: (ctx) => userSearchActorId({ term: "jar", limit: null }, ctx.viewerId),
+    viewerScoped: true,
+  },
+  {
+    // X12: universal search's People — `includeConnected` joins the key.
+    actorType: "UserSearchActor",
+    document: `{ userSearch(term: "jar", includeConnected: true, first: 2) { ... on UserSearchConnection { edges { cursor } } } }`,
+    key: (ctx) =>
+      userSearchActorId(
+        { term: "jar", limit: null, includeConnected: true },
+        ctx.viewerId,
+      ),
     viewerScoped: true,
   },
   {

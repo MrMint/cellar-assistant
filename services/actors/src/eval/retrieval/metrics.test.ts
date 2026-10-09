@@ -6,6 +6,7 @@ import {
   reciprocalRank,
   regressions,
   summariseMenus,
+  summariseNarrowing,
   summariseSearch,
 } from "./metrics.ts";
 
@@ -128,5 +129,62 @@ describe("regressions against a baseline", () => {
   it("does not flag an improvement", () => {
     const better = { search: { ...search, hitAt1: 1 }, menus };
     expect(regressions({ search, menus }, better)).toEqual([]);
+  });
+});
+
+describe("narrowing (X12)", () => {
+  const plain = [
+    q(["a", "x", "y"], ["a"], "named"),
+    q(["b", "c", "z"], ["b", "c"], "described"),
+  ];
+
+  it("counts the padding a narrowed answer dropped, and keeps recall honest", () => {
+    const narrowed = [
+      q(["a"], ["a"], "named"),
+      q(["b", "c", "z"], ["b", "c"], "described"),
+    ];
+    expect(summariseNarrowing(plain, narrowed)).toEqual({
+      queries: 2,
+      narrowed: 1,
+      recallAt10: 1,
+      hitAt1: 1,
+      irrelevantBefore: 3,
+      irrelevantAfter: 1,
+      paddingBefore: 2,
+      paddingAfter: 0,
+    });
+  });
+
+  it("shows a narrowing that dropped a relevant hit as lost recall", () => {
+    const narrowed = [
+      q(["a"], ["a"], "named"),
+      q(["b"], ["b", "c"], "described"),
+    ];
+    expect(summariseNarrowing(plain, narrowed).recallAt10).toBe(0.75);
+  });
+
+  it("refuses a narrowed query with no plain counterpart", () => {
+    expect(() => summariseNarrowing(plain, [q(["a"], ["a"], "new")])).toThrow(
+      /no plain counterpart/,
+    );
+  });
+
+  it("is a regression when narrowing loses recall or lets padding back", () => {
+    const search = summariseSearch(plain);
+    const menus = summariseMenus([]);
+    const good = summariseNarrowing(plain, [
+      q(["a"], ["a"], "named"),
+      q(["b", "c"], ["b", "c"], "described"),
+    ]);
+    const bad = { ...good, recallAt10: 0.5, irrelevantAfter: 3 };
+    expect(
+      regressions(
+        { search, menus, narrowed: good },
+        { search, menus, narrowed: bad },
+      ),
+    ).toEqual([
+      "narrowed.recallAt10 0.500 < baseline 1.000",
+      "narrowed.irrelevantAfter 3 > baseline 0",
+    ]);
   });
 });

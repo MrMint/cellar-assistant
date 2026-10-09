@@ -11,7 +11,6 @@ import {
   type SearchParams,
   searchStateFromParams,
 } from "@/components/search/adapter";
-import { ServerCatalogSections } from "@/components/search/CatalogSections";
 import { Greeting } from "@/components/search/Greeting";
 import {
   NEARBY_PLACES_LIMIT,
@@ -26,13 +25,15 @@ import { SearchPageLayout } from "@/components/search/SearchPageLayout";
 import {
   SearchDiscoverySkeleton,
   SearchResultsSkeleton,
+  SearchSectionsSkeleton,
 } from "@/components/search/SearchResultsSkeleton";
 import { ServerBarcodeResults } from "@/components/search/ServerBarcodeResults";
 import {
   ExpiredImageSearch,
   ServerImageResults,
 } from "@/components/search/ServerImageResults";
-import { ServerSearchResults } from "@/components/search/ServerSearchResults";
+import { UniversalSearchResults } from "@/components/search/UniversalSearchResults";
+import { sectionFromParam } from "@/components/search/universal-search";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
 import { getServerUser } from "@/utilities/auth-server";
@@ -48,15 +49,18 @@ import { getServerUser } from "@/utilities/auth-server";
  * button, G32) is back: the photo is uploaded and `?image=` carries its file
  * id where the old `?image_results=` carried the rows themselves.
  *
+ * A text search is universal search (X12, decisions D9 and D10): sections
+ * for your bottles, items, places, recipes, people and brands, three rows
+ * each with "See all" (`?in=<section>` opens one in place). It replaced the
+ * item grid and the Recipes/Brands tail D1 added.
+ *
  * Not restored, each by decision rather than omission:
  *
  * - **The five quick-link chips** (Cellars, Map, Tier Lists, Favorites,
  *   Rankings) — X01 deletes them: every one duplicated a tab (Cellar, Map) or
  *   a row of the Me hub (Tier lists, Loved, Top rated) one thumb-reach away.
- * - **The rewrite's tabs** (brands, people, recipes) and its two extra quick
- *   links: the old page had neither, and the old UI wins where they overlap
- *   (UI parity decision 2). Brand search lives on `/brands`, people on
- *   `/friends`, recipes on `/recipes`.
+ * - **The rewrite's tabs** (brands, people, recipes): D10 restored them as
+ *   sections of the one results page instead.
  */
 export const dynamic = "force-dynamic";
 
@@ -70,6 +74,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
   const { query, barcode, imageFileId, legacyImageLink, hasActiveSearch } =
     state;
   const activityKinds = activityKindsFromParams(resolvedSearchParams);
+  const focus = sectionFromParam(resolvedSearchParams.in);
 
   const user = await getServerUser();
 
@@ -116,21 +121,15 @@ export default async function Search({ searchParams }: SearchPageProps) {
             </ResultsSection>
           )}
 
+          {/* X12 (D9, D10): one page of sections — Your bottles · Items ·
+              Places · Recipes · People · Brands — or the one "See all"
+              opened. The box above is the same element throughout (N01). */}
           {query !== null && (
-            <ResultsSection
-              title={<>Search results for &ldquo;{query}&rdquo;</>}
+            <Suspense
+              key={`${focus ?? "all"}:${query}`}
+              fallback={<SearchSectionsSkeleton />}
             >
-              <Suspense fallback={<SearchResultsSkeleton />}>
-                <ServerSearchResults query={query} />
-              </Suspense>
-            </ResultsSection>
-          )}
-
-          {/* D1: recipes and brands are reached from search now. Streams
-              in on its own, so the items never wait for it. */}
-          {query !== null && (
-            <Suspense fallback={null}>
-              <ServerCatalogSections query={query} />
+              <UniversalSearchResults query={query} focus={focus} />
             </Suspense>
           )}
         </div>

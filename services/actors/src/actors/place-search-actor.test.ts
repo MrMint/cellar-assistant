@@ -16,6 +16,7 @@
  */
 import type { Ctx, PlaceSearchInput } from "@cellar-assistant/contracts";
 import {
+  ConflictError,
   ForbiddenError,
   PLACE_SEARCH_WEIGHTS,
   placeSearchActorId,
@@ -198,6 +199,37 @@ describe.skipIf(skip)("PlaceSearchActor (§2.3)", () => {
           input,
         );
         expect(hits.map((h) => h.name)).toEqual(["Vino Near"]);
+      });
+    });
+
+    it("matches by name when the query cannot be embedded (D25, X12)", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedPlace(db, { name: "Copper Lantern", lng: -83, lat: 40 });
+        await seedPlace(db, { name: "Somewhere Else", lng: -83, lat: 40 });
+        const input: PlaceSearchInput = { query: "copper lantern" };
+        const unconfigured: EmbedQuery = async () => {
+          throw new ConflictError("no embedding provider", "AI_UNCONFIGURED");
+        };
+        const hits = await newActor(input, db, viewer, unconfigured).all(
+          userCtx(viewer),
+          input,
+        );
+        expect(hits.map((h) => h.name)).toEqual(["Copper Lantern"]);
+        expect(at(hits, 0).categoryScore).toBe(0);
+      });
+    });
+
+    it("still fails a request the name could not make right", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const input: PlaceSearchInput = { query: "copper" };
+        const refused: EmbedQuery = async () => {
+          throw new ForbiddenError("not yours");
+        };
+        await expect(
+          newActor(input, db, viewer, refused).all(userCtx(viewer), input),
+        ).rejects.toThrow(ForbiddenError);
       });
     });
 

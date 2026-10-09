@@ -57,6 +57,9 @@ import {
   ItemSearchActorDescriptor,
   itemActorId,
   itemSearchActorId,
+  PERSON_RELATIONS,
+  RECIPE_HYBRID_DISTANCE_GAP,
+  RECIPE_HYBRID_MAX_DISTANCE,
   RECIPE_SEARCH_RESULT_CAP,
   RecipeSearchActorDescriptor,
   recipeSearchActorId,
@@ -146,6 +149,15 @@ builder.queryField("itemSearch", (t) =>
       }),
       itemTypes: t.arg({ type: [ItemTypeEnum], required: false }),
       maxDistance: t.arg.float({ required: false }),
+      narrow: t.arg.boolean({
+        required: false,
+        description:
+          "X12: when the phrase names an item outright, return the items " +
+          "whose names match and the ones the embedding puts right beside " +
+          "the named one, instead of padding the list with whatever else is " +
+          "nearest. No effect on a search that names nothing (a description, " +
+          "a producer the names do not say), or on a photo or vector search.",
+      }),
       limit: t.arg.int({
         required: false,
         description:
@@ -169,6 +181,7 @@ builder.queryField("itemSearch", (t) =>
         limit:
           args.limit ??
           (imageFileId === null ? null : IMAGE_SEARCH_RESULT_LIMIT),
+        ...(args.narrow === true ? { narrow: true } : {}),
       };
       return connectionFromPage(
         await context
@@ -364,7 +377,8 @@ builder.queryField("recipeSearch", (t) =>
     description:
       "Recipe search (RecipeSearchActor). `term` matches name, description " +
       "and type; `semanticQuery` ranks by `recipe_vectors` distance; both " +
-      "together narrow with the first and rank with the second.",
+      "together narrow with the first and rank with the second. `hybrid` " +
+      "is universal search's mode: names first, then meaning.",
     // A7e — an error union, for the reason `pagination.ts` records.
     errors: {},
     args: {
@@ -373,6 +387,16 @@ builder.queryField("recipeSearch", (t) =>
       semanticQuery: t.arg.string({ required: false }),
       type: t.arg.string({ required: false }),
       maxDistance: t.arg.float({ required: false }),
+      hybrid: t.arg.boolean({
+        required: false,
+        description:
+          "X12 / D9: universal search's Recipes — recipes whose name " +
+          "contains `term` first, then the ones nearest its meaning (cut at " +
+          `\`maxDistance\`, default ${RECIPE_HYBRID_MAX_DISTANCE}, and at ` +
+          `${RECIPE_HYBRID_DISTANCE_GAP} past the nearest). Answers with the ` +
+          "name matches alone when the term cannot be embedded. " +
+          "`semanticQuery` is ignored.",
+      }),
       limit: t.arg.int({
         required: false,
         description:
@@ -388,6 +412,7 @@ builder.queryField("recipeSearch", (t) =>
         type: args.type ?? null,
         maxDistance: args.maxDistance ?? null,
         limit: args.limit ?? null,
+        ...(args.hybrid === true ? { hybrid: true } : {}),
       };
       return connectionFromPage(
         await context
@@ -405,17 +430,34 @@ builder.queryField("recipeSearch", (t) =>
 /* User search                                                                 */
 /* -------------------------------------------------------------------------- */
 
+const PersonRelationEnum = builder.enumType("PersonRelation", {
+  description:
+    "How a person in a search answer is connected to the viewer (X12): a " +
+    "friend, someone whose request is waiting on the viewer, someone the " +
+    "viewer has asked, or nobody yet.",
+  values: PERSON_RELATIONS,
+});
+
 const UserSearchResult = builder
   .objectRef<UserSearchHit>("UserSearchResult")
   .implement({
     description:
-      "Someone the viewer could send a friend request to. The viewer, their " +
-      "friends, and anyone with a request open in either direction are never " +
-      "in this list.",
+      "Someone matching the term. By default someone the viewer could send " +
+      "a friend request to: the viewer, their friends, and anyone with a " +
+      "request open in either direction are never in this list. With " +
+      "`includeConnected` everyone but the viewer, connected people first, " +
+      "each with `relation`.",
     fields: (t) => ({
       userId: t.exposeID("userId"),
       displayName: t.exposeString("displayName"),
       avatarUrl: t.exposeString("avatarUrl", { nullable: true }),
+      relation: t.field({
+        type: PersonRelationEnum,
+        nullable: true,
+        description:
+          "Set on an `includeConnected` search only (X12); null otherwise.",
+        resolve: (hit) => hit.relation ?? null,
+      }),
     }),
   });
 
@@ -435,6 +477,13 @@ builder.queryField("userSearch", (t) =>
     args: {
       ...t.arg.connectionArgs(),
       term: t.arg.string({ required: true }),
+      includeConnected: t.arg.boolean({
+        required: false,
+        description:
+          "X12: search everyone but the viewer — friends first, then open " +
+          "requests either way, then everyone else — instead of only the " +
+          "people the viewer could ask. Universal search's People section.",
+      }),
       limit: t.arg.int({
         required: false,
         description:
@@ -444,7 +493,11 @@ builder.queryField("userSearch", (t) =>
       }),
     },
     resolve: async (_root, args, context) => {
-      const input = { term: args.term, limit: args.limit ?? null };
+      const input = {
+        term: args.term,
+        limit: args.limit ?? null,
+        ...(args.includeConnected === true ? { includeConnected: true } : {}),
+      };
       return connectionFromPage(
         await context
           .actor(

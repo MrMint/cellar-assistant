@@ -6,6 +6,7 @@
  */
 import type { Ctx, RecipeSearchInput } from "@cellar-assistant/contracts";
 import {
+  ConflictError,
   ForbiddenError,
   recipeSearchActorId,
 } from "@cellar-assistant/contracts";
@@ -28,7 +29,10 @@ import {
   seedUser,
   withTestDb,
 } from "../lib/testing.ts";
-import { RecipeSearchActor } from "./recipe-search-actor.ts";
+import {
+  mergeHybridRecipes,
+  RecipeSearchActor,
+} from "./recipe-search-actor.ts";
 
 const { skip } = await resolveTestDatabase();
 
@@ -94,6 +98,97 @@ describe.skipIf(skip)("RecipeSearchActor (§2.3)", () => {
         );
         expect(hits.map((h) => h.name)).toEqual(["Negroni Cake"]);
       });
+    });
+  });
+
+  describe("hybrid, for universal search (X12 / D9)", () => {
+    const seedBar = async (db: DbOrTx) => {
+      const negroni = await seedRecipe(db, { name: "Negroni" });
+      const boulevardier = await seedRecipe(db, {
+        name: "Boulevardier",
+        description: "A negroni with whiskey",
+      });
+      const americano = await seedRecipe(db, { name: "Americano" });
+      const mojito = await seedRecipe(db, { name: "Mojito" });
+      const cake = await seedRecipe(db, {
+        name: "Chocolate Cake",
+        type: "food",
+      });
+      await seedRecipeVector(db, negroni, blendedVector(0, 1, 0.9));
+      await seedRecipeVector(db, boulevardier, blendedVector(0, 1, 0.1));
+      await seedRecipeVector(db, americano, blendedVector(0, 1, 0.2));
+      await seedRecipeVector(db, mojito, blendedVector(0, 1, 0.3));
+      await seedRecipeVector(db, cake, blendedVector(0, 1, 0.9));
+    };
+
+    it("lists name matches first, then the near ones within the gap", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedBar(db);
+        const input: RecipeSearchInput = { term: "negroni", hybrid: true };
+        const hits = await newActor(input, db, viewer).all(
+          userCtx(viewer),
+          input,
+        );
+        // Negroni by name (its vector is far); Boulevardier and Americano by
+        // meaning; Mojito is 0.097 past the nearest, the cake past 0.45.
+        expect(hits.map((h) => h.name)).toEqual([
+          "Negroni",
+          "Boulevardier",
+          "Americano",
+        ]);
+        expect(hits[0]?.distance).toBeNull();
+      });
+    });
+
+    it("answers with the names alone when the term cannot be embedded (D25)", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedBar(db);
+        const input: RecipeSearchInput = { term: "negroni", hybrid: true };
+        const unconfigured: EmbedQuery = async () => {
+          throw new ConflictError("no embedding provider", "AI_UNCONFIGURED");
+        };
+        const hits = await newActor(input, db, viewer, unconfigured).all(
+          userCtx(viewer),
+          input,
+        );
+        expect(hits.map((h) => h.name)).toEqual(["Negroni"]);
+      });
+    });
+
+    it("joins the key only when set", () => {
+      expect(
+        recipeSearchActorId({ term: "negroni", hybrid: false }, null),
+      ).toBe(recipeSearchActorId({ term: "negroni" }, null));
+      expect(
+        recipeSearchActorId({ term: "negroni", hybrid: true }, null),
+      ).not.toBe(recipeSearchActorId({ term: "negroni" }, null));
+    });
+
+    it("merges without repeating a recipe both halves found", () => {
+      const hit = (recipeId: string, distance: number | null) => ({
+        recipeId,
+        name: recipeId,
+        description: null,
+        type: "cocktail",
+        recipeGroupId: null,
+        distance,
+      });
+      expect(
+        mergeHybridRecipes(
+          [hit("negroni", null)],
+          [hit("negroni", 0.1), hit("americano", 0.12), hit("mojito", 0.2)],
+          10,
+        ).map((h) => h.recipeId),
+      ).toEqual(["negroni", "americano"]);
+      expect(
+        mergeHybridRecipes(
+          [hit("a", null), hit("b", null)],
+          [hit("c", 0.1)],
+          2,
+        ),
+      ).toHaveLength(2);
     });
   });
 

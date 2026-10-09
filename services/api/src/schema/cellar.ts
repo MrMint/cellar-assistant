@@ -28,6 +28,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   AddCellarItemInput as AddCellarItemInputType,
+  BottleSearchHit,
   CellarDashboardDto,
   CellarDto,
   CellarItemDto,
@@ -48,6 +49,7 @@ import type {
   UpdateCellarItemInput as UpdateCellarItemInputType,
 } from "@cellar-assistant/contracts";
 import {
+  BOTTLE_SEARCH_RESULT_CAP,
   CELLAR_ALMOST_EMPTY_AT,
   CELLAR_ITEM_SORTS,
   CELLAR_ITEM_SOURCES,
@@ -1073,6 +1075,71 @@ builder.mutationField("bulkCheckIn", (t) =>
           includeSelf: false,
         });
       return { cellarItemId, checkIns: loggedRows(logged, cellarItemId) };
+    },
+  }),
+);
+
+const BottleSearchHitType = builder
+  .objectRef<BottleSearchHit>("BottleSearchHit")
+  .implement({
+    description:
+      "One item you have open bottles of, in one of your cellars (X12's " +
+      '"Your bottles").',
+    fields: (t) => ({
+      cellarItemId: t.exposeID("cellarItemId", {
+        description:
+          "The bottle a tap opens: one already opened, else the oldest.",
+      }),
+      cellarId: t.exposeID("cellarId"),
+      cellarName: t.exposeString("cellarName"),
+      bottleCount: t.exposeInt("bottleCount", {
+        description: "Open bottles of this item in this cellar, at least 1.",
+      }),
+      item: t.field({
+        type: ItemInterface,
+        description: "The item. One batched loader call per page.",
+        resolve: (hit) => itemActorId(hit.item),
+      }),
+    }),
+  });
+
+const BottleSearchConnection = builder.connectionObject(
+  { type: BottleSearchHitType, name: "BottleSearchConnection" },
+  { name: "BottleSearchEdge" },
+);
+
+builder.objectField(Viewer, "bottleSearch", (t) =>
+  t.field({
+    type: BottleSearchConnection,
+    description:
+      'X12 — universal search\'s "Your bottles": open bottles in cellars ' +
+      "you created or co-own whose item name contains the term (or, for a " +
+      "typo, matches it closely), one hit per item per cellar — exact names " +
+      "first. By name only, so it answers the same with or without an AI " +
+      "provider. Never a friend's bottle, however visible its cellar. " +
+      "`totalCount` counts every match, also past `limit`.",
+    args: {
+      ...t.arg.connectionArgs(),
+      term: t.arg.string({ required: true }),
+      limit: t.arg.int({
+        required: false,
+        description:
+          `How many hits the actor returns — 1 to ${BOTTLE_SEARCH_RESULT_CAP}, ` +
+          `${BOTTLE_SEARCH_RESULT_CAP} when omitted. Not pagination: ` +
+          "`first`/`after` page this set.",
+      }),
+    },
+    resolve: async (viewer, args, context) => {
+      const found = await context
+        .actor(
+          CellarsCollectionActorDescriptor,
+          viewerCollectionActorId(viewer.id),
+        )
+        .findBottles({ term: args.term, limit: args.limit ?? null });
+      return {
+        ...connectionFromPage(offsetPage(found.hits, toPageArgs(args))),
+        totalCount: found.totalCount,
+      };
     },
   }),
 );

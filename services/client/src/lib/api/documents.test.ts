@@ -74,9 +74,9 @@ import * as pourQueries from "@/components/pour/queries";
 import * as rankingFragments from "@/components/ranking/fragments";
 import * as recipeFragments from "@/components/recipe/fragments";
 import * as recipeQueries from "@/components/recipe/queries";
-import * as searchCatalogSections from "@/components/search/catalog-sections";
 import * as searchQueries from "@/components/search/queries";
-import { ITEM_SEARCH_LIMIT } from "@/components/search/queries";
+import * as universalSearch from "@/components/search/universal-search";
+import { SECTION_LIMITS } from "@/components/search/universal-search";
 import * as shareQueries from "@/components/share/queries";
 import * as tierListFragments from "@/components/tier-list/fragments";
 import * as tierListQueries from "@/components/tier-list/queries";
@@ -114,8 +114,8 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/ranking/fragments.ts": rankingFragments,
   "components/recipe/fragments.ts": recipeFragments,
   "components/recipe/queries.ts": recipeQueries,
-  "components/search/catalog-sections.ts": searchCatalogSections,
   "components/search/queries.ts": searchQueries,
+  "components/search/universal-search.ts": universalSearch,
   "components/share/queries.ts": shareQueries,
   "components/tier-list/fragments.ts": tierListFragments,
   "components/tier-list/queries.ts": tierListQueries,
@@ -281,14 +281,25 @@ describe("argument values the schema documents but cannot enforce", () => {
     assert.deepEqual(over, []);
   });
 
-  test("ITEM_SEARCH_LIMIT stays inside itemSearch's cap of 50", () => {
-    // `limit`'s own description in the SDL reads "1 to 50 inclusive, and over
-    // the cap is a VALIDATION error rather than a silent clamp (A7g)". This
-    // file is a consumer of that contract, not its source; the constant is a
-    // value, so only a test can hold it to the documented range.
-    assert.ok(
-      ITEM_SEARCH_LIMIT >= 1 && ITEM_SEARCH_LIMIT <= 50,
-      `ITEM_SEARCH_LIMIT is ${ITEM_SEARCH_LIMIT}; itemSearch accepts 1-50`,
-    );
+  test("universal search's limits stay inside each search's documented cap", () => {
+    // Each `limit` description in the SDL reads "1 to N inclusive … over the
+    // cap is a VALIDATION error rather than a silent clamp (A7g)"; the
+    // sections pass these constants as both `limit` and `first`, so only a
+    // test holds them to the documented ranges.
+    const caps = {
+      bottles: 50,
+      items: 50,
+      places: 50,
+      recipes: 50,
+      people: 10,
+      brands: 100,
+    } as const;
+    for (const [section, cap] of Object.entries(caps)) {
+      const limit = SECTION_LIMITS[section as keyof typeof caps];
+      assert.ok(
+        limit >= 1 && limit <= cap,
+        `SECTION_LIMITS.${section} is ${limit}; the search accepts 1-${cap}`,
+      );
+    }
   });
 });

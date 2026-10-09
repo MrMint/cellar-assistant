@@ -7,7 +7,7 @@ import {
   useContext,
   useTransition,
 } from "react";
-import { SearchResultsSkeleton } from "./SearchResultsSkeleton";
+import { SearchSectionsSkeleton } from "./SearchResultsSkeleton";
 
 type SearchNavigationValue = {
   /** A search navigation (text, barcode or photo) is in flight. */
@@ -44,13 +44,14 @@ export const useSearchNavigation = (): SearchNavigationValue | null =>
 
 /**
  * The results slot: its server-rendered children, or the results skeleton
- * while a search navigation is pending.
+ * while a search navigation is pending — in universal search's shape (X12),
+ * since typing is what most navigations are.
  */
 export function SearchResultsRegion({ children }: { children: ReactNode }) {
   const isPending = useSearchNavigation()?.isPending ?? false;
   return (
     <div aria-busy={isPending}>
-      {isPending ? <SearchResultsSkeleton /> : children}
+      {isPending ? <SearchSectionsSkeleton /> : children}
     </div>
   );
 }

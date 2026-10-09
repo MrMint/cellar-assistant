@@ -93,6 +93,7 @@ import { SearchActorBase } from "../lib/search-actor-base.ts";
 import { resolveTierListFilter } from "../lib/tier-list-visibility.ts";
 import { ownUnsharedMatching } from "../lib/unshared-places.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
+import { embeddingUnavailable } from "./item-search-actor.ts";
 
 /** `performSemanticSearch`'s adaptive cut, ported. */
 const RELATIVE_CUTOFF = 0.33;
@@ -271,7 +272,23 @@ export class PlaceSearchActor
     matchedCategories: readonly string[];
     categoryScores: readonly number[];
   }> {
-    const literal = toVectorLiteral(await this.#embed(ctx, query));
+    let vector: readonly number[];
+    try {
+      vector = await this.#embed(ctx, query);
+    } catch (error) {
+      if (!embeddingUnavailable(error)) throw error;
+      // D25 parity (X12): with no embedding there are no implied
+      // categories, but `search_places_hybrid` still ranks by the name and
+      // the full-text index — the search answers by name rather than
+      // failing. Not cached: the embedding may be back on the next turn.
+      console.warn(
+        "[PlaceSearchActor] the query could not be embedded; matching " +
+          `places by name alone: ${String(error)}`,
+      );
+      this.doNotCache();
+      return { matchedCategories: [], categoryScores: [] };
+    }
+    const literal = toVectorLiteral(vector);
     const matches = await searchCategoryVectors(this.db, {
       vectorLiteral: literal,
       maxDistance: CATEGORY_VECTOR_MAX_DISTANCE,

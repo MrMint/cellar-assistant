@@ -58,6 +58,9 @@
  */
 import type {
   ActorCategory,
+  BottleSearchDto,
+  BottleSearchHit,
+  BottleSearchInput,
   CappedList,
   CellarsCollectionActorInterface,
   CollectionSection,
@@ -69,6 +72,7 @@ import type {
   PageArgs,
 } from "@cellar-assistant/contracts";
 import {
+  BOTTLE_SEARCH_RESULT_CAP,
   CellarsCollectionActorDescriptor,
   ConflictError,
   ForbiddenError,
@@ -88,9 +92,29 @@ import {
 } from "../lib/collection-sections.ts";
 import { keysetOrder, keysetWhere, uuidArray } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
+import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { type VisibleRow, visibleWhere } from "../lib/visibility-sql.ts";
+import { escapeLike } from "./brand-search-actor.ts";
 
 type CellarIdRow = { readonly id: string; readonly sort_key: string };
+
+type BottleRow = {
+  readonly cellar_item_id: string;
+  readonly cellar_id: string;
+  readonly cellar_name: string;
+  readonly item_type: string | null;
+  readonly item_id: string;
+  readonly item_name: string;
+  readonly bottle_count: number;
+  readonly total: number;
+};
+
+/**
+ * `findBottles`' typo rule: the item search's lexical threshold
+ * (`LEXICAL_THRESHOLD`), so a misspelling finds your bottle exactly when it
+ * would find the item.
+ */
+export const BOTTLE_NAME_SIMILARITY = 0.5;
 
 type ContainingRow = {
   readonly cellar_id: string;
@@ -380,6 +404,126 @@ export class CellarsCollectionActor
         return { nodes: bucket?.nodes ?? [], totalCount: bucket?.total ?? 0 };
       });
     });
+  }
+
+  /**
+   * X12 — "Your bottles" in universal search: what the viewer *has*, by name.
+   *
+   * The set is `stats`' — cellars the viewer created or co-owns, privacy
+   * playing no part — and only bottles still in them (`empty_at is null`).
+   * A bottle matches when its item's name contains the term or, for a typo,
+   * scores {@link BOTTLE_NAME_SIMILARITY} or better on pg_trgm's
+   * `strict_word_similarity` (the item search's lexical rule). No operator
+   * and no index: the scan is bounded by one person's cellars, which is
+   * small, and the answer needs no embedding, so it is the same with or
+   * without an AI provider.
+   *
+   * One hit per item per cellar, with how many open bottles of it the cellar
+   * holds; a tap opens the one already opened, else the oldest. Ordered:
+   * the exact name, then names that start with the term, then similarity,
+   * then name and cellar name — and `id`s, so the order is total.
+   */
+  async findBottles(
+    ctx: Ctx,
+    input: BottleSearchInput,
+  ): Promise<BottleSearchDto> {
+    this.requireKey(ctx);
+    const viewer = ctx.viewerId;
+    if (viewer === null) throw new ForbiddenError("sign in to search bottles");
+    const term = input.term.trim();
+    if (term === "") {
+      throw new ValidationError(
+        "a bottle search needs something to search for",
+      );
+    }
+    const limit = input.limit ?? BOTTLE_SEARCH_RESULT_CAP;
+    if (
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > BOTTLE_SEARCH_RESULT_CAP
+    ) {
+      throw new ValidationError(
+        `limit must be an integer in [1, ${BOTTLE_SEARCH_RESULT_CAP}], got ${limit}`,
+      );
+    }
+
+    const arc = ARCS.cellarItems;
+    const alias = (type: ItemType) =>
+      sql.identifier(`it_${type.toLowerCase()}`);
+    const joins = sql.join(
+      ITEM_TYPES.map(
+        (type) =>
+          sql`left join ${ITEM_TABLES[type]} ${alias(type)}
+                on ${alias(type)}.id = ${arc.column(type, "ci")}`,
+      ),
+      sql` `,
+    );
+    const name = sql`coalesce(${sql.join(
+      ITEM_TYPES.map((type) => sql`${alias(type)}.name`),
+      sql`, `,
+    )})`;
+    const contains = `%${escapeLike(term)}%`;
+    const startsWith = `${escapeLike(term)}%`;
+
+    const { rows } = await this.db.execute<BottleRow>(sql`
+      with mine as (
+        select ci.id, ci.cellar_id, ci.open_at, ci.created_at,
+               ${arc.typeExpr("ci")} as item_type,
+               ${arc.idExpr("ci")} as item_id,
+               ${name} as item_name
+        from public.cellar_items ci
+        join public.cellars c on c.id = ci.cellar_id
+        ${joins}
+        where ${ownedBy(viewer)} and ci.empty_at is null
+      ),
+      matched as (
+        select m.*,
+               strict_word_similarity(${term}, m.item_name)::float8 as sim
+        from mine m
+        where m.item_name is not null
+          and (m.item_name ilike ${contains} escape '\\'
+               or strict_word_similarity(${term}, m.item_name)
+                  >= ${BOTTLE_NAME_SIMILARITY})
+      ),
+      grouped as (
+        select m.cellar_id, m.item_type, m.item_id,
+               min(m.item_name) as item_name,
+               (array_agg(m.id order by (m.open_at is null), m.created_at, m.id))[1]
+                 as cellar_item_id,
+               count(*)::int as bottle_count,
+               max(m.sim) as sim,
+               bool_or(lower(m.item_name) = lower(${term})) as exact,
+               bool_or(m.item_name ilike ${startsWith} escape '\\') as prefix
+        from matched m
+        group by m.cellar_id, m.item_type, m.item_id
+      )
+      select g.cellar_item_id, g.cellar_id, c.name as cellar_name,
+             g.item_type, g.item_id, g.item_name, g.bottle_count,
+             (count(*) over ())::int as total
+      from grouped g
+      join public.cellars c on c.id = g.cellar_id
+      order by g.exact desc, g.prefix desc, g.sim desc,
+               lower(g.item_name) asc, lower(c.name) asc,
+               g.cellar_id asc, g.item_id asc
+      limit ${limit}
+    `);
+
+    const hits = rows.map((row): BottleSearchHit => {
+      if (row.item_type === null || !isItemType(row.item_type)) {
+        throw new ConflictError(
+          `a cellar_items row in ${row.cellar_id} names no item`,
+        );
+      }
+      return {
+        cellarItemId: row.cellar_item_id,
+        cellarId: row.cellar_id,
+        cellarName: row.cellar_name,
+        item: { type: row.item_type, id: row.item_id },
+        itemName: row.item_name,
+        bottleCount: Number(row.bottle_count),
+      };
+    });
+    return { hits, totalCount: Number(rows[0]?.total ?? 0) };
   }
 
   /**

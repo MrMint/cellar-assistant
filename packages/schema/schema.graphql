@@ -601,6 +601,35 @@ type BottleLogSummary {
   lastScore: Float
 }
 
+type BottleSearchConnection {
+  edges: [BottleSearchEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type BottleSearchEdge {
+  cursor: String!
+  node: BottleSearchHit!
+}
+
+"""
+One item you have open bottles of, in one of your cellars (X12's "Your bottles").
+"""
+type BottleSearchHit {
+  """Open bottles of this item in this cellar, at least 1."""
+  bottleCount: Int!
+  cellarId: ID!
+
+  """The bottle a tap opens: one already opened, else the oldest."""
+  cellarItemId: ID!
+  cellarName: String!
+
+  """The item. One batched loader call per page."""
+  item: Item!
+}
+
 """
 A catalog brand (§2.1 BrandActor) — the owner of one or more items or places. Deduplicated by case-insensitive name through BrandRegistryActor.
 """
@@ -4087,6 +4116,16 @@ enum PermissionType {
   PUBLIC
 }
 
+"""
+How a person in a search answer is connected to the viewer (X12): a friend, someone whose request is waiting on the viewer, someone the viewer has asked, or nobody yet.
+"""
+enum PersonRelation {
+  FRIEND
+  NONE
+  REQUEST_RECEIVED
+  REQUEST_SENT
+}
+
 union PingResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Pong | ValidationError
 
 """
@@ -4831,6 +4870,11 @@ type Query {
     """
     limit: Int
     maxDistance: Float
+
+    """
+    X12: when the phrase names an item outright, return the items whose names match and the ones the embedding puts right beside the named one, instead of padding the list with whatever else is nearest. No effect on a search that names nothing (a description, a producer the names do not say), or on a photo or vector search.
+    """
+    narrow: Boolean
     text: String
 
     """
@@ -5194,7 +5238,7 @@ type Query {
   recipePhotoJob(jobId: ID!): QueryRecipePhotoJobResult!
 
   """
-  Recipe search (RecipeSearchActor). `term` matches name, description and type; `semanticQuery` ranks by `recipe_vectors` distance; both together narrow with the first and rank with the second.
+  Recipe search (RecipeSearchActor). `term` matches name, description and type; `semanticQuery` ranks by `recipe_vectors` distance; both together narrow with the first and rank with the second. `hybrid` is universal search's mode: names first, then meaning.
   """
   recipeSearch(
     """
@@ -5209,6 +5253,11 @@ type Query {
     How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
     """
     first: Int
+
+    """
+    X12 / D9: universal search's Recipes — recipes whose name contains `term` first, then the ones nearest its meaning (cut at `maxDistance`, default 0.45, and at 0.05 past the nearest). Answers with the name matches alone when the term cannot be embedded. `semanticQuery` is ignored.
+    """
+    hybrid: Boolean
 
     """
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
@@ -5289,6 +5338,11 @@ type Query {
     How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
     """
     first: Int
+
+    """
+    X12: search everyone but the viewer — friends first, then open requests either way, then everyone else — instead of only the people the viewer could ask. Universal search's People section.
+    """
+    includeConnected: Boolean
 
     """
     **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
@@ -7819,11 +7873,14 @@ type UserSearchEdge {
 }
 
 """
-Someone the viewer could send a friend request to. The viewer, their friends, and anyone with a request open in either direction are never in this list.
+Someone matching the term. By default someone the viewer could send a friend request to: the viewer, their friends, and anyone with a request open in either direction are never in this list. With `includeConnected` everyone but the viewer, connected people first, each with `relation`.
 """
 type UserSearchResult {
   avatarUrl: String
   displayName: String!
+
+  """Set on an `includeConnected` search only (X12); null otherwise."""
+  relation: PersonRelation
   userId: ID!
 }
 
@@ -7856,6 +7913,35 @@ type Viewer {
   Which AI-backed features this deployment can serve (N07). Hide a feature that is false instead of offering it.
   """
   aiCapabilities: AiCapabilities!
+
+  """
+  X12 — universal search's "Your bottles": open bottles in cellars you created or co-own whose item name contains the term (or, for a typo, matches it closely), one hit per item per cellar — exact names first. By name only, so it answers the same with or without an AI provider. Never a friend's bottle, however visible its cellar. `totalCount` counts every match, also past `limit`.
+  """
+  bottleSearch(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+
+    """
+    How many hits the actor returns — 1 to 50, 50 when omitted. Not pagination: `first`/`after` page this set.
+    """
+    limit: Int
+    term: String!
+  ): BottleSearchConnection!
 
   """
   The /search landing line. Counts only cellars you created or co-own — `myCellars` also lists other people's visible cellars, so summing it over-counts (UI parity G36).
