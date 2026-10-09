@@ -148,7 +148,23 @@ test("a sealed bottle pours: the first pour opens it, and Undo seals it again", 
   // A pot of tea is 8 g of a 100 g tin.
   await expect(level).toHaveAttribute("aria-valuenow", "92");
 
-  // The level is the control: drag it down inside the bottle.
+  // The level is the control: drag it down inside the bottle. The sheet
+  // slides up from below the screen as it opens, so measure the bottle once
+  // it is on screen and has stopped moving — measured mid-slide, the drag
+  // lands on the overlay and closes the sheet instead.
+  let settled = await level.boundingBox();
+  await expect
+    .poll(async () => {
+      const now = await level.boundingBox();
+      const still =
+        now !== null &&
+        settled !== null &&
+        now.y === settled.y &&
+        now.y + now.height <= (viewport?.height ?? 844);
+      settled = now;
+      return still;
+    })
+    .toBe(true);
   const box = await level.boundingBox();
   expect(box, "the bottle is drawn").not.toBeNull();
   if (box !== null) {
