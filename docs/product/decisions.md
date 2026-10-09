@@ -126,3 +126,46 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **Install prompt (N15).** "First save" counts a bottle added to a cellar or
   an item confirmed in the onboarding wizard, announced the moment it happens
   rather than at the next navigation.
+
+### One item page (wave B "itempage": X09, D1 taste header, D8)
+
+- **The bottle route is the item page with that bottle selected.**
+  `/cellars/<c>/<type>s/<bottleId>` is not redirected: it renders the same
+  page as `/<type>s/<itemId>` with that bottle marked in "Your bottles", its
+  level control inline, its photo in the hero and "Delete bottle" in `⋯`.
+  The URL keeps meaning a bottle (D-gating answer 1), Back from it still goes
+  to the cellar, and old item-id links at that URL redirect as before. A
+  bottle in someone else's cellar you may see shows as a read-only "This
+  bottle" row.
+- **Taste header (D1's Rankings on item pages).** You · Friends · Everyone:
+  your review's score (the one rating per item, D5 — not an average of your
+  logs), your friends' average with how many friends, everyone's average with
+  how many ratings. A friend who reviewed twice counts once, by their newest.
+  No number is words ("Rate it", "No friends' ratings", "No ratings yet"),
+  never a zero, never a percentage. The friend set is resolved on the server
+  (`Item.friendsScore`).
+- **Your bottles** are bottles still in cellars you created or co-own, open
+  first, then sealed, then finished (`Item.myBottles`). Pour opens the level
+  (Open it, the remaining slider, "Finished it?" with Undo) in a sheet with
+  "Log this drink"; Log opens "Log a drink" for that bottle. The section is
+  not drawn when you have none — "Add to cellar" is in the ActionBar. X03's
+  full Pour sheet (open + log + level in one action, glass presets) can
+  replace the sheet's contents later.
+- **ActionBar:** Log a drink (brass) · Add to cellar · Want to try · `⋯`.
+  "Log a drink" logs from the selected bottle when it is yours, else from
+  your one open bottle, else with no bottle (two open bottles is a question,
+  not a guess). `⋯` holds Add to tier list, Share, Edit item (creator, D7),
+  and Delete bottle (last, on a bottle URL, for its cellar's owner). The
+  AppBar keeps Share and no longer has a `⋯` of its own.
+- **One producer title per type:** Winery, Brewery, Distillery, Roaster,
+  Brewery (sake), Tea house — plural when an item has several. The primary
+  brand also leads the hero as a link to its brand page (D1: Brands from item
+  pages).
+- **Fact sheet for all six types:** every recorded attribute as a labelled
+  row (wine, beer, spirit and coffee had only a subtitle); nothing unrecorded
+  becomes a row and nothing is estimated.
+- **Recipes:** "Cocktails with this" (X14) is shown for every type, spirits
+  included; the restored "Used in Recipes" now lists only **food** recipes
+  ("Cook with this"), since every cocktail is already in X14's section.
+- **Deleting a bottle keeps its drink logs** (X02's `ON DELETE SET NULL`); the
+  confirm no longer says they are deleted with it.
