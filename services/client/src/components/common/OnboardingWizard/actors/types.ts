@@ -18,9 +18,13 @@ export type SearchByBarcodeInput = {
   urqlClient: Client;
 };
 
-/** G32: the display photo, as captured, and the type being added. */
+/**
+ * G32: the front label, already uploaded at the shutter, and the type being
+ * added. The search reads the label's own file (X06: one upload, not a
+ * second `image-search` copy of the same bytes).
+ */
 export type SearchByImageInput = {
-  displayImage?: string;
+  imageFileId?: string;
   urqlClient: Client;
   itemType?: ApiItemType;
 };
@@ -33,6 +37,11 @@ export type InsertCellarItemInput = {
   /** Minted once per wizard, so a retry files one bottle, not two. */
   cellarItemId: string;
   displayImage?: string;
+  /**
+   * The display photo, already uploaded (the front label, N21): attached as
+   * it is rather than uploaded again. Wins over `displayImage`.
+   */
+  displayImageFileId?: string;
 };
 
 export type InsertCellarItemResult = {
@@ -82,12 +91,6 @@ export type RereadLabelsResult = DefaultValuesResult & {
   backLabelFileId?: string;
 };
 
-export type OpenCellarItemInput = {
-  urqlClient: Client;
-  cellarId: string;
-  cellarItemId: string;
-};
-
 /** N19: the read label, looked up in the catalogue. */
 export type SearchCatalogInput = {
   urqlClient: Client;
@@ -113,6 +116,12 @@ export interface DefaultValuesResult {
    * when it answered (so a resumed draft knows), else from what was sent.
    */
   labelSent?: boolean;
+  /**
+   * The front label's file, as the session stored it. A draft resumed after
+   * a full reload has lost the capture itself; this is how it gets its photo
+   * back (X06), and what its bottle's display image is attached from.
+   */
+  frontLabelFileId?: string;
 }
 
 export type UploadItemImageInput = {
@@ -120,6 +129,8 @@ export type UploadItemImageInput = {
   itemId: string;
   itemType: ApiItemType;
   displayImage?: string;
+  /** As on {@link InsertCellarItemInput}. */
+  displayImageFileId?: string;
 };
 
 export type UploadItemImageResult = {

@@ -154,7 +154,7 @@ afterEach(async () => {
 });
 
 describe("SuccessSheet (N21's real ending)", () => {
-  test("+1 bottle, then Snap another · Open it now · View bottle", async () => {
+  test("+1 bottle, then Snap another · Open it now (no second 'View bottle')", async () => {
     const calls: string[] = [];
     await render(
       <SuccessSheet
@@ -180,8 +180,10 @@ describe("SuccessSheet (N21's real ending)", () => {
     );
     await click(button("Snap another"));
     await click(button("Open it now"));
-    await click(button("View bottle"));
-    assert.deepEqual(calls, ["snap", "open", "done"]);
+    // X06: Open it now *is* the bottle's page; a second button saying so
+    // would be the same tap twice.
+    assert.equal(button("View bottle"), undefined);
+    assert.deepEqual(calls, ["snap", "open"]);
   });
 
   test("without a cellar: the catalog, and no Open it now", async () => {
