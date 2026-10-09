@@ -70,8 +70,12 @@ test("the Cellar tab is Cellars · Bar, and Bar is recipes (D1)", async ({
 test("a brand-new account: lands Home, has My Cellar, and every empty screen offers one thing to do (N15)", async ({
   browser,
 }) => {
-  // Its own context, signed out: the fixture's is test@test.com.
+  // Its own context, signed out: the fixture's is test@test.com. The runner
+  // applies the project's `storageState` to `browser.newContext()` too, so it
+  // has to be cleared here — signed in, /sign-up redirects to / and the test
+  // would only ever skip.
   const ctx = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
     viewport: { width: 390, height: 844 },
     isMobile: true,
     hasTouch: true,
