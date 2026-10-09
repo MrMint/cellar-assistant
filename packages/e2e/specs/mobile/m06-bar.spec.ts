@@ -152,6 +152,9 @@ test("Love replaces the heart", async ({ page }) => {
 test("a pantry toggle moves the recipe to Make now", async ({ page }) => {
   await page.goto("/recipes/bar/pantry");
   const limes = page.locator('[data-pantry-kind="lime"]');
+  // Visible first: under the loading shell (X24) the streamed chip is already
+  // in the DOM, hidden, so its attribute matches before it has a box.
+  await expect(limes).toBeVisible();
   await expect(limes).toHaveAttribute("aria-pressed", "false");
   const box = await limes.boundingBox();
   // The chip is 36 pt tall inside a 44 pt target (its ::after).
