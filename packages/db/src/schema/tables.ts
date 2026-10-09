@@ -1228,20 +1228,28 @@ export const verification = pgTable("verification", {
 // Places keep theirs on `user_place_interactions.want_to_visit` (D11 revives
 // that column rather than duplicating it here). One row per thing saved: the
 // six-column item arc plus `recipe_id` under one `num_nonnulls(...) = 1`
-// check, a unique per user per column, and cascades so a deleted item,
-// recipe or user takes the wish with it. Written only by `UserActor`.
+// check and a unique per user per column. Written only by `UserActor`.
+// Deletes (wave B hardening): the user and the six item columns RESTRICT, as
+// `item_favorites` does — nothing deletes a user or an item today, and a
+// future purge or merge must decide what happens to a wish rather than have
+// it vanish silently. `recipe_id` stays CASCADE, as `recipe_favorites`
+// (Love) does: a recipe's creator may delete it (`RecipeActor.delete`), and
+// RESTRICT would let anyone who saved it block that delete with a raw FK
+// error. `idx_want_to_try_recipe_id` serves that cascade; the unique
+// (user_id, recipe_id) leads with the user and cannot.
 export const wantToTry = pgTable("want_to_try", {
 	id: uuid().defaultRandom().primaryKey(),
-	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" } ),
+	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "restrict" } ),
 	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
-	beerId: uuid("beer_id").references(() => beers.id, { onDelete: "cascade" } ),
-	wineId: uuid("wine_id").references(() => wines.id, { onDelete: "cascade" } ),
-	spiritId: uuid("spirit_id").references(() => spirits.id, { onDelete: "cascade" } ),
-	coffeeId: uuid("coffee_id").references(() => coffees.id, { onDelete: "cascade" } ),
-	sakeId: uuid("sake_id").references(() => sakes.id, { onDelete: "cascade" } ),
-	teaId: uuid("tea_id").references(() => teas.id, { onDelete: "cascade" } ),
+	beerId: uuid("beer_id").references(() => beers.id, { onDelete: "restrict" } ),
+	wineId: uuid("wine_id").references(() => wines.id, { onDelete: "restrict" } ),
+	spiritId: uuid("spirit_id").references(() => spirits.id, { onDelete: "restrict" } ),
+	coffeeId: uuid("coffee_id").references(() => coffees.id, { onDelete: "restrict" } ),
+	sakeId: uuid("sake_id").references(() => sakes.id, { onDelete: "restrict" } ),
+	teaId: uuid("tea_id").references(() => teas.id, { onDelete: "restrict" } ),
 	recipeId: uuid("recipe_id").references(() => recipes.id, { onDelete: "cascade" } ),
 }, (table) => [
+	index("idx_want_to_try_recipe_id").using("btree", table.recipeId.asc().nullsLast()).where(sql`(recipe_id IS NOT NULL)`),
 	index("idx_want_to_try_user_created").using("btree", table.userId.asc().nullsLast(), table.createdAt.asc().nullsLast()),
 	unique("want_to_try_user_id_beer_id_key").on(table.userId, table.beerId),	unique("want_to_try_user_id_coffee_id_key").on(table.userId, table.coffeeId),	unique("want_to_try_user_id_recipe_id_key").on(table.userId, table.recipeId),	unique("want_to_try_user_id_sake_id_key").on(table.userId, table.sakeId),	unique("want_to_try_user_id_spirit_id_key").on(table.userId, table.spiritId),	unique("want_to_try_user_id_tea_id_key").on(table.userId, table.teaId),	unique("want_to_try_user_id_wine_id_key").on(table.userId, table.wineId),check("want_to_try_one_target", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) = 1)`),]);
 

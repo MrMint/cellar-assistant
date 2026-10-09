@@ -1942,6 +1942,73 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       });
     });
 
+    it("deletes: a saved item RESTRICTs like item_favorites; a recipe still cascades, through its own index", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const teaId = await seedTea(db, alice);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        await actor.setWantToTry(
+          ctx,
+          { kind: "ITEM", item: { type: "TEA", id: teaId } },
+          true,
+        );
+
+        // In a savepoint: the refused statement must not poison the harness's
+        // transaction for the assertions after it.
+        const refused = await db
+          .transaction(async (sp) => {
+            await sp.execute(sql`delete from public.teas where id = ${teaId}`);
+          })
+          .then(
+            () => null,
+            (error: unknown) =>
+              (error as { cause?: { code?: string; constraint?: string } })
+                .cause ?? (error as { code?: string; constraint?: string }),
+          );
+        // 23001 restrict_violation — RESTRICT, not NO ACTION's 23503.
+        expect(refused).toMatchObject({
+          code: "23001",
+          constraint: "want_to_try_tea_id_teas_id_fkey",
+        });
+        expect(
+          nodes(await actor.wantToTry(ctx, firstPage)).map(
+            (entry) => entry.target.kind,
+          ),
+        ).toEqual(["ITEM"]);
+
+        // The catalog, for what the statement above cannot show: every rule,
+        // and the index the recipe cascade reads.
+        const rules = await db.execute<{ column: string; rule: string }>(sql`
+          select a.attname as column, c.confdeltype::text as rule
+          from pg_constraint c
+          join pg_attribute a
+            on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+          where c.conrelid = 'public.want_to_try'::regclass and c.contype = 'f'
+          order by a.attname
+        `);
+        expect(
+          Object.fromEntries(rules.rows.map((row) => [row.column, row.rule])),
+        ).toEqual({
+          beer_id: "r",
+          coffee_id: "r",
+          recipe_id: "c",
+          sake_id: "r",
+          spirit_id: "r",
+          tea_id: "r",
+          user_id: "r",
+          wine_id: "r",
+        });
+        const index = await db.execute<{ indexdef: string }>(sql`
+          select indexdef from pg_indexes
+          where schemaname = 'public' and indexname = 'idx_want_to_try_recipe_id'
+        `);
+        expect(index.rows[0]?.indexdef).toMatch(
+          /\(recipe_id\) WHERE \(recipe_id IS NOT NULL\)/,
+        );
+      });
+    });
+
     it("X27: the list drops a saved place that went under review — for everyone but its creator", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
