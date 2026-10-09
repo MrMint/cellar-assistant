@@ -238,8 +238,10 @@ It also records in-app history for `AppBar`'s Back.
 destinations from `nav.ts`: Home `/` · Cellar `/cellars` · ＋ · Map `/map` ·
 Me `/me` (D1; the `/me` hub page is S1's). A tab lights for its route and
 everything under it (`activeTab`), and lights at once on tap. Re-tapping the
-active tab scrolls the scroller to the top, then pops to the tab's root. The
-brass ＋ (56 pt, 8 pt proud) opens `CaptureChooser`.
+active tab scrolls the scroller to the top, then pops to the tab's root, then
+goes to the tab's `rootTap` if it has one (Home's opens the search sheet,
+X10). The brass ＋ (56 pt, 8 pt proud) opens `CaptureChooser`. The phone tab
+bar is hidden on `/search`, a full-screen sheet (`contentLayout`).
 
 **`CaptureChooser`** — `open`, `onOpenChange`, `options?`. Bottle · Menu ·
 Recipe · Place as rows into today's flows (`CAPTURE_OPTIONS` in `nav.ts`).
