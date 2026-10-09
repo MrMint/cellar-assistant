@@ -322,25 +322,30 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       desktop: true,
       states: [
         {
+          // X09: Add to tier list is a row of the ActionBar's ⋯ sheet; the
+          // modal opens once the sheet has closed.
           name: "add-to-tier-list",
-          open: (page) =>
-            clickThenWait(page, () =>
-              page.getByRole("button", { name: "Add to Tier List" }).click(),
-            ),
+          open: async (page) => {
+            await page.getByRole("button", { name: "More actions" }).click();
+            await page
+              .getByRole("dialog")
+              .getByRole("button", { name: "Add to tier list" })
+              .click();
+            await page
+              .getByRole("dialog", { name: "Add to Tier List" })
+              .waitFor({ state: "visible", timeout: 10_000 });
+            await page.waitForTimeout(600);
+          },
         },
         {
-          // Delete lives behind the AppBar's ⋯ since S5: a menuitem at md+,
-          // a sheet button on a phone (the sheet closes before the confirm).
+          // X09: Delete bottle is the last row of the ActionBar's ⋯ sheet
+          // (the sheet closes before the confirm).
           name: "delete-confirm",
           open: async (page) => {
             await page.getByRole("button", { name: "More actions" }).click();
             await page
-              .getByRole("menuitem", { name: "Delete item" })
-              .or(
-                page
-                  .getByRole("dialog")
-                  .getByRole("button", { name: "Delete item" }),
-              )
+              .getByRole("dialog")
+              .getByRole("button", { name: "Delete bottle" })
               .click();
             await page
               .getByRole("dialog", { name: "Delete this bottle?" })
@@ -353,7 +358,7 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
           },
         },
         {
-          // The ⋯ itself: a BottomSheet on a phone, a dropdown menu at md+.
+          // The ActionBar's ⋯ itself: a BottomSheet.
           name: "overflow",
           open: async (page) => {
             await page.getByRole("button", { name: "More actions" }).click();
