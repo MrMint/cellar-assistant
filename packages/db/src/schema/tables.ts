@@ -284,7 +284,7 @@ export const files = pgTable("files", {
 
 // X17 friend invites: one live invite secret per user, written only by that
 // user's `UserActor`. Added by `db:generate`
-// (`migrations/20261008214452_friend_invites`), in the shape `pull` emits.
+// (`migrations/20261009032150_friend_invites`), in the shape `pull` emits.
 export const friendInvites = pgTable("friend_invites", {
 	userId: uuid("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" } ),
 	secret: text().notNull(),
