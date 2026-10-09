@@ -147,11 +147,16 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   rest" when less than that is left.
 - **The last pour (level 0)** logs the drink and then asks "Finished?" inside
   the sheet. Finished is N13a's finish with its Undo toast; **Not yet leaves
-  5%** (or what was there, if less). Then the item's rating — the review,
-  prefilled — then, for each of **your own** tier lists the item is on, the
+  5%** (or what was there, if less), and closing the sheet on that question
+  is Not yet — the drink is already logged, so the level must move too, and
+  a bottle is never finished without a tap. A bottle reading 0% that was
+  never finished can still be poured: that pour is the last of it. Then
+  the item's rating — the review, prefilled — then, for each of **your own** tier lists the item is on, the
   band that rating reads as (`bandForScore`), moved to the end of that band
   in one tap, with Undo through the list's history (D4). Friends' lists are
-  not offered.
+  not offered. "Keep my rating" suggests from the rating already saved, never
+  from stars tapped and left unsaved; a list longer than one page (100) links
+  to the list instead of moving from the sheet.
 - **"me + Sam"** is the last set of friends you poured with **on this
   device** (`localStorage`), kept to people who are still your friends;
   "Others…" opens the full friend chips.
@@ -162,7 +167,9 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   own.
 - **Who with after the fact.** Only on your own log of a drink you logged.
   Dropping a friend who has added to their entry is refused (it is theirs
-  now) rather than silently kept.
+  now) rather than silently kept. Only people being added must be friends
+  now: someone already on the log stays when the set names them, even after
+  an unfriending.
 - **Delete with Undo.** Deleting a log no longer asks; the toast's Undo puts
   back the same entries (ids, dates, companions' entries) for **one hour**
   after the delete, for whoever deleted them. A bottle, place or photo that
