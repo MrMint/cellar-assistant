@@ -563,19 +563,22 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
         await seedFriendship(db, viewer, friend);
         const place = await seedPlace(db, { name: "P", lng: 0, lat: 0 });
         const wine = await seedWine(db, friend, "Feed privacy wine");
-        const lists: Record<string, string> = {};
-        const cellars: Record<string, string> = {};
+        type Privacy = "PRIVATE" | "FRIENDS" | "PUBLIC";
+        const lists = {} as Record<Privacy, string>;
+        const cellars = {} as Record<Privacy, string>;
         for (const privacy of ["PRIVATE", "FRIENDS", "PUBLIC"] as const) {
-          lists[privacy] = await seedTierList(db, {
+          const list = await seedTierList(db, {
             createdById: friend,
             privacy,
           });
-          await seedTierListPlace(db, lists[privacy], place);
-          cellars[privacy] = await seedCellar(db, {
+          await seedTierListPlace(db, list, place);
+          lists[privacy] = list;
+          const cellar = await seedCellar(db, {
             createdById: friend,
             privacy,
           });
-          await seedCellarItem(db, cellars[privacy], friend, wine);
+          await seedCellarItem(db, cellar, friend, wine);
+          cellars[privacy] = cellar;
         }
         const actor = await activate(
           createActor(FriendsCollectionActor, viewer, db),
