@@ -271,6 +271,22 @@ export const ItemInterface = builder.loadableInterface("Item", {
         context.actor(ItemActorDescriptor, itemActorId(item)).score(),
     }),
 
+    friendsScore: t.field({
+      type: ItemScoreType,
+      description:
+        "X09: the item page's taste header, Friends — the same average as " +
+        "`score`, over your friends' reviews only (one each, their newest; " +
+        "never yours). The friend set is resolved inside the actor from your " +
+        "own `friends` rows; nothing here names a user. `average` null with " +
+        "no friend reviews.",
+      resolve: (item, _args, context) =>
+        context.ctx.viewerId === null
+          ? { average: null, count: 0 }
+          : context
+              .actor(ItemActorDescriptor, itemActorId(item))
+              .friendsScore(),
+    }),
+
     /**
      * A7c (7). The star's state belonged here, not in the client.
      *

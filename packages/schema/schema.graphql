@@ -429,6 +429,11 @@ type Beer implements Item {
   """
   favoriteCount: Int!
 
+  """
+  X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
+  """
+  friendsScore: ItemScore!
+
   """The row's uuid in its own table."""
   id: ID!
 
@@ -465,6 +470,30 @@ type Beer implements Item {
   Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isWantToTry: Boolean!
+
+  """
+  X09 — "Your bottles": every bottle of this in a cellar you created or co-own (never anyone else's, however visible), open ones first (most recently opened), then sealed (most recently added), then finished (most recently finished). `status` defaults to ACTIVE: bottles still in the cellar. `totalCount` exact. Empty for an anonymous viewer. Two batched hops per request, however many items ask.
+  """
+  myBottles(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    status: CellarItemStatus = ACTIVE
+  ): CellarItemConnection!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -909,6 +938,10 @@ type CellarEdge {
 
 """A bottle in a cellar: the item, plus what has happened to it."""
 type CellarItem {
+  """
+  The cellar this bottle is in, through the `Cellar` loader — whose actor applies `canSeeCellar` again, so a cellar that stopped being visible between reads nulls this field, not the page. One batched `CellarActor.get` per distinct cellar.
+  """
+  cellar: Cellar
   cellarId: ID!
 
   """
@@ -1153,6 +1186,11 @@ type Coffee implements Item {
   """
   favoriteCount: Int!
 
+  """
+  X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
+  """
+  friendsScore: ItemScore!
+
   """The row's uuid in its own table."""
   id: ID!
 
@@ -1188,6 +1226,30 @@ type Coffee implements Item {
   Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isWantToTry: Boolean!
+
+  """
+  X09 — "Your bottles": every bottle of this in a cellar you created or co-own (never anyone else's, however visible), open ones first (most recently opened), then sealed (most recently added), then finished (most recently finished). `status` defaults to ACTIVE: bottles still in the cellar. `totalCount` exact. Empty for an anonymous viewer. Two batched hops per request, however many items ask.
+  """
+  myBottles(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    status: CellarItemStatus = ACTIVE
+  ): CellarItemConnection!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -2279,6 +2341,11 @@ interface Item {
   """
   favoriteCount: Int!
 
+  """
+  X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
+  """
+  friendsScore: ItemScore!
+
   """The row's uuid in its own table."""
   id: ID!
 
@@ -2314,6 +2381,30 @@ interface Item {
   Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isWantToTry: Boolean!
+
+  """
+  X09 — "Your bottles": every bottle of this in a cellar you created or co-own (never anyone else's, however visible), open ones first (most recently opened), then sealed (most recently added), then finished (most recently finished). `status` defaults to ACTIVE: bottles still in the cellar. `totalCount` exact. Empty for an anonymous viewer. Two batched hops per request, however many items ask.
+  """
+  myBottles(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    status: CellarItemStatus = ACTIVE
+  ): CellarItemConnection!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -5946,6 +6037,11 @@ type Sake implements Item {
   """
   favoriteCount: Int!
 
+  """
+  X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
+  """
+  friendsScore: ItemScore!
+
   """The row's uuid in its own table."""
   id: ID!
 
@@ -5981,6 +6077,30 @@ type Sake implements Item {
   Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isWantToTry: Boolean!
+
+  """
+  X09 — "Your bottles": every bottle of this in a cellar you created or co-own (never anyone else's, however visible), open ones first (most recently opened), then sealed (most recently added), then finished (most recently finished). `status` defaults to ACTIVE: bottles still in the cellar. `totalCount` exact. Empty for an anonymous viewer. Two batched hops per request, however many items ask.
+  """
+  myBottles(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    status: CellarItemStatus = ACTIVE
+  ): CellarItemConnection!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -6421,6 +6541,11 @@ type Spirit implements Item {
   """
   favoriteCount: Int!
 
+  """
+  X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
+  """
+  friendsScore: ItemScore!
+
   """The row's uuid in its own table."""
   id: ID!
 
@@ -6456,6 +6581,30 @@ type Spirit implements Item {
   Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isWantToTry: Boolean!
+
+  """
+  X09 — "Your bottles": every bottle of this in a cellar you created or co-own (never anyone else's, however visible), open ones first (most recently opened), then sealed (most recently added), then finished (most recently finished). `status` defaults to ACTIVE: bottles still in the cellar. `totalCount` exact. Empty for an anonymous viewer. Two batched hops per request, however many items ask.
+  """
+  myBottles(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    status: CellarItemStatus = ACTIVE
+  ): CellarItemConnection!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -6698,6 +6847,11 @@ type Tea implements Item {
   favoriteCount: Int!
   flavorProfile: String
   form: String
+
+  """
+  X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
+  """
+  friendsScore: ItemScore!
   harvestYear: Int
 
   """The row's uuid in its own table."""
@@ -6742,6 +6896,30 @@ type Tea implements Item {
   Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isWantToTry: Boolean!
+
+  """
+  X09 — "Your bottles": every bottle of this in a cellar you created or co-own (never anyone else's, however visible), open ones first (most recently opened), then sealed (most recently added), then finished (most recently finished). `status` defaults to ACTIVE: bottles still in the cellar. `totalCount` exact. Empty for an anonymous viewer. Two batched hops per request, however many items ask.
+  """
+  myBottles(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    status: CellarItemStatus = ACTIVE
+  ): CellarItemConnection!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -7698,6 +7876,11 @@ type Wine implements Item {
   """
   favoriteCount: Int!
 
+  """
+  X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
+  """
+  friendsScore: ItemScore!
+
   """The row's uuid in its own table."""
   id: ID!
 
@@ -7733,6 +7916,30 @@ type Wine implements Item {
   Whether this is on the viewer's Want to try list (X08). `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isWantToTry: Boolean!
+
+  """
+  X09 — "Your bottles": every bottle of this in a cellar you created or co-own (never anyone else's, however visible), open ones first (most recently opened), then sealed (most recently added), then finished (most recently finished). `status` defaults to ACTIVE: bottles still in the cellar. `totalCount` exact. Empty for an anonymous viewer. Two batched hops per request, however many items ask.
+  """
+  myBottles(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    status: CellarItemStatus = ACTIVE
+  ): CellarItemConnection!
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.

@@ -75,7 +75,7 @@ const CellarItemSortEnum = builder.enumType("CellarItemSort", {
   values: CELLAR_ITEM_SORTS,
 });
 
-const CellarItemStatusEnum = builder.enumType("CellarItemStatus", {
+export const CellarItemStatusEnum = builder.enumType("CellarItemStatus", {
   description:
     "Which bottles a cellar list holds. ACTIVE (not emptied) is the default: " +
     "the old UI hid empty bottles from every cellar list (UI parity decision 4).",
