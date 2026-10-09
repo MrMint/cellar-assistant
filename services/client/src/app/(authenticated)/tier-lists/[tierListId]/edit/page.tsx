@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { AppBar } from "@/components/app/AppBar";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { DeleteTierListButton } from "@/components/tier-list/DeleteTierListButton";
 import { EditTierListClient } from "@/components/tier-list/EditTierListClient";
@@ -61,7 +62,7 @@ export default async function EditTierListPage({
   if (viewer.me?.id !== tierList.createdById) {
     return (
       <div className="flex flex-col gap-2">
-        <h3 className="text-ink-1 type-title-2">{tierList.name}</h3>
+        <AppBar title={tierList.name} parent={`/tier-lists/${tierList.id}`} />
         <p className="text-ink-2 type-callout">
           Only the person who made a tier list can change it.
         </p>
@@ -71,6 +72,11 @@ export default async function EditTierListPage({
 
   return (
     <div className="flex flex-col gap-8">
+      {/* X21: the page's h1, and Back to the list on a cold open. */}
+      <AppBar
+        title={`Edit ${tierList.name}`}
+        parent={`/tier-lists/${tierList.id}`}
+      />
       <EditTierListClient tierList={tierList} />
       <div className="flex">
         <DeleteTierListButton

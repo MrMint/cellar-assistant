@@ -24,6 +24,8 @@ export default async function MapPage() {
   return (
     // N22: fill the content area (map/layout.tsx), not the viewport.
     <div className="relative flex h-full min-h-0 w-full flex-auto flex-col overflow-hidden bg-surface-1">
+      {/* X21: the canvas has no visible headline; its h1 is for assistive tech. */}
+      <h1 className="sr-only">Map</h1>
       <Suspense fallback={<MapShell />}>
         <MapWrapper userId={user.id} cachedLocation={cachedLocation} />
       </Suspense>

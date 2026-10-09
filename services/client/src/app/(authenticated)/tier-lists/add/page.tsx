@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppBar } from "@/components/app/AppBar";
 import { AddTierListClient } from "@/components/tier-list/AddTierListClient";
 
 export const metadata: Metadata = { title: "New tier list" };
@@ -9,5 +10,11 @@ export const metadata: Metadata = { title: "New tier list" };
  * SDL's `PermissionType`, which `EnumSelect` knows at compile time.
  */
 export default function AddTierListPage() {
-  return <AddTierListClient />;
+  // X21: the page's h1, and a way back on a cold open.
+  return (
+    <div className="flex flex-col gap-4">
+      <AppBar title="New tier list" parent="/tier-lists" />
+      <AddTierListClient />
+    </div>
+  );
 }

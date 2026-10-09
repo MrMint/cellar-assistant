@@ -74,6 +74,9 @@ export async function RecipePage({
     <>
       {header}
       <RecipeDetails
+        // The recipe is the page's heading unless a header above it (a
+        // group's name) already is.
+        titleLevel={header === undefined ? "h1" : "h2"}
         recipe={recipe}
         viewerId={data.me?.id ?? null}
         isCanonical={

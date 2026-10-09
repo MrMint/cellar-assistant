@@ -203,7 +203,7 @@ export function AIRecipeGeneratorView({
           <div className="flex flex-col gap-6">
             {/* Features */}
             <section className="rounded-lg bg-surface-1 p-4">
-              <h3 className="mb-4 type-title-2">AI Features</h3>
+              <h2 className="mb-4 type-title-2">AI Features</h2>
               <div className="flex flex-col gap-4">
                 {FEATURES.map(({ icon: Icon, title, text }) => (
                   <div key={title} className="flex items-start gap-4">
@@ -223,7 +223,7 @@ export function AIRecipeGeneratorView({
 
             {/* Tips */}
             <section className="rounded-lg bg-surface-1 p-4">
-              <h3 className="mb-4 type-title-2">Best Results Tips</h3>
+              <h2 className="mb-4 type-title-2">Best Results Tips</h2>
               <div className="flex flex-col gap-3">
                 <p className="type-callout">
                   📱 <strong>Clear photos:</strong> Ensure text is readable and
@@ -254,7 +254,7 @@ export function AIRecipeGeneratorView({
                   strokeWidth={ICON_STROKE}
                   className="mb-4 size-10 text-ink-2"
                 />
-                <h4 className="mb-2 type-title-2">{title}</h4>
+                <h3 className="mb-2 type-title-2">{title}</h3>
                 <p className="type-callout text-ink-2">{text}</p>
               </section>
             ))}

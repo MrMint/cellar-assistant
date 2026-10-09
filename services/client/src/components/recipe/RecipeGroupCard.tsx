@@ -94,8 +94,8 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
         )}
 
         <div className="flex flex-col gap-2 p-4">
-          {/* Recipe Group Name */}
-          <h3 className="type-headline">
+          {/* Recipe Group Name: an h2 under the page's h1 (X21) */}
+          <h2 className="type-headline">
             {href ? (
               <Link href={href} overlay underline="none">
                 {recipeGroup.name}
@@ -103,7 +103,7 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
             ) : (
               recipeGroup.name
             )}
-          </h3>
+          </h2>
 
           {/* Canonical Recipe Name (if different) */}
           {canonical && canonical.name !== recipeGroup.name && (

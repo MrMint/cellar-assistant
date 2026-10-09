@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { AppBar } from "@/components/app/AppBar";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import { EditCellarClient } from "@/components/cellar/EditCellarClient";
 import { GetCellarEditQuery } from "@/components/cellar/fragments";
@@ -59,34 +60,48 @@ export default async function EditCellar({
 
   const cellar = result.data;
   const me = viewer.me;
+  // X21: the page's h1 (the generateMetadata title's words), and Back to
+  // the cellar on a cold open.
+  const bar = (
+    <AppBar
+      title={`Edit ${cellar.name}`}
+      parent={`/cellars/${cellar.id}/items`}
+    />
+  );
   if (!canAddToCellar(cellar, me?.id ?? null)) {
     return (
-      <p className="type-body">
-        You do not have permission to edit this cellar.
-      </p>
+      <div className="flex flex-col gap-4">
+        {bar}
+        <p className="type-body">
+          You do not have permission to edit this cellar.
+        </p>
+      </div>
     );
   }
 
   return (
-    <EditCellarClient
-      cellar={{
-        id: cellar.id,
-        name: cellar.name,
-        privacy: cellar.privacy,
-        createdById: cellar.createdById,
-        coOwnerIds: cellar.coOwnerIds,
-        coOwners: cellar.coOwners.edges.map((edge) => edge.node),
-        itemCount: cellar.itemCount,
-      }}
-      viewer={
-        me === null || me === undefined
-          ? null
-          : {
-              id: me.id,
-              displayName: me.profile?.displayName ?? me.email ?? "",
-              avatarUrl: me.profile?.avatarUrl ?? null,
-            }
-      }
-    />
+    <div className="flex flex-col gap-4">
+      {bar}
+      <EditCellarClient
+        cellar={{
+          id: cellar.id,
+          name: cellar.name,
+          privacy: cellar.privacy,
+          createdById: cellar.createdById,
+          coOwnerIds: cellar.coOwnerIds,
+          coOwners: cellar.coOwners.edges.map((edge) => edge.node),
+          itemCount: cellar.itemCount,
+        }}
+        viewer={
+          me === null || me === undefined
+            ? null
+            : {
+                id: me.id,
+                displayName: me.profile?.displayName ?? me.email ?? "",
+                avatarUrl: me.profile?.avatarUrl ?? null,
+              }
+        }
+      />
+    </div>
   );
 }

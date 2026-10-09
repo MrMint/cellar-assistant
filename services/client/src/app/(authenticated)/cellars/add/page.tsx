@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppBar } from "@/components/app/AppBar";
 import { AddCellarClient } from "@/components/cellar/AddCellarClient";
 
 export const metadata: Metadata = { title: "New cellar" };
@@ -12,5 +13,11 @@ export const metadata: Metadata = { title: "New cellar" };
  * fetch here and the viewer is implicit in `myFriends`.
  */
 export default function AddCellar() {
-  return <AddCellarClient />;
+  // X21: the page's h1, and a way back on a cold open.
+  return (
+    <div className="flex flex-col gap-4">
+      <AppBar title="New cellar" parent="/cellars" />
+      <AddCellarClient />
+    </div>
+  );
 }
