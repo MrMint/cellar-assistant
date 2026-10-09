@@ -216,3 +216,25 @@ export const MyRecipesQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/**
+ * Whether a stopped or failed reading left a draft behind (X15). The job
+ * writes the recipe row before its ingredients and method, so a Stop or a
+ * failure after that stage leaves a partial draft — the composer says so
+ * rather than "Nothing was saved".
+ */
+export const RecipeLeftoverQuery = graphql(
+  `
+  query RecipeLeftover($recipeId: ID!) {
+    recipe(id: $recipeId) {
+      __typename
+      ... on Recipe {
+        id
+        isDraft
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);

@@ -196,4 +196,11 @@ describe("readFailureCopy", () => {
     assert.equal(copy.kind, "retryable");
     assert.match(copy.message, /^Nothing was saved\./);
   });
+
+  test("a failure after the job wrote the recipe row never says nothing was saved", () => {
+    const copy = readFailureCopy("the provider timed out", "photo", true);
+    assert.equal(copy.title, "Reading stopped part-way");
+    assert.doesNotMatch(copy.message, /Nothing was saved/);
+    assert.match(copy.message, /draft only you can see/);
+  });
 });

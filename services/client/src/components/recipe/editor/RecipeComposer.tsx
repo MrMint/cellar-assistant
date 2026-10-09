@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { useClient, useMutation } from "urql";
+import { useClient, useMutation, useQuery } from "urql";
 import { AppBar } from "@/components/app/AppBar";
 import {
   AI,
@@ -36,7 +36,7 @@ import {
 import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { stageProgress } from "../adapter";
-import { StartRecipeTextJobMutation } from "./documents";
+import { RecipeLeftoverQuery, StartRecipeTextJobMutation } from "./documents";
 import { takeRecipePhoto } from "./pending-photo";
 import { RecipeEditor } from "./RecipeEditor";
 import { blankForm } from "./recipe-draft";
@@ -51,7 +51,17 @@ const PASTE_MAX = 8000;
 export const readFailureCopy = (
   reason: string,
   source: "photo" | "paste",
+  /** The job wrote a partial draft before it failed (`RecipeLeftoverQuery`). */
+  leftDraft = false,
 ): { kind: "nothing-read" | "retryable"; title: string; message: string } => {
+  if (leftDraft) {
+    return {
+      kind: "retryable",
+      title: "Reading stopped part-way",
+      message:
+        "What it read so far is a draft only you can see. Review it, or start again.",
+    };
+  }
   if (/no recipe could be read/i.test(reason)) {
     return source === "photo"
       ? {
@@ -274,7 +284,7 @@ function PhotoComposer() {
                 id={inputId}
                 type="file"
                 accept="image/*"
-                className="sr-only"
+                className="peer sr-only"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
@@ -282,7 +292,11 @@ function PhotoComposer() {
                 }}
               />
               <Button asChild>
-                <label htmlFor={inputId} className="cursor-pointer">
+                {/* The input is visually hidden: its focus shows here. */}
+                <label
+                  htmlFor={inputId}
+                  className="cursor-pointer peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50"
+                >
                   <Camera aria-hidden />
                   Choose a photo
                 </label>
@@ -433,6 +447,23 @@ function Reading({
   const phase = useRecipeJob(jobId);
   const [, cancel] = useMutation(CancelRecipePhotoJobMutation);
   const doneId = phase?.kind === "done" ? phase.recipeId : null;
+  // A Stop or a failure after the job wrote the recipe row leaves a partial
+  // draft behind; ask before saying "Nothing was saved".
+  const endedId =
+    phase?.kind === "cancelled" || phase?.kind === "failed"
+      ? phase.recipeId
+      : null;
+  const [leftover] = useQuery({
+    query: RecipeLeftoverQuery,
+    variables: { recipeId: endedId ?? "" },
+    pause: endedId === null,
+    requestPolicy: "network-only",
+  });
+  const leftoverId =
+    endedId !== null && leftover.data?.recipe?.__typename === "Recipe"
+      ? leftover.data.recipe.id
+      : null;
+  const checkingLeftover = endedId !== null && leftover.fetching;
 
   useEffect(() => {
     if (doneId !== null) router.replace(`/recipes/${doneId}/edit`);
@@ -480,19 +511,38 @@ function Reading({
       </Alert>
     );
   }
+  if (checkingLeftover) {
+    return <ReadingProgress label="Checking what was saved" value={null} />;
+  }
   if (phase.kind === "cancelled") {
     return (
       <div className="flex flex-col gap-3">
         <Alert>
-          <AlertDescription>Stopped. Nothing was saved.</AlertDescription>
+          <AlertDescription>
+            {leftoverId === null
+              ? "Stopped. Nothing was saved."
+              : "Stopped. What it had read so far is a draft only you can see."}
+          </AlertDescription>
         </Alert>
-        <Button variant="secondary" className="self-start" onClick={onAgain}>
-          Try again
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {leftoverId !== null && (
+            <Button variant="secondary" asChild>
+              <Link href={`/recipes/${leftoverId}/edit`} underline="none">
+                Review the draft
+              </Link>
+            </Button>
+          )}
+          <Button
+            variant={leftoverId === null ? "secondary" : "ghost"}
+            onClick={onAgain}
+          >
+            Try again
+          </Button>
+        </div>
       </div>
     );
   }
-  const copy = readFailureCopy(phase.reason, source);
+  const copy = readFailureCopy(phase.reason, source, leftoverId !== null);
   return (
     <div className="flex flex-col gap-3">
       <AiStatus
@@ -505,8 +555,18 @@ function Reading({
           tone: "neutral",
         }}
       />
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={onAgain}>
+      <div className="flex flex-wrap gap-2">
+        {leftoverId !== null && (
+          <Button variant="secondary" asChild>
+            <Link href={`/recipes/${leftoverId}/edit`} underline="none">
+              Review the draft
+            </Link>
+          </Button>
+        )}
+        <Button
+          variant={leftoverId === null ? "secondary" : "ghost"}
+          onClick={onAgain}
+        >
           {source === "photo" ? "Choose another photo" : "Edit the text"}
         </Button>
         <Button variant="ghost" asChild>
