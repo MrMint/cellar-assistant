@@ -4,16 +4,13 @@ import {
   badgeText,
   countTiles,
   EMPTY_ME_HUB,
+  meCountsFromResult,
   meHubFromResult,
 } from "./me-hub-data";
 
 describe("meHubFromResult", () => {
   test("pinned lists, their total, and only PENDING incoming requests", () => {
     const data = meHubFromResult({
-      me: {
-        id: "u1",
-        counts: { bottles: 4, logs: 9, places: 2, tierLists: 5 },
-      },
       myTierLists: {
         __typename: "TierListConnection",
         totalCount: 5,
@@ -29,7 +26,7 @@ describe("meHubFromResult", () => {
       },
     } as unknown as Parameters<typeof meHubFromResult>[0]);
     assert.deepEqual(data, {
-      counts: { bottles: 4, logs: 9, places: 2, tierLists: 5 },
+      counts: null,
       pinnedTierLists: [{ id: "t1", name: "Reds", itemCount: 3 }],
       tierListCount: 5,
       pendingFriendRequests: 2,
@@ -43,6 +40,15 @@ describe("meHubFromResult", () => {
     } as unknown as Parameters<typeof meHubFromResult>[0]);
     assert.deepEqual(data, EMPTY_ME_HUB);
     assert.deepEqual(meHubFromResult(null), EMPTY_ME_HUB);
+  });
+});
+
+describe("meCountsFromResult", () => {
+  test("the viewer's counts, or null when there is no viewer or no data", () => {
+    const counts = { bottles: 4, logs: 9, places: 2, tierLists: 5 };
+    assert.deepEqual(meCountsFromResult({ me: { id: "u1", counts } }), counts);
+    assert.equal(meCountsFromResult({ me: null }), null);
+    assert.equal(meCountsFromResult(null), null);
   });
 });
 

@@ -299,8 +299,9 @@ export function MeHubShell() {
           </div>
         </ShellBlocks>
         {/* The count row's height, so the sections do not jump when it lands
-            (an account with nothing yet has no row, and that is the rarer case). */}
-        <ShellBlocks className="h-[76px] rounded-lg bg-surface-1" />
+            (an account with nothing yet has no row, and that is the rarer case):
+            py-3 (24) + a title-1 numeral (34) + gap-0.5 (2) + a footnote (18). */}
+        <ShellBlocks className="h-[78px] rounded-lg bg-surface-1" />
         {ME_SECTIONS.map((section) => (
           <InsetSection key={section.label} label={section.label}>
             {section.label === "Lists" && (

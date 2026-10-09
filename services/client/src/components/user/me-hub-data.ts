@@ -4,9 +4,12 @@
  * top of Lists, and the friend requests waiting on them, for the badge on
  * Friends.
  *
- * One document, so the hub is one round trip. Every part is optional to the
- * page: a failure in any renders what it would have shown anyway — no count
- * row, plain rows (`meHubFromResult`) — never an error over the hub.
+ * Two documents, read side by side. Every part is optional to the page: a
+ * failure in any renders what it would have shown anyway — no count row,
+ * plain rows (`meHubFromResult`) — never an error over the hub. The counts
+ * are their own document because `Viewer.counts` is a plain field: an error
+ * there is a GraphQL error, which fails the whole operation, and it must not
+ * take the pinned lists and the Friends badge down with it.
  */
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql, type ResultOf } from "@/lib/api/graphql";
@@ -20,15 +23,6 @@ export const FRIEND_REQUESTS_PAGE = 100;
 export const MeHubQuery = graphql(
   `
   query MeHub($pinned: Int!, $requests: Int!) {
-    me {
-      id
-      counts {
-        bottles
-        logs
-        places
-        tierLists
-      }
-    }
     myTierLists(first: $pinned, section: MINE) {
       __typename
       ... on TierListConnection {
@@ -59,6 +53,21 @@ export const MeHubQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/** The header's count row (X18), read on its own — see the module doc. */
+export const MeCountsQuery = graphql(`
+  query MeCounts {
+    me {
+      id
+      counts {
+        bottles
+        logs
+        places
+        tierLists
+      }
+    }
+  }
+`);
 
 export type PinnedTierList = { id: string; name: string; itemCount: number };
 
@@ -97,7 +106,7 @@ export const meHubFromResult = (
   const listConnection =
     lists?.__typename === "TierListConnection" ? lists : null;
   return {
-    counts: data?.me?.counts ?? null,
+    counts: null,
     pinnedTierLists:
       listConnection?.edges.map(({ node }) => ({
         id: node.id,
@@ -111,6 +120,11 @@ export const meHubFromResult = (
         : 0,
   };
 };
+
+/** `MeCounts`' result → the count row's numbers, or `null` (no row). */
+export const meCountsFromResult = (
+  data: ResultOf<typeof MeCountsQuery> | null | undefined,
+): MeCounts | null => data?.me?.counts ?? null;
 
 /** The badge's text: the count, capped where the page read stops. */
 export const badgeText = (count: number): string =>
