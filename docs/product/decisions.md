@@ -126,3 +126,52 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **Install prompt (N15).** "First save" counts a bottle added to a cellar or
   an item confirmed in the onboarding wizard, announced the moment it happens
   rather than at the next navigation.
+
+### Pour and the drink-log follow-ups (wave B "pour": X03)
+
+- **Where Pour lives (X03).** The bottle page's ActionBar (Pour, plus Log a
+  drink beside it) and the cellar overview's bottle cards, for the cellar's
+  owners and co-owners while the bottle is not finished. Visitors and
+  finished bottles get Log a drink / Check in only. X04's "Open now" shelf
+  can reuse `pour/PourSheet` as the overview does.
+- **The first pour opens the bottle**, at the pour's own time (so a
+  backdated first pour opens it then). "Open it!" became a quiet "Mark as
+  opened" for opening without pouring. A plain Log a drink from the bottle
+  does **not** open it or move the level.
+- **Glass presets (X03).** The app records no bottle size, so a pour is a
+  share of an assumed container, and the sheet says which: wine 750 ml
+  (taste 75, glass 150, large 250), beer 355 ml (60, half 180, the bottle),
+  spirit 700 ml (20, measure 45, double 90), sake 720 ml (ochoko 60, 120,
+  tokkuri 180), coffee a 340 g bag (cup 18 g, 36, pot 60), tea a 100 g tin
+  (cup 3 g, pot 8, large 15). The sheet opens on the middle one, or on "the
+  rest" when less than that is left.
+- **The last pour (level 0)** logs the drink and then asks "Finished?" inside
+  the sheet. Finished is N13a's finish with its Undo toast; **Not yet leaves
+  5%** (or what was there, if less), and closing the sheet on that question
+  is Not yet — the drink is already logged, so the level must move too, and
+  a bottle is never finished without a tap. A bottle reading 0% that was
+  never finished can still be poured: that pour is the last of it. Then
+  the item's rating — the review, prefilled — then, for each of **your own** tier lists the item is on, the
+  band that rating reads as (`bandForScore`), moved to the end of that band
+  in one tap, with Undo through the list's history (D4). Friends' lists are
+  not offered. "Keep my rating" suggests from the rating already saved, never
+  from stars tapped and left unsaved; a list longer than one page (100) links
+  to the list instead of moving from the sheet.
+- **"me + Sam"** is the last set of friends you poured with **on this
+  device** (`localStorage`), kept to people who are still your friends;
+  "Others…" opens the full friend chips.
+- **Backdating.** "When" is Now by default; Earlier opens the device's own
+  date-and-time picker. No later than now (five minutes of clock skew
+  allowed), no earlier than 1900. Re-dating your log of a table moves the
+  companions' entries you wrote with it, except any a friend has made their
+  own.
+- **Who with after the fact.** Only on your own log of a drink you logged.
+  Dropping a friend who has added to their entry is refused (it is theirs
+  now) rather than silently kept. Only people being added must be friends
+  now: someone already on the log stays when the set names them, even after
+  an unfriending.
+- **Delete with Undo.** Deleting a log no longer asks; the toast's Undo puts
+  back the same entries (ids, dates, companions' entries) for **one hour**
+  after the delete, for whoever deleted them. A bottle, place or photo that
+  has gone meanwhile comes back as none; an ex-friend's entry does not come
+  back.

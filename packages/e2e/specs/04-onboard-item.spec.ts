@@ -169,7 +169,7 @@ test.describe("onboard → cellar → check in", () => {
     ).toBe("CheckIn");
   });
 
-  test("the wine is in the cellar and can be checked in from the page", async ({
+  test("the wine is in the cellar and can be poured from the page", async ({
     primary,
   }) => {
     test.skip(itemId === undefined, "no wine was onboarded");
@@ -184,17 +184,17 @@ test.describe("onboard → cellar → check in", () => {
       "the cellar page does not show its new item",
     ).toMatch(/E2 Wine/);
 
-    // "Check in" opens the drink-log sheet (X02); "Log it" with nothing
-    // filled in is the old "Just me".
-    const checkIn = primary.getByRole("button", { name: "Check in" });
+    // X03: an owner's bottle card offers "Pour" (open, log and level in one
+    // sheet); its default glass is the old "Check In" with a level.
+    const pour = primary.getByRole("button", { name: /^Pour E2 Wine/ });
     await expect(
-      checkIn.first(),
-      "no check-in control on the cellar page",
+      pour.first(),
+      "no pour control on the cellar page",
     ).toBeVisible({ timeout: 20_000 });
-    await checkIn.first().click();
+    await pour.first().click();
     await primary
-      .getByRole("dialog", { name: "Log a drink" })
-      .getByRole("button", { name: "Log it" })
+      .getByRole("dialog", { name: "Pour" })
+      .getByRole("button", { name: /^Pour (\d+ ml|the last of it)$/ })
       .click();
 
     // The check-in list is written by `CheckInActor` and read back through

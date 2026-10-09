@@ -50,6 +50,17 @@ const VESSELS: Readonly<
   },
 };
 
+/**
+ * One type's vessel outline, on the 64 × 160 grid — for drawing *inside* the
+ * silhouette (the Pour sheet's liquid is clipped to it, X03).
+ */
+export const vesselShape = (
+  type: ApiItemType,
+): { readonly name: string; readonly d: string; readonly evenOdd: boolean } => {
+  const vessel = VESSELS[type];
+  return { name: vessel.name, d: vessel.d, evenOdd: vessel.evenOdd === true };
+};
+
 /** The silhouette alone — for a plate, or a future empty state. */
 export function VesselSilhouette({
   type,

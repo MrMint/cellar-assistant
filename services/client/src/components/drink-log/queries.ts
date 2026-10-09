@@ -25,6 +25,8 @@ export const DrinkLogEntryFragment = graphql(`
     isMine
     canRemove
     fromCellar
+    userId
+    createdById
     companionIds
     user {
       __typename
@@ -131,6 +133,48 @@ export const DeleteDrinkLogMutation = graphql(
   }
 `,
   [ActorErrorFieldsFragment],
+);
+
+/**
+ * Who else was there, after the fact (X03): the whole new set. Only on your
+ * own entry of a drink you logged.
+ */
+export const SetDrinkLogCompanionsMutation = graphql(
+  `
+  mutation SetDrinkLogCompanions($id: ID!, $companionIds: [ID!]!) {
+    setDrinkLogCompanions(id: $id, companionIds: $companionIds) {
+      __typename
+      ... on ItemCheckIn {
+        ...DrinkLogEntry
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [DrinkLogEntryFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * Undo of `deleteDrinkLog` (X03): the same entries back — ids, dates and
+ * companions — for whoever removed them, within the hour.
+ */
+export const RestoreDrinkLogMutation = graphql(
+  `
+  mutation RestoreDrinkLog($id: ID!) {
+    restoreDrinkLog(id: $id) {
+      __typename
+      ... on RestoredDrinkLogPayload {
+        ids
+        entry {
+          id
+          ...DrinkLogEntry
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [DrinkLogEntryFragment, ActorErrorFieldsFragment],
 );
 
 export const SuggestFlavourTagsMutation = graphql(

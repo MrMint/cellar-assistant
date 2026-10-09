@@ -64,6 +64,7 @@ export const relations = defineRelations(schema, (r) => ({
 			alias: "checkIns_createdById_user_id"
 		}),
 		friendInvites: r.many.friendInvites(),
+		checkInTrash: r.many.checkInTrash(),
 		friendRequestsFriendId: r.many.friendRequests({
 			alias: "friendRequests_friendId_user_id"
 		}),
@@ -964,6 +965,12 @@ export const relations = defineRelations(schema, (r) => ({
 		photo: r.one.files({
 			from: r.checkIns.photoFileId,
 			to: r.files.id
+		}),
+	},
+	checkInTrash: {
+		removedBy: r.one.user({
+			from: r.checkInTrash.removedById,
+			to: r.user.id,
 		}),
 	},
 	friendInvites: {

@@ -202,7 +202,7 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     editHref: null,
   };
 
-  test("unopened, owner: 'Open it!', Delete in `⋯`, no Edit for a non-creator", () => {
+  test("unopened, owner: Pour opens it (X03), Delete in `⋯`, no Edit for a non-creator", () => {
     const html = render(
       <CellarItemPageView
         {...props}
@@ -216,7 +216,13 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
         }}
       />,
     );
-    assert.match(html, />Open it!</);
+    // X03: the first pour opens the bottle, so Pour and Log are there before
+    // it is opened; opening without pouring is the quiet "Mark as opened".
+    assert.match(html, /role="toolbar" aria-label="This bottle"/);
+    assert.match(html, />Pour</);
+    assert.match(html, /data-emphasis="secondary"[^>]*>.*Log a drink</);
+    assert.match(html, />Mark as opened</);
+    assert.doesNotMatch(html, />Open it!</);
     // The Joy header drew Delete enabled for the owner and Edit disabled for
     // a non-creator; `⋯` holds what applies, Delete last (design §2).
     assert.match(html, /<button[^>]*aria-label="More actions"/);
@@ -231,7 +237,6 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     );
     assert.match(html, /<button[^>]*aria-label="Add a photo"/);
     assert.match(html, />Wineries \(1\)</);
-    assert.doesNotMatch(html, />Log a drink</);
   });
 
   test("not the cellar's owner, not the creator: no `⋯` at all", () => {
@@ -250,7 +255,10 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     );
     assert.match(html, /aria-label="Share"/);
     assert.doesNotMatch(html, /aria-label="More actions"/);
-    assert.doesNotMatch(html, />Open it!</);
+    assert.doesNotMatch(html, />Mark as opened</);
+    // A visitor logs from the bottle (sealed or not) but never pours it.
+    assert.doesNotMatch(html, />Pour</);
+    assert.match(html, /data-emphasis="primary"[^>]*>.*Log a drink</);
   });
 
   test("opened: check-ins and the slider", () => {
@@ -274,13 +282,15 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
         ]}
       />,
     );
-    // X02: one "Log a drink" (the sheet covers "just me" and the table).
-    assert.match(html, /data-emphasis="primary"[^>]*>.*Log a drink</);
+    // X03: Pour is the owner's main action; "Log a drink" (X02's sheet, a
+    // glass that does not move the level) sits beside it.
+    assert.match(html, />Pour</);
+    assert.match(html, /data-emphasis="secondary"[^>]*>.*Log a drink</);
     assert.doesNotMatch(html, /Bulk Check In/);
     assert.match(html, /Remaining: 40%/);
     assert.match(html, /Opened/);
     assert.match(html, /2026-01-02/);
-    assert.doesNotMatch(html, />Open it!</);
+    assert.doesNotMatch(html, />Mark as opened</);
   });
 
   test("emptied: 'Empty … ago', no slider", () => {
@@ -319,8 +329,9 @@ describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
     );
     assert.match(html, />Restore to cellar</);
     // Logging stays (logs survive the bottle, D5) but is no longer the solid
-    // primary action.
+    // primary action, and a finished bottle has nothing left to pour.
     assert.match(html, /data-emphasis="secondary"[^>]*>.*Log a drink</);
+    assert.doesNotMatch(html, />Pour</);
   });
 });
 

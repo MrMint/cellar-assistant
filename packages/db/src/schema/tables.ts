@@ -237,6 +237,22 @@ export const checkIns = pgTable("check_ins", {
 	index("idx_check_ins_photo_file_id").using("btree", table.photoFileId.asc().nullsLast()),
 check("check_ins_one_item", sql`(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("check_ins_score_half_stars", sql`((score IS NULL) OR (score = ANY (ARRAY[(0.5)::double precision, (1)::double precision, (1.5)::double precision, (2)::double precision, (2.5)::double precision, (3)::double precision, (3.5)::double precision, (4)::double precision, (4.5)::double precision, (5)::double precision])))`),check("check_ins_note_length", sql`((note IS NULL) OR (char_length(note) <= 2000))`),check("check_ins_tags_count", sql`(cardinality(tags) <= 12)`),]);
 
+// X03 follow-up: a removed drink log, kept for its Undo
+// (`restoreDrinkLog`) — the removed `check_ins` row as JSON, keyed by its own
+// id, plus the id `deleteDrinkLog` was called with. Written only by
+// `CheckInActor`. Added by `db:generate`
+// (`migrations/20261009054310_check_in_trash`), in the shape `pull` emits.
+export const checkInTrash = pgTable("check_in_trash", {
+	id: uuid().primaryKey(),
+	removalId: uuid("removal_id").notNull(),
+	removedById: uuid("removed_by_id").notNull().references(() => user.id, { onDelete: "cascade" } ),
+	removedAt: timestamp("removed_at", { withTimezone: true }).default(sql`now()`).notNull(),
+	row: jsonb().notNull(),
+}, (table) => [
+	index("idx_check_in_trash_removal_id").using("btree", table.removalId.asc().nullsLast()),
+	index("idx_check_in_trash_removed_at").using("btree", table.removedAt.asc().nullsLast()),
+]);
+
 export const coffeeCultivar = pgTable("coffee_cultivar", {
 	value: text().primaryKey(),
 	comment: text(),

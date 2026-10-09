@@ -64,6 +64,7 @@ export const tables = {
   cellar_owners: t.cellarOwners,
   cellars: t.cellars,
   check_ins: t.checkIns,
+  check_in_trash: t.checkInTrash,
   coffee_cultivar: t.coffeeCultivar,
   coffees: t.coffees,
   country: t.country,

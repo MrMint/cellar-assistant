@@ -6,8 +6,9 @@ import { bodyText, expect, test, watch } from "../fixtures/test.ts";
 /**
  * The restored item pages (UI parity wave 3a): the item page, the edit form
  * and the **bottle** page, asserted against the production copy at
- * `82450ad1` — "Located in:", "Reviews:", "Tea Characteristics", "Open it!",
- * "Log a drink", "Delete item".
+ * `82450ad1` — "Located in:", "Reviews:", "Tea Characteristics", "Open it!"
+ * (Pour since X03, whose first pour opens the bottle), "Log a drink",
+ * "Delete item".
  *
  * A tea, because sake and tea are the two types `createItem` can write
  * without the onboarding flow (`item_onboarding_id NOT NULL` on the other
@@ -175,20 +176,27 @@ test("an item id at the cellar URL redirects to its one bottle (decision 1)", as
   );
 });
 
-test("the bottle page: open it, check in, delete it", async ({ primary }) => {
+test("the bottle page: pour it (which opens it), log a drink, delete it", async ({
+  primary,
+}) => {
   const noise = watch(primary);
   await primary.goto(`/cellars/${cellarId}/teas/${bottleId}`);
   await expect(primary.getByRole("heading", { name: teaName })).toBeVisible();
   // No "Located in:" on a bottle page (the old layout).
   expect(await bodyText(primary)).not.toContain("Located in:");
 
-  await primary.getByRole("button", { name: "Open it!" }).click();
-  await expect(primary.getByText("Remaining: 100%")).toBeVisible({
+  // X03: Pour is there before the bottle is opened; the first pour opens it.
+  const bar = primary.getByRole("toolbar", { name: "This bottle" });
+  await bar.getByRole("button", { name: "Pour", exact: true }).click();
+  const sheet = primary.getByRole("dialog", { name: "Pour" });
+  await sheet.getByRole("button", { name: /^Cup/ }).click();
+  await sheet.getByRole("button", { name: "Pour 3 g" }).click();
+  await expect(primary.getByText("Remaining: 97%")).toBeVisible({
     timeout: 20_000,
   });
 
   // X02: "Log a drink" opens the sheet; "Log it" alone is the old "Check In".
-  await primary.getByRole("button", { name: "Log a drink" }).click();
+  await bar.getByRole("button", { name: "Log a drink" }).click();
   await primary
     .getByRole("dialog", { name: "Log a drink" })
     .getByRole("button", { name: "Log it" })

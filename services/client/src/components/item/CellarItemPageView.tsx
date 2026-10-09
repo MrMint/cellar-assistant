@@ -1,5 +1,6 @@
 import { LabelPlate } from "@/components/app/LabelPlate";
 import { ItemCocktails } from "@/components/bar/ItemCocktails";
+import { BottleActions } from "@/components/pour/BottleActions";
 import { AddReview } from "@/components/review/AddReview";
 import type { CheckInRow, ItemView } from "./adapter";
 import { CellarItemHeader } from "./CellarItemHeader";
@@ -41,7 +42,7 @@ export type CellarItemPageViewProps = {
  * The six `82450ad1:src/components/{wine,…}/Cellar{T}Details.tsx`, as one view
  * over `ITEM_VIEW_CONFIG` — one **bottle** (decision 1). Same grid: the
  * bottle's display photo (tap to set one) on the left; details,
- * characteristics, check-ins (once opened), the remaining slider, brands
+ * characteristics, check-ins, the remaining slider, brands
  * (wine, coffee, sake, tea) and, for sake and tea, recipes in the middle
  * (Share, which sat under the slider, is the header bar's action now —
  * N26); the review form and reviews on the right, then beer's and spirit's
@@ -129,20 +130,7 @@ export function CellarItemPageView({
               flavorProfile={item.flavorProfile}
               ingredients={item.ingredients}
             />
-            {bottle.openAt !== null && (
-              <ItemCheckIns
-                checkIns={checkIns}
-                subject={{
-                  itemType: item.type,
-                  itemId: item.itemId,
-                  itemName: item.name,
-                  bottle: { cellarId: cellar.id, cellarItemId: bottle.id },
-                }}
-                friends={friends}
-                total={checkInsTotal}
-                finished={bottle.emptyAt !== null}
-              />
-            )}
+            <ItemCheckIns checkIns={checkIns} total={checkInsTotal} />
             <ItemRemainingSlider
               itemId={bottle.id}
               cellarId={cellar.id}
@@ -182,6 +170,24 @@ export function CellarItemPageView({
           </div>
         </div>
       </div>
+      {/* X03: Pour (open, log and level in one) and Log a drink, in the
+          thumb zone — before the bottle is opened too. */}
+      <BottleActions
+        bottle={{
+          cellarId: cellar.id,
+          cellarItemId: bottle.id,
+          openAt: bottle.openAt,
+          percentageRemaining: bottle.percentageRemaining,
+        }}
+        subject={{
+          itemType: item.type,
+          itemId: item.itemId,
+          itemName: item.name,
+        }}
+        isOwner={isOwner}
+        finished={bottle.emptyAt !== null}
+        friends={friends}
+      />
     </div>
   );
 }

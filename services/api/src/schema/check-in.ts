@@ -14,6 +14,9 @@
  * - `updateDrinkLog` / `deleteDrinkLog` — your own entry; deleting the one
  *   you logged for a table removes the companions' rows you wrote with it,
  *   except those a companion has since made their own (`canRemoveCheckIn`).
+ * - `setDrinkLogCompanions` — who else was there, after the fact (X03).
+ * - `restoreDrinkLog` — Undo of `deleteDrinkLog`: the same rows, ids and
+ *   dates, for an hour, to whoever removed them (X03).
  * - `suggestFlavourTags` — a typed note → flavour words the drinker may tap.
  *   An abstaining model seam (`services/actors/src/lib/ai/seams.ts`,
  *   `providerFlavourTags`): it returns only words the note itself contains,
@@ -30,6 +33,7 @@ import type {
   LogDrinkInput as LogDrinkInputType,
   LoggedDrinkDto,
   RemovedCheckIns,
+  RestoredCheckIns,
   UpdateDrinkLogInput as UpdateDrinkLogInputType,
 } from "@cellar-assistant/contracts";
 import {
@@ -127,6 +131,14 @@ const LogDrinkInput = builder.inputType("LogDrinkInput", {
         "Defaults to true. False logs a round for your companions only, " +
         "and then takes no score, note, tags or photo.",
     }),
+    drankAt: t.field({
+      type: "DateTime",
+      required: false,
+      description:
+        "When it was drunk — backdating a log. Defaults to now; no later " +
+        "than now (plus a few minutes of clock skew), no earlier than 1900. " +
+        "It is the entry's `createdAt`.",
+    }),
   }),
 });
 
@@ -140,6 +152,14 @@ const UpdateDrinkLogInput = builder.inputType("UpdateDrinkLogInput", {
     tags: t.stringList({ required: false }),
     placeId: t.id({ required: false }),
     photoFileId: t.id({ required: false }),
+    drankAt: t.field({
+      type: "DateTime",
+      required: false,
+      description:
+        "Re-date the drink. On the entry you logged for a table it moves the " +
+        "companions' entries you wrote with it too, except any a friend has " +
+        "made their own. Cannot be cleared.",
+    }),
   }),
 });
 
@@ -149,6 +169,7 @@ const UPDATE_DRINK_LOG = {
   tags: { policy: "clearable", map: (tags) => tags.map(String) },
   placeId: { policy: "clearable", map: String },
   photoFileId: { policy: "clearable", map: String },
+  drankAt: { policy: "reject", map: String },
 } satisfies PatchPolicy<typeof UpdateDrinkLogInput.$inferInput>;
 
 const toLogInput = (
@@ -181,6 +202,7 @@ const toLogInput = (
     ? { companionIds: input.companionIds.map(String) }
     : {}),
   ...(present(input.includeSelf) ? { includeSelf: input.includeSelf } : {}),
+  ...(present(input.drankAt) ? { drankAt: String(input.drankAt) } : {}),
 });
 
 /* -------------------------------------------------------------------------- */
@@ -217,6 +239,23 @@ const DeletedDrinkLogPayload = builder
         description:
           "Every entry removed — the one you named first, then the companion " +
           "entries you wrote with it that their drinkers had not added to.",
+      }),
+    }),
+  });
+
+const RestoredDrinkLogPayload = builder
+  .objectRef<RestoredCheckIns>("RestoredDrinkLogPayload")
+  .implement({
+    description: "What `restoreDrinkLog` put back.",
+    fields: (t) => ({
+      ids: t.exposeIDList("ids", {
+        description:
+          "Every entry restored, with the ids it had — the one you named first.",
+      }),
+      entry: t.field({
+        type: ItemCheckInType,
+        description: "The entry you named, as it is again.",
+        resolve: (restored) => restored.entry,
       }),
     }),
   });
@@ -319,6 +358,47 @@ builder.mutationField("deleteDrinkLog", (t) =>
     args: { id: t.arg.id({ required: true }) },
     resolve: (_root, args, context) =>
       context.actor(CheckInActorDescriptor, String(args.id)).remove(),
+  }),
+);
+
+builder.mutationField("setDrinkLogCompanions", (t) =>
+  t.field({
+    type: ItemCheckInType,
+    description:
+      "Who else was there, after the fact: the complete set of friends who " +
+      "drank with you (not a change list). Only on your own entry of a drink " +
+      "you logged. A friend added gets an entry of their own in the same " +
+      "occasion; one left out loses the entry you wrote for them — unless " +
+      "they have added to it, which is a `ConflictError`.",
+    errors: {},
+    args: {
+      id: t.arg.id({ required: true }),
+      companionIds: t.arg.idList({ required: true }),
+    },
+    resolve: (_root, args, context): Promise<ItemCheckInDto> =>
+      context
+        .actor(CheckInActorDescriptor, String(args.id))
+        .setCompanions({ companionIds: args.companionIds.map(String) }),
+  }),
+);
+
+builder.mutationField("restoreDrinkLog", (t) =>
+  t.field({
+    type: RestoredDrinkLogPayload,
+    description:
+      "Undo `deleteDrinkLog`: the entries it removed come back with their " +
+      "own ids and dates. Only for whoever removed them, within an hour. " +
+      "A bottle, place or photo that has gone since comes back as none; a " +
+      "companion who is no longer your friend does not come back.",
+    errors: {},
+    args: {
+      id: t.arg.id({
+        required: true,
+        description: "The id `deleteDrinkLog` was called with.",
+      }),
+    },
+    resolve: (_root, args, context) =>
+      context.actor(CheckInActorDescriptor, String(args.id)).restore(),
   }),
 );
 

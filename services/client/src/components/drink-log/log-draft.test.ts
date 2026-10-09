@@ -7,9 +7,12 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   addTag,
+  companionsChanged,
   draftFromEntry,
+  drankAtProblem,
   EMPTY_DRAFT,
   entryContext,
+  fromLocalInputValue,
   joinNames,
   type LogDraft,
   logInput,
@@ -17,7 +20,9 @@ import {
   removeTag,
   shouldSuggest,
   toggleId,
+  toLocalInputValue,
   updateInput,
+  whenLabel,
 } from "./log-draft";
 
 const subject = {
@@ -95,6 +100,7 @@ describe("logInput", () => {
       place: { id: "p1", name: "The Corner" },
       companionIds: ["f1"],
       photoFileId: "file1",
+      drankAt: "2026-10-01T18:00:00.000Z",
     };
     assert.deepEqual(
       logInput(
@@ -110,6 +116,7 @@ describe("logInput", () => {
         placeId: "p1",
         photoFileId: "file1",
         companionIds: ["f1"],
+        drankAt: "2026-10-01T18:00:00.000Z",
       },
     );
   });
@@ -122,11 +129,29 @@ describe("updateInput", () => {
     tags: ["plum"],
     place: { id: "p1", name: "Bar", displayName: "The Bar" },
     photo: null,
+    createdAt: "2026-10-01T18:00:00.000Z",
+    companionIds: ["f1"],
   });
 
-  test("the entry becomes a draft, the place by its display name", () => {
+  test("the entry becomes a draft: the place by its display name, its time and table", () => {
     assert.deepEqual(before.place, { id: "p1", name: "The Bar" });
-    assert.deepEqual(before.companionIds, []);
+    assert.deepEqual(before.companionIds, ["f1"]);
+    assert.equal(before.drankAt, "2026-10-01T18:00:00.000Z");
+  });
+
+  test("re-dating is a patch; companions are not — they have their own call", () => {
+    assert.deepEqual(
+      updateInput(before, {
+        ...before,
+        drankAt: "2026-09-30T20:00:00.000Z",
+        companionIds: [],
+      }),
+      { drankAt: "2026-09-30T20:00:00.000Z" },
+    );
+    assert.equal(companionsChanged(["a", "b"], ["b", "a"]), false);
+    assert.equal(companionsChanged(["a"], ["a", "b"]), true);
+    assert.equal(companionsChanged(["a", "b"], ["a"]), true);
+    assert.equal(companionsChanged([], []), false);
   });
 
   test("nothing changed: an empty patch, so the sheet writes nothing", () => {
@@ -143,6 +168,51 @@ describe("updateInput", () => {
         place: null,
       }),
       { score: null, note: null, tags: ["plum", "spice"], placeId: null },
+    );
+  });
+});
+
+describe("when", () => {
+  const now = new Date(2026, 9, 8, 21, 30);
+
+  test("the picker's local wall clock round-trips to the instant", () => {
+    const at = new Date(2026, 9, 4, 19, 5);
+    assert.equal(toLocalInputValue(at), "2026-10-04T19:05");
+    assert.equal(fromLocalInputValue("2026-10-04T19:05"), at.toISOString());
+    assert.equal(fromLocalInputValue(""), null);
+    assert.equal(fromLocalInputValue("yesterday"), null);
+  });
+
+  test("the server's rule, said before the tap", () => {
+    assert.equal(drankAtProblem(null, now), null);
+    assert.equal(
+      drankAtProblem(new Date(2026, 9, 8, 20).toISOString(), now),
+      null,
+    );
+    assert.match(
+      drankAtProblem(new Date(2026, 9, 9, 21).toISOString(), now) ?? "",
+      /future/,
+    );
+    assert.match(drankAtProblem("1850-01-01T00:00:00Z", now) ?? "", /1900/);
+  });
+
+  test("the chip says Now, Today, Yesterday, or the day", () => {
+    assert.equal(whenLabel(null, now, "en-GB"), "Now");
+    assert.equal(
+      whenLabel(new Date(2026, 9, 8, 19, 30).toISOString(), now, "en-GB"),
+      "Today, 19:30",
+    );
+    assert.equal(
+      whenLabel(new Date(2026, 9, 7, 21, 5).toISOString(), now, "en-GB"),
+      "Yesterday, 21:05",
+    );
+    assert.match(
+      whenLabel(new Date(2026, 9, 4, 19, 30).toISOString(), now, "en-GB"),
+      /^Sun 4 Oct, 19:30$/,
+    );
+    assert.match(
+      whenLabel(new Date(2025, 9, 4, 19, 30).toISOString(), now, "en-GB"),
+      /2025/,
     );
   });
 });

@@ -230,6 +230,14 @@ const FIELDS: ReadonlyArray<
   ["updateDrinkLog", "tags", "clearable", `["t"]`, ["t"]],
   ["updateDrinkLog", "placeId", "clearable", `"${ID2}"`, ID2],
   ["updateDrinkLog", "photoFileId", "clearable", `"${ID2}"`, ID2],
+  // X03: a log always has a date — re-dating is allowed, clearing is not.
+  [
+    "updateDrinkLog",
+    "drankAt",
+    "reject",
+    `"2026-10-01T18:00:00.000Z"`,
+    "2026-10-01T18:00:00.000Z",
+  ],
 
   ["updateProfile", "displayName", "reject", `"N"`, "N"],
   ["updateProfile", "avatarUrl", "clearable", `"u"`, "u"],

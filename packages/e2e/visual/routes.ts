@@ -372,7 +372,7 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       slug: "bottle-wine-sealed",
       path: bottlePath("w8", "sealed"),
       as: "demo",
-      note: "bottle page: a sealed wine (Open it!)",
+      note: "bottle page: a sealed wine (Pour in the ActionBar, Mark as opened)",
     },
     {
       slice: "S5",

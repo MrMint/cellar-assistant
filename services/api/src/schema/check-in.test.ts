@@ -1,6 +1,7 @@
 /**
  * X02's drink-log surface: `logDrink`, `updateDrinkLog`, `deleteDrinkLog`,
- * `suggestFlavourTags`, `Item.checkIns(scope:)` and the CHECKED_IN feed entry.
+ * `suggestFlavourTags`, `Item.checkIns(scope:)` and the CHECKED_IN feed entry;
+ * and X03's follow-ups: `drankAt`, `setDrinkLogCompanions`, `restoreDrinkLog`.
  *
  * Each maps onto one `CheckInActor` (or collection actor) call, addressed by
  * the id the client minted, and no visibility is decided here.
@@ -145,6 +146,68 @@ describe("updateDrinkLog / deleteDrinkLog", () => {
     expect(result.data?.deleteDrinkLog).toEqual({
       __typename: "DeletedDrinkLogPayload",
       ids: [LOG_ID, "x"],
+    });
+  });
+});
+
+describe("X03 follow-ups", () => {
+  it("logDrink passes drankAt through as an instant", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CheckInActor.log": () => ({
+        entry,
+        rows: [{ id: LOG_ID, userId: viewer.id }],
+        cellarItemId: null,
+      }),
+    });
+    const result = await run(
+      `mutation { logDrink(id: "${LOG_ID}", input: {
+           item: { type: WINE, id: "${WINE_ID}" },
+           drankAt: "2026-10-01T18:00:00.000Z"
+         }) { __typename } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.args.slice(1)).toEqual([
+      {
+        item: { type: "WINE", id: WINE_ID },
+        drankAt: "2026-10-01T18:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("setDrinkLogCompanions sends the whole set to the entry's actor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CheckInActor.setCompanions": () => ({ ...entry, companionIds: [] }),
+    });
+    const result = await run(
+      `mutation { setDrinkLogCompanions(id: "${LOG_ID}", companionIds: []) {
+           __typename ... on ItemCheckIn { companionIds } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.actorId).toBe(LOG_ID);
+    expect(calls[0]?.args.slice(1)).toEqual([{ companionIds: [] }]);
+    expect(result.data?.setDrinkLogCompanions).toEqual({
+      __typename: "ItemCheckIn",
+      companionIds: [],
+    });
+  });
+
+  it("restoreDrinkLog answers the ids and the entry put back", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CheckInActor.restore": () => ({ ids: [LOG_ID, "x"], entry }),
+    });
+    const result = await run(
+      `mutation { restoreDrinkLog(id: "${LOG_ID}") {
+           __typename ... on RestoredDrinkLogPayload { ids entry { id createdAt } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.actorId).toBe(LOG_ID);
+    expect(result.data?.restoreDrinkLog).toEqual({
+      __typename: "RestoredDrinkLogPayload",
+      ids: [LOG_ID, "x"],
+      entry: { id: LOG_ID, createdAt: entry.createdAt },
     });
   });
 });

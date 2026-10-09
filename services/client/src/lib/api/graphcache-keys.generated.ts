@@ -161,6 +161,7 @@ export const KEYLESS_TYPES = [
   "RemoveFriendPayload",
   "RemovedRecipeVote",
   "ReorderBandPayload",
+  "RestoredDrinkLogPayload",
   "ReverseGeocodeResult",
   "SetFavoritePayload",
   "SetRecipeLovePayload",

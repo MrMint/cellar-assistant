@@ -8,7 +8,8 @@ import { Gql } from "../../fixtures/test.ts";
  * The item page's "Your log" (D8) starts empty with one action; "Log a drink"
  * opens a sheet whose primary action sits inside the viewport; a score, a note
  * and a typed tag log in one tap; the toast's Undo takes it back; logging
- * again and deleting it from the row's ⋯ empties the log once more. The
+ * again and deleting it from the row's ⋯ empties the log at once — its toast's
+ * Undo brings the same entry back (X03) — and a second delete empties it. The
  * review is never touched by a log's score (D5), which is asserted through
  * the API at the end.
  *
@@ -152,11 +153,19 @@ test("log a drink from the item page, undo it, log again, delete it", async ({
     .first()
     .getByRole("button", { name: "More for this log" })
     .click();
+  // X03: no confirm — it goes at once, and the toast's Undo restores the
+  // same entry; then delete it for good.
   await page.getByRole("button", { name: "Delete" }).first().click();
-  await page
-    .getByRole("alertdialog", { name: "Delete this log?" })
-    .getByRole("button", { name: "Delete" })
+  await expect(log.getByText("Nothing logged yet.")).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(entry).toHaveCount(1, { timeout: 20_000 });
+  await entry
+    .first()
+    .getByRole("button", { name: "More for this log" })
     .click();
+  await page.getByRole("button", { name: "Delete" }).first().click();
   await expect(log.getByText("Nothing logged yet.")).toBeVisible({
     timeout: 20_000,
   });

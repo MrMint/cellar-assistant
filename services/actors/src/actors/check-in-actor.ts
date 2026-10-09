@@ -44,6 +44,21 @@
  *
  * Nothing here reads or writes `item_reviews`. A ★3 on Tuesday's glass does
  * not move the ★4.5 the drinker gave the wine (D5).
+ *
+ * ## After the fact (X03's drink-log follow-ups)
+ *
+ * - **When** — `created_at` is when it was drunk, and a log may be backdated
+ *   (`drankAt`, `parseDrankAt`). Re-dating the entry you logged for a table
+ *   moves the companions' entries you wrote with it, the same set Undo takes.
+ * - **Who with** — `setCompanions` replaces the occasion's roster: a friend
+ *   added gets a row about them; one dropped loses the row you wrote, unless
+ *   they have made it theirs (`checkInIsClaimed`), which is a `ConflictError`.
+ * - **Undo of a delete** — `remove` copies every row it deletes into
+ *   `check_in_trash` in the same transaction, and `restore` (keyed by the
+ *   same id) puts them back with their own ids and dates for
+ *   `DRINK_LOG_RESTORE_WINDOW_MS`. Whatever a row pointed at that has gone
+ *   meanwhile (a bottle, a place, a photo) comes back as null; a companion
+ *   who is no longer your friend does not come back.
  */
 import { randomUUID } from "node:crypto";
 import type {
@@ -63,6 +78,7 @@ import type {
 import {
   CheckInActorDescriptor,
   ConflictError,
+  DRINK_LOG_RESTORE_WINDOW_MS,
   ForbiddenError,
   isCheckInScore,
   isItemType,
@@ -70,10 +86,20 @@ import {
   MAX_CHECK_IN_NOTE_LENGTH,
   NotFoundError,
   normaliseCheckInTags,
+  parseDrankAt,
+  type RestoredCheckIns,
+  type SetDrinkLogCompanionsInput,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { cellarItems, checkIns, files } from "@cellar-assistant/db";
-import { and, asc, eq, inArray } from "@cellar-assistant/db/orm";
+import {
+  cellarItems,
+  checkIns,
+  checkInTrash,
+  files,
+  places,
+  user,
+} from "@cellar-assistant/db";
+import { and, asc, eq, gt, inArray, lt, sql } from "@cellar-assistant/db/orm";
 import {
   canEditCheckIn,
   canRemoveCheckIn,
@@ -239,6 +265,7 @@ export class CheckInActor
 
     const groupId = this.key;
     const now = new Date();
+    const drankAt = parseDrankAt(input.drankAt, now);
     const rows = drinkers.map((userId, index) => ({
       id: index === 0 ? groupId : randomUUID(),
       userId,
@@ -251,7 +278,7 @@ export class CheckInActor
       ...(includeSelf && index === 0
         ? opinion
         : { score: null, note: null, tags: [], photoFileId: null }),
-      createdAt: now,
+      createdAt: drankAt,
       updatedAt: now,
     }));
 
@@ -292,15 +319,34 @@ export class CheckInActor
       if (viewer === null) throw new ForbiddenError("sign in to add a photo");
       patch.photoFileId = await this.#requirePhoto(viewer, input.photoFileId);
     }
-    if (Object.keys(patch).length === 0) {
+    const now = new Date();
+    const drankAt =
+      input.drankAt === undefined ? null : parseDrankAt(input.drankAt, now);
+    if (Object.keys(patch).length === 0 && drankAt === null) {
       return await this.#placeSeenBy(ctx, toEntryDto(aggregate, viewer));
     }
 
+    // Re-dating the entry you logged for a table re-dates the occasion: the
+    // companions' rows you wrote with it that are still yours to change.
+    const redated =
+      drankAt === null
+        ? []
+        : this.#writtenWithIt(ctx, aggregate).filter((id) => id !== this.key);
     await this.tx(async (tx) => {
       await tx
         .update(checkIns)
-        .set({ ...patch, updatedAt: new Date() })
+        .set({
+          ...patch,
+          ...(drankAt === null ? {} : { createdAt: drankAt }),
+          updatedAt: now,
+        })
         .where(eq(checkIns.id, this.key));
+      if (drankAt !== null && redated.length > 0) {
+        await tx
+          .update(checkIns)
+          .set({ createdAt: drankAt, updatedAt: now })
+          .where(inArray(checkIns.id, redated));
+      }
     });
     await this.reload();
     return await this.#placeSeenBy(
@@ -329,28 +375,290 @@ export class CheckInActor
     // companion rows they wrote with it — each one `canRemoveCheckIn` still
     // allows, so a friend who has since scored or noted their glass keeps it.
     // A companion removing their own row ("I wasn't there") takes only theirs.
-    const viewer = ctx.viewerId;
-    const ids =
-      row.id === row.groupId && viewer !== null && row.createdById === viewer
-        ? aggregate.roster
-            .filter(
-              (other) =>
-                other.createdById === viewer &&
-                canRemoveCheckIn(ctx, {
-                  userId: other.userId,
-                  createdById: other.createdById,
-                  claimedByDrinker: other.claimed,
-                }),
-            )
-            .map((other) => other.id)
-        : [row.id];
+    const ids = this.#writtenWithIt(ctx, aggregate);
     const ordered = [row.id, ...ids.filter((id) => id !== row.id)];
+    const viewer = ctx.viewerId;
 
     await this.tx(async (tx) => {
+      const removed = await tx
+        .select()
+        .from(checkIns)
+        .where(inArray(checkIns.id, ordered));
+      // The Undo (`restore`): every removed row, as it was, for the window.
+      // Expired trash goes on the way past — no sweeper to schedule.
+      await tx
+        .delete(checkInTrash)
+        .where(
+          lt(
+            checkInTrash.removedAt,
+            new Date(Date.now() - DRINK_LOG_RESTORE_WINDOW_MS),
+          ),
+        );
+      if (viewer !== null && removed.length > 0) {
+        await tx
+          .insert(checkInTrash)
+          .values(
+            removed.map((gone) => ({
+              id: gone.id,
+              removalId: this.key,
+              removedById: viewer,
+              row: toTrashRow(gone),
+            })),
+          )
+          .onConflictDoUpdate({
+            target: checkInTrash.id,
+            set: {
+              removalId: this.key,
+              removedById: viewer,
+              removedAt: new Date(),
+              row: sql`excluded.row`,
+            },
+          });
+      }
       await tx.delete(checkIns).where(inArray(checkIns.id, ordered));
     });
     this.setAggregate(null);
     return { ids: ordered };
+  }
+
+  /**
+   * Who else was there, after the fact. Only on your own entry of an
+   * occasion you logged; `companionIds` is the whole new set.
+   */
+  async setCompanions(
+    ctx: Ctx,
+    input: SetDrinkLogCompanionsInput,
+  ): Promise<ItemCheckInDto> {
+    const aggregate = this.requireAggregate();
+    const { row, roster } = aggregate;
+    const viewer = ctx.viewerId;
+    await this.requireAllowed(
+      ctx,
+      viewer !== null && row.userId === viewer && row.createdById === viewer,
+      "only the person who logged this drink can change who was there",
+      aggregate,
+    );
+    if (viewer === null) throw new ForbiddenError("sign in to edit a log");
+
+    const raw = input.companionIds;
+    if (!Array.isArray(raw)) {
+      throw new ValidationError("companionIds must be a list of user ids");
+    }
+    const present = roster.filter((other) => other.id !== row.id);
+    const presentUsers = new Set(present.map((other) => other.userId));
+    const wantedIds = [
+      ...new Set(raw.map((id) => requireUuid(id, "companionIds[]"))),
+    ].filter((id) => id !== viewer);
+    // Friendship is asked of the people being *added*. Someone already at
+    // the table stays when the set names them, friends or not: the client
+    // sends the whole roster back, so an ex-friend on an old log must not
+    // make every later change to it a ForbiddenError.
+    const newcomers = await this.#requireCompanions(ctx, viewer, {
+      companionIds: wantedIds.filter((id) => !presentUsers.has(id)),
+    });
+    const wanted = { ids: wantedIds };
+    const added = newcomers.ids;
+    const dropped = present.filter(
+      (other) => other.userId !== viewer && !wanted.ids.includes(other.userId),
+    );
+    const kept = dropped.filter(
+      (other) =>
+        !canRemoveCheckIn(ctx, {
+          userId: other.userId,
+          createdById: other.createdById,
+          claimedByDrinker: other.claimed,
+        }),
+    );
+    if (kept.length > 0) {
+      throw new ConflictError(
+        kept.length === 1
+          ? "one of them has added to their own entry, so it is theirs now and stays"
+          : `${kept.length} of them have added to their own entries, so those are theirs now and stay`,
+      );
+    }
+    const drinkers = roster.length - dropped.length + added.length;
+    if (drinkers > MAX_CHECK_IN_DRINKERS) {
+      throw new ValidationError(
+        `a log takes at most ${MAX_CHECK_IN_DRINKERS} drinkers, got ${drinkers}`,
+      );
+    }
+    if (added.length === 0 && dropped.length === 0) {
+      return await this.#placeSeenBy(ctx, toEntryDto(aggregate, viewer));
+    }
+
+    const item = ARC.requireRefOf(row);
+    const now = new Date();
+    await this.tx(async (tx) => {
+      if (dropped.length > 0) {
+        await tx.delete(checkIns).where(
+          inArray(
+            checkIns.id,
+            dropped.map((other) => other.id),
+          ),
+        );
+      }
+      if (added.length > 0) {
+        await tx.insert(checkIns).values(
+          added.map((userId) => ({
+            id: randomUUID(),
+            userId,
+            createdById: viewer,
+            groupId: row.groupId,
+            cellarItemId: row.cellarItemId,
+            ...ARC.values(item),
+            placeId: row.placeId,
+            score: null,
+            note: null,
+            tags: [],
+            photoFileId: null,
+            // The occasion's own time, not the moment of the edit.
+            createdAt: row.createdAt,
+            updatedAt: now,
+          })),
+        );
+      }
+    });
+    await this.reload();
+    return await this.#placeSeenBy(
+      ctx,
+      toEntryDto(this.requireAggregate(), viewer),
+    );
+  }
+
+  /**
+   * Undo of `remove`: the rows it took, back with their own ids and dates,
+   * for whoever removed them, within {@link DRINK_LOG_RESTORE_WINDOW_MS}.
+   */
+  async restore(ctx: Ctx): Promise<RestoredCheckIns> {
+    const viewer = ctx.viewerId;
+    if (viewer === null) throw new ForbiddenError("sign in to undo");
+    const since = new Date(Date.now() - DRINK_LOG_RESTORE_WINDOW_MS);
+    const trashed = await this.db
+      .select()
+      .from(checkInTrash)
+      .where(
+        and(
+          eq(checkInTrash.removalId, this.key),
+          eq(checkInTrash.removedById, viewer),
+          gt(checkInTrash.removedAt, since),
+        ),
+      );
+    if (trashed.length === 0) {
+      // Never removed, someone else's removal, already restored, or too old:
+      // one answer, so this is no oracle for somebody else's log.
+      throw new NotFoundError(`check-in ${this.key} has nothing to undo`);
+    }
+
+    const rows = trashed.map((entry) => fromTrashRow(entry.row));
+    const friendships = await friendshipsOf(this.db, viewer);
+    const restorable = rows.filter(
+      (gone) =>
+        gone.userId === viewer ||
+        gone.createdById !== viewer ||
+        isFriend(ctx, gone.userId, friendships),
+    );
+    const keyed = restorable.find((gone) => gone.id === this.key);
+    if (keyed === undefined) {
+      throw new ConflictError(`check-in ${this.key} can no longer be restored`);
+    }
+
+    // What a row pointed at may have gone since: the bottle (removed or
+    // finished and deleted), the place, the photo. The log outlives them, as
+    // it would have had it never been removed.
+    const existing = async <T extends { id: string }>(
+      ids: readonly (string | null)[],
+      lookup: (present: string[]) => Promise<T[]>,
+    ): Promise<Set<string>> => {
+      const wanted = [
+        ...new Set(ids.filter((id): id is string => id !== null)),
+      ];
+      if (wanted.length === 0) return new Set();
+      return new Set((await lookup(wanted)).map((found) => found.id));
+    };
+    const bottles = await existing(
+      restorable.map((gone) => gone.cellarItemId),
+      (ids) =>
+        this.db
+          .select({ id: cellarItems.id })
+          .from(cellarItems)
+          .where(inArray(cellarItems.id, ids)),
+    );
+    const placesFound = await existing(
+      restorable.map((gone) => gone.placeId),
+      (ids) =>
+        this.db
+          .select({ id: places.id })
+          .from(places)
+          .where(inArray(places.id, ids)),
+    );
+    const photos = await existing(
+      restorable.map((gone) => gone.photoFileId),
+      (ids) =>
+        this.db
+          .select({ id: files.id })
+          .from(files)
+          .where(inArray(files.id, ids)),
+    );
+    const people = await existing(
+      restorable.flatMap((gone) => [gone.userId, gone.createdById]),
+      (ids) =>
+        this.db.select({ id: user.id }).from(user).where(inArray(user.id, ids)),
+    );
+    const values = restorable
+      .filter((gone) => people.has(gone.userId) && people.has(gone.createdById))
+      .map((gone) => ({
+        ...gone,
+        cellarItemId:
+          gone.cellarItemId !== null && bottles.has(gone.cellarItemId)
+            ? gone.cellarItemId
+            : null,
+        placeId:
+          gone.placeId !== null && placesFound.has(gone.placeId)
+            ? gone.placeId
+            : null,
+        photoFileId:
+          gone.photoFileId !== null && photos.has(gone.photoFileId)
+            ? gone.photoFileId
+            : null,
+      }));
+    const ids = [
+      this.key,
+      ...values.map((gone) => gone.id).filter((id) => id !== this.key),
+    ];
+
+    try {
+      await this.tx(async (tx) => {
+        if (values.length > 0) {
+          await tx
+            .insert(checkIns)
+            .values(values)
+            .onConflictDoNothing({ target: checkIns.id });
+        }
+        await tx
+          .delete(checkInTrash)
+          .where(eq(checkInTrash.removalId, this.key));
+      });
+    } catch (error) {
+      // The drink itself (the catalog item, `ON DELETE RESTRICT`) has gone
+      // since: a refusal the toast can say, not a 500. The trash is kept by
+      // the rollback and expires with the window.
+      const cause = error instanceof Error ? error.cause : undefined;
+      const code = (cause instanceof Error ? cause : error) as {
+        code?: unknown;
+      } | null;
+      if (code?.code === "23503") {
+        throw new ConflictError(
+          `check-in ${this.key} can no longer be restored: what it logged has gone`,
+        );
+      }
+      throw error;
+    }
+    await this.reload();
+    const aggregate = this.requireAggregate();
+    return {
+      ids,
+      entry: await this.#placeSeenBy(ctx, toEntryDto(aggregate, viewer)),
+    };
   }
 
   async suggestFlavourTags(
@@ -379,6 +687,35 @@ export class CheckInActor
   /* ---------------------------------------------------------------------- */
   /* Internals                                                               */
   /* ---------------------------------------------------------------------- */
+
+  /**
+   * The rows that go with this one when it is removed or re-dated: for the
+   * writer of an occasion acting on its keyed row, every row of it they wrote
+   * that `canRemoveCheckIn` still allows (a friend who has since scored or
+   * noted their glass keeps it); otherwise this row alone.
+   */
+  #writtenWithIt(ctx: Ctx, aggregate: CheckInAggregate): string[] {
+    const { row, roster } = aggregate;
+    const viewer = ctx.viewerId;
+    if (
+      row.id !== row.groupId ||
+      viewer === null ||
+      row.createdById !== viewer
+    ) {
+      return [row.id];
+    }
+    return roster
+      .filter(
+        (other) =>
+          other.createdById === viewer &&
+          canRemoveCheckIn(ctx, {
+            userId: other.userId,
+            createdById: other.createdById,
+            claimedByDrinker: other.claimed,
+          }),
+      )
+      .map((other) => other.id);
+  }
 
   /** `canSeeCheckIn`, with each of its flags read fresh for this turn. */
   protected override async canSee(
@@ -610,6 +947,27 @@ const requireNote = (note: string | null | undefined): string | null => {
     );
   }
   return trimmed;
+};
+
+/** A removed row as `check_in_trash.row` keeps it: JSON, instants as ISO. */
+export const toTrashRow = (row: CheckInRow): Record<string, unknown> => ({
+  ...row,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+});
+
+/** `check_in_trash.row` back into an insertable `check_ins` row. */
+export const fromTrashRow = (value: unknown): CheckInRow => {
+  const raw = value as Record<string, unknown> & {
+    createdAt: string;
+    updatedAt: string;
+  };
+  return {
+    ...(raw as unknown as CheckInRow),
+    tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
+    createdAt: new Date(raw.createdAt),
+    updatedAt: new Date(raw.updatedAt),
+  };
 };
 
 /** `lib/check-in-rows.ts`'s `toItemCheckInDto`, for a Drizzle row. */

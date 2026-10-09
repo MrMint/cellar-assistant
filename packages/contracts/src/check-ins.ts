@@ -52,6 +52,52 @@ export const MAX_CHECK_IN_TAG_LENGTH = 32;
 export const MAX_CHECK_IN_DRINKERS = 100;
 
 /**
+ * How far ahead of the server's clock a `drankAt` may be: a phone whose
+ * clock runs a little fast logs "now", not "the future".
+ */
+export const MAX_DRANK_AT_SKEW_MS = 5 * 60 * 1000;
+/** The earliest a drink can be backdated to. Before it is a typo. */
+export const EARLIEST_DRANK_AT = "1900-01-01T00:00:00.000Z";
+
+/**
+ * How long a removed log can be put back (`restoreDrinkLog`, the Undo after
+ * a delete). The toast offers it for seconds; the window is generous so a
+ * slow network or a retry still finds the rows, and short so a deleted
+ * note does not linger.
+ */
+export const DRINK_LOG_RESTORE_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * When a drink was had — `check_ins.created_at`, which is what every log
+ * orders and dates by. Absent (or `null`) is `now`; a backdated log names
+ * its own instant. A value later than `now` + {@link MAX_DRANK_AT_SKEW_MS} or
+ * earlier than {@link EARLIEST_DRANK_AT}, or one that is not an instant, is a
+ * `ValidationError`. Shared by `CheckInActor` and the log sheet, so the
+ * picker never offers a time the server refuses.
+ */
+export const parseDrankAt = (
+  value: string | null | undefined,
+  now: Date,
+): Date => {
+  if (value === null || value === undefined) return now;
+  const at = new Date(String(value));
+  if (Number.isNaN(at.getTime())) {
+    throw new ValidationError(
+      `drankAt must be an ISO-8601 instant, got ${JSON.stringify(value)}`,
+    );
+  }
+  if (at.getTime() > now.getTime() + MAX_DRANK_AT_SKEW_MS) {
+    throw new ValidationError("a drink can't be logged in the future");
+  }
+  if (at.getTime() < Date.parse(EARLIEST_DRANK_AT)) {
+    throw new ValidationError(
+      `a drink can't be backdated before ${EARLIEST_DRANK_AT.slice(0, 4)}`,
+    );
+  }
+  return at;
+};
+
+/**
  * One tag's canonical spelling: trimmed, inner whitespace collapsed, lower
  * case. `null` for a tag that is empty once trimmed. Throws for one longer
  * than {@link MAX_CHECK_IN_TAG_LENGTH} — silently cutting a word in half
@@ -124,6 +170,11 @@ export type LogDrinkInput = {
    * then needs at least one companion.
    */
   readonly includeSelf?: boolean | null;
+  /**
+   * When it was drunk (an ISO instant) — backdating a log. Absent is now.
+   * Every row of the occasion carries it. See {@link parseDrankAt}.
+   */
+  readonly drankAt?: string | null;
 };
 
 /**
@@ -136,6 +187,23 @@ export type UpdateDrinkLogInput = {
   readonly tags?: readonly string[] | null;
   readonly placeId?: string | null;
   readonly photoFileId?: string | null;
+  /**
+   * Re-date the drink (an ISO instant; never cleared). On the entry you
+   * logged for a table it moves the companions' entries you wrote with it
+   * too — the ones their drinkers have not made their own — so the occasion
+   * stays one evening.
+   */
+  readonly drankAt?: string;
+};
+
+/**
+ * Who else was there, after the fact: the **complete** set of friends who
+ * drank with you (not a delta). A friend added gets an entry of their own in
+ * the same occasion; one left out loses the entry you wrote for them — unless
+ * they have added to it, which makes it theirs and is a `ConflictError`.
+ */
+export type SetDrinkLogCompanionsInput = {
+  readonly companionIds: readonly string[];
 };
 
 /**
@@ -190,6 +258,14 @@ export type RemovedCheckIns = {
   readonly ids: readonly string[];
 };
 
+/** What `restore` put back: the same rows, ids and dates as before. */
+export type RestoredCheckIns = {
+  /** Every row restored — the keyed one first. */
+  readonly ids: readonly string[];
+  /** The keyed entry, as the viewer sees it. */
+  readonly entry: ItemCheckInDto;
+};
+
 /* -------------------------------------------------------------------------- */
 /* Suggested flavour tags — an abstaining AI seam                              */
 /* -------------------------------------------------------------------------- */
@@ -232,6 +308,9 @@ export type FlavourTagSuggestionDto = {
  * - `log` creates the row this actor is keyed by (and its companion rows).
  * - `get` / `update` / `remove` act on that row. Visibility is `canSeeCheckIn`
  *   and a row the viewer may not see is `NotFound`, identical to a missing one.
+ * - `setCompanions` replaces who else was there, after the fact.
+ * - `restore` undoes a `remove`: the rows come back with their own ids and
+ *   dates, for {@link DRINK_LOG_RESTORE_WINDOW_MS}, to whoever removed them.
  * - `suggestFlavourTags` touches no row: it reads a note and answers words. It
  *   lives here because the sheet that asks has already minted this actor's id.
  */
@@ -239,7 +318,12 @@ export type CheckInActorInterface = {
   log(ctx: Ctx, input: LogDrinkInput): Promise<LoggedDrinkDto>;
   get(ctx: Ctx): Promise<ItemCheckInDto>;
   update(ctx: Ctx, input: UpdateDrinkLogInput): Promise<ItemCheckInDto>;
+  setCompanions(
+    ctx: Ctx,
+    input: SetDrinkLogCompanionsInput,
+  ): Promise<ItemCheckInDto>;
   remove(ctx: Ctx): Promise<RemovedCheckIns>;
+  restore(ctx: Ctx): Promise<RestoredCheckIns>;
   suggestFlavourTags(
     ctx: Ctx,
     input: SuggestFlavourTagsInput,
@@ -253,7 +337,9 @@ export const CheckInActorDescriptor: ActorDescriptor<CheckInActorInterface> = {
     log: {},
     get: {},
     update: {},
+    setCompanions: {},
     remove: {},
+    restore: {},
     suggestFlavourTags: { modelBacked: true },
   },
 };

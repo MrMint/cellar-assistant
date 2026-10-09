@@ -24,7 +24,8 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  *
  * Drawn with the restored blocks rather than the rewrite's: `HeaderBar` with
  * the cellar's breadcrumb and the old "Add item" button, an edit icon as on
- * `CellarCard`, a preview of bottles as `BottleCard`s (with "Check in"), and the
+ * `CellarCard`, a preview of bottles as `BottleCard`s (with "Pour" for the
+ * cellar's owners — X03 — and "Check in" otherwise), and the
  * check-in history (`CellarCheckIns`, which e2e 04 drives).
  */
 export const dynamic = "force-dynamic";
@@ -85,6 +86,7 @@ export default async function CellarPage({
               cellarGridItem(edge.node),
             )}
             asOf={Date.now()}
+            canPour={canAdd}
           />
         </>
       )}
