@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { Cocktail } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
@@ -85,104 +85,124 @@ export function YourBottles({
   // `pointer-events: none` on the body — BottomSheet's `onClosed`).
   const logAfterClose = useRef<LogBottle | null>(null);
 
-  if (bottles.length === 0) return null;
-
   // The bottle being poured as the server last read it: a write refreshes the
   // page, and the sheet follows the new level rather than the tapped row's.
+  const found =
+    pouring === null
+      ? undefined
+      : bottles.find((bottle) => bottle.id === pouring.id);
+  // Finishing it in the sheet ("Finished it?" → Finished) takes it out of
+  // this list — it holds bottles still in the cellar — on the refresh that
+  // follows. The sheet must not then fall back to the tapped row's snapshot
+  // (open, at its old level: a slider that writes to a finished bottle), and
+  // must stay mounted, or the finish's Undo toast goes with it. So a bottle
+  // that leaves the list while it is being poured reads as finished from
+  // that moment, with Restore, until Undo or Restore brings it back.
+  const [leftAt, setLeftAt] = useState<string | null>(null);
+  const gone = pouring !== null && found === undefined;
+  useEffect(() => {
+    setLeftAt((at) => (gone ? (at ?? new Date().toISOString()) : null));
+  }, [gone]);
   const livePouring =
     pouring === null
       ? null
-      : (bottles.find((bottle) => bottle.id === pouring.id) ?? pouring);
+      : (found ??
+        (leftAt === null ? pouring : { ...pouring, emptyAt: leftAt }));
+
+  // Nothing to list, and no sheet still showing one that just left it.
+  if (bottles.length === 0 && pouring === null) return null;
 
   const logFrom = (bottle: YourBottle) =>
     actions?.logDrink({ cellarId: bottle.cellarId, cellarItemId: bottle.id });
 
   return (
     <>
-      <InsetSection
-        id="your-bottles"
-        label="Your bottles"
-        action={
-          <span className="type-footnote tabular">
-            {bottlesCountLabel(total ?? bottles.length)}
-          </span>
-        }
-      >
-        {bottles.map((bottle) => {
-          const selected = bottle.id === selectedId;
-          const finished = bottle.emptyAt !== null;
-          const cellar = bottle.cellarName ?? "Your cellar";
-          return (
-            <div
-              key={bottle.id}
-              data-slot="your-bottle"
-              data-selected={selected || undefined}
-              className={cn(selected && "bg-surface-2")}
-            >
-              <div className="relative flex min-h-14 items-center gap-3 px-4 py-2.5">
-                <LevelGauge type={itemType} bottle={bottle} />
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <Link
-                    href={bottleHref(bottle.cellarId, itemType, bottle.id)}
-                    overlay
-                    underline="none"
-                    aria-current={selected ? "page" : undefined}
-                    className="type-body truncate text-ink-1"
-                  >
-                    {cellar}
-                  </Link>
-                  <span className="type-footnote truncate">
-                    {bottleStateLine(bottle)}
-                  </span>
+      {bottles.length > 0 && (
+        <InsetSection
+          id="your-bottles"
+          label="Your bottles"
+          action={
+            <span className="type-footnote tabular">
+              {bottlesCountLabel(total ?? bottles.length)}
+            </span>
+          }
+        >
+          {bottles.map((bottle) => {
+            const selected = bottle.id === selectedId;
+            const finished = bottle.emptyAt !== null;
+            const cellar = bottle.cellarName ?? "Your cellar";
+            return (
+              <div
+                key={bottle.id}
+                data-slot="your-bottle"
+                data-selected={selected || undefined}
+                className={cn(selected && "bg-surface-2")}
+              >
+                <div className="relative flex min-h-14 items-center gap-3 px-4 py-2.5">
+                  <LevelGauge type={itemType} bottle={bottle} />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <Link
+                      href={bottleHref(bottle.cellarId, itemType, bottle.id)}
+                      overlay
+                      underline="none"
+                      aria-current={selected ? "page" : undefined}
+                      className="type-body truncate text-ink-1"
+                    >
+                      {cellar}
+                    </Link>
+                    <span className="type-footnote truncate">
+                      {bottleStateLine(bottle)}
+                    </span>
+                  </div>
+                  {!finished && (
+                    <div className="relative z-10 flex shrink-0 items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setPouring(bottle)}
+                        aria-label={`Pour from ${cellar}`}
+                        className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
+                      >
+                        Pour
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => logFrom(bottle)}
+                        aria-label={`Log a drink from ${cellar}`}
+                        className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
+                      >
+                        Log
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                {!finished && (
-                  <div className="relative z-10 flex shrink-0 items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setPouring(bottle)}
-                      aria-label={`Pour from ${cellar}`}
-                      className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
-                    >
-                      Pour
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => logFrom(bottle)}
-                      aria-label={`Log a drink from ${cellar}`}
-                      className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
-                    >
-                      Log
-                    </Button>
+                {selected && (
+                  // The bottle the URL names: its level, Open it, Finished,
+                  // Restore — inline, as the old bottle page had them.
+                  <div className="px-4 pb-4">
+                    <ItemRemainingSlider
+                      itemId={bottle.id}
+                      cellarId={bottle.cellarId}
+                      isCellarOwner
+                      percentageRemaining={bottle.percentageRemaining}
+                      opened={bottle.openAt}
+                      emptied={bottle.emptyAt}
+                      itemName={itemName}
+                    />
                   </div>
                 )}
               </div>
-              {selected && (
-                // The bottle the URL names: its level, Open it, Finished,
-                // Restore — inline, as the old bottle page had them.
-                <div className="px-4 pb-4">
-                  <ItemRemainingSlider
-                    itemId={bottle.id}
-                    cellarId={bottle.cellarId}
-                    isCellarOwner
-                    percentageRemaining={bottle.percentageRemaining}
-                    opened={bottle.openAt}
-                    emptied={bottle.emptyAt}
-                    itemName={itemName}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-        <HeldBackNote
-          shown={bottles.length}
-          total={total}
-          noun="bottles"
-          order="first"
-        />
-      </InsetSection>
+            );
+          })}
+          <HeldBackNote
+            shown={bottles.length}
+            total={total}
+            noun="bottles"
+            order="first"
+          />
+        </InsetSection>
+      )}
 
       <BottomSheet
         open={pouring !== null}
