@@ -121,6 +121,12 @@ export class UserSearchActor
     const limit = requireLimit(input.limit ?? USER_SEARCH_RESULT_CAP);
 
     if (input.includeConnected === true) {
+      // Not held for the activation's idle window: every hit carries how it
+      // is connected *now*, and the page it answers is where that changes —
+      // an Add, then "See all", must not say "Add" again, nor a request
+      // accepted on Friends still read "Wants to be friends". Two small
+      // reads and one capped store search per turn.
+      this.doNotCache();
       return this.#everyone(viewer, term, limit);
     }
 

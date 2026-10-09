@@ -190,6 +190,25 @@ describe.skipIf(skip)("UserSearchActor (§2.3, §1.5)", () => {
       });
     });
 
+    it("re-reads relations every turn rather than holding a stale answer", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const input: UserSearchInput = {
+          term: "alberta",
+          includeConnected: true,
+        };
+        const actor = newActor(input, db, s.viewer, s.profiles);
+        const ctx = userCtx(s.viewer);
+        const before = await actor.all(ctx, input);
+        expect(before.map((hit) => hit.relation)).toEqual(["NONE"]);
+
+        await seedRequest(db, s.viewer, s.stranger);
+        const after = await actor.all(ctx, input);
+        expect(after.map((hit) => hit.relation)).toEqual(["REQUEST_SENT"]);
+        expect(actor.searchRuns).toBe(2);
+      });
+    });
+
     it("joins the key only when set", () => {
       const viewer = crypto.randomUUID();
       expect(
