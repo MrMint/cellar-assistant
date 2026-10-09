@@ -108,6 +108,12 @@ export type RecipeDetailsItem = {
   canonical_recipe_id?: string | null;
   /** X08: on the viewer's Want to try list; absent where nobody asked. */
   is_want_to_try?: boolean;
+  /** X15 / D22: who may see it (`PRIVATE`, `FRIENDS`, `PUBLIC`). */
+  privacy?: string;
+  /** X15: AI output its author has not reviewed yet. */
+  is_draft?: boolean;
+  /** X15: the author — who may edit or delete it. */
+  created_by_id?: string | null;
   instructions: RecipeInstruction[];
   ingredients: RecipeIngredient[];
   /** D9: Love replaces the old heart. */
@@ -368,6 +374,9 @@ export const recipeDetailsFromNode = (
   version: node.version,
   canonical_recipe_id: node.canonicalRecipeId ?? null,
   is_want_to_try: node.isWantToTry,
+  privacy: node.privacy,
+  is_draft: node.isDraft,
+  created_by_id: node.createdBy?.id ?? null,
   instructions: node.instructions.edges.map((edge) =>
     instructionFromNode(edge.node),
   ),

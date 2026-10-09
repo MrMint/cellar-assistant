@@ -70,6 +70,7 @@ import * as itemFragments from "@/components/item/fragments";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
 import * as mapQueries from "@/components/map/queries";
 import * as rankingFragments from "@/components/ranking/fragments";
+import * as recipeEditorDocuments from "@/components/recipe/editor/documents";
 import * as recipeFragments from "@/components/recipe/fragments";
 import * as recipeQueries from "@/components/recipe/queries";
 import * as searchCatalogSections from "@/components/search/catalog-sections";
@@ -108,6 +109,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/item/fragments.ts": itemFragments,
   "components/map/queries.ts": mapQueries,
   "components/ranking/fragments.ts": rankingFragments,
+  "components/recipe/editor/documents.ts": recipeEditorDocuments,
   "components/recipe/fragments.ts": recipeFragments,
   "components/recipe/queries.ts": recipeQueries,
   "components/search/catalog-sections.ts": searchCatalogSections,

@@ -79,6 +79,8 @@ export const RecipeDetailsFragment = graphql(`
     recipeGroupId
     canonicalRecipeId
     isWantToTry
+    privacy
+    isDraft
     createdAt
     createdBy {
       id

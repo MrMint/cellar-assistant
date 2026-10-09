@@ -16,7 +16,8 @@ import {
   RECIPE_GROUPS_PAGE_SIZE,
   RecipeGroupsQuery,
 } from "@/components/recipe/queries";
-import { VirtualizedRecipeGroupGrid } from "@/components/recipe/VirtualizedRecipeGroupGrid";
+import { RecipeGroupCard } from "@/components/recipe/RecipeGroupCard";
+import { RecipeGroupCardSkeleton } from "@/components/recipe/RecipeGroupCardSkeleton";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -89,8 +90,14 @@ export type RecipeGroupSearchProps = {
 
 /**
  * `82450ad1:src/components/search/RecipeGroupSearch.tsx`, restored — the
- * search card (one box, category and base-spirit Selects, "Clear All"), the
- * results line, and `VirtualizedRecipeGroupGrid`.
+ * search card (one box, category and base-spirit Selects, "Clear"), the
+ * results line, and the cards.
+ *
+ * X15 dropped the old nested virtualizer: an 800 px scroll box *inside* the
+ * app's own scroller, which sliced the last card in half and hid the end of
+ * the list (review #58). The cards are a plain grid in the page's scroll now,
+ * with "Show more" for the next page — twelve cards a page does not need
+ * windowing, and the page's own scroll is the one the thumb expects.
  *
  * `useOptimizedRecipeGroupSearch` (Hasura `_ilike`, offset paging, an LRU) →
  * `recipeGroups(term:, category:, baseSpirit:)` through `usePagedConnection`:
@@ -216,7 +223,9 @@ export const RecipeGroupSearch = ({
       <section className="mb-6 flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
         {/* Main search input */}
         <Field>
-          <FieldLabel htmlFor={searchId}>Search Recipe Groups</FieldLabel>
+          <FieldLabel htmlFor={searchId} className="sr-only">
+            Search recipes
+          </FieldLabel>
           <InputGroup>
             <InputGroupAddon>
               <Search aria-hidden />
@@ -224,7 +233,9 @@ export const RecipeGroupSearch = ({
             <InputGroupInput
               ref={searchInputRef}
               id={searchId}
-              placeholder="Search by recipe name, description, or tags..."
+              type="search"
+              enterKeyHint="search"
+              placeholder="Search recipes"
               value={filters.searchTerm}
               onChange={(e) =>
                 handleUpdateFilters({ searchTerm: e.target.value })
@@ -298,7 +309,7 @@ export const RecipeGroupSearch = ({
             filters.category !== "all" ||
             filters.baseSpirit) && (
             <Button variant="ghost" onClick={handleClearFilters}>
-              Clear All
+              Clear
             </Button>
           )}
         </div>
@@ -307,51 +318,60 @@ export const RecipeGroupSearch = ({
       {/* Results */}
       {error && (
         <p className="type-body text-destructive">
-          Error searching recipe groups: {error.message}
+          Couldn't search recipes: {error.message}
         </p>
       )}
 
       {/* Results summary */}
-      <div className="mb-4 flex flex-wrap items-center gap-4">
-        <p className="type-callout text-ink-2">
-          {isLoading && results.length === 0
-            ? "Searching recipe groups..."
-            : results.length > 0
-              ? `Found ${totalCount} recipe groups${hasMore ? ` (showing ${results.length})` : ``}`
-              : "No recipe groups found"}
-        </p>
-        {hasMore && (
-          <Button
-            variant="ghost"
-            onClick={() => void reset(undefined, { fresh: true })}
-          >
-            Refresh
-          </Button>
-        )}
-      </div>
+      <p className="mb-4 px-1 type-footnote" aria-live="polite">
+        {isLoading && results.length === 0
+          ? "Searching…"
+          : results.length > 0
+            ? hasMore
+              ? `Showing ${results.length} of ${totalCount}`
+              : totalCount === 1
+                ? "1 recipe"
+                : `${totalCount} recipes`
+            : ""}
+      </p>
 
-      {/* Recipe group grid */}
       {results.length > 0 ? (
-        <VirtualizedRecipeGroupGrid
-          recipeGroups={[...results]}
-          onRecipeGroupSelect={onRecipeGroupSelect}
-          isLoading={isLoading}
-          hasMore={hasMore}
-          onLoadMore={() => void list.loadMore()}
-          containerHeight={800}
-          itemHeight={350}
-          loadingItems={6}
-        />
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+            {results.map((recipeGroup) => (
+              <RecipeGroupCard
+                key={recipeGroup.id}
+                recipeGroup={recipeGroup}
+                href={`/recipes/groups/${recipeGroup.id}`}
+                onClick={onRecipeGroupSelect}
+              />
+            ))}
+            {list.status === "loadingMore" && (
+              <RecipeGroupCardSkeleton count={3} />
+            )}
+          </div>
+          {hasMore && (
+            <Button
+              variant="secondary"
+              className="self-center"
+              disabled={list.status === "loadingMore"}
+              aria-busy={list.status === "loadingMore" || undefined}
+              onClick={() => void list.loadMore()}
+            >
+              Show more
+            </Button>
+          )}
+        </div>
       ) : (
         !isLoading && (
           <EmptyState
             className="rounded-lg bg-surface-1"
             illustration={<Restaurant aria-hidden />}
-            title="No recipe groups found"
-            description="Try adjusting your search criteria or filters"
+            title="No recipes found"
+            description="Try another word, or clear the filters."
             action={
               <Button variant="outline" onClick={handleClearFilters}>
-                Clear Filters
+                Clear filters
               </Button>
             }
           />

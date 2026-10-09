@@ -38,6 +38,8 @@ const details = (
   version: 2,
   recipeGroupId: "g1",
   canonicalRecipeId: "r0",
+  privacy: "PUBLIC",
+  isDraft: false,
   createdAt: "2026-01-02T03:04:05.000Z",
   createdBy: { id: "u1", displayName: "Ada", avatarUrl: null },
   ingredients: {

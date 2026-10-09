@@ -19,7 +19,7 @@ import {
   shareTargetOf,
 } from "./routes";
 import { type ShareCapabilities, shareLink } from "./share-link";
-import { tierListShareBlock } from "./share-rules";
+import { recipeShareBlock, tierListShareBlock } from "./share-rules";
 import { groupByBand, topEntries } from "./tier-bands";
 
 const ID = "3f2b9c1e-8a4d-4f6b-9c2e-1a2b3c4d5e6f";
@@ -42,6 +42,9 @@ describe("share routes", () => {
       "/tier-lists/add",
       `/recipes/groups/${ID}`,
       "/recipes/ai-generator",
+      // X15: the composer and the author's editor are never share pages.
+      "/recipes/new",
+      `/recipes/${ID}/edit`,
       `/cellars/${ID}`,
       `/cellars/${ID}/wines/${ID}`,
       `/wines/${ID}/edit`,
@@ -230,5 +233,25 @@ describe("tierListShareBlock", () => {
       tierListShareBlock("PRIVATE", true)?.description ?? "",
       /public or friends-only/,
     );
+  });
+});
+
+describe("recipeShareBlock (X15 / D22)", () => {
+  test("the author of a private recipe or a draft is stopped, with the way out", () => {
+    assert.equal(recipeShareBlock("PUBLIC", false, true), null);
+    assert.equal(recipeShareBlock("FRIENDS", false, true), null);
+    assert.match(
+      recipeShareBlock("PRIVATE", false, true)?.description ?? "",
+      /public or friends-only/,
+    );
+    assert.match(
+      recipeShareBlock("PUBLIC", true, true)?.message ?? "",
+      /draft/,
+    );
+  });
+
+  test("nobody else is ever blocked: they cannot see a private recipe at all", () => {
+    assert.equal(recipeShareBlock("PRIVATE", false, false), null);
+    assert.equal(recipeShareBlock("PUBLIC", false, false), null);
   });
 });

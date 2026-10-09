@@ -394,11 +394,11 @@ const ItemOnboardingRun = ({
             <EmptyState
               illustration={<Cocktail aria-hidden className="size-10" />}
               title="Snap a recipe card."
-              description="The drafter reads a photo, or a few words, into a recipe."
+              description="A photo or pasted text becomes a draft you check before it's saved."
               action={
                 <Button asChild>
-                  <Link href="/recipes/ai-generator" underline="none">
-                    Open the recipe drafter
+                  <Link href="/recipes/new" underline="none">
+                    New recipe
                   </Link>
                 </Button>
               }
