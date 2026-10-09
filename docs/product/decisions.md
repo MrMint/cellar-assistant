@@ -152,7 +152,8 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   the server renders without it (no flash); matches and requests leave when
   answered.
 - **The AI job tray** shows work still running (label reads under 15 min,
-  menu scans, recipe photos, insights being generated) and failures not yet
+  menu scans until their matches are found, not just read, recipe photos,
+  insights being generated) and failures not yet
   dismissed, worded by N07's mapper from the typed failure; a limit reads
   calm, never red. A watcher in the shell polls `me.aiJobs` every 4 s **only
   while something runs** (woken by Home, a menu scan or a recipe photo;
@@ -160,12 +161,14 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   Open / Review / Try again — except on the screen already showing it, and
   never for a label read (the add flow announces those).
 - **Continue** is open bottles across cellars you created or co-own (not a
-  friend's — not yours to pour), newest opened first, up to 12. **Pour**
+  friend's — not yours to pour), newest opened first, up to 12 on the
+  shelf. **Pour**
   opens the X02 drink-log sheet with the bottle; X03's Pour sheet replaces
   what it opens when it lands.
 - **Drink soon** is the opened-bottle table only (D29): a style's typical
   life once open, labelled "Typical for <style> once open: <span>", listed
-  once a bottle has been open the shortest span, most overdue first. Beer
+  once a bottle has been open the shortest span, most overdue first, over
+  every open bottle (up to 100), not only the shelf's dozen. Beer
   (1–2 days) and coffee beans (2–4 weeks) apply to any style; wine, sake,
   spirits and tea by their style field; matcha by its form. A style the
   table lacks shows no window. Per-bottle dates and the user's own

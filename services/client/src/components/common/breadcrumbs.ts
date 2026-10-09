@@ -137,8 +137,8 @@ export function generateBreadcrumbs(
 }
 
 /**
- * Pages that *are* a tab: the four tabs' own hrefs, plus `/search`, where
- * Home's `/` lands (it redirects there until X10's Home exists).
+ * Pages that *are* a tab root: the four tabs' own hrefs, plus `/search`, the
+ * full-screen search sheet (X10), which has its own Close rather than a Back.
  */
 const TAB_ROOTS: ReadonlySet<string> = new Set(["/", "/search"]);
 
