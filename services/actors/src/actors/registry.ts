@@ -41,6 +41,7 @@ import type {
   AnyActorDescriptor,
 } from "@cellar-assistant/contracts";
 import {
+  AiJobsCollectionActorDescriptor,
   BarActorDescriptor,
   BarcodeActorDescriptor,
   BrandActorDescriptor,
@@ -94,6 +95,7 @@ import {
 import type { AbstractActor, ActorId, DaprClient } from "@dapr/dapr";
 import { guardDeclaredMethods } from "../lib/actor-method-allowlist.ts";
 import type { KeepAlive } from "../lib/keep-alive.ts";
+import { AiJobsCollectionActor } from "./ai-jobs-collection-actor.ts";
 import { BarActor } from "./bar-actor.ts";
 import { BarcodeActor } from "./barcode-actor.ts";
 import { BrandActor } from "./brand-actor.ts";
@@ -358,4 +360,8 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   entry(RecipeGroupsCollectionActor, RecipeGroupsCollectionActorDescriptor),
   entry(BrandsCollectionActor, BrandsCollectionActorDescriptor),
   entry(BrandLinksCollectionActor, BrandLinksCollectionActorDescriptor),
+  // X10. Home's job tray and inbox: the viewer's AI work across four tables
+  // (label reads, menu scans, recipe photos, tier-list insights), read the
+  // C3 way — keyed by the viewer, checked every turn, nothing held.
+  entry(AiJobsCollectionActor, AiJobsCollectionActorDescriptor),
 ];

@@ -1,5 +1,6 @@
 export * from "./actors.ts";
 export * from "./ai.ts";
+export * from "./ai-jobs.ts";
 export * from "./bar.ts";
 export * from "./barcodes.ts";
 export * from "./brand.ts";

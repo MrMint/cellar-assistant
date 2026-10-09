@@ -252,10 +252,10 @@ export type TierListAggregate = {
  * the same threshold to *describable* entries rather than to the row count, so
  * the two gates are one constant.
  */
-const MIN_ITEMS_FOR_INSIGHTS = MIN_GROUNDED_ENTRIES;
+export const MIN_ITEMS_FOR_INSIGHTS = MIN_GROUNDED_ENTRIES;
 
 /** `generateInsights`'s throttle: the old function's `THROTTLE_MS`, 24h. */
-const INSIGHTS_THROTTLE_MS = 24 * 60 * 60 * 1000;
+export const INSIGHTS_THROTTLE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * One ranked row, as the insights prompt needs to see it: where the user put

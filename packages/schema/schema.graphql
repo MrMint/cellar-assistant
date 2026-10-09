@@ -231,6 +231,83 @@ type AiCapabilities {
   tierListInsights: Boolean!
 }
 
+"""
+One piece of your AI work (X10). Exactly the fields its `kind` names are set; the rest are null.
+"""
+type AiJob {
+  """MENU_SCAN, READY: lines read."""
+  count: Int
+
+  """
+  FAILED: the stored failure's classification, or null when it had none. The failure's message is never exposed.
+  """
+  failureCode: ActorErrorCode
+  failureReason: ActorErrorReason
+
+  """When it became READY or FAILED; null while RUNNING."""
+  finishedAt: DateTime
+
+  """
+  `<kind>:<subjectId>` — stable across reads, so a client can tell what changed since it last asked.
+  """
+  id: ID!
+
+  """LABEL_READ: what kind of bottle."""
+  itemType: ItemType
+  kind: AiJobKind!
+
+  """
+  MENU_SCAN: the scan's place, when you may see it (a place under review is its creator's alone).
+  """
+  placeId: ID
+  placeName: String
+
+  """RECIPE_PHOTO, READY: the recipe it made."""
+  recipeId: ID
+  recipeName: String
+
+  """FAILED on a budget: when asking again can first succeed."""
+  retryAt: DateTime
+  startedAt: DateTime!
+  status: AiJobStatus!
+
+  """The onboarding, menu scan, job or tier list id."""
+  subjectId: ID!
+  tierListName: String
+}
+
+type AiJobConnection {
+  edges: [AiJobEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type AiJobEdge {
+  cursor: String!
+  node: AiJob!
+}
+
+"""
+Which AI work: a bottle's LABEL_READ, a MENU_SCAN, a RECIPE_PHOTO, or a tier list's TIER_LIST_INSIGHTS.
+"""
+enum AiJobKind {
+  LABEL_READ
+  MENU_SCAN
+  RECIPE_PHOTO
+  TIER_LIST_INSIGHTS
+}
+
+"""
+RUNNING: asked for, not answered yet. READY: answered — a draft, a menu's lines, a recipe or insights wait for you. FAILED: the latest attempt failed (`failureCode` / `failureReason`).
+"""
+enum AiJobStatus {
+  FAILED
+  READY
+  RUNNING
+}
+
 input AttachItemImageInput {
   """
   A `files.id` whose object `FileActor.verify` confirms. An unverified file is refused with `ConflictError`.
@@ -909,6 +986,10 @@ type CellarEdge {
 
 """A bottle in a cellar: the item, plus what has happened to it."""
 type CellarItem {
+  """
+  The cellar this bottle is in, through the `Cellar` loader — which applies `canSeeCellar` again, so a bottle reached some other way never names a cellar its viewer may not see.
+  """
+  cellar: Cellar
   cellarId: ID!
 
   """
@@ -7349,6 +7430,29 @@ type Viewer {
   aiCapabilities: AiCapabilities!
 
   """
+  Your AI work (X10): label reads, menu scans, recipe photos and tier-list insights — running in the last day, or settled in the last three — newest first. The actor holds at most 30; `first`/`after` page that set. Home's job tray and its Waiting on you inbox read this.
+  """
+  aiJobs(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): AiJobConnection!
+
+  """
   The /search landing line. Counts only cellars you created or co-own — `myCellars` also lists other people's visible cellars, so summing it over-counts (UI parity G36).
   """
   collectionStats: CollectionStats!
@@ -7385,6 +7489,32 @@ type Viewer {
   Your invite link, or null if you have not made one (`ensureFriendInvite`).
   """
   friendInvite: FriendInvite
+
+  """
+  Home's Friends section (X10): what your friends did — never your own rows — newest first, each kind under `recentActivity`'s rule, and paged for real: `after` takes an `edge.cursor` from the page before.
+  """
+  friendsFeed(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """Only these kinds; omitted or empty means all of them."""
+    kinds: [ActivityKind!]
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ActivityEntryConnection!
   id: ID!
 
   """
@@ -7418,6 +7548,29 @@ type Viewer {
     limit: Int
     location: LngLatInput!
   ): NearbyPlaceConnection!
+
+  """
+  Home's Continue shelf (X10): open bottles (opened, not finished) in cellars you created or co-own, most recently opened first. A friend's open bottle is not listed — it is not yours to pour.
+  """
+  openBottles(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): CellarItemConnection!
 
   """The viewer's own profile row, including their email."""
   profile: UserProfile!
