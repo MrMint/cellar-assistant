@@ -75,6 +75,7 @@ import * as recipeQueries from "@/components/recipe/queries";
 import * as searchCatalogSections from "@/components/search/catalog-sections";
 import * as searchQueries from "@/components/search/queries";
 import { ITEM_SEARCH_LIMIT } from "@/components/search/queries";
+import * as shareQueries from "@/components/share/queries";
 import * as tierListFragments from "@/components/tier-list/fragments";
 import * as tierListQueries from "@/components/tier-list/queries";
 import * as userFragments from "@/components/user/fragments";
@@ -111,6 +112,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/recipe/queries.ts": recipeQueries,
   "components/search/catalog-sections.ts": searchCatalogSections,
   "components/search/queries.ts": searchQueries,
+  "components/share/queries.ts": shareQueries,
   "components/tier-list/fragments.ts": tierListFragments,
   "components/tier-list/queries.ts": tierListQueries,
   "components/user/fragments.ts": userFragments,

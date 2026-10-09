@@ -1,5 +1,8 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/api/auth-server";
+import { REQUEST_PATH_HEADER } from "@/lib/auth/request-path";
+import { withReturnTo } from "@/utilities/sanitize-return-to";
 
 /**
  * The viewer, for server components that only need identity.
@@ -41,12 +44,17 @@ export async function getOptionalServerUser(): Promise<ServerUser | null> {
   };
 }
 
-/** As {@link getOptionalServerUser}, but redirects to `/sign-in` instead of returning null. */
+/**
+ * As {@link getOptionalServerUser}, but redirects to `/sign-in` instead of
+ * returning null — carrying the page asked for as `returnTo`, which the proxy
+ * stamped on the request (`lib/auth/request-path.ts`; D19, X17).
+ */
 export async function getServerUser(): Promise<ServerUser> {
   const user = await getOptionalServerUser();
 
   if (!user) {
-    redirect("/sign-in");
+    const asked = (await headers()).get(REQUEST_PATH_HEADER);
+    redirect(withReturnTo("/sign-in", asked));
   }
 
   return user;

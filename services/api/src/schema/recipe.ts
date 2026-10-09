@@ -105,7 +105,7 @@ import { type PatchPolicy, patch, present } from "./patch.ts";
 /* Enums                                                                       */
 /* -------------------------------------------------------------------------- */
 
-const RecipeTypeEnum = builder.enumType("RecipeType", {
+export const RecipeTypeEnum = builder.enumType("RecipeType", {
   description:
     "`recipes_type_check` — a `text` column with a check constraint, not a " +
     "Postgres enum (§4 left it alone).",

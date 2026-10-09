@@ -95,6 +95,7 @@ import {
   isItemType,
 } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { SharedRecipeDto } from "./share.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Small closed sets that are `text` + CHECK in the database, not `pgEnum`      */
@@ -481,6 +482,13 @@ export const requireOneIngredientSource = (
 
 export type RecipeActorInterface = {
   get(ctx: Ctx): Promise<RecipeDto>;
+  /**
+   * X17: the public share page's read — the recipe, its ingredients by name
+   * and its steps, the same answer for every caller, anonymous included.
+   * Whether a recipe may be shared is `canShareRecipeAnonymously` in
+   * `@cellar-assistant/policy`. See `share.ts`.
+   */
+  getShared(ctx: Ctx): Promise<SharedRecipeDto>;
   ingredients(ctx: Ctx, page: PageArgs): Promise<Page<RecipeIngredientDto>>;
   instructions(ctx: Ctx, page: PageArgs): Promise<Page<RecipeInstructionDto>>;
   reviews(ctx: Ctx, page: PageArgs): Promise<Page<RecipeReviewDto>>;
@@ -580,6 +588,7 @@ export const RecipeActorDescriptor: ActorDescriptor<RecipeActorInterface> = {
   // `regenerateVector` (an embedding), directly or through its group.
   methods: {
     get: {},
+    getShared: {},
     ingredients: {},
     instructions: {},
     reviews: {},

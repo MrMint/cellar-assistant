@@ -149,6 +149,7 @@ export const TABLE_WRITERS = {
   // X14 / D23 and D9: the Bar pantry toggles and recipe Love.
   bar_pantry_items: "UserActor",
   recipe_favorites: "UserActor",
+  friend_invites: "UserActor",
 
   item_onboardings: "ItemOnboardingActor",
   barcodes: "BarcodeActor",

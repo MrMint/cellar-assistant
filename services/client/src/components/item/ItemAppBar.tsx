@@ -6,7 +6,7 @@ import { Share } from "@/components/app/icons";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { generateBreadcrumbs } from "@/components/common/breadcrumbs";
 import { itemOverflow } from "./header-actions";
-import { ItemShareDialog, useItemShare } from "./ItemShare";
+import { useItemShare } from "./ItemShare";
 
 export type ItemAppBarProps = {
   /** Where Back goes on a cold deep link (no in-app page behind this one). */
@@ -45,9 +45,10 @@ export function ItemAppBar({
 }: ItemAppBarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const sharing = useItemShare({
+  const shareItem = useItemShare({
     itemId: share?.itemId ?? "",
     itemType: share?.itemType ?? "WINE",
+    itemName,
   });
 
   const overflow: AppBarOverflowItem[] = itemOverflow({
@@ -65,31 +66,22 @@ export function ItemAppBar({
   }));
 
   return (
-    <>
-      <AppBar
-        title={title}
-        parent={parent}
-        breadcrumbs={generateBreadcrumbs(pathname ?? "", cellarName, itemName)}
-        actions={
-          share === undefined
-            ? []
-            : [
-                {
-                  label: "Share",
-                  icon: Share,
-                  onSelect: () => void sharing.share(),
-                },
-              ]
-        }
-        overflow={overflow}
-      />
-      {share !== undefined && (
-        <ItemShareDialog
-          open={sharing.open}
-          onOpenChange={sharing.setOpen}
-          url={sharing.url}
-        />
-      )}
-    </>
+    <AppBar
+      title={title}
+      parent={parent}
+      breadcrumbs={generateBreadcrumbs(pathname ?? "", cellarName, itemName)}
+      actions={
+        share === undefined
+          ? []
+          : [
+              {
+                label: "Share",
+                icon: Share,
+                onSelect: () => void shareItem(),
+              },
+            ]
+      }
+      overflow={overflow}
+    />
   );
 }

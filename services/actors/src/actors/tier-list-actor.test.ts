@@ -587,6 +587,135 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
   });
 
   /* ------------------------------------------------------------------ */
+  /* getShared — the X17 public share page                               */
+  /* ------------------------------------------------------------------ */
+
+  describe("getShared (X17): PUBLIC only, the same answer for every caller", () => {
+    it("describes a PUBLIC list's entries for an anonymous caller", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db, { displayName: "Riley" });
+        const id = await seedTierList(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+          name: "Fridge beers",
+        });
+        const actor = await activate(newTierListActor(id, db));
+        const wineId = await seedWine(db, owner, "Ridge Monte Bello");
+        const placeId = await seedPlace(db, "The Wine Bar");
+        await actor.addItem(userCtx(owner, "r1"), {
+          entry: { type: "WINE", id: wineId },
+          band: 5,
+          notes: "the benchmark",
+        });
+        await actor.addItem(userCtx(owner, "r2"), {
+          entry: { type: "PLACE", id: placeId },
+          band: 3,
+        });
+        // A public photo of the wine, and a newer private one that must lose.
+        const publicFile = randomUUID();
+        const privateFile = randomUUID();
+        for (const [fileId, isPublic] of [
+          [publicFile, true],
+          [privateFile, false],
+        ] as const) {
+          await db.execute(sql`
+            insert into public.files (id, bucket, key, uploaded_by, verified_at)
+            values (${fileId}::uuid, 'cellar-files', ${`item-image/${fileId}`},
+                    ${owner}::uuid, now())
+          `);
+          await db.execute(sql`
+            insert into public.item_image (file_id, user_id, wine_id, is_public, created_at)
+            values (${fileId}::uuid, ${owner}::uuid, ${wineId}::uuid, ${isPublic},
+                    now() + ${isPublic ? "0 seconds" : "1 minute"}::interval)
+          `);
+        }
+
+        const shared = await actor.getShared(anonymousCtx("r-anon"));
+        expect(shared).toMatchObject({
+          id,
+          name: "Fridge beers",
+          privacy: "PUBLIC",
+          ownerDisplayName: "Riley",
+        });
+        expect(shared.entries).toEqual([
+          expect.objectContaining({
+            band: 5,
+            entryType: "WINE",
+            entryId: wineId,
+            name: "Ridge Monte Bello",
+            notes: "the benchmark",
+            imageFileId: publicFile,
+          }),
+          expect.objectContaining({
+            band: 3,
+            entryType: "PLACE",
+            entryId: placeId,
+            name: "The Wine Bar",
+            imageFileId: null,
+          }),
+        ]);
+        // Nothing viewer-relative or internal crosses.
+        const serialised = JSON.stringify(shared);
+        expect(serialised).not.toContain(owner);
+        expect(serialised).not.toContain(privateFile);
+        expect(shared).not.toHaveProperty("aiInsights");
+      });
+    });
+
+    it("never prints an email-shaped display name", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db, { displayName: "riley@example.com" });
+        const id = await seedTierList(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+        });
+        const actor = await activate(newTierListActor(id, db));
+        expect(
+          (await actor.getShared(anonymousCtx("r"))).ownerDisplayName,
+        ).toBeNull();
+      });
+    });
+
+    it.each(["PRIVATE", "FRIENDS"] as const)(
+      "%s: refused to everyone — owner and friend included — exactly as a missing list",
+      async (privacy) => {
+        await withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const friend = await seedUser(db);
+          await seedFriendship(db, owner, friend);
+          await seedFriendship(db, friend, owner);
+          const id = await seedTierList(db, { createdById: owner, privacy });
+          const absent = randomUUID();
+          const missing = await refusalOf(
+            async () =>
+              (await activate(newTierListActor(absent, db))).getShared(
+                anonymousCtx("r"),
+              ),
+            absent,
+          );
+          for (const ctx of [
+            anonymousCtx("r"),
+            userCtx(owner, "r"),
+            userCtx(friend, "r"),
+          ]) {
+            const refused = await refusalOf(
+              async () =>
+                (await activate(newTierListActor(id, db))).getShared(ctx),
+              id,
+            );
+            expect(refused).toEqual(missing);
+          }
+          // The signed-in path is unchanged: the owner still reads it there.
+          const actor = await activate(newTierListActor(id, db));
+          await expect(actor.get(userCtx(owner, "r"))).resolves.toMatchObject({
+            id,
+          });
+        });
+      },
+    );
+  });
+
+  /* ------------------------------------------------------------------ */
   /* removeItem — renumbers what remains                                 */
   /* ------------------------------------------------------------------ */
 
@@ -1551,6 +1680,7 @@ describe.skipIf(skip)("TierListActor concealment", () => {
     (actor: TierListActor, ctx: Ctx) => Promise<unknown>,
   ][] = [
     ["get", "NOT_FOUND", (actor, ctx) => actor.get(ctx)],
+    ["getShared", "NOT_FOUND", (actor, ctx) => actor.getShared(ctx)],
     ["items", "NOT_FOUND", (actor, ctx) => actor.items(ctx, page)],
     ["update", "NOT_FOUND", (actor, ctx) => actor.update(ctx, { name: "x" })],
     ["delete", "NOT_FOUND", (actor, ctx) => actor.delete(ctx)],

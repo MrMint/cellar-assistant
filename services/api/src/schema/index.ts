@@ -72,5 +72,8 @@ import "./discovery.ts";
 // X08: `Viewer.wantToTry` and the `isWantToTry` edges on `Item` and `Recipe`
 // reference `Viewer`, `Item`, `Recipe` and the `Place` stub, so it comes last.
 import "./want-to-try.ts";
+// X17: the share reads and friend invites. Reuses enums from `item.ts`,
+// `recipe.ts` and `tier-list.ts`, and adds a field to `Viewer`.
+import "./share.ts";
 
 export const schema = builder.toSchema();

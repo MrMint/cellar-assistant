@@ -68,6 +68,7 @@ export const tables = {
   coffees: t.coffees,
   country: t.country,
   files: t.files,
+  friend_invites: t.friendInvites,
   friend_requests: t.friendRequests,
   friends: t.friends,
   generic_items: t.genericItems,

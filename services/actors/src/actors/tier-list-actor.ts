@@ -157,6 +157,7 @@ import type {
   PageArgs,
   PermissionType,
   RemovedTierListItem,
+  SharedTierListDto,
   TierListActorInterface,
   TierListDto,
   TierListEditDto,
@@ -185,7 +186,11 @@ import {
   tierLists,
 } from "@cellar-assistant/db";
 import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
-import { canSeeTierList, isOwner } from "@cellar-assistant/policy";
+import {
+  canSeeTierList,
+  canShareTierListAnonymously,
+  isOwner,
+} from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
 import { aiCapabilities } from "../lib/ai/capabilities.ts";
@@ -194,6 +199,11 @@ import { actorDb } from "../lib/db.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { enqueueOutboxOnce } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
+import {
+  publicDisplayName,
+  publicItemImages,
+  shareKey,
+} from "../lib/share-reads.ts";
 import type { TierListEntryDescriptor } from "../lib/tier-list-entries.ts";
 import {
   entryKey,
@@ -514,6 +524,61 @@ export class TierListActor
     // if it were not on the list. Read fresh: `places` is not ours to cache.
     const rows = await this.#visibleItems(ctx, aggregate);
     return offsetPage(rows.map(toItemDto), page);
+  }
+
+  /**
+   * X17's public share page. PUBLIC lists only — `canShareTierListAnonymously`
+   * — and deliberately blind to `ctx`: the owner of a PRIVATE list and a
+   * friend of a FRIENDS one get the same `NotFoundError` as a stranger, worded
+   * exactly as a missing row (`refuseAsAbsent`), so the share URL is no
+   * oracle for which lists exist. Signed-in viewers read `get` instead.
+   *
+   * Entries are described by the same FK-lookup read the insights path uses
+   * (`resolveTierListEntries`), plus each ranked item's newest **public**
+   * photo. A list is curated and small (module doc), so this is one select
+   * per entry type present, not per entry.
+   */
+  async getShared(_ctx: Ctx): Promise<SharedTierListDto> {
+    const { tierList, items } = this.requireAggregate();
+    if (!canShareTierListAnonymously(tierList)) this.refuseAsAbsent();
+
+    const refs = items.map(entryRefOf);
+    const itemRefs = refs.flatMap((ref) =>
+      ref.type === "PLACE" ? [] : [{ type: ref.type, id: ref.id }],
+    );
+    const [descriptors, images, ownerDisplayName] = await Promise.all([
+      resolveTierListEntries(this.db, refs),
+      publicItemImages(this.db, itemRefs),
+      publicDisplayName(this.db, tierList.createdById),
+    ]);
+
+    return {
+      id: tierList.id,
+      name: tierList.name,
+      description: tierList.description,
+      listType: tierList.listType,
+      privacy: tierList.privacy,
+      ownerDisplayName,
+      updatedAt: requiredIso(tierList.contentUpdatedAt),
+      entries: items.map((row, index) => {
+        const ref = refs[index] ?? entryRefOf(row);
+        const found = descriptors.get(entryKey(ref));
+        return {
+          id: row.id,
+          band: row.band,
+          position: row.position,
+          notes: row.notes,
+          entryType: ref.type,
+          entryId: ref.id,
+          name: found?.name ?? null,
+          location: found?.location ?? null,
+          imageFileId:
+            ref.type === "PLACE"
+              ? null
+              : (images.get(shareKey(ref))?.fileId ?? null),
+        };
+      }),
+    };
   }
 
   /* ---------------------------------------------------------------------- */

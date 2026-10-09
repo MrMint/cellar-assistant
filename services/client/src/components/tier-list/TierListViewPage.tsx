@@ -62,6 +62,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { absoluteUrl, canonicalPath } from "@/lib/share/routes";
+import { tierListShareBlock } from "@/lib/share/share-rules";
+import { useShareLink } from "@/lib/share/use-share-link";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
 import { itemTypeOfList, onListHrefs } from "./adapter";
@@ -177,25 +180,26 @@ export function TierListViewPage({
     setAddOpen(true);
   }, []);
 
+  const share = useShareLink();
   const handleShare = useCallback(async () => {
-    const url = `${window.location.origin}/tier-lists/${data.id}`;
-    const shareData = {
-      title: data.name,
-      text: `Check out my tier list: ${data.name}`,
-      url,
-    };
-
-    try {
-      if (navigator.share && navigator.canShare?.(shareData)) {
-        await navigator.share(shareData);
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        notify("Link copied to clipboard", { tone: "success" });
-      }
-    } catch {
-      // User cancelled share
+    // X17: a PRIVATE list's link opens for its owner only, so a share would
+    // send everyone else to "doesn't exist or isn't shared with you".
+    const blocked = tierListShareBlock(data.privacy, data.isOwner);
+    if (blocked !== null) {
+      notify(blocked.message, { description: blocked.description });
+      return;
     }
-  }, [data.id, data.name]);
+    await share({
+      url: absoluteUrl(
+        window.location.origin,
+        canonicalPath({ kind: "tier-list", id: data.id }),
+      ),
+      title: data.name,
+      text: data.isOwner
+        ? `My ranking: ${data.name}`
+        : `${data.name} on Cellar Assistant`,
+    });
+  }, [data.id, data.name, data.privacy, data.isOwner, share]);
 
   /**
    * One step of the list's history. Its toast offers the opposite step, so

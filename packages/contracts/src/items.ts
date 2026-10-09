@@ -57,6 +57,7 @@ import {
   type Simplify,
 } from "./item-types.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { SharedItemDto } from "./share.ts";
 
 /** Exactly the values of the `item_type` Postgres enum. */
 export const ITEM_TYPES = [
@@ -590,6 +591,12 @@ export type RegenerateVectorResult = {
  */
 export type ItemActorInterface = {
   get(ctx: Ctx): Promise<ItemDto>;
+  /**
+   * X17: the public share page's read. Catalog facts, the newest **public**
+   * image and the everyone score — the same answer for every caller,
+   * anonymous included. See `share.ts`.
+   */
+  getShared(ctx: Ctx): Promise<SharedItemDto>;
   /** Called by `ItemOnboardingActor.confirm` and `RecipePhotoJobActor` (§2.1). */
   create(ctx: Ctx, input: CreateItemInput): Promise<ItemDto>;
   /** Creator only; enrichment updates come in as `system`. */
@@ -688,6 +695,7 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
   // direction a cost limit may err in).
   methods: {
     get: {},
+    getShared: {},
     create: { modelBacked: true },
     update: { modelBacked: true },
     setBarcode: {},
