@@ -83,6 +83,12 @@ export type CellarDto = {
    * count of bottles, not of distinct items: two bottles of one wine are 2.
    */
   readonly itemCounts: ItemTypeCountsDto;
+  /**
+   * X04: emptied bottles — what the status segment's "Finished" holds. Kept
+   * apart from `itemCounts`, which counts only what is still in the cellar
+   * (decision D13).
+   */
+  readonly finishedCount: number;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -214,6 +220,12 @@ export const CELLAR_ITEM_SORTS = [
   // `ascend(name)` after distance). Names live in the item tables, which this
   // actor does not own, so they are read fresh per call, never cached (§1.3).
   "NAME_ASC",
+  // X04: the "Open now" shelf — the bottle opened most recently first, then
+  // the rest (sealed, then finished) newest first.
+  "OPENED_DESC",
+  // X04: the Finished diary — the bottle finished most recently first, then
+  // the rest newest first.
+  "FINISHED_DESC",
 ] as const;
 
 export type CellarItemSort = (typeof CELLAR_ITEM_SORTS)[number];
@@ -221,9 +233,11 @@ export type CellarItemSort = (typeof CELLAR_ITEM_SORTS)[number];
 /**
  * UI parity G2: which bottles a `CellarActor.items` page holds. `ACTIVE` (not
  * emptied) is the default — decision 4: the old UI hid empty bottles from
- * every cellar list (`empty_at: {_is_null: true}`).
+ * every cellar list (`empty_at: {_is_null: true}`). `OPEN` (X04) is the
+ * "Open now" shelf: not emptied, and opened — by `openAt`, or by a level
+ * already below full, which the API allows without an `openAt`.
  */
-export const CELLAR_ITEM_STATUSES = ["ACTIVE", "EMPTY", "ALL"] as const;
+export const CELLAR_ITEM_STATUSES = ["ACTIVE", "EMPTY", "ALL", "OPEN"] as const;
 
 export type CellarItemStatus = (typeof CELLAR_ITEM_STATUSES)[number];
 
@@ -244,6 +258,130 @@ export type CellarItemsArgs = {
   readonly types?: readonly ItemType[] | null;
   /** UI parity G2. Defaults to `ACTIVE`. Applied before paging, like `types`. */
   readonly status?: CellarItemStatus | null;
+};
+
+/**
+ * X04: how a bottle answered an in-cellar search. `NAME` — the phrase matches
+ * the item's name (pg_trgm, the N08 lexical rule); `MEANING` — it does not,
+ * but the item's vector is within the tuned distance cutoff.
+ */
+export const CELLAR_SEARCH_MATCHES = ["NAME", "MEANING"] as const;
+
+export type CellarSearchMatch = (typeof CELLAR_SEARCH_MATCHES)[number];
+
+/**
+ * X04: identical bottles as one grid cell — "×3". Every bottle of one catalog
+ * item that survives the filter, in the page's order; the first of them (the
+ * one the sort put highest) leads and decides where the group sits.
+ */
+export type CellarItemGroupDto = {
+  /** The lead bottle — what the card shows and links to. */
+  readonly lead: CellarItemDto;
+  /** Every bottle in the group, lead first, in the list's order. */
+  readonly bottleIds: readonly string[];
+  /** `bottleIds.length`. */
+  readonly count: number;
+  /** How many of them are open (not finished). */
+  readonly openCount: number;
+  /** On a `search` page, how the item matched; `null` otherwise. */
+  readonly match: CellarSearchMatch | null;
+};
+
+/**
+ * Whether a `search` page used the vectors. `UNAVAILABLE`: the phrase could
+ * not be embedded (no AI provider, out of allowance, a model error), so the
+ * page holds name matches only — the client says so rather than presenting a
+ * short list as complete.
+ */
+export const CELLAR_SEARCH_MEANINGS = [
+  "NOT_ASKED",
+  "USED",
+  "UNAVAILABLE",
+] as const;
+
+export type CellarSearchMeaning = (typeof CELLAR_SEARCH_MEANINGS)[number];
+
+export type CellarItemGroupPage = Page<CellarItemGroupDto> & {
+  /** Bottles across every group on every page — D13 counts bottles. */
+  readonly bottleCount: number;
+  readonly meaning: CellarSearchMeaning;
+};
+
+export type CellarItemGroupsArgs = {
+  readonly page: PageArgs;
+  /** As `CellarItemsArgs.sort`. Ignored when `search` is set. */
+  readonly sort?: CellarItemSort | null;
+  /**
+   * X04: free text that **narrows** — name matches first, then items within
+   * the tuned vector-distance cutoff, and nothing else. (`items`'
+   * `semanticQuery` is the older re-sort of everything.)
+   */
+  readonly search?: string | null;
+  readonly types?: readonly ItemType[] | null;
+  readonly status?: CellarItemStatus | null;
+  /** Group identical bottles. Defaults to true; false gives one per bottle. */
+  readonly group?: boolean | null;
+};
+
+/**
+ * X04 / D3: the cellar page's dashboard, computed over the cached bottles
+ * plus one read of their logs. Every count is bottles (D13).
+ */
+export type CellarDashboardDto = {
+  /** Bottles still in the cellar (`itemCounts.total`). */
+  readonly bottleCount: number;
+  /** Open and not finished. */
+  readonly openCount: number;
+  /** Open, not finished, at or under {@link CELLAR_ALMOST_EMPTY_AT}%. */
+  readonly almostEmptyCount: number;
+  /** Bottles finished this calendar month, in `timeZone`. */
+  readonly finishedThisMonth: number;
+  /** Every finished bottle. */
+  readonly finishedCount: number;
+  /** Still in the cellar and added in the last {@link CELLAR_RECENT_DAYS} days. */
+  readonly addedRecently: number;
+  /**
+   * Logs poured from this cellar's bottles per calendar month, oldest first,
+   * {@link CELLAR_LOG_MONTHS} of them, the last being the current month in
+   * `timeZone`. Everyone's logs, as `checkIns` lists them.
+   */
+  readonly logsByMonth: readonly number[];
+  /** The current month, `YYYY-MM`, in `timeZone` — the last of `logsByMonth`. */
+  readonly currentMonth: string;
+  /** The IANA zone the months were cut in (UTC when none or an unknown one was given). */
+  readonly timeZone: string;
+};
+
+export type CellarDashboardArgs = {
+  /** IANA, e.g. `America/Chicago`. Unknown or absent → UTC. */
+  readonly timeZone?: string | null;
+};
+
+/** A bottle at or under this percentage is "almost empty". */
+export const CELLAR_ALMOST_EMPTY_AT = 25;
+/** "Recently added" means within this many days. */
+export const CELLAR_RECENT_DAYS = 30;
+/** How many months the dashboard's trend covers. */
+export const CELLAR_LOG_MONTHS = 12;
+
+/**
+ * X04: the viewer's **own** logs from one bottle — the Finished diary's "your
+ * log". Never anyone else's: a co-owner's notes stay on their own item page.
+ */
+export type BottleLogSummaryDto = {
+  readonly count: number;
+  readonly firstAt: string | null;
+  readonly lastAt: string | null;
+  /** The newest score among them, if any has one. */
+  readonly lastScore: number | null;
+  /** The newest non-empty note among them, if any. */
+  readonly lastNote: string | null;
+};
+
+export type CellarNameMatchesArgs = {
+  readonly search: string;
+  /** At most this many groups, best name match first. */
+  readonly limit: number;
 };
 
 export type DeletedCellar = { readonly id: string };
@@ -329,6 +467,36 @@ export type CellarActorInterface = {
     ctx: Ctx,
     cellarItemIds: readonly string[],
   ): Promise<readonly CappedList<CheckInDto>[]>;
+
+  /**
+   * X04: the grid's list — `items`, with identical bottles grouped ("×3")
+   * and `search` narrowing rather than re-sorting. Gated as `items`.
+   */
+  itemGroups(
+    ctx: Ctx,
+    args: CellarItemGroupsArgs,
+  ): Promise<CellarItemGroupPage>;
+  /** X04 / D3: the dashboard above the grid. Gated as `get`. */
+  dashboard(ctx: Ctx, args: CellarDashboardArgs): Promise<CellarDashboardDto>;
+  /**
+   * X04: the viewer's own logs per bottle, aligned to `cellarItemIds` — the
+   * Finished diary. Gated on the cellar; an id that is not one of its bottles
+   * (or a bottle the viewer never logged) answers a zero summary.
+   */
+  myLogsOf(
+    ctx: Ctx,
+    cellarItemIds: readonly string[],
+  ): Promise<readonly BottleLogSummaryDto[]>;
+  /**
+   * X04's cross-cellar fan-out ("Lagavulin is in Bar Cart"): this cellar's
+   * bottles still in it whose item **name** matches, grouped. Names only — no
+   * embedding — so asking every cellar you own costs no model call. Gated on
+   * the cellar's visibility, like `items`.
+   */
+  nameMatches(
+    ctx: Ctx,
+    args: CellarNameMatchesArgs,
+  ): Promise<readonly CellarItemGroupDto[]>;
 };
 
 /**
@@ -385,6 +553,11 @@ export const CellarActorDescriptor: ActorDescriptor<
     item: {},
     bottleFor: {},
     checkInsOf: {},
+    // Only with `search`, which embeds it (`MODEL_BACKED_FIELDS`).
+    itemGroups: { modelBacked: true },
+    dashboard: {},
+    myLogsOf: {},
+    nameMatches: {},
   },
   internalMethods: {
     createStarter: {},

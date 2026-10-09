@@ -1486,6 +1486,292 @@ describe.skipIf(skip)("CellarActor.createStarter (N15)", () => {
   });
 });
 
+/**
+ * A vector at `cos` to axis 0 (in the 0–1 plane): cosine distance to
+ * `unitVector(0)` is `1 - cos`, so a test can place an item exactly.
+ */
+const vectorAt = (cos: number): number[] =>
+  Array.from({ length: 768 }, (_, i) =>
+    i === 0 ? cos : i === 1 ? Math.sqrt(1 - cos * cos) : 0,
+  );
+
+const seedVectorAt = async (
+  db: DbOrTx,
+  wineId: string,
+  cos: number,
+): Promise<void> => {
+  await db.execute(sql`
+    insert into public.item_vectors (wine_id, vector)
+    values (${wineId}::uuid, ${toVectorLiteral(vectorAt(cos))}::halfvec)
+  `);
+};
+
+describe.skipIf(skip)("CellarActor — the cellar home (X04)", () => {
+  afterAll(closeTestDb);
+
+  it("groups identical bottles where the best-placed one sits, and counts bottles", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const cellarId = await seedCellar(db, { createdById: owner });
+      const actor = await activate(newCellarActor(cellarId, db));
+      const ctx = userCtx(owner, "r");
+      const barolo = await seedWine(db, owner, "Barolo");
+      const rioja = await seedWine(db, owner, "Rioja");
+
+      const sealed = await actor.addItem(ctx, { item: barolo });
+      await actor.addItem(ctx, { item: rioja });
+      const open = await actor.addItem(ctx, { item: barolo });
+      await actor.openItem(ctx, open.id);
+
+      const result = await actor.itemGroups(ctx, { page, sort: "OPEN_FIRST" });
+      expect(result.totalCount).toBe(2);
+      expect(result.bottleCount).toBe(3);
+      expect(result.meaning).toBe("NOT_ASKED");
+      const [first, second] = result.entries.map((entry) => entry.node);
+      // The open Barolo leads its group, and the group sits first.
+      expect(first?.lead.id).toBe(open.id);
+      expect(first?.bottleIds).toEqual([open.id, sealed.id]);
+      expect(first?.count).toBe(2);
+      expect(first?.openCount).toBe(1);
+      expect(first?.match).toBeNull();
+      expect(second?.lead.item.id).toBe(rioja.id);
+
+      const flat = await actor.itemGroups(ctx, { page, group: false });
+      expect(flat.totalCount).toBe(3);
+    });
+  });
+
+  it("search narrows: names first, then near meanings, nothing else", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const cellarId = await seedCellar(db, { createdById: owner });
+      const embed = vi.fn<EmbedQuery>(async () => unitVector(0));
+      const actor = await activate(newCellarActor(cellarId, db, embed));
+      const ctx = userCtx(owner, "r");
+
+      const lagavulin = await seedWine(db, owner, "Lagavulin 16");
+      const smoky = await seedWine(db, owner, "Ardbeg Ten");
+      const unrelated = await seedWine(db, owner, "Whispering Angel");
+      await seedVectorAt(db, lagavulin.id, 0.95);
+      await seedVectorAt(db, smoky.id, 0.9);
+      await seedVectorAt(db, unrelated.id, 0.1);
+      await actor.addItem(ctx, { item: unrelated });
+      await actor.addItem(ctx, { item: smoky });
+      await actor.addItem(ctx, { item: lagavulin });
+
+      const result = await actor.itemGroups(ctx, {
+        page,
+        search: " lagavulin ",
+      });
+      expect(embed).toHaveBeenCalledWith(ctx, "lagavulin");
+      expect(result.meaning).toBe("USED");
+      expect(
+        result.entries.map((entry) => [
+          entry.node.lead.item.id,
+          entry.node.match,
+        ]),
+      ).toEqual([
+        [lagavulin.id, "NAME"],
+        [smoky.id, "MEANING"],
+      ]);
+      expect(result.bottleCount).toBe(2);
+    });
+  });
+
+  it("search without a model is names only, and says so", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const cellarId = await seedCellar(db, { createdById: owner });
+      const actor = await activate(newCellarActor(cellarId, db));
+      const ctx = userCtx(owner, "r");
+      const lagavulin = await seedWine(db, owner, "Lagavulin 16");
+      await actor.addItem(ctx, { item: lagavulin });
+      await actor.addItem(ctx, { item: await seedWine(db, owner, "Rioja") });
+
+      const result = await actor.itemGroups(ctx, {
+        page,
+        search: "lagavullin",
+      });
+      expect(result.meaning).toBe("UNAVAILABLE");
+      expect(result.entries.map((entry) => entry.node.lead.item.id)).toEqual([
+        lagavulin.id,
+      ]);
+    });
+  });
+
+  it("OPEN, OPENED_DESC and FINISHED_DESC: the shelf and the diary", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const cellarId = await seedCellar(db, { createdById: owner });
+      const actor = await activate(newCellarActor(cellarId, db));
+      const ctx = userCtx(owner, "r");
+      const add = async (name: string) =>
+        actor.addItem(ctx, { item: await seedWine(db, owner, name) });
+
+      const sealed = await add("Sealed");
+      const earlier = await add("Opened earlier");
+      const later = await add("Opened later");
+      const poured = await add("Poured, never opened");
+      const done = await add("Done");
+      await actor.updateItem(ctx, earlier.id, {
+        openAt: "2026-01-01T00:00:00.000Z",
+      });
+      await actor.updateItem(ctx, later.id, {
+        openAt: "2026-03-01T00:00:00.000Z",
+      });
+      await actor.setItemPercentage(ctx, poured.id, 60);
+      await actor.updateItem(ctx, done.id, {
+        emptyAt: "2026-02-01T00:00:00.000Z",
+      });
+
+      const ids = async (
+        args: Omit<Parameters<CellarActor["itemGroups"]>[1], "page">,
+      ) =>
+        (await actor.itemGroups(ctx, { page, ...args })).entries.map(
+          (entry) => entry.node.lead.id,
+        );
+      expect(await ids({ status: "OPEN", sort: "OPENED_DESC" })).toEqual([
+        later.id,
+        earlier.id,
+        poured.id,
+      ]);
+      expect((await ids({ status: "ALL", sort: "FINISHED_DESC" }))[0]).toBe(
+        done.id,
+      );
+      expect(await ids({ status: "EMPTY" })).toEqual([done.id]);
+      expect(await ids({ status: "ACTIVE" })).not.toContain(done.id);
+      expect(await ids({ status: "ACTIVE" })).toContain(sealed.id);
+      expect((await actor.get(ctx)).finishedCount).toBe(1);
+    });
+  });
+
+  it("the dashboard counts bottles, and logs per month in the viewer's zone", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const cellarId = await seedCellar(db, { createdById: owner });
+      const actor = await activate(newCellarActor(cellarId, db));
+      const ctx = userCtx(owner, "r");
+      const wine = await seedWine(db, owner, "Barolo");
+      const a = await actor.addItem(ctx, { item: wine });
+      const b = await actor.addItem(ctx, { item: wine });
+      const c = await actor.addItem(ctx, {
+        item: await seedWine(db, owner, "Rioja"),
+      });
+      await actor.setItemPercentage(ctx, a.id, 20);
+      await actor.openItem(ctx, b.id);
+      await actor.emptyItem(ctx, c.id);
+      await seedCheckIn(db, {
+        userId: owner,
+        cellarItemId: a.id,
+        wineId: wine.id,
+      });
+      await seedCheckIn(db, {
+        userId: owner,
+        cellarItemId: b.id,
+        wineId: wine.id,
+      });
+
+      const dashboard = await actor.dashboard(ctx, {
+        timeZone: "America/Chicago",
+      });
+      expect(dashboard).toMatchObject({
+        bottleCount: 2,
+        openCount: 2,
+        almostEmptyCount: 1,
+        finishedThisMonth: 1,
+        finishedCount: 1,
+        addedRecently: 2,
+        timeZone: "America/Chicago",
+      });
+      expect(dashboard.logsByMonth).toHaveLength(12);
+      expect(dashboard.logsByMonth.at(-1)).toBe(2);
+      expect(dashboard.logsByMonth.slice(0, 11).every((n) => n === 0)).toBe(
+        true,
+      );
+      expect(
+        (await actor.dashboard(ctx, { timeZone: "Nowhere/Special" })).timeZone,
+      ).toBe("UTC");
+    });
+  });
+
+  it("myLogsOf summarises only the viewer's own logs", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const coOwner = await seedUser(db);
+      const cellarId = await seedCellar(db, {
+        createdById: owner,
+        coOwnerIds: [coOwner],
+      });
+      const actor = await activate(newCellarActor(cellarId, db));
+      const ctx = userCtx(owner, "r");
+      const wine = await seedWine(db, owner, "Barolo");
+      const bottle = await actor.addItem(ctx, { item: wine });
+      const mine = await seedCheckIn(db, {
+        userId: owner,
+        cellarItemId: bottle.id,
+        wineId: wine.id,
+      });
+      await db.execute(sql`
+        update public.check_ins set score = 4.5, note = '  Tar and roses '
+        where id = ${mine}::uuid
+      `);
+      await seedCheckIn(db, {
+        userId: coOwner,
+        cellarItemId: bottle.id,
+        wineId: wine.id,
+      });
+
+      const [summary, unknown] = await actor.myLogsOf(ctx, [
+        bottle.id,
+        randomUUID(),
+      ]);
+      expect(summary).toMatchObject({
+        count: 1,
+        lastScore: 4.5,
+        lastNote: "Tar and roses",
+      });
+      expect(unknown).toEqual({
+        count: 0,
+        firstAt: null,
+        lastAt: null,
+        lastScore: null,
+        lastNote: null,
+      });
+      const [theirs] = await actor.myLogsOf(userCtx(coOwner, "r2"), [
+        bottle.id,
+      ]);
+      expect(theirs).toMatchObject({ count: 1, lastNote: null });
+    });
+  });
+
+  it("nameMatches: bottles still here, by name, with no model call", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const cellarId = await seedCellar(db, { createdById: owner });
+      const embed = vi.fn<EmbedQuery>(async () => unitVector(0));
+      const actor = await activate(newCellarActor(cellarId, db, embed));
+      const ctx = userCtx(owner, "r");
+      const lagavulin = await seedWine(db, owner, "Lagavulin 16");
+      await actor.addItem(ctx, { item: lagavulin });
+      const gone = await actor.addItem(ctx, { item: lagavulin });
+      await actor.emptyItem(ctx, gone.id);
+      await actor.addItem(ctx, { item: await seedWine(db, owner, "Rioja") });
+
+      const groups = await actor.nameMatches(ctx, {
+        search: "lagavulin",
+        limit: 5,
+      });
+      expect(groups.map((group) => [group.lead.item.id, group.count])).toEqual([
+        [lagavulin.id, 1],
+      ]);
+      expect(embed).not.toHaveBeenCalled();
+      await expect(
+        actor.nameMatches(ctx, { search: "x", limit: 0 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+});
+
 describe.skipIf(skip)("CellarActor concealment", () => {
   afterAll(closeTestDb);
 
@@ -1514,6 +1800,13 @@ describe.skipIf(skip)("CellarActor concealment", () => {
       (actor, ctx) => actor.bottleFor(ctx, { type: "WINE", id: ITEM }),
     ],
     ["checkInsOf", (actor, ctx) => actor.checkInsOf(ctx, [ITEM])],
+    ["itemGroups", (actor, ctx) => actor.itemGroups(ctx, { page })],
+    ["dashboard", (actor, ctx) => actor.dashboard(ctx, {})],
+    ["myLogsOf", (actor, ctx) => actor.myLogsOf(ctx, [ITEM])],
+    [
+      "nameMatches",
+      (actor, ctx) => actor.nameMatches(ctx, { search: "wine", limit: 5 }),
+    ],
   ];
 
   it.each(CALLS)("%s", async (_method, call) => {

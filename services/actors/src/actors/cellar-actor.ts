@@ -93,14 +93,22 @@ import { randomUUID } from "node:crypto";
 import type {
   ActorCategory,
   AddCellarItemInput,
+  BottleLogSummaryDto,
   CappedList,
   CellarActorInterface,
+  CellarDashboardArgs,
+  CellarDashboardDto,
   CellarDto,
   CellarItemDto,
+  CellarItemGroupDto,
+  CellarItemGroupPage,
+  CellarItemGroupsArgs,
   CellarItemSort,
   CellarItemSource,
   CellarItemStatus,
   CellarItemsArgs,
+  CellarNameMatchesArgs,
+  CellarSearchMeaning,
   CheckInDto,
   CreateCellarInput,
   Ctx,
@@ -118,6 +126,9 @@ import type {
   UpdateCellarItemInput,
 } from "@cellar-assistant/contracts";
 import {
+  CELLAR_ALMOST_EMPTY_AT,
+  CELLAR_LOG_MONTHS,
+  CELLAR_RECENT_DAYS,
   CellarActorDescriptor,
   ConflictError,
   ForbiddenError,
@@ -145,6 +156,17 @@ import {
 } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
+import {
+  CELLAR_NAME_THRESHOLD,
+  countByMonth,
+  groupInOrder,
+  monthKey,
+  monthsEndingAt,
+  nameScores,
+  narrowCandidates,
+  resolveTimeZone,
+  type SearchMatch,
+} from "../lib/cellar-search.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import { idempotencyKey } from "../lib/delivery.ts";
@@ -348,6 +370,240 @@ export class CellarActor
         nodes: rows.slice(0, REVERSE_EDGE_CAP).map(toCheckInDto),
         totalCount: rows.length,
       };
+    });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* X04: the cellar home                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * X04: the grid's list. The same filter as `items` (G2), then either the
+   * sort or — with `search` — the narrowing (`../lib/cellar-search.ts`): name
+   * matches, then meaning matches inside the tuned cutoff, and nothing else.
+   * Then identical bottles fold into one group ("×3"), which sits where its
+   * best-placed bottle sat. Paged by group; `bottleCount` counts bottles.
+   *
+   * When the phrase cannot be embedded (no AI provider, out of allowance, a
+   * model error) the page is name matches alone and says so (`meaning:
+   * UNAVAILABLE`) — a search by name needs no model, and must not fail
+   * because one is missing.
+   */
+  async itemGroups(
+    ctx: Ctx,
+    args: CellarItemGroupsArgs,
+  ): Promise<CellarItemGroupPage> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+
+    const rows = filtered(aggregate.items, args.types, args.status);
+    const query = args.search?.trim() ?? "";
+    let ordered: readonly Matched[];
+    let meaning: CellarSearchMeaning = "NOT_ASKED";
+    if (query === "") {
+      ordered = (await this.#sorted(rows, args.sort)).map((dto) => ({
+        dto,
+        match: null,
+      }));
+    } else {
+      const searched = await this.#narrowed(ctx, rows, query);
+      meaning = searched.meaning;
+      ordered = searched.matches.map((hit) => ({
+        dto: toItemDto(hit.value, hit.distance),
+        match: hit.match,
+      }));
+    }
+
+    const groups = toGroups(ordered, args.group ?? true);
+    return {
+      ...offsetPage(groups, args.page),
+      bottleCount: ordered.length,
+      meaning,
+    };
+  }
+
+  /**
+   * X04 / D3: the dashboard above the grid — open, almost empty, finished
+   * this month, recently added, and the logs poured per month. Bottles from
+   * the cached aggregate; the logs read fresh (this actor does not write
+   * them), only their timestamps, only the last {@link CELLAR_LOG_MONTHS}
+   * months' worth. Months are cut in the viewer's zone, so a glass at 11 pm
+   * on the 31st lands in the month the viewer lived it in.
+   */
+  async dashboard(
+    ctx: Ctx,
+    args: CellarDashboardArgs,
+  ): Promise<CellarDashboardDto> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+
+    const zone = resolveTimeZone(args.timeZone);
+    const now = new Date();
+    const current = monthKey(now, zone);
+    const months = monthsEndingAt(current, CELLAR_LOG_MONTHS);
+    const recentSince = now.getTime() - CELLAR_RECENT_DAYS * DAY_MS;
+
+    const active = aggregate.items.filter((row) => row.emptyAt === null);
+    const open = active.filter(isOpenRow);
+    const finished = aggregate.items.filter((row) => row.emptyAt !== null);
+
+    const ids = aggregate.items.map((row) => row.id);
+    // A day of slack past the oldest month's start in any zone; the
+    // bucketing drops whatever falls outside the months.
+    const since = new Date(
+      now.getTime() - (CELLAR_LOG_MONTHS * 31 + 1) * DAY_MS,
+    );
+    const logs =
+      ids.length === 0
+        ? []
+        : await this.db
+            .select({ createdAt: checkIns.createdAt })
+            .from(checkIns)
+            .where(
+              and(
+                inArray(checkIns.cellarItemId, ids),
+                sql`${checkIns.createdAt} >= ${since.toISOString()}`,
+              ),
+            );
+
+    return {
+      bottleCount: active.length,
+      openCount: open.length,
+      almostEmptyCount: open.filter(
+        (row) => Number(row.percentageRemaining) <= CELLAR_ALMOST_EMPTY_AT,
+      ).length,
+      finishedThisMonth: finished.filter(
+        (row) =>
+          row.emptyAt !== null && monthKey(row.emptyAt, zone) === current,
+      ).length,
+      finishedCount: finished.length,
+      addedRecently: active.filter(
+        (row) => row.createdAt.getTime() >= recentSince,
+      ).length,
+      logsByMonth: countByMonth(
+        logs.map((log) => log.createdAt),
+        months,
+        zone,
+      ),
+      currentMonth: current,
+      timeZone: zone,
+    };
+  }
+
+  /**
+   * X04: the Finished diary's "your log" — the viewer's **own** logs from
+   * each bottle, never a co-owner's or a friend's (their notes are theirs;
+   * `checkIns` already tells the cellar *that* they drank). Gated on the
+   * cellar, like every read here.
+   */
+  async myLogsOf(
+    ctx: Ctx,
+    cellarItemIds: readonly string[],
+  ): Promise<readonly BottleLogSummaryDto[]> {
+    requireReverseEdgeBatch(cellarItemIds, "myLogsOf cellarItemIds");
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const wanted = cellarItemIds.map((id) => String(id).toLowerCase());
+    const viewer = ctx.viewerId;
+    const mine = new Set(aggregate.items.map((row) => row.id));
+    const asked = wanted.filter((id) => mine.has(id));
+    const rows =
+      viewer === null || asked.length === 0
+        ? []
+        : await this.db
+            .select({
+              cellarItemId: checkIns.cellarItemId,
+              createdAt: checkIns.createdAt,
+              score: checkIns.score,
+              note: checkIns.note,
+            })
+            .from(checkIns)
+            .where(
+              and(
+                inArray(checkIns.cellarItemId, asked),
+                eq(checkIns.userId, viewer),
+              ),
+            )
+            .orderBy(sql`${checkIns.createdAt} desc, ${checkIns.id} desc`);
+    return wanted.map((cellarItemId) =>
+      summariseLogs(rows.filter((row) => row.cellarItemId === cellarItemId)),
+    );
+  }
+
+  /**
+   * X04's fan-out: bottles still here whose item name matches `search`,
+   * grouped, best first — no embedding, so `services/api` can ask every
+   * cellar the viewer owns for the price of a trigram read each.
+   */
+  async nameMatches(
+    ctx: Ctx,
+    args: CellarNameMatchesArgs,
+  ): Promise<readonly CellarItemGroupDto[]> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const query = String(args.search ?? "").trim();
+    if (query === "") return [];
+    if (!Number.isInteger(args.limit) || args.limit < 1 || args.limit > 20) {
+      throw new ValidationError(
+        `limit must be an integer from 1 to 20, got ${args.limit}`,
+      );
+    }
+    const rows = aggregate.items.filter((row) => row.emptyAt === null);
+    const matches = await this.#namedOnly(rows, query);
+    const groups = toGroups(
+      matches.map((hit) => ({
+        dto: toItemDto(hit.value, hit.distance),
+        match: hit.match,
+      })),
+      true,
+    );
+    return groups.slice(0, args.limit);
+  }
+
+  /**
+   * The narrowing over `rows` (`../lib/cellar-search.ts`): name scores and,
+   * when the phrase can be embedded, vector distances.
+   */
+  async #narrowed(
+    ctx: Ctx,
+    rows: readonly CellarItemRow[],
+    query: string,
+  ): Promise<{
+    readonly matches: readonly SearchMatch<CellarItemRow>[];
+    readonly meaning: CellarSearchMeaning;
+  }> {
+    if (rows.length === 0) return { matches: [], meaning: "USED" };
+    const refs = rows.map(itemRefOf);
+    const [scores, distances] = await Promise.all([
+      nameScores(this.db, refs, query),
+      this.#embed(ctx, query).then(
+        (vector) => vectorDistances(this.db, refs, vector),
+        // A model that is missing, out of allowance or failing costs the
+        // meaning arm, not the search: names need no model.
+        () => null,
+      ),
+    ]);
+    return {
+      matches: narrowCandidates(candidatesOf(rows), scores, distances, {
+        nameThreshold: CELLAR_NAME_THRESHOLD,
+      }),
+      meaning: distances === null ? "UNAVAILABLE" : "USED",
+    };
+  }
+
+  /**
+   * Name matches alone — `nameMatches`' path, which must never reach a model
+   * (`MODEL_BACKED_FIELDS` derives that from this method not calling
+   * `#embed`).
+   */
+  async #namedOnly(
+    rows: readonly CellarItemRow[],
+    query: string,
+  ): Promise<readonly SearchMatch<CellarItemRow>[]> {
+    if (rows.length === 0) return [];
+    const scores = await nameScores(this.db, rows.map(itemRefOf), query);
+    return narrowCandidates(candidatesOf(rows), scores, null, {
+      nameThreshold: CELLAR_NAME_THRESHOLD,
     });
   }
 
@@ -855,6 +1111,8 @@ export class CellarActor
       coOwnerIds: aggregate.coOwnerIds,
       itemCount: aggregate.items.length,
       itemCounts: activeCounts(aggregate.items),
+      finishedCount: aggregate.items.filter((row) => row.emptyAt !== null)
+        .length,
       createdAt: requiredIso(aggregate.cellar.createdAt),
       updatedAt: requiredIso(aggregate.cellar.updatedAt),
     };
@@ -935,14 +1193,29 @@ const filtered = (
           }),
         );
   const state = status ?? "ACTIVE";
-  if (state !== "ACTIVE" && state !== "EMPTY" && state !== "ALL") {
+  if (
+    state !== "ACTIVE" &&
+    state !== "EMPTY" &&
+    state !== "ALL" &&
+    state !== "OPEN"
+  ) {
     throw new ValidationError(`not a cellar item status: ${String(state)}`);
   }
+  const inState = (row: CellarItemRow): boolean => {
+    switch (state) {
+      case "ALL":
+        return true;
+      case "ACTIVE":
+        return row.emptyAt === null;
+      case "EMPTY":
+        return row.emptyAt !== null;
+      case "OPEN":
+        return isOpenRow(row);
+    }
+  };
   return rows.filter(
     (row) =>
-      (wanted === null || wanted.has(itemRefOf(row).type)) &&
-      (state === "ALL" ||
-        (state === "ACTIVE" ? row.emptyAt === null : row.emptyAt !== null)),
+      (wanted === null || wanted.has(itemRefOf(row).type)) && inState(row),
   );
 };
 
@@ -984,6 +1257,23 @@ const sorted = (
       // Open (and not finished) first, then unopened, then empty; newest
       // first inside each group, which `copy` already is.
       return copy.sort((a, b) => openRank(a) - openRank(b));
+    case "OPENED_DESC":
+      // Open bottles, most recently opened first (one opened by its level
+      // alone has no `openAt` and sorts after those that have one), then the
+      // rest as OPEN_FIRST has them.
+      return copy.sort(
+        (a, b) =>
+          openRank(a) - openRank(b) ||
+          (openRank(a) === 0 ? instantDesc(a.openAt, b.openAt) : 0),
+      );
+    case "FINISHED_DESC":
+      // Finished bottles, most recently finished first, then the rest newest
+      // first — the diary's order.
+      return copy.sort(
+        (a, b) =>
+          Number(a.emptyAt === null) - Number(b.emptyAt === null) ||
+          instantDesc(a.emptyAt, b.emptyAt),
+      );
     case "NAME_ASC":
       // Needs names, which `#sorted` reads before it gets here; reaching this
       // arm means a caller skipped that, so say so rather than guess.
@@ -994,6 +1284,77 @@ const sorted = (
 const openRank = (item: CellarItemDto): number => {
   if (item.emptyAt !== null) return 2;
   return item.openAt === null ? 1 : 0;
+};
+
+/** Newest instant first; a missing one after any present one. Stable on ties. */
+const instantDesc = (a: string | null, b: string | null): number => {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return Date.parse(b) - Date.parse(a);
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * X04's "open": not finished, and opened — by `openAt`, or by a level already
+ * below full, which the API allows without one. The client's `bottleState`
+ * reads a bottle the same way.
+ */
+const isOpenRow = (row: CellarItemRow): boolean =>
+  row.emptyAt === null &&
+  (row.openAt !== null || Number(row.percentageRemaining) < 100);
+
+const isOpenDto = (dto: CellarItemDto): boolean =>
+  dto.emptyAt === null &&
+  (dto.openAt !== null || dto.percentageRemaining < 100);
+
+/** Rows as `narrowCandidates` takes them. */
+const candidatesOf = (rows: readonly CellarItemRow[]) =>
+  rows.map((row) => ({ value: row, itemId: itemRefOf(row).id, id: row.id }));
+
+/** A bottle in a list, and how it answered a search (null without one). */
+type Matched = {
+  readonly dto: CellarItemDto;
+  readonly match: CellarItemGroupDto["match"];
+};
+
+/** X04's ×N over an ordered list (`groupInOrder`). */
+const toGroups = (
+  ordered: readonly Matched[],
+  group: boolean,
+): CellarItemGroupDto[] =>
+  groupInOrder(
+    ordered,
+    (entry) => `${entry.dto.item.type}:${entry.dto.item.id}`,
+    group,
+  ).map(({ lead, members }) => ({
+    lead: lead.dto,
+    bottleIds: members.map((member) => member.dto.id),
+    count: members.length,
+    openCount: members.filter((member) => isOpenDto(member.dto)).length,
+    match: lead.match,
+  }));
+
+/** The diary's "your log" for one bottle: newest first in, a summary out. */
+const summariseLogs = (
+  rows: readonly {
+    readonly createdAt: Date;
+    readonly score: number | null;
+    readonly note: string | null;
+  }[],
+): BottleLogSummaryDto => {
+  const newest = rows[0];
+  const oldest = rows.at(-1);
+  const scored = rows.find((row) => row.score !== null);
+  const noted = rows.find((row) => row.note !== null && row.note.trim() !== "");
+  return {
+    count: rows.length,
+    firstAt: oldest === undefined ? null : oldest.createdAt.toISOString(),
+    lastAt: newest === undefined ? null : newest.createdAt.toISOString(),
+    lastScore: scored?.score ?? null,
+    lastNote: noted?.note?.trim() ?? null,
+  };
 };
 
 const requireName = (name: string): string => {
