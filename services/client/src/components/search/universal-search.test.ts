@@ -277,6 +277,38 @@ describe("rows", () => {
         ["r3 v1", "Cocktail · Missing Campari", "/recipes/r3"],
       ],
     );
+    assert.deepEqual(rows[0]?.thumb, { kind: "icon", icon: "recipe" });
+  });
+
+  test("a recipe's free-form picture is an external thumb, not a next/image one", () => {
+    const [row] = recipeRows({
+      recipeSearch: {
+        __typename: "RecipeSearchConnection",
+        edges: [
+          {
+            node: {
+              recipeId: "r1",
+              name: "Paper Plane",
+              description: null,
+              type: "cocktail",
+              recipeGroupId: null,
+              distance: 0.3,
+              recipe: {
+                id: "r1",
+                imageUrl: "https://example.com/plane.jpg",
+                recipeGroup: null,
+                makeability: null,
+              },
+            },
+          },
+        ],
+      },
+    } as never);
+    assert.deepEqual(row?.thumb, {
+      kind: "external",
+      url: "https://example.com/plane.jpg",
+    });
+    assert.equal(row?.description, "Cocktail");
   });
 
   test("people: friends and requests open Friends; anyone else ends in Add", () => {

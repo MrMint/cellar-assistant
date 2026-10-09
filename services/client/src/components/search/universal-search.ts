@@ -286,7 +286,13 @@ export type PersonRelation =
 
 /** What sits at the start of a row. */
 export type RowThumb =
+  /** A stored photo: a presigned file URL, which `next/image` may load. */
   | { readonly kind: "image"; readonly url: string }
+  /**
+   * A free-form URL (`Recipe.imageUrl`): drawn as a plain `<img>`, since
+   * `next/image` would need its host allowlisted — as `RecipeGroupCard` does.
+   */
+  | { readonly kind: "external"; readonly url: string }
   | { readonly kind: "item"; readonly itemType: string }
   | { readonly kind: "icon"; readonly icon: "place" | "recipe" | "brand" }
   | {
@@ -466,7 +472,7 @@ export const recipeRows = (
           : `/recipes/${node.recipeId}`,
       thumb:
         node.recipe.imageUrl !== null && node.recipe.imageUrl !== ""
-          ? { kind: "image", url: node.recipe.imageUrl }
+          ? { kind: "external", url: node.recipe.imageUrl }
           : { kind: "icon", icon: "recipe" },
     });
   }

@@ -50,6 +50,13 @@ function Thumb({ thumb }: { thumb: RowThumb }) {
           />
         </span>
       );
+    case "external":
+      return (
+        <span className="block size-11 overflow-hidden rounded-sm bg-surface-2">
+          {/* biome-ignore lint/performance/noImgElement: a free-form URL; next/image would need its host allowlisted. */}
+          <img src={thumb.url} alt="" className="size-full object-cover" />
+        </span>
+      );
     case "item":
       return isItemType(thumb.itemType) ? (
         <span
