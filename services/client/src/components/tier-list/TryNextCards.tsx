@@ -57,6 +57,9 @@ export function TryNextCards({
   const [{ data, fetching, error }] = useQuery({
     query: TierListTryNextQuery,
     variables: { id: tierListId, first: TRY_NEXT_PAGE_SIZE },
+    // The list, your loves and your friends' lists move between visits: the
+    // last answer shows at once and a fresh one replaces it.
+    requestPolicy: "cache-and-network",
   });
 
   const cards = useMemo((): TryNextCard[] | null => {
