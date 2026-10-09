@@ -17,6 +17,14 @@ import { Gql } from "../../fixtures/test.ts";
 test.describe.configure({ mode: "serial" });
 
 let tierListId: string | undefined;
+/**
+ * Set once the remove → Undo → Redo step has run to the end. The reload step
+ * reads the history that step leaves, so without it there is nothing to
+ * check: an account with one wine skips the step, and the one entry
+ * `beforeAll` added would otherwise pass for "one entry left" and leave Undo
+ * naming that add.
+ */
+let removedThenRedone = false;
 
 type Entry = { id: string; band: number; name: string };
 
@@ -63,6 +71,20 @@ test.beforeAll(async () => {
     for (const cellar of cellars.myCellars?.edges ?? []) {
       for (const row of cellar.node.items.edges) {
         if (row.node.item?.type === "WINE") wines.add(row.node.item.id);
+      }
+    }
+    // An account whose cellars hold fewer than two wines (a fresh lane's
+    // test@test.com holds one) tops up from the catalog, as 07-tier-lists
+    // does; without two entries every step below would skip.
+    if (wines.size < 2) {
+      const found = await api.raw(
+        `query { itemSearch(text: "wine", itemTypes: [WINE], limit: 5, first: 5) {
+           __typename
+           ... on ItemSearchConnection { edges { node { item { id } } } }
+         } }`,
+      );
+      for (const edge of found.data?.itemSearch?.edges ?? []) {
+        if (edge.node.item?.id) wines.add(edge.node.item.id);
       }
     }
     for (const wineId of Array.from(wines).slice(0, 2)) {
@@ -186,6 +208,7 @@ test("remove lands at once; the toast's Undo and the bar's Redo step the history
       async () => ((await entries(api, id)).length === 1 ? true : null),
       { timeoutMs: 20_000, what: "Redo to take it out again" },
     );
+    removedThenRedone = true;
   } finally {
     await api.dispose();
   }
@@ -198,7 +221,10 @@ test("the history survives a reload: Undo still names the removal and works", as
   const api = await Gql.forAccount("primary");
   try {
     const now = await entries(api, id);
-    test.skip(now.length !== 1, "the previous step did not leave one entry");
+    test.skip(
+      !removedThenRedone || now.length !== 1,
+      "the remove → Undo → Redo step did not run, or did not leave one entry",
+    );
 
     await page.goto(`/tier-lists/${id}`);
     await page.getByRole("button", { name: "Arrange", exact: true }).tap();
