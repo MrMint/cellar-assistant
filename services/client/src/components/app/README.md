@@ -200,7 +200,10 @@ directly in feature code. Stroke 1.75 (`ICON_STROKE`).
 | MdSchedule, MdUpdate | `Schedule` |
 | MdHourglassEmpty | `Pending` |
 | MdHistory | `History` |
+| MdUndo / MdRedo | `Undo` / `Redo` (D4's history steps — the Arrange bar, ⌘Z) |
 | MdLock / MdLockOpen | `Lock` / `Unlock` |
+| MdSwapVert | `Arrange` (X23: the tier list's editing mode — the padlock it replaced is gone) |
+| MdRemoveCircleOutline | `RemoveFromList` (a row's minus while arranging; never `Delete`, which is for whole things) |
 | MdVisibility | `Visible` |
 | MdPublic, MdLanguage | `Public` |
 | MdVerified | `Verified` |
