@@ -914,6 +914,19 @@ export class RecipeActor
         EMBEDDING_FIELDS.includes(field) &&
         String(value) !== String(before[field]),
     );
+    // X15: the group's canonical is ranked by how widely each version is
+    // shared (`RecipeGroupActor.#rankedRecipes`), and only a PUBLIC one names
+    // the group. So a change of privacy, or a draft published, can move the
+    // canonical — hand the recompute to the outbox, as `delete` does.
+    const sharingChanged =
+      (patch.privacy !== undefined &&
+        patch.privacy !== aggregate.recipe.privacy) ||
+      (patch.isDraft !== undefined &&
+        patch.isDraft !== aggregate.recipe.isDraft);
+    const groupId =
+      patch.recipeGroupId !== undefined
+        ? patch.recipeGroupId
+        : aggregate.recipe.recipeGroupId;
 
     await this.tx(async (tx) => {
       await tx
@@ -921,6 +934,17 @@ export class RecipeActor
         .set({ ...patch, updatedAt: new Date() })
         .where(eq(recipes.id, this.key));
       if (embeddingChanged) await this.#enqueueRegenerate(tx, "update", ctx);
+      if (sharingChanged && groupId !== null && groupId !== undefined) {
+        await enqueueOutbox(
+          tx,
+          OUTBOX_TARGETS["RecipeGroupActor.recomputeCanonical"],
+          {
+            targetId: groupId,
+            payload: { reason: "member sharing changed", recipeId: this.key },
+          },
+          { attributeTo: ctx },
+        );
+      }
     });
     await this.reload();
     return this.#toDto(this.requireAggregate());

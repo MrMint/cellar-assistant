@@ -502,6 +502,36 @@ describe.skipIf(skip)("RecipeActor", () => {
         ).rejects.toThrow(ValidationError);
       });
     });
+
+    it("a change of sharing hands the group's canonical recompute to the outbox", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const ctx = userCtx(owner, "r");
+        const groupId = await seedRecipeGroup(db, { createdById: owner });
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          privacy: "PRIVATE",
+          isDraft: true,
+        });
+        const actor = await activate(newRecipeActor(recipeId, db));
+
+        // A same-value write and an embedding-only edit move nothing.
+        await actor.update(ctx, { privacy: "PRIVATE" });
+        await actor.update(ctx, { name: "Renamed" });
+        expect(await outboxRowsFor(db, groupId)).toEqual([]);
+
+        // Publishing a draft as PUBLIC can make it the canonical, and the
+        // group's name: the group is told.
+        await actor.update(ctx, { isDraft: false, privacy: "PUBLIC" });
+        expect(await outboxRowsFor(db, groupId)).toEqual([
+          {
+            method: "recomputeCanonical",
+            payload: { reason: "member sharing changed", recipeId },
+          },
+        ]);
+      });
+    });
   });
 
   /* ---------------------------------------------------------------------- */
