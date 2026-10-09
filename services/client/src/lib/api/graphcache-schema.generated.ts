@@ -684,6 +684,88 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "BottleSearchConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "BottleSearchEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BottleSearchEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BottleSearchHit" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BottleSearchHit",
+        fields: [
+          {
+            name: "bottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "cellarId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "cellarItemId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "cellarName",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "item",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "Brand",
         fields: [
           { name: "brandType", type: { kind: "ENUM", name: "BrandType" } },
@@ -10026,6 +10108,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "String" },
             },
           },
+          { name: "relation", type: { kind: "ENUM", name: "PersonRelation" } },
           {
             name: "userId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -10092,6 +10175,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "AiCapabilities" },
+            },
+          },
+          {
+            name: "bottleSearch",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BottleSearchConnection" },
             },
           },
           {
