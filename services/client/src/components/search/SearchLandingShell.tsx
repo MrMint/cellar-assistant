@@ -1,24 +1,14 @@
 import { ICON_STROKE, Search } from "@/components/app/icons";
 import { LoadingShell, ShellBlocks } from "@/components/app/LoadingShell";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { SearchDiscoverySkeleton } from "./SearchResultsSkeleton";
-
-/** The landing view's five quick links, as placeholders of their widths. */
-const QUICK_LINKS = [
-  { key: "cellars", width: "w-24" },
-  { key: "map", width: "w-18" },
-  { key: "tier-lists", width: "w-26" },
-  { key: "favorites", width: "w-26" },
-  { key: "rankings", width: "w-26" },
-] as const;
 
 /**
  * Home (`/search`) while it loads (X24), in `SearchPageLayout`'s landing
  * frame: the greeting and the collection line, the search box (drawn, not
  * live — it takes a tap only once the page has arrived, so the real input
- * is the one that gets focus, N01), the quick links, then the discovery
- * section's own skeleton.
+ * is the one that gets focus, N01), then the discovery section's own
+ * skeleton. (No quick-link chips: X01 took them off the page.)
  */
 export function SearchLandingShell() {
   return (
@@ -41,11 +31,6 @@ export function SearchLandingShell() {
           </ShellBlocks>
         </div>
       </div>
-      <ShellBlocks className="flex flex-wrap justify-center gap-2">
-        {QUICK_LINKS.map(({ key, width }) => (
-          <Skeleton key={key} className={cn("h-9 rounded-full", width)} />
-        ))}
-      </ShellBlocks>
       <ShellBlocks>
         <SearchDiscoverySkeleton />
       </ShellBlocks>
