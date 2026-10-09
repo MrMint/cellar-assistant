@@ -198,8 +198,10 @@ export type CellarsCollectionActorInterface = {
    * includes strangers' PUBLIC cellars and friends' FRIENDS ones; summing it
    * told a user they owned other people's bottles. The old page
    * (`82450ad1:src/components/search/fragments.ts`) counted cellars the viewer
-   * created or co-owns, and **distinct items** in them per type — so that is
-   * what this counts.
+   * created or co-owns — so that is whose cellars this counts. Per type it
+   * counts **bottles still in the cellar** (decision D13), as every cellar
+   * card does; the old page's distinct items, finished ones included, were
+   * the drift D13 removed.
    */
   stats(ctx: Ctx): Promise<CollectionStatsDto>;
   /**

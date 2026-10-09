@@ -136,7 +136,8 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   "Your log".
 - **Dashboard order at 390.** Bar and search → Open now (open bottles, most
   recently opened first, up to 12, each with Pour) → four tiles (in the
-  cellar, with the three biggest types named; open; almost empty, at or under
+  cellar, with the three biggest types named; open, with how many are still
+  sealed; almost empty, at or under
   **25%**; finished this month) → pours per month (12 months) → Recently
   added (last **30 days**, not already on Open now) → the collection. A tile
   opens the collection with the matching sort or segment. A search hides the
@@ -150,10 +151,12 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   months and re-renders once.
 - **×N.** Identical bottles (one catalog item) are one card, placed where the
   best-placed bottle sits under the current sort, showing that bottle's state
-  and linking to it. Open now does not group.
+  and linking to it. Open now does not group, and under All a finished bottle
+  is its own card rather than part of a live bottle's ×N.
 - **Finished is a diary**: by month finished, latest first, with the date,
   how long it lasted once open, **your own** logs from it (count, last score,
-  last note — never a co-owner's) and your rating. Its sort is fixed.
+  last note — never a co-owner's) and your rating. Its sort is fixed, and a
+  search narrows it without reordering it.
 - **Search narrows.** Names first (pg_trgm, the N08 rule), then meaning
   matches within cosine distance **0.36** and within **+0.06** of the nearest
   (tuned on N05 with nomic-embed-text; Gemini not measured), nothing else. A
