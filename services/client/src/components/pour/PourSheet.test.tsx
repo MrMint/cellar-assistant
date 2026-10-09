@@ -206,6 +206,22 @@ globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
     ReorderBand: {
       reorderTierListBand: { __typename: "ReorderBandPayload", band: 5 },
     },
+    PourTierListHistory: {
+      tierList: {
+        __typename: "TierList",
+        id: "t1",
+        editHistory: {
+          __typename: "TierListEditHistory",
+          undo: {
+            __typename: "TierListEdit",
+            seq: 7,
+            kind: "MOVE",
+            fromBand: 3,
+            toBand: 5,
+          },
+        },
+      },
+    },
     MyFriends: {
       myFriends: {
         __typename: "FriendConnection",
@@ -498,6 +514,23 @@ describe("PourSheet", () => {
       tierListId: "t1",
       band: 5,
       orderedIds: ["e4", "e5", "e1"],
+    });
+
+    // Its Undo names the move it made (D4's expectedSeq), read back from the
+    // list's history — never "whatever is on top".
+    const toast = [
+      ...document.querySelectorAll<HTMLElement>("[data-sonner-toast]"),
+    ].find((t) => /Moved .* to Outstanding/.test(t.textContent ?? ""));
+    assert.ok(toast, "the move's toast");
+    await click(
+      [...toast.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === "Undo",
+      ),
+    );
+    await flush(50);
+    assert.deepEqual(ops("UndoTierListEdit")[0]?.variables, {
+      tierListId: "t1",
+      expectedSeq: 7,
     });
   });
 });

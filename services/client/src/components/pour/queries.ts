@@ -85,3 +85,31 @@ export const PourTierListBandQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/**
+ * Where a list's history stands just after the sheet's band move: the edit
+ * on top, so the move's Undo can name it (`expectedSeq`, D4) — the move
+ * payload does not carry it.
+ */
+export const PourTierListHistoryQuery = graphql(
+  `
+  query PourTierListHistory($tierListId: ID!) {
+    tierList(id: $tierListId) {
+      __typename
+      ... on TierList {
+        id
+        editHistory {
+          undo {
+            seq
+            kind
+            fromBand
+            toBand
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);

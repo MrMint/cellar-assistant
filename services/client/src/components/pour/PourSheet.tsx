@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { useMutation, useQuery } from "urql";
+import { useClient, useMutation, useQuery } from "urql";
 import { FilterChip } from "@/components/app/FilterChip";
 import { Check, People, Pour } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
@@ -24,7 +24,10 @@ import { WhenPicker } from "@/components/drink-log/WhenPicker";
 import { useFinishToast } from "@/components/item/FinishBottleDialogs";
 import { useFinishBottle } from "@/components/item/useFinishBottle";
 import { BAND_LABELS } from "@/components/tier-list/constants";
-import { bandForScore } from "@/components/tier-list/history";
+import {
+  bandForScore,
+  historyStepFailure,
+} from "@/components/tier-list/history";
 import {
   ReorderBandMutation,
   UndoTierListEditMutation,
@@ -52,6 +55,7 @@ import {
   type ListPlacement,
   levelAfterPreset,
   meAndLabel,
+  movedEditSeq,
   notYetLevel,
   ownPlacements,
   parseCompanions,
@@ -62,7 +66,11 @@ import {
   rememberedCompanions,
   undoPourBottleInput,
 } from "./pour-plan";
-import { PourFollowUpQuery, PourTierListBandQuery } from "./queries";
+import {
+  PourFollowUpQuery,
+  PourTierListBandQuery,
+  PourTierListHistoryQuery,
+} from "./queries";
 
 /** Per-viewer convenience: the last "who with" poured with, on this device. */
 const COMPANIONS_KEY = "ca.pour.lastCompanions";
@@ -809,6 +817,7 @@ function BandRow({
   const [error, setError] = useState<string | null>(null);
   const [, reorder] = useMutation(ReorderBandMutation);
   const [, undoEdit] = useMutation(UndoTierListEditMutation);
+  const client = useClient();
 
   const list = unwrapResult(data?.tierList, "TierList");
   // `reorderTierListBand` takes the band's whole membership; past one page
@@ -835,32 +844,58 @@ function BandRow({
       ).data?.reorderTierListBand,
       "ReorderBandPayload",
     );
-    setMoving(false);
     if (!moved.ok) {
+      setMoving(false);
       setError(moved.error.message);
       return;
     }
     const was = band;
+    // D4: an Undo names the edit it takes back. The move's payload does not
+    // carry its `seq`, so read the list's top edit now and offer Undo only
+    // when it is this move.
+    const history = unwrapResult(
+      (
+        await client
+          .query(
+            PourTierListHistoryQuery,
+            { tierListId: placement.tierListId },
+            { requestPolicy: "network-only" },
+          )
+          .toPromise()
+      ).data?.tierList,
+      "TierList",
+    );
+    const seq = history.ok
+      ? movedEditSeq(history.data.editHistory?.undo, was, suggested)
+      : null;
+    setMoving(false);
     setBand(suggested);
     notify(
       `Moved ${itemName} to ${BAND_LABELS[suggested] ?? "Unrated"} on ${placement.name}`,
       {
         tone: "success",
-        undo: () => {
-          void (async () => {
-            const undone = unwrapResult(
-              (await undoEdit({ tierListId: placement.tierListId })).data
-                ?.undoTierListEdit,
-              "TierListHistoryStep",
-            );
-            if (undone.ok) setBand(was);
-            else
-              notify("Couldn't undo that move", {
-                tone: "error",
-                description: undone.error.message,
-              });
-          })();
-        },
+        undo:
+          seq === null
+            ? undefined
+            : () => {
+                void (async () => {
+                  const undone = unwrapResult(
+                    (
+                      await undoEdit({
+                        tierListId: placement.tierListId,
+                        expectedSeq: seq,
+                      })
+                    ).data?.undoTierListEdit,
+                    "TierListHistoryStep",
+                  );
+                  if (undone.ok) setBand(was);
+                  else
+                    notify("Couldn't undo that move", {
+                      tone: "error",
+                      description: historyStepFailure("undo", undone.error),
+                    });
+                })();
+              },
       },
     );
   };

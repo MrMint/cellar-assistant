@@ -404,6 +404,35 @@ export const ownPlacements = (
 };
 
 /**
+ * The `seq` of the band move just made, for its toast's Undo
+ * (`undoTierListEdit`'s `expectedSeq`, D4): the list's top edit, read right
+ * after the move, when it is that move — a MOVE from `fromBand` to `toBand`.
+ * `null` when something else is on top (another tab edited the list in
+ * between), so the toast offers no Undo rather than one that would take back
+ * an edit this sheet never made.
+ */
+export const movedEditSeq = (
+  undo:
+    | {
+        readonly seq: number;
+        readonly kind: string;
+        readonly fromBand?: number | null;
+        readonly toBand?: number | null;
+      }
+    | null
+    | undefined,
+  fromBand: number,
+  toBand: number,
+): number | null =>
+  undo !== null &&
+  undo !== undefined &&
+  undo.kind === "MOVE" &&
+  undo.fromBand === fromBand &&
+  undo.toBand === toBand
+    ? undo.seq
+    : null;
+
+/**
  * `reorderTierListBand`'s `orderedIds` for moving one entry into `band`:
  * the band as it is (by position), with the entry at its end — a rating
  * says which band, not where in it. `null` when it is already there.

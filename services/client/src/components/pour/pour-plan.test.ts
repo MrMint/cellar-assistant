@@ -18,6 +18,7 @@ import {
   levelValueText,
   liquidTop,
   meAndLabel,
+  movedEditSeq,
   notYetLevel,
   parseCompanions,
   pourBottleInput,
@@ -198,5 +199,26 @@ describe("who with", () => {
       ),
       [sam, ana],
     );
+  });
+});
+
+describe("movedEditSeq", () => {
+  test("names the move just made, for its Undo", () => {
+    assert.equal(
+      movedEditSeq({ seq: 7, kind: "MOVE", fromBand: 3, toBand: 5 }, 3, 5),
+      7,
+    );
+  });
+  test("no Undo when another edit is on top", () => {
+    assert.equal(
+      movedEditSeq({ seq: 8, kind: "ADD", fromBand: null, toBand: 5 }, 3, 5),
+      null,
+    );
+    assert.equal(
+      movedEditSeq({ seq: 8, kind: "MOVE", fromBand: 5, toBand: 2 }, 3, 5),
+      null,
+    );
+    assert.equal(movedEditSeq(null, 3, 5), null);
+    assert.equal(movedEditSeq(undefined, 3, 5), null);
   });
 });
