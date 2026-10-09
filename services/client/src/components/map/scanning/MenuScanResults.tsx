@@ -291,7 +291,14 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
           {match.href ? (
             <>
               {" to "}
-              <Link href={match.href} underline="always" className="text-ink-1">
+              {/* 24px tall at least (WCAG 2.5.8): the line sits on the
+                  row's own open button, so an 18px text link fails axe
+                  target-size on every matched row. */}
+              <Link
+                href={match.href}
+                underline="always"
+                className="inline-flex min-h-6 items-center text-ink-1"
+              >
                 {match.name}
               </Link>
             </>
