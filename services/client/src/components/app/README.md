@@ -418,8 +418,9 @@ calls `onError` (toast it). One write at a time: taps during a write flip
 what is drawn, and the hook writes again only if the last tapped state is not
 what the server then holds — safe even over a mutation that flips rather than
 sets, though every write wired to it sets (`setFavorite`,
-`recordPlaceInteraction`), so a retry can never flip one back. The state is per subject: key a component that is reused
-for another item or place (the map drawer keys its content by place id).
+`recordPlaceInteraction`), so a retry can never flip one back. The state is
+per subject: key a component that is reused for another item or place (the
+map drawer keys its content by place id).
 Never disable the control while `pending` (`aria-busy` only) and never swap
 its glyph for a spinner. Used by ItemCard's heart and the place Save / Visited
 toggles (`usePlaceToggles`). Check-ins are not toggles: they go through the
