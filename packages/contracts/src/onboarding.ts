@@ -319,7 +319,7 @@ export type ItemOnboardingActorInterface = {
    * the client mints; any signed-in caller, and an id that already names an
    * onboarding must be the caller's. Abstains rather than guesses; stores
    * nothing, and never creates the item — the person's confirm does that,
-   * through `createItem`.
+   * through `openDraft` then `confirm`.
    */
   suggestNewItem(
     ctx: Ctx,

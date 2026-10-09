@@ -916,7 +916,7 @@ export class ItemOnboardingActor
    * is the signed-in caller; the key is a draft id the client minted, and one
    * that already names an onboarding must be the caller's (answered as absent
    * otherwise, like every other read of a row here). Writes nothing — the
-   * draft card's confirm is `createItem`, the person's tap.
+   * draft card's Add is `openDraft` then `confirm`, on the person's tap.
    */
   async suggestNewItem(
     ctx: Ctx,
@@ -928,6 +928,11 @@ export class ItemOnboardingActor
     }
     if (!isItemType(input.itemType)) {
       throw new ValidationError(`"${input.itemType}" is not an item type`);
+    }
+    // A draft with no name gives the model nothing to look up: refused before
+    // a metered call, not answered with a guess about an empty string.
+    if (typeof input.name !== "string" || input.name.trim() === "") {
+      throw new ValidationError("a draft needs a name to suggest details for");
     }
     const existing = this.aggregate;
     if (existing !== null) await this.requireVisible(ctx, existing);

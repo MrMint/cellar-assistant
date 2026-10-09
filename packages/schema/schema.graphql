@@ -3619,7 +3619,7 @@ type Mutation {
   suggestItemDetails(input: SuggestItemDetailsInput!, itemId: ID!, type: ItemType!): SuggestItemDetailsResult!
 
   """
-  X07 “Add to catalog”: the `suggestItemDetails` pass for a draft that is not an item yet — a menu line nobody has filed. Any signed-in viewer; `draftId` is minted by the client (an id that names someone else's onboarding is not found). May abstain; writes nothing — the draft becomes an item only through `createItem`.
+  X07 “Add to catalog”: the `suggestItemDetails` pass for a draft that is not an item yet — a menu line nobody has filed. Any signed-in viewer; `draftId` is minted by the client (an id that names someone else's onboarding is not found). May abstain; writes nothing — the draft becomes an item only through `openItemDraft` then `confirmItemOnboarding`, on the person's tap.
   """
   suggestNewItemDetails(draftId: ID!, input: SuggestItemDetailsInput!, type: ItemType!): SuggestNewItemDetailsResult!
 

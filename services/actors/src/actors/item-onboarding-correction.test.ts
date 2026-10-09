@@ -270,7 +270,7 @@ describe.skipIf(skip)("ItemOnboardingActor — X19 corrections", () => {
     });
   });
 
-  it("suggestNewItem refuses an anonymous caller, a non-type, and someone else's onboarding id", async () => {
+  it("suggestNewItem refuses an anonymous caller, a non-type, a blank name, and someone else's onboarding id", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
       const stranger = await seedUser(db);
@@ -289,6 +289,12 @@ describe.skipIf(skip)("ItemOnboardingActor — X19 corrections", () => {
         draft.suggestNewItem(userCtx(owner, "r"), {
           itemType: "COCKTAIL" as never,
           name: "Negroni",
+        }),
+      ).rejects.toThrow(ValidationError);
+      await expect(
+        draft.suggestNewItem(userCtx(owner, "r"), {
+          itemType: "WINE",
+          name: "   ",
         }),
       ).rejects.toThrow(ValidationError);
       const theirs = await activate(
