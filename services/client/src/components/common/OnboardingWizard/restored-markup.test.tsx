@@ -56,16 +56,43 @@ describe("ItemOnboarding (snap-once, X05/N21)", () => {
     assert.match(text(render(<ItemOnboarding type="TEA" />)), /Add Tea/);
   });
 
-  test("a generic entry asks the type, and offers the three modes", () => {
-    const html = render(<ItemOnboarding type="WINE" chooseType showModes />);
+  test("a generic entry asks the type; the surface's mode row sits under the camera", () => {
+    const html = render(
+      <ItemOnboarding
+        type="WINE"
+        chooseType
+        leading={<button type="button">Close</button>}
+        modeRow={<div data-slot="mode-row" />}
+      />,
+    );
     const words = text(html);
-    assert.match(words, /Add a bottle/);
+    assert.match(words, /Close[\s\S]*Add a bottle/);
     assert.match(html, /aria-label="What are you adding\?"/);
     for (const type of ["Wine", "Beer", "Spirit", "Sake", "Coffee", "Tea"]) {
       assert.match(words, new RegExp(`\\b${type}\\b`));
     }
-    assert.match(html, /aria-label="What are you capturing\?"/);
-    assert.match(words, /Bottle[\s\S]*Menu[\s\S]*Recipe/);
+    // X06: right under the picture, above the hint and "Type it in instead".
+    assert.match(
+      html,
+      /data-slot="capture-camera"[\s\S]*data-slot="mode-row"[\s\S]*Type it in instead/,
+    );
+  });
+
+  test("a carried photo stands in for the camera until 'Read this label' (X06)", () => {
+    const html = render(
+      <ItemOnboarding
+        type="BEER"
+        chooseType
+        initialPhoto="data:image/jpeg;base64,AA=="
+      />,
+    );
+    assert.doesNotMatch(html, /data-slot="capture-camera"/);
+    assert.match(html, /data-slot="capture-preview"/);
+    assert.match(html, /src="data:image\/jpeg;base64,AA=="/);
+    assert.match(text(html), /Read this label/);
+    assert.match(text(html), /Retake/);
+    // The type row is still there, so the read's type is the person's.
+    assert.match(html, /aria-label="What are you adding\?"/);
   });
 });
 

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { loadAddableCellars } from "@/components/capture/addable-cellars";
+import { CaptureClose } from "@/components/capture/CaptureChrome";
 import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboarding";
 import { itemTypeFromSegment } from "@/components/item-api/itemTypes";
 
@@ -24,10 +25,13 @@ export default async function AddItemTypePage({
   const cellars = await loadAddableCellars();
 
   return (
-    <ItemOnboarding
-      type={type}
-      cellars={cellars}
-      resumeId={typeof draft === "string" ? draft : undefined}
-    />
+    <div className="mx-auto w-full max-w-[600px]">
+      <ItemOnboarding
+        type={type}
+        cellars={cellars}
+        resumeId={typeof draft === "string" ? draft : undefined}
+        leading={<CaptureClose />}
+      />
+    </div>
   );
 }

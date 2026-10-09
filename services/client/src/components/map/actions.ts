@@ -35,6 +35,7 @@ import { useMemo } from "react";
 import { type Client, useClient } from "urql";
 import { uploadFile } from "@/lib/api/files";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
+import type { MenuPlaceHint } from "@/lib/capture/menu-place";
 import {
   type DuplicatePlace,
   duplicateFrom,
@@ -659,9 +660,14 @@ export function usePlaceActions() {
 
     // -- menu scanning (the old `menuScanning.ts`) --------------------------
 
+    /**
+     * `placeHint` is a place id (the place page's scanner), or the capture
+     * surface's whole hint (X06): the place the person confirmed, the nearest
+     * guess, and where they stood (`lib/capture/menu-place.ts`).
+     */
     const uploadAndProcessMenuScan = async (
       file: File,
-      placeId: string,
+      placeHint: string | MenuPlaceHint,
     ): Promise<{ success: boolean; scanId?: string; error?: string }> => {
       try {
         const fileId = await uploadFile(client, file, "menu-scan", {
@@ -670,7 +676,13 @@ export function usePlaceActions() {
         const response = await client
           .mutation(CreateMenuScanMutation, {
             menuScanId: crypto.randomUUID(),
-            input: { originalImageId: fileId, placeHint: { placeId } },
+            input: {
+              originalImageId: fileId,
+              placeHint:
+                typeof placeHint === "string"
+                  ? { placeId: placeHint }
+                  : placeHint,
+            },
           })
           .toPromise();
         if (response.error) {

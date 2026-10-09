@@ -1,17 +1,19 @@
 import { loadAddableCellars } from "@/components/capture/addable-cellars";
+import { CaptureSurface } from "@/components/capture/CaptureSurface";
 import {
   type ApiItemType,
   ITEM_TYPES,
 } from "@/components/cellar-api/itemTypes";
-import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboarding";
 import { CAPTURE_MODES, type CaptureMode } from "@/lib/capture/capture-prefs";
+import { draftIdFrom } from "@/lib/capture/draft-store";
+import { photoTokenFrom } from "@/lib/capture/photo-handoff";
 
 /**
- * `/add` — the capture surface (X05): one camera, the type and the cellar
- * defaulted to the last used (no classifier call), and Bottle · Menu ·
- * Recipe. `?mode=` and `?type=` are an entry's explicit asks (the ＋
- * chooser's Bottle row passes `mode=bottle`); `?draft=` reopens a read left
- * running in the background.
+ * `/add` — the capture surface behind ＋ (X06): the camera, full screen, with
+ * Bottle · Menu · Recipe opening on the last mode used. `?mode=` and `?type=`
+ * are an entry's explicit asks; `?draft=` reopens a bottle's read left
+ * running in the background; `?photo=` carries in a photo taken elsewhere
+ * (photo search's fallback, a label read that said "menu").
  */
 export const dynamic = "force-dynamic";
 
@@ -30,11 +32,9 @@ export default async function AddPage({
   const explicit =
     type !== undefined && (ITEM_TYPES as readonly string[]).includes(type);
   return (
-    <ItemOnboarding
+    <CaptureSurface
       type={explicit ? (type as ApiItemType) : "WINE"}
       typeExplicit={explicit}
-      chooseType
-      showModes
       mode={
         mode !== undefined &&
         (CAPTURE_MODES as readonly string[]).includes(mode)
@@ -42,7 +42,8 @@ export default async function AddPage({
           : undefined
       }
       cellars={cellars}
-      resumeId={one(params.draft)}
+      resumeId={draftIdFrom(one(params.draft))}
+      photoToken={photoTokenFrom(params.photo)}
     />
   );
 }

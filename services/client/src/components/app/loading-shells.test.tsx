@@ -29,6 +29,7 @@ const { SearchLandingShell } = await import(
   "@/components/search/SearchLandingShell"
 );
 const { MeHubShell, ME_SECTIONS } = await import("@/components/user/MeHub");
+const { CaptureShell } = await import("@/components/capture/CaptureShell");
 
 const html = (node: ReactNode) => renderToStaticMarkup(node);
 const SPINNER = /animate-spin|data-slot="spinner"/;
@@ -73,12 +74,20 @@ describe("the route shells", () => {
       ["me", <MeHubShell key="me" />],
       ["home", <SearchLandingShell key="s" />],
       ["place", <PlaceDetailsShell key="p" />],
+      ["capture", <CaptureShell key="a" />],
     ] as const) {
       const out = html(node);
       assert.match(out, /data-loading-shell=""/, `${name} is a shell`);
       assert.doesNotMatch(out, SPINNER, `${name} shows no spinner`);
       assert.match(out, /data-slot="skeleton"/, `${name} has placeholders`);
     }
+  });
+
+  test("Capture (X06): a live Close over the camera and mode-row frames", () => {
+    const out = html(<CaptureShell />);
+    assert.match(out, /<button[^>]*aria-label="Close"/);
+    assert.match(out, /aspect-\[3\/4\]/);
+    assert.match(out, /Loading the camera…/);
   });
 
   test("Cellars: the bar's title and a live Add cellar link", () => {

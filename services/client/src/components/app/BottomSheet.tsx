@@ -69,7 +69,7 @@ export type BottomSheetProps = {
 /**
  * The one bottom sheet (N27; design-direction.md §4.6), on vaul's Drawer:
  * drag with velocity snaps, a focus trap, Escape and a backdrop, from one
- * set of props. Every phone overlay — action lists, the ＋ chooser, the
+ * set of props. Every phone overlay — action lists, the menu place picker, the
  * AppBar overflow, confirms, the install prompt — is one of these.
  * `ResponsiveDialog` swaps it for a centred dialog from `md` up.
  *
