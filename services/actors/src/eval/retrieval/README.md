@@ -77,6 +77,47 @@ What moved what:
   separated by the vector (≥ 0.05) or by the name (≥ 0.1), so that line goes to
   the verifier.
 
+### Narrowed search (X12)
+
+Universal search asks for `itemSearch(narrow: true)`: when some hit's name
+matches the phrase at `ITEM_SEARCH_NARROW_STRONG_NAME` (0.6) or better, only
+the hits whose names match at the lexical threshold (0.5) and the vector-only
+hits within `ITEM_SEARCH_NARROW_DISTANCE_GAP` (0.03) of the nearest strong name
+hit are kept (`narrowToNamed`). The eval runs every query both ways and
+reports `narrowed`; `baseline.json` guards its hit@1, recall@10 and the
+irrelevant-hit count.
+
+| When | Tree | narrowed queries | hit@1 | recall@10 | irrelevant hits (all 49 queries) | irrelevant hits (the narrowed queries) | unrelated left (name < 0.5) |
+|---|---|---|---|---|---|---|---|
+| 2026-10-09 | X12, `nomic-embed-text` | 29 / 49 (10 name, 4 typo, 12 sibling, 2 brand, 1 semantic) | 97.96% (= plain) | 100% (= plain) | 389 → 172 | 241 → 24 | 3 |
+
+The 24 left in the narrowed queries are mostly the named item's siblings by
+name (Lagavulin 8 and Distillers Edition for "lagavulin 16"), which the
+labels count as wrong answers and a person scanning for the bottle does not.
+The three unrelated ones: Cantillon Kriek for "kbs" (+0.020 from Founders KBS)
+and Monkey 47 and Tanqueray Ten for "hendricks gin" (gins, within 0.03 of Hendrick's
+Orbium). Narrowing never fires on the 16 descriptive queries but one ("pinot
+noir wine", where every name says it) and the producer queries whose names do
+not say it ("antinori", "russian river").
+
+How the two numbers were chosen (a sweep over the same run's hits, every
+combination of strong 0.6–1.0, gap 0.02–0.15 and an optional absolute cap of
+0.40–0.50): no setting lost a relevant hit — a producer's other bottles sit
+within 0.011 of the named one ("buffalo trace": E.H. Taylor −0.012, Eagle Rare
+17 +0.011) — so the choice is how much padding survives.
+
+- **Strong 0.6, not higher:** it is what lets a typo narrow ("blantons" against "Blanton's" 0.70,
+  "veuve cliquot" 0.71); at 0.8 only exact names do and 29 narrowed queries
+  become 20. Not lower: "wheated bourbon" scores 0.50 against
+  "Buffalo Trace … Bourbon", and narrowing it would drop the wheated bourbons
+  the vector found (Maker's Mark is lexically 0).
+- **Gap 0.03, relative:** unrelated hits left 1 at 0.02, 3 at 0.03, 6 at
+  0.05, 28 at 0.10. 0.02 leaves only 0.009 of headroom over Eagle Rare 17;
+  0.03 leaves 0.019 for the price of two gins under "hendricks gin". An absolute
+  cap (0.45) would also have dropped KBS's neighbour, but absolute distances
+  are the embedding model's, not the catalog's — re-measure before relying on
+  one with `gemini-embedding-2`.
+
 ### With the real verifier (`RETRIEVAL_EVAL_VERIFIER=model`, Ollama `gemma3:4b`)
 
 | When | Tree | menu match | candidate recall | false suggestions | verifier errors |

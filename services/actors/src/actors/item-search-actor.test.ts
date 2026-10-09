@@ -353,6 +353,82 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
   });
 
   /* ------------------------------------------------------------------ */
+  /* Narrowed search (X12)                                               */
+  /* ------------------------------------------------------------------ */
+
+  describe("a narrowed search (X12)", () => {
+    /**
+     * The query vector is axis 0. The named beer sits on it; the same
+     * brewery's other beer 0.012 away (within the gap); its sibling by name
+     * far away; an unrelated beer at 0.29 — nearer than the sibling, and
+     * exactly the padding a narrowed search drops.
+     */
+    const seedPliny = async (db: DbOrTx, owner: string) => {
+      const elder = await seedBeer(db, owner, "Pliny the Elder");
+      const younger = await seedBeer(db, owner, "Pliny the Younger");
+      const blindPig = await seedBeer(db, owner, "Blind Pig");
+      const unrelated = await seedBeer(db, owner, "Some Other IPA");
+      await seedItemVector(db, elder, unitVector(0));
+      await seedItemVector(db, blindPig, blendedVector(0, 1, 0.1));
+      await seedItemVector(db, unrelated, blendedVector(0, 1, 0.5));
+      await seedItemVector(db, younger, blendedVector(0, 1, 0.8));
+      return { elder, younger, blindPig, unrelated };
+    };
+
+    it("keeps the name matches and the near neighbours, and drops the padding", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const { elder, younger, blindPig, unrelated } = await seedPliny(
+          db,
+          owner,
+        );
+        const plain: ItemSearchInput = { text: "pliny the elder" };
+        const all = await newActor(plain, db, owner).all(userCtx(owner), plain);
+        expect(all.map((hit) => hit.id)).toContain(unrelated.id);
+
+        const input: ItemSearchInput = {
+          text: "pliny the elder",
+          narrow: true,
+        };
+        const hits = await newActor(input, db, owner).all(
+          userCtx(owner),
+          input,
+        );
+        expect(hits.map((hit) => hit.id).sort()).toEqual(
+          [elder.id, younger.id, blindPig.id].sort(),
+        );
+        expect(at(hits, 0).id).toBe(elder.id);
+      });
+    });
+
+    it("leaves a descriptive search, which names nothing, as it was", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        await seedPliny(db, owner);
+        const plain: ItemSearchInput = { text: "hoppy west coast" };
+        const narrowed: ItemSearchInput = { ...plain, narrow: true };
+        const a = await newActor(plain, db, owner).all(userCtx(owner), plain);
+        const b = await newActor(narrowed, db, owner).all(
+          userCtx(owner),
+          narrowed,
+        );
+        expect(b.map((hit) => hit.id)).toEqual(a.map((hit) => hit.id));
+        expect(b).toHaveLength(4);
+      });
+    });
+
+    it("is part of the key only when set", () => {
+      const base: ItemSearchInput = { text: "pliny" };
+      expect(itemSearchActorId({ ...base, narrow: false }, null)).toBe(
+        itemSearchActorId(base, null),
+      );
+      expect(itemSearchActorId({ ...base, narrow: true }, null)).not.toBe(
+        itemSearchActorId(base, null),
+      );
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
   /* No embedding (D25 parity)                                           */
   /* ------------------------------------------------------------------ */
 

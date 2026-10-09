@@ -75,6 +75,8 @@ import type {
 import {
   ConflictError,
   ITEM_SEARCH_MAX_DISTANCE,
+  ITEM_SEARCH_NARROW_DISTANCE_GAP,
+  ITEM_SEARCH_NARROW_STRONG_NAME,
   ITEM_SEARCH_RESULT_CAP,
   ITEM_TYPES,
   ItemSearchActorDescriptor,
@@ -349,7 +351,7 @@ export class ItemSearchActor
     );
 
     if (query.kind !== "text") return toHits(vectorRows);
-    return fuseHybrid(
+    const fused = fuseHybrid(
       toHits(vectorRows),
       toHits(lexicalRows),
       tiedRanks(
@@ -358,6 +360,7 @@ export class ItemSearchActor
       ),
       limit,
     );
+    return input.narrow === true ? narrowToNamed(fused) : fused;
   }
 
   /**
@@ -731,6 +734,45 @@ export const fuseHybrid = (
     )
     .slice(0, limit)
     .map(({ hit }) => hit);
+
+/**
+ * X12 — a search that names an item narrows to it instead of padding the
+ * list with whatever else is nearest (`ItemSearchInput.narrow`).
+ *
+ * "Names an item": some hit's name matches the phrase at
+ * {@link ITEM_SEARCH_NARROW_STRONG_NAME} or better. Then a hit stays when
+ * its own name matches at the lexical arm's threshold
+ * ({@link LEXICAL_THRESHOLD} — the siblings, "Lagavulin 8" for "lagavulin
+ * 16"), or when its vector lies within {@link ITEM_SEARCH_NARROW_DISTANCE_GAP}
+ * of the nearest strong name hit's (a producer's other bottles, which the
+ * embedding text names by brand). Everything else was padding.
+ *
+ * Order is kept, so this only ever removes. With no strong name hit — a
+ * description, a producer the names do not say — the list is returned as
+ * it is: those are exactly the searches the vector is for. A strong hit with
+ * no vector (never embedded) narrows to the name matches alone, since there
+ * is no distance to measure the others against.
+ */
+export const narrowToNamed = (
+  hits: readonly ItemSearchHit[],
+): ItemSearchHit[] => {
+  const strong = hits.filter(
+    (hit) => (hit.lexicalSimilarity ?? 0) >= ITEM_SEARCH_NARROW_STRONG_NAME,
+  );
+  if (strong.length === 0) return [...hits];
+  const anchors = strong
+    .map((hit) => hit.distance)
+    .filter((distance): distance is number => distance !== null);
+  const reach =
+    anchors.length === 0
+      ? Number.NEGATIVE_INFINITY
+      : Math.min(...anchors) + ITEM_SEARCH_NARROW_DISTANCE_GAP;
+  return hits.filter(
+    (hit) =>
+      (hit.lexicalSimilarity ?? 0) >= LEXICAL_THRESHOLD ||
+      (hit.distance !== null && hit.distance <= reach),
+  );
+};
 
 /** A hit with no vector sorts after every hit that has one. */
 const orderedDistance = (hit: ItemSearchHit): number =>

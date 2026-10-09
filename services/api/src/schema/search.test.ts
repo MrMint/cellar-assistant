@@ -121,6 +121,24 @@ const FIELDS: readonly {
     viewerScoped: false,
   },
   {
+    // X12: `narrow` joins the key, and only when it is set.
+    actorType: "ItemSearchActor",
+    document: `{ itemSearch(text: "pinot noir", narrow: true, first: 2) { ... on ItemSearchConnection { edges { cursor } } } }`,
+    key: (ctx) =>
+      itemSearchActorId(
+        {
+          text: "pinot noir",
+          vector: null,
+          itemTypes: null,
+          maxDistance: null,
+          limit: null,
+          narrow: true,
+        },
+        ctx.viewerId,
+      ),
+    viewerScoped: false,
+  },
+  {
     actorType: "CellarItemSearchActor",
     document: `{ cellarItemSearch(cellarId: "${CELLAR}", query: "oaky", first: 2) { ... on CellarItemSearchConnection { edges { cursor } } } }`,
     key: (ctx) =>

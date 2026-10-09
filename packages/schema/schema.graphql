@@ -4436,6 +4436,11 @@ type Query {
     """
     limit: Int
     maxDistance: Float
+
+    """
+    X12: when the phrase names an item outright, return the items whose names match and the ones the embedding puts right beside the named one, instead of padding the list with whatever else is nearest. No effect on a search that names nothing (a description, a producer the names do not say), or on a photo or vector search.
+    """
+    narrow: Boolean
     text: String
 
     """

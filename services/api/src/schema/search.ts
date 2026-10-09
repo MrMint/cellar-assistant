@@ -146,6 +146,15 @@ builder.queryField("itemSearch", (t) =>
       }),
       itemTypes: t.arg({ type: [ItemTypeEnum], required: false }),
       maxDistance: t.arg.float({ required: false }),
+      narrow: t.arg.boolean({
+        required: false,
+        description:
+          "X12: when the phrase names an item outright, return the items " +
+          "whose names match and the ones the embedding puts right beside " +
+          "the named one, instead of padding the list with whatever else is " +
+          "nearest. No effect on a search that names nothing (a description, " +
+          "a producer the names do not say), or on a photo or vector search.",
+      }),
       limit: t.arg.int({
         required: false,
         description:
@@ -169,6 +178,7 @@ builder.queryField("itemSearch", (t) =>
         limit:
           args.limit ??
           (imageFileId === null ? null : IMAGE_SEARCH_RESULT_LIMIT),
+        ...(args.narrow === true ? { narrow: true } : {}),
       };
       return connectionFromPage(
         await context

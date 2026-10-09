@@ -274,7 +274,42 @@ export type ItemSearchInput = {
   readonly itemTypes?: readonly ItemType[] | null;
   readonly maxDistance?: number | null;
   readonly limit?: number | null;
+  /**
+   * X12: **narrow instead of padding.** A `text` search whose phrase names
+   * an item outright (a hit whose name matches at
+   * {@link ITEM_SEARCH_NARROW_STRONG_NAME} or better) keeps only the hits
+   * whose names match too, plus the vector-only hits within
+   * {@link ITEM_SEARCH_NARROW_DISTANCE_GAP} of that name hit — the same
+   * producer's other bottles, which the embedding puts right beside it —
+   * rather than filling the list with whatever else is nearest. No effect on
+   * a search with no such hit (a description, a producer the names do not
+   * say), on a photo or vector search, or when it is false. Off by default,
+   * so the menu matcher's candidate lists are unchanged; part of the key
+   * only when set.
+   */
+  readonly narrow?: boolean | null;
 };
+
+/**
+ * X12: the name similarity (`strict_word_similarity`, 0–1) that counts as
+ * the phrase naming an item. Tuned on the N05 eval
+ * (`services/actors/src/eval/retrieval/README.md`): 0.6 takes typos that
+ * still spell most of the name ("blantons" against "Blanton's" 0.70, "veuve cliquot" 0.71) and
+ * leaves a descriptive phrase that merely shares a word with a name
+ * ("wheated bourbon" against "… Bourbon", 0.50) un-narrowed — narrowing that
+ * one would drop the wheated bourbons the vector found.
+ */
+export const ITEM_SEARCH_NARROW_STRONG_NAME = 0.6;
+
+/**
+ * X12: how much further than the nearest strong name hit a vector-only hit
+ * may lie and still be kept by a narrowed search. Relative, not absolute, so
+ * it survives a change of embedding model better than a fixed cutoff; tuned
+ * on N05 with `nomic-embed-text` — a producer's other bottles sit within
+ * 0.011 of the named one ("buffalo trace": Eagle Rare 17 at +0.011), the
+ * nearest unrelated hit +0.020 ("kbs"). See the eval README for the sweep.
+ */
+export const ITEM_SEARCH_NARROW_DISTANCE_GAP = 0.03;
 
 export type ItemSearchHit = ItemRef & {
   readonly name: string;
@@ -338,6 +373,8 @@ export const itemSearchActorId = (
     itemTypes: [...(input.itemTypes ?? [])].sort(),
     maxDistance: input.maxDistance ?? ITEM_SEARCH_MAX_DISTANCE,
     limit: input.limit ?? ITEM_SEARCH_RESULT_CAP,
+    // Absent unless set, so every key minted before X12 is unchanged.
+    ...(input.narrow === true ? { narrow: true } : {}),
   });
 
 /* -------------------------------------------------------------------------- */
