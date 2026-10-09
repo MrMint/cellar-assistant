@@ -202,7 +202,11 @@ export function ItemPageView({
           total={
             bottlesTotal === null || bottlesTotal === undefined
               ? null
-              : bottlesTotal + (shownBottles.length - bottles.length)
+              : // `myBottles` counts bottles still in the cellar, so only a
+                // finished selected bottle is one it did not count. (Comparing
+                // list lengths would also count an active selected bottle
+                // that sits past the first page as an extra one.)
+                bottlesTotal + (owned && selected.emptyAt !== null ? 1 : 0)
           }
           selectedId={owned ? selected.id : null}
         />

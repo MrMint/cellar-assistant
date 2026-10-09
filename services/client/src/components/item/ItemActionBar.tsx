@@ -59,7 +59,8 @@ export type ItemActionBarProps = {
  *
  * The sheet's rows open their own modals only once the sheet has finished
  * closing (`onClosed`): two overlapping Radix/vaul modals can leave
- * `pointer-events: none` stuck on the body.
+ * `pointer-events: none` stuck on the body. Share is the exception — it
+ * opens no modal of ours, and needs the tap's user activation.
  */
 export function ItemActionBar({
   itemId,
@@ -87,6 +88,8 @@ export function ItemActionBar({
         setTierListOpen(true);
         return;
       case "share":
+        // Run from the tap itself (see the row's onClick); kept for
+        // exhaustiveness.
         void share();
         return;
       case "edit":
@@ -167,7 +170,15 @@ export function ItemActionBar({
                   entry.destructive && "text-destructive",
                 )}
                 onClick={() => {
-                  afterClose.current = entry.action;
+                  // Share runs inside the tap: the system share sheet (and
+                  // Safari's clipboard fallback) need the tap's user
+                  // activation, which a sheet's closing animation can
+                  // outlast. It opens no modal of ours, so it need not wait.
+                  if (entry.action === "share") {
+                    void share();
+                  } else {
+                    afterClose.current = entry.action;
+                  }
                   setMoreOpen(false);
                 }}
               >
