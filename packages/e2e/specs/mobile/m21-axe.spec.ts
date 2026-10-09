@@ -374,39 +374,86 @@ test("the skip link is the first Tab stop and lands focus in main", async ({
 });
 
 /**
- * The focused element, whether it draws a focus indicator (an outline, a
- * ring's box-shadow, or either on its ::before/::after — `app/Link`'s overlay
- * rings its pseudo-element), and whether this walk has been here before.
- * Runs in the page, from source: no closures, no imports.
+ * One step of the keyboard walk, run in the page after each Tab. Judges the
+ * element focused **before** this Tab: its look while focused (stored on it
+ * at the previous step) against its look now that focus has moved on. A
+ * difference is its focus indicator; none means it has none.
+ *
+ * Comparing the element with itself is the point. Asking only "does it have
+ * an outline or a box-shadow while focused?" passes nearly everything here:
+ * Tailwind composes `box-shadow` from ring and shadow layers, so any control
+ * with `shadow-xs` (most shadcn buttons and inputs) has a non-`none`
+ * box-shadow whether it is focused or not.
+ *
+ * The look is the outline, box-shadow, border colour, background and text
+ * decoration of the element and its ::before/::after (`app/Link`'s overlay
+ * draws its ring on a pseudo-element), and of its three nearest ancestors
+ * (`ui/input-group` rings the group, not the input, through `has-[…]`).
+ * Runs in the page, from source: no
+ * closures, no imports. Transitions are switched off first (`noMotion`), or
+ * a ring still fading in would read as no change.
  */
-function focusIndicator(): {
-  shown: boolean;
-  what: string;
-  again: boolean;
-} | null {
-  const el = document.activeElement as HTMLElement | null;
-  if (el === null || el === document.body) return null;
+function focusStep(): {
+  judged: { what: string; shown: boolean } | null;
+  current: { what: string; again: boolean } | null;
+} {
+  const own = (el: Element) =>
+    [undefined, "::before", "::after"]
+      .map((pseudo) => {
+        const s = getComputedStyle(el, pseudo);
+        return [
+          s.outlineStyle,
+          s.outlineWidth,
+          s.outlineColor,
+          s.outlineOffset,
+          s.boxShadow,
+          s.borderTopColor,
+          s.borderBottomColor,
+          s.backgroundColor,
+          s.textDecorationLine,
+        ].join("|");
+      })
+      .join("||");
+  const look = (el: Element) => {
+    const parts: string[] = [];
+    for (let at: Element | null = el, i = 0; at !== null && i < 4; i++) {
+      parts.push(own(at));
+      at = at.parentElement;
+    }
+    return parts.join("|||");
+  };
+
+  let judged: { what: string; shown: boolean } | null = null;
+  const prev = document.querySelector("[data-e2e-focus-look]");
+  if (prev !== null) {
+    if (prev !== document.activeElement) {
+      judged = {
+        what: prev.getAttribute("data-e2e-focus-what") ?? "?",
+        shown: prev.getAttribute("data-e2e-focus-look") !== look(prev),
+      };
+    }
+    prev.removeAttribute("data-e2e-focus-look");
+  }
+
+  const el = document.activeElement;
+  if (el === null || el === document.body) return { judged, current: null };
   const again = el.hasAttribute("data-e2e-focus-seen");
-  el.setAttribute("data-e2e-focus-seen", "");
-  const visible = (s: CSSStyleDeclaration) =>
-    (s.outlineStyle !== "none" &&
-      Number.parseFloat(s.outlineWidth) > 0 &&
-      !/,\s*0\)$|transparent/.test(s.outlineColor)) ||
-    (s.boxShadow !== "none" && s.boxShadow !== "");
-  const shown =
-    visible(getComputedStyle(el)) ||
-    visible(getComputedStyle(el, "::after")) ||
-    visible(getComputedStyle(el, "::before"));
   const name = (el.getAttribute("aria-label") ?? el.textContent ?? "")
     .trim()
     .slice(0, 40);
   const role = el.getAttribute("role");
-  return {
-    shown,
-    again,
-    what: `${el.tagName.toLowerCase()}${role === null ? "" : `[role=${role}]`} "${name}"`,
-  };
+  const what = `${el.tagName.toLowerCase()}${role === null ? "" : `[role=${role}]`} "${name}"`;
+  el.setAttribute("data-e2e-focus-seen", "");
+  el.setAttribute("data-e2e-focus-what", what);
+  el.setAttribute("data-e2e-focus-look", look(el));
+  return { judged, current: { what, again } };
 }
+
+/** Transitions and animations finish at once, so a look is its end state. */
+const noMotion = `*, *::before, *::after {
+  transition-duration: 0s !important; transition-delay: 0s !important;
+  animation-duration: 0s !important; animation-delay: 0s !important;
+}`;
 
 test("focus is visible at every Tab stop on the main routes", async ({
   page,
@@ -428,18 +475,23 @@ test("focus is visible at every Tab stop on the main routes", async ({
     await test.step(route, async () => {
       await page.goto(route);
       await settled(page);
-      // Until focus wraps round to a stop already seen, or 40 stops.
+      await page.addStyleTag({ content: noMotion });
+      // Until focus wraps round to a stop already seen or leaves the page,
+      // or 40 stops. Each step judges the stop before it, so the last stop
+      // is judged by the step that ends the walk.
       let stops = 0;
-      for (; stops < 40; stops++) {
+      for (; stops <= 40; stops++) {
         await page.keyboard.press("Tab");
-        const focused = await page.evaluate(focusIndicator);
-        if (focused === null || focused.again) break;
-        expect
-          .soft(
-            focused.shown,
-            `${route}: no focus indicator on ${focused.what}`,
-          )
-          .toBe(true);
+        const { judged, current } = await page.evaluate(focusStep);
+        if (judged !== null) {
+          expect
+            .soft(
+              judged.shown,
+              `${route}: no focus indicator on ${judged.what}`,
+            )
+            .toBe(true);
+        }
+        if (current === null || current.again) break;
       }
       expect(stops, `${route}: Tab reached nothing`).toBeGreaterThan(2);
     });
