@@ -8,6 +8,7 @@ import {
   blankForm,
   confirmAllMatches,
   confirmMatch,
+  createFields,
   emptyIngredient,
   formFromRecipe,
   formProblems,
@@ -17,6 +18,7 @@ import {
   rejectMatch,
   type ServerRecipe,
   stepInputs,
+  widenAfterCreate,
 } from "./recipe-draft";
 
 const GIN = "11111111-1111-4111-8111-111111111111";
@@ -257,6 +259,20 @@ describe("stepInputs and recipeFields", () => {
       description: null,
       privacy: "PRIVATE",
     });
+  });
+
+  test("a new recipe is written Private and shared only by the last write", () => {
+    const form = {
+      ...blankForm(),
+      name: "Daiquiri",
+      privacy: "PUBLIC" as const,
+    };
+    // Whatever the form says, the first write is Private: a later write that
+    // fails must not leave a half-written recipe other people can open.
+    assert.equal(createFields(form).privacy, "PRIVATE");
+    assert.equal(recipeFields(form).privacy, "PUBLIC");
+    assert.equal(widenAfterCreate(form), true);
+    assert.equal(widenAfterCreate({ ...form, privacy: "PRIVATE" }), false);
   });
 
   test("a name and an ingredient are what a save needs", () => {

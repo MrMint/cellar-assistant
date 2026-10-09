@@ -34,6 +34,7 @@ import {
 import {
   confirmAllMatches,
   confirmMatch,
+  createFields,
   type DraftIngredient,
   emptyIngredient,
   emptyStep,
@@ -47,6 +48,7 @@ import {
   recipeFields,
   rejectMatch,
   stepInputs,
+  widenAfterCreate,
 } from "./recipe-draft";
 
 export type RecipeEditorProps =
@@ -132,9 +134,15 @@ export function RecipeEditor(props: RecipeEditorProps) {
     try {
       let id = recipeId;
       const fields = recipeFields(form);
+      // A new recipe is written Private and shared last (`createFields`), so
+      // a later write that fails never leaves a half-written shared recipe —
+      // on a retry too, since the row this editor created is still Private
+      // until the final write lands.
+      const shareLast = props.mode === "new" && widenAfterCreate(form);
       if (id === null) {
         const created = unwrapResult(
-          (await createRecipe({ input: fields })).data?.createRecipe,
+          (await createRecipe({ input: createFields(form) })).data
+            ?.createRecipe,
           "Recipe",
         );
         if (!created.ok) {
@@ -146,8 +154,12 @@ export function RecipeEditor(props: RecipeEditorProps) {
         setRecipeId(id);
       } else if (!isDraft) {
         const updated = unwrapResult(
-          (await updateRecipe({ recipeId: id, input: fields })).data
-            ?.updateRecipe,
+          (
+            await updateRecipe({
+              recipeId: id,
+              input: props.mode === "new" ? createFields(form) : fields,
+            })
+          ).data?.updateRecipe,
           "Recipe",
         );
         if (!updated.ok) {
@@ -183,13 +195,16 @@ export function RecipeEditor(props: RecipeEditorProps) {
         return;
       }
 
-      if (isDraft) {
-        // Last: publishing is what makes it more than the author's draft.
+      if (isDraft || shareLast) {
+        // Last: publishing a draft, or sharing a new recipe, is what makes it
+        // more than its author's.
         const published = unwrapResult(
           (
             await updateRecipe({
               recipeId: id,
-              input: { ...fields, isDraft: false },
+              input: isDraft
+                ? { ...fields, isDraft: false }
+                : { privacy: form.privacy },
             })
           ).data?.updateRecipe,
           "Recipe",
@@ -312,7 +327,6 @@ export function RecipeEditor(props: RecipeEditorProps) {
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
                 onClick={() => setForm(confirmAllMatches)}
               >
                 <Check aria-hidden />
@@ -589,7 +603,6 @@ function IngredientRow({
               <Button
                 type="button"
                 variant="secondary"
-                size="sm"
                 aria-label={`Keep ${line.match.label}`}
                 onClick={() => onChange(confirmMatch(line))}
               >
@@ -600,7 +613,6 @@ function IngredientRow({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               aria-label={
                 suggested
                   ? `Not ${line.match.label}`

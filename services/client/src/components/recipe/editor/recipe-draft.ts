@@ -488,6 +488,23 @@ export const recipeFields = (form: RecipeForm) => ({
   privacy: form.privacy,
 });
 
+/**
+ * The `createRecipe` input for a new recipe: always **Private**, whatever
+ * the form says. A save is several writes (recipe, ingredients, method), and
+ * a recipe shared before its ingredients are written would be a half-written
+ * recipe other people can open if a later write fails. The chosen privacy is
+ * applied by {@link widenAfterCreate}, after the rest has landed — the same
+ * "publish last" rule a draft follows.
+ */
+export const createFields = (form: RecipeForm) => ({
+  ...recipeFields(form),
+  privacy: "PRIVATE" as const,
+});
+
+/** Whether a new recipe still needs its privacy set once everything else is written. */
+export const widenAfterCreate = (form: RecipeForm): boolean =>
+  form.privacy !== "PRIVATE";
+
 /* -------------------------------------------------------------------------- */
 /* Words                                                                       */
 /* -------------------------------------------------------------------------- */

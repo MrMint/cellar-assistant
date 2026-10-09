@@ -166,7 +166,7 @@ export const RecipeDetails = ({
               The AI read this recipe. Only you can see it until you check it
               and save it.
             </p>
-            <Button asChild size="sm" className="self-start">
+            <Button asChild className="self-start">
               <Link href={`/recipes/${recipe.id}/edit`} underline="none">
                 Review draft
               </Link>
