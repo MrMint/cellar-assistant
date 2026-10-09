@@ -101,6 +101,7 @@ export {
   TriangleAlert as Warning,
   Trophy,
   User as Person,
+  UserPlus as PersonAdd,
   UserRound as Me,
   Users as People,
   Utensils as Restaurant,

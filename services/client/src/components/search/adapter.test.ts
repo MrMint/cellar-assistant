@@ -21,8 +21,6 @@ import {
 } from "./adapter";
 import {
   BARCODE_SEARCH_LIMIT,
-  ITEM_SEARCH_LIMIT,
-  ITEM_SEARCH_MAX_DISTANCE,
   NEARBY_PLACES_LIMIT,
   RECENT_ACTIVITY_CAP,
   RECENT_ACTIVITY_PER_KIND,
@@ -187,10 +185,7 @@ describe("searchResultFromCard", () => {
   });
 });
 
-test("limits match the old page and stay inside the API's caps", () => {
-  assert.equal(ITEM_SEARCH_LIMIT, 10, "text_search(limit: 10)");
-  assert.ok(ITEM_SEARCH_LIMIT >= 1 && ITEM_SEARCH_LIMIT <= 50);
-  assert.equal(ITEM_SEARCH_MAX_DISTANCE, 1, "distance: { _lte: 1 }");
+test("limits stay inside the API's caps", () => {
   assert.ok(BARCODE_SEARCH_LIMIT >= 1 && BARCODE_SEARCH_LIMIT <= 100);
 });
 

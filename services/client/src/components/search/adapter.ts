@@ -102,6 +102,8 @@ export type SearchParams = {
   image_results?: string | string[];
   image_no_results?: string | string[];
   activity?: string | string[];
+  /** X12: the one section "See all" opened (`universal-search.ts`). */
+  in?: string | string[];
 };
 
 export type SearchState = {
