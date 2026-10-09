@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useMutation } from "urql";
 import { ActionBar } from "@/components/app/ActionBar";
 import { AIDraftField } from "@/components/app/AIDraftField";
@@ -126,9 +126,13 @@ export function RecipeEditor(props: RecipeEditorProps) {
         ? "Review draft"
         : "Edit recipe";
 
+  // A second submit (a double tap, Return in a field) while one is in
+  // flight would create a second recipe: `createRecipe` mints its own id.
+  const inFlight = useRef(false);
   const save = async () => {
     setAttempted(true);
-    if (problems.length > 0) return;
+    if (problems.length > 0 || inFlight.current) return;
+    inFlight.current = true;
     setSaving(true);
     setFailure(null);
     try {
@@ -229,6 +233,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
         }),
       });
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };
