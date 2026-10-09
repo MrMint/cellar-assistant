@@ -120,6 +120,14 @@ export const defaultPour = (type: ApiItemType, level: number): number => {
   return glass === undefined ? level : levelAfterPreset(type, level, glass);
 };
 
+/**
+ * Whether the primary button can pour: the level must have moved down — or
+ * the bottle reads 0% without having been finished, where the only pour is
+ * the last of it.
+ */
+export const canPourTo = (from: number, to: number): boolean =>
+  to < from || (from === 0 && to === 0);
+
 /** Which preset (if any) a level is exactly one pour of. */
 export const presetFor = (
   type: ApiItemType,
@@ -276,8 +284,10 @@ export const pourLabel = (
   from: number,
   to: number,
 ): string => {
-  if (to >= from) return "Pour";
+  // An empty bottle that was never finished (0% left) can still be poured:
+  // that is the last of it, and it asks "Finished?".
   if (to === 0) return "Pour the last of it";
+  if (to >= from) return "Pour";
   const preset = presetFor(type, from, to);
   return preset === null
     ? `Pour ${from - to}%`

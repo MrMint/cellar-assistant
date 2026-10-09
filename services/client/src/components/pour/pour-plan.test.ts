@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  canPourTo,
   clampLevel,
   containerNote,
   defaultPour,
@@ -160,6 +161,10 @@ describe("what the writes send", () => {
     assert.equal(pourLabel("WINE", 60, 47), "Pour 13%");
     assert.equal(pourLabel("WINE", 60, 0), "Pour the last of it");
     assert.equal(pourLabel("WINE", 60, 60), "Pour");
+    assert.equal(pourLabel("WINE", 0, 0), "Pour the last of it");
+    assert.equal(canPourTo(60, 60), false);
+    assert.equal(canPourTo(60, 59), true);
+    assert.equal(canPourTo(0, 0), true);
     assert.equal(pouredMessage("WINE", 60, 40), "Poured 150 ml · 40% left");
     assert.equal(pouredMessage("SPIRIT", 60, 48), "Poured 12% · 48% left");
     assert.equal(pouredMessage("SPIRIT", 60, 47), "Poured 90 ml · 47% left");

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { FilterChip } from "@/components/app/FilterChip";
 import { Check, People, Pour } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { RatingInput } from "@/components/app/RatingInput";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
@@ -43,6 +44,7 @@ import {
   type BottleBefore,
   bandMoveOrder,
   type Companion,
+  canPourTo,
   clampLevel,
   containerNote,
   defaultPour,
@@ -343,7 +345,15 @@ export function PourSheet({
     <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
-        if (!busy) onOpenChange(next);
+        if (busy) return;
+        // Closing on "Finished?" is "Not yet": the drink is already logged,
+        // and the bottle must not keep reading as if it had not been poured.
+        // Not yet leaves a drop, closes the sheet and offers Undo.
+        if (!next && step === "finish" && finishPhase === "idle") {
+          void notYet();
+          return;
+        }
+        onOpenChange(next);
       }}
       dismissible={!busy && finishPhase !== "finishing"}
       title={title}
@@ -352,7 +362,7 @@ export function PourSheet({
         step === "pour" ? (
           <Button
             className="w-full"
-            disabled={busy || level >= from || whenProblem !== null}
+            disabled={busy || !canPourTo(from, level) || whenProblem !== null}
             aria-busy={busy || undefined}
             onClick={() => void pour()}
             data-slot="pour-submit"
@@ -394,7 +404,7 @@ export function PourSheet({
     >
       {open && step === "pour" && (
         <div className="flex flex-col gap-6 pb-2" data-slot="pour-sheet">
-          <div className="flex items-end gap-4">
+          <div className="flex flex-wrap items-end gap-4">
             <PourLevel
               type={type}
               from={from}
@@ -407,9 +417,11 @@ export function PourSheet({
                   {level}%
                 </span>
                 <span className="type-footnote">
-                  {level >= from
-                    ? `left of ${from}% — drag the level down`
-                    : `left · pouring ${from - level}%`}
+                  {from === 0
+                    ? "left — this is the last of it"
+                    : level >= from
+                      ? `left of ${from}% — drag the level down`
+                      : `left · pouring ${from - level}%`}
                 </span>
               </p>
               <GlassPresets
@@ -652,6 +664,10 @@ function AfterFinish({
   const [error, setError] = useState<ApiFailure | null>(null);
   const [saving, setSaving] = useState(false);
   const shown = score ?? myReview?.score ?? null;
+  // "Keep it" is only for a rating already saved, and suggests a band from
+  // that one — not from stars tapped and then not saved.
+  const kept = myReview?.score ?? null;
+  const canKeep = placements.length > 0 && kept !== null;
 
   const [, addReview] = useMutation(AddItemReviewMutation);
   const [, updateReview] = useMutation(UpdateItemReviewMutation);
@@ -752,13 +768,17 @@ function AfterFinish({
         <Button
           variant="ghost"
           disabled={saving}
-          onClick={() =>
-            placements.length > 0 && shown !== null ? onBand() : onDone()
-          }
+          onClick={() => {
+            if (!canKeep) {
+              onDone();
+              return;
+            }
+            setScore(null);
+            setRated(kept);
+            onBand();
+          }}
         >
-          {placements.length > 0 && shown !== null
-            ? "Keep it, see my lists"
-            : "Skip"}
+          {canKeep ? "Keep my rating, see my lists" : "Skip"}
         </Button>
       </div>
     </div>
@@ -791,9 +811,15 @@ function BandRow({
   const [, undoEdit] = useMutation(UndoTierListEditMutation);
 
   const list = unwrapResult(data?.tierList, "TierList");
-  const items = list.ok ? list.data.items.edges.map((edge) => edge.node) : null;
+  // `reorderTierListBand` takes the band's whole membership; past one page
+  // the sheet cannot know it, so the move is the list page's to make.
+  const tooLong = list.ok && list.data.items.pageInfo.hasNextPage;
+  const items =
+    list.ok && !tooLong ? list.data.items.edges.map((edge) => edge.node) : null;
   const order =
     items === null ? null : bandMoveOrder(items, placement.entryId, suggested);
+
+  const settled = band === suggested;
 
   const move = async () => {
     if (order === null) return;
@@ -839,7 +865,6 @@ function BandRow({
     );
   };
 
-  const settled = band === suggested;
   return (
     <li className="flex min-h-14 items-center gap-3 px-4 py-2">
       <div className="flex min-w-0 flex-1 flex-col">
@@ -848,6 +873,17 @@ function BandRow({
         </span>
         <span className="type-footnote">
           {BAND_LABELS[band] ?? "Unrated"}
+          {tooLong && !settled && (
+            <span className="block">
+              A long list —{" "}
+              <Link
+                href={`/tier-lists/${placement.tierListId}`}
+                underline="always"
+              >
+                move it there
+              </Link>
+            </span>
+          )}
           {error !== null && (
             <span role="alert" className="block text-destructive">
               {error}

@@ -271,6 +271,7 @@ const slider = () => {
 };
 const ops = (name: string) => sent.filter((s) => s.operationName === name);
 
+let closes = 0;
 const sheet = (bottle: {
   percentageRemaining: number;
   openAt: string | null;
@@ -278,7 +279,9 @@ const sheet = (bottle: {
   <>
     <PourSheet
       open
-      onOpenChange={() => {}}
+      onOpenChange={(next) => {
+        if (!next) closes += 1;
+      }}
       bottle={{ cellarId: "c1", cellarItemId: "b1", ...bottle }}
       subject={{ itemType: "WINE", itemId: "w1", itemName: "Barolo 2016" }}
       friends={[{ id: "sam", displayName: "Sam", avatarUrl: null }]}
@@ -293,6 +296,7 @@ const sheet = (bottle: {
 beforeEach(() => {
   sent.length = 0;
   changes = 0;
+  closes = 0;
   window.localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -397,6 +401,45 @@ describe("PourSheet", () => {
     assert.deepEqual(ops("UpdateCellarItem")[0]?.variables.input, {
       percentageRemaining: 5,
     });
+  });
+
+  test("closing on Finished? is Not yet: the poured bottle keeps a drop, with Undo", async () => {
+    await render(
+      sheet({ percentageRemaining: 15, openAt: "2026-10-01T00:00:00Z" }),
+    );
+    await flush(20);
+    await click(button("Pour the last of it"));
+    await flush(50);
+    assert.match(document.body.textContent ?? "", /That's the last of it/);
+    assert.equal(closes, 0);
+
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    await flush(50);
+    assert.deepEqual(
+      ops("UpdateCellarItem")[0]?.variables.input,
+      { percentageRemaining: 5 },
+      "the level is written as Not yet would write it",
+    );
+    assert.equal(ops("EmptyCellarItem").length, 0, "never finished silently");
+    assert.ok(closes > 0, "and the sheet closes");
+    assert.match(document.body.textContent ?? "", /a drop left/);
+  });
+
+  test("a bottle at 0% that was never finished pours the last of it", async () => {
+    await render(
+      sheet({ percentageRemaining: 0, openAt: "2026-10-01T00:00:00Z" }),
+    );
+    await flush(20);
+    const pour = button("Pour the last of it");
+    assert.equal(pour?.disabled, false);
+    await click(pour);
+    await flush(50);
+    assert.equal(ops("LogDrink").length, 1);
+    assert.match(document.body.textContent ?? "", /That's the last of it/);
   });
 
   test("me + Sam is the last table poured with on this device", async () => {
