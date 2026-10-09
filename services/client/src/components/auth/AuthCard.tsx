@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { mainContentProps } from "@/components/app/SkipLink";
+import { mainContentProps } from "@/components/app/main-content";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";

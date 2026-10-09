@@ -1,39 +1,46 @@
-import type { ComponentProps } from "react";
+"use client";
+
+import type { ComponentProps, MouseEvent } from "react";
 import { cn } from "@/lib/utils";
+import { MAIN_CONTENT_ID } from "./main-content";
 
 /**
- * The id every frame gives its `<main>` (X21): `AppShell`'s scroller, the
- * sign-in and sign-up `AuthPage`, the public `ShareFrame`. `SkipLink` jumps
- * here, so a frame without it would leave the skip link pointing nowhere.
+ * Following the skip link by script: focus `<main>` without the fragment
+ * navigation the bare `href` would make. That navigation pushes a history
+ * entry for the page already showing (`/cellars#main-content`), so the next
+ * Back (AppBar's, or the system's in the standalone PWA) would land on the
+ * same page and appear to do nothing. The `href` serves before hydration.
  */
-export const MAIN_CONTENT_ID = "main-content";
-
-/**
- * Spread on the `<main>` that carries `MAIN_CONTENT_ID`: the id, and
- * `tabIndex={-1}` so following the skip link moves focus into it (an element
- * with no tab index is only scrolled to, and the next Tab would start from the
- * top again). Give that `<main>` `outline-none` too: it is a container taking
- * programmatic focus, not a control, so it draws no ring.
- */
-export const mainContentProps = {
-  id: MAIN_CONTENT_ID,
-  tabIndex: -1,
-} as const;
+function skipToMain(event: MouseEvent<HTMLAnchorElement>) {
+  const main = document.getElementById(MAIN_CONTENT_ID);
+  if (main === null) return;
+  event.preventDefault();
+  main.focus();
+}
 
 /**
  * "Skip to content" (X21): the first thing a keyboard reaches on every page,
  * invisible until it has focus, then a brass pill over the top-left corner
- * (clear of the notch). Following it lands focus on the page's `<main>`, past
- * the side rail. Rendered once, by the root layout.
+ * (clear of the notch). Following it lands focus on the page's `<main>`
+ * (`main-content.tsx`), past the side rail. Rendered once, by the root
+ * layout.
  *
- * A plain `<a href="#…">`, not `app/Link`: an in-page fragment needs no
- * client navigation, prefetch or View Transition.
+ * A plain `<a href="#…">`, not `app/Link`: an in-page jump needs no client
+ * navigation, prefetch or View Transition.
  */
-export function SkipLink({ className, ...props }: ComponentProps<"a">) {
+export function SkipLink({
+  className,
+  onClick,
+  ...props
+}: ComponentProps<"a">) {
   return (
     <a
       data-slot="skip-link"
       href={`#${MAIN_CONTENT_ID}`}
+      onClick={(event) => {
+        onClick?.(event);
+        if (!event.defaultPrevented) skipToMain(event);
+      }}
       className={cn(
         "sr-only focus-visible:not-sr-only",
         "focus-visible:fixed focus-visible:top-[calc(env(safe-area-inset-top)+0.5rem)] focus-visible:left-[calc(env(safe-area-inset-left)+1rem)] focus-visible:z-[100]",

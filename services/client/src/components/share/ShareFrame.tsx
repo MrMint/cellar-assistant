@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { ActionBar } from "@/components/app/ActionBar";
 import { Link } from "@/components/app/Link";
+import { mainContentProps } from "@/components/app/main-content";
 import { Page } from "@/components/app/Page";
-import { mainContentProps } from "@/components/app/SkipLink";
 import { Button } from "@/components/ui/button";
 import { withReturnTo } from "@/utilities/sanitize-return-to";
 

@@ -22,11 +22,12 @@ import { FilterChip } from "./FilterChip";
 import { IconButton } from "./IconButton";
 import * as icons from "./icons";
 import { Link } from "./Link";
+import { MAIN_CONTENT_ID } from "./main-content";
 import { activeTab, CAPTURE_OPTIONS, isUnder, TABS } from "./nav";
 import { nextNavStack } from "./nav-history";
 import { InsetSection, ListRow, Page } from "./Page";
 import { formatScore, Score } from "./Score";
-import { MAIN_CONTENT_ID, SkipLink } from "./SkipLink";
+import { SkipLink } from "./SkipLink";
 import { ITEM_TYPES_IN_ORDER, itemTypeTokens, TypeChip } from "./TypeChip";
 import { UserAvatar } from "./UserAvatar";
 

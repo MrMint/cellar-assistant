@@ -3,10 +3,10 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { mainContentProps } from "./main-content";
 import { useNavHistoryTracker } from "./nav-history";
 import { usePointerDownPrefetch } from "./prefetch";
 import { SideRail } from "./SideRail";
-import { mainContentProps } from "./SkipLink";
 import { TabBar } from "./TabBar";
 
 /**
