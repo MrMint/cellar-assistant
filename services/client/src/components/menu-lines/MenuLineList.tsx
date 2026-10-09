@@ -8,7 +8,7 @@ import { AddToCellarSheet } from "@/components/item/AddToCellarActions";
 import type { MenuItemView } from "@/components/map/adapter";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
 import type { TierListEntityType } from "@/components/tier-list/constants";
-import { unwrapResult } from "@/lib/api/result";
+import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { MenuLineDraftSheet } from "./MenuLineDraftSheet";
 import { MenuLineRow } from "./MenuLineRow";
@@ -64,22 +64,38 @@ export function MenuLineList({
   const type = selected === null ? null : lineItemType(selected);
   const itemName = matched?.name ?? "";
 
-  const [{ data: cellarData }] = useQuery({
+  const [{ data: cellarData, error: cellarTransportError }] = useQuery({
     query: MenuLineCellarsQuery,
     pause: sheet !== "cellar",
   });
-  const cellarResult = cellarData
-    ? unwrapResult(cellarData.myCellars, "CellarConnection")
-    : null;
-  const cellars =
-    cellarResult === null
-      ? undefined
-      : cellarResult.ok
-        ? cellarResult.data.edges.map(({ node }) => ({
+  // Memoised on the response, not rebuilt per render: `AddToCellarSheet`
+  // resets its choices (cellar, count, "already open") whenever `cellars`
+  // changes identity, and the scan page re-renders this list on every poll.
+  // A failed read is said as one, not as "you have no cellar".
+  const { cellars, cellarsError } = useMemo((): {
+    cellars: { id: string; name: string }[] | undefined;
+    cellarsError: string | null;
+  } => {
+    if (cellarData === undefined) {
+      return {
+        cellars: undefined,
+        cellarsError:
+          cellarTransportError === undefined
+            ? null
+            : failureFromTransport(cellarTransportError).message,
+      };
+    }
+    const result = unwrapResult(cellarData.myCellars, "CellarConnection");
+    return result.ok
+      ? {
+          cellars: result.data.edges.map(({ node }) => ({
             id: node.id,
             name: node.name,
-          }))
-        : [];
+          })),
+          cellarsError: null,
+        }
+      : { cellars: undefined, cellarsError: result.error.message };
+  }, [cellarData, cellarTransportError]);
 
   const onLogged = useDrinkLogFeedback({ itemName, onChanged });
 
@@ -152,6 +168,7 @@ export function MenuLineList({
                 itemId={matched.id}
                 itemType={type}
                 cellars={cellars}
+                loadError={cellarsError}
                 source={
                   selected === null
                     ? undefined

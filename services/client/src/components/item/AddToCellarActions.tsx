@@ -48,6 +48,8 @@ export type AddToCellarSheetProps = {
   itemType: ApiItemType;
   /** The viewer's own and co-owned cellars; `undefined` while loading. */
   cellars: readonly CellarChoice[] | undefined;
+  /** Reading the cellars failed: said as such, not as "no cellar yet". */
+  loadError?: string | null;
   source?: AddToCellarSource;
 };
 
@@ -97,6 +99,7 @@ export const AddToCellarSheet = ({
   itemType,
   itemId,
   cellars,
+  loadError = null,
   source,
 }: AddToCellarSheetProps) => {
   const router = useRouter();
@@ -134,7 +137,11 @@ export const AddToCellarSheet = ({
         title="Add to cellar"
       >
         <p className="type-body pb-4 text-ink-2">
-          {cellars === undefined ? (
+          {loadError !== null ? (
+            <span role="alert" className="text-destructive">
+              Couldn&apos;t read your cellars: {loadError}
+            </span>
+          ) : cellars === undefined ? (
             <span className="inline-flex items-center gap-2">
               <Spinner aria-hidden /> Finding your cellars…
             </span>
