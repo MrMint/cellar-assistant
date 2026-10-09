@@ -16,6 +16,7 @@ import { sql } from "@cellar-assistant/db/orm";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { setAiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
+import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import {
   seedPlace,
   seedTierList,
@@ -30,6 +31,7 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import { AiJobsCollectionActor } from "./ai-jobs-collection-actor.ts";
+import { menuMatchJobId } from "./menu-scan-actor.ts";
 
 const { skip } = await resolveTestDatabase();
 
@@ -211,6 +213,72 @@ describe.skipIf(skip)("AiJobsCollectionActor", () => {
         failureReason: "USER_CAP",
       });
       expect(JSON.stringify(jobs)).not.toContain("daily allowance");
+    });
+  });
+
+  it("menu scans: extracted but still matching (N06a) is RUNNING, not READY", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const place = await seedPlace(db, { name: "Old Mill", lng: 0, lat: 0 });
+      const extracted = (minutesAgo: number) =>
+        seedScan(db, viewer, {
+          status: "completed",
+          minutesAgo,
+          placeId: place,
+          detected: 4,
+        });
+      const matchJob = async (scan: string, status: string) => {
+        await db.execute(sql`
+          insert into public.jobs (id, kind, status, created_by)
+          values (${menuMatchJobId(scan)}::uuid, 'menu-match', ${status},
+                  ${viewer}::uuid)
+        `);
+      };
+      const outboxRow = async (
+        target: keyof typeof OUTBOX_TARGETS,
+        targetId: string,
+        status: string,
+      ) => {
+        const { actorType, method } = OUTBOX_TARGETS[target];
+        await db.execute(sql`
+          insert into public.outbox (target_actor, target_id, method, status)
+          values (${actorType}, ${targetId}, ${method}, ${status})
+        `);
+      };
+
+      const jobRunning = await extracted(1);
+      await matchJob(jobRunning, "running");
+      const jobDone = await extracted(2);
+      await matchJob(jobDone, "completed");
+      const queued = await extracted(3);
+      await outboxRow("MenuScanActor.match", queued, "pending");
+      const starting = await extracted(4);
+      await outboxRow(
+        "MenuMatchJobActor.start",
+        menuMatchJobId(starting),
+        "delivering",
+      );
+      const deadLetter = await extracted(5);
+      await outboxRow("MenuScanActor.match", deadLetter, "dead");
+      // A scan with no place files nothing, so there is nothing to match.
+      const placeless = await seedScan(db, viewer, {
+        status: "completed",
+        minutesAgo: 6,
+        detected: 4,
+      });
+      await outboxRow("MenuScanActor.match", placeless, "pending");
+
+      const status = new Map(
+        (await listFor(db, viewer)).map((j) => [j.subjectId, j.status]),
+      );
+      expect(Object.fromEntries(status)).toEqual({
+        [jobRunning]: "RUNNING",
+        [jobDone]: "READY",
+        [queued]: "RUNNING",
+        [starting]: "RUNNING",
+        [deadLetter]: "READY",
+        [placeless]: "READY",
+      });
     });
   });
 

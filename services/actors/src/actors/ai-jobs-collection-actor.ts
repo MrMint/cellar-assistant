@@ -9,9 +9,15 @@
  * | kind                 | table              | RUNNING                      | READY                    | FAILED                     |
  * |----------------------|--------------------|------------------------------|--------------------------|----------------------------|
  * | `LABEL_READ`         | `item_onboardings` | `START`, under 15 min old    | `COMPLETED` (a draft)    | — (see below)              |
- * | `MENU_SCAN`          | `menu_scans`       | `pending` / `processing`     | `completed`              | `failed`, `processing_error` |
+ * | `MENU_SCAN`          | `menu_scans`       | reading, or matching (N06a)  | `completed`, matched     | `failed`, `processing_error` |
  * | `RECIPE_PHOTO`       | `jobs`             | `pending` / `running`        | `completed`              | `failed`, `last_error`     |
  * | `TIER_LIST_INSIGHTS` | `tier_lists`       | N07 `PENDING`, not deferred  | N07 `READY`              | N07 `FAILED`               |
+ *
+ * A menu scan stays RUNNING after extraction while its matches are still
+ * being found (N06a's `queued` / `running`): `processing_status` turns
+ * `completed` before a single line is matched, and calling that READY would
+ * toast "the menu is read" and stop the watcher just before the matches —
+ * the part Home's "Waiting on you" exists for — arrive.
  *
  * A failed label read is left out: the onboarding row keeps no reason, and
  * the person was told at the time, in the add flow that was waiting on it.
@@ -44,12 +50,14 @@ import {
   parseStoredFailure,
   RECIPE_PHOTO_JOB_KIND,
 } from "@cellar-assistant/contracts";
-import { sql } from "@cellar-assistant/db/orm";
+import { type SQL, sql } from "@cellar-assistant/db/orm";
 import { aiCapabilities } from "../lib/ai/capabilities.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
-import { toIso } from "../lib/collection-sql.ts";
+import { toIso, uuidArray } from "../lib/collection-sql.ts";
+import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import { tierListInsightsStatus } from "../lib/tier-list-insights-status.ts";
 import { placeRefVisibleToSql } from "../lib/unshared-places.ts";
+import { menuMatchJobId } from "./menu-scan-actor.ts";
 import {
   INSIGHTS_THROTTLE_MS,
   MIN_ITEMS_FOR_INSIGHTS,
@@ -74,6 +82,8 @@ type MenuScanRow = {
   readonly finished_at: Stamp;
   readonly place_id: string | null;
   readonly place_name: string | null;
+  /** The place the scan files against, visible to the viewer or not. */
+  readonly effective_place_id: string | null;
 };
 
 type RecipePhotoRow = {
@@ -220,7 +230,8 @@ export class AiJobsCollectionActor
       select s.id, s.processing_status, s.processing_error, s.items_detected,
              coalesce(s.scanned_at, s.created_at) as started_at,
              coalesce(s.processed_at, s.updated_at) as finished_at,
-             p.id as place_id, p.name as place_name
+             p.id as place_id, p.name as place_name,
+             ${placeId} as effective_place_id
       from public.menu_scans s
       left join public.places p
         on p.id = ${placeId}
@@ -237,12 +248,24 @@ export class AiJobsCollectionActor
       order by coalesce(s.processed_at, s.updated_at) desc, s.id desc
       limit ${AI_JOB_LIMIT}
     `);
+    const matching = await this.#stillMatching(
+      rows
+        .filter(
+          (row) =>
+            row.processing_status === "completed" &&
+            row.effective_place_id !== null &&
+            (row.items_detected ?? 0) > 0,
+        )
+        .map((row) => row.id),
+    );
     return rows.flatMap((row): AiJobDto[] => {
       const startedAt = iso(row.started_at);
       if (startedAt === null) return [];
       const status: AiJobStatus =
         row.processing_status === "completed"
-          ? "READY"
+          ? matching.has(row.id)
+            ? "RUNNING"
+            : "READY"
           : row.processing_status === "failed"
             ? "FAILED"
             : "RUNNING";
@@ -262,6 +285,41 @@ export class AiJobsCollectionActor
         },
       ];
     });
+  }
+
+  /**
+   * Which of these extracted scans are still being matched — N06a's
+   * `queued` or `running` (`deriveMatchStatus`), read for the whole set at
+   * once: the scan's `menu-match` job exists and has not finished, or there
+   * is no job yet and a live outbox row will start one. Anything else (a
+   * finished, failed or cancelled job; a dead outbox row; a scan matched
+   * before jobs existed) has settled.
+   */
+  async #stillMatching(scanIds: readonly string[]): Promise<Set<string>> {
+    if (scanIds.length === 0) return new Set();
+    const jobIds = scanIds.map(menuMatchJobId);
+    const match = OUTBOX_TARGETS["MenuScanActor.match"];
+    const start = OUTBOX_TARGETS["MenuMatchJobActor.start"];
+    const live = (target: SQL): SQL => sql`exists (
+      select 1 from public.outbox o
+      where o.status in ('pending', 'delivering') and ${target}
+    )`;
+    const { rows } = await this.db.execute<{ scan_id: string }>(sql`
+      select s.scan_id::text as scan_id
+      from unnest(${uuidArray(scanIds, "menu scan id")},
+                  ${uuidArray(jobIds, "menu match job id")})
+        as s(scan_id, job_id)
+      left join public.jobs j on j.id = s.job_id
+      where j.status in ('pending', 'running')
+         or (j.id is null and (
+              ${live(sql`o.target_actor = ${match.actorType}
+                and o.method = ${match.method}
+                and o.target_id = s.scan_id::text`)}
+           or ${live(sql`o.target_actor = ${start.actorType}
+                and o.method = ${start.method}
+                and o.target_id = s.job_id::text`)}))
+    `);
+    return new Set(rows.map((row) => row.scan_id));
   }
 
   async #recipePhotos(viewer: string): Promise<AiJobDto[]> {
