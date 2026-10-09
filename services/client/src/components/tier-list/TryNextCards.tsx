@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useQuery } from "urql";
 import { ICON_STROKE, Place } from "@/components/app/icons";
 import { LabelPlate } from "@/components/app/LabelPlate";
@@ -45,14 +45,19 @@ const ITEM_TYPES = new Set(["WINE", "BEER", "SPIRIT", "COFFEE", "SAKE", "TEA"]);
  * bottle you love) it sits next to in the catalog — and a Want to try
  * bookmark (X08). Deterministic: no model is asked, so it shows whatever the
  * AI provider. Empty is said, for the owner, as what would fill it; anyone
- * else sees nothing rather than an empty box.
+ * else sees nothing rather than an empty box — not even the section's
+ * heading, which is why the caller hands its section in as `frame` instead
+ * of wrapping this component in it.
  */
 export function TryNextCards({
   tierListId,
   isOwner,
+  frame,
 }: {
   tierListId: string;
   isOwner: boolean;
+  /** The section around the cards; not drawn when there is nothing to show. */
+  frame: (body: ReactNode) => ReactNode;
 }) {
   const [{ data, fetching, error }] = useQuery({
     query: TierListTryNextQuery,
@@ -123,7 +128,7 @@ export function TryNextCards({
   }, [data, isOwner]);
 
   if (fetching && cards === null) {
-    return (
+    return frame(
       <div
         role="status"
         aria-label="Finding what to try next"
@@ -132,20 +137,34 @@ export function TryNextCards({
         {[0, 1, 2].map((index) => (
           <Skeleton key={index} className="aspect-[3/4] w-[148px] shrink-0" />
         ))}
-      </div>
+      </div>,
     );
   }
 
-  if (error !== undefined || cards === null || cards.length === 0) {
-    return isOwner ? (
-      <p className="text-ink-3 type-callout">
-        Nothing to suggest yet. Rank a few in your top two bands, love a bottle,
-        or see what friends rank highest.
-      </p>
-    ) : null;
+  // Only the owner is told about an empty or failed read; a visitor gets no
+  // section at all. A failed read is said as one, not as "nothing to suggest".
+  if (error !== undefined && (cards === null || cards.length === 0)) {
+    return isOwner
+      ? frame(
+          <p className="text-ink-3 type-callout">
+            Couldn&apos;t load suggestions just now.
+          </p>,
+        )
+      : null;
   }
 
-  return (
+  if (cards === null || cards.length === 0) {
+    return isOwner
+      ? frame(
+          <p className="text-ink-3 type-callout">
+            Nothing to suggest yet. Rank a few in your top two bands, love a
+            bottle, or see what friends rank highest.
+          </p>,
+        )
+      : null;
+  }
+
+  return frame(
     <ul
       aria-label="Try this next"
       className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]"
@@ -155,7 +174,7 @@ export function TryNextCards({
           <TryNextTile card={card} />
         </li>
       ))}
-    </ul>
+    </ul>,
   );
 }
 

@@ -212,13 +212,18 @@ export function TierListInsightsPanel({
       </Section>
 
       {/* Try this next — grounded catalog cards (X16) */}
+      {/* The cards draw their own section, so a visitor with nothing to
+          see gets no heading over an empty box. */}
       {grounded !== null && (
-        <Section title="Try this next" icon={Explore}>
-          <TryNextCards
-            tierListId={grounded.tierListId}
-            isOwner={grounded.isOwner}
-          />
-        </Section>
+        <TryNextCards
+          tierListId={grounded.tierListId}
+          isOwner={grounded.isOwner}
+          frame={(body) => (
+            <Section title="Try this next" icon={Explore}>
+              {body}
+            </Section>
+          )}
+        />
       )}
 
       {/* Category Donut */}
