@@ -1,8 +1,8 @@
 "use client";
 
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useClient, useMutation, useQuery } from "urql";
+import { useRef, useState } from "react";
+import { useQuery } from "urql";
 import {
   Camera,
   ErrorIcon,
@@ -16,43 +16,14 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-import { aiOutcome } from "@/lib/ai/outcome";
-import {
-  describeUploadBlockers,
-  UploadRejectedError,
-  UploadUnavailableError,
-  uploadFile,
-} from "@/lib/api/files";
+import { describeUploadBlockers } from "@/lib/api/files";
 import { readFragment } from "@/lib/api/graphql";
-import {
-  CancelRecipePhotoJobMutation,
-  RECIPE_PHOTO_POLL_MS,
-  RECIPE_PHOTO_STAGE_LABEL,
-  RECIPE_PHOTO_TIMEOUT_MS,
-  RecipePhotoJobQuery,
-  StartRecipePhotoJobMutation,
-} from "@/lib/api/recipe-photos";
 import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
-import { recipeCreatedLine, stageProgress } from "./adapter";
+import { recipeCreatedLine } from "./adapter";
 import { RecipeDetailsFragment } from "./fragments";
 import { RecipePageQuery, recipePageVariables } from "./queries";
-
-type Phase =
-  | { kind: "idle" }
-  | { kind: "uploading" }
-  | {
-      kind: "running";
-      jobId: string;
-      stage: string;
-      attempts: number;
-      lastError: string | null;
-      cancelRequested: boolean;
-    }
-  | { kind: "done"; recipeId: string }
-  | { kind: "stalled"; recipeId: string }
-  | { kind: "cancelled" }
-  | { kind: "failed"; reason: string };
+import { recipePhotoStep, useRecipePhotoJob } from "./useRecipePhotoJob";
 
 interface RecipePhotoProcessorProps {
   /** One id per finished job — the old callback's shape, one recipe a photo. */
@@ -87,12 +58,16 @@ export function RecipePhotoProcessor({
   onRecipesCreated,
   onProcessingComplete,
 }: RecipePhotoProcessorProps) {
-  const client = useClient();
-  const [, startRecipePhotoJob] = useMutation(StartRecipePhotoJobMutation);
-  const [, cancelRecipePhotoJob] = useMutation(CancelRecipePhotoJobMutation);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  // The job itself (upload, start, poll, Stop) is `useRecipePhotoJob`, shared
+  // with the capture surface's Recipe mode (X06).
+  const { phase, start, stop, reset } = useRecipePhotoJob({
+    onDone: (recipeId) => {
+      onRecipesCreated?.([recipeId]);
+      onProcessingComplete?.();
+    },
+  });
 
   /** An origin this build's CSP will not let the browser upload to. */
   const blockers = describeUploadBlockers();
@@ -110,74 +85,6 @@ export function RecipePhotoProcessor({
     : null;
 
   const isProcessing = phase.kind === "uploading" || phase.kind === "running";
-  const jobId = phase.kind === "running" ? phase.jobId : null;
-
-  // Keep the parent's callbacks out of the poll's dependencies.
-  const callbacks = useRef({ onRecipesCreated, onProcessingComplete });
-  callbacks.current = { onRecipesCreated, onProcessingComplete };
-
-  useEffect(() => {
-    if (jobId === null) return;
-    let cancelled = false;
-    const startedAt = Date.now();
-
-    const tick = async (): Promise<void> => {
-      const response = await client
-        .query(
-          RecipePhotoJobQuery,
-          { jobId },
-          { requestPolicy: "network-only" },
-        )
-        .toPromise();
-      if (cancelled) return;
-
-      const result = unwrapResult(
-        response.data?.recipePhotoJob,
-        "RecipePhotoJob",
-      );
-      if (!result.ok) {
-        setPhase({ kind: "failed", reason: result.error.message });
-        return;
-      }
-      const job = result.data;
-      if (job.progress.done) {
-        setPhase({ kind: "done", recipeId: job.progress.recipeId });
-        callbacks.current.onRecipesCreated?.([job.progress.recipeId]);
-        callbacks.current.onProcessingComplete?.();
-        return;
-      }
-      if (job.status === "CANCELLED") {
-        setPhase({ kind: "cancelled" });
-        return;
-      }
-      if (job.status === "FAILED") {
-        setPhase({
-          kind: "failed",
-          reason: job.lastError ?? "The job failed without saying why.",
-        });
-        return;
-      }
-      if (Date.now() - startedAt > RECIPE_PHOTO_TIMEOUT_MS) {
-        setPhase({ kind: "stalled", recipeId: job.progress.recipeId });
-        return;
-      }
-      setPhase({
-        kind: "running",
-        jobId,
-        stage: job.progress.stage,
-        attempts: job.attempts,
-        lastError: job.lastError ?? null,
-        cancelRequested: job.cancelRequested,
-      });
-    };
-
-    const timer = setInterval(() => void tick(), RECIPE_PHOTO_POLL_MS);
-    void tick();
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [client, jobId]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -185,70 +92,16 @@ export function RecipePhotoProcessor({
     if (file?.type.startsWith("image/")) {
       setSelectedFile(file);
       // Clear any previous results
-      setPhase({ kind: "idle" });
+      reset();
     }
   };
 
-  const handleUploadAndProcess = useCallback(async () => {
-    if (!selectedFile) return;
-    setPhase({ kind: "uploading" });
-    try {
-      // `StartRecipePhotoJobInput.fileId` must be verified; nothing
-      // downstream verifies for us.
-      const fileId = await uploadFile(client, selectedFile, "recipe-photo", {
-        verify: true,
-      });
-      const result = unwrapResult(
-        (
-          await startRecipePhotoJob({
-            jobId: crypto.randomUUID(),
-            input: { fileId },
-          })
-        ).data?.startRecipePhotoJob,
-        "RecipePhotoJob",
-      );
-      if (!result.ok) {
-        // N07: starting the job is where a spent allowance or a missing
-        // provider is refused; say it in words, never the server's message.
-        setPhase({ kind: "failed", reason: aiOutcome(result.error).message });
-        return;
-      }
-      setPhase({
-        kind: "running",
-        jobId: result.data.id,
-        stage: result.data.progress.stage,
-        attempts: result.data.attempts,
-        lastError: result.data.lastError ?? null,
-        cancelRequested: false,
-      });
-    } catch (thrown) {
-      setPhase({
-        kind: "failed",
-        reason:
-          thrown instanceof UploadUnavailableError
-            ? thrown.blockers.join(" ")
-            : thrown instanceof UploadRejectedError
-              ? thrown.failure.message
-              : thrown instanceof Error
-                ? thrown.message
-                : String(thrown),
-      });
-    }
-  }, [client, selectedFile, startRecipePhotoJob]);
+  const handleUploadAndProcess = () => {
+    if (selectedFile) void start(selectedFile);
+  };
+  const handleStop = () => void stop();
 
-  const handleStop = useCallback(async () => {
-    if (jobId === null) return;
-    // Lands at the top of the next batch; the poll moves the phase.
-    await cancelRecipePhotoJob({ jobId });
-  }, [cancelRecipePhotoJob, jobId]);
-
-  const currentStep =
-    phase.kind === "uploading"
-      ? "Uploading photo"
-      : phase.kind === "running"
-        ? (RECIPE_PHOTO_STAGE_LABEL[phase.stage] ?? phase.stage)
-        : "";
-  const progress = phase.kind === "running" ? stageProgress(phase.stage) : 0;
+  const { label: currentStep, progress } = recipePhotoStep(phase);
 
   return (
     <section className="flex flex-col gap-6 rounded-lg bg-surface-1 p-4">
@@ -305,7 +158,7 @@ export function RecipePhotoProcessor({
 
           {/* Process Button */}
           <Button
-            onClick={() => void handleUploadAndProcess()}
+            onClick={handleUploadAndProcess}
             disabled={!selectedFile || isProcessing}
             aria-busy={isProcessing || undefined}
             className="w-full"
@@ -343,7 +196,7 @@ export function RecipePhotoProcessor({
             <Button
               variant="ghost"
               disabled={phase.cancelRequested}
-              onClick={() => void handleStop()}
+              onClick={handleStop}
               className="mt-2"
             >
               {phase.cancelRequested ? "Stopping…" : "Stop"}

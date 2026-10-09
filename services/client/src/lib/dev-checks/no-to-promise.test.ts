@@ -66,12 +66,13 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "cursor walk the hook models. `windowGate` keeps a smaller, older window " +
       "from landing after a bigger one.",
   },
-  "recipe/RecipePhotoProcessor.tsx": {
+  "recipe/useRecipePhotoJob.ts": {
     calls: 1,
     reason:
       "Polls one recipe-photo job to a terminal state with network-only reads " +
       "in an effect whose cleanup sets `cancelled`; a poll is a loop over one " +
-      "object, not a list.",
+      "object, not a list. (RecipePhotoProcessor's, moved into a hook so the " +
+      "capture surface's Recipe mode shares it, X06.)",
   },
   "common/OnboardingWizard/actors/closeOnboarding.ts": {
     calls: 1,
