@@ -152,6 +152,7 @@ enum ActorErrorReason {
   RECIPE_NOT_IN_GROUP
   REVIEW_ALREADY_EXISTS
   SERVICE_BUDGET
+  TIER_LIST_HISTORY_MOVED
   USER_CAP
 }
 
@@ -3453,9 +3454,13 @@ type Mutation {
   recordPlaceInteraction(input: RecordPlaceInteractionInput!): RecordPlaceInteractionResult!
 
   """
-  D4: puts back the latest undone edit. A new edit after an undo clears what Redo can put back. Creator only; nothing to redo is a `ConflictError`.
+  D4: puts back the latest undone edit. A new edit after an undo clears what Redo can put back. Creator only. `expectedSeq` is the `editHistory.redo.seq` the caller showed; anything else on top is a `ConflictError` with reason TIER_LIST_HISTORY_MOVED, and no write.
   """
-  redoTierListEdit(tierListId: ID!): RedoTierListEditResult!
+  redoTierListEdit(
+    """The `seq` of the undone edit to put back."""
+    expectedSeq: Int!
+    tierListId: ID!
+  ): RedoTierListEditResult!
 
   """
   Decline a request sent to you, or cancel one you sent. Both are the same row; only the requester's actor may delete it.
@@ -3587,9 +3592,13 @@ type Mutation {
   suggestItemDetails(input: SuggestItemDetailsInput!, itemId: ID!, type: ItemType!): SuggestItemDetailsResult!
 
   """
-  D4: takes back the latest edit not already undone (an add, a removal, a move) and records that in the list's append-only history. Creator only; nothing to undo is a `ConflictError`.
+  D4: takes back the latest edit not already undone (an add, a removal, a move) and records that in the list's append-only history. Creator only. `expectedSeq` is the `editHistory.undo.seq` the caller showed: if anything else is on top (the list changed in another tab, or there is nothing left to undo) it is a `ConflictError` with reason TIER_LIST_HISTORY_MOVED and nothing is written.
   """
-  undoTierListEdit(tierListId: ID!): UndoTierListEditResult!
+  undoTierListEdit(
+    """The `seq` of the edit to take back."""
+    expectedSeq: Int!
+    tierListId: ID!
+  ): UndoTierListEditResult!
 
   """
   The item creator's alone. Idempotent: a brand that is not linked — never was, or an earlier call already unlinked it — answers the same `UnlinkedItemBrand`, so a retried clear succeeds instead of NotFound.

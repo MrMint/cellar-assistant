@@ -35,7 +35,11 @@ import { useMutation } from "urql";
 import { unwrapResult } from "@/lib/api/result";
 import { addEntryFailureMessage, entryTypeOf } from "./adapter";
 import type { TierListEntityType } from "./constants";
-import type { TierListEditView, TierListHistoryView } from "./history";
+import {
+  historyStepFailure,
+  type TierListEditView,
+  type TierListHistoryView,
+} from "./history";
 import {
   AddItemToTierListMutation,
   AddTierListMutation,
@@ -280,11 +284,12 @@ export function useTierListActions() {
     async (
       direction: "undo" | "redo",
       tierListId: string,
+      expectedSeq: number,
     ): Promise<TierListHistoryStepResult> => {
       const response =
         direction === "undo"
-          ? await undoEdit({ tierListId })
-          : await redoEdit({ tierListId });
+          ? await undoEdit({ tierListId, expectedSeq })
+          : await redoEdit({ tierListId, expectedSeq });
       const failed = transportError(response.error);
       if (failed !== null) return { success: false, error: failed };
       const payload =
@@ -298,11 +303,9 @@ export function useTierListActions() {
         return {
           success: false,
           // The one refusal a person can meet is the race of two tabs: the
-          // other one already stepped. The actor's own words are a log line.
-          error:
-            result.error.code === "CONFLICT"
-              ? `Nothing to ${direction} on this list any more.`
-              : `Couldn't ${direction} that. Try again.`,
+          // other one already stepped, or edited. The actor's own words are
+          // a log line.
+          error: historyStepFailure(direction, result.error),
         };
       }
       return {
@@ -315,11 +318,13 @@ export function useTierListActions() {
   );
 
   const undoAction = useCallback(
-    (tierListId: string) => historyStep("undo", tierListId),
+    (tierListId: string, expectedSeq: number) =>
+      historyStep("undo", tierListId, expectedSeq),
     [historyStep],
   );
   const redoAction = useCallback(
-    (tierListId: string) => historyStep("redo", tierListId),
+    (tierListId: string, expectedSeq: number) =>
+      historyStep("redo", tierListId, expectedSeq),
     [historyStep],
   );
 

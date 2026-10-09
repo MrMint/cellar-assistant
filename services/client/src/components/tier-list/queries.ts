@@ -356,11 +356,16 @@ export const ReorderBandMutation = graphql(
   [ActorErrorFieldsFragment],
 );
 
-/** D4: take back the latest edit; the toast and the buttons read the rest. */
+/**
+ * D4: take back the edit `expectedSeq` names — the `undo` the page showed;
+ * anything newer on top is refused (TIER_LIST_HISTORY_MOVED), so a stale tab
+ * cannot take back an edit it never saw. The toast and the buttons read the
+ * rest.
+ */
 export const UndoTierListEditMutation = graphql(
   `
-    mutation UndoTierListEdit($tierListId: ID!) {
-      undoTierListEdit(tierListId: $tierListId) {
+    mutation UndoTierListEdit($tierListId: ID!, $expectedSeq: Int!) {
+      undoTierListEdit(tierListId: $tierListId, expectedSeq: $expectedSeq) {
         __typename
         ... on TierListHistoryStep {
           applied {
@@ -381,11 +386,11 @@ export const UndoTierListEditMutation = graphql(
   ],
 );
 
-/** D4: put back the latest undone edit. */
+/** D4: put back the undone edit `expectedSeq` names — `undo`'s mirror. */
 export const RedoTierListEditMutation = graphql(
   `
-    mutation RedoTierListEdit($tierListId: ID!) {
-      redoTierListEdit(tierListId: $tierListId) {
+    mutation RedoTierListEdit($tierListId: ID!, $expectedSeq: Int!) {
+      redoTierListEdit(tierListId: $tierListId, expectedSeq: $expectedSeq) {
         __typename
         ... on TierListHistoryStep {
           applied {

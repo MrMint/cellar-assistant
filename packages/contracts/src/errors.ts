@@ -141,6 +141,18 @@ export const ACTOR_ERROR_REASONS = [
    * for any unknown reason.
    */
   "LOOKS_LIKE_MENU",
+
+  /* -- tier lists (D4, wave B) -------------------------------------------- */
+
+  /**
+   * `TierListActor.undo` / `redo` named an `expectedSeq` that is not the edit
+   * on top of the matching stack: the list changed since the caller read its
+   * history (another tab or device undid, redid or edited), so stepping now
+   * would take back — or put back — an edit the person never saw. Nothing is
+   * written. `CONFLICT`. A client re-reads the history and says the list
+   * changed, rather than retrying blind.
+   */
+  "TIER_LIST_HISTORY_MOVED",
 ] as const;
 
 export type ActorErrorReason = (typeof ACTOR_ERROR_REASONS)[number];
