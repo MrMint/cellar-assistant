@@ -47,10 +47,14 @@ export function RecipeCapture({
     onDone: (recipeId) => router.push(`/recipes/${recipeId}`),
   });
   const blockers = describeUploadBlockers();
+  // A capture that does not decode to a file has nothing to send: say so
+  // rather than leave "Read this recipe" doing nothing.
+  const [unreadable, setUnreadable] = useState(false);
 
   const read = (shot: string) => {
     setPhoto(shot);
     const file = dataUrlToFile(shot, `recipe-${Date.now()}.jpg`);
+    setUnreadable(file === null);
     if (file !== null) void start(file);
   };
 
@@ -97,6 +101,7 @@ export function RecipeCapture({
               ? undefined
               : () => {
                   setPhoto(null);
+                  setUnreadable(false);
                   reset();
                 }
           }
@@ -117,7 +122,7 @@ export function RecipeCapture({
                 className="bg-ai/20 [&>[data-slot=progress-indicator]]:bg-ai"
               />
             </div>
-          ) : phase.kind === "idle" ? (
+          ) : unreadable ? null : phase.kind === "idle" ? (
             <Button onClick={() => read(photo)}>Read this recipe</Button>
           ) : phase.kind === "failed" || phase.kind === "cancelled" ? (
             <Button onClick={() => read(photo)}>Try again</Button>
@@ -125,7 +130,17 @@ export function RecipeCapture({
         </CapturePhotoPreview>
       )}
 
-      {modeRow}
+      {/* Not while the read is in flight: a switch would stop watching it. */}
+      {!inFlight && modeRow}
+
+      {unreadable && (
+        <Alert variant="destructive" className="border-destructive/60">
+          <ErrorIcon aria-hidden />
+          <AlertDescription className="text-destructive/90">
+            The photo could not be read. Retake it.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {phase.kind === "running" && (
         <div className="flex flex-col items-center gap-1 text-center">

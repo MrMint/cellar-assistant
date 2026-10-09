@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { EmptyState } from "@/components/app/EmptyState";
@@ -16,8 +16,8 @@ import {
   Search,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { notify } from "@/components/app/notify";
 import { usePlaceActions } from "@/components/map/actions";
-import { locationPrePromptVisible } from "@/components/map/hooks/geolocation-store";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import { formatCategoryName } from "@/components/map/places/place-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -118,6 +118,16 @@ export function MenuCapture({
   const [picking, setPicking] = useState(false);
   const [sending, setSending] = useState<Sending>({ kind: "idle" });
 
+  // A send outlives this surface (Close, or a tab, mid-upload): it must not
+  // then pull the person onto the results page from wherever they went.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   const send = async (shot: string, place: Chosen) => {
     const file = dataUrlToFile(shot, `menu-scan-${Date.now()}.jpg`);
     if (file === null) {
@@ -133,7 +143,23 @@ export function MenuCapture({
       menuPlaceHint({ confirmed: place, nearest, location }),
     );
     if (result.success && result.scanId !== undefined) {
-      router.push(`/map/scans/${result.scanId}`);
+      const href = `/map/scans/${result.scanId}`;
+      if (mounted.current) {
+        router.push(href);
+      } else {
+        notify(`The menu from ${place.name} is being read`, {
+          undo: () => router.push(href),
+          actionLabel: "See it",
+          durationMs: 15_000,
+        });
+      }
+      return;
+    }
+    if (!mounted.current) {
+      notify("The menu wasn't sent", {
+        description: result.error ?? "The scan could not be started.",
+        tone: "error",
+      });
       return;
     }
     setSending({
@@ -211,11 +237,13 @@ export function MenuCapture({
         </CapturePhotoPreview>
       )}
 
-      {modeRow}
+      {/* Not while the photo is going up: a switch would drop it mid-send. */}
+      {!busy && modeRow}
 
       <PlaceCard
         chosen={chosen}
         nearest={declined ? null : nearest}
+        declined={declined && nearest !== null}
         geo={geo}
         searching={location !== null && nearbyFetching}
         disabled={busy}
@@ -272,6 +300,7 @@ export function MenuCapture({
 function PlaceCard({
   chosen,
   nearest,
+  declined,
   geo,
   searching,
   disabled,
@@ -281,6 +310,8 @@ function PlaceCard({
 }: {
   chosen: Chosen | null;
   nearest: KnownPlace | null;
+  /** The nearest place was there, and the person said "Somewhere else". */
+  declined: boolean;
   geo: ReturnType<typeof useGeolocation>;
   searching: boolean;
   disabled: boolean;
@@ -363,8 +394,10 @@ function PlaceCard({
     </Button>
   );
 
-  if (locationPrePromptVisible(geo)) {
-    // D14: our one line first; the browser's prompt only from this tap.
+  // D14: our one line first; the browser's prompt only from this tap. Not
+  // gated on the map's "Not now": that dismissed the map's banner, and this
+  // card is a different question with its own way past it (Pick the place).
+  if (geo.permission === "prompt" && !geo.requested) {
     return shell(
       <>
         <p className="type-headline text-ink-1">Where are you?</p>
@@ -408,7 +441,9 @@ function PlaceCard({
       <p className="type-footnote">
         {geo.location === null
           ? "Pick it, and the menu is filed there."
-          : "No place we know is right here. Pick it, or add it."}
+          : declined
+            ? "Pick it, or add it if it isn't listed."
+            : "No place we know is right here. Pick it, or add it."}
       </p>
     </>,
     pick,

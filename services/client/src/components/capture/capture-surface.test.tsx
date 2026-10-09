@@ -143,8 +143,12 @@ const answers: Record<string, (variables: Record<string, unknown>) => unknown> =
     }),
   };
 
+/** Holds the photo's PUT until released, when a test sets it. */
+let uploadGate: Promise<void> | null = null;
+
 globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
   if (String(url).includes("/upload/")) {
+    if (uploadGate !== null) await uploadGate;
     return new Response(null, { status: 200 });
   }
   // Anything else that is not the API (the barcode reader's wasm) is absent.
@@ -176,6 +180,7 @@ const { createRoot } = await import("react-dom/client");
 const { Client, Provider, fetchExchange } = await import("urql");
 const { CaptureSurface } = await import("./CaptureSurface");
 const { MenuCapture } = await import("./MenuCapture");
+const { RecipeCapture } = await import("./RecipeCapture");
 const { photoHandoff } = await import("@/lib/capture/photo-handoff");
 const { CAPTURE_PREFS_KEY, readCapturePrefs } = await import(
   "@/lib/capture/capture-prefs"
@@ -231,6 +236,7 @@ beforeEach(() => {
   root = createRoot(container);
   sent.length = 0;
   pushed.length = 0;
+  uploadGate = null;
   window.localStorage.clear();
 });
 
@@ -320,6 +326,12 @@ describe("MenuCapture (X06): a menu from anywhere", () => {
     await settle();
     await click(button("Somewhere else"));
     await settle();
+    // The card behind no longer claims nothing is near: one was, and was
+    // passed over.
+    assert.match(
+      document.querySelector('[data-slot="menu-place"]')?.textContent ?? "",
+      /Pick it, or add it if it isn.t listed\./,
+    );
     const dialog = document.querySelector('[role="dialog"]');
     assert.ok(dialog, "the picker is open");
     const names = [...dialog.querySelectorAll("li button")].map(
@@ -353,6 +365,63 @@ describe("MenuCapture (X06): a menu from anywhere", () => {
     assert.ok(button("Change"));
     assert.equal(
       sent.some((s) => s.operationName === "MapCreateMenuScan"),
+      false,
+    );
+  });
+});
+
+describe("MenuCapture (X06): a send that outlives the surface", () => {
+  test("the mode row steps aside while the photo goes up", async () => {
+    let release = () => {};
+    uploadGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await render(
+      <MenuCapture initialPhoto={PHOTO} modeRow={<p data-slot="mode-row" />} />,
+    );
+    await settle();
+    assert.ok(document.querySelector('[data-slot="mode-row"]'));
+    await click(button(/^Yes, I.m here$/));
+    await settle();
+    assert.equal(document.querySelector('[data-slot="mode-row"]'), null);
+    release();
+    await settle();
+  });
+
+  test("closed mid-upload: the scan is still made, but nobody is pulled onto it", async () => {
+    let release = () => {};
+    uploadGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await render(<MenuCapture initialPhoto={PHOTO} />);
+    await settle();
+    await click(button(/^Yes, I.m here$/));
+    await settle();
+    // Close (or another tab) while the PUT is still in flight.
+    await act(async () => root.unmount());
+    release();
+    await settle();
+    assert.ok(
+      sent.some((s) => s.operationName === "MapCreateMenuScan"),
+      "the scan was created",
+    );
+    assert.deepEqual(pushed, [], "no navigation from an unmounted surface");
+  });
+});
+
+describe("RecipeCapture (X06)", () => {
+  test("a photo that does not decode says so instead of doing nothing", async () => {
+    await render(<RecipeCapture initialPhoto="data:image/jpeg;base64," />);
+    await settle();
+    await click(button("Read this recipe"));
+    await settle();
+    assert.match(
+      document.querySelector('[role="alert"]')?.textContent ?? "",
+      /could not be read\. Retake it\./,
+    );
+    assert.equal(button("Read this recipe"), undefined);
+    assert.equal(
+      sent.some((s) => s.operationName === "CreateUploadTarget"),
       false,
     );
   });
