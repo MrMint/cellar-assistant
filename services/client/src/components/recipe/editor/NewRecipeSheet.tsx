@@ -73,7 +73,10 @@ export function NewRecipeSheet({
     <BottomSheet open={open} onOpenChange={onOpenChange} title="New recipe">
       <ul className="flex flex-col pb-2">
         {aiOffered && (
-          <li className={ROW}>
+          // The input is visually hidden, so the row shows its keyboard focus.
+          <li
+            className={`${ROW} has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50`}
+          >
             {/* The row is the file input's label, so the tap that opens the
                 sheet's row opens the picker — no second "Choose photo". */}
             <input
