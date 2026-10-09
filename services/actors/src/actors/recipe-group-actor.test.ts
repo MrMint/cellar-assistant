@@ -108,14 +108,18 @@ const seedRecipe = async (
     recipeGroupId: string;
     name: string;
     createdAt: string;
+    /** X15: defaults to PUBLIC — the pre-D22 catalog these tests describe. */
+    privacy?: "PUBLIC" | "FRIENDS" | "PRIVATE";
+    isDraft?: boolean;
   },
 ): Promise<string> => {
   const id = randomUUID();
   await db.execute(sql`
-    insert into public.recipes (id, name, type, created_by_id, recipe_group_id, created_at, updated_at)
+    insert into public.recipes (id, name, type, created_by_id, recipe_group_id, created_at, updated_at, privacy, is_draft)
     values (${id}::uuid, ${options.name}, 'cocktail', ${options.createdById}::uuid,
             ${options.recipeGroupId}::uuid, ${options.createdAt}::timestamptz,
-            ${options.createdAt}::timestamptz)
+            ${options.createdAt}::timestamptz,
+            ${options.privacy ?? "PUBLIC"}::permission_type, ${options.isDraft ?? false})
   `);
   return id;
 };
@@ -176,6 +180,127 @@ describe.skipIf(skip)("RecipeGroupActor", () => {
           expect((await actor.recipes(ctx, page)).totalCount, label).toBe(1);
           expect((await actor.votes(ctx, page)).totalCount, label).toBe(0);
         }
+      });
+    });
+
+    it("X15: answers each viewer with the versions they may see, and hides a group with none", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const friend = await seedUser(db);
+        const stranger = await seedUser(db);
+        await seedFriendship(db, owner, friend);
+
+        const groupId = await seedGroup(db, { createdById: owner });
+        const shared = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          name: "Shared",
+          createdAt: "2026-01-01T00:00:00Z",
+        });
+        const forFriends = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          name: "For friends",
+          createdAt: "2026-01-02T00:00:00Z",
+          privacy: "FRIENDS",
+        });
+        const secret = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          name: "Secret",
+          createdAt: "2026-01-03T00:00:00Z",
+          privacy: "PRIVATE",
+        });
+        const draft = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          name: "Draft",
+          createdAt: "2026-01-04T00:00:00Z",
+          privacy: "PUBLIC",
+          isDraft: true,
+        });
+        const actor = await activate(newGroupActor(groupId, db));
+        const seen = async (viewer: string) =>
+          (await actor.recipes(userCtx(viewer, "r"), page)).entries
+            .map((entry) => entry.node)
+            .sort();
+
+        expect(await seen(owner)).toEqual(
+          [shared, forFriends, secret, draft].sort(),
+        );
+        expect(await seen(friend)).toEqual([shared, forFriends].sort());
+        expect(await seen(stranger)).toEqual([shared]);
+        expect(
+          (await actor.get(userCtx(stranger, "r"))).recipeCount,
+        ).toBe(1);
+
+        // A stranger cannot vote on a version hidden from them: it is
+        // answered exactly like a recipe that is not in the group.
+        await expect(
+          actor.vote(userCtx(stranger, "r"), {
+            recipeId: secret,
+            voteType: "upvote",
+          }),
+        ).rejects.toThrow(NotFoundError);
+
+        // A group whose every version is hidden from you does not exist.
+        const privateGroup = await seedGroup(db, { createdById: owner });
+        await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: privateGroup,
+          name: "Only mine",
+          createdAt: "2026-01-01T00:00:00Z",
+          privacy: "PRIVATE",
+        });
+        const hidden = await activate(newGroupActor(privateGroup, db));
+        await expect(hidden.get(userCtx(stranger, "r"))).rejects.toThrow(
+          NotFoundError,
+        );
+        await expect(
+          hidden.recipes(userCtx(stranger, "r"), page),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          hidden.update(userCtx(stranger, "r"), { name: "Taken" }),
+        ).rejects.toThrow(NotFoundError);
+        expect((await hidden.get(userCtx(owner, "r"))).recipeCount).toBe(1);
+      });
+    });
+
+    it("X15: a private version never becomes the group's name, and shared versions win the canonical", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const groupId = await seedGroup(db, {
+          createdById: owner,
+          name: "Negroni",
+        });
+        const secret = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          name: "Grandma's secret Negroni",
+          createdAt: "2026-01-01T00:00:00Z",
+          privacy: "PRIVATE",
+        });
+        const actor = await activate(newGroupActor(groupId, db));
+        // Even upvoted, alone, the private version names nothing.
+        await actor.vote(userCtx(owner, "r"), {
+          recipeId: secret,
+          voteType: "upvote",
+        });
+        let group = await actor.get(userCtx(owner, "r"));
+        expect(group.canonicalRecipeId).toBe(secret);
+        expect(group.name).toBe("Negroni");
+
+        const shared = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          name: "Classic Negroni",
+          createdAt: "2026-01-02T00:00:00Z",
+        });
+        await actor.recomputeCanonical(testDelivery("recompute-x15"));
+        group = await actor.get(userCtx(owner, "r"));
+        // The PUBLIC version outranks the upvoted private one.
+        expect(group.canonicalRecipeId).toBe(shared);
+        expect(group.name).toBe("Classic Negroni");
       });
     });
 
@@ -901,9 +1026,11 @@ describe.skipIf(skip)("RecipeGroupActor", () => {
         const groupId = await seedGroup(db, { createdById: owner });
         const actor = await activate(newGroupActor(groupId, db));
 
+        // X15: an empty group is its creator's alone, so a stranger is told
+        // it does not exist rather than that it is not theirs.
         await expect(
           actor.delete(userCtx(stranger, "r")),
-        ).rejects.toBeInstanceOf(ForbiddenError);
+        ).rejects.toBeInstanceOf(NotFoundError);
         await expect(actor.delete(anonymousCtx("r"))).rejects.toBeInstanceOf(
           ForbiddenError,
         );

@@ -23,9 +23,12 @@
  *   - `addReview` — any signed-in user; anonymous refused;
  *   - `updateReview` / `deleteReview` — **the author only**, plus admin/system.
  *
- * Everything else follows today's Hasura metadata exactly: `recipes`' select
- * filter is `{}` for the `user` role (the catalog rule — any signed-in viewer,
- * anonymous refused, as B3 settled for `BrandActor`), and its update/delete
+ * Reads were catalog data until X15 (D22): `recipes` now carries
+ * `privacy` and `is_draft`, and every read is `canSeeRecipe` — the four-branch
+ * rule, with a draft its creator's alone — answered as `NotFound` when it
+ * says no (`canSee` / `requireVisible` below). Anonymous is still refused
+ * outright, except by `getShared`. The writes follow today's Hasura metadata:
+ * `recipes`' update/delete
  * filters are `created_by_id = session user`, which is what `#requireCreator`
  * is. `recipe_ingredients` and `recipe_instructions` gate on
  * `recipe.created_by_id` in the same metadata, so `setIngredients` and
@@ -156,7 +159,8 @@ import {
   bypassesPolicy,
   canShareRecipeAnonymously,
   isOwner,
-  RECIPE_PRIVACY_WITHOUT_A_COLUMN,
+  PRIVACY_VALUES,
+  type Privacy,
 } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
@@ -166,11 +170,7 @@ import {
   daprEmbedDocument,
   type EmbedDocument,
 } from "../lib/embedding-client.ts";
-import {
-  requirePrivileged,
-  requireSignedIn,
-  requireViewer,
-} from "../lib/guards.ts";
+import { requireSignedIn, requireViewer } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
@@ -181,6 +181,7 @@ import {
   ingredientRefOf,
   ingredientRowToDto,
 } from "../lib/recipe-ingredients.ts";
+import { canSeeRecipeRow } from "../lib/recipe-visibility.ts";
 import { ingredientNames, shareKey } from "../lib/share-reads.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 import {
@@ -358,6 +359,16 @@ const requireName = (name: string, what: string): string => {
     throw new ValidationError(`${what} must be 300 characters or less`);
   }
   return trimmed;
+};
+
+/** `recipes.privacy` — a `permission_type`. */
+const requirePrivacy = (value: string): Privacy => {
+  if (!(PRIVACY_VALUES as readonly string[]).includes(value)) {
+    throw new ValidationError(
+      `privacy must be one of ${PRIVACY_VALUES.join("|")}, got ${value}`,
+    );
+  }
+  return value as Privacy;
 };
 
 const requireRecipeType = (value: string): RecipeType => {
@@ -640,10 +651,29 @@ export class RecipeActor
   /* Policy                                                                  */
   /* ---------------------------------------------------------------------- */
 
-  // Reads are catalog data: today's `recipes` select filter is `{}` for the
-  // `user` role, which is "any signed-in user, nobody else" —
-  // `requireSignedIn` (`../lib/guards.ts`), the rule B3 settled for
-  // `BrandActor` and B2 reused for `ItemActor`.
+  // X15 / D22: reads are no longer catalog data. A recipe is private first —
+  // `canSeeRecipe` in `packages/policy`: the four-branch rule on
+  // `recipes.privacy`, and a draft is its creator's alone. A viewer who may
+  // not see it is told it does not exist (`requireVisible`), so an id is
+  // never an oracle. Anonymous callers are still refused outright first
+  // (`requireSignedIn`): the one anonymous read is `getShared`.
+  protected override canSee(
+    ctx: Ctx,
+    aggregate: RecipeAggregate,
+  ): Promise<boolean> {
+    return canSeeRecipeRow(this.db, ctx, {
+      createdById: aggregate.recipe.createdById,
+      privacy: requirePrivacy(aggregate.recipe.privacy),
+      isDraft: aggregate.recipe.isDraft,
+    });
+  }
+
+  /** Signed in, then visible — the gate every read and review passes. */
+  async #readable(ctx: Ctx, what: string): Promise<RecipeAggregate> {
+    const aggregate = this.requireAggregate();
+    requireSignedIn(ctx, what);
+    return this.requireVisible(ctx, aggregate);
+  }
 
   /**
    * Today's `recipes` update/delete filter, verbatim. A recipe whose creator
@@ -651,15 +681,23 @@ export class RecipeActor
    * an admin may touch it — `ItemActor.updateGeneric`'s decision for the same
    * shape of column.
    */
-  #requireCreator(ctx: Ctx, aggregate: RecipeAggregate, what: string): void {
+  async #requireCreator(
+    ctx: Ctx,
+    aggregate: RecipeAggregate,
+    what: string,
+  ): Promise<void> {
     if (bypassesPolicy(ctx)) return;
-    if (aggregate.recipe.createdById === null) {
-      throw new ForbiddenError(
-        `recipe ${this.key} has no creator; only an admin may ${what}`,
-      );
-    }
-    if (isOwner(ctx, aggregate.recipe.createdById)) return;
-    throw new ForbiddenError(`recipe ${this.key} is not yours to ${what}`);
+    // A caller who may not see the recipe is told it is absent (X15): a
+    // `Forbidden` here would confirm a private recipe exists.
+    await this.requireAllowed(
+      ctx,
+      aggregate.recipe.createdById !== null &&
+        isOwner(ctx, aggregate.recipe.createdById),
+      aggregate.recipe.createdById === null
+        ? `recipe ${this.key} has no creator; only an admin may ${what}`
+        : `recipe ${this.key} is not yours to ${what}`,
+      aggregate,
+    );
   }
 
   /* ---------------------------------------------------------------------- */
@@ -667,20 +705,17 @@ export class RecipeActor
   /* ---------------------------------------------------------------------- */
 
   async get(ctx: Ctx): Promise<RecipeDto> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe");
-    return this.#toDto(aggregate);
+    return this.#toDto(await this.#readable(ctx, "view a recipe"));
   }
 
   /**
    * X17's public share page: the one read here an anonymous caller may make.
    *
-   * Whether a recipe may be shared is `canShareRecipeAnonymously`, which is
-   * handed {@link RECIPE_PRIVACY_WITHOUT_A_COLUMN} because `recipes` has no
-   * privacy column: every recipe is catalog data any signed-in user can read
-   * (module doc). **D22 / X15 makes recipes private-first; when that column
-   * lands, pass the row's value here** — the policy refuses anything but
-   * PUBLIC, and a refusal is worded as a missing row (`refuseAsAbsent`).
+   * Whether a recipe may be shared is `canShareRecipeAnonymously`: PUBLIC and
+   * not a draft (X15 / D22). Anything else is refused worded as a missing row
+   * (`refuseAsAbsent`) — the same answer as an id that names nothing, so the
+   * share URL of a private recipe says nothing about whether it exists. The
+   * author gets the same 404 there: share reads are viewer-independent.
    *
    * What crosses is `SharedRecipeDto`'s whitelist: no author, no votes, no
    * reviews, ingredients by name only. Viewer-independent, like every share
@@ -689,7 +724,10 @@ export class RecipeActor
   async getShared(_ctx: Ctx): Promise<SharedRecipeDto> {
     const aggregate = this.requireAggregate();
     if (
-      !canShareRecipeAnonymously({ privacy: RECIPE_PRIVACY_WITHOUT_A_COLUMN })
+      !canShareRecipeAnonymously({
+        privacy: requirePrivacy(aggregate.recipe.privacy),
+        isDraft: aggregate.recipe.isDraft,
+      })
     ) {
       this.refuseAsAbsent();
     }
@@ -725,8 +763,7 @@ export class RecipeActor
     ctx: Ctx,
     page: PageArgs,
   ): Promise<Page<RecipeIngredientDto>> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe's ingredients");
+    const aggregate = await this.#readable(ctx, "view a recipe's ingredients");
     return offsetPage(await this.#ingredientDtos(aggregate), page);
   }
 
@@ -734,21 +771,18 @@ export class RecipeActor
     ctx: Ctx,
     page: PageArgs,
   ): Promise<Page<RecipeInstructionDto>> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe's instructions");
+    const aggregate = await this.#readable(ctx, "view a recipe's instructions");
     return offsetPage(aggregate.instructions.map(instructionRowToDto), page);
   }
 
   async reviews(ctx: Ctx, page: PageArgs): Promise<Page<RecipeReviewDto>> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe's reviews");
+    const aggregate = await this.#readable(ctx, "view a recipe's reviews");
     return offsetPage(aggregate.reviews.map(reviewRowToDto), page);
   }
 
   /** Computed in memory from the loaded reviews — replaces `_aggregate`. */
   async score(ctx: Ctx): Promise<RecipeScoreDto> {
-    const aggregate = this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe's score");
+    const aggregate = await this.#readable(ctx, "view a recipe's score");
     const scored = aggregate.reviews.filter(
       (row): row is RecipeReviewRow & { score: number } => row.score !== null,
     );
@@ -776,7 +810,12 @@ export class RecipeActor
     const createdById = requireSignedIn(ctx, "create a recipe");
     requireUuid(this.key, "recipeId");
     const existing = this.aggregate;
-    if (existing !== null) return this.#toDto(existing);
+    // A re-delivered create gets its row back — but only a caller who may see
+    // it: a stranger who guesses the id of somebody's private recipe is told
+    // nothing about it (X15), the same `NotFound` as a read.
+    if (existing !== null) {
+      return this.#toDto(await this.requireVisible(ctx, existing));
+    }
 
     const name = requireName(input.name, "a recipe's name");
     const type = requireRecipeType(input.type);
@@ -805,6 +844,9 @@ export class RecipeActor
           ),
           imageUrl: input.imageUrl ?? null,
           createdById,
+          // D22: private first. A caller that says nothing gets PRIVATE.
+          privacy: requirePrivacy(input.privacy ?? "PRIVATE"),
+          isDraft: input.isDraft ?? false,
         })
         .onConflictDoNothing({ target: recipes.id });
       // §1.4: the write and its follow-up commit together. A new recipe has
@@ -819,7 +861,7 @@ export class RecipeActor
   /** Creator only (today's `recipes` update filter). */
   async update(ctx: Ctx, input: UpdateRecipeInput): Promise<RecipeDto> {
     const aggregate = this.requireAggregate();
-    this.#requireCreator(ctx, aggregate, "update");
+    await this.#requireCreator(ctx, aggregate, "update");
 
     const patch: Partial<typeof recipes.$inferInsert> = {};
     if (input.name !== undefined) {
@@ -849,6 +891,19 @@ export class RecipeActor
       );
     }
     if (input.imageUrl !== undefined) patch.imageUrl = input.imageUrl;
+    if (input.privacy !== undefined) {
+      patch.privacy = requirePrivacy(input.privacy);
+    }
+    if (input.isDraft !== undefined) {
+      // Saving a draft publishes it; nothing turns a published recipe back
+      // into AI output nobody has reviewed.
+      if (input.isDraft && !aggregate.recipe.isDraft) {
+        throw new ValidationError(
+          "a published recipe cannot become a draft again",
+        );
+      }
+      patch.isDraft = input.isDraft;
+    }
     if (Object.keys(patch).length === 0) return this.#toDto(aggregate);
 
     // B2's change-detection shape: compare each patched field against the
@@ -897,7 +952,7 @@ export class RecipeActor
     input: SetRecipeIngredientsInput,
   ): Promise<readonly RecipeIngredientDto[]> {
     const aggregate = this.requireAggregate();
-    this.#requireCreator(ctx, aggregate, "set its ingredients");
+    await this.#requireCreator(ctx, aggregate, "set its ingredients");
 
     const resolved = await this.#resolveIngredients(ctx, input.ingredients);
     const changed =
@@ -1106,7 +1161,7 @@ export class RecipeActor
     input: SetRecipeInstructionsInput,
   ): Promise<readonly RecipeInstructionDto[]> {
     const aggregate = this.requireAggregate();
-    this.#requireCreator(ctx, aggregate, "set its instructions");
+    await this.#requireCreator(ctx, aggregate, "set its instructions");
 
     const values = input.instructions.map((instruction, index) => ({
       id: randomUUID(),
@@ -1169,8 +1224,8 @@ export class RecipeActor
     ctx: Ctx,
     input: AddRecipeReviewInput,
   ): Promise<RecipeReviewDto> {
-    const aggregate = this.requireAggregate();
     const userId = requireViewer(ctx, "review a recipe");
+    const aggregate = await this.requireVisible(ctx);
 
     const reviewId = requireUuid(input.reviewId ?? randomUUID(), "reviewId");
     const byId = aggregate.reviews.find((row) => row.id === reviewId);
@@ -1219,7 +1274,7 @@ export class RecipeActor
     input: UpdateRecipeReviewInput,
   ): Promise<RecipeReviewDto> {
     reviewId = requireUuid(reviewId, "reviewId");
-    const aggregate = this.requireAggregate();
+    const aggregate = await this.requireVisible(ctx);
     const row = aggregate.reviews.find((review) => review.id === reviewId);
     if (row === undefined) {
       throw new NotFoundError(
@@ -1257,7 +1312,7 @@ export class RecipeActor
   /** **Author only** — the other half of the §7 gap. */
   async deleteReview(ctx: Ctx, reviewId: string): Promise<DeletedRecipeReview> {
     reviewId = requireUuid(reviewId, "reviewId");
-    const aggregate = this.requireAggregate();
+    const aggregate = await this.requireVisible(ctx);
     const row = aggregate.reviews.find((review) => review.id === reviewId);
     if (row === undefined) {
       throw new NotFoundError(
@@ -1313,7 +1368,7 @@ export class RecipeActor
    */
   async delete(ctx: Ctx): Promise<DeletedRecipe> {
     const aggregate = this.requireAggregate();
-    this.#requireCreator(ctx, aggregate, "delete a recipe");
+    await this.#requireCreator(ctx, aggregate, "delete a recipe");
     const groupId = aggregate.recipe.recipeGroupId;
 
     await this.tx(async (tx) => {
@@ -1361,8 +1416,7 @@ export class RecipeActor
     ctx: Ctx,
     _payload: Record<string, unknown> = {},
   ): Promise<RegenerateRecipeVectorResult> {
-    const aggregate = this.requireAggregate();
-    requirePrivileged(
+    const aggregate = this.requirePrivilegedAggregate(
       ctx,
       `only a system or admin caller may regenerate the vector of recipe ${this.key}`,
     );
@@ -1440,8 +1494,7 @@ export class RecipeActor
     ctx: Ctx,
     _payload: Record<string, unknown> = {},
   ): Promise<RecipeMetaBackfillResult> {
-    const aggregate = this.requireAggregate();
-    requirePrivileged(
+    const aggregate = this.requirePrivilegedAggregate(
       ctx,
       `only a system or admin caller may backfill recipe ${this.key}`,
     );
@@ -1596,6 +1649,8 @@ export class RecipeActor
       // §6 B6: what replaces the `recipe_summary` view.
       ingredientCount: aggregate.ingredients.length,
       instructionCount: aggregate.instructions.length,
+      privacy: requirePrivacy(row.privacy),
+      isDraft: row.isDraft,
       createdAt: iso(row.createdAt),
       updatedAt: iso(row.updatedAt),
     };

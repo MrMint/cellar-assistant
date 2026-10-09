@@ -36,8 +36,14 @@ import {
 
 const { skip } = await resolveTestDatabase();
 
+/**
+ * Created by the test's viewer: since X15 a group is listed for its creator
+ * or for a viewer who can see a version in it, and most of these groups are
+ * empty on purpose (the count tests).
+ */
 const seedGroup = async (
   db: DbOrTx,
+  createdById: string,
   input: {
     readonly name: string;
     readonly category?: "cocktail" | "mocktail" | "other" | "punch" | "shot";
@@ -45,9 +51,10 @@ const seedGroup = async (
   },
 ): Promise<string> => {
   const { rows } = await db.execute<{ id: string }>(sql`
-    insert into public.recipe_groups (name, category, base_spirit, tags)
+    insert into public.recipe_groups (name, category, base_spirit, tags, created_by_id)
     values (${input.name}, ${input.category ?? "cocktail"}::recipe_category,
-            ${input.baseSpirit ?? null}, '{classic}'::text[])
+            ${input.baseSpirit ?? null}, '{classic}'::text[],
+            ${createdById}::uuid)
     returning id
   `);
   const id = rows[0]?.id;
@@ -103,11 +110,11 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
       const prefix = `zzz-c3-${crypto.randomUUID().slice(0, 8)}`;
-      const negroni = await seedGroup(db, {
+      const negroni = await seedGroup(db, viewer, {
         name: `${prefix}-negroni`,
         baseSpirit: "gin",
       });
-      await seedGroup(db, { name: `${prefix}-daiquiri`, baseSpirit: "rum" });
+      await seedGroup(db, viewer, { name: `${prefix}-daiquiri`, baseSpirit: "rum" });
       const recipe = await seedRecipe(db, { name: `${prefix} v1` });
       await db.execute(sql`
         update public.recipes set recipe_group_id = ${negroni}::uuid
@@ -135,20 +142,20 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
       const tag = crypto.randomUUID().slice(0, 8);
-      const byName = await seedGroup(db, { name: `Negroni ${tag}` });
-      const byDescription = await seedGroup(db, { name: `Americano ${tag}x` });
+      const byName = await seedGroup(db, viewer, { name: `Negroni ${tag}` });
+      const byDescription = await seedGroup(db, viewer, { name: `Americano ${tag}x` });
       await db.execute(sql`
         update public.recipe_groups
         set description = ${`a cousin of the BOULEVARDIER-${tag}`}
         where id = ${byDescription}::uuid
       `);
-      const byVersion = await seedGroup(db, { name: `Spritz ${tag}y` });
+      const byVersion = await seedGroup(db, viewer, { name: `Spritz ${tag}y` });
       const recipe = await seedRecipe(db, { name: `Boulevardier-${tag} v2` });
       await db.execute(sql`
         update public.recipes set recipe_group_id = ${byVersion}::uuid
         where id = ${recipe}::uuid
       `);
-      await seedGroup(db, { name: `Unrelated ${tag}z` });
+      await seedGroup(db, viewer, { name: `Unrelated ${tag}z` });
 
       const filter = {
         term: `  boulevardier-${tag} `,
@@ -195,8 +202,8 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
       const tag = crypto.randomUUID().slice(0, 8);
-      await seedGroup(db, { name: `Pct ${tag} 100% agave` });
-      await seedGroup(db, { name: `Pct ${tag} 1000 agave` });
+      await seedGroup(db, viewer, { name: `Pct ${tag} 100% agave` });
+      await seedGroup(db, viewer, { name: `Pct ${tag} 1000 agave` });
 
       const filter = { term: `${tag} 100%` };
       const actor = await activate(
@@ -252,7 +259,7 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
       const viewer = await seedUser(db);
       const tag = `newest-${crypto.randomUUID().slice(0, 8)}`;
       const at = async (name: string, createdAt: string | null) => {
-        const id = await seedGroup(db, { name: `${tag} ${name}` });
+        const id = await seedGroup(db, viewer, { name: `${tag} ${name}` });
         await db.execute(sql`
           update public.recipe_groups
           set created_at = ${createdAt}::timestamptz
@@ -330,8 +337,8 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
       const prefix = `zzz-c3-${crypto.randomUUID().slice(0, 8)}`;
-      await seedGroup(db, { name: `${prefix}-shot`, category: "shot" });
-      await seedGroup(db, { name: `${prefix}-cocktail` });
+      await seedGroup(db, viewer, { name: `${prefix}-shot`, category: "shot" });
+      await seedGroup(db, viewer, { name: `${prefix}-cocktail` });
 
       const filter = { category: "shot" } as const;
       const actor = await activate(
@@ -357,7 +364,7 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
   it("refuses anonymous on a warm activation (§1.5, C1)", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
-      await seedGroup(db, {
+      await seedGroup(db, viewer, {
         name: `zzz-c3-${crypto.randomUUID().slice(0, 8)}`,
       });
       const actor = await activate(
@@ -377,6 +384,71 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
         actor.list(anonymousCtx("r"), NO_FILTER, pageArgs({ first: 5 })),
       ).rejects.toBeInstanceOf(ForbiddenError);
       expect(actor.queryCount).toBe(1);
+    });
+  });
+
+  it("X15: lists a group for a viewer who created it or can see a version, counts and matches only visible versions", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const author = await seedUser(db);
+      const tag = `zzz-x15-${crypto.randomUUID().slice(0, 8)}`;
+      const mixed = await seedGroup(db, author, { name: `${tag} mixed` });
+      const hidden = await seedGroup(db, author, { name: `${tag} hidden` });
+      const empty = await seedGroup(db, author, { name: `${tag} empty` });
+      const put = async (
+        groupId: string,
+        name: string,
+        privacy: "PUBLIC" | "PRIVATE",
+      ) => {
+        const id = await seedRecipe(db, {
+          name,
+          createdById: author,
+          privacy,
+        });
+        await db.execute(sql`
+          update public.recipes set recipe_group_id = ${groupId}::uuid
+          where id = ${id}::uuid
+        `);
+      };
+      await put(mixed, `${tag} open`, "PUBLIC");
+      await put(mixed, `${tag} secretword`, "PRIVATE");
+      await put(hidden, `${tag} only mine`, "PRIVATE");
+      void empty;
+
+      const actor = await activate(
+        createActor(
+          RecipeGroupsCollectionActor,
+          recipeGroupsCollectionActorId(BY_NAME),
+          db,
+        ),
+      );
+      const keep = (name: string) => name.startsWith(tag);
+      expect(await walk(actor, userCtx(viewer, "r"), BY_NAME, keep)).toEqual([
+        { name: `${tag} mixed`, recipeCount: 1 },
+      ]);
+      expect(await walk(actor, userCtx(author, "r"), BY_NAME, keep)).toEqual([
+        { name: `${tag} empty`, recipeCount: 0 },
+        { name: `${tag} hidden`, recipeCount: 1 },
+        { name: `${tag} mixed`, recipeCount: 2 },
+      ]);
+
+      // A private version's name is not a search term for anyone else.
+      const term = { term: "secretword" } as const;
+      const searching = await activate(
+        createActor(
+          RecipeGroupsCollectionActor,
+          recipeGroupsCollectionActorId(term),
+          db,
+        ),
+      );
+      expect(
+        await walk(searching, userCtx(viewer, "r"), term, keep),
+      ).toEqual([]);
+      expect(
+        (await walk(searching, userCtx(author, "r"), term, keep)).map(
+          (row) => row.name,
+        ),
+      ).toEqual([`${tag} mixed`]);
     });
   });
 

@@ -36,11 +36,16 @@
  * `id`, so the offset cursor §1.5 gives search actors means the same thing on
  * the next page.
  *
- * ## Viewer: not in the key
+ * ## Viewer: in the key, since X15
  *
- * `recipes` has no privacy column and today's Hasura select permission is
- * `filter: {}` for role `user`. Catalog data, B3's rule: any signed-in viewer,
- * anonymous refused, one activation shared by everyone.
+ * Recipes are private first (D22): the answer is the viewer's own recipes and
+ * drafts, their friends' FRIENDS ones and everyone's PUBLIC ones —
+ * `recipeVisibleSql` (`../lib/recipe-visibility.ts`), inside both queries so
+ * the vector scan keeps going until `limit` *visible* rows pass. So the
+ * activation is the viewer's (`recipeSearchActorId` hashes the viewer id) and
+ * a cached result set can never be handed to someone else. The menu
+ * matcher's `system` ctx has its own (viewer `null`) activation and sees
+ * shared recipes only — its answer lands on a place's menu.
  */
 import type {
   ActorCategory,
@@ -66,6 +71,7 @@ import type { EmbedQuery } from "../lib/embedding-client.ts";
 import { daprEmbedQuery } from "../lib/embedding-client.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { withHnswScan } from "../lib/hnsw.ts";
+import { recipeScope, recipeVisibleSql } from "../lib/recipe-visibility.ts";
 import { SearchActorBase } from "../lib/search-actor-base.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
 import { escapeLike } from "./brand-search-actor.ts";
@@ -102,7 +108,10 @@ export class RecipeSearchActor
     return recipeSearchActorId(input, viewerId);
   }
 
-  /** Catalog data: `recipes` has no privacy column (module doc). */
+  /**
+   * Signed in, or the `system` menu matcher (`requireSignedIn` admits it).
+   * The rows themselves are narrowed per viewer inside the query (module doc).
+   */
   protected override async authorize(ctx: Ctx): Promise<"allow"> {
     requireSignedIn(ctx, "search recipes");
     return "allow";
@@ -143,13 +152,14 @@ export class RecipeSearchActor
                or coalesce(r.description, '') ilike ${pattern} escape '\\'
                or r.type ilike ${pattern} escape '\\')`;
     const typeFilter = type === "" ? sql`true` : sql`r.type = ${type}`;
+    const visible = recipeVisibleSql(await recipeScope(this.db, ctx));
 
     if (semanticQuery === "") {
       const { rows } = await this.db.execute<Row>(sql`
         select r.id, r.name, r.description, r.type, r.recipe_group_id,
                null::float8 as distance
         from public.recipes r
-        where ${lexical} and ${typeFilter}
+        where ${lexical} and ${typeFilter} and ${visible}
         order by (lower(r.name) = ${term.toLowerCase()}) desc,
                  r.created_at desc nulls last,
                  lower(r.name) asc,
@@ -174,6 +184,7 @@ export class RecipeSearchActor
           from public.recipe_vectors rv
           join public.recipes r on r.id = rv.recipe_id
           where rv.vector is not null and ${lexical} and ${typeFilter}
+            and ${visible}
           order by rv.vector <=> ${literal}::halfvec
           limit ${limit}
         )

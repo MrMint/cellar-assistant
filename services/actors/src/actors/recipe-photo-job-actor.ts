@@ -89,6 +89,7 @@ import {
   RECIPE_CATEGORIES,
   RECIPE_PHOTO_JOB_KIND,
   RECIPE_PHOTO_STAGES,
+  RECIPE_TEXT_MAX,
   RECIPE_TYPES,
   RecipePhotoJobActorDescriptor,
   userCtx,
@@ -326,6 +327,26 @@ export class RecipePhotoJobActor
       "a recipe-photo job's payload",
     );
     requireUuid(this.key, "jobId");
+    // X15's Paste: a job reads either a photo or pasted text, never both and
+    // never neither. Text needs no file check — there is no file.
+    const text = payload.text ?? null;
+    const hasFile = payload.fileId !== undefined && payload.fileId !== null;
+    if (text !== null) {
+      if (hasFile || (payload.additionalFileIds ?? []).length > 0) {
+        throw new ValidationError(
+          "a recipe job reads a photo or pasted text, not both",
+        );
+      }
+      if (text.trim() === "") {
+        throw new ValidationError("there is no recipe text to read");
+      }
+      if (text.length > RECIPE_TEXT_MAX) {
+        throw new ValidationError(
+          `pasted recipe text is at most ${RECIPE_TEXT_MAX} characters, got ${text.length}`,
+        );
+      }
+      return;
+    }
     const fileId = requireUuid(payload.fileId ?? "", "fileId");
 
     const sent = payload.additionalFileIds ?? [];
@@ -421,7 +442,8 @@ export class RecipePhotoJobActor
       case "extract": {
         const { recipe, model } = await this.#extract(owner, {
           jobId: this.key,
-          fileId: payload.fileId,
+          fileId: payload.fileId ?? null,
+          text: payload.text ?? null,
           additionalFileIds: payload.additionalFileIds ?? [],
           notes: payload.notes ?? null,
         });
@@ -449,6 +471,10 @@ export class RecipePhotoJobActor
           difficultyLevel: extraction.difficultyLevel ?? null,
           prepTimeMinutes: extraction.prepTimeMinutes ?? null,
           servingSize: extraction.servingSize ?? null,
+          // X15 / D22: what the model read is a draft, private, until the
+          // person reviews it in the editor and saves it.
+          privacy: "PRIVATE",
+          isDraft: true,
         });
         return state;
       }

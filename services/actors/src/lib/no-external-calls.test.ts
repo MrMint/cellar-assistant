@@ -232,6 +232,22 @@ const GUARDED: readonly Guarded[] = [
     sidecarTargets: [],
   },
   {
+    // X15: who may see a recipe — SQL fragments and one friendship read, no
+    // I/O beyond the database. `UserActor` imports it for Love and Want to
+    // try on a recipe, which must not confirm a private one exists.
+    file: "../lib/recipe-visibility.ts",
+    imports: [
+      "@cellar-assistant/contracts",
+      "@cellar-assistant/db/orm",
+      "@cellar-assistant/policy",
+      "./collection-sql.ts",
+      "./db.ts",
+      "./visibility-sql.ts",
+      "./visibility.ts",
+    ],
+    sidecarTargets: [],
+  },
+  {
     // The display-name rule (W4 security F2): a regex and a random handle.
     // Shared with better-auth's hooks, which is why it lives in `auth/` — and
     // guarded so importing it never pulls better-auth into a UserActor turn.
@@ -260,6 +276,8 @@ const GUARDED: readonly Guarded[] = [
       "../auth/display-name.ts",
       // X27: `placeVisibleTo`, a Drizzle predicate — guarded above.
       "../lib/unshared-places.ts",
+      // X15: `visibleRecipeIds` — guarded above.
+      "../lib/recipe-visibility.ts",
     ],
     sidecarTargets: [],
   },
