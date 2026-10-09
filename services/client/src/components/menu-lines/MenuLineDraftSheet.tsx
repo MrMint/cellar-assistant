@@ -167,6 +167,11 @@ export function MenuLineDraftSheet({
   });
   const watched = useWatch({ control });
 
+  // Bumped whenever the card starts over (another line, another type): a
+  // "Suggest details" answer that lands after that belongs to a card the
+  // person is no longer looking at, and is dropped rather than shown here.
+  const generation = useRef(0);
+
   // A fresh card each time it opens for a line.
   const openedFor = useRef<string | null>(null);
   useEffect(() => {
@@ -176,6 +181,7 @@ export function MenuLineDraftSheet({
     }
     if (openedFor.current === current.id) return;
     openedFor.current = current.id;
+    generation.current += 1;
     reset(startingValues(current));
     setType(lineItemType(current));
     setProposals([]);
@@ -197,6 +203,7 @@ export function MenuLineDraftSheet({
 
   const chooseType = (next: ApiItemType) => {
     if (next === type) return;
+    generation.current += 1;
     // Another type's details do not carry over; the name and notes do.
     setValue("attributes", {});
     setProposals([]);
@@ -218,20 +225,21 @@ export function MenuLineDraftSheet({
 
   const suggest = async () => {
     if (type === null) return;
+    const asked = generation.current;
     setStatus({ state: "working" });
     const values = getValues();
+    const response = await suggestDetails({
+      draftId: draftIdFor(type),
+      type,
+      input: {
+        name: values.name,
+        country: values.country === "" ? null : values.country,
+        attributes: values.attributes,
+      },
+    });
+    if (asked !== generation.current) return;
     const result = unwrapResult(
-      (
-        await suggestDetails({
-          draftId: draftIdFor(type),
-          type,
-          input: {
-            name: values.name,
-            country: values.country === "" ? null : values.country,
-            attributes: values.attributes,
-          },
-        })
-      ).data?.suggestNewItemDetails,
+      response.data?.suggestNewItemDetails,
       "ItemDetailSuggestions",
     );
     if (!result.ok) {
