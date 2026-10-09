@@ -153,8 +153,16 @@ const caseWord = (word: string, isInner: boolean): string => {
  * `CASTELLO DI MONTEROSSO` → `Castello di Monterosso`. A name that is not
  * {@link isShouting} comes back unchanged.
  */
-export const smartTitleCase = (name: string): string => {
-  if (!isShouting(name)) return name;
+export const smartTitleCase = (name: string): string =>
+  isShouting(name) ? titleCaseWords(name) : name;
+
+/**
+ * The casing {@link smartTitleCase} applies, without its "is this shouting?"
+ * gate — for a caller that has already decided a run of text should be cased
+ * (`menu-line-text.ts` decides per segment of a menu line). Expects text with
+ * no lowercase letters; anything else is lowercased word by word first.
+ */
+export const titleCaseWords = (name: string): string => {
   // Words are separated by whitespace; hyphens and slashes join parts that
   // are each cased (`SAINT-ÉMILION` → `Saint-Émilion`).
   const parts = name.split(/(\s+)/);
