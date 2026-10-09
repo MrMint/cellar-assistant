@@ -6,7 +6,6 @@ import {
   Love,
   People,
   Ranked,
-  Scan,
   WantToTry,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
@@ -43,7 +42,8 @@ export type MeLink = {
  *   search (`components/cellar/CellarSegments.tsx`, `/search`).
  * - **Brands** — the brand link on item pages and the Brands section of
  *   search; not in the nav.
- * - **Scans** stay here until Home's "Waiting on you" (X10) takes them.
+ * - **Scans** — Home's job tray and "Waiting on you" (X10); each scan's own
+ *   page stays, and `/map/scans` redirects to the inbox.
  */
 export const ME_SECTIONS: readonly {
   label: string;
@@ -68,10 +68,6 @@ export const ME_SECTIONS: readonly {
           `${count} friend ${count === 1 ? "request" : "requests"}`,
       },
     ],
-  },
-  {
-    label: "More",
-    links: [{ label: "Scans", href: "/map/scans", icon: Scan }],
   },
 ];
 

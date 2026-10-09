@@ -34,14 +34,13 @@ describe("MeHub", () => {
     assert.ok(html.includes("pat@example.test"));
   });
 
-  test("Lists (Tier lists, Top rated, Loved, Want to try), Friends, Scans, Edit profile — in that order", () => {
+  test("Lists (Tier lists, Top rated, Loved, Want to try), Friends, Edit profile — in that order", () => {
     assert.deepEqual(links, [
       "Tier lists -> /tier-lists",
       "Top rated -> /rankings",
       "Loved -> /favorites",
       "Want to try -> /want-to-try",
       "Friends -> /friends",
-      "Scans -> /map/scans",
       "Edit profile -> /users/edit",
     ]);
   });
@@ -49,6 +48,10 @@ describe("MeHub", () => {
   test("D1: Recipes and Brands are not Me rows (Cellar › Bar, item pages, search)", () => {
     assert.ok(!links.some((link) => link.endsWith("-> /recipes")));
     assert.ok(!links.some((link) => link.endsWith("-> /brands")));
+  });
+
+  test("X10: Scans moved to Home's inbox — no Me row for the retired list", () => {
+    assert.ok(!links.some((link) => link.endsWith("-> /map/scans")));
   });
 
   test("your tier lists are pinned first, then All tier lists", () => {
