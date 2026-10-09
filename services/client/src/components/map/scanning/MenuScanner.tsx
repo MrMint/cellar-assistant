@@ -33,6 +33,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { kickAiJobs } from "@/components/home/ai-job-store";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -164,6 +165,9 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
 
     if (result.success && result.scanId) {
       setScanId(result.scanId);
+      // X10: the shell's watcher follows the scan from here, so leaving this
+      // page still ends in a "menu is read" toast, and Home's tray shows it.
+      kickAiJobs();
       setScanStatus({
         id: result.scanId,
         processing_status: "pending",
