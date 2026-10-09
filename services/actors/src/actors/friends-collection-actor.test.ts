@@ -556,6 +556,60 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
       });
     });
 
+    it("keeps canSeeTierList and canSeeCellar: a friend's PRIVATE list or cellar never reaches the feed", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const place = await seedPlace(db, { name: "P", lng: 0, lat: 0 });
+        const wine = await seedWine(db, friend, "Feed privacy wine");
+        const lists: Record<string, string> = {};
+        const cellars: Record<string, string> = {};
+        for (const privacy of ["PRIVATE", "FRIENDS", "PUBLIC"] as const) {
+          lists[privacy] = await seedTierList(db, {
+            createdById: friend,
+            privacy,
+          });
+          await seedTierListPlace(db, lists[privacy], place);
+          cellars[privacy] = await seedCellar(db, {
+            createdById: friend,
+            privacy,
+          });
+          await seedCellarItem(db, cellars[privacy], friend, wine);
+        }
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const { entries } = await feedPage(actor, viewer, 20);
+        const listIds = entries.map((e) => e.node.tierListItem?.tierListId);
+        const cellarIds = entries.map((e) => e.node.cellarId);
+        for (const privacy of ["PRIVATE", "FRIENDS", "PUBLIC"] as const) {
+          const ctx = userCtx(viewer, "r");
+          expect(listIds.includes(lists[privacy]), `list ${privacy}`).toBe(
+            canSeeTierList(ctx, {
+              createdById: friend,
+              privacy,
+              viewerIsFriendOfCreator: true,
+            }),
+          );
+          expect(
+            cellarIds.includes(cellars[privacy]),
+            `cellar ${privacy}`,
+          ).toBe(
+            canSeeCellar(ctx, {
+              createdById: friend,
+              privacy,
+              coOwnerIds: [],
+              viewerIsFriendOfCreator: true,
+            }),
+          );
+        }
+        // The two PRIVATE rows exist; the feed just never names them.
+        expect(listIds).not.toContain(lists.PRIVATE);
+        expect(cellarIds).not.toContain(cellars.PRIVATE);
+      });
+    });
+
     it("is empty without friends, and refuses another viewer", async () => {
       await withTestDb(async (db) => {
         const viewer = await seedUser(db);
