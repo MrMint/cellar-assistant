@@ -8,6 +8,7 @@ import { Add, Cellar, Decrease } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { announceSave } from "@/components/pwa/install-prompt";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
@@ -140,6 +141,8 @@ export const AddToCellarActions = ({
       setError(refusal ?? "The bottle could not be added.");
       return;
     }
+    // A bottle saved: the install prompt waits for the first (N15).
+    announceSave();
     minted.current = null;
     rememberCapturePrefs({ cellarId: target });
     setOpen(false);

@@ -5,6 +5,8 @@ import { CellarItemsControls } from "@/components/cellar/CellarItemsControls";
 import { CellarItemsGridServer } from "@/components/cellar/CellarItemsGridServer";
 import { CellarItemsGridSkeleton } from "@/components/cellar/CellarItemsGridSkeleton";
 import { filterCountsFromItemCounts } from "@/components/cellar/cellarItemCounts";
+import { DEFAULT_CELLAR_STATUS } from "@/components/cellar/cellarItemsQuery";
+import { EmptyCellar } from "@/components/cellar/EmptyCellar";
 import {
   CellarInfoFragment,
   GetCellarInfoQuery,
@@ -66,6 +68,16 @@ export default async function CellarItemsPage({
   const cellar = readFragment(CellarInfoFragment, result.data);
   const canAdd = canAddToCellar(cellar, viewer.me?.id ?? null);
   const counts = filterCountsFromItemCounts(cellar.itemCounts);
+  // Nothing in it at all, and no search, filter or status segment that could
+  // explain that: the first-run state (N15) without a round trip for an empty
+  // grid. `itemCounts` counts non-empty bottles, i.e. the default "In cellar"
+  // segment, so "Finished" and "All" still go to the grid. Same copy as the
+  // grid's own empty state (`EmptyCellar` is `CellarItemsEmpty`).
+  const empty =
+    cellar.itemCounts.total === 0 &&
+    search === "" &&
+    validTypes.length === 0 &&
+    status === DEFAULT_CELLAR_STATUS;
 
   return (
     <div className="flex flex-col gap-4">
@@ -81,20 +93,24 @@ export default async function CellarItemsPage({
         initialStatus={status}
       />
 
-      {/* Items grid streams in with Suspense */}
-      <Suspense
-        key={`${search}-${JSON.stringify(types)}-${sort}-${status}`}
-        fallback={<CellarItemsGridSkeleton />}
-      >
-        <CellarItemsGridServer
-          cellarId={cellarId}
-          search={search}
-          types={validTypes}
-          sort={sort}
-          status={status}
-          canAdd={canAdd}
-        />
-      </Suspense>
+      {empty ? (
+        <EmptyCellar cellarId={cellarId} canAdd={canAdd} />
+      ) : (
+        /* Items grid streams in with Suspense */
+        <Suspense
+          key={`${search}-${JSON.stringify(types)}-${sort}-${status}`}
+          fallback={<CellarItemsGridSkeleton />}
+        >
+          <CellarItemsGridServer
+            cellarId={cellarId}
+            search={search}
+            types={validTypes}
+            sort={sort}
+            status={status}
+            canAdd={canAdd}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

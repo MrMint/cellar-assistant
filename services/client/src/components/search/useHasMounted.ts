@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
  *
  * The discovery cards' framer-motion entrances (`initial="hidden"`) would
  * otherwise server-render `opacity:0` and depend on hydration to show the
- * content at all — the defect `./AnimateIn.tsx` fixes for the hero. With
+ * content at all (the defect the hero's old `AnimateIn` also had). With
  * this, the first paint is the at-rest state and a later mount (a filter
  * change re-keys the grid) still animates as it did.
  */

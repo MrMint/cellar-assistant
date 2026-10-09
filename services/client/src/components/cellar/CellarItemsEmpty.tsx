@@ -1,6 +1,6 @@
 import Image, { type StaticImageData } from "next/image";
 import { EmptyState } from "@/components/app/EmptyState";
-import { Add } from "@/components/app/icons";
+import { Camera } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -42,7 +42,7 @@ export type CellarItemsEmptyCopy = {
   title: string;
   description: string;
   art: "cellar" | ApiItemType | null;
-  /** Whether "Add a bottle" is the one action (an empty cellar, if you may). */
+  /** Whether "Snap a bottle" is the one action (an empty cellar, if you may). */
   addAction: boolean;
 };
 
@@ -110,8 +110,9 @@ export const cellarItemsEmptyCopy = ({
     };
   }
   return {
+    // N15's first-run state: one line, and the camera as the one action.
     title: "Your cellar is waiting.",
-    description: "Add a bottle and it shows up here.",
+    description: "Snap a label and the bottle is in.",
     art: "cellar",
     addAction: true,
   };
@@ -147,8 +148,8 @@ export function CellarItemsEmpty({
         copy.addAction ? (
           <Button asChild>
             <Link href={`/cellars/${cellarId}/items/add`} underline="none">
-              <Add />
-              Add a bottle
+              <Camera aria-hidden />
+              Snap a bottle
             </Link>
           </Button>
         ) : undefined

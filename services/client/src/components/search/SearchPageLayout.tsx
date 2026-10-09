@@ -10,10 +10,11 @@ type SearchPageLayoutProps = {
   /** The `?q=` this render is for (trimmed), or null. */
   urlQuery: string | null;
   /**
-   * The landing view's hero (greeting and collection line, above the box) and
-   * quick links (under it), or null for the results view.
+   * The landing view's hero (greeting and collection line, above the box), or
+   * null for the results view. (The quick-link chips that sat under the box
+   * went in X01: each one duplicated a tab or a Me row.)
    */
-  landing: { hero: ReactNode; quickLinks: ReactNode } | null;
+  landing: { hero: ReactNode } | null;
   /** The landing view's discovery section, or the results. */
   children: ReactNode;
 };
@@ -46,7 +47,6 @@ export function SearchPageLayout({
         <div className={cn(landing && "w-full max-w-150 self-center")}>
           <ClientSearchInterface urlQuery={urlQuery} />
         </div>
-        {landing ? landing.quickLinks : null}
         <SearchResultsRegion>{children}</SearchResultsRegion>
       </div>
     </SearchNavigationProvider>

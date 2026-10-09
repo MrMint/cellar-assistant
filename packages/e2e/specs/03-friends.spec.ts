@@ -160,10 +160,20 @@ test.describe("the /cellars index reflects the friendship", () => {
       "the friendship flow did not run",
     );
     await expectIndexRendered(secondary);
+    // X11 / D2: under From friends — never among the viewer's own.
     await expect(
-      secondary.getByText(friendsCellarName).first(),
-      "the friend's cellar is not listed on /cellars",
+      secondary
+        .getByRole("region", { name: "From friends" })
+        .getByText(friendsCellarName)
+        .first(),
+      "the friend's cellar is not listed under From friends on /cellars",
     ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      secondary
+        .getByRole("region", { name: "Yours" })
+        .getByText(friendsCellarName),
+      "a friend's cellar is listed under Yours",
+    ).toHaveCount(0);
   });
 
   test("another account's PRIVATE cellar is not on this viewer's index", async ({

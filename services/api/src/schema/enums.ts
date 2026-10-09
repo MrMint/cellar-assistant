@@ -31,6 +31,7 @@ import {
   COFFEE_PROCESSES,
   COFFEE_ROAST_LEVELS,
   COFFEE_SPECIES,
+  COLLECTION_SECTIONS,
   FRIEND_REQUEST_STATUSES,
   INSTRUCTION_TYPES,
   PERMISSION_TYPES,
@@ -107,3 +108,17 @@ export const SakeServingTemperatureEnum = builder.enumType(
     values: SAKE_SERVING_TEMPERATURES,
   },
 );
+
+/**
+ * Not a `pgEnum`: the `section` argument of `myCellars` and `myTierLists`
+ * (decision D2, roadmap X11). Lives here so both modules can import it.
+ */
+export const CollectionSectionEnum = builder.enumType("CollectionSection", {
+  description:
+    "Which part of the viewer's visible set a `/cellars` or `/tier-lists` " +
+    "section lists (decision D2). The three partition the set: `MINE` is " +
+    "rows the viewer created (or co-owns, for a cellar); `FRIENDS` is " +
+    "friends' PUBLIC or FRIENDS rows; `DISCOVER` is PUBLIC rows of people " +
+    "who are not friends. A stranger's PUBLIC row is never `MINE`.",
+  values: COLLECTION_SECTIONS,
+});

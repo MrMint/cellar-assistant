@@ -117,6 +117,43 @@ import type { TierListEntryRef, TierListItemDto } from "./tier-lists.ts";
 export const viewerCollectionActorId = (viewerId: string): string => viewerId;
 
 /* -------------------------------------------------------------------------- */
+/* Sections — Yours / From friends / Discover (decision D2, roadmap X11)       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Which part of a viewer's visible set a `/cellars` or `/tier-lists` page
+ * asks for (D2: "Yours · From friends · Discover"). The three are a
+ * **partition** of what `canSee` admits, so asking for each in turn lists
+ * every visible row exactly once:
+ *
+ * | section    | rows                                                        |
+ * |------------|-------------------------------------------------------------|
+ * | `MINE`     | ones the viewer created (or, for a cellar, co-owns)         |
+ * | `FRIENDS`  | not the viewer's; created by a friend; PUBLIC or FRIENDS    |
+ * | `DISCOVER` | not the viewer's; created by someone who is not a friend; PUBLIC |
+ *
+ * Each section is still `and`ed with the visibility clause, so a section can
+ * only ever narrow what the viewer may see. The privacy conditions are
+ * written out rather than left to that clause so the partition holds for an
+ * admin too, whose visibility clause is `true`: an admin's Discover is other
+ * people's PUBLIC rows, not every private cellar in the database.
+ *
+ * Omitting the section keeps the old behaviour — the whole visible set — for
+ * any caller that wants "anything the viewer can see". (The client's own
+ * pickers — add to cellar, add to tier list — ask for `MINE`.) A stranger's
+ * PUBLIC row is never in `MINE`.
+ */
+export const COLLECTION_SECTIONS = ["MINE", "FRIENDS", "DISCOVER"] as const;
+
+export type CollectionSection = (typeof COLLECTION_SECTIONS)[number];
+
+export const isCollectionSection = (
+  value: unknown,
+): value is CollectionSection =>
+  typeof value === "string" &&
+  (COLLECTION_SECTIONS as readonly string[]).includes(value);
+
+/* -------------------------------------------------------------------------- */
 /* CellarsCollectionActor(viewerId) — /cellars                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -146,9 +183,14 @@ export type CellarsCollectionActorInterface = {
   /**
    * **ids** — `cellars.id`: the viewer's own (created or co-owned) first, then
    * everyone else's, each by most recent activity (decision D13). Hydrated
-   * through `CellarActor.get`.
+   * through `CellarActor.get`. `section` narrows to one of
+   * {@link COLLECTION_SECTIONS} (D2); omitted or null is the whole set.
    */
-  list(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
+  list(
+    ctx: Ctx,
+    page: PageArgs,
+    section?: CollectionSection | null,
+  ): Promise<Page<string>>;
   /**
    * The `/search` landing line ("N bottles across M cellars"), UI parity G36.
    *
@@ -283,8 +325,16 @@ export const CheckInsCollectionActorDescriptor: ActorDescriptor<CheckInsCollecti
  * re-deriving the rule in SQL.
  */
 export type TierListsCollectionActorInterface = {
-  /** **ids** — `tier_lists.id`, most recently changed first. */
-  list(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
+  /**
+   * **ids** — `tier_lists.id`, most recently changed first. `section`
+   * narrows to one of {@link COLLECTION_SECTIONS} (D2); omitted or null is
+   * every list the viewer may see.
+   */
+  list(
+    ctx: Ctx,
+    page: PageArgs,
+    section?: CollectionSection | null,
+  ): Promise<Page<string>>;
   /**
    * UI parity G8 — "On lists": for each entry (an item or a place), the
    * `tier_list_items` rows ranking it on a list the viewer may see

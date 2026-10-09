@@ -1,0 +1,95 @@
+/**
+ * What the `/me` hub reads beyond the session (D1): the viewer's own tier
+ * lists, pinned at the top of Lists, and the friend requests waiting on them,
+ * for the badge on Friends.
+ *
+ * One document, so the hub is one round trip. Both halves are optional to
+ * the page: a failure in either renders the plain row it would have shown
+ * anyway (`meHubFromResult`), never an error over the hub.
+ */
+import { ActorErrorFieldsFragment } from "@/lib/api/errors";
+import { graphql, type ResultOf } from "@/lib/api/graphql";
+
+/** How many of the viewer's own tier lists sit pinned above "All tier lists". */
+export const PINNED_TIER_LISTS = 3;
+
+/** The API caps `first` at 100; past that the badge reads "99+". */
+export const FRIEND_REQUESTS_PAGE = 100;
+
+export const MeHubQuery = graphql(
+  `
+  query MeHub($pinned: Int!, $requests: Int!) {
+    myTierLists(first: $pinned, section: MINE) {
+      __typename
+      ... on TierListConnection {
+        totalCount
+        edges {
+          node {
+            id
+            name
+            itemCount
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+    myFriendRequests(direction: INCOMING, first: $requests) {
+      __typename
+      ... on FriendRequestConnection {
+        edges {
+          node {
+            id
+            status
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+export type PinnedTierList = { id: string; name: string; itemCount: number };
+
+export type MeHubData = {
+  /** The viewer's own tier lists, most recently changed first. */
+  pinnedTierLists: PinnedTierList[];
+  /** How many tier lists the viewer owns in all, when known. */
+  tierListCount: number | null;
+  /** Incoming friend requests still pending. */
+  pendingFriendRequests: number;
+};
+
+export const EMPTY_ME_HUB: MeHubData = {
+  pinnedTierLists: [],
+  tierListCount: null,
+  pendingFriendRequests: 0,
+};
+
+/** The query's result → the hub's props. A failed half reads as empty. */
+export const meHubFromResult = (
+  data: ResultOf<typeof MeHubQuery> | null | undefined,
+): MeHubData => {
+  const lists = data?.myTierLists;
+  const requests = data?.myFriendRequests;
+  const listConnection =
+    lists?.__typename === "TierListConnection" ? lists : null;
+  return {
+    pinnedTierLists:
+      listConnection?.edges.map(({ node }) => ({
+        id: node.id,
+        name: node.name,
+        itemCount: node.itemCount,
+      })) ?? [],
+    tierListCount: listConnection?.totalCount ?? null,
+    pendingFriendRequests:
+      requests?.__typename === "FriendRequestConnection"
+        ? requests.edges.filter(({ node }) => node.status === "PENDING").length
+        : 0,
+  };
+};
+
+/** The badge's text: the count, capped where the page read stops. */
+export const badgeText = (count: number): string =>
+  count >= FRIEND_REQUESTS_PAGE ? `${FRIEND_REQUESTS_PAGE - 1}+` : `${count}`;

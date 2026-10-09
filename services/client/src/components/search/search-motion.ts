@@ -18,10 +18,7 @@ import { distance, tween } from "@/lib/motion";
 
 /** Seconds between staggered children, and before the first. */
 export const STAGGER = {
-  /** The landing hero's quick links (`AnimateIn`'s `StaggerIn`). */
-  step: 0.04,
-  delay: 0.03,
-  /** The discovery grids, which can hold more cards. */
+  /** The discovery grids. */
   stepFast: 0.03,
   delayFast: 0.02,
 } as const;

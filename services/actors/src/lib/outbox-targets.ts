@@ -489,6 +489,20 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
     ],
   }),
 
+  "CellarActor.createStarter": target(CellarActorDescriptor, "createStarter", {
+    enqueuedBy: [
+      {
+        module: "auth/auth.ts",
+        targetId: "derived",
+        note:
+          "`starterCellarId(user.id)` — derived from the `user` row better-auth " +
+          "has just inserted, in its `user.create` after-hook (N15). No caller " +
+          "input reaches the id or the payload's `ownerId`; the far end " +
+          "refuses a key not derived from that `ownerId`.",
+      },
+    ],
+  }),
+
   /* ------------------------------------------------------------------ File */
 
   "FileActor.delete": target(FileActorDescriptor, "delete", {

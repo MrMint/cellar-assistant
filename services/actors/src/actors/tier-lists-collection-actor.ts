@@ -27,6 +27,7 @@
 import type {
   ActorCategory,
   CappedList,
+  CollectionSection,
   Ctx,
   Page,
   PageArgs,
@@ -48,6 +49,10 @@ import { type SQL, sql } from "@cellar-assistant/db/orm";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import {
+  requireSection,
+  sectionedVisibleWhere,
+} from "../lib/collection-sections.ts";
+import {
   keysetOrder,
   keysetWhere,
   toIso,
@@ -55,7 +60,7 @@ import {
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { placeRefVisibleSql } from "../lib/unshared-places.ts";
-import { visibleWhere } from "../lib/visibility-sql.ts";
+import { type VisibleRow, visibleWhere } from "../lib/visibility-sql.ts";
 
 type TierListIdRow = { readonly id: string; readonly sort_key: string };
 
@@ -99,6 +104,12 @@ const entryMatch = (refs: readonly TierListEntryRef[]): SQL => {
   return sql.join(disjuncts, sql` or `);
 };
 
+/** Where `canSeeTierList`'s inputs live in this collection's query. */
+const TIER_LIST_ROW: VisibleRow = {
+  createdBy: sql`t.created_by_id`,
+  privacy: sql`t.privacy`,
+};
+
 /** `tier_lists.content_updated_at` is `not null` — no `coalesce` needed. */
 const SORT = sql`t.content_updated_at`;
 const ID = sql`t.id`;
@@ -110,15 +121,25 @@ export class TierListsCollectionActor
   static readonly category: ActorCategory =
     TierListsCollectionActorDescriptor.category;
 
-  async list(ctx: Ctx, page: PageArgs): Promise<Page<string>> {
+  /**
+   * `section` (D2, `lib/collection-sections.ts`): `MINE` is the viewer's own
+   * lists, `FRIENDS` friends' visible ones, `DISCOVER` strangers' PUBLIC
+   * ones; omitted, every list the viewer may see.
+   */
+  async list(
+    ctx: Ctx,
+    page: PageArgs,
+    section?: CollectionSection | null,
+  ): Promise<Page<string>> {
+    const only = requireSection(section);
     return mapPage(
       await this.paged<TierListIdRow>(
         ctx,
         null,
         page,
-        (after, limit) => this.#read(ctx, after, limit),
+        (after, limit) => this.#read(ctx, after, limit, only),
         (row) => ({ sort: row.sort_key, id: row.id }),
-        () => this.#scope(ctx),
+        () => this.#scope(ctx, only),
       ),
       (row) => row.id,
     );
@@ -202,10 +223,13 @@ export class TierListsCollectionActor
   }
 
   /** Shared by the page and its `count(*)` — see `PageScope`. */
-  async #scope(ctx: Ctx): Promise<PageScope> {
+  async #scope(
+    ctx: Ctx,
+    section: CollectionSection | null = null,
+  ): Promise<PageScope> {
     return {
       from: sql`public.tier_lists t`,
-      where: await this.#visibilityClause(ctx),
+      where: await sectionedVisibleWhere(this.db, ctx, TIER_LIST_ROW, section),
     };
   }
 
@@ -213,8 +237,9 @@ export class TierListsCollectionActor
     ctx: Ctx,
     after: KeysetCursor | null,
     limit: number,
+    section: CollectionSection | null,
   ): Promise<readonly TierListIdRow[]> {
-    const { from, where } = await this.#scope(ctx);
+    const { from, where } = await this.#scope(ctx, section);
     const { rows } = await this.db.execute<TierListIdRow>(sql`
       select t.id, (t.content_updated_at)::text as sort_key
       from ${from}
@@ -228,9 +253,6 @@ export class TierListsCollectionActor
 
   /** `canSeeTierList`: creator, PUBLIC, or FRIENDS-and-a-friend. */
   async #visibilityClause(ctx: Ctx) {
-    return visibleWhere(this.db, ctx, {
-      createdBy: sql`t.created_by_id`,
-      privacy: sql`t.privacy`,
-    });
+    return visibleWhere(this.db, ctx, TIER_LIST_ROW);
   }
 }

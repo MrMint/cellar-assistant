@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { SignUpApiClient } from "@/components/auth/SignUpApiClient";
 import { readPasswordMode } from "@/lib/auth/password-mode";
 import { getOptionalServerUser } from "@/utilities/auth-server";
-import { sanitizeReturnTo } from "@/utilities/sanitize-return-to";
+import { HOME_PATH, sanitizeReturnTo } from "@/utilities/sanitize-return-to";
 
 /**
  * D2: better-auth sign-up. See `sign-in/page.tsx`.
@@ -21,7 +21,7 @@ export default async function SignUp({
 
   const user = await getOptionalServerUser();
   if (user) {
-    redirect(returnTo ?? "/cellars");
+    redirect(returnTo ?? HOME_PATH);
   }
 
   return (

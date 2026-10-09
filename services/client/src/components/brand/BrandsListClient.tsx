@@ -37,6 +37,8 @@ const NO_SEARCH: Page<BrandCardItem> = {
 
 interface BrandsListClientProps {
   initialPage: Page<BrandCardItem>;
+  /** A term to start with — `/brands?q=`, from search's "See all" (D1). */
+  initialSearch?: string;
 }
 
 /**
@@ -54,9 +56,12 @@ interface BrandsListClientProps {
  *   item count. `first` caps at 100, so the search pages too, through the
  *   same eager load-more as the unsearched grid.
  */
-export const BrandsListClient = ({ initialPage }: BrandsListClientProps) => {
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+export const BrandsListClient = ({
+  initialPage,
+  initialSearch = "",
+}: BrandsListClientProps) => {
+  const [search, setSearch] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -101,7 +106,13 @@ export const BrandsListClient = ({ initialPage }: BrandsListClientProps) => {
     }
   }, [debouncedSearch, resetSearch]);
 
-  const searching = hasSearch && searchList.status === "resetting";
+  // Also "searching" before the reset above has run for this term: a page
+  // opened at `/brands?q=` (search's See all) renders — on the server, and
+  // for the first client frame — with the term set and no search started,
+  // which would otherwise say "No brands found" for a term that has some.
+  const searching =
+    hasSearch &&
+    (searchList.status === "resetting" || searchList.args !== debouncedSearch);
   const active = hasSearch ? searchList : list;
   const brands = [...active.rows];
   const failure = active.failure;

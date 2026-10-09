@@ -72,11 +72,19 @@ export const CellarCardFragment = graphql(`
   }
 `);
 
-/** `/cellars` — one page of the grid. `myCellars` is everything you may see. */
+/**
+ * `/cellars` — one page of one section: Yours, From friends or Discover
+ * (`section`, decision D2). Without a section `myCellars` is everything the
+ * viewer may see, strangers' PUBLIC cellars included.
+ */
 export const GetCellarsQuery = graphql(
   `
-  query GetCellars($first: Int!, $after: String) {
-    myCellars(first: $first, after: $after) {
+  query GetCellars(
+    $first: Int!
+    $after: String
+    $section: CollectionSection
+  ) {
+    myCellars(first: $first, after: $after, section: $section) {
       __typename
       ... on CellarConnection {
         totalCount

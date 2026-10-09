@@ -21,7 +21,7 @@
  */
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { withReturnTo } from "../../utilities/sanitize-return-to.ts";
+import { HOME_PATH, withReturnTo } from "../../utilities/sanitize-return-to.ts";
 import type {
   AuthErrorBody,
   AuthSession,
@@ -110,7 +110,7 @@ export const authClient = {
      * provider then redirects to `<BETTER_AUTH_URL>/api/auth/callback/<id>`,
      * which is registered with the provider and configured in `infra/.env`.
      */
-    social: (provider: SocialProvider, callbackPath = "/cellars") =>
+    social: (provider: SocialProvider, callbackPath = HOME_PATH) =>
       post<{ url: string; redirect: boolean }>(authEndpoint.signInSocial, {
         provider,
         // One URL for both a returning and a brand-new account
@@ -249,11 +249,18 @@ export const useSession = (): UseSession => {
 /**
  * `useState`-shaped helper for the sign-in and sign-up forms: one pending flag
  * and one error, so a form does not have to reimplement it.
+ *
+ * `onSuccess` runs after the session is re-read and **in the same tick as
+ * `pending` goes false**, so a form that starts its navigation there (in a
+ * transition — `useLanding`) hands its spinner straight to the navigation's
+ * with no frame between them where the button looks idle (X01: "the submit
+ * spinner persists until navigation commits"). The session re-read used to
+ * run after `pending` had already gone false, which was exactly that frame.
  */
 export const useAuthAction = <TInput>(
   action: (input: TInput) => Promise<AuthResult<unknown>>,
 ): {
-  run: (input: TInput) => Promise<boolean>;
+  run: (input: TInput, onSuccess?: () => void) => Promise<boolean>;
   pending: boolean;
   error: AuthErrorBody | null;
 } => {
@@ -261,16 +268,18 @@ export const useAuthAction = <TInput>(
   const [error, setError] = useState<AuthErrorBody | null>(null);
 
   const run = useCallback(
-    async (input: TInput): Promise<boolean> => {
+    async (input: TInput, onSuccess?: () => void): Promise<boolean> => {
       setPending(true);
       setError(null);
       const result = await action(input);
-      setPending(false);
       if (result.error !== null) {
+        setPending(false);
         setError(result.error);
         return false;
       }
       await revalidate();
+      onSuccess?.();
+      setPending(false);
       return true;
     },
     [action],

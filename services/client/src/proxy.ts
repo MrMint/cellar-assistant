@@ -7,6 +7,7 @@ import {
   parseCookieHeader,
 } from "./lib/api/session-cookie";
 import { OFFLINE_PATH } from "./lib/pwa/offline";
+import { HOME_PATH } from "./utilities/sanitize-return-to";
 
 /**
  * The signed-in gate, in front of every page.
@@ -74,8 +75,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   const signInUrl = new URL("/sign-in", request.url);
   const returnTo = request.nextUrl.pathname + request.nextUrl.search;
-  // Only pass returnTo for non-default routes.
-  if (returnTo !== "/" && returnTo !== "/cellars") {
+  // Only pass returnTo when it is not where sign-in lands anyway (X01: `/`).
+  if (returnTo !== HOME_PATH) {
     signInUrl.searchParams.set("returnTo", returnTo);
   }
   return NextResponse.redirect(signInUrl);

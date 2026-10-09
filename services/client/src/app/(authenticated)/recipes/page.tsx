@@ -3,6 +3,7 @@ import {
   BarEntryCard,
   BarEntryCardFallback,
 } from "@/components/bar/BarEntryCard";
+import { CellarSegments } from "@/components/cellar/CellarSegments";
 import {
   RECIPE_GROUPS_PAGE_SIZE,
   RecipeGroupsQuery,
@@ -13,7 +14,9 @@ import { apiServerQuery } from "@/lib/api/urql-server";
 
 /**
  * `/recipes` — `82450ad1:src/app/(authenticated)/recipes/page.tsx`, restored:
- * "Recipe Groups", the old blurb, and `RecipeGroupSearch`.
+ * "Recipe Groups", the old blurb, and `RecipeGroupSearch` — under the Cellar
+ * tab's "Bar" segment, which is where recipes are reached from now (D1), with
+ * the Recipes section of search.
  *
  * The first page is server-rendered (`recipeGroups`, with `?q=` — or the old
  * `?semantic=` alias — as its term), and the search pages on from the client.
@@ -43,6 +46,8 @@ export default async function RecipesPage({
 
   return (
     <div className="mx-auto w-full max-w-[1200px]">
+      {/* The Cellar tab's Bar (D1): recipes live beside your cellars. */}
+      <CellarSegments current="bar" className="mb-6" />
       <h1 className="mb-6 type-large-title">Recipe Groups</h1>
 
       {/* X14 / G29: the bar's verdict, first thing on the recipes tab. */}

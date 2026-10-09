@@ -1,15 +1,5 @@
 import { type ReactNode, Suspense } from "react";
 import {
-  Cellar,
-  ICON_STROKE,
-  Leaderboard,
-  ListView,
-  Love,
-  MapIcon,
-} from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
-import { FadeIn, StaggerIn, StaggerItem } from "@/components/search/AnimateIn";
-import {
   type ActivityEntry,
   type ActivityKind,
   activityFeedFromNodes,
@@ -21,6 +11,7 @@ import {
   type SearchParams,
   searchStateFromParams,
 } from "@/components/search/adapter";
+import { ServerCatalogSections } from "@/components/search/CatalogSections";
 import { Greeting } from "@/components/search/Greeting";
 import {
   NEARBY_PLACES_LIMIT,
@@ -49,8 +40,8 @@ import { getServerUser } from "@/utilities/auth-server";
 /**
  * `/search` — `82450ad1:src/app/(authenticated)/search/page.tsx`, restored.
  *
- * Landing view: greeting, the collection line, the search box, the five
- * quick links, and the discovery section under them — Recent Activity
+ * Landing view: greeting, the collection line, the search box, and the
+ * discovery section under them — Recent Activity
  * (`?activity=`) and Nearby Places (G31, restored at the user's request over
  * `me.recentActivity` / `me.nearbyPlaces`). Active search (`?q=`,
  * `?barcode=`, `?image=`): the box and the results. Image search (the Photo
@@ -59,6 +50,9 @@ import { getServerUser } from "@/utilities/auth-server";
  *
  * Not restored, each by decision rather than omission:
  *
+ * - **The five quick-link chips** (Cellars, Map, Tier Lists, Favorites,
+ *   Rankings) — X01 deletes them: every one duplicated a tab (Cellar, Map) or
+ *   a row of the Me hub (Tier lists, Loved, Top rated) one thumb-reach away.
  * - **The rewrite's tabs** (brands, people, recipes) and its two extra quick
  *   links: the old page had neither, and the old UI wins where they overlap
  *   (UI parity decision 2). Brand search lives on `/brands`, people on
@@ -88,7 +82,6 @@ export default async function Search({ searchParams }: SearchPageProps) {
           ? null
           : {
               hero: <LandingHero displayName={user.displayName} />,
-              quickLinks: <QuickLinks />,
             }
       }
     >
@@ -132,6 +125,14 @@ export default async function Search({ searchParams }: SearchPageProps) {
               </Suspense>
             </ResultsSection>
           )}
+
+          {/* D1: recipes and brands are reached from search now. Streams
+              in on its own, so the items never wait for it. */}
+          {query !== null && (
+            <Suspense fallback={null}>
+              <ServerCatalogSections query={query} />
+            </Suspense>
+          )}
         </div>
       )}
     </SearchPageLayout>
@@ -158,48 +159,13 @@ function ResultsSection({
 function LandingHero({ displayName }: { displayName?: string }) {
   return (
     <div className="flex flex-col items-center gap-6">
-      <FadeIn>
-        <Greeting displayName={displayName} />
-      </FadeIn>
+      <Greeting displayName={displayName} />
       <div className="-mt-3 flex min-h-6 justify-center">
         <Suspense fallback={null}>
           <CollectionStats />
         </Suspense>
       </div>
     </div>
-  );
-}
-
-const QUICK_LINKS = [
-  { href: "/cellars", label: "Cellars", icon: Cellar },
-  { href: "/map", label: "Map", icon: MapIcon },
-  { href: "/tier-lists", label: "Tier Lists", icon: ListView },
-  { href: "/favorites", label: "Loved", icon: Love },
-  { href: "/rankings", label: "Rankings", icon: Leaderboard },
-];
-
-/** The five quick links under the box on the landing view. */
-function QuickLinks() {
-  return (
-    <StaggerIn>
-      <nav
-        aria-label="Quick links"
-        className="flex flex-wrap justify-center gap-2"
-      >
-        {QUICK_LINKS.map(({ href, label, icon: Icon }, index) => (
-          <StaggerItem key={href} index={index}>
-            <Link
-              href={href}
-              underline="none"
-              className="relative inline-flex h-9 items-center gap-1.5 rounded-full bg-surface-2 px-3.5 font-medium text-ink-1 text-sm transition-colors duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] hover:bg-surface-3 active:bg-surface-3"
-            >
-              <Icon aria-hidden className="size-4" strokeWidth={ICON_STROKE} />
-              {label}
-            </Link>
-          </StaggerItem>
-        ))}
-      </nav>
-    </StaggerIn>
   );
 }
 

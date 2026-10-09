@@ -63,7 +63,7 @@ interface CellarItemsGridProps {
   status?: CellarItemsArgs["status"];
   /** The server's request time: the first render's "now" (`useNow`). */
   asOf: number | null;
-  /** Creator or co-owner: the empty cellar's one action is "Add a bottle". */
+  /** Creator or co-owner: the empty cellar's one action is "Snap a bottle". */
   canAdd: boolean;
 }
 

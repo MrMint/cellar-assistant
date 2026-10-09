@@ -1,6 +1,6 @@
 /**
  * The items grid's empty states (design §3.6): which one shows, its one
- * line, and that "Add a bottle" — the only action — appears only for an
+ * line, and that "Snap a bottle" — the only action — appears only for an
  * empty cellar you may add to.
  */
 import { mock } from "bun:test";
@@ -18,10 +18,10 @@ const { CellarItemsEmpty, cellarItemsEmptyCopy } = await import(
 describe("cellarItemsEmptyCopy", () => {
   const base = { search: "", types: [], canAdd: true } as const;
 
-  test("an empty cellar: waiting, with the cellar art and Add", () => {
+  test("an empty cellar: waiting, with the cellar art and Snap a bottle", () => {
     assert.deepEqual(cellarItemsEmptyCopy(base), {
       title: "Your cellar is waiting.",
-      description: "Add a bottle and it shows up here.",
+      description: "Snap a label and the bottle is in.",
       art: "cellar",
       addAction: true,
     });
@@ -77,7 +77,7 @@ describe("cellarItemsEmptyCopy", () => {
 });
 
 describe("CellarItemsEmpty", () => {
-  test("an empty cellar you own: one line, one Add link to the add page", () => {
+  test("an empty cellar you own: one line, one Snap a bottle link to the add page", () => {
     const html = renderToStaticMarkup(
       <CellarItemsEmpty cellarId="c1" canAdd search="" types={[]} />,
     );
@@ -87,7 +87,7 @@ describe("CellarItemsEmpty", () => {
       (match) => match[1],
     );
     assert.deepEqual(links, ["/cellars/c1/items/add"]);
-    assert.match(html, />Add a bottle</);
+    assert.match(html, />Snap a bottle</);
   });
 
   test("nothing finished: no action at all", () => {

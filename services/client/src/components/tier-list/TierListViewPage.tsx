@@ -287,7 +287,7 @@ export function TierListViewPage({
   const board = isEmpty ? (
     <EmptyState
       illustration={<Ranked aria-hidden strokeWidth={ICON_STROKE} />}
-      title="Nothing ranked yet"
+      title="Nothing ranked yet."
       description={
         data.isOwner
           ? "Add something you've tried. Your rating picks its band."
@@ -303,7 +303,7 @@ export function TierListViewPage({
             }}
           >
             <Add aria-hidden strokeWidth={ICON_STROKE} />
-            Add entry
+            Add from what you&apos;ve tasted
           </Button>
         ) : undefined
       }

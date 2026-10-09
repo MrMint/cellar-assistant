@@ -211,8 +211,8 @@ describe("TierListViewPage (restored header and tabs)", () => {
         insightsData={insights}
       />,
     );
-    assert.match(html, />Nothing ranked yet</);
-    assert.match(html, />Add entry</);
+    assert.match(html, />Nothing ranked yet\.</);
+    assert.match(html, />Add from what you&#x27;ve tasted</);
     assert.doesNotMatch(html, />Arrange</);
   });
 

@@ -72,11 +72,13 @@ import * as mapQueries from "@/components/map/queries";
 import * as rankingFragments from "@/components/ranking/fragments";
 import * as recipeFragments from "@/components/recipe/fragments";
 import * as recipeQueries from "@/components/recipe/queries";
+import * as searchCatalogSections from "@/components/search/catalog-sections";
 import * as searchQueries from "@/components/search/queries";
 import { ITEM_SEARCH_LIMIT } from "@/components/search/queries";
 import * as tierListFragments from "@/components/tier-list/fragments";
 import * as tierListQueries from "@/components/tier-list/queries";
 import * as userFragments from "@/components/user/fragments";
+import * as meHubData from "@/components/user/me-hub-data";
 import * as wantToTryQueries from "@/components/want-to-try/queries";
 import * as ai from "./ai.ts";
 import * as cellars from "./cellars.ts";
@@ -107,11 +109,13 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/ranking/fragments.ts": rankingFragments,
   "components/recipe/fragments.ts": recipeFragments,
   "components/recipe/queries.ts": recipeQueries,
+  "components/search/catalog-sections.ts": searchCatalogSections,
   "components/search/queries.ts": searchQueries,
   "components/tier-list/fragments.ts": tierListFragments,
   "components/tier-list/queries.ts": tierListQueries,
   "components/user/fragments.ts": userFragments,
   "components/want-to-try/queries.ts": wantToTryQueries,
+  "components/user/me-hub-data.ts": meHubData,
   "lib/api/ai.ts": ai,
   "lib/api/cellars.ts": cellars,
   "lib/api/errors.ts": errors,

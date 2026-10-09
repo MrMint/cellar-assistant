@@ -58,7 +58,7 @@ import {
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { PermissionTypeEnum } from "./enums.ts";
+import { CollectionSectionEnum, PermissionTypeEnum } from "./enums.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { type PatchPolicy, patch, present } from "./patch.ts";
@@ -512,8 +512,18 @@ builder.queryField("myCellars", (t) =>
       "the `Cellar` DataLoader batches them into parallel `CellarActor.get` " +
       "calls (§1.5). Ordered with the viewer's own and co-owned cellars " +
       "first, then the rest, each by most recent activity: a bottle added " +
-      "or changed, or a check-in (decision D13).",
-    args: t.arg.connectionArgs(),
+      "or changed, or a check-in (decision D13). `section` narrows to one " +
+      "part of that set — Yours, From friends or Discover (decision D2).",
+    args: {
+      ...t.arg.connectionArgs(),
+      section: t.arg({
+        type: CollectionSectionEnum,
+        required: false,
+        description:
+          "Omit for every visible cellar; `MINE` for the viewer's own and " +
+          "co-owned ones only.",
+      }),
+    },
     errors: {},
     resolve: async (_root, args, context) => {
       const viewerId = context.ctx.viewerId;
@@ -523,7 +533,7 @@ builder.queryField("myCellars", (t) =>
           CellarsCollectionActorDescriptor,
           viewerCollectionActorId(viewerId),
         )
-        .list(toPageArgs(args));
+        .list(toPageArgs(args), args.section ?? null);
       return connectionFromPage(page);
     },
   }),
