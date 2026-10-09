@@ -196,6 +196,8 @@ export const StartRecipeTextJobMutation = graphql(
 
 /** Your drafts and your recipes, for the Bar page. */
 export const MY_RECIPES_PAGE_SIZE = 20;
+/** What "Show all" reads: the API's page cap. */
+export const MY_RECIPES_ALL = 100;
 
 export const MyRecipesQuery = graphql(
   `

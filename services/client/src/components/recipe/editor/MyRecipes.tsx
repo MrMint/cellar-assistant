@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "urql";
 import { AI, Lock, People, Public } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { InsetSection, ListRow } from "@/components/app/Page";
 import { Button } from "@/components/ui/button";
+import { unwrapResult } from "@/lib/api/result";
+import { MY_RECIPES_ALL, MyRecipesQuery } from "./documents";
 import { PRIVACY_COPY, type RecipePrivacy } from "./recipe-draft";
 
 export type MyRecipeRow = {
@@ -38,10 +41,36 @@ const ingredientsLine = (count: number): string =>
  * say who can see each one, because they start private (D22).
  * Neither section is drawn when it is empty.
  */
-export function MyRecipes({ rows }: { rows: readonly MyRecipeRow[] }) {
+export function MyRecipes({
+  rows,
+  publishedTotal,
+}: {
+  rows: readonly MyRecipeRow[];
+  /**
+   * How many published recipes you have in all — more than `rows` holds when
+   * the server read only the first page. "Show all" then reads the rest.
+   */
+  publishedTotal?: number;
+}) {
   const [all, setAll] = useState(false);
   const drafts = rows.filter((row) => row.isDraft);
-  const mine = rows.filter((row) => !row.isDraft);
+  const firstPage = rows.filter((row) => !row.isDraft);
+  const total = Math.max(publishedTotal ?? 0, firstPage.length);
+  // "Show all" reads the rest only when the server's first page was short of
+  // the total — and only once it is asked for.
+  const [rest] = useQuery({
+    query: MyRecipesQuery,
+    variables: { first: MY_RECIPES_ALL, drafts: false },
+    pause: !all || total <= firstPage.length,
+  });
+  const restResult =
+    rest.data === undefined
+      ? null
+      : unwrapResult(rest.data.myRecipes, "RecipeConnection");
+  const mine =
+    all && restResult?.ok === true
+      ? restResult.data.edges.map((edge) => edge.node)
+      : firstPage;
   const shown = all ? mine : mine.slice(0, FIRST);
 
   return (
@@ -76,9 +105,14 @@ export function MyRecipes({ rows }: { rows: readonly MyRecipeRow[] }) {
           label="Your recipes"
           aria-label="Your recipes"
           action={
-            mine.length > FIRST ? (
-              <Button variant="ghost" size="sm" onClick={() => setAll(!all)}>
-                {all ? "Show fewer" : `Show all ${mine.length}`}
+            total > FIRST ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-busy={(all && rest.fetching) || undefined}
+                onClick={() => setAll(!all)}
+              >
+                {all ? "Show fewer" : `Show all ${total}`}
               </Button>
             ) : undefined
           }

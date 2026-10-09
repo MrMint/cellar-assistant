@@ -151,6 +151,19 @@ describe("MyRecipes — the top of the Bar (X15)", () => {
     assert.match(html, /Friends · 1 ingredient/);
   });
 
+  test("Show all counts every published recipe, not the first page", () => {
+    const rows = ["a", "b", "c", "d"].map((id) => ({
+      id,
+      name: `Recipe ${id}`,
+      privacy: "PRIVATE",
+      isDraft: false,
+      ingredientCount: 2,
+    }));
+    const html = render(<MyRecipes rows={rows} publishedTotal={27} />);
+    assert.match(html, /Show all 27/);
+    assert.doesNotMatch(html, /Recipe d</);
+  });
+
   test("nothing at all when you have written nothing", () => {
     assert.equal(render(<MyRecipes rows={[]} />), "");
   });

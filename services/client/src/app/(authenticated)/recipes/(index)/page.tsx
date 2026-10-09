@@ -45,7 +45,7 @@ export default async function RecipesPage({
 }) {
   const params = await searchParams;
   const initialQuery = firstParam(params.q) || firstParam(params.semantic);
-  const [data, mine] = await Promise.all([
+  const [data, draftsRead, publishedRead] = await Promise.all([
     apiServerQuery(RecipeGroupsQuery, {
       first: RECIPE_GROUPS_PAGE_SIZE,
       after: null,
@@ -53,10 +53,20 @@ export default async function RecipesPage({
       category: null,
       baseSpirit: null,
     }),
-    apiServerQuery(MyRecipesQuery, { first: MY_RECIPES_PAGE_SIZE }),
+    // Read apart, so each section's count is its own and drafts never crowd
+    // published recipes out of the first page.
+    apiServerQuery(MyRecipesQuery, {
+      first: MY_RECIPES_PAGE_SIZE,
+      drafts: true,
+    }),
+    apiServerQuery(MyRecipesQuery, {
+      first: MY_RECIPES_PAGE_SIZE,
+      drafts: false,
+    }),
   ]);
   const result = unwrapResult(data.recipeGroups, "RecipeGroupConnection");
-  const own = unwrapResult(mine.myRecipes, "RecipeConnection");
+  const drafts = unwrapResult(draftsRead.myRecipes, "RecipeConnection");
+  const published = unwrapResult(publishedRead.myRecipes, "RecipeConnection");
 
   return (
     <Page wide>
@@ -69,7 +79,17 @@ export default async function RecipesPage({
       {/* The Cellar tab's Bar (D1): recipes live beside your cellars. */}
       <CellarSegments current="bar" />
 
-      {own.ok && <MyRecipes rows={own.data.edges.map((edge) => edge.node)} />}
+      <MyRecipes
+        rows={[
+          ...(drafts.ok ? drafts.data.edges.map((edge) => edge.node) : []),
+          ...(published.ok
+            ? published.data.edges.map((edge) => edge.node)
+            : []),
+        ]}
+        publishedTotal={
+          published.ok ? (published.data.totalCount ?? undefined) : undefined
+        }
+      />
 
       {/* X14 / G29: the bar's verdict. */}
       <Suspense fallback={<BarEntryCardFallback />}>
