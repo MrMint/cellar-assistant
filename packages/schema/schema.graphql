@@ -2838,6 +2838,11 @@ input LogDrinkInput {
   companionIds: [ID!]
 
   """
+  When it was drunk — backdating a log. Defaults to now; no later than now (plus a few minutes of clock skew), no earlier than 1900. It is the entry's `createdAt`.
+  """
+  drankAt: DateTime
+
+  """
   Defaults to true. False logs a round for your companions only, and then takes no score, note, tags or photo.
   """
   includeSelf: Boolean
@@ -3504,6 +3509,14 @@ type Mutation {
   resolveBrand(name: String!): ResolveBrandResult!
 
   """
+  Undo `deleteDrinkLog`: the entries it removed come back with their own ids and dates. Only for whoever removed them, within an hour. A bottle, place or photo that has gone since comes back as none; a companion who is no longer your friend does not come back.
+  """
+  restoreDrinkLog(
+    """The id `deleteDrinkLog` was called with."""
+    id: ID!
+  ): RestoreDrinkLogResult!
+
+  """
   Edit a PENDING or REJECTED place you added and send it for review again — the whole place, not a patch: it goes back to PENDING, its old verdict and suggestions are cleared, and a fresh review is queued. An APPROVED place is shared and is not editable here. To anyone but its creator the place does not exist (NotFound).
   """
   resubmitPlace(input: ResubmitPlaceInput!, placeId: ID!): ResubmitPlaceResult!
@@ -3521,6 +3534,11 @@ type Mutation {
   """Admin only (BrandActor.setParent). Pass null to clear the parent."""
   setBrandParent(id: ID!, parentBrandId: ID): SetBrandParentResult!
   setCellarItemPercentage(cellarId: ID!, cellarItemId: ID!, percentageRemaining: Float!): SetCellarItemPercentageResult!
+
+  """
+  Who else was there, after the fact: the complete set of friends who drank with you (not a change list). Only on your own entry of a drink you logged. A friend added gets an entry of their own in the same occasion; one left out loses the entry you wrote for them — unless they have added to it, which is a `ConflictError`.
+  """
+  setDrinkLogCompanions(companionIds: [ID!]!, id: ID!): SetDrinkLogCompanionsResult!
 
   """
   Replaces the recipe's complete ingredient list in one transaction. An ingredient naming a `newGenericItem` is find-or-created through `ItemActor`, the single writer of `generic_items`.
@@ -5815,6 +5833,17 @@ union ResetFriendInviteResult = BudgetExceededError | ConflictError | ForbiddenE
 
 union ResolveBrandResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+union RestoreDrinkLogResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RestoredDrinkLogPayload | ValidationError
+
+"""What `restoreDrinkLog` put back."""
+type RestoredDrinkLogPayload {
+  """The entry you named, as it is again."""
+  entry: ItemCheckIn!
+
+  """Every entry restored, with the ids it had — the one you named first."""
+  ids: [ID!]!
+}
+
 """
 The whole place, as the creator wants it now — the same fields and rules as `CreatePlaceInput`, without the id (the place has one). Not a patch: every field is the full new answer, so an omitted or null field is 'none', exactly as on `createPlace`.
 """
@@ -6120,6 +6149,8 @@ union SetBarPantryItemResult = BarPantryEntry | BudgetExceededError | ConflictEr
 union SetBrandParentResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union SetCellarItemPercentageResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
+union SetDrinkLogCompanionsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemCheckIn | NotFoundError | ValidationError
 
 union SetRecipeIngredientsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeIngredientsPayload | ValidationError
 
@@ -7141,6 +7172,10 @@ union UpdateCellarResult = BudgetExceededError | Cellar | ConflictError | Forbid
 Only the fields you pass are written; `null` clears one (`tags: []` clears the tags).
 """
 input UpdateDrinkLogInput {
+  """
+  Re-date the drink. On the entry you logged for a table it moves the companions' entries you wrote with it too, except any a friend has made their own. Cannot be cleared.
+  """
+  drankAt: DateTime
   note: String
   photoFileId: ID
   placeId: ID

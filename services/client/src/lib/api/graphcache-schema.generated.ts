@@ -4740,6 +4740,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "restoreDrinkLog",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RestoreDrinkLogResult" },
+            },
+          },
+          {
             name: "resubmitPlace",
             type: {
               kind: "NON_NULL",
@@ -4772,6 +4779,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SetCellarItemPercentageResult" },
+            },
+          },
+          {
+            name: "setDrinkLogCompanions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetDrinkLogCompanionsResult" },
             },
           },
           {
@@ -8303,6 +8317,45 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "RestoreDrinkLogResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RestoredDrinkLogPayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "RestoredDrinkLogPayload",
+        fields: [
+          {
+            name: "entry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemCheckIn" },
+            },
+          },
+          {
+            name: "ids",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
         name: "ResubmitPlaceResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -8516,6 +8569,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "CellarItem" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SetDrinkLogCompanionsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemCheckIn" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
