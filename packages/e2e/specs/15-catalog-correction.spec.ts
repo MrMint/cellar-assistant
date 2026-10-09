@@ -62,6 +62,9 @@ test("a coffee can be added without a description", async ({ api }) => {
   expect(read.item.data.description).toBeNull();
 });
 
+// X09: the producer is named twice on the item page — a link in the hero and
+// the producer section's row — so a brand that must be *shown* is asserted in
+// the hero, and one that must be *gone* is counted page-wide.
 test("the item page says NV, and the creator can add the brand in one tap", async ({
   primary,
 }) => {
@@ -82,7 +85,9 @@ test("the item page says NV, and the creator can add the brand in one tap", asyn
     { timeout: 15_000 },
   );
   await expect(
-    primary.getByRole("link", { name: firstBrand, exact: true }),
+    primary
+      .getByTestId("item-hero")
+      .getByRole("link", { name: firstBrand, exact: true }),
   ).toBeVisible({ timeout: 15_000 });
   expect(noise.pageErrors).toEqual([]);
 });
@@ -98,7 +103,9 @@ test("Wrong brand? Change it — and Undo puts it back", async ({ primary }) => 
   const toast = primary.getByText(`Brand changed to ${secondBrand}`);
   await expect(toast).toBeVisible({ timeout: 15_000 });
   await expect(
-    primary.getByRole("link", { name: secondBrand, exact: true }),
+    primary
+      .getByTestId("item-hero")
+      .getByRole("link", { name: secondBrand, exact: true }),
   ).toBeVisible({ timeout: 15_000 });
   // One brand, not two: the wrong one is gone, not demoted.
   await expect(
@@ -107,7 +114,9 @@ test("Wrong brand? Change it — and Undo puts it back", async ({ primary }) => 
 
   await primary.getByRole("button", { name: "Undo" }).click();
   await expect(
-    primary.getByRole("link", { name: firstBrand, exact: true }),
+    primary
+      .getByTestId("item-hero")
+      .getByRole("link", { name: firstBrand, exact: true }),
   ).toBeVisible({ timeout: 15_000 });
   await expect(
     primary.getByRole("link", { name: secondBrand, exact: true }),

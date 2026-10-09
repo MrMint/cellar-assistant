@@ -132,10 +132,15 @@ test("the item page: hero, taste header, fact sheet, Your bottles, ActionBar", a
     bottles.getByRole("button", { name: `Pour from ${cellarName}` }),
   ).toBeVisible();
 
-  const text = await bodyText(primary);
-  for (const copy of ["Located in", cellarName, "Reviews", "Tea house"]) {
-    expect(text, `the item page is missing "${copy}"`).toContain(copy);
+  // Section titles are overlines (CSS uppercase, which `innerText` applies),
+  // so they are found by their headings' accessible names, not body text.
+  for (const title of ["Located in", "Reviews", "Tea house"]) {
+    await expect(
+      primary.getByRole("heading", { name: title, exact: true }),
+      `the item page is missing "${title}"`,
+    ).toBeVisible();
   }
+  expect(await bodyText(primary)).toContain(cellarName);
   // The review list collapses each review in an Accordion, and the text is a
   // read-only Lexical editor that only fills in after hydration — open the
   // review the way a person would, then wait for the text.
@@ -215,7 +220,9 @@ test("the bottle URL is the item page with that bottle selected: pour it (which 
   await expect(
     primary.getByRole("navigation", { name: "Ratings" }),
   ).toBeVisible();
-  expect(await bodyText(primary)).toContain("Located in");
+  await expect(
+    primary.getByRole("heading", { name: "Located in", exact: true }),
+  ).toBeVisible();
   await expect(primary.getByTestId("selected-bottle")).toContainText(
     cellarName,
   );

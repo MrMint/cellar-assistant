@@ -242,7 +242,7 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
 
   await page.goto(`/cellars/${cellarId}/teas/${bottleId}`);
   await page
-    .getByRole("toolbar", { name: "This bottle" })
+    .getByRole("toolbar", { name: "Item actions" })
     .getByRole("button", { name: "Pour", exact: true })
     .click();
   const sheet = page.getByRole("dialog", { name: "Pour" });
