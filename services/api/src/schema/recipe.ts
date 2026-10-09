@@ -52,6 +52,7 @@ import type {
   GenericItemKind,
   IngredientRole,
   InstructionType,
+  PermissionType,
   RecipeCategory,
   RecipeDto,
   RecipeGroupDto,
@@ -96,7 +97,11 @@ import {
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { InstructionTypeEnum, RecipeCategoryEnum } from "./enums.ts";
+import {
+  InstructionTypeEnum,
+  PermissionTypeEnum,
+  RecipeCategoryEnum,
+} from "./enums.ts";
 import { GenericItemKindEnum, GenericItemType, ItemInterface } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { type PatchPolicy, patch, present } from "./patch.ts";
@@ -436,8 +441,9 @@ const RecipeGroupType = builder.objectRef<RecipeGroupDto>("RecipeGroup");
 
 RecipeType_.implement({
   description:
-    "One version of a drink or dish. Visible to any signed-in viewer; only " +
-    "its creator may edit it.",
+    "One version of a drink or dish. Private first (X15 / D22): visible by " +
+    "`privacy`'s four-branch rule, a draft only to its creator, and " +
+    "`NotFoundError` to everyone else. Only its creator may edit it.",
   fields: (t) => ({
     id: t.exposeID("id"),
     name: t.exposeString("name"),
@@ -461,6 +467,19 @@ RecipeType_.implement({
         "the actor from rows it already holds.",
     }),
     instructionCount: t.exposeInt("instructionCount"),
+    privacy: t.field({
+      type: PermissionTypeEnum,
+      description:
+        "X15 / D22: who may see it — PRIVATE (new recipes), FRIENDS or " +
+        "PUBLIC (every recipe from before privacy existed). Only PUBLIC " +
+        "recipes have a share page.",
+      resolve: (recipe) => recipe.privacy,
+    }),
+    isDraft: t.exposeBoolean("isDraft", {
+      description:
+        "AI output its creator has not reviewed yet — theirs alone, whatever " +
+        "`privacy` says. `updateRecipe(input: { isDraft: false })` publishes it.",
+    }),
     createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
     updatedAt: t.expose("updatedAt", { type: "DateTime", nullable: true }),
 
@@ -858,6 +877,11 @@ const CreateRecipeInput = builder.inputType("CreateRecipeInput", {
     prepTimeMinutes: t.int({ required: false }),
     servingSize: t.int({ required: false }),
     imageUrl: t.string({ required: false }),
+    privacy: t.field({
+      type: PermissionTypeEnum,
+      required: false,
+      description: "Defaults to PRIVATE (D22: private first).",
+    }),
   }),
 });
 
@@ -872,6 +896,13 @@ const UpdateRecipeInput = builder.inputType("UpdateRecipeInput", {
     prepTimeMinutes: t.int({ required: false }),
     servingSize: t.int({ required: false }),
     imageUrl: t.string({ required: false }),
+    privacy: t.field({ type: PermissionTypeEnum, required: false }),
+    isDraft: t.boolean({
+      required: false,
+      description:
+        "`false` publishes a draft at its `privacy`. A published recipe " +
+        "cannot become a draft again (`ValidationError`).",
+    }),
   }),
 });
 
@@ -932,6 +963,7 @@ const toCreateRecipeInput = (input: {
   prepTimeMinutes?: number | null;
   servingSize?: number | null;
   imageUrl?: string | null;
+  privacy?: PermissionType | null;
 }): CreateRecipeInputType => ({
   name: input.name,
   type: input.type,
@@ -943,6 +975,7 @@ const toCreateRecipeInput = (input: {
   prepTimeMinutes: input.prepTimeMinutes ?? null,
   servingSize: input.servingSize ?? null,
   imageUrl: input.imageUrl ?? null,
+  privacy: input.privacy ?? null,
 });
 
 const UPDATE_RECIPE = {
@@ -954,6 +987,8 @@ const UPDATE_RECIPE = {
   prepTimeMinutes: "clearable",
   servingSize: "clearable",
   imageUrl: "clearable",
+  privacy: "keep",
+  isDraft: "keep",
 } satisfies PatchPolicy<typeof UpdateRecipeInput.$inferInput>;
 
 const UPDATE_RECIPE_REVIEW = {

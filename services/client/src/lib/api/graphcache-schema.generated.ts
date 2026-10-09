@@ -4810,6 +4810,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "startRecipeTextJob",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "StartRecipeTextJobResult" },
+            },
+          },
+          {
             name: "suggestFlavourTags",
             type: {
               kind: "NON_NULL",
@@ -6290,6 +6297,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "myRecipes",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryMyRecipesResult" },
+            },
+          },
+          {
             name: "myTierLists",
             type: {
               kind: "NON_NULL",
@@ -6726,6 +6740,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QueryMyRecipesResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RecipeConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryMyTierListsResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -7055,6 +7081,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "isDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
             name: "isLoved",
             type: {
               kind: "NON_NULL",
@@ -7085,6 +7118,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           { name: "prepTimeMinutes", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "privacy",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PermissionType" },
+            },
+          },
           {
             name: "recipeGroup",
             type: { kind: "OBJECT", name: "RecipeGroup" },
@@ -9112,6 +9152,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       {
         kind: "UNION",
         name: "StartRecipePhotoJobResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RecipePhotoJob" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "StartRecipeTextJobResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "ConflictError" },
