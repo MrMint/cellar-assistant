@@ -440,12 +440,24 @@ export class CheckInActor
     );
     if (viewer === null) throw new ForbiddenError("sign in to edit a log");
 
-    const wanted = await this.#requireCompanions(ctx, viewer, {
-      companionIds: input.companionIds,
-    });
+    const raw = input.companionIds;
+    if (!Array.isArray(raw)) {
+      throw new ValidationError("companionIds must be a list of user ids");
+    }
     const present = roster.filter((other) => other.id !== row.id);
     const presentUsers = new Set(present.map((other) => other.userId));
-    const added = wanted.ids.filter((id) => !presentUsers.has(id));
+    const wantedIds = [
+      ...new Set(raw.map((id) => requireUuid(id, "companionIds[]"))),
+    ].filter((id) => id !== viewer);
+    // Friendship is asked of the people being *added*. Someone already at
+    // the table stays when the set names them, friends or not: the client
+    // sends the whole roster back, so an ex-friend on an old log must not
+    // make every later change to it a ForbiddenError.
+    const newcomers = await this.#requireCompanions(ctx, viewer, {
+      companionIds: wantedIds.filter((id) => !presentUsers.has(id)),
+    });
+    const wanted = { ids: wantedIds };
+    const added = newcomers.ids;
     const dropped = present.filter(
       (other) => other.userId !== viewer && !wanted.ids.includes(other.userId),
     );
@@ -614,15 +626,33 @@ export class CheckInActor
       ...values.map((gone) => gone.id).filter((id) => id !== this.key),
     ];
 
-    await this.tx(async (tx) => {
-      if (values.length > 0) {
+    try {
+      await this.tx(async (tx) => {
+        if (values.length > 0) {
+          await tx
+            .insert(checkIns)
+            .values(values)
+            .onConflictDoNothing({ target: checkIns.id });
+        }
         await tx
-          .insert(checkIns)
-          .values(values)
-          .onConflictDoNothing({ target: checkIns.id });
+          .delete(checkInTrash)
+          .where(eq(checkInTrash.removalId, this.key));
+      });
+    } catch (error) {
+      // The drink itself (the catalog item, `ON DELETE RESTRICT`) has gone
+      // since: a refusal the toast can say, not a 500. The trash is kept by
+      // the rollback and expires with the window.
+      const cause = error instanceof Error ? error.cause : undefined;
+      const code = (cause instanceof Error ? cause : error) as {
+        code?: unknown;
+      } | null;
+      if (code?.code === "23503") {
+        throw new ConflictError(
+          `check-in ${this.key} can no longer be restored: what it logged has gone`,
+        );
       }
-      await tx.delete(checkInTrash).where(eq(checkInTrash.removalId, this.key));
-    });
+      throw error;
+    }
     await this.reload();
     const aggregate = this.requireAggregate();
     return {

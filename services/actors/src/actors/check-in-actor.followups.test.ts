@@ -224,6 +224,35 @@ describe.skipIf(skip)("CheckInActor follow-ups (X03)", () => {
       });
     });
 
+    it("someone already at the table stays without being a friend any more; a newcomer must be one", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, friend, otherFriend, stranger, wine } =
+          await scenario(db);
+        const id = randomUUID();
+        await (await actorFor(db, id)).log(userCtx(drinker, "r"), {
+          item: wine,
+          companionIds: [friend],
+        });
+        // Unfriended since: the old log still names them.
+        await db.execute(
+          sql`delete from public.friends where (user_id = ${drinker}::uuid and friend_id = ${friend}::uuid) or (user_id = ${friend}::uuid and friend_id = ${drinker}::uuid)`,
+        );
+        const entry = await (await actorFor(db, id)).setCompanions(
+          userCtx(drinker, "r"),
+          { companionIds: [friend, otherFriend] },
+        );
+        expect([...entry.companionIds].sort()).toEqual(
+          [friend, otherFriend].sort(),
+        );
+        await expect(
+          (await actorFor(db, id)).setCompanions(userCtx(drinker, "r"), {
+            companionIds: [friend, otherFriend, stranger],
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        expect(await occasion(db, id)).toHaveLength(3);
+      });
+    });
+
     it("only the person who logged it: a companion is refused, a stranger told it is absent", async () => {
       await withTestDb(async (db) => {
         const { drinker, friend, otherFriend, stranger, wine } =
@@ -335,6 +364,23 @@ describe.skipIf(skip)("CheckInActor follow-ups (X03)", () => {
         expect(restored.entry.item).toEqual(wine);
         const [row] = await occasion(db, id);
         expect(row?.cellarItemId).toBeNull();
+      });
+    });
+
+    it("the drink itself gone meanwhile is a Conflict, not a database error", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, wine } = await scenario(db);
+        const id = randomUUID();
+        await (await actorFor(db, id)).log(userCtx(drinker, "r"), {
+          item: wine,
+        });
+        await (await actorFor(db, id)).remove(userCtx(drinker, "r"));
+        await db.execute(
+          sql`delete from public.wines where id = ${wine.id}::uuid`,
+        );
+        await expect(
+          (await actorFor(db, id)).restore(userCtx(drinker, "r")),
+        ).rejects.toBeInstanceOf(ConflictError);
       });
     });
 
