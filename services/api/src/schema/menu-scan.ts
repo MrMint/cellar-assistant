@@ -44,7 +44,7 @@ import { builder } from "./builder.ts";
 import { failureSummary } from "./failure-summary.ts";
 import { ItemInterface } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
-import { RecipeType_ } from "./recipe.ts";
+import { RecipeType_, visibleRecipeIdOrNull } from "./recipe.ts";
 import { PlaceStubType } from "./tier-list.ts";
 
 const MenuScanStatusEnum = builder.enumType("MenuScanStatus", {
@@ -114,10 +114,14 @@ export const MatchSuggestionType = builder
         type: RecipeType_,
         nullable: true,
         description: "Set when `targetKind` is `RECIPE` — a matched cocktail.",
-        resolve: (suggestion) =>
-          suggestion.target.kind === "RECIPE"
-            ? suggestion.target.recipeId
-            : null,
+        // X15: null, not a field error, once its author makes it private.
+        resolve: (suggestion, _args, context) =>
+          visibleRecipeIdOrNull(
+            context,
+            suggestion.target.kind === "RECIPE"
+              ? suggestion.target.recipeId
+              : null,
+          ),
       }),
       confidenceScore: t.exposeFloat("confidenceScore", {
         description:

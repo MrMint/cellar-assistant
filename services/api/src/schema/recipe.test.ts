@@ -5,7 +5,7 @@
  * are correct — that is `recipe-actor.test.ts` and `recipe-group-actor.test.ts`
  * against real Postgres.
  */
-import { ConflictError } from "@cellar-assistant/contracts";
+import { ConflictError, NotFoundError } from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -42,6 +42,8 @@ const recipeDto = (id = RECIPE_ID, name = "Negroni") => ({
   version: 1,
   ingredientCount: 2,
   instructionCount: 1,
+  privacy: "PUBLIC" as const,
+  isDraft: false,
   createdAt: "2026-09-08T00:00:00.000Z",
   updatedAt: "2026-09-08T00:00:00.000Z",
 });
@@ -696,5 +698,43 @@ describe("deleteRecipe / deleteRecipeGroup (A7d item 7)", () => {
       __typename: "ConflictError",
       code: "CONFLICT",
     });
+  });
+});
+
+describe("X15: a recipe the viewer may not see, referred to from elsewhere", () => {
+  it("a group's canonical that is someone else's private version is null, not a field error", async () => {
+    const { invoke } = stubSidecar({
+      "RecipeGroupActor.get": () => groupDto,
+      "RecipeActor.get": () => {
+        throw new NotFoundError(`RecipeActor(${RECIPE_ID}) has no row`);
+      },
+    });
+    const result = await run(
+      `{ recipeGroup(id: "${GROUP_ID}") {
+           ... on RecipeGroup { id canonicalRecipe { id } }
+         } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeGroup).toEqual({
+      id: GROUP_ID,
+      canonicalRecipe: null,
+    });
+  });
+
+  it("privacy and isDraft are on the type", async () => {
+    const { invoke } = stubSidecar({
+      "RecipeActor.get": () => ({
+        ...recipeDto(),
+        privacy: "PRIVATE",
+        isDraft: true,
+      }),
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { privacy isDraft } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ privacy: "PRIVATE", isDraft: true });
   });
 });

@@ -414,7 +414,12 @@ export class RecipeGroupsCollectionActor
     const { rows } = await this.db.execute<GroupRow>(sql`
       select g.id, g.name, g.description, g.category::text as category,
              g.base_spirit, g.tags, g.image_url, g.created_by_id,
-             g.canonical_recipe_id, g.created_at, g.updated_at,
+             -- X15: named only when the viewer may see it.
+             case when exists (
+               select 1 from public.recipes r
+               where r.id = g.canonical_recipe_id and ${recipeVisibleSql(scope)}
+             ) then g.canonical_recipe_id end as canonical_recipe_id,
+             g.created_at, g.updated_at,
              (${ORDERS.NEWEST.sort})::text as sort_key,
              (select count(*) from public.recipes r
                where r.recipe_group_id = g.id

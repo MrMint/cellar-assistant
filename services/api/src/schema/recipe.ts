@@ -83,6 +83,7 @@ import {
   ingredientAmount,
   ingredientItemType,
   itemActorId,
+  NotFoundError,
   normalizeRecipeGroupOrder,
   normalizeRecipeGroupTerm,
   offsetPage,
@@ -439,6 +440,27 @@ export const RecipeType_ = builder.loadableObjectRef<RecipeDto, string>(
 
 const RecipeGroupType = builder.objectRef<RecipeGroupDto>("RecipeGroup");
 
+/**
+ * X15: a recipe id a field *refers to* — a group's canonical, a menu line's
+ * match — that the viewer may no longer see (made private since, or someone
+ * else's private version). The loader answers `NotFoundError`, which on a
+ * nullable reference is not a failure of the page but simply "nothing to
+ * show you": `null`, never a field error that blanks a whole list.
+ */
+export const visibleRecipeIdOrNull = async (
+  context: ApiContext,
+  recipeId: string | null,
+): Promise<string | null> => {
+  if (recipeId === null) return null;
+  try {
+    await RecipeType_.getDataloader(context).load(recipeId);
+    return recipeId;
+  } catch (cause) {
+    if (cause instanceof NotFoundError) return null;
+    throw cause;
+  }
+};
+
 RecipeType_.implement({
   description:
     "One version of a drink or dish. Private first (X15 / D22): visible by " +
@@ -691,8 +713,11 @@ RecipeGroupType.implement({
     canonicalRecipe: t.field({
       type: RecipeType_,
       nullable: true,
-      description: "Resolved through the `Recipe` DataLoader.",
-      resolve: (group) => group.canonicalRecipeId,
+      description:
+        "Resolved through the `Recipe` DataLoader. Null when the viewer may " +
+        "not see it (X15: another person's private version).",
+      resolve: (group, _args, context) =>
+        visibleRecipeIdOrNull(context, group.canonicalRecipeId),
     }),
 
     recipes: t.field({

@@ -929,7 +929,13 @@ export class RecipeGroupActor
       tags: row.tags ?? [],
       imageUrl: row.imageUrl,
       createdById: row.createdById,
-      canonicalRecipeId: row.canonicalRecipeId,
+      // X15: the canonical as this snapshot's viewer may see it — another
+      // person's private version is not named, even by id.
+      canonicalRecipeId: snapshot.recipes.some(
+        (recipe) => recipe.id === row.canonicalRecipeId,
+      )
+        ? row.canonicalRecipeId
+        : null,
       recipeCount: snapshot.recipes.length,
       createdAt: iso(row.createdAt),
       updatedAt: iso(row.updatedAt),
