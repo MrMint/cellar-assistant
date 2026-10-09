@@ -179,10 +179,15 @@ test.describe("onboard → cellar → check in", () => {
       400,
     );
 
-    expect(
-      await bodyText(primary),
-      "the cellar page does not show its new item",
-    ).toMatch(/E2 Wine/);
+    // `/cellars/[id]` redirects to the cellar home, whose content streams in
+    // behind its loading shell ("Loading cellar…"): poll rather than read the
+    // body once at `load`.
+    await expect
+      .poll(() => bodyText(primary), {
+        message: "the cellar page does not show its new item",
+        timeout: 20_000,
+      })
+      .toMatch(/E2 Wine/);
 
     // X04 merged the overview into the cellar home: a bottle added a moment
     // ago is on the dashboard's "Recently added" shelf, and its owner gets
