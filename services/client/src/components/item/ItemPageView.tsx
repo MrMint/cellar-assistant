@@ -91,13 +91,12 @@ export function ItemPageView({
 }: ItemPageViewProps) {
   const producer = shownItemBrand(item.brands);
   const owned = selected?.isOwner;
-  // A selected bottle of yours is always in the list — a finished one too
-  // (the list itself holds bottles still in the cellar), so its Restore is
-  // where its row is.
-  const shownBottles =
-    owned && !bottles.some((bottle) => bottle.id === selected.id)
-      ? [selected, ...bottles]
-      : bottles;
+  // A selected bottle of yours leads the list — a finished one too (the list
+  // itself holds bottles still in the cellar), so its Restore is where its
+  // row is — and the others follow in the API's open-first order.
+  const shownBottles = owned
+    ? [selected, ...bottles.filter((bottle) => bottle.id !== selected.id)]
+    : bottles;
   const logBottle = defaultLogBottle(shownBottles, owned ? selected.id : null);
 
   const plate = (

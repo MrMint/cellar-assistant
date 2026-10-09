@@ -300,6 +300,21 @@ describe("the bottle route: the item page with that bottle selected (X09)", () =
     assert.match(html, /This bottle · Home · Sealed/);
   });
 
+  test("the selected bottle leads Your bottles, the rest keep their order", () => {
+    const html = page({
+      selected: selected({ id: "b2", cellarName: "Garage" }),
+      bottles: [
+        bottle({ id: "b1", openAt: "2026-01-01T00:00:00Z" }),
+        bottle({ id: "b2", cellarName: "Garage" }),
+        bottle({ id: "b3", cellarName: "Attic" }),
+      ],
+    });
+    const order = [...html.matchAll(/href="\/cellars\/c\/teas\/(b\d)"/g)].map(
+      (match) => match[1],
+    );
+    assert.deepEqual(order, ["b2", "b1", "b3"]);
+  });
+
   test("yours, opened: the level inline", () => {
     const html = page({
       selected: selected({
