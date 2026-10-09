@@ -20,11 +20,17 @@ import {
   favoritesVariables,
 } from "./adapter";
 import { FavoritesQuery } from "./fragments";
+import { type LovedRecipeRow, LovedRecipes } from "./LovedRecipes";
 
 interface FavoritesClientProps {
   /** The server's first page, for the filter it was rendered with. */
   initialPage: Page<FavoriteGridRow>;
   initialTypes: ApiItemType[];
+  /** D9 / X15: the recipes you Love, server-read; drawn above the bottles. */
+  lovedRecipes?: {
+    readonly rows: readonly LovedRecipeRow[];
+    readonly totalCount: number;
+  };
 }
 
 /**
@@ -46,6 +52,7 @@ interface FavoritesClientProps {
 export function FavoritesClient({
   initialPage,
   initialTypes,
+  lovedRecipes,
 }: FavoritesClientProps) {
   const { types, setTypes } = useTypesFilterState();
 
@@ -92,6 +99,14 @@ export function FavoritesClient({
           <CellarItemsFilter types={types} onTypesChange={setTypes} />
         </div>
       </div>
+      {/* Recipes are not an item type: a type filter is about bottles, so
+          the recipes stand aside while one is on. */}
+      {lovedRecipes !== undefined && (types ?? []).length === 0 && (
+        <LovedRecipes
+          rows={lovedRecipes.rows}
+          totalCount={lovedRecipes.totalCount}
+        />
+      )}
       {list.failure !== null && <ApiError error={list.failure} title="Loved" />}
       <VirtualGrid
         items={items}

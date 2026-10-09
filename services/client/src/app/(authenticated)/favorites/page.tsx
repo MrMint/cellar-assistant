@@ -4,7 +4,12 @@ import {
   favoritesVariables,
 } from "@/components/favorites/adapter";
 import { Favorites } from "@/components/favorites/Favorites";
-import { FavoritesQuery } from "@/components/favorites/fragments";
+import {
+  FavoritesQuery,
+  LOVED_RECIPES_PAGE_SIZE,
+  LovedRecipesQuery,
+} from "@/components/favorites/fragments";
+import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { toPage } from "@/lib/paging/paged-connection";
 import { parseTypesParam } from "@/utilities/types-param";
@@ -29,10 +34,16 @@ export default async function FavoritesPage({
 }) {
   const raw = (await searchParams).types;
   const types = parseTypesParam(typeof raw === "string" ? raw : null);
-  const data = await apiServerQuery(
-    FavoritesQuery,
-    favoritesVariables(types, null),
-  );
+  const [data, loved] = await Promise.all([
+    apiServerQuery(FavoritesQuery, favoritesVariables(types, null)),
+    apiServerQuery(LovedRecipesQuery, {
+      first: LOVED_RECIPES_PAGE_SIZE,
+      after: null,
+    }),
+  ]);
+  // D9 / X15: the recipes you Love sit on the same page as the bottles. A
+  // failed read leaves them out rather than failing the bottles too.
+  const recipes = unwrapResult(loved.lovedRecipes, "RecipeConnection");
 
   if (data.me === null || data.me === undefined) {
     return (
@@ -49,6 +60,14 @@ export default async function FavoritesPage({
         favoriteRowFromNode(edge.node),
       )}
       initialTypes={types}
+      lovedRecipes={
+        recipes.ok
+          ? {
+              rows: recipes.data.edges.map((edge) => edge.node),
+              totalCount: recipes.data.totalCount ?? recipes.data.edges.length,
+            }
+          : undefined
+      }
     />
   );
 }
