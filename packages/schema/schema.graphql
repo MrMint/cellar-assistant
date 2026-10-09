@@ -152,6 +152,7 @@ enum ActorErrorReason {
   RECIPE_NOT_IN_GROUP
   REVIEW_ALREADY_EXISTS
   SERVICE_BUDGET
+  TIER_LIST_HISTORY_MOVED
   USER_CAP
 }
 
@@ -3414,7 +3415,7 @@ type Mutation {
   linkBarcodeItem(code: String!, itemId: ID!, itemType: ItemType!): LinkBarcodeItemResult!
 
   """
-  The item creator's alone (today's `item_brands` insert check). `brandId` comes from `resolveBrand`, never from a client-invented id.
+  The item creator's alone (today's `item_brands` insert check). `brandId` comes from `resolveBrand`, never from a client-invented id; one that names no brand is a `NotFoundError`.
   """
   linkItemBrand(brandId: ID!, isPrimary: Boolean, itemId: ID!, type: ItemType!): LinkItemBrandResult!
 
@@ -3453,9 +3454,13 @@ type Mutation {
   recordPlaceInteraction(input: RecordPlaceInteractionInput!): RecordPlaceInteractionResult!
 
   """
-  D4: puts back the latest undone edit. A new edit after an undo clears what Redo can put back. Creator only; nothing to redo is a `ConflictError`.
+  D4: puts back the latest undone edit. A new edit after an undo clears what Redo can put back. Creator only. `expectedSeq` is the `editHistory.redo.seq` the caller showed; anything else on top is a `ConflictError` with reason TIER_LIST_HISTORY_MOVED, and no write.
   """
-  redoTierListEdit(tierListId: ID!): RedoTierListEditResult!
+  redoTierListEdit(
+    """The `seq` of the undone edit to put back."""
+    expectedSeq: Int!
+    tierListId: ID!
+  ): RedoTierListEditResult!
 
   """
   Decline a request sent to you, or cancel one you sent. Both are the same row; only the requester's actor may delete it.
@@ -3486,7 +3491,7 @@ type Mutation {
   reorderTierListBand(band: Int!, orderedIds: [ID!]!, tierListId: ID!): ReorderTierListBandResult!
 
   """
-  D8 “Wrong brand? Change it”: `brandId` (from `resolveBrand`) becomes the item's primary brand and `replacesBrandId` — the brand the page showed — is unlinked, in one turn. The creator only. Repeating it is a no-op, so an Undo is the same call with the two swapped.
+  D8 “Wrong brand? Change it”: `brandId` (from `resolveBrand`) becomes the item's primary brand and `replacesBrandId` — the brand the page showed — is unlinked, in one turn. The creator only. Repeating it is a no-op, so an Undo is the same call with the two swapped. A `brandId` that names no brand is a `NotFoundError`.
   """
   replaceItemBrand(brandId: ID!, itemId: ID!, replacesBrandId: ID, type: ItemType!): ReplaceItemBrandResult!
 
@@ -3523,6 +3528,11 @@ type Mutation {
   setCellarItemPercentage(cellarId: ID!, cellarItemId: ID!, percentageRemaining: Float!): SetCellarItemPercentageResult!
 
   """
+  Put one item in the viewer's favourites, or take it out. Idempotent: asking for the current state changes nothing, so a retried request cannot flip it back (it replaced the flipping `toggleFavorite`).
+  """
+  setFavorite(favorited: Boolean!, itemId: ID!, type: ItemType!): SetFavoriteResult!
+
+  """
   Replaces the recipe's complete ingredient list in one transaction. An ingredient naming a `newGenericItem` is find-or-created through `ItemActor`, the single writer of `generic_items`.
   """
   setRecipeIngredients(
@@ -3535,6 +3545,11 @@ type Mutation {
   Replaces the recipe's complete instruction list in one transaction. Steps are numbered 1..n from the order you send.
   """
   setRecipeInstructions(instructions: [RecipeInstructionInput!]!, recipeId: ID!): SetRecipeInstructionsResult!
+
+  """
+  D9: Love a recipe (`loved: true`), or take the Love back. Idempotent: asking for the current state changes nothing, so a retried request cannot flip it back (it replaced the flipping `toggleRecipeLove`).
+  """
+  setRecipeLove(loved: Boolean!, recipeId: ID!): SetRecipeLoveResult!
 
   """
   Put an item, recipe or place on the viewer's Want to try list, or take it off. Idempotent: asking for the current state changes nothing.
@@ -3576,16 +3591,18 @@ type Mutation {
   """
   suggestItemDetails(input: SuggestItemDetailsInput!, itemId: ID!, type: ItemType!): SuggestItemDetailsResult!
 
-  """Add or remove one item from the viewer's favourites."""
-  toggleFavorite(itemId: ID!, type: ItemType!): ToggleFavoriteResult!
-
-  """D9: Love a recipe, or take the Love back."""
-  toggleRecipeLove(recipeId: ID!): ToggleRecipeLoveResult!
+  """
+  D4: takes back the latest edit not already undone (an add, a removal, a move) and records that in the list's append-only history. Creator only. `expectedSeq` is the `editHistory.undo.seq` the caller showed: if anything else is on top (the list changed in another tab, or there is nothing left to undo) it is a `ConflictError` with reason TIER_LIST_HISTORY_MOVED and nothing is written.
+  """
+  undoTierListEdit(
+    """The `seq` of the edit to take back."""
+    expectedSeq: Int!
+    tierListId: ID!
+  ): UndoTierListEditResult!
 
   """
-  D4: takes back the latest edit not already undone (an add, a removal, a move) and records that in the list's append-only history. Creator only; nothing to undo is a `ConflictError`.
+  The item creator's alone. Idempotent: a brand that is not linked — never was, or an earlier call already unlinked it — answers the same `UnlinkedItemBrand`, so a retried clear succeeds instead of NotFound.
   """
-  undoTierListEdit(tierListId: ID!): UndoTierListEditResult!
   unlinkItemBrand(brandId: ID!, itemId: ID!, type: ItemType!): UnlinkItemBrandResult!
 
   """Admin only (BrandActor.update)."""
@@ -6121,9 +6138,36 @@ union SetBrandParentResult = Brand | BudgetExceededError | ConflictError | Forbi
 
 union SetCellarItemPercentageResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+"""The state of one favourite after `setFavorite`."""
+type SetFavoritePayload {
+  """
+  False when the favourite already was what was asked — a repeat or a retry.
+  """
+  changed: Boolean!
+  favorited: Boolean!
+
+  """Resolved through the item DataLoader (§1.5)."""
+  item: Item!
+  itemId: ID!
+  itemType: ItemType!
+}
+
+union SetFavoriteResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SetFavoritePayload | ValidationError
+
 union SetRecipeIngredientsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeIngredientsPayload | ValidationError
 
 union SetRecipeInstructionsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeInstructionsPayload | ValidationError
+
+"""The state of one Love after `setRecipeLove`."""
+type SetRecipeLovePayload {
+  """False when the Love already was what was asked — a repeat or a retry."""
+  changed: Boolean!
+  loved: Boolean!
+  recipe: Recipe!
+  recipeId: ID!
+}
+
+union SetRecipeLoveResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SetRecipeLovePayload | ValidationError
 
 """
 The state after the call. Select the target's own field (`item { isWantToTry }`, `recipe { isWantToTry }`, `place { myInteraction { wantToVisit } }`) and a normalised cache updates itself.
@@ -7075,27 +7119,6 @@ type TierListItemEdge {
   cursor: String!
   node: TierListItem!
 }
-
-"""The state of one favourite after the toggle."""
-type ToggleFavoritePayload {
-  favorited: Boolean!
-
-  """Resolved through the item DataLoader (§1.5)."""
-  item: Item!
-  itemId: ID!
-  itemType: ItemType!
-}
-
-union ToggleFavoriteResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ToggleFavoritePayload | ValidationError
-
-"""The state of one Love after the toggle."""
-type ToggleRecipeLovePayload {
-  loved: Boolean!
-  recipe: Recipe!
-  recipeId: ID!
-}
-
-union ToggleRecipeLoveResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ToggleRecipeLovePayload | ValidationError
 
 union UndoTierListEditResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListHistoryStep | ValidationError
 

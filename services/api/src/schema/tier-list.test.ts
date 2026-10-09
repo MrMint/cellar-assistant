@@ -346,7 +346,7 @@ describe("edit history (D4)", () => {
     });
     for (const field of ["undoTierListEdit", "redoTierListEdit"]) {
       const result = await run(
-        `mutation { ${field}(tierListId: "${tierListDto.id}") {
+        `mutation { ${field}(tierListId: "${tierListDto.id}", expectedSeq: 7) {
            __typename
            ... on TierListHistoryStep {
              applied { kind entryName }
@@ -365,6 +365,18 @@ describe("edit history (D4)", () => {
       { actorType: "TierListActor", actorId: tierListDto.id, method: "undo" },
       { actorType: "TierListActor", actorId: tierListDto.id, method: "redo" },
     ]);
+    // The step the caller saw reaches the actor, which refuses any other.
+    expect(calls.map((call) => call.args.slice(1))).toEqual([[7], [7]]);
+  });
+
+  it("requires expectedSeq: an undo that names no step is refused before the actor", async () => {
+    const { invoke, calls } = stubSidecar({});
+    const result = await run(
+      `mutation { undoTierListEdit(tierListId: "${tierListDto.id}") { __typename } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors?.[0]?.message).toMatch(/expectedSeq/);
+    expect(calls).toEqual([]);
   });
 });
 

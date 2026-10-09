@@ -35,7 +35,12 @@ import { useMutation } from "urql";
 import { unwrapResult } from "@/lib/api/result";
 import { addEntryFailureMessage, entryTypeOf } from "./adapter";
 import type { TierListEntityType } from "./constants";
-import type { TierListEditView, TierListHistoryView } from "./history";
+import {
+  addedEditSeq,
+  historyStepFailure,
+  type TierListEditView,
+  type TierListHistoryView,
+} from "./history";
 import {
   AddItemToTierListMutation,
   AddTierListMutation,
@@ -97,6 +102,11 @@ export type TierListResult = {
 export type TierListItemResult = {
   success: boolean;
   tierListItemId?: string;
+  /**
+   * The add's own edit, for its toast's Undo (`expectedSeq`); null when the
+   * list's history no longer has it on top (`addedEditSeq`).
+   */
+  editSeq?: number | null;
   error?: string;
 };
 
@@ -107,7 +117,16 @@ export type TierListHistoryStepResult =
       applied: TierListEditView;
       history: TierListHistoryView;
     }
-  | { success: false; error: string };
+  | {
+      success: false;
+      error: string;
+      /**
+       * The refusal was `TIER_LIST_HISTORY_MOVED`: the list changed elsewhere
+       * and nothing was stepped. A caller that does not show the list (the
+       * item page's add toast) words that itself.
+       */
+      moved?: boolean;
+    };
 
 const transportError = (error: { message: string } | undefined) =>
   error === undefined ? null : error.message;
@@ -232,7 +251,14 @@ export function useTierListActions() {
         "TierListItem",
       );
       return result.ok
-        ? { success: true, tierListItemId: result.data.id }
+        ? {
+            success: true,
+            tierListItemId: result.data.id,
+            editSeq: addedEditSeq(
+              result.data.tierList?.editHistory?.undo,
+              entityId,
+            ),
+          }
         : { success: false, error: addEntryFailureMessage(result.error) };
     },
     [addItem],
@@ -280,11 +306,12 @@ export function useTierListActions() {
     async (
       direction: "undo" | "redo",
       tierListId: string,
+      expectedSeq: number,
     ): Promise<TierListHistoryStepResult> => {
       const response =
         direction === "undo"
-          ? await undoEdit({ tierListId })
-          : await redoEdit({ tierListId });
+          ? await undoEdit({ tierListId, expectedSeq })
+          : await redoEdit({ tierListId, expectedSeq });
       const failed = transportError(response.error);
       if (failed !== null) return { success: false, error: failed };
       const payload =
@@ -298,11 +325,10 @@ export function useTierListActions() {
         return {
           success: false,
           // The one refusal a person can meet is the race of two tabs: the
-          // other one already stepped. The actor's own words are a log line.
-          error:
-            result.error.code === "CONFLICT"
-              ? `Nothing to ${direction} on this list any more.`
-              : `Couldn't ${direction} that. Try again.`,
+          // other one already stepped, or edited. The actor's own words are
+          // a log line.
+          error: historyStepFailure(direction, result.error),
+          moved: result.error.reason === "TIER_LIST_HISTORY_MOVED",
         };
       }
       return {
@@ -315,11 +341,13 @@ export function useTierListActions() {
   );
 
   const undoAction = useCallback(
-    (tierListId: string) => historyStep("undo", tierListId),
+    (tierListId: string, expectedSeq: number) =>
+      historyStep("undo", tierListId, expectedSeq),
     [historyStep],
   );
   const redoAction = useCallback(
-    (tierListId: string) => historyStep("redo", tierListId),
+    (tierListId: string, expectedSeq: number) =>
+      historyStep("redo", tierListId, expectedSeq),
     [historyStep],
   );
 

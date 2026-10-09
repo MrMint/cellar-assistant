@@ -384,6 +384,33 @@ export const canSeePlace = (ctx: Ctx, place: PlaceVisibility): boolean => {
   return ctx.viewerId !== null && place.createdById === ctx.viewerId;
 };
 
+/**
+ * Whether **everyone who may see `place` may also see `other`** — the rule for
+ * anything one place's answer says about another (wave B hardening).
+ *
+ * The case it exists for is the Google binding: when `place` resolves to a
+ * Google listing `other` already holds, naming `other` in `place`'s answer —
+ * or refusing in a way that only `other`'s existence explains — tells
+ * `place`'s audience that `other` exists. That is fine when they can see it
+ * anyway, and an existence oracle when `other` is someone else's place under
+ * review. So: a shared `other` is visible to every audience; an unshared one
+ * only to an unshared `place` of the same creator (whose audience is that
+ * creator alone). A shared `place`'s audience is everyone, so it never "sees"
+ * an unshared `other`, even one its own creator could open.
+ *
+ * Viewer-independent on purpose: the binding is decided in a delivered
+ * `system` turn, which has no viewer, but its outcome is visible to whoever
+ * reads `place` next.
+ */
+export const isPlaceVisibleToAudienceOf = (
+  place: PlaceVisibility,
+  other: PlaceVisibility,
+): boolean => {
+  if (isPlaceShared(other)) return true;
+  if (isPlaceShared(place)) return false;
+  return place.createdById !== null && other.createdById === place.createdById;
+};
+
 /* -------------------------------------------------------------------------- */
 /* Anonymous sharing (X17)                                                     */
 /* -------------------------------------------------------------------------- */

@@ -77,13 +77,35 @@
  * to a Google id another place already holds — is therefore not a bug to
  * guard against but the expected outcome whenever two rows describe one real
  * venue, which is common in a database that lets users add places next to
- * Overture imports. `#googleBindingCollision` looks for it *before* writing,
+ * Overture imports. `#googleBindingClaim` looks for it *before* writing,
  * and `enrichFromGoogle` returns `status: "collision"` naming the other place
  * instead of throwing: merging two duplicate places is C1's duplicate-search
  * territory, not something an enrichment turn may decide. The unique indexes
  * stay as the tripwire behind that check, and a violation that slips through
  * anyway (two enrichments racing on different places) is translated to
  * `ConflictError`, never a 500.
+ *
+ * **A collision never names — or depends on — a place its audience cannot
+ * see** (wave B hardening, `isPlaceVisibleToAudienceOf`). The holder can be
+ * someone else's place still under review (X27): its creator's enrichment
+ * bound it first. Naming it in this place's answer, or refusing in a way only
+ * its existence explains, would tell this place's audience that a hidden
+ * place exists. So the holder is treated as **not there**:
+ *
+ *  - this place is **shared**: shared catalog data beats an unshared draft.
+ *    The draft's binding is released (its `google_place_id` cleared, its
+ *    enrichment row deleted — guarded on it still being unshared) in the same
+ *    transaction that binds this place, so the outcome is exactly what it
+ *    would be had the draft never claimed the listing: `enriched`. An
+ *    unshared row can no longer squat a real venue's listing.
+ *  - this place is **unshared** too (another creator's draft against yours):
+ *    neither may take the listing from the other, and the answer is the
+ *    `unresolved` a Google miss gives, naming nothing.
+ *
+ * The release writes another place's rows from this activation; that place's
+ * own activation, if live, keeps its cached enrichment until it reloads —
+ * cosmetic, creator-only, and every write it could make from the stale copy
+ * goes back through this same check.
  *
  * ## Budget keys: one per paid Google call, and a retry is a new call
  *
@@ -259,7 +281,13 @@ import {
   or,
   sql,
 } from "@cellar-assistant/db/orm";
-import { bypassesPolicy, canSeePlace, isOwner } from "@cellar-assistant/policy";
+import {
+  bypassesPolicy,
+  canSeePlace,
+  isOwner,
+  isPlaceShared,
+  isPlaceVisibleToAudienceOf,
+} from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import {
   EntityActorBase,
@@ -2020,15 +2048,29 @@ export class PlaceActor
   }
 
   /**
-   * Has some *other* place already claimed `googlePlaceId`? Checked against
-   * both tables that carry the binding, because they have separate unique
-   * indexes and either can be the one that already holds it.
+   * Has some *other* place already claimed `googlePlaceId`, and may this
+   * place's audience know it? Checked against both tables that carry the
+   * binding, because they have separate unique indexes and either can be the
+   * one that already holds it.
+   *
+   * - `collision` — the holder is visible to everyone who can see this place:
+   *   name it, as ever.
+   * - `release` — the holder is an unshared draft and this place is shared:
+   *   the holder is treated as absent and its claim is released by the bind
+   *   (class doc).
+   * - `hidden` — the holder is an unshared draft and so is this place, of a
+   *   different creator: treated as absent, and neither takes the listing.
    */
-  async #googleBindingCollision(
+  async #googleBindingClaim(
     googlePlaceId: string,
-  ): Promise<GoogleBindingCollision | null> {
+  ): Promise<
+    | { readonly kind: "collision"; readonly collision: GoogleBindingCollision }
+    | { readonly kind: "release"; readonly holderId: string }
+    | { readonly kind: "hidden" }
+    | null
+  > {
     const [claimedPlace] = await this.db
-      .select({ id: places.id })
+      .select()
       .from(places)
       .where(
         and(
@@ -2038,23 +2080,68 @@ export class PlaceActor
         ),
       )
       .limit(1);
-    if (claimedPlace !== undefined) {
-      return { googlePlaceId, boundToPlaceId: claimedPlace.id };
-    }
+    const [claimedEnrichment] =
+      claimedPlace !== undefined
+        ? []
+        : await this.db
+            .select({ place: places })
+            .from(placeGoogleEnrichments)
+            .innerJoin(places, eq(places.id, placeGoogleEnrichments.placeId))
+            .where(
+              and(
+                eq(placeGoogleEnrichments.googlePlaceId, googlePlaceId),
+                ne(placeGoogleEnrichments.placeId, this.key),
+              ),
+            )
+            .limit(1);
+    const holder = claimedPlace ?? claimedEnrichment?.place;
+    if (holder === undefined) return null;
 
-    const [claimedEnrichment] = await this.db
-      .select({ id: placeGoogleEnrichments.placeId })
-      .from(placeGoogleEnrichments)
+    const self = placeVisibility(this.requireAggregate().place);
+    if (isPlaceVisibleToAudienceOf(self, placeVisibility(holder))) {
+      return {
+        kind: "collision",
+        collision: { googlePlaceId, boundToPlaceId: holder.id },
+      };
+    }
+    return isPlaceShared(self)
+      ? { kind: "release", holderId: holder.id }
+      : { kind: "hidden" };
+  }
+
+  /**
+   * Clears an unshared draft's claim on `googlePlaceId`, inside the
+   * transaction that binds this place instead (class doc). Both statements
+   * re-check that the holder is still unshared, so a draft approved in the
+   * meantime keeps its binding — and this place's insert then trips the
+   * unique index, which `#enrich` answers as the race it is.
+   */
+  async #releaseUnsharedClaim(
+    tx: DbOrTx,
+    holderId: string,
+    googlePlaceId: string,
+    now: Date,
+  ): Promise<void> {
+    const unshared = ne(places.reviewStatus, "approved");
+    await tx
+      .update(places)
+      .set({ googlePlaceId: null, updatedAt: now })
       .where(
         and(
-          eq(placeGoogleEnrichments.googlePlaceId, googlePlaceId),
-          ne(placeGoogleEnrichments.placeId, this.key),
+          eq(places.id, holderId),
+          eq(places.googlePlaceId, googlePlaceId),
+          unshared,
         ),
-      )
-      .limit(1);
-    return claimedEnrichment === undefined
-      ? null
-      : { googlePlaceId, boundToPlaceId: claimedEnrichment.id };
+      );
+    await tx
+      .delete(placeGoogleEnrichments)
+      .where(
+        and(
+          eq(placeGoogleEnrichments.placeId, holderId),
+          eq(placeGoogleEnrichments.googlePlaceId, googlePlaceId),
+          sql`exists (select 1 from ${places} where ${places.id} = ${holderId}::uuid and ${unshared})`,
+        ),
+      );
   }
 
   /**
@@ -2125,8 +2212,9 @@ export class PlaceActor
     if (resolution.result !== null) return resolution.result;
     const { googlePlaceId, resolvedVia } = resolution;
 
-    const collision = await this.#googleBindingCollision(googlePlaceId);
-    if (collision !== null) {
+    const claim = await this.#googleBindingClaim(googlePlaceId);
+    if (claim?.kind === "collision") {
+      const { collision } = claim;
       return {
         placeId: this.key,
         status: "collision",
@@ -2139,6 +2227,19 @@ export class PlaceActor
           "merging them is a duplicate-search decision, not an enrichment one",
       };
     }
+    if (claim?.kind === "hidden") {
+      // Another creator's draft holds it, and this place is a draft too: no
+      // name, no hint — the answer a Google miss gives (class doc).
+      return {
+        placeId: this.key,
+        status: "unresolved",
+        enrichment: existing === null ? null : enrichmentRowToDto(existing),
+        photos: aggregate.photos.map(photoRowToDto),
+        collision: null,
+        reason: `google place ${googlePlaceId} could not be bound to this place`,
+      };
+    }
+    const releaseFrom = claim?.kind === "release" ? claim.holderId : null;
 
     const reserved = await this.#reserve(
       ctx,
@@ -2163,6 +2264,9 @@ export class PlaceActor
     const now = new Date();
     try {
       await this.tx(async (tx) => {
+        if (releaseFrom !== null) {
+          await this.#releaseUnsharedClaim(tx, releaseFrom, googlePlaceId, now);
+        }
         await tx
           .insert(placeGoogleEnrichments)
           .values({
@@ -2218,11 +2322,16 @@ export class PlaceActor
     } catch (error) {
       if (isGoogleBindingViolation(error)) {
         // The pre-check above lost a race with another place's enrichment.
-        // Same answer, arrived at through the tripwire rather than the check.
-        const raced = await this.#googleBindingCollision(googlePlaceId);
+        // Same answer, arrived at through the tripwire rather than the check —
+        // and held to the same rule: the holder is named only when this
+        // place's audience may see it.
+        const raced = await this.#googleBindingClaim(googlePlaceId);
         throw new ConflictError(
-          `google place ${googlePlaceId} was bound to place ` +
-            `${raced?.boundToPlaceId ?? "another row"} while this enrichment ran`,
+          raced?.kind === "collision"
+            ? `google place ${googlePlaceId} was bound to place ` +
+                `${raced.collision.boundToPlaceId} while this enrichment ran`
+            : `google place ${googlePlaceId} was bound elsewhere while this ` +
+                "enrichment ran",
         );
       }
       throw error;

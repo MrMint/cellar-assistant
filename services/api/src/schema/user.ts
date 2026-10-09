@@ -28,7 +28,7 @@ import type {
   ItemRef,
   PlaceInteractionDto,
   RecordPlaceInteractionInput,
-  ToggleFavoriteResult,
+  SetFavoriteResult,
   UpdateProfileInput,
   UserProfileDto,
 } from "@cellar-assistant/contracts";
@@ -279,12 +279,16 @@ const RemoveFriendPayload = builder
     }),
   });
 
-const ToggleFavoritePayload = builder
-  .objectRef<ToggleFavoriteResult>("ToggleFavoritePayload")
+const SetFavoritePayload = builder
+  .objectRef<SetFavoriteResult>("SetFavoritePayload")
   .implement({
-    description: "The state of one favourite after the toggle.",
+    description: "The state of one favourite after `setFavorite`.",
     fields: (t) => ({
       favorited: t.exposeBoolean("favorited"),
+      changed: t.exposeBoolean("changed", {
+        description:
+          "False when the favourite already was what was asked — a repeat or a retry.",
+      }),
       itemId: t.id({ resolve: (result) => result.ref.id }),
       itemType: t.field({
         type: ItemTypeEnum,
@@ -591,18 +595,25 @@ builder.mutationField("removeFriend", (t) =>
   }),
 );
 
-builder.mutationField("toggleFavorite", (t) =>
+builder.mutationField("setFavorite", (t) =>
   t.field({
-    type: ToggleFavoritePayload,
-    description: "Add or remove one item from the viewer's favourites.",
+    type: SetFavoritePayload,
+    description:
+      "Put one item in the viewer's favourites, or take it out. Idempotent: " +
+      "asking for the current state changes nothing, so a retried request " +
+      "cannot flip it back (it replaced the flipping `toggleFavorite`).",
     args: {
       type: t.arg({ type: ItemTypeEnum, required: true }),
       itemId: t.arg.id({ required: true }),
+      favorited: t.arg.boolean({ required: true }),
     },
     errors: {},
     resolve: (_root, args, context) => {
       const ref: ItemRef = { type: args.type, id: String(args.itemId) };
-      return myActor(context, "change your favourites").toggleFavorite(ref);
+      return myActor(context, "change your favourites").setFavorite(
+        ref,
+        args.favorited,
+      );
     },
   }),
 );

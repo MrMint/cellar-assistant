@@ -164,10 +164,17 @@ export type AcceptFriendRequestResult = {
 /* Favorites and place interactions                                            */
 /* -------------------------------------------------------------------------- */
 
-export type ToggleFavoriteResult = {
+/**
+ * `setFavorite`'s answer. A `set`, not a toggle (wave B hardening): the
+ * caller names the state it wants, so a retried request — or one whose
+ * answer was lost — lands on the same state instead of flipping it back.
+ */
+export type SetFavoriteResult = {
   readonly ref: ItemRef;
-  /** State *after* the toggle. */
+  /** State *after* the call. */
   readonly favorited: boolean;
+  /** False when the state already was what was asked — a repeat or a retry. */
+  readonly changed: boolean;
 };
 
 /**
@@ -290,10 +297,13 @@ export type BarPantryItemDto = {
   readonly have: boolean;
 };
 
-export type ToggleRecipeLoveResult = {
+/** `setRecipeLove`'s answer — a `set`, for `SetFavoriteResult`'s reason. */
+export type SetRecipeLoveResult = {
   readonly recipeId: string;
-  /** State *after* the toggle. */
+  /** State *after* the call. */
   readonly loved: boolean;
+  /** False when the state already was what was asked — a repeat or a retry. */
+  readonly changed: boolean;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -402,7 +412,15 @@ export type UserActorInterface = {
     ctx: Ctx,
     refs: readonly ItemRef[],
   ): Promise<readonly number[]>;
-  toggleFavorite(ctx: Ctx, ref: ItemRef): Promise<ToggleFavoriteResult>;
+  /**
+   * Favourite an item, or stop. Idempotent — `set`, not `toggle`, as
+   * `setWantToTry` is, so a retried request cannot flip it the wrong way.
+   */
+  setFavorite(
+    ctx: Ctx,
+    ref: ItemRef,
+    favorited: boolean,
+  ): Promise<SetFavoriteResult>;
 
   placeInteractions(
     ctx: Ctx,
@@ -476,8 +494,15 @@ export type UserActorInterface = {
     ctx: Ctx,
     recipeIds: readonly string[],
   ): Promise<readonly string[]>;
-  /** D9: Love replaces the recipe heart. Self only. */
-  toggleRecipeLove(ctx: Ctx, recipeId: string): Promise<ToggleRecipeLoveResult>;
+  /**
+   * D9: Love replaces the recipe heart. Self only. Idempotent — `set`, not
+   * `toggle`, so a retried request cannot flip it the wrong way.
+   */
+  setRecipeLove(
+    ctx: Ctx,
+    recipeId: string,
+    loved: boolean,
+  ): Promise<SetRecipeLoveResult>;
   /** Loved recipe ids, newest first. Self only. */
   lovedRecipes(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
 };
@@ -506,7 +531,7 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     favorites: {},
     favoriteStates: {},
     favoriteCounts: {},
-    toggleFavorite: {},
+    setFavorite: {},
     placeInteractions: {},
     placeInteraction: {},
     placeInteractionsFor: {},
@@ -517,7 +542,7 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     barPantry: {},
     setBarPantryItem: {},
     recipeLoveStates: {},
-    toggleRecipeLove: {},
+    setRecipeLove: {},
     lovedRecipes: {},
   },
 };

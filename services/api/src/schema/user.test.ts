@@ -238,7 +238,7 @@ describe("friend mutations address the viewer's own actor (§1.2)", () => {
     for (const document of [
       `mutation { sendFriendRequest(userId: "${BOB}") { __typename } }`,
       `mutation { removeFriend(userId: "${BOB}") { __typename } }`,
-      `mutation { toggleFavorite(type: WINE, itemId: "${BOB}") { __typename } }`,
+      `mutation { setFavorite(type: WINE, itemId: "${BOB}", favorited: true) { __typename } }`,
       `{ myFriends(first: 5) { __typename } }`,
       `{ myFriendRequests(direction: INCOMING, first: 5) { __typename } }`,
     ]) {

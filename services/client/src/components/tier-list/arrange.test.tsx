@@ -70,16 +70,16 @@ mock.module("@/components/tier-list/actions", () => ({
     },
     reorderBandAction: async () => ({ success: true }),
     addItemToTierListAction: async () => ({ success: true }),
-    undoAction: async (id: string) => {
-      calls.push(`undo ${id}`);
+    undoAction: async (id: string, expectedSeq: number) => {
+      calls.push(`undo ${id} #${expectedSeq}`);
       return {
         success: true,
         applied: edit,
         history: { canUndo: false, canRedo: true, undo: null, redo: edit },
       };
     },
-    redoAction: async (id: string) => {
-      calls.push(`redo ${id}`);
+    redoAction: async (id: string, expectedSeq: number) => {
+      calls.push(`redo ${id} #${expectedSeq}`);
       return {
         success: true,
         applied: edit,
@@ -201,7 +201,9 @@ describe("Arrange (X23 / D4)", () => {
     assert.equal(button(/^Redo/).disabled, true);
 
     await click(undo);
-    assert.deepEqual(calls, ["undo tl-1", "refresh"]);
+    // It names the edit the button showed (D4 + wave B: expectedSeq), so a
+    // newer edit from another tab can never be the one taken back.
+    assert.deepEqual(calls, ["undo tl-1 #7", "refresh"]);
     assert.equal(toasts.at(-1)?.message, "Moved Barolo back to Unrated");
     assert.equal(toasts.at(-1)?.options?.actionLabel, "Redo");
     // The server's answer is now where the buttons stand.
@@ -212,7 +214,7 @@ describe("Arrange (X23 / D4)", () => {
       toasts.at(-1)?.options?.undo?.();
       await new Promise((r) => setTimeout(r, 0));
     });
-    assert.deepEqual(calls.slice(2), ["redo tl-1", "refresh"]);
+    assert.deepEqual(calls.slice(2), ["redo tl-1 #7", "refresh"]);
   });
 
   test("a removal lands at once, and its toast's Undo steps the history", async () => {
@@ -230,11 +232,60 @@ describe("Arrange (X23 / D4)", () => {
     // The fresh edit is undoable before the refresh even lands.
     assert.equal(button(/^Undo/).disabled, false);
 
+    // The toast's Undo, tapped before the refresh says which edit the
+    // removal was: it waits for that instead of stepping blind…
+    let tapped: Promise<void> | undefined;
     await act(async () => {
-      toasts.at(-1)?.options?.undo?.();
+      tapped = Promise.resolve(toasts.at(-1)?.options?.undo?.());
       await new Promise((r) => setTimeout(r, 0));
     });
-    assert.deepEqual(calls.slice(2), ["undo tl-1", "refresh"]);
+    assert.deepEqual(calls, ["remove row-1", "refresh"], "nothing sent yet");
+    // …and names the edit once the refreshed history arrives.
+    const removal = {
+      seq: 8,
+      kind: "REMOVE" as const,
+      entryName: "Rioja",
+      fromBand: 3,
+      toBand: null,
+    };
+    await render({
+      ...data,
+      history: { canUndo: true, canRedo: false, undo: removal, redo: null },
+    });
+    await act(async () => {
+      await tapped;
+      await new Promise((r) => setTimeout(r, 250));
+    });
+    assert.deepEqual(calls.slice(2), ["undo tl-1 #8", "refresh"]);
+  });
+
+  test("a removal's Undo whose refresh shows nothing left to undo sends nothing, and says so", async () => {
+    await render({
+      ...data,
+      history: { canUndo: false, canRedo: false, undo: null, redo: null },
+    });
+    await click(button("Arrange"));
+    await click(button("Remove Rioja"));
+    let tapped: Promise<void> | undefined;
+    await act(async () => {
+      tapped = Promise.resolve(toasts.at(-1)?.options?.undo?.());
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    // Another tab already took the removal back: the refresh has no Undo.
+    await render({
+      ...data,
+      history: { canUndo: false, canRedo: true, undo: null, redo: edit },
+    });
+    await act(async () => {
+      await tapped;
+      await new Promise((r) => setTimeout(r, 250));
+    });
+    assert.deepEqual(calls, ["remove row-1", "refresh", "refresh"]);
+    assert.equal(
+      toasts.at(-1)?.message,
+      "Nothing to undo on this list any more.",
+    );
+    assert.equal(toasts.at(-1)?.options?.tone, "error");
   });
 
   test("⌘Z while arranging is Undo; outside Arrange it does nothing", async () => {
@@ -250,7 +301,7 @@ describe("Arrange (X23 / D4)", () => {
     assert.deepEqual(calls, []);
     await click(button("Arrange"));
     await press();
-    assert.deepEqual(calls, ["undo tl-1", "refresh"]);
+    assert.deepEqual(calls, ["undo tl-1 #7", "refresh"]);
   });
 
   test("an empty list's Add from what you've tasted opens Arrange and the picker, once", async () => {

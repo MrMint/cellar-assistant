@@ -139,12 +139,13 @@ want to know *why* a line says what it says; don't work through it by hand.
   (password `123456789`). Do not run `bun run db:seed` bare in a worktree: its defaults are the
   **shared** lane's `:5433` and `:3002`. Use `bun run dev:seed`.
 - Optional: `ollama serve` + `ollama pull nomic-embed-text gemma3:4b` for the AI-backed features
-  (semantic search, tier-list insights, item-onboarding defaults, menu extraction, recipe-photo
-  vision — `services/actors/README.md`). Leave `AI_PROVIDER` unset to run with those features
-  deliberately erroring instead of silently degrading — that is a supported state, and
-  `dev:doctor` reports it as one rather than as a fault. One wrinkle it also reports: the
-  per-worktree lane's `export_passthrough` **defaults `AI_PROVIDER` to `ollama`**, so "I never
-  set it" does not mean "unset" there.
+  (semantic search, tier-list insights, item-onboarding defaults, "Suggest details" item
+  suggestions, flavour chips, place review, menu extraction, recipe-photo vision — every
+  `MODEL_SEAMS` entry, tabled in `services/actors/README.md`). Leave `AI_PROVIDER` unset to
+  run with those features deliberately erroring instead of silently degrading — that is a
+  supported state, and `dev:doctor` reports it as one rather than as a fault. One wrinkle it
+  also reports: the per-worktree lane's `export_passthrough` **defaults `AI_PROVIDER` to
+  `ollama`**, so "I never set it" does not mean "unset" there.
 
 ## HARD: never run `bun run dev` or `bun run build`
 

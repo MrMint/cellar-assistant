@@ -1,6 +1,6 @@
 /**
  * `ItemCard`'s heart (X24): it fills, and the count moves, in the tap's own
- * frame — no spinner, no wait on `toggleFavorite` — and a refused write puts
+ * frame — no spinner, no wait on `setFavorite` — and a refused write puts
  * both back with a toast. (The old card set its "optimistic" state inside the
  * async transition that awaited the write, so the heart only changed when the
  * server answered.) happy-dom, with `useMutation` answering by hand.
@@ -19,7 +19,7 @@ const { nextImageModule } = await import("../../../test-support/next-image");
 mock.module("next/image", () => nextImageModule("fallback"));
 
 type Answer = {
-  data?: { toggleFavorite: Record<string, unknown> };
+  data?: { setFavorite: Record<string, unknown> };
   error?: Error;
 };
 let writes: {
@@ -77,8 +77,8 @@ afterEach(async () => {
     for (const w of writes) {
       w.resolve({
         data: {
-          toggleFavorite: {
-            __typename: "ToggleFavoritePayload",
+          setFavorite: {
+            __typename: "SetFavoritePayload",
             favorited: true,
           },
         },
@@ -127,7 +127,12 @@ describe("ItemCard favourite toggle (X24)", () => {
     assert.equal(count(), "5");
     assert.equal(heart().disabled, false, "a second tap is still taken");
     assert.equal(heart().querySelector('[role="status"]'), null, "no spinner");
-    assert.deepEqual(writes[0]?.variables, { itemId: "i1", type: "WINE" });
+    // The state asked for, not a flip: a retry of this write cannot undo it.
+    assert.deepEqual(writes[0]?.variables, {
+      itemId: "i1",
+      type: "WINE",
+      favorited: true,
+    });
   });
 
   test("the server's answer is kept", async () => {
@@ -135,8 +140,8 @@ describe("ItemCard favourite toggle (X24)", () => {
     await act(async () => heart().click());
     await answer({
       data: {
-        toggleFavorite: {
-          __typename: "ToggleFavoritePayload",
+        setFavorite: {
+          __typename: "SetFavoritePayload",
           favorited: true,
         },
       },
@@ -154,7 +159,7 @@ describe("ItemCard favourite toggle (X24)", () => {
 
     await answer({
       data: {
-        toggleFavorite: {
+        setFavorite: {
           __typename: "ForbiddenError",
           message: "Not yours",
           code: "FORBIDDEN",
@@ -178,8 +183,8 @@ describe("ItemCard favourite toggle (X24)", () => {
   });
 
   test("a double tap flips twice, one write at a time, and ends where it began", async () => {
-    // `toggleFavorite` flips rather than sets, so two overlapping writes
-    // could land in either order; the second is sent only after the first.
+    // Writes never overlap, so they cannot land out of order; the second
+    // is sent only after the first, and each names its own state.
     await mount(false);
     await act(async () => heart().click());
     await act(async () => heart().click());
@@ -190,8 +195,8 @@ describe("ItemCard favourite toggle (X24)", () => {
     await act(async () => {
       writes[0]?.resolve({
         data: {
-          toggleFavorite: {
-            __typename: "ToggleFavoritePayload",
+          setFavorite: {
+            __typename: "SetFavoritePayload",
             favorited: true,
           },
         },
@@ -199,11 +204,13 @@ describe("ItemCard favourite toggle (X24)", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
     assert.equal(writes.length, 2, "then the flip back");
+    assert.equal(writes[0]?.variables.favorited, true);
+    assert.equal(writes[1]?.variables.favorited, false);
     await act(async () => {
       writes[1]?.resolve({
         data: {
-          toggleFavorite: {
-            __typename: "ToggleFavoritePayload",
+          setFavorite: {
+            __typename: "SetFavoritePayload",
             favorited: false,
           },
         },

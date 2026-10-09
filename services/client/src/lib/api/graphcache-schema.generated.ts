@@ -4775,6 +4775,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "setFavorite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetFavoriteResult" },
+            },
+          },
+          {
             name: "setRecipeIngredients",
             type: {
               kind: "NON_NULL",
@@ -4786,6 +4793,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SetRecipeInstructionsResult" },
+            },
+          },
+          {
+            name: "setRecipeLove",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetRecipeLoveResult" },
             },
           },
           {
@@ -4821,20 +4835,6 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SuggestItemDetailsResult" },
-            },
-          },
-          {
-            name: "toggleFavorite",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "UNION", name: "ToggleFavoriteResult" },
-            },
-          },
-          {
-            name: "toggleRecipeLove",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "UNION", name: "ToggleRecipeLoveResult" },
             },
           },
           {
@@ -8521,6 +8521,57 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "OBJECT",
+        name: "SetFavoritePayload",
+        fields: [
+          {
+            name: "changed",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "favorited",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "item",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+          {
+            name: "itemId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "itemType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "SetFavoriteResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SetFavoritePayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "UNION",
         name: "SetRecipeIngredientsResult",
         possibleTypes: [
@@ -8541,6 +8592,50 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "RecipeInstructionsPayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "SetRecipeLovePayload",
+        fields: [
+          {
+            name: "changed",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "loved",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "recipe",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Recipe" },
+            },
+          },
+          {
+            name: "recipeId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "SetRecipeLoveResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SetRecipeLovePayload" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -9595,87 +9690,6 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
         ],
         interfaces: [],
-      },
-      {
-        kind: "OBJECT",
-        name: "ToggleFavoritePayload",
-        fields: [
-          {
-            name: "favorited",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "SCALAR", name: "Boolean" },
-            },
-          },
-          {
-            name: "item",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "INTERFACE", name: "Item" },
-            },
-          },
-          {
-            name: "itemId",
-            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
-          },
-          {
-            name: "itemType",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "ENUM", name: "ItemType" },
-            },
-          },
-        ],
-        interfaces: [],
-      },
-      {
-        kind: "UNION",
-        name: "ToggleFavoriteResult",
-        possibleTypes: [
-          { kind: "OBJECT", name: "BudgetExceededError" },
-          { kind: "OBJECT", name: "ConflictError" },
-          { kind: "OBJECT", name: "ForbiddenError" },
-          { kind: "OBJECT", name: "NotFoundError" },
-          { kind: "OBJECT", name: "ToggleFavoritePayload" },
-          { kind: "OBJECT", name: "ValidationError" },
-        ],
-      },
-      {
-        kind: "OBJECT",
-        name: "ToggleRecipeLovePayload",
-        fields: [
-          {
-            name: "loved",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "SCALAR", name: "Boolean" },
-            },
-          },
-          {
-            name: "recipe",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "OBJECT", name: "Recipe" },
-            },
-          },
-          {
-            name: "recipeId",
-            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
-          },
-        ],
-        interfaces: [],
-      },
-      {
-        kind: "UNION",
-        name: "ToggleRecipeLoveResult",
-        possibleTypes: [
-          { kind: "OBJECT", name: "BudgetExceededError" },
-          { kind: "OBJECT", name: "ConflictError" },
-          { kind: "OBJECT", name: "ForbiddenError" },
-          { kind: "OBJECT", name: "NotFoundError" },
-          { kind: "OBJECT", name: "ToggleRecipeLovePayload" },
-          { kind: "OBJECT", name: "ValidationError" },
-        ],
       },
       {
         kind: "UNION",

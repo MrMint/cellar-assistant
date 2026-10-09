@@ -689,11 +689,22 @@ builder.mutationField("undoTierListEdit", (t) =>
     description:
       "D4: takes back the latest edit not already undone (an add, a " +
       "removal, a move) and records that in the list's append-only history. " +
-      "Creator only; nothing to undo is a `ConflictError`.",
+      "Creator only. `expectedSeq` is the `editHistory.undo.seq` the caller " +
+      "showed: if anything else is on top (the list changed in another tab, " +
+      "or there is nothing left to undo) it is a `ConflictError` with reason " +
+      "TIER_LIST_HISTORY_MOVED and nothing is written.",
     errors: {},
-    args: { tierListId: t.arg.id({ required: true }) },
+    args: {
+      tierListId: t.arg.id({ required: true }),
+      expectedSeq: t.arg.int({
+        required: true,
+        description: "The `seq` of the edit to take back.",
+      }),
+    },
     resolve: (_root, args, context) =>
-      context.actor(TierListActorDescriptor, String(args.tierListId)).undo(),
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .undo(args.expectedSeq),
   }),
 );
 
@@ -702,11 +713,20 @@ builder.mutationField("redoTierListEdit", (t) =>
     type: TierListHistoryStepType,
     description:
       "D4: puts back the latest undone edit. A new edit after an undo " +
-      "clears what Redo can put back. Creator only; nothing to redo is a " +
-      "`ConflictError`.",
+      "clears what Redo can put back. Creator only. `expectedSeq` is the " +
+      "`editHistory.redo.seq` the caller showed; anything else on top is a " +
+      "`ConflictError` with reason TIER_LIST_HISTORY_MOVED, and no write.",
     errors: {},
-    args: { tierListId: t.arg.id({ required: true }) },
+    args: {
+      tierListId: t.arg.id({ required: true }),
+      expectedSeq: t.arg.int({
+        required: true,
+        description: "The `seq` of the undone edit to put back.",
+      }),
+    },
     resolve: (_root, args, context) =>
-      context.actor(TierListActorDescriptor, String(args.tierListId)).redo(),
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .redo(args.expectedSeq),
   }),
 );

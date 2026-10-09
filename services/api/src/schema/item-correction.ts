@@ -222,7 +222,8 @@ builder.mutationField("replaceItemBrand", (t) =>
       "D8 “Wrong brand? Change it”: `brandId` (from `resolveBrand`) becomes " +
       "the item's primary brand and `replacesBrandId` — the brand the page " +
       "showed — is unlinked, in one turn. The creator only. Repeating it is " +
-      "a no-op, so an Undo is the same call with the two swapped.",
+      "a no-op, so an Undo is the same call with the two swapped. A " +
+      "`brandId` that names no brand is a `NotFoundError`.",
     errors: {},
     args: {
       type: t.arg({ type: ItemTypeEnum, required: true }),

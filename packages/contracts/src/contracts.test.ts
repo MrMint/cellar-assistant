@@ -279,6 +279,7 @@ describe("actor errors (§8.3)", () => {
       "AI_UNCONFIGURED",
       "NOTHING_READ",
       "LOOKS_LIKE_MENU",
+      "TIER_LIST_HISTORY_MOVED",
     ]);
   });
 

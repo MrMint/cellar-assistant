@@ -32,6 +32,7 @@ import {
   isFriend,
   isOwner,
   isPlaceShared,
+  isPlaceVisibleToAudienceOf,
   PLACE_REVIEW_STATUSES,
   type PlaceReviewStatus,
   PRIVACY_VALUES,
@@ -447,6 +448,50 @@ describe("canSeeItemImage", () => {
   it("anonymous: sees a public image", () => {
     expect(canSeeItemImage(anonymous, image(true))).toBe(true);
     expect(canSeeItemImage(anonymous, image(false))).toBe(false);
+  });
+});
+
+describe("isPlaceVisibleToAudienceOf (the Google binding's no-oracle rule)", () => {
+  const at = (
+    reviewStatus: PlaceReviewStatus,
+    createdById: string | null = OWNER,
+  ) => ({ createdById, reviewStatus });
+
+  it("a shared other is visible to every place's audience", () => {
+    for (const place of [
+      at("approved"),
+      at("pending"),
+      at("rejected", STRANGER),
+      at("approved", null),
+    ]) {
+      expect(isPlaceVisibleToAudienceOf(place, at("approved", FRIEND))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("an unshared other is never visible to a shared place's audience — not even its own creator's place", () => {
+    for (const status of ["pending", "rejected"] as const) {
+      expect(isPlaceVisibleToAudienceOf(at("approved"), at(status))).toBe(
+        false,
+      );
+      expect(
+        isPlaceVisibleToAudienceOf(at("approved", null), at(status, null)),
+      ).toBe(false);
+    }
+  });
+
+  it("an unshared place's audience is its creator: they see their own unshared places, nobody else's", () => {
+    expect(isPlaceVisibleToAudienceOf(at("pending"), at("rejected"))).toBe(
+      true,
+    );
+    expect(
+      isPlaceVisibleToAudienceOf(at("pending"), at("pending", STRANGER)),
+    ).toBe(false);
+    // No creator on either side is not a match.
+    expect(
+      isPlaceVisibleToAudienceOf(at("pending", null), at("pending", null)),
+    ).toBe(false);
   });
 });
 

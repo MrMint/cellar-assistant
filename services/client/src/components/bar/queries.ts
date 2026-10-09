@@ -104,12 +104,12 @@ export const SetBarPantryItemMutation = graphql(
  * D9. Selects the recipe's own `isLoved` back so the normalised cache
  * (`Recipe` is keyed by id) updates every view of it.
  */
-export const ToggleRecipeLoveMutation = graphql(
+export const SetRecipeLoveMutation = graphql(
   `
-  mutation ToggleRecipeLove($recipeId: ID!) {
-    toggleRecipeLove(recipeId: $recipeId) {
+  mutation SetRecipeLove($recipeId: ID!, $loved: Boolean!) {
+    setRecipeLove(recipeId: $recipeId, loved: $loved) {
       __typename
-      ... on ToggleRecipeLovePayload {
+      ... on SetRecipeLovePayload {
         recipeId
         loved
         recipe {

@@ -1538,7 +1538,7 @@ describe.skipIf(skip)("UserActor (B4)", () => {
   /* ---------------------------------------------------------------------- */
 
   describe("favorites are owner-only", () => {
-    it("toggles on and off, and nobody else can read or mutate them", async () => {
+    it("sets on and off idempotently, and nobody else can read or mutate them", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
         const bob = await seedPerson(db, "Bob");
@@ -1548,27 +1548,37 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const ref = { type: "TEA", id: teaId } as const;
 
         const actor = await userActor(alice, db);
-        expect(await actor.toggleFavorite(userCtx(alice, "r"), ref)).toEqual({
-          ref,
-          favorited: true,
-        });
+        expect(await actor.setFavorite(userCtx(alice, "r"), ref, true)).toEqual(
+          { ref, favorited: true, changed: true },
+        );
+        // A retried request (its first answer lost) lands on the same state:
+        // it used to be a toggle, and a retry un-favourited.
+        expect(await actor.setFavorite(userCtx(alice, "r"), ref, true)).toEqual(
+          { ref, favorited: true, changed: false },
+        );
         expect(
           nodes(await actor.favorites(userCtx(alice, "r"), firstPage)),
         ).toEqual([ref]);
+        expect(
+          await db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(itemFavorites)
+            .where(eq(itemFavorites.userId, alice)),
+        ).toEqual([{ n: 1 }]);
 
-        // A second toggle removes it — and `item_favorites` has no unique
-        // constraint for sake or tea, so this is the actor's own guard.
-        expect(await actor.toggleFavorite(userCtx(alice, "r"), ref)).toEqual({
-          ref,
-          favorited: false,
-        });
+        expect(
+          await actor.setFavorite(userCtx(alice, "r"), ref, false),
+        ).toEqual({ ref, favorited: false, changed: true });
+        expect(
+          await actor.setFavorite(userCtx(alice, "r"), ref, false),
+        ).toEqual({ ref, favorited: false, changed: false });
         expect(
           await db
             .select({ n: sql<number>`count(*)::int` })
             .from(itemFavorites)
             .where(eq(itemFavorites.userId, alice)),
         ).toEqual([{ n: 0 }]);
-        await actor.toggleFavorite(userCtx(alice, "r"), ref);
+        await actor.setFavorite(userCtx(alice, "r"), ref, true);
 
         // friend, stranger, anonymous — read and write alike.
         for (const viewer of [
@@ -1579,9 +1589,11 @@ describe.skipIf(skip)("UserActor (B4)", () => {
           await expect(actor.favorites(viewer, firstPage)).rejects.toThrow(
             ForbiddenError,
           );
-          await expect(actor.toggleFavorite(viewer, ref)).rejects.toThrow(
-            ForbiddenError,
-          );
+          for (const favorited of [true, false]) {
+            await expect(
+              actor.setFavorite(viewer, ref, favorited),
+            ).rejects.toThrow(ForbiddenError);
+          }
         }
         // Nothing the refused calls did leaked through.
         expect(
@@ -1605,10 +1617,11 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const favorited = await seedTea(db, alice);
         const notFavorited = await seedTea(db, alice);
         const actor = await userActor(alice, db);
-        await actor.toggleFavorite(userCtx(alice, "r"), {
-          type: "TEA",
-          id: favorited,
-        });
+        await actor.setFavorite(
+          userCtx(alice, "r"),
+          { type: "TEA", id: favorited },
+          true,
+        );
 
         expect(
           await actor.favoriteStates(userCtx(alice, "r"), [
@@ -1661,10 +1674,11 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         ] as const) {
           const theirs = await userActor(person, db);
           for (const id of ids) {
-            await theirs.toggleFavorite(userCtx(person, "r"), {
-              type: "TEA",
-              id,
-            });
+            await theirs.setFavorite(
+              userCtx(person, "r"),
+              { type: "TEA", id },
+              true,
+            );
           }
         }
 
@@ -1680,10 +1694,11 @@ describe.skipIf(skip)("UserActor (B4)", () => {
 
         // Fresh, not cached: Bob's un-favourite shows up on Alice's very
         // next call, though her activation never reloaded.
-        await (await userActor(bob, db)).toggleFavorite(userCtx(bob, "r"), {
-          type: "TEA",
-          id: popular,
-        });
+        await (await userActor(bob, db)).setFavorite(
+          userCtx(bob, "r"),
+          { type: "TEA", id: popular },
+          false,
+        );
         expect(
           await actor.favoriteCounts(userCtx(alice, "r"), [
             { type: "TEA", id: popular },
@@ -1709,23 +1724,44 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const alice = await seedPerson(db, "Alice");
         const actor = await userActor(alice, db);
         await expect(
-          actor.toggleFavorite(userCtx(alice, "r"), {
-            type: "TEA",
-            id: "00000000-0000-4000-8000-00000000dead",
-          }),
+          actor.setFavorite(
+            userCtx(alice, "r"),
+            { type: "TEA", id: "00000000-0000-4000-8000-00000000dead" },
+            true,
+          ),
         ).rejects.toThrow(NotFoundError);
+        // Un-favouriting something never favourited is already done: no
+        // existence check, nothing to refuse.
         await expect(
-          actor.toggleFavorite(userCtx(alice, "r"), {
-            type: "COCKTAIL" as never,
-            id: "00000000-0000-4000-8000-00000000dead",
-          }),
+          actor.setFavorite(
+            userCtx(alice, "r"),
+            { type: "TEA", id: "00000000-0000-4000-8000-00000000dead" },
+            false,
+          ),
+        ).resolves.toMatchObject({ favorited: false, changed: false });
+        await expect(
+          actor.setFavorite(
+            userCtx(alice, "r"),
+            {
+              type: "COCKTAIL" as never,
+              id: "00000000-0000-4000-8000-00000000dead",
+            },
+            true,
+          ),
+        ).rejects.toThrow(ValidationError);
+        await expect(
+          actor.setFavorite(
+            userCtx(alice, "r"),
+            { type: "TEA", id: "00000000-0000-4000-8000-00000000dead" },
+            "yes" as never,
+          ),
         ).rejects.toThrow(ValidationError);
       });
     });
 
     /**
      * Review W4 #3. The uuid check is case-insensitive and Postgres reads both
-     * spellings as one row, but the toggle's lookup is `===` against the
+     * spellings as one row, but the set's lookup is `===` against the
      * cached (lowercase) rows: an uppercase id used to miss the existing
      * favourite, fall through to the insert, and fail as a raw 23505 on
      * `item_favorites_user_id_tea_id_key` instead of un-favouriting.
@@ -1738,18 +1774,22 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const actor = await userActor(alice, db);
 
         expect(
-          await actor.toggleFavorite(userCtx(alice, "r"), {
-            type: "TEA",
-            id: teaId,
-          }),
+          await actor.setFavorite(
+            userCtx(alice, "r"),
+            { type: "TEA", id: teaId },
+            true,
+          ),
         ).toMatchObject({ favorited: true });
         expect(
           await actor.favoriteStates(userCtx(alice, "r"), [upper]),
         ).toEqual([`tea:${teaId}`]);
         // The answer names the canonical id, not the spelling it was given.
-        expect(await actor.toggleFavorite(userCtx(alice, "r"), upper)).toEqual({
+        expect(
+          await actor.setFavorite(userCtx(alice, "r"), upper, false),
+        ).toEqual({
           ref: { type: "TEA", id: teaId },
           favorited: false,
+          changed: true,
         });
         expect(
           await db
@@ -1939,6 +1979,73 @@ describe.skipIf(skip)("UserActor (B4)", () => {
           },
         ]);
         expect((await actor.wantToTry(ctx, firstPage)).totalCount).toBe(1);
+      });
+    });
+
+    it("deletes: a saved item RESTRICTs like item_favorites; a recipe still cascades, through its own index", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const teaId = await seedTea(db, alice);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        await actor.setWantToTry(
+          ctx,
+          { kind: "ITEM", item: { type: "TEA", id: teaId } },
+          true,
+        );
+
+        // In a savepoint: the refused statement must not poison the harness's
+        // transaction for the assertions after it.
+        const refused = await db
+          .transaction(async (sp) => {
+            await sp.execute(sql`delete from public.teas where id = ${teaId}`);
+          })
+          .then(
+            () => null,
+            (error: unknown) =>
+              (error as { cause?: { code?: string; constraint?: string } })
+                .cause ?? (error as { code?: string; constraint?: string }),
+          );
+        // 23001 restrict_violation — RESTRICT, not NO ACTION's 23503.
+        expect(refused).toMatchObject({
+          code: "23001",
+          constraint: "want_to_try_tea_id_teas_id_fkey",
+        });
+        expect(
+          nodes(await actor.wantToTry(ctx, firstPage)).map(
+            (entry) => entry.target.kind,
+          ),
+        ).toEqual(["ITEM"]);
+
+        // The catalog, for what the statement above cannot show: every rule,
+        // and the index the recipe cascade reads.
+        const rules = await db.execute<{ column: string; rule: string }>(sql`
+          select a.attname as column, c.confdeltype::text as rule
+          from pg_constraint c
+          join pg_attribute a
+            on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+          where c.conrelid = 'public.want_to_try'::regclass and c.contype = 'f'
+          order by a.attname
+        `);
+        expect(
+          Object.fromEntries(rules.rows.map((row) => [row.column, row.rule])),
+        ).toEqual({
+          beer_id: "r",
+          coffee_id: "r",
+          recipe_id: "c",
+          sake_id: "r",
+          spirit_id: "r",
+          tea_id: "r",
+          user_id: "r",
+          wine_id: "r",
+        });
+        const index = await db.execute<{ indexdef: string }>(sql`
+          select indexdef from pg_indexes
+          where schemaname = 'public' and indexname = 'idx_want_to_try_recipe_id'
+        `);
+        expect(index.rows[0]?.indexdef).toMatch(
+          /\(recipe_id\) WHERE \(recipe_id IS NOT NULL\)/,
+        );
       });
     });
 

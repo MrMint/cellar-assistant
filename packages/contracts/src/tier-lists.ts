@@ -357,13 +357,20 @@ export type TierListActorInterface = {
   editHistory(ctx: Ctx): Promise<TierListEditHistoryDto | null>;
   /**
    * D4: take back the latest edit not already undone, and record that as a
-   * new `UNDO` row (the log is append-only). Creator only. Nothing to undo
-   * is a `ConflictError`. A content change like any other edit: bumps
-   * `content_updated_at` and asks for insights.
+   * new `UNDO` row (the log is append-only). Creator only. A content change
+   * like any other edit: bumps `content_updated_at` and asks for insights.
+   *
+   * `expectedSeq` is the `seq` of the edit the caller means to take back —
+   * the `undo` its history showed. Anything else on top (or nothing) is a
+   * `ConflictError` with reason `TIER_LIST_HISTORY_MOVED` and no write, so a
+   * stale tab cannot undo an edit made since it last read the list.
    */
-  undo(ctx: Ctx): Promise<TierListHistoryStepResult>;
-  /** D4: put back the latest undone edit — `undo`'s mirror; a `REDO` row. */
-  redo(ctx: Ctx): Promise<TierListHistoryStepResult>;
+  undo(ctx: Ctx, expectedSeq: number): Promise<TierListHistoryStepResult>;
+  /**
+   * D4: put back the latest undone edit — `undo`'s mirror; a `REDO` row.
+   * `expectedSeq` is the edit the caller means to put back (`redo`).
+   */
+  redo(ctx: Ctx, expectedSeq: number): Promise<TierListHistoryStepResult>;
 
   /**
    * `system`, via the outbox — replaces the `tier_list_items_content_changed`

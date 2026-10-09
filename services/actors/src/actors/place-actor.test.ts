@@ -168,6 +168,7 @@ const seedPlace = async (
     createdById?: string | null;
     location?: { lng: number; lat: number };
     googlePlaceId?: string | null;
+    reviewStatus?: "pending" | "approved" | "rejected";
   } = {},
 ): Promise<string> => {
   const [row] = await db
@@ -178,6 +179,7 @@ const seedPlace = async (
       location: overrides.location ?? SAN_FRANCISCO,
       createdBy: overrides.createdById ?? null,
       source: "user",
+      reviewStatus: overrides.reviewStatus ?? "approved",
       ...(overrides.googlePlaceId === undefined
         ? {}
         : { googlePlaceId: overrides.googlePlaceId }),
@@ -692,6 +694,163 @@ describe.skipIf(skip)("PlaceActor (B5)", () => {
       });
       expect(result.status).toBe("collision");
       expect(result.collision?.boundToPlaceId).toBe(incumbent);
+    });
+  });
+
+  /**
+   * Wave B hardening: the holder of a Google listing can be another user's
+   * place still under review (X27). A collision must never name it, nor be
+   * an answer only its existence explains — it is treated as not there.
+   */
+  describe("enrichFromGoogle: a collision with a place the audience cannot see (no existence oracle)", () => {
+    const enrichedRow = async (db: DbOrTx, placeId: string) =>
+      (
+        await db
+          .select()
+          .from(placeGoogleEnrichments)
+          .where(eq(placeGoogleEnrichments.placeId, placeId))
+      )[0] ?? null;
+    const boundId = async (db: DbOrTx, placeId: string) =>
+      (
+        await db
+          .select({ googlePlaceId: places.googlePlaceId })
+          .from(places)
+          .where(eq(places.id, placeId))
+      )[0]?.googlePlaceId ?? null;
+
+    it.each(["pending", "rejected"] as const)(
+      "a shared place takes the listing from a %s draft — enriched, exactly as if the draft never claimed it",
+      async (status) => {
+        await withTestDb(async (db) => {
+          const drafter = await seedUser(db);
+          const draft = await seedPlace(db, {
+            name: "Someone's Draft",
+            createdById: drafter,
+            reviewStatus: status,
+            googlePlaceId: "ChIJ_VENUE",
+          });
+          await db.insert(placeGoogleEnrichments).values({
+            placeId: draft,
+            googlePlaceId: "ChIJ_VENUE",
+            resolvedVia: "autocomplete",
+          });
+          const shared = await seedPlace(db, { name: "The Venue" });
+
+          const actor = await activate(
+            newPlaceActor(shared, db, {
+              google: fakeGoogle({
+                textSearch: async () => ({ googlePlaceId: "ChIJ_VENUE" }),
+                details: async (id) => details(id),
+              }),
+            }),
+          );
+          const result = await actor.enrichFromGoogle(testDelivery("w"), {
+            maxPhotos: 0,
+          });
+
+          expect(result.status).toBe("enriched");
+          expect(result.collision).toBeNull();
+          // Not one byte of the answer refers to the draft.
+          expect(JSON.stringify(result)).not.toContain(draft);
+          expect(await boundId(db, shared)).toBe("ChIJ_VENUE");
+          expect((await enrichedRow(db, shared))?.googlePlaceId).toBe(
+            "ChIJ_VENUE",
+          );
+          // The draft's claim is gone; the draft itself is untouched.
+          expect(await boundId(db, draft)).toBeNull();
+          expect(await enrichedRow(db, draft)).toBeNull();
+          const [still] = await db
+            .select({ reviewStatus: places.reviewStatus })
+            .from(places)
+            .where(eq(places.id, draft));
+          expect(still?.reviewStatus).toBe(status);
+        });
+      },
+    );
+
+    it("a draft holding the listing only through its enrichment row is released too", async () => {
+      await withTestDb(async (db) => {
+        const drafter = await seedUser(db);
+        const draft = await seedPlace(db, {
+          createdById: drafter,
+          reviewStatus: "pending",
+        });
+        await db.insert(placeGoogleEnrichments).values({
+          placeId: draft,
+          googlePlaceId: "ChIJ_ROW_ONLY",
+          resolvedVia: "autocomplete",
+        });
+        const shared = await seedPlace(db, { name: "Real Venue" });
+        const actor = await activate(
+          newPlaceActor(shared, db, {
+            google: fakeGoogle({ details: async (id) => details(id) }),
+          }),
+        );
+        const result = await actor.enrichFromGoogle(testDelivery("v"), {
+          googlePlaceId: "ChIJ_ROW_ONLY",
+          maxPhotos: 0,
+        });
+        expect(result.status).toBe("enriched");
+        expect(JSON.stringify(result)).not.toContain(draft);
+        expect(await enrichedRow(db, draft)).toBeNull();
+      });
+    });
+
+    it("one creator's draft against another's: unresolved, naming nothing, writing nothing", async () => {
+      await withTestDb(async (db) => {
+        const alice = await seedUser(db);
+        const bob = await seedUser(db);
+        const bobsDraft = await seedPlace(db, {
+          createdById: bob,
+          reviewStatus: "pending",
+          googlePlaceId: "ChIJ_CONTESTED",
+        });
+        const alicesDraft = await seedPlace(db, {
+          createdById: alice,
+          reviewStatus: "pending",
+        });
+        const actor = await activate(
+          newPlaceActor(alicesDraft, db, {
+            google: fakeGoogle({
+              textSearch: async () => ({ googlePlaceId: "ChIJ_CONTESTED" }),
+              details: async () => {
+                throw new Error("no details are bought for a hidden claim");
+              },
+            }),
+          }),
+        );
+        const result = await actor.enrichFromGoogle(testDelivery("u"));
+        expect(result.status).toBe("unresolved");
+        expect(result.collision).toBeNull();
+        expect(JSON.stringify(result)).not.toContain(bobsDraft);
+        expect(await boundId(db, alicesDraft)).toBeNull();
+        expect(await boundId(db, bobsDraft)).toBe("ChIJ_CONTESTED");
+      });
+    });
+
+    it("the creator's own draft is visible to their own draft's audience: a named collision, as ever", async () => {
+      await withTestDb(async (db) => {
+        const alice = await seedUser(db);
+        const first = await seedPlace(db, {
+          createdById: alice,
+          reviewStatus: "rejected",
+          googlePlaceId: "ChIJ_MINE",
+        });
+        const second = await seedPlace(db, {
+          createdById: alice,
+          reviewStatus: "pending",
+        });
+        const actor = await activate(
+          newPlaceActor(second, db, {
+            google: fakeGoogle({
+              textSearch: async () => ({ googlePlaceId: "ChIJ_MINE" }),
+            }),
+          }),
+        );
+        const result = await actor.enrichFromGoogle(testDelivery("t"));
+        expect(result.status).toBe("collision");
+        expect(result.collision?.boundToPlaceId).toBe(first);
+      });
     });
   });
 

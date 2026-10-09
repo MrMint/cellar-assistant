@@ -197,8 +197,9 @@ describe("useOptimisticToggle", () => {
   });
 
   test("a write that flips instead of sets converges on the tapped state", async () => {
-    // `toggleFavorite`: the server was already on (another device), so the
-    // flip turned it off. The hook writes again rather than settle wrong.
+    // A flipping write (the old `toggleFavorite`): the server was already on
+    // (another device), so the flip turned it off. The hook writes again
+    // rather than settle wrong. Kept: the hook must not depend on sets.
     await mount(false);
     await tap();
     await answer(0, { ok: true, value: false });

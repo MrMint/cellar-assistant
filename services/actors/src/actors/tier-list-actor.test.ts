@@ -1692,8 +1692,8 @@ describe.skipIf(skip)("TierListActor concealment", () => {
       (actor, ctx) => actor.reorderBand(ctx, 3, [ENTRY]),
     ],
     ["editHistory", "NOT_FOUND", (actor, ctx) => actor.editHistory(ctx)],
-    ["undo", "NOT_FOUND", (actor, ctx) => actor.undo(ctx)],
-    ["redo", "NOT_FOUND", (actor, ctx) => actor.redo(ctx)],
+    ["undo", "NOT_FOUND", (actor, ctx) => actor.undo(ctx, 1)],
+    ["redo", "NOT_FOUND", (actor, ctx) => actor.redo(ctx, 1)],
     [
       "generateInsights",
       "FORBIDDEN",
@@ -1750,6 +1750,63 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
     for (const name of names) wines.push(await seedWine(db, owner, name));
     return { owner, id, actor, wines, ctx: userCtx(owner, "r-owner") };
   };
+
+  /** Undo / Redo the way the page does: naming the step its history shows. */
+  const undoTop = async (actor: TierListActor, ctx: Ctx) =>
+    actor.undo(ctx, (await actor.editHistory(ctx))?.undo?.seq ?? -1);
+  const redoTop = async (actor: TierListActor, ctx: Ctx) =>
+    actor.redo(ctx, (await actor.editHistory(ctx))?.redo?.seq ?? -1);
+
+  it("a stale tab cannot undo or redo an edit it never saw (expectedSeq)", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      // Tab A reads the history: its Undo button names edit 1.
+      const tabA = await actor.editHistory(ctx);
+      expect(tabA?.undo?.seq).toBe(1);
+
+      // Tab B (another device) adds a second wine — edit 2.
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[1] ?? "" } });
+      const logBefore = await db
+        .select({ seq: tierListHistory.seq })
+        .from(tierListHistory)
+        .where(eq(tierListHistory.tierListId, id));
+
+      // Tab A's Undo still names edit 1. It used to take back edit 2.
+      const refused = await actor.undo(ctx, tabA?.undo?.seq ?? 0).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refused).toBeInstanceOf(ConflictError);
+      expect(refused).toMatchObject({ reason: "TIER_LIST_HISTORY_MOVED" });
+      // Nothing written: both wines still ranked, no UNDO row.
+      expect(await board(actor, ctx)).toHaveLength(2);
+      expect(
+        await db
+          .select({ seq: tierListHistory.seq })
+          .from(tierListHistory)
+          .where(eq(tierListHistory.tierListId, id)),
+      ).toHaveLength(logBefore.length);
+
+      // Naming the edit on top works, and Redo is held to the same rule.
+      const step = await actor.undo(ctx, 2);
+      expect(step.applied).toMatchObject({ seq: 2, kind: "ADD" });
+      expect(step.history.redo?.seq).toBe(2);
+      await expect(actor.redo(ctx, 1)).rejects.toMatchObject({
+        code: "CONFLICT",
+        reason: "TIER_LIST_HISTORY_MOVED",
+      });
+      await expect(actor.redo(ctx, 2)).resolves.toMatchObject({
+        applied: { seq: 2 },
+      });
+      // An undo naming no step at all is malformed, not a conflict.
+      for (const bad of [0, -1, 1.5, Number.NaN, "2" as never]) {
+        await expect(actor.undo(ctx, bad)).rejects.toBeInstanceOf(
+          ValidationError,
+        );
+      }
+    });
+  });
 
   it("records every edit, and nothing for a no-op reorder", async () => {
     await withTestDb(async (db) => {
@@ -1812,7 +1869,7 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
       await actor.removeItem(ctx, middle.id);
       expect(await board(actor, ctx)).toHaveLength(2);
 
-      const step = await actor.undo(ctx);
+      const step = await undoTop(actor, ctx);
       expect(step.applied).toMatchObject({ kind: "REMOVE", entryName: "B" });
       expect(step.history.redo).toMatchObject({ kind: "REMOVE" });
       expect(await board(actor, ctx)).toEqual(before);
@@ -1821,7 +1878,7 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
       );
       expect(restored?.node.notes).toBe("the middle one");
 
-      await actor.redo(ctx);
+      await redoTop(actor, ctx);
       expect(await board(actor, ctx)).toEqual(
         before
           .filter((cell) => !cell.endsWith(String(wines[1])))
@@ -1850,11 +1907,11 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
         toBand: 5,
       });
 
-      await actor.undo(ctx);
+      await undoTop(actor, ctx);
       expect(await board(actor, ctx)).toEqual(start);
 
       // Undo the third ADD too: the newest add leaves, the rest stay put.
-      await actor.undo(ctx);
+      await undoTop(actor, ctx);
       expect(await board(actor, ctx)).toEqual(start.slice(0, 2));
       expect(await actor.editHistory(ctx)).toMatchObject({
         undo: { kind: "ADD", entry: { id: wines[1] } },
@@ -1862,9 +1919,9 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
       });
 
       // Redo both, in order.
-      await actor.redo(ctx);
+      await redoTop(actor, ctx);
       expect(await board(actor, ctx)).toEqual(start);
-      await actor.redo(ctx);
+      await redoTop(actor, ctx);
       expect((await board(actor, ctx))[0]).toBe(`5:0:${wines[0]}`);
       expect((await actor.editHistory(ctx))?.redo).toBeNull();
     });
@@ -1873,16 +1930,16 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
   it("a new edit after an undo clears redo; nothing to undo is a conflict", async () => {
     await withTestDb(async (db) => {
       const { actor, wines, ctx } = await setup(db);
-      await expect(actor.undo(ctx)).rejects.toBeInstanceOf(ConflictError);
+      await expect(actor.undo(ctx, 1)).rejects.toBeInstanceOf(ConflictError);
       await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
-      await actor.undo(ctx);
+      await undoTop(actor, ctx);
       expect((await actor.editHistory(ctx))?.redo).not.toBeNull();
       await actor.addItem(ctx, { entry: { type: "WINE", id: wines[1] ?? "" } });
       expect(await actor.editHistory(ctx)).toMatchObject({
         editCount: 2,
         redo: null,
       });
-      await expect(actor.redo(ctx)).rejects.toBeInstanceOf(ConflictError);
+      await expect(actor.redo(ctx, 2)).rejects.toBeInstanceOf(ConflictError);
     });
   });
 
@@ -1891,7 +1948,7 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
       const { id, actor, wines, ctx } = await setup(db);
       await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
       await actor.addItem(ctx, { entry: { type: "WINE", id: wines[1] ?? "" } });
-      await actor.undo(ctx);
+      await undoTop(actor, ctx);
 
       const fresh = await activate(newTierListActor(id, db));
       expect(await fresh.editHistory(ctx)).toMatchObject({
@@ -1899,7 +1956,7 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
         undo: { kind: "ADD", entry: { id: wines[0] } },
         redo: { kind: "ADD", entry: { id: wines[1] } },
       });
-      await fresh.redo(ctx);
+      await redoTop(fresh, ctx);
       expect(await board(fresh, ctx)).toHaveLength(2);
     });
   });
@@ -1920,7 +1977,7 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
       });
       const friendCtx = userCtx(friend, "r-friend");
       expect(await actor.editHistory(friendCtx)).toBeNull();
-      await expect(actor.undo(friendCtx)).rejects.toBeInstanceOf(
+      await expect(actor.undo(friendCtx, 1)).rejects.toBeInstanceOf(
         ForbiddenError,
       );
     });
@@ -1942,8 +1999,15 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
       });
       const fresh = await activate(newTierListActor(id, db));
       const before = await board(fresh, ctx);
+      // The history names it (by seq and kind), so the page can offer the
+      // step — Undo takes the seq it names.
+      expect((await fresh.editHistory(ctx))?.undo).toMatchObject({
+        seq: 2,
+        kind: "ADD",
+        entryName: null,
+      });
 
-      const step = await fresh.undo(ctx);
+      const step = await undoTop(fresh, ctx);
       expect(step.applied).toMatchObject({
         seq: 2,
         kind: "ADD",
@@ -1991,7 +2055,7 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
       await db.execute(
         sql`update public.outbox set status = 'delivered' where target_id = ${id}`,
       );
-      await actor.undo(ctx);
+      await undoTop(actor, ctx);
       const after = await contentUpdatedAt(db, id);
       expect(after?.getTime()).toBeGreaterThanOrEqual(before?.getTime() ?? 0);
       expect(await liveOutboxRowsFor(db, id)).toHaveLength(1);

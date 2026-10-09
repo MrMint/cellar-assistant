@@ -5,10 +5,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  addedEditSeq,
   bandForScore,
   editPhrase,
   historyActionLabel,
+  historyStepFailure,
   historyStepMessage,
+  stepSeq,
   type TierListEditView,
 } from "./history";
 
@@ -103,5 +106,66 @@ describe("history wording", () => {
       historyStepMessage("undo", edit({ entryName: null, fromBand: null })),
       "Put the list back in order",
     );
+  });
+});
+
+describe("stepSeq and historyStepFailure (expectedSeq, wave B)", () => {
+  const edit: TierListEditView = {
+    seq: 4,
+    kind: "ADD",
+    entryName: "Barolo",
+    fromBand: null,
+    toBand: 5,
+  };
+
+  test("names the edit each direction would take, or null when unknown", () => {
+    const history = { canUndo: true, canRedo: true, undo: edit, redo: null };
+    assert.equal(stepSeq(history, "undo"), 4);
+    assert.equal(stepSeq(history, "redo"), null);
+    // Just after an edit on this page: undoable, but which edit is not
+    // known until the refresh — null, so the page waits rather than guess.
+    assert.equal(
+      stepSeq(
+        { canUndo: true, canRedo: false, undo: null, redo: null },
+        "undo",
+      ),
+      null,
+    );
+  });
+
+  test("a moved history says the list changed elsewhere and nothing was done", () => {
+    const moved = { code: "CONFLICT", reason: "TIER_LIST_HISTORY_MOVED" };
+    assert.match(historyStepFailure("undo", moved), /changed somewhere else/);
+    assert.match(historyStepFailure("undo", moved), /nothing was undone/);
+    assert.match(historyStepFailure("redo", moved), /nothing was redone/);
+    assert.equal(
+      historyStepFailure("redo", { code: "CONFLICT", reason: null }),
+      "Nothing to redo on this list any more.",
+    );
+    assert.equal(
+      historyStepFailure("undo", { code: "FORBIDDEN", reason: null }),
+      "Couldn't undo that. Try again.",
+    );
+  });
+});
+
+describe("addedEditSeq (the add's own Undo)", () => {
+  test("the newest edit, when it is an ADD of this very entry", () => {
+    assert.equal(
+      addedEditSeq({ seq: 9, kind: "ADD", entryId: "W-1" }, "w-1"),
+      9,
+    );
+  });
+
+  test("anything else is null: no Undo rather than the wrong one", () => {
+    for (const undo of [
+      null,
+      undefined,
+      { seq: 9, kind: "ADD", entryId: "w-2" },
+      { seq: 9, kind: "REMOVE", entryId: "w-1" },
+      { seq: 9, kind: "ADD", entryId: null },
+    ]) {
+      assert.equal(addedEditSeq(undo, "w-1"), null);
+    }
   });
 });

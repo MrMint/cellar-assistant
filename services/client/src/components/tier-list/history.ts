@@ -83,6 +83,58 @@ export function historyActionLabel(
 }
 
 /**
+ * The edit an Undo or Redo would take, by `seq` — what the mutation's
+ * `expectedSeq` names. Null when the page does not know it yet (just after an
+ * edit, before the refreshed history arrives) or there is nothing to take.
+ */
+export function stepSeq(
+  history: TierListHistoryView,
+  direction: "undo" | "redo",
+): number | null {
+  const edit = direction === "undo" ? history.undo : history.redo;
+  return edit?.seq ?? null;
+}
+
+/**
+ * The `seq` of the add just made, read back with it: the list's newest
+ * undoable edit, when that is an ADD of this very entry. Anything else (an
+ * edit from another device landed in between, or the history is hidden) is
+ * null, and the add's toast then has no Undo to offer rather than one that
+ * could take back something else.
+ */
+export function addedEditSeq(
+  undo:
+    | { seq: number; kind: string; entryId?: string | null }
+    | null
+    | undefined,
+  entityId: string,
+): number | null {
+  if (undo === null || undo === undefined || undo.kind !== "ADD") return null;
+  return undo.entryId?.toLowerCase() === entityId.toLowerCase()
+    ? undo.seq
+    : null;
+}
+
+/**
+ * Why a step was refused, in the person's words. The one refusal they can
+ * meet is another tab or device having changed the list since this page read
+ * it (`TIER_LIST_HISTORY_MOVED`): the step it named is no longer the one on
+ * top, so nothing was undone, and the page shows where the list stands now.
+ */
+export function historyStepFailure(
+  direction: "undo" | "redo",
+  error: { code: string; reason: string | null },
+): string {
+  if (error.reason === "TIER_LIST_HISTORY_MOVED") {
+    const done = direction === "undo" ? "undone" : "redone";
+    return `This list changed somewhere else, so nothing was ${done}. Here's where it stands now.`;
+  }
+  return error.code === "CONFLICT"
+    ? `Nothing to ${direction} on this list any more.`
+    : `Couldn't ${direction} that. Try again.`;
+}
+
+/**
  * The toast after an Undo or Redo, saying what changed on the board rather
  * than naming the mechanism: "Put Barolo back in Good", "Moved Barolo to
  * Outstanding again".

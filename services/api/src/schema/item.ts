@@ -1307,7 +1307,8 @@ builder.mutationField("linkItemBrand", (t) =>
     type: ItemBrandType,
     description:
       "The item creator's alone (today's `item_brands` insert check). " +
-      "`brandId` comes from `resolveBrand`, never from a client-invented id.",
+      "`brandId` comes from `resolveBrand`, never from a client-invented id; " +
+      "one that names no brand is a `NotFoundError`.",
     errors: {},
     args: {
       type: t.arg({ type: ItemTypeEnum, required: true }),
@@ -1331,6 +1332,10 @@ builder.mutationField("linkItemBrand", (t) =>
 builder.mutationField("unlinkItemBrand", (t) =>
   t.field({
     type: UnlinkedItemBrandType,
+    description:
+      "The item creator's alone. Idempotent: a brand that is not linked — " +
+      "never was, or an earlier call already unlinked it — answers the same " +
+      "`UnlinkedItemBrand`, so a retried clear succeeds instead of NotFound.",
     errors: {},
     args: {
       type: t.arg({ type: ItemTypeEnum, required: true }),

@@ -894,12 +894,18 @@ export class TierListActor
     return await this.#describeHistory(aggregate);
   }
 
-  async undo(ctx: Ctx): Promise<TierListHistoryStepResult> {
-    return await this.#step(ctx, "UNDO");
+  async undo(
+    ctx: Ctx,
+    expectedSeq: number,
+  ): Promise<TierListHistoryStepResult> {
+    return await this.#step(ctx, "UNDO", expectedSeq);
   }
 
-  async redo(ctx: Ctx): Promise<TierListHistoryStepResult> {
-    return await this.#step(ctx, "REDO");
+  async redo(
+    ctx: Ctx,
+    expectedSeq: number,
+  ): Promise<TierListHistoryStepResult> {
+    return await this.#step(ctx, "REDO", expectedSeq);
   }
 
   /**
@@ -912,20 +918,46 @@ export class TierListActor
    * touched band ends at clean `0..n-1`. The step is recorded either way, so
    * the stacks always advance — a history that refused to move past one
    * stale edit would strand every edit beneath it.
+   *
+   * **Only the edit the caller names** (wave B hardening): `expectedSeq` must
+   * be the edit on top of the stack. The history is per list, not per tab,
+   * so a tab that read it an hour ago and then pressed Undo used to take back
+   * whatever was newest — possibly an edit made since on another device,
+   * which that tab never showed. A mismatch writes nothing and says why
+   * (`TIER_LIST_HISTORY_MOVED`). The stack is read from this activation's
+   * aggregate, which every edit reloads in the same turn, so the comparison
+   * and the write cannot interleave with another edit (one turn at a time).
    */
   async #step(
     ctx: Ctx,
     direction: "UNDO" | "REDO",
+    expectedSeq: number,
   ): Promise<TierListHistoryStepResult> {
     const aggregate = this.requireAggregate();
     const what = direction === "UNDO" ? "undo" : "redo";
     await this.#requireCreator(ctx, aggregate, `${what} edits to this list`);
+    if (!Number.isSafeInteger(expectedSeq) || expectedSeq < 1) {
+      throw new ValidationError(
+        `expectedSeq must be the seq of the edit to ${what} (an integer from 1)`,
+      );
+    }
 
     const stacks = historyStacks(aggregate.history);
     const stack = direction === "UNDO" ? stacks.undo : stacks.redo;
     const targetSeq = stack[stack.length - 1];
     if (targetSeq === undefined) {
-      throw new ConflictError(`there is nothing to ${what} on this list`);
+      throw new ConflictError(
+        `there is nothing to ${what} on this list (expected edit ` +
+          `${String(expectedSeq)}); it changed since it was read`,
+        "TIER_LIST_HISTORY_MOVED",
+      );
+    }
+    if (targetSeq !== expectedSeq) {
+      throw new ConflictError(
+        `the edit to ${what} on this list is ${String(targetSeq)}, not ` +
+          `${String(expectedSeq)}; it changed since it was read`,
+        "TIER_LIST_HISTORY_MOVED",
+      );
     }
     const [target] = await this.#historyRows([targetSeq]);
     if (target === undefined) {
@@ -1187,6 +1219,26 @@ export class TierListActor
       const change = parseChange(row.kind, row.change);
       return change === null ? [] : [{ row, change }];
     });
+    // A row whose snapshot no longer parses is still a step on the stack: it
+    // is described by its seq and kind alone, so `editHistory` can name it —
+    // Undo and Redo take an `expectedSeq`, and a step the page cannot name is
+    // a step it could never take (`#step` steps past it, applying nothing).
+    const unparsed = new Map(
+      rows
+        .filter((row) => parseChange(row.kind, row.change) === null)
+        .map((row): [number, TierListEditDto] => [
+          row.seq,
+          {
+            seq: row.seq,
+            kind: isEditKind(row.kind) ? row.kind : "MOVE",
+            entry: null,
+            entryName: null,
+            fromBand: null,
+            toBand: null,
+            at: row.createdAt.toISOString(),
+          },
+        ]),
+    );
     const refs = parsed.flatMap(({ change }) => {
       const ref =
         change.kind === "MOVE" ? change.subject?.entry : change.row.entry;
@@ -1196,7 +1248,7 @@ export class TierListActor
       refs.length === 0
         ? new Map()
         : await resolveTierListEntries(this.db, refs);
-    return parsed.map(({ row, change }): TierListEditDto => {
+    const described = parsed.map(({ row, change }): TierListEditDto => {
       const entry =
         change.kind === "MOVE"
           ? (change.subject?.entry ?? null)
@@ -1225,6 +1277,7 @@ export class TierListActor
         at,
       };
     });
+    return [...described, ...unparsed.values()].sort((a, b) => a.seq - b.seq);
   }
 
   /**

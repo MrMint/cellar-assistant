@@ -73,6 +73,7 @@ import {
   bandForScore,
   historyActionLabel,
   historyStepMessage,
+  stepSeq,
   type TierListHistoryView,
 } from "./history";
 import { TierListInsightsPanel } from "./insights/TierListInsightsPanel";
@@ -102,6 +103,15 @@ function Hint({ label, children }: { label: string; children: ReactElement }) {
 
 const TRIGGER =
   "h-full rounded-sm font-medium text-ink-2 data-[state=active]:bg-surface-3 data-[state=active]:text-ink-1 dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-surface-3";
+
+/**
+ * How long an Undo tapped right after an edit on this page waits for the
+ * refreshed history to name that edit (`markEdited` cannot know its seq),
+ * and how often it looks. The refresh is a few hundred ms; past this the
+ * tap says so instead of stepping blind.
+ */
+const STEP_SEQ_WAIT_MS = 4000;
+const STEP_SEQ_POLL_MS = 100;
 
 const NO_HISTORY: TierListHistoryView = {
   canUndo: false,
@@ -170,6 +180,39 @@ export function TierListViewPage({
   const { history, setHistory, markEdited } = useHistory(data.history);
   const [stepping, setStepping] = useState(false);
   const steppingRef = useRef(false);
+  /** The latest history, for a step that waits on the refresh to name it. */
+  const historyRef = useRef(history);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+
+  /**
+   * The `seq` an Undo or Redo names (`expectedSeq`): the step the page
+   * shows. Just after an edit made here the page knows *that* it can undo but
+   * not *which* edit until the refresh lands, so it waits for that — never
+   * steps blind, which is what let a stale tab take back another tab's edit.
+   *
+   * `"nothing"` when the history it now holds has no such step (a refresh
+   * after another tab's change can take it away); `"pending"` when the
+   * refresh has not named it within `STEP_SEQ_WAIT_MS`.
+   */
+  const seqToStep = useCallback(
+    async (
+      direction: "undo" | "redo",
+    ): Promise<number | "nothing" | "pending"> => {
+      for (let waited = 0; ; waited += STEP_SEQ_POLL_MS) {
+        const current = historyRef.current;
+        const seq = stepSeq(current, direction);
+        if (seq !== null) return seq;
+        const possible =
+          direction === "undo" ? current.canUndo : current.canRedo;
+        if (!possible) return "nothing";
+        if (waited >= STEP_SEQ_WAIT_MS) return "pending";
+        await new Promise((resolve) => setTimeout(resolve, STEP_SEQ_POLL_MS));
+      }
+    },
+    [],
+  );
 
   const canArrange = data.isOwner;
   const isArranging = canArrange && arranging;
@@ -206,14 +249,28 @@ export function TierListViewPage({
    * an Undo by mistake is itself one tap from being taken back.
    */
   const step = useCallback(
-    async (direction: "undo" | "redo") => {
+    async (direction: "undo" | "redo", expected?: number) => {
       if (steppingRef.current) return;
       steppingRef.current = true;
       setStepping(true);
+      const expectedSeq = expected ?? (await seqToStep(direction));
+      if (typeof expectedSeq !== "number") {
+        steppingRef.current = false;
+        setStepping(false);
+        const verb = direction === "undo" ? "Undo" : "Redo";
+        notify(
+          expectedSeq === "nothing"
+            ? `Nothing to ${direction} on this list any more.`
+            : `Still catching up with your last change. Try ${verb} again.`,
+          { tone: "error", id: TIER_LIST_EDIT_TOAST },
+        );
+        router.refresh();
+        return;
+      }
       const result =
         direction === "undo"
-          ? await undoAction(data.id)
-          : await redoAction(data.id);
+          ? await undoAction(data.id, expectedSeq)
+          : await redoAction(data.id, expectedSeq);
       steppingRef.current = false;
       setStepping(false);
       if (!result.success) {
@@ -226,11 +283,13 @@ export function TierListViewPage({
       notify(historyStepMessage(direction, result.applied), {
         id: TIER_LIST_EDIT_TOAST,
         actionLabel: opposite === "redo" ? "Redo" : "Undo",
-        undo: () => void step(opposite),
+        // The opposite step is this very edit: name it, so the toast can
+        // only ever reverse what it announced.
+        undo: () => void step(opposite, result.applied.seq),
       });
       router.refresh();
     },
-    [data.id, redoAction, router, setHistory, undoAction],
+    [data.id, redoAction, router, seqToStep, setHistory, undoAction],
   );
 
   // ⌘Z / ⇧⌘Z (Ctrl on other systems) while arranging, outside text fields
@@ -274,9 +333,12 @@ export function TierListViewPage({
       }
       setAddOpen(false);
       markEdited();
+      // The add's own edit, read back with it: the toast's Undo takes back
+      // exactly that, or is not offered (`addedEditSeq`).
+      const editSeq = result.editSeq ?? null;
       notify(`Added ${candidate.name} to ${BAND_LABELS[band]}`, {
         id: TIER_LIST_EDIT_TOAST,
-        undo: () => void step("undo"),
+        ...(editSeq === null ? {} : { undo: () => void step("undo", editSeq) }),
       });
       router.refresh();
     },

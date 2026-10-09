@@ -157,17 +157,33 @@ export function AddToTierListModal({
     setNewListName(`My ${ENTITY_TYPE_LABELS[entityType]} Tier List`);
   }, [open, entityType]);
 
-  /** The add's toast: where it went, and an Undo that takes it back. */
+  /**
+   * The add's toast: where it went, and an Undo that takes back exactly that
+   * add (`editSeq`, read back with it) — or no Undo at all when the add's
+   * edit could not be named, rather than one that might take back another
+   * device's newer edit.
+   */
   const added = useCallback(
-    (tierListId: string, listName: string) => {
-      notify(`Added to ${listName} · ${BAND_LABELS[band]}`, {
+    (tierListId: string, listName: string, editSeq: number | null) => {
+      const message = `Added to ${listName} · ${BAND_LABELS[band]}`;
+      if (editSeq === null) {
+        notify(message);
+        return;
+      }
+      notify(message, {
         undo: () => {
-          void undoAction(tierListId).then((result) => {
+          void undoAction(tierListId, editSeq).then((result) => {
             if (result.success) {
               notify(`Took ${entityName} off ${listName}`);
               router.refresh();
             } else {
-              fail(result.error);
+              // This page does not show the list, so the list page's "here's
+              // where it stands now" would point at nothing.
+              fail(
+                result.moved === true
+                  ? `${listName} changed somewhere else, so nothing was undone.`
+                  : result.error,
+              );
             }
           });
         },
@@ -189,7 +205,7 @@ export function AddToTierListModal({
         if (result.success) {
           router.refresh();
           onClose();
-          added(tierListId, listName);
+          added(tierListId, listName, result.editSeq ?? null);
         } else {
           fail(result.error ?? "Failed to add item to tier list");
         }
@@ -235,7 +251,7 @@ export function AddToTierListModal({
       if (result.success) {
         router.refresh();
         onClose();
-        added(created.tierListId, name);
+        added(created.tierListId, name, result.editSeq ?? null);
       } else {
         fail(result.error ?? "Failed to add item to tier list");
       }

@@ -95,7 +95,7 @@ describe.skipIf(skip)("UserActor — Bar pantry (D23)", () => {
 });
 
 describe.skipIf(skip)("UserActor — recipe Love (D9)", () => {
-  it("toggles a Love, answers states in a batch, and lists newest first", async () => {
+  it("sets a Love idempotently, answers states in a batch, and lists newest first", async () => {
     await withTestDb(async (db) => {
       const me = await seedUser(db);
       const first = await seedRecipe(db, { name: "Negroni" });
@@ -103,12 +103,20 @@ describe.skipIf(skip)("UserActor — recipe Love (D9)", () => {
       const actor = await actorOf(me, db);
       const ctx = userCtx(me);
 
-      expect(await actor.toggleRecipeLove(ctx, first)).toEqual({
+      expect(await actor.setRecipeLove(ctx, first, true)).toEqual({
         recipeId: first,
         loved: true,
+        changed: true,
+      });
+      // The retry of a request whose answer was lost: still loved. This was
+      // `toggleRecipeLove`, and the retry took the Love back.
+      expect(await actor.setRecipeLove(ctx, first, true)).toEqual({
+        recipeId: first,
+        loved: true,
+        changed: false,
       });
       await new Promise((resolve) => setTimeout(resolve, 5));
-      await actor.toggleRecipeLove(ctx, second);
+      await actor.setRecipeLove(ctx, second, true);
       expect(
         await actor.recipeLoveStates(ctx, [first, second, randomUUID()]),
       ).toEqual([first, second]);
@@ -119,9 +127,15 @@ describe.skipIf(skip)("UserActor — recipe Love (D9)", () => {
       const loved = await actor.lovedRecipes(ctx, pageArgs({ first: 10 }));
       expect(loved.entries.map((entry) => entry.node)).toEqual([second, first]);
 
-      expect(await actor.toggleRecipeLove(ctx, first)).toEqual({
+      expect(await actor.setRecipeLove(ctx, first, false)).toEqual({
         recipeId: first,
         loved: false,
+        changed: true,
+      });
+      expect(await actor.setRecipeLove(ctx, first, false)).toEqual({
+        recipeId: first,
+        loved: false,
+        changed: false,
       });
       expect(await actor.recipeLoveStates(ctx, [first])).toEqual([]);
     });
@@ -134,8 +148,8 @@ describe.skipIf(skip)("UserActor — recipe Love (D9)", () => {
       const gone = await seedRecipe(db, { name: "Bijou" });
       const actor = await actorOf(me, db);
       const ctx = userCtx(me);
-      await actor.toggleRecipeLove(ctx, kept);
-      await actor.toggleRecipeLove(ctx, gone);
+      await actor.setRecipeLove(ctx, kept, true);
+      await actor.setRecipeLove(ctx, gone, true);
       // Deleted by its author: the Love goes with it by cascade, behind this
       // actor's cached aggregate.
       await db.execute(
@@ -153,11 +167,14 @@ describe.skipIf(skip)("UserActor — recipe Love (D9)", () => {
       const recipe = await seedRecipe(db, { name: "Sazerac" });
       const actor = await actorOf(me, db);
       await expect(
-        actor.toggleRecipeLove(userCtx(me), randomUUID()),
+        actor.setRecipeLove(userCtx(me), randomUUID(), true),
       ).rejects.toBeInstanceOf(NotFoundError);
       await expect(
-        actor.toggleRecipeLove(userCtx(other), recipe),
+        actor.setRecipeLove(userCtx(other), recipe, true),
       ).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(
+        actor.setRecipeLove(userCtx(me), recipe, "on" as never),
+      ).rejects.toBeInstanceOf(ValidationError);
       await expect(
         actor.recipeLoveStates(userCtx(other), [recipe]),
       ).rejects.toBeInstanceOf(ForbiddenError);
