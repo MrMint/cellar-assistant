@@ -188,10 +188,11 @@ test("a retried favourite stays favourited (setFavorite)", async () => {
   test.skip(wineId === undefined, "the account has no wine to favourite");
   const id = wineId ?? "";
   const states = await api.query(
-    `query S($id: ID!) { item(type: WINE, id: $id) { __typename ... on Item { isFavorite } } }`,
+    `query S($id: ID!) { item(type: WINE, id: $id) {
+       __typename ... on QueryItemSuccess { data { isFavorite } } } }`,
     { id },
   );
-  favouriteWine = { id, was: states.item?.isFavorite === true };
+  favouriteWine = { id, was: states.item?.data?.isFavorite === true };
 
   await setFavorite(id, false);
   expect(await setFavorite(id, true)).toMatchObject({
