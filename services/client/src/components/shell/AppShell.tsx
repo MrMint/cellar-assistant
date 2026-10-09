@@ -1,5 +1,6 @@
 import { AppShell as AppChrome } from "@/components/app/AppShell";
 import { InstallPwaDialog } from "@/components/common/InstallPwaDialog";
+import { AiJobWatcher } from "@/components/home/AiJobWatcher";
 import { ApiUrqlProvider } from "@/components/providers/ApiUrqlProvider";
 import { ModalPointerGuard } from "./ModalPointerGuard";
 
@@ -24,6 +25,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppChrome>{children}</AppChrome>
       <InstallPwaDialog />
       <ModalPointerGuard />
+      {/* X10: polls the viewer's AI work while it runs and toasts what
+          finishes, wherever the person has gone. */}
+      <AiJobWatcher />
     </ApiUrqlProvider>
   );
 }

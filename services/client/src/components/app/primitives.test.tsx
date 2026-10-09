@@ -50,7 +50,8 @@ describe("nav: which tab is lit", () => {
     assert.equal(activeTab("/cellars/abc/items"), "cellar");
     assert.equal(activeTab("/recipes/1"), "cellar");
     assert.equal(activeTab("/map"), "map");
-    assert.equal(activeTab("/map/scans"), "map");
+    assert.equal(activeTab("/map/scans/s1"), "map");
+    assert.equal(activeTab("/discoveries"), undefined, "X10 redirects it Home");
     assert.equal(activeTab("/places/9"), "map");
     assert.equal(activeTab("/me"), "me");
     assert.equal(activeTab("/tier-lists/3"), "me");
@@ -86,7 +87,8 @@ describe("nav: which tab is lit", () => {
         (entry) => /^\(.+\)$/.test(entry) && hasPage(`${dir}/${entry}`),
       );
     };
-    const missing = hrefs.filter((href) => href !== "/" && !routeExists(href));
+    // `/` too, since X10 gave Home a page of its own (`(home)/page.tsx`).
+    const missing = hrefs.filter((href) => !routeExists(href));
     assert.deepEqual(
       missing.filter((m) => m !== "/me"),
       [],
@@ -106,18 +108,30 @@ describe("AppShell: the content area per route", () => {
     assert.deepEqual(contentLayout("/cellars"), {
       padded: true,
       scrolls: true,
+      tabBar: true,
     });
   });
   test("map routes are edge to edge; only the canvas clips", () => {
-    assert.deepEqual(contentLayout("/map"), { padded: false, scrolls: false });
-    assert.deepEqual(contentLayout("/map/scans"), {
+    assert.deepEqual(contentLayout("/map"), {
+      padded: false,
+      scrolls: false,
+      tabBar: true,
+    });
+    assert.deepEqual(contentLayout("/map/scans/s1"), {
       padded: false,
       scrolls: true,
+      tabBar: true,
     });
     assert.deepEqual(contentLayout("/mapping"), {
       padded: true,
       scrolls: true,
+      tabBar: true,
     });
+  });
+  test("X10: the search sheet is full screen — no tab bar on /search alone", () => {
+    assert.equal(contentLayout("/search").tabBar, false);
+    assert.equal(contentLayout("/").tabBar, true);
+    assert.equal(contentLayout("/searching").tabBar, true);
   });
 });
 

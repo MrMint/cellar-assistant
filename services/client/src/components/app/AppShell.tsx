@@ -17,9 +17,16 @@ import { TabBar } from "./TabBar";
 export function contentLayout(pathname: string): {
   padded: boolean;
   scrolls: boolean;
+  tabBar: boolean;
 } {
   const isMap = pathname === "/map" || pathname.startsWith("/map/");
-  return { padded: !isMap, scrolls: pathname !== "/map" };
+  return {
+    padded: !isMap,
+    scrolls: pathname !== "/map",
+    // X10: search is a full-screen sheet on a phone, and a full-screen sheet
+    // hides the tab bar (design §2). The side rail stays from `sm` up.
+    tabBar: pathname !== "/search",
+  };
 }
 
 /**
@@ -36,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
   useNavHistoryTracker();
   usePointerDownPrefetch();
-  const { padded, scrolls } = contentLayout(pathname);
+  const { padded, scrolls, tabBar } = contentLayout(pathname);
 
   return (
     <div
@@ -62,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      <TabBar className="sm:hidden" />
+      {tabBar && <TabBar className="sm:hidden" />}
     </div>
   );
 }

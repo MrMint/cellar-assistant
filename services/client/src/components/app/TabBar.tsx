@@ -21,7 +21,8 @@ export const opensElsewhere = (event: MouseEvent<HTMLAnchorElement>): boolean =>
 
 /**
  * Re-tapping the active tab (D26): scroll its page to the top first; already
- * at the top, pop to the tab's root. Returns whether it handled the tap.
+ * at the top, pop to the tab's root; already at the root, go where the tab's
+ * `rootTap` says (Home: search, X10). Returns whether it handled the tap.
  */
 export function handleActiveTabTap(
   tab: Tab,
@@ -37,6 +38,10 @@ export function handleActiveTabTap(
   }
   if (pathname !== tab.href) {
     navigate(tab.href);
+    return true;
+  }
+  if (tab.rootTap !== undefined) {
+    navigate(tab.rootTap);
     return true;
   }
   return false;

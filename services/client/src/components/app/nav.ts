@@ -32,18 +32,29 @@ export type Tab = {
    * Me, Recipes light Cellar (its "Bar" segment), places light Map.
    */
   also: readonly string[];
+  /**
+   * Where a tap goes when this tab is already showing its root, scrolled to
+   * the top — the one tap that would otherwise do nothing. Home opens search
+   * (X10: "the tab bar search"), the way a phone's own apps do.
+   */
+  rootTap?: string;
 };
 
 /** The four tabs, in bar order; the capture ＋ sits between Cellar and Map. */
 export const TABS: readonly Tab[] = [
   /**
-   * `/search`, not `/`: until X10 gives `/` a page of its own (D1), `/` only
-   * redirects here, and a tab that pointed at it paid that redirect's round
-   * trip on every tap — about 400 ms at 150 ms RTT with the old page frozen
-   * on screen, and no loading shell, since the shell belongs to `/search`
-   * (X24, measured on the UX lane). X10 points it back at `/`.
+   * `/` is Home's own page since X10 ("Today"). Search is a full-screen
+   * sheet reached from Home — its field, or a tap on Home at the top — so
+   * `/search` lights Home too.
    */
-  { key: "home", label: "Home", href: "/search", icon: Home, also: ["/"] },
+  {
+    key: "home",
+    label: "Home",
+    href: "/",
+    icon: Home,
+    also: ["/search"],
+    rootTap: "/search",
+  },
   {
     key: "cellar",
     label: "Cellar",
@@ -56,7 +67,8 @@ export const TABS: readonly Tab[] = [
     label: "Map",
     href: "/map",
     icon: MapIcon,
-    also: ["/places", "/discoveries"],
+    // `/discoveries` went to Home's Waiting on you (X10) and redirects there.
+    also: ["/places"],
   },
   {
     key: "me",

@@ -422,6 +422,19 @@ describe("TabBar", () => {
       "at the root and the top: nothing to do",
     );
   });
+
+  test("X10: Home at its root and the top opens the search sheet", () => {
+    const home = TABS.find((t) => t.key === "home");
+    assert.ok(home);
+    assert.equal(home.href, "/");
+    const scroller = { scrollTop: 0, scrollTo: () => {} } as unknown as Element;
+    const nav: string[] = [];
+    assert.equal(
+      handleActiveTabTap(home, "/", (h) => nav.push(h), scroller),
+      true,
+    );
+    assert.deepEqual(nav, ["/search"]);
+  });
 });
 
 describe("AppShell", () => {
