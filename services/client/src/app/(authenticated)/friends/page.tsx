@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { AppBar } from "@/components/app/AppBar";
 import { Friends } from "@/components/friend/Friends";
 import { InviteFriendsCard } from "@/components/share/InviteFriendsCard";
+
+export const metadata: Metadata = { title: "Friends" };
 
 /**
  * `/friends`. Reached from the Me hub (D1), so its bar goes Back there on a

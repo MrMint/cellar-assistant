@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { SectionKey } from "@/components/common/CollectionSection";
 import {
   GetTierListsQuery,
@@ -10,6 +11,8 @@ import {
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { toPage } from "@/lib/paging/paged-connection";
+
+export const metadata: Metadata = { title: "Tier lists" };
 
 /**
  * `/tier-lists` — Yours, From friends and Discover (decision D2, X11), each a

@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { AppBar } from "@/components/app/AppBar";
 import { ICON_STROKE, Warning } from "@/components/app/icons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EditProfileClient } from "@/components/user/EditProfileClient";
 import { MyProfileQuery } from "@/components/user/fragments";
 import { apiServerQuery } from "@/lib/api/urql-server";
+
+export const metadata: Metadata = { title: "Edit profile" };
 
 /**
  * `/users/edit`.

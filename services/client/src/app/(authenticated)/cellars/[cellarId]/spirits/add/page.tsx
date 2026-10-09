@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboarding";
+
+export const metadata: Metadata = { title: "Add a spirit" };
 
 /**
  * `/cellars/[cellarId]/spirits/add` — `82450ad1`'s `AddSpirit`: the onboarding

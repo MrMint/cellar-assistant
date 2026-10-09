@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { loadAddableCellars } from "@/components/capture/addable-cellars";
 import {
   type ApiItemType,
@@ -5,6 +6,8 @@ import {
 } from "@/components/cellar-api/itemTypes";
 import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboarding";
 import { CAPTURE_MODES, type CaptureMode } from "@/lib/capture/capture-prefs";
+
+export const metadata: Metadata = { title: "Add a bottle" };
 
 /**
  * `/add` — the capture surface (X05): one camera, the type and the cellar

@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { Page } from "@/components/app/Page";
 import { itemLinkFromFragment } from "@/components/brand/adapter";
 import { BrandDetailsClient } from "@/components/brand/BrandDetailsClient";
@@ -35,6 +37,30 @@ import { toPage } from "@/lib/paging/paged-connection";
  */
 export const dynamic = "force-dynamic";
 
+/** The brand's first read, once per request, for the page and its title (X21). */
+const loadBrand = cache((brandId: string) =>
+  apiServerQuery(BrandDetailQuery, {
+    id: brandId,
+    itemsFirst: BRAND_ITEMS_PAGE_SIZE,
+    placesFirst: BRAND_PLACES_PAGE_SIZE,
+    childrenFirst: BRAND_CHILDREN_PAGE_SIZE,
+  }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ brandId: string }>;
+}): Promise<Metadata> {
+  const { brandId } = await params;
+  const result = unwrapResult((await loadBrand(brandId)).brand, "Brand");
+  return {
+    title: result.ok
+      ? readFragment(BrandCoreFragment, result.data).name
+      : "Brand",
+  };
+}
+
 export default async function BrandDetailPage({
   params,
 }: {
@@ -42,12 +68,7 @@ export default async function BrandDetailPage({
 }) {
   const { brandId } = await params;
 
-  const data = await apiServerQuery(BrandDetailQuery, {
-    id: brandId,
-    itemsFirst: BRAND_ITEMS_PAGE_SIZE,
-    placesFirst: BRAND_PLACES_PAGE_SIZE,
-    childrenFirst: BRAND_CHILDREN_PAGE_SIZE,
-  });
+  const data = await loadBrand(brandId);
   const result = unwrapResult(data.brand, "Brand");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();

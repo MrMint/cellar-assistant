@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { SharedNotFound } from "@/components/share/SharedNotFound";
 
-export const metadata: Metadata = { title: "Not found · Cellar Assistant" };
+export const metadata: Metadata = { title: "Not found" };
 
 /**
  * A shared link whose thing is missing **or** not public: one message for

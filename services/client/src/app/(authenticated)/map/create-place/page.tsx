@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { CreatePlaceForm } from "@/components/map/places/CreatePlaceForm";
+
+export const metadata: Metadata = { title: "Add a place" };
 
 /**
  * `82450ad1:src/app/(authenticated)/map/create-place/page.tsx`, restored.

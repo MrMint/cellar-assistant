@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { canAddToCellar, cellarGridItem } from "@/components/cellar/adapter";
 import { CellarOverviewHeader } from "@/components/cellar/CellarOverviewHeader";
 import { CellarOverviewItems } from "@/components/cellar/CellarOverviewItems";
@@ -31,6 +33,30 @@ export const dynamic = "force-dynamic";
 
 const CHECK_INS = 20;
 
+/** One overview query per request, for the page and its title (X21). */
+const loadOverview = cache((cellarId: string) =>
+  apiServerQuery(GetCellarOverviewQuery, {
+    cellarId,
+    items: OVERVIEW_ITEMS_PAGE_SIZE,
+    checkIns: CHECK_INS,
+    sort: OVERVIEW_SORT,
+  }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ cellarId: string }>;
+}): Promise<Metadata> {
+  const { cellarId } = await params;
+  const result = unwrapResult((await loadOverview(cellarId)).cellar, "Cellar");
+  return {
+    title: result.ok
+      ? readFragment(CellarInfoFragment, result.data).name
+      : "Cellar",
+  };
+}
+
 export default async function CellarPage({
   params,
 }: {
@@ -38,12 +64,7 @@ export default async function CellarPage({
 }) {
   const { cellarId } = await params;
   const [detail, viewer] = await Promise.all([
-    apiServerQuery(GetCellarOverviewQuery, {
-      cellarId,
-      items: OVERVIEW_ITEMS_PAGE_SIZE,
-      checkIns: CHECK_INS,
-      sort: OVERVIEW_SORT,
-    }),
+    loadOverview(cellarId),
     apiServerQuery(ViewerQuery, {}),
   ]);
 

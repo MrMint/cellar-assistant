@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { AIRecipeGenerator } from "@/components/recipe/AIRecipeGenerator";
+
+export const metadata: Metadata = { title: "AI recipe generator" };
 
 /**
  * `/recipes/ai-generator` — `82450ad1:src/app/(authenticated)/recipes/ai-generator/page.tsx`,

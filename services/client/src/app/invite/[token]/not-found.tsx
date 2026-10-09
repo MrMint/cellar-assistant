@@ -6,7 +6,7 @@ import { ShellMessage } from "@/components/shell/ShellMessage";
 import { Button } from "@/components/ui/button";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 
-export const metadata: Metadata = { title: "Invite · Cellar Assistant" };
+export const metadata: Metadata = { title: "Invite" };
 
 const COPY = {
   title: "This invite link doesn't work any more",

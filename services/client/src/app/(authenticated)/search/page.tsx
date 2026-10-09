@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { type ReactNode, Suspense } from "react";
 import {
   type ActivityEntry,
@@ -9,6 +10,8 @@ import {
   type NearbyPlace,
   nearbyPlacesFromNodes,
   type SearchParams,
+  searchPageHeading,
+  searchPageTitle,
   searchStateFromParams,
 } from "@/components/search/adapter";
 import { ServerCatalogSections } from "@/components/search/CatalogSections";
@@ -64,6 +67,13 @@ interface SearchPageProps {
   searchParams: Promise<SearchParams>;
 }
 
+/** X21: "Home", or what is being searched for. Reads the URL only. */
+export async function generateMetadata({
+  searchParams,
+}: SearchPageProps): Promise<Metadata> {
+  return { title: searchPageTitle(searchStateFromParams(await searchParams)) };
+}
+
 export default async function Search({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = await searchParams;
   const state = searchStateFromParams(resolvedSearchParams);
@@ -77,6 +87,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
   return (
     <SearchPageLayout
       urlQuery={query}
+      heading={searchPageHeading(state)}
       landing={
         hasActiveSearch
           ? null

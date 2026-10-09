@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -14,6 +17,33 @@ import {
 import { CellarItemPageView } from "./CellarItemPageView";
 import { CellarBottleForQuery, CellarItemPageQuery } from "./fragments";
 import { allFriends, allItemBrands } from "./page-lists";
+
+/** One `CellarItemPageQuery` per request, for the page and its title (X21). */
+const loadCellarItemPage = cache((cellarId: string, bottleId: string) =>
+  apiServerQuery(CellarItemPageQuery, { cellarId, bottleId }),
+);
+
+/**
+ * X21: the bottle's item name as the document title; its type when the id is
+ * not a bottle here (the page redirects on, and the next page names it).
+ */
+export async function cellarItemPageMetadata(
+  type: ApiItemType,
+  cellarId: string,
+  id: string,
+): Promise<Metadata> {
+  const cellar = unwrapResult(
+    (await loadCellarItemPage(cellarId, id)).cellar,
+    "Cellar",
+  );
+  const bottle = cellar.ok ? (cellar.data.item ?? null) : null;
+  return {
+    title:
+      bottle === null
+        ? itemTypeTokens[type].label
+        : itemViewFromFragment(bottle.item).name,
+  };
+}
 
 /**
  * `/cellars/[cellarId]/{type}s/[id]` for all six types — one **bottle**, the
@@ -35,10 +65,7 @@ export async function CellarItemPage({
   cellarId: string;
   id: string;
 }) {
-  const data = await apiServerQuery(CellarItemPageQuery, {
-    cellarId,
-    bottleId: id,
-  });
+  const data = await loadCellarItemPage(cellarId, id);
   const cellarResult = unwrapResult(data.cellar, "Cellar");
   if (!cellarResult.ok) {
     if (isNotFound(cellarResult.error)) notFound();

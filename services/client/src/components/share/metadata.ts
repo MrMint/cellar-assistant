@@ -52,7 +52,8 @@ export const shareMetadata = ({
   description: string;
   canonicalPath: string;
 }): Metadata => ({
-  title: `${title} · ${SITE}`,
+  // The root layout's template adds " · Cellar Assistant" (X21).
+  title,
   description,
   alternates: { canonical: canonicalPath },
   openGraph: {
@@ -67,5 +68,5 @@ export const shareMetadata = ({
 
 /** A missing or private thing's metadata: nothing about it at all. */
 export const NOT_SHARED_METADATA: Metadata = {
-  title: `Not found · ${SITE}`,
+  title: "Not found",
 };

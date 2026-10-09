@@ -17,6 +17,11 @@ type SearchPageLayoutProps = {
   landing: { hero: ReactNode } | null;
   /** The landing view's discovery section, or the results. */
   children: ReactNode;
+  /**
+   * The page's one h1 (X21), for assistive tech only: the greeting is
+   * client-rendered and the results view has no headline of its own.
+   */
+  heading: string;
 };
 
 /**
@@ -37,10 +42,14 @@ export function SearchPageLayout({
   urlQuery,
   landing,
   children,
+  heading,
 }: SearchPageLayoutProps) {
   return (
     <SearchNavigationProvider>
       <div className={cn("flex flex-col gap-6", landing && "pt-4 sm:pt-8")}>
+        {/* Always rendered, always first: the slots after it keep their
+            places, so the box below is still never remounted. */}
+        <h1 className="sr-only">{heading}</h1>
         {landing ? landing.hero : null}
         {/* The same element in both views — only its classes change — so
             the box below it is never remounted. */}

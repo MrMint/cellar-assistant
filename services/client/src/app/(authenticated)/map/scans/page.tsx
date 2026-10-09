@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ScanHistory } from "@/components/map/scanning/ScanHistory";
 import { Spinner } from "@/components/ui/spinner";
+
+export const metadata: Metadata = { title: "Menu scans" };
 
 export default function ScanHistoryPage() {
   // The shell's `<main data-app-scroller>` scrolls this page (D26), so tab

@@ -29,11 +29,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
   const result = await loadPreview(token, false);
   const base: Metadata = { robots: { index: false, follow: false } };
-  if (!result.ok) return { ...base, title: "Invite · Cellar Assistant" };
+  if (!result.ok) return { ...base, title: "Invite" };
   const title = `${result.data.inviterDisplayName} invited you to Cellar Assistant`;
   return {
     ...base,
-    title,
+    // Already names the app: no template suffix (X21).
+    title: { absolute: title },
     description:
       "Become friends to see each other's cellars, rankings and check-ins.",
     openGraph: { title, siteName: "Cellar Assistant", type: "website" },

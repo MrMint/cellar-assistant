@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { AddCellarClient } from "@/components/cellar/AddCellarClient";
+
+export const metadata: Metadata = { title: "New cellar" };
 
 /**
  * `/cellars/add` — the old `AddCellarClient` (`82450ad1`).

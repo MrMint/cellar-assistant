@@ -37,7 +37,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Cellar Assistant",
+  // X21: every route names itself ("Cellars · Cellar Assistant"), through its
+  // own `metadata` or `generateMetadata`; `lib/dev-checks/page-titles.test.ts`
+  // holds every page.tsx to that. A page sets its own words only — never the
+  // suffix — or `{ absolute }` when the app's name is already in them.
+  title: { default: "Cellar Assistant", template: "%s · Cellar Assistant" },
   description:
     "Manage your wine, beer, spirit, and coffee collections. Scan menus, track your cellar, and discover new favorites.",
   applicationName: "Cellar Assistant",

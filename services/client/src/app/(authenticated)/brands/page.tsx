@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Page } from "@/components/app/Page";
 import { toBrandCardItems } from "@/components/brand/adapter";
 import { BrandsListClient } from "@/components/brand/BrandsListClient";
@@ -10,6 +11,8 @@ import { ApiError } from "@/components/cellar-api/ApiError";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
+
+export const metadata: Metadata = { title: "Brands" };
 
 /**
  * `/brands` — the old page (`82450ad1`): heading, blurb and

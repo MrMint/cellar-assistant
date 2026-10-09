@@ -1,5 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { cache, type ReactNode } from "react";
 import { readFragment } from "@/lib/api/graphql";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -11,6 +12,28 @@ import {
   RecipePageQuery,
 } from "./queries";
 import { RecipeDetails } from "./RecipeDetails";
+
+/** One recipe read per request, for the page and its title (X21). */
+const loadRecipePage = cache((recipeId: string) =>
+  apiServerQuery(RecipePageQuery, {
+    recipeId,
+    reviewFirst: RECIPE_REVIEWS_PAGE_SIZE,
+    versionFirst: RECIPE_VERSIONS_PAGE_SIZE,
+  }),
+);
+
+/** X21: the recipe's name as the document title. */
+export async function recipePageMetadata(recipeId: string): Promise<Metadata> {
+  const result = unwrapResult(
+    (await loadRecipePage(recipeId)).recipe,
+    "Recipe",
+  );
+  return {
+    title: result.ok
+      ? readFragment(RecipeDetailsFragment, result.data).name
+      : "Recipe",
+  };
+}
 
 /**
  * One recipe as `RecipeDetails`, read on the server — what the old detail page
@@ -27,11 +50,7 @@ export async function RecipePage({
   recipeId: string;
   header?: ReactNode;
 }) {
-  const data = await apiServerQuery(RecipePageQuery, {
-    recipeId,
-    reviewFirst: RECIPE_REVIEWS_PAGE_SIZE,
-    versionFirst: RECIPE_VERSIONS_PAGE_SIZE,
-  });
+  const data = await loadRecipePage(recipeId);
   const result = unwrapResult(data.recipe, "Recipe");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();

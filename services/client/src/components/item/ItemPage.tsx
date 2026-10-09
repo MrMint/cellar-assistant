@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -12,6 +15,30 @@ import {
 import { ItemPageQuery } from "./fragments";
 import { ItemPageView } from "./ItemPageView";
 import { allAddableCellars, allItemBrands, allItemCellars } from "./page-lists";
+
+/**
+ * The page's one `ItemPageQuery`, per request: `generateMetadata` and the
+ * page both ask, and React's `cache` makes that one query (X21).
+ */
+const loadItemPage = cache((type: ApiItemType, itemId: string) =>
+  apiServerQuery(ItemPageQuery, { itemId, type }),
+);
+
+/** X21: the item's name as the document title; its type when unreadable. */
+export async function itemPageMetadata(
+  type: ApiItemType,
+  itemId: string,
+): Promise<Metadata> {
+  const result = unwrapResult(
+    (await loadItemPage(type, itemId)).item,
+    "QueryItemSuccess",
+  );
+  return {
+    title: result.ok
+      ? itemViewFromFragment(result.data.data).name
+      : itemTypeTokens[type].label,
+  };
+}
 
 /**
  * `/{type}s/[itemId]` for all six types — the old per-type `page.tsx` +
@@ -30,7 +57,7 @@ export async function ItemPage({
   type: ApiItemType;
   itemId: string;
 }) {
-  const data = await apiServerQuery(ItemPageQuery, { itemId, type });
+  const data = await loadItemPage(type, itemId);
   const result = unwrapResult(data.item, "QueryItemSuccess");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();

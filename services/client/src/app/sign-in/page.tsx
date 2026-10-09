@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SignInApiClient } from "@/components/auth/SignInApiClient";
 import { readPasswordMode } from "@/lib/auth/password-mode";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 import { HOME_PATH, sanitizeReturnTo } from "@/utilities/sanitize-return-to";
+
+export const metadata: Metadata = { title: "Sign in" };
 
 /**
  * Sign-in against **better-auth** (`SignInApiClient`).

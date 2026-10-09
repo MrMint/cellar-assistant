@@ -1,5 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { cache, Suspense } from "react";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import { CellarItemsControls } from "@/components/cellar/CellarItemsControls";
 import { CellarItemsGridServer } from "@/components/cellar/CellarItemsGridServer";
@@ -34,6 +35,26 @@ interface CellarItemsPageProps {
  */
 export const dynamic = "force-dynamic";
 
+/** One cellar header read per request, for the page and its title (X21). */
+const loadCellarInfo = cache((cellarId: string) =>
+  apiServerQuery(GetCellarInfoQuery, { cellarId }),
+);
+
+export async function generateMetadata({
+  params,
+}: Pick<CellarItemsPageProps, "params">): Promise<Metadata> {
+  const { cellarId } = await params;
+  const result = unwrapResult(
+    (await loadCellarInfo(cellarId)).cellar,
+    "Cellar",
+  );
+  return {
+    title: result.ok
+      ? readFragment(CellarInfoFragment, result.data).name
+      : "Cellar",
+  };
+}
+
 export default async function CellarItemsPage({
   params,
   searchParams,
@@ -50,7 +71,7 @@ export default async function CellarItemsPage({
 
   // Fetch cellar metadata immediately (for header)
   const [data, viewer] = await Promise.all([
-    apiServerQuery(GetCellarInfoQuery, { cellarId }),
+    loadCellarInfo(cellarId),
     apiServerQuery(ViewerQuery, {}),
   ]);
 

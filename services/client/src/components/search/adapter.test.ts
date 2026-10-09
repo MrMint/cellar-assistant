@@ -15,6 +15,8 @@ import {
   imageSearchHref,
   MAX_BARCODE_LENGTH,
   nearbyPlacesFromNodes,
+  searchPageHeading,
+  searchPageTitle,
   searchResultFromCard,
   searchResultsFromNodes,
   searchStateFromParams,
@@ -54,6 +56,31 @@ describe("collectionStatsLine (bottles still in the cellar, D13)", () => {
       }),
       "10 bottles in your 3 cellars",
     );
+  });
+});
+
+describe("X21: /search's title and h1", () => {
+  const title = (params: Record<string, string>) =>
+    searchPageTitle(searchStateFromParams(params));
+  const heading = (params: Record<string, string>) =>
+    searchPageHeading(searchStateFromParams(params));
+
+  test("the landing view is Home, in the title and the h1", () => {
+    assert.equal(title({}), "Home");
+    assert.equal(title({ q: "   " }), "Home");
+    assert.equal(heading({}), "Home");
+    assert.equal(heading({ activity: "drank" }), "Home");
+  });
+
+  test("an active search names what it searches for", () => {
+    assert.equal(title({ q: " barolo " }), "Search: barolo");
+    assert.equal(title({ barcode: "012345678905" }), "Barcode 012345678905");
+    assert.equal(
+      title({ image: "3F2504E0-4F89-11D3-9A0C-0305E82C3301" }),
+      "Photo search",
+    );
+    assert.equal(title({ image_no_results: "true" }), "Photo search");
+    assert.equal(heading({ q: "barolo" }), "Search results");
   });
 });
 

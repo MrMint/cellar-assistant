@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
 import { CreatePlaceForm } from "@/components/map/places/CreatePlaceForm";
 import { PlaceForEditQuery } from "@/components/map/queries";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
@@ -19,9 +21,22 @@ interface EditPlacePageProps {
   params: Promise<{ placeId: string }>;
 }
 
+/** One edit read per request, for the page and its title (X21). */
+const loadPlaceForEdit = cache((placeId: string) =>
+  apiServerQuery(PlaceForEditQuery, { id: placeId }),
+);
+
+export async function generateMetadata({
+  params,
+}: EditPlacePageProps): Promise<Metadata> {
+  const { placeId } = await params;
+  const read = unwrapResult((await loadPlaceForEdit(placeId)).place, "Place");
+  return { title: read.ok ? `Edit ${read.data.name}` : "Edit place" };
+}
+
 export default async function EditPlacePage({ params }: EditPlacePageProps) {
   const { placeId } = await params;
-  const { place } = await apiServerQuery(PlaceForEditQuery, { id: placeId });
+  const { place } = await loadPlaceForEdit(placeId);
   const result = unwrapResult(place, "Place");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();

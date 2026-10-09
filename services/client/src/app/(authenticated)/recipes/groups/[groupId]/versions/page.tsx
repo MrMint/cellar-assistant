@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { Link } from "@/components/app/Link";
 import { versionFromNodes } from "@/components/recipe/adapter";
 import {
@@ -24,13 +26,33 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  */
 export const dynamic = "force-dynamic";
 
+/** One versions read per request, for the page and its title (X21). */
+const loadVersions = cache((groupId: string) =>
+  apiServerQuery(RecipeVersionsPageQuery, { groupId }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ groupId: string }>;
+}): Promise<Metadata> {
+  const { groupId } = await params;
+  const result = unwrapResult(
+    (await loadVersions(groupId)).recipeGroup,
+    "RecipeGroup",
+  );
+  return {
+    title: result.ok ? `${result.data.name}: all versions` : "Recipe versions",
+  };
+}
+
 export default async function RecipeVersionsPage({
   params,
 }: {
   params: Promise<{ groupId: string }>;
 }) {
   const { groupId } = await params;
-  const data = await apiServerQuery(RecipeVersionsPageQuery, { groupId });
+  const data = await loadVersions(groupId);
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();

@@ -48,7 +48,7 @@ const { act, Suspense, use, useState } = React;
 type ReactNode = import("react").ReactNode;
 const { createRoot } = await import("react-dom/client");
 const { Client, Provider } = await import("urql");
-const { searchStateFromParams } = await import("./adapter");
+const { searchPageHeading, searchStateFromParams } = await import("./adapter");
 const { SearchPageLayout } = await import("./SearchPageLayout");
 const { SearchResultsSkeleton } = await import("./SearchResultsSkeleton");
 const { SEARCH_DEBOUNCE_MS } = await import("./search-navigation");
@@ -96,17 +96,17 @@ const urql = new Client({ url: "http://test.invalid/graphql", exchanges: [] });
 /** The `/search` page for one URL — the page.tsx shape, without the I/O. */
 function Page({ href }: { href: string }) {
   const q = new URL(href, "http://localhost").searchParams.get("q");
-  const { query, hasActiveSearch } = searchStateFromParams({
-    q: q ?? undefined,
-  });
+  const state = searchStateFromParams({ q: q ?? undefined });
+  const { query, hasActiveSearch } = state;
   return (
     <SearchPageLayout
       urlQuery={query}
+      heading={searchPageHeading(state)}
       landing={
         hasActiveSearch
           ? null
           : {
-              hero: <h1 data-testid="hero">Good evening</h1>,
+              hero: <h2 data-testid="hero">Good evening</h2>,
             }
       }
     >
@@ -253,6 +253,26 @@ describe("the search box survives typing (N01)", () => {
         ["replace", "/search?q=wi"],
         ["replace", "/search?q=wine"],
       ]);
+    } finally {
+      await unmount();
+    }
+  });
+
+  test("X21: exactly one h1, named for the view, without remounting the box", async () => {
+    await mount("/search");
+    try {
+      const box = input();
+      const h1s = () => [...container.querySelectorAll("h1")];
+      assert.equal(h1s().length, 1);
+      assert.equal(h1s()[0]?.textContent, "Home");
+
+      await typeInto(box, "w");
+      await settle();
+      await resolveResults("w");
+
+      assert.equal(h1s().length, 1);
+      assert.equal(h1s()[0]?.textContent, "Search results");
+      assert.equal(input(), box, "the input was not remounted");
     } finally {
       await unmount();
     }

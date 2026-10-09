@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import { EditCellarClient } from "@/components/cellar/EditCellarClient";
 import { GetCellarEditQuery } from "@/components/cellar/fragments";
@@ -15,6 +17,24 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  */
 export const dynamic = "force-dynamic";
 
+/** One edit read per request, for the page and its title (X21). */
+const loadCellarEdit = cache((cellarId: string) =>
+  apiServerQuery(GetCellarEditQuery, { cellarId }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ cellarId: string }>;
+}): Promise<Metadata> {
+  const { cellarId } = await params;
+  const result = unwrapResult(
+    (await loadCellarEdit(cellarId)).cellar,
+    "Cellar",
+  );
+  return { title: result.ok ? `Edit ${result.data.name}` : "Edit cellar" };
+}
+
 export default async function EditCellar({
   params,
 }: {
@@ -22,7 +42,7 @@ export default async function EditCellar({
 }) {
   const { cellarId } = await params;
   const [data, viewer] = await Promise.all([
-    apiServerQuery(GetCellarEditQuery, { cellarId }),
+    loadCellarEdit(cellarId),
     apiServerQuery(ViewerQuery, {}),
   ]);
 

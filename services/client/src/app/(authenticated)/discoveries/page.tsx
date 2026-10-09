@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Page } from "@/components/app/Page";
 import { DiscoveryDashboard } from "@/components/map/discovery/DiscoveryDashboard";
 import { Spinner } from "@/components/ui/spinner";
+
+export const metadata: Metadata = { title: "Your discoveries" };
 
 /** `82450ad1:src/app/(authenticated)/discoveries/page.tsx`, restored. */
 export default function DiscoveriesPage() {

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import {
   BarEntryCard,
@@ -11,6 +12,8 @@ import {
 import { RecipeGroupSearch } from "@/components/search/RecipeGroupSearch";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
+
+export const metadata: Metadata = { title: "Recipes" };
 
 /**
  * `/recipes` — `82450ad1:src/app/(authenticated)/recipes/page.tsx`, restored:

@@ -3,7 +3,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { NotFoundMessage } from "@/components/shell/NotFoundMessage";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 
-export const metadata: Metadata = { title: "Not found · Cellar Assistant" };
+export const metadata: Metadata = { title: "Not found" };
 
 /**
  * A URL that matches no route at all (a stale link, `/wines` since D7, a

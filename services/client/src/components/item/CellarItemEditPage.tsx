@@ -1,10 +1,34 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { bottleHref } from "./adapter";
 import { CellarBottleItemQuery } from "./fragments";
-import { ItemEditPage } from "./ItemEditPage";
+import { ItemEditPage, itemEditMetadata } from "./ItemEditPage";
+
+/** One `CellarBottleItemQuery` per request, for the page and its title (X21). */
+const loadCellarBottleItem = cache((cellarId: string, bottleId: string) =>
+  apiServerQuery(CellarBottleItemQuery, { cellarId, bottleId }),
+);
+
+/**
+ * X21: the edit page's title, from the item the bottle holds — the same
+ * cached reads the page itself makes, so no extra query.
+ */
+export async function cellarItemEditMetadata(
+  type: ApiItemType,
+  cellarId: string,
+  id: string,
+): Promise<Metadata> {
+  const cellar = unwrapResult(
+    (await loadCellarBottleItem(cellarId, id)).cellar,
+    "Cellar",
+  );
+  const item = cellar.ok ? (cellar.data.item?.item ?? null) : null;
+  return itemEditMetadata(item?.type ?? type, item?.id ?? id);
+}
 
 /**
  * `/cellars/[cellarId]/{type}s/[id]/edit` — the id is the bottle (decision 1);
@@ -22,10 +46,7 @@ export async function CellarItemEditPage({
   cellarId: string;
   id: string;
 }) {
-  const data = await apiServerQuery(CellarBottleItemQuery, {
-    cellarId,
-    bottleId: id,
-  });
+  const data = await loadCellarBottleItem(cellarId, id);
   const cellar = unwrapResult(data.cellar, "Cellar");
   if (!cellar.ok) {
     if (isNotFound(cellar.error)) notFound();

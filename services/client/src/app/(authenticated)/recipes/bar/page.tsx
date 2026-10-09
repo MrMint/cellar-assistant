@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { Page } from "@/components/app/Page";
 import { BarAppBar } from "@/components/bar/BarAppBar";
 import { BAR_SECTION_LIMIT, WhatCanIMakeQuery } from "@/components/bar/queries";
 import { WhatCanIMake } from "@/components/bar/WhatCanIMake";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
+
+export const metadata: Metadata = { title: "What can I make" };
 
 /**
  * `/recipes/bar` — **What can I make** (G29, D18): Make now · One bottle

@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { AddTierListClient } from "@/components/tier-list/AddTierListClient";
+
+export const metadata: Metadata = { title: "New tier list" };
 
 /**
  * `/tier-lists/add` — the old `AddTierListClient` (`82450ad1`). The old page

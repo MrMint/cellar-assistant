@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SignUpApiClient } from "@/components/auth/SignUpApiClient";
 import { readPasswordMode } from "@/lib/auth/password-mode";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 import { HOME_PATH, sanitizeReturnTo } from "@/utilities/sanitize-return-to";
+
+export const metadata: Metadata = { title: "Sign up" };
 
 /**
  * D2: better-auth sign-up. See `sign-in/page.tsx`.

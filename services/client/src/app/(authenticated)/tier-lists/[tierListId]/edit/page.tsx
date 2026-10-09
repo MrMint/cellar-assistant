@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { DeleteTierListButton } from "@/components/tier-list/DeleteTierListButton";
 import { EditTierListClient } from "@/components/tier-list/EditTierListClient";
@@ -20,6 +22,24 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  */
 export const dynamic = "force-dynamic";
 
+/** One edit read per request, for the page and its title (X21). */
+const loadTierListEdit = cache((tierListId: string) =>
+  apiServerQuery(GetTierListEditQuery, { id: tierListId }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ tierListId: string }>;
+}): Promise<Metadata> {
+  const { tierListId } = await params;
+  const result = unwrapResult(
+    (await loadTierListEdit(tierListId)).tierList,
+    "TierList",
+  );
+  return { title: result.ok ? `Edit ${result.data.name}` : "Edit tier list" };
+}
+
 export default async function EditTierListPage({
   params,
 }: {
@@ -27,7 +47,7 @@ export default async function EditTierListPage({
 }) {
   const { tierListId } = await params;
   const [data, viewer] = await Promise.all([
-    apiServerQuery(GetTierListEditQuery, { id: tierListId }),
+    loadTierListEdit(tierListId),
     apiServerQuery(TierListViewerQuery, {}),
   ]);
 

@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { attributesFrom } from "@/components/item-api/itemFormRules";
 import { ViewerQuery } from "@/lib/api/cellars";
@@ -16,6 +19,27 @@ import { displayItemName } from "@/utilities/smart-title-case";
 import { ItemAppBar } from "./ItemAppBar";
 import { ItemForm } from "./ItemForm";
 import { shownBrandOf } from "./shown-brand";
+
+/** One `ItemSummaryQuery` per request, for the page and its title (X21). */
+const loadItemSummary = cache((type: ApiItemType, itemId: string) =>
+  apiServerQuery(ItemSummaryQuery, { itemId, type }),
+);
+
+/** X21: "Edit <name>", the bar's own title; "Edit wine" when unreadable. */
+export async function itemEditMetadata(
+  type: ApiItemType,
+  itemId: string,
+): Promise<Metadata> {
+  const result = unwrapResult(
+    (await loadItemSummary(type, itemId)).item,
+    "QueryItemSuccess",
+  );
+  return {
+    title: result.ok
+      ? `Edit ${displayItemName(readFragment(ItemCoreFragment, result.data.data).name)}`
+      : `Edit ${itemTypeTokens[type].label.toLowerCase()}`,
+  };
+}
 
 /**
  * `/{type}s/[itemId]/edit` and `/cellars/[c]/{type}s/[bottleId]/edit` — new
@@ -43,7 +67,7 @@ export async function ItemEditPage({
   cellarName?: string;
   backHref: string;
 }) {
-  const data = await apiServerQuery(ItemSummaryQuery, { itemId, type });
+  const data = await loadItemSummary(type, itemId);
   const result = unwrapResult(data.item, "QueryItemSuccess");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();

@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { RankingsClient } from "@/components/ranking/RankingsClient";
+
+export const metadata: Metadata = { title: "Top rated" };
 
 /**
  * `/rankings` — the old `RankingsClient` (`82450ad1`), which fetches its own

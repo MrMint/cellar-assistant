@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AddItemClient } from "@/components/cellar/AddItemClient";
 import { canAddToCellar } from "@/components/cellar/adapter";
@@ -14,6 +15,8 @@ import {
 import { readFragment } from "@/lib/api/graphql";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
+
+export const metadata: Metadata = { title: "Add a bottle" };
 
 /**
  * `/cellars/[cellarId]/items/add` — the capture surface (X05) filing into

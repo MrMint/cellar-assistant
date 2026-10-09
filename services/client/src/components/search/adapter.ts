@@ -163,6 +163,28 @@ export const searchStateFromParams = (params: SearchParams): SearchState => {
   };
 };
 
+/**
+ * `/search`'s document title (X21). The landing view is the Home tab (D1);
+ * an active search names what is being searched for, so history and the
+ * app switcher tell one search from another. The suffix is the root
+ * layout's template.
+ */
+export const searchPageTitle = (state: SearchState): string => {
+  if (state.query !== null) return `Search: ${state.query}`;
+  if (state.barcode !== null) return `Barcode ${state.barcode}`;
+  if (state.imageFileId !== null || state.legacyImageLink)
+    return "Photo search";
+  return "Home";
+};
+
+/**
+ * `/search`'s one h1 (X21), for assistive tech only: the greeting is the
+ * landing view's visible headline but renders on the client alone, and the
+ * results view has no headline at all.
+ */
+export const searchPageHeading = (state: SearchState): string =>
+  state.hasActiveSearch ? "Search results" : "Home";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Where an uploaded search photo goes: `/search?image=<fileId>` (G32). */

@@ -4,7 +4,7 @@ import { NotFoundMessage } from "@/components/shell/NotFoundMessage";
 // Next takes a 404's metadata from the deepest `not-found` on the path, so
 // without its own export this one blanks the root's and the tab reads
 // "Cellar Assistant" (UX lane, 2026-10-08).
-export const metadata: Metadata = { title: "Not found · Cellar Assistant" };
+export const metadata: Metadata = { title: "Not found" };
 
 /**
  * Every `notFound()` thrown by a page in the signed-in group lands here, inside
