@@ -6,18 +6,7 @@
  * No `"use client"`: plain data and pure functions, importable from either
  * side of the boundary.
  */
-import {
-  Add,
-  AddPlace,
-  type AppIcon,
-  Camera,
-  Cellar,
-  Cocktail,
-  Home,
-  MapIcon,
-  Me,
-  Scan,
-} from "./icons";
+import { Add, type AppIcon, Cellar, Home, MapIcon, Me } from "./icons";
 
 export type TabKey = "home" | "cellar" | "map" | "me";
 
@@ -90,49 +79,27 @@ export function activeTab(pathname: string): TabKey | undefined {
   )?.key;
 }
 
-export type CaptureOption = {
-  key: "bottle" | "menu" | "recipe" | "place";
-  label: string;
-  description: string;
-  href: string;
-  icon: AppIcon;
-};
+/**
+ * Where ＋ goes (X06): the full-screen capture surface — the camera, with the
+ * mode row Bottle · Menu · Recipe opening on the last mode used. It replaced
+ * X01's chooser sheet; a place is added from the map.
+ */
+export const CAPTURE_HREF = "/add";
+
+/** The per-type cellar add routes' segments (`/cellars/[id]/wines/add`). */
+const CAPTURE_TYPE_SEGMENTS = "items|wines|beers|spirits|coffees|sakes|teas";
+const CELLAR_CAPTURE = new RegExp(
+  `^/cellars/[^/]+/(?:${CAPTURE_TYPE_SEGMENTS})/add/?$`,
+);
 
 /**
- * What ＋ offers (X01 chooser), each leading into today's flow. X06 later
- * replaces the chooser with the full-screen capture surface.
+ * Routes that are the capture surface, where the tab bar steps aside
+ * (design §2: "It hides only in capture"): `/add` and below, and a cellar's
+ * own add pages. Not `/cellars/add` (a form for a new cellar) or
+ * `/tier-lists/add`.
  */
-export const CAPTURE_OPTIONS: readonly CaptureOption[] = [
-  {
-    key: "bottle",
-    label: "Bottle",
-    description: "Snap a label or scan a barcode",
-    // Explicit: the capture surface otherwise opens on the last-used mode.
-    href: "/add?mode=bottle",
-    icon: Camera,
-  },
-  {
-    key: "menu",
-    label: "Menu",
-    description: "Pick the place on the map, then scan its menu",
-    href: "/map",
-    icon: Scan,
-  },
-  {
-    key: "recipe",
-    label: "Recipe",
-    description: "Write one or let AI draft it",
-    href: "/recipes/ai-generator",
-    icon: Cocktail,
-  },
-  {
-    key: "place",
-    label: "Place",
-    description: "Add a bar, shop or restaurant",
-    href: "/map/create-place",
-    icon: AddPlace,
-  },
-];
+export const isCaptureRoute = (pathname: string): boolean =>
+  isUnder(pathname, CAPTURE_HREF) || CELLAR_CAPTURE.test(pathname);
 
 /** The capture button's own glyph. */
 export const CaptureIcon = Add;

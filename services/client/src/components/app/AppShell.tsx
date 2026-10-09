@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { isCaptureRoute } from "./nav";
 import { useNavHistoryTracker } from "./nav-history";
 import { usePointerDownPrefetch } from "./prefetch";
 import { SideRail } from "./SideRail";
@@ -12,14 +13,21 @@ import { TabBar } from "./TabBar";
  * How the content area treats a route (what `ConditionalPaddingWrapper` did):
  * every `/map/*` route lays itself out edge to edge, and only the map canvas
  * itself (`/map`) clips instead of scrolling, so MapLibre fills exactly the
- * space above the tab bar and its attribution stays visible (N22).
+ * space above the tab bar and its attribution stays visible (N22). The
+ * capture surface (X06) is the one place the phone's tab bar steps aside
+ * (design §2) — the camera has the screen, and Close is the way out.
  */
 export function contentLayout(pathname: string): {
   padded: boolean;
   scrolls: boolean;
+  tabBar: boolean;
 } {
   const isMap = pathname === "/map" || pathname.startsWith("/map/");
-  return { padded: !isMap, scrolls: pathname !== "/map" };
+  return {
+    padded: !isMap,
+    scrolls: pathname !== "/map",
+    tabBar: !isCaptureRoute(pathname),
+  };
 }
 
 /**
@@ -36,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
   useNavHistoryTracker();
   usePointerDownPrefetch();
-  const { padded, scrolls } = contentLayout(pathname);
+  const { padded, scrolls, tabBar } = contentLayout(pathname);
 
   return (
     <div
@@ -47,8 +55,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         // tab bar's glass runs under the home indicator. It has to be this
         // element: the shell clips (overflow-hidden), so a negative margin
         // on the tab bar itself was cut off at the shell's edge. Nothing
-        // between the root layout and here may clip either.
-        "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
+        // between the root layout and here may clip either. Without the bar
+        // (capture), the root layout's padding keeps the content clear.
+        tabBar && "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
       )}
     >
       <SideRail className="hidden sm:flex" />
@@ -62,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      <TabBar className="sm:hidden" />
+      {tabBar && <TabBar className="sm:hidden" />}
     </div>
   );
 }

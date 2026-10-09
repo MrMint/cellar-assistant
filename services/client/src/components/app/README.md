@@ -239,10 +239,11 @@ destinations from `nav.ts`: Home `/` · Cellar `/cellars` · ＋ · Map `/map` �
 Me `/me` (D1; the `/me` hub page is S1's). A tab lights for its route and
 everything under it (`activeTab`), and lights at once on tap. Re-tapping the
 active tab scrolls the scroller to the top, then pops to the tab's root. The
-brass ＋ (56 pt, 8 pt proud) opens `CaptureChooser`.
-
-**`CaptureChooser`** — `open`, `onOpenChange`, `options?`. Bottle · Menu ·
-Recipe · Place as rows into today's flows (`CAPTURE_OPTIONS` in `nav.ts`).
+brass ＋ (56 pt, 8 pt proud) is `CaptureButton`, a link to the full-screen
+capture surface `/add` (`CAPTURE_HREF`, X06): the camera with Bottle · Menu ·
+Recipe, on the last mode used. `AppShell` hides the phone's tab bar on capture
+routes (`isCaptureRoute`: `/add…` and a cellar's add pages); Close is the way
+out there.
 
 **`AppBar`**
 
@@ -437,7 +438,7 @@ in-app anchor, so a route's shell is on its way ~100 ms before the click.
 It covers every `app/Link` (tabs included) without making `Link` a client
 component. Opt a link out with `data-prefetch="false"`. Buttons that navigate
 warm their destination themselves: AppBar's Back (its `parent` on a cold deep
-link) and ＋ (`prefetchCaptureDestinations`).
+link). ＋ is a link, so the shared listener covers it.
 
 ## Layering (z-index)
 

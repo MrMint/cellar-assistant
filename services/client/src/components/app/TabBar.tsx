@@ -3,10 +3,15 @@
 import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { CaptureChooser } from "./CaptureChooser";
 import { Link } from "./Link";
-import { activeTab, CaptureIcon, TABS, type Tab, type TabKey } from "./nav";
-import { prefetchCaptureDestinations } from "./prefetch";
+import {
+  activeTab,
+  CAPTURE_HREF,
+  CaptureIcon,
+  TABS,
+  type Tab,
+  type TabKey,
+} from "./nav";
 
 /** The shell's inner scroller (`AppShell`), which re-tap scrolls to the top. */
 export const SCROLLER_SELECTOR = "[data-app-scroller]";
@@ -86,15 +91,38 @@ function TabLink({
 }
 
 /**
+ * The brass ＋ (design §2): 56 pt, a link straight into the full-screen
+ * capture surface (X06) — the camera, on the last mode used. As a link it is
+ * prefetched at pointerdown like every tab (X24), so the tap commits into the
+ * surface's shell.
+ */
+export function CaptureButton({ className }: { className?: string }) {
+  return (
+    <Link
+      href={CAPTURE_HREF}
+      underline="none"
+      aria-label="Add"
+      data-slot="capture-button"
+      className={cn(
+        "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100",
+        className,
+      )}
+    >
+      <CaptureIcon aria-hidden className="size-7" strokeWidth={2} />
+    </Link>
+  );
+}
+
+/**
  * Phones (below `sm`): five labelled tabs, Home · Cellar · ＋ · Map · Me (D1).
  * 49 pt plus the home-indicator inset on frosted glass; the brass ＋ is 56 pt
  * and sits 8 pt proud of the bar. `SideRail` is the same set from `sm` up.
+ * The capture surface hides the bar (`AppShell`, design §2).
  */
 export function TabBar({ className }: { className?: string }) {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const [active, setActive] = useOptimisticTab();
-  const [choosing, setChoosing] = useState(false);
 
   const onTap = (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => {
     if (opensElsewhere(event)) return;
@@ -130,20 +158,7 @@ export function TabBar({ className }: { className?: string }) {
           />
         ))}
         <div className="relative flex justify-center">
-          <button
-            type="button"
-            aria-label="Add"
-            aria-haspopup="dialog"
-            aria-expanded={choosing}
-            onClick={() => setChoosing(true)}
-            // The chooser's destinations, warmed while the finger is still
-            // down (X24); the tabs themselves are links, which the shell's
-            // pointerdown prefetch already covers.
-            onPointerDown={() => prefetchCaptureDestinations(router)}
-            className="absolute -top-2 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/40 outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100"
-          >
-            <CaptureIcon aria-hidden className="size-7" strokeWidth={2} />
-          </button>
+          <CaptureButton className="absolute -top-2 shadow-lg shadow-black/40" />
         </div>
         {right.map((tab) => (
           <TabLink
@@ -154,7 +169,6 @@ export function TabBar({ className }: { className?: string }) {
           />
         ))}
       </div>
-      <CaptureChooser open={choosing} onOpenChange={setChoosing} />
     </nav>
   );
 }

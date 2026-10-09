@@ -1,13 +1,16 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { type MouseEvent, useState } from "react";
+import type { MouseEvent } from "react";
 import { cn } from "@/lib/utils";
-import { CaptureChooser } from "./CaptureChooser";
 import { Link } from "./Link";
-import { CaptureIcon, TABS, type Tab } from "./nav";
-import { prefetchCaptureDestinations } from "./prefetch";
-import { handleActiveTabTap, opensElsewhere, useOptimisticTab } from "./TabBar";
+import { TABS, type Tab } from "./nav";
+import {
+  CaptureButton,
+  handleActiveTabTap,
+  opensElsewhere,
+  useOptimisticTab,
+} from "./TabBar";
 
 /**
  * From `sm` up: the same five destinations as `TabBar`, stacked in a rail on
@@ -17,7 +20,6 @@ export function SideRail({ className }: { className?: string }) {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const [active, setActive] = useOptimisticTab();
-  const [choosing, setChoosing] = useState(false);
 
   const onTap = (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => {
     if (opensElsewhere(event)) return;
@@ -66,19 +68,8 @@ export function SideRail({ className }: { className?: string }) {
       )}
     >
       {TABS.slice(0, 2).map(item)}
-      <button
-        type="button"
-        aria-label="Add"
-        aria-haspopup="dialog"
-        aria-expanded={choosing}
-        onClick={() => setChoosing(true)}
-        onPointerDown={() => prefetchCaptureDestinations(router)}
-        className="my-1 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground outline-none transition-transform duration-(--ca-dur-micro) ease-standard hover:bg-primary/90 focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100"
-      >
-        <CaptureIcon aria-hidden className="size-7" strokeWidth={2} />
-      </button>
+      <CaptureButton className="my-1 hover:bg-primary/90" />
       {TABS.slice(2).map(item)}
-      <CaptureChooser open={choosing} onOpenChange={setChoosing} />
     </nav>
   );
 }
