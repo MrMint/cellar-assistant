@@ -729,6 +729,75 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
       });
     });
 
+    it("an unknown brand id is a typed NotFound on link and replace, never a raw foreign-key error", async () => {
+      await withTestDb(async (db) => {
+        const { owner, actor } = await seedScenario(db);
+        const ctx = userCtx(owner, "r");
+        const real = await seedBrand(db, `Real ${randomUUID()}`);
+        await actor.linkBrand(ctx, { brandId: real, isPrimary: true });
+        const ghost = randomUUID();
+
+        for (const call of [
+          () => actor.linkBrand(ctx, { brandId: ghost }),
+          () =>
+            actor.replacePrimaryBrand(ctx, {
+              brandId: ghost,
+              replacesBrandId: real,
+            }),
+        ]) {
+          const refused = await call().then(
+            () => null,
+            (error: unknown) => error,
+          );
+          expect(refused).toBeInstanceOf(NotFoundError);
+          expect((refused as NotFoundError).message).toBe(
+            `brand ${ghost} not found`,
+          );
+        }
+        // Nothing moved: the real brand is still the only, primary, link.
+        const rows = (await actor.brands(ctx, page)).entries.map(
+          (entry) => entry.node,
+        );
+        expect(rows.map((row) => [row.brandId, row.isPrimary])).toEqual([
+          [real, true],
+        ]);
+      });
+    });
+
+    it("unlinkBrand is idempotent: a retried clear (first answer lost) succeeds, and clears", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, ref, actor } = await seedScenario(db);
+        const ctx = userCtx(owner, "r");
+        const shown = await seedBrand(db, `Shown ${randomUUID()}`);
+        await actor.linkBrand(ctx, { brandId: shown, isPrimary: true });
+
+        await expect(actor.unlinkBrand(ctx, shown)).resolves.toEqual({
+          brandId: shown,
+        });
+        const before = (await pendingOutbox(db, actorIdFor(ref))).length;
+        // The retry: same answer, nothing written, no second re-embed.
+        await expect(
+          actor.unlinkBrand(ctx, shown.toUpperCase()),
+        ).resolves.toEqual({ brandId: shown });
+        expect((await pendingOutbox(db, actorIdFor(ref))).length).toBe(before);
+        expect((await actor.brands(ctx, page)).totalCount).toBe(0);
+        // Still the creator's alone, linked or not.
+        await expect(
+          actor.unlinkBrand(userCtx(friend, "r"), shown),
+        ).rejects.toThrow(ForbiddenError);
+
+        // A lost *change* retried is the same story: replace is a no-op once
+        // it has landed, not a NotFound for the brand it already unlinked.
+        const next = await seedBrand(db, `Next ${randomUUID()}`);
+        await actor.linkBrand(ctx, { brandId: shown, isPrimary: true });
+        const input = { brandId: next, replacesBrandId: shown };
+        await actor.replacePrimaryBrand(ctx, input);
+        await expect(
+          actor.replacePrimaryBrand(ctx, input),
+        ).resolves.toMatchObject({ brandId: next, isPrimary: true });
+      });
+    });
+
     it("correctionSource (X19): the creator's onboarding and whether it kept a label; null for anyone else", async () => {
       await withTestDb(async (db) => {
         const { owner, friend, stranger, actor } = await seedScenario(db);

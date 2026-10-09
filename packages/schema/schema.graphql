@@ -3414,7 +3414,7 @@ type Mutation {
   linkBarcodeItem(code: String!, itemId: ID!, itemType: ItemType!): LinkBarcodeItemResult!
 
   """
-  The item creator's alone (today's `item_brands` insert check). `brandId` comes from `resolveBrand`, never from a client-invented id.
+  The item creator's alone (today's `item_brands` insert check). `brandId` comes from `resolveBrand`, never from a client-invented id; one that names no brand is a `NotFoundError`.
   """
   linkItemBrand(brandId: ID!, isPrimary: Boolean, itemId: ID!, type: ItemType!): LinkItemBrandResult!
 
@@ -3486,7 +3486,7 @@ type Mutation {
   reorderTierListBand(band: Int!, orderedIds: [ID!]!, tierListId: ID!): ReorderTierListBandResult!
 
   """
-  D8 “Wrong brand? Change it”: `brandId` (from `resolveBrand`) becomes the item's primary brand and `replacesBrandId` — the brand the page showed — is unlinked, in one turn. The creator only. Repeating it is a no-op, so an Undo is the same call with the two swapped.
+  D8 “Wrong brand? Change it”: `brandId` (from `resolveBrand`) becomes the item's primary brand and `replacesBrandId` — the brand the page showed — is unlinked, in one turn. The creator only. Repeating it is a no-op, so an Undo is the same call with the two swapped. A `brandId` that names no brand is a `NotFoundError`.
   """
   replaceItemBrand(brandId: ID!, itemId: ID!, replacesBrandId: ID, type: ItemType!): ReplaceItemBrandResult!
 
@@ -3590,6 +3590,10 @@ type Mutation {
   D4: takes back the latest edit not already undone (an add, a removal, a move) and records that in the list's append-only history. Creator only; nothing to undo is a `ConflictError`.
   """
   undoTierListEdit(tierListId: ID!): UndoTierListEditResult!
+
+  """
+  The item creator's alone. Idempotent: a brand that is not linked — never was, or an earlier call already unlinked it — answers the same `UnlinkedItemBrand`, so a retried clear succeeds instead of NotFound.
+  """
   unlinkItemBrand(brandId: ID!, itemId: ID!, type: ItemType!): UnlinkItemBrandResult!
 
   """Admin only (BrandActor.update)."""

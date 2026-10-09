@@ -1225,6 +1225,10 @@ export class ItemActor
    *
    * Idempotent on `(item, brandId)`, which is also how a re-delivered
    * `ItemOnboardingActor.confirm` produces one link rather than two.
+   *
+   * A `brandId` that names no brand is a `NotFoundError` (wave B hardening):
+   * it used to reach the insert and come back as a raw
+   * `item_brands_brand_id_brands_id_fkey` violation — a 500.
    */
   async linkBrand(ctx: Ctx, input: LinkItemBrandInput): Promise<ItemBrandDto> {
     const aggregate = this.#requireItem();
@@ -1254,6 +1258,7 @@ export class ItemActor
       return brandRowToDto(reloaded.ref.type, row);
     }
 
+    await this.#requireBrandExists(brandId);
     const linkId = randomUUID();
     await this.tx(async (tx) => {
       await tx.insert(itemBrands).values({
@@ -1263,6 +1268,8 @@ export class ItemActor
         ...BRANDS.values(aggregate.ref),
       });
       await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
+    }).catch((error: unknown) => {
+      throw translateBrandForeignKey(error, brandId);
     });
     await this.reload();
     const reloaded = this.#requireItem();
@@ -1273,6 +1280,15 @@ export class ItemActor
     return brandRowToDto(reloaded.ref.type, row);
   }
 
+  /**
+   * Item creator only. **Idempotent** (wave B hardening): a brand that is
+   * not linked — never was, or a previous call already unlinked it — is the
+   * state asked for, so the answer is the same `{ brandId }` and nothing is
+   * written. It used to be a `NotFoundError`, which made a retried clear
+   * (the edit form's, after its first answer was lost) fail forever: the
+   * page still showed the brand, and every Save asked to unlink a link that
+   * was already gone.
+   */
   async unlinkBrand(ctx: Ctx, brandId: string): Promise<UnlinkedItemBrand> {
     brandId = requireUuid(brandId, "brandId");
     const aggregate = this.#requireItem();
@@ -1282,9 +1298,7 @@ export class ItemActor
       "unlink a brand from it",
     );
     const row = aggregate.brands.find((brand) => brand.brandId === brandId);
-    if (row === undefined) {
-      throw new NotFoundError(`brand ${brandId} is not linked to ${this.key}`);
-    }
+    if (row === undefined) return { brandId };
 
     await this.tx(async (tx) => {
       await tx.delete(itemBrands).where(eq(itemBrands.id, row.id));
@@ -1303,7 +1317,8 @@ export class ItemActor
    *
    * Idempotent: when `brandId` is already the only primary and
    * `replacesBrandId` is no longer linked, nothing is written — so a retried
-   * request, or an Undo of an Undo, is a no-op rather than an error. One
+   * request, or an Undo of an Undo, is a no-op rather than an error. A
+   * `brandId` that names no brand is a `NotFoundError`, never a raw FK. One
    * `regenerateVector` is enqueued when anything changed (the brand names are
    * embedded, N08).
    */
@@ -1338,6 +1353,9 @@ export class ItemActor
       toDemote.length === 0;
 
     if (!settled) {
+      // Only a new link can name a brand that does not exist; an existing
+      // link's brand row is there (`ON DELETE CASCADE` would have taken it).
+      if (target === undefined) await this.#requireBrandExists(brandId);
       await this.tx(async (tx) => {
         if (toUnlink !== undefined) {
           await tx.delete(itemBrands).where(eq(itemBrands.id, toUnlink.id));
@@ -1367,6 +1385,8 @@ export class ItemActor
             .where(eq(itemBrands.id, target.id));
         }
         await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
+      }).catch((error: unknown) => {
+        throw translateBrandForeignKey(error, brandId);
       });
       await this.reload();
     }
@@ -1376,6 +1396,22 @@ export class ItemActor
       throw new ConflictError(`item brand ${brandId} was not written`);
     }
     return brandRowToDto(reloaded.ref.type, row);
+  }
+
+  /**
+   * The brand a new link names has to exist. Checked before the write so the
+   * answer is a typed `NotFoundError`; `translateBrandForeignKey` covers the
+   * brand that disappears between this read and the insert.
+   */
+  async #requireBrandExists(brandId: string): Promise<void> {
+    const [row] = await this.db
+      .select({ id: brandsTable.id })
+      .from(brandsTable)
+      .where(eq(brandsTable.id, brandId))
+      .limit(1);
+    if (row === undefined) {
+      throw new NotFoundError(`brand ${brandId} not found`);
+    }
   }
 
   /**
@@ -1828,6 +1864,19 @@ const pgErrorOf = (
     code?: unknown;
     constraint?: unknown;
   };
+};
+
+/**
+ * A link insert that lost its brand mid-turn: the brand row was deleted
+ * between `#requireBrandExists` and the insert. The same `NotFoundError` the
+ * check gives, not a raw 23503.
+ */
+const translateBrandForeignKey = (error: unknown, brandId: string): unknown => {
+  const pg = pgErrorOf(error);
+  return pg?.code === "23503" &&
+    pg.constraint === "item_brands_brand_id_brands_id_fkey"
+    ? new NotFoundError(`brand ${brandId} not found`)
+    : error;
 };
 
 /** `idx_generic_items_name_category` is a UNIQUE CONSTRAINT, not an index. */

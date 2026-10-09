@@ -349,6 +349,58 @@ describe("the brand change and its Undo (D8)", () => {
       ["b1", "b2"],
     ]);
   });
+
+  test("clearing unlinks the brand that was shown — and a retried clear is a success, not a NotFound", async () => {
+    const { client, sent } = clientAnswering({
+      ...replaceAnswers,
+      // The server's answer is the same whether the link was there or a
+      // first, lost attempt already removed it (`unlinkBrand` is idempotent).
+      UnlinkItemBrand: {
+        unlinkItemBrand: { __typename: "UnlinkedItemBrand", brandId: "b1" },
+      },
+    });
+    const changer = await changerFor(client, ["b1"]);
+    const results: Awaited<ReturnType<typeof changer.change>>[] = [];
+    await act(async () => {
+      results.push(await changer.change(ridge, "  "));
+      // The edit form's Save again, after "The brand wasn't changed. Try
+      // again.": the page still shows Ridge, so it asks for the same unlink.
+      results.push(await changer.change(ridge, ""));
+    });
+    for (const result of results) {
+      assert.ok(result.ok && result.changed);
+      assert.equal(result.to, null);
+      assert.deepEqual(result.from, ridge);
+    }
+    assert.deepEqual(
+      sent
+        .filter((op) => op.operationName === "UnlinkItemBrand")
+        .map((op) => op.variables),
+      [
+        { type: "WINE", itemId: "w1", brandId: "b1" },
+        { type: "WINE", itemId: "w1", brandId: "b1" },
+      ],
+    );
+    assert.deepEqual(replaced(sent), [], "a clear never replaces");
+
+    // Undo of the clear: Ridge back as the primary, nothing named to unlink.
+    const [cleared] = results;
+    await act(async () => {
+      if (cleared?.ok && cleared.changed) await changer.undo(cleared);
+    });
+    assert.deepEqual(replaced(sent), [["b1", null]]);
+  });
+
+  test("clearing an item that shows no brand sends nothing", async () => {
+    const { client, sent } = clientAnswering({});
+    const changer = await changerFor(client, []);
+    let result: Awaited<ReturnType<typeof changer.change>> | undefined;
+    await act(async () => {
+      result = await changer.change(null, "");
+    });
+    assert.deepEqual(result, { ok: true, changed: false });
+    assert.deepEqual(sent, []);
+  });
 });
 
 describe("correctionOutcome", () => {
