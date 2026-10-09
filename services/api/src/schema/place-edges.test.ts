@@ -650,6 +650,34 @@ describe("PlaceMenuItem.canCorrectMatch / forYou (X07)", () => {
     ]);
   });
 
+  it("a failed lineContext nulls each line's forYou, not the menu", async () => {
+    const { invoke } = stubSidecar({
+      "MenuScanActor.get": () => scanDto,
+      "MenuScanActor.menuItems": (_id, _ctx, args) => page(lines, args),
+      "MenuScansCollectionActor.lineContext": () => {
+        throw new Error("actor timed out");
+      },
+    });
+    const result = await run(
+      `{ menuScan(id: "${SCAN}") { ... on MenuScan {
+         menuItems(first: 10) { edges { node { id canCorrectMatch forYou { yourScore } } } }
+       } } }`,
+      testContext(invoke, viewer),
+    );
+    const nodes = (
+      result.data as {
+        menuScan: { menuItems: { edges: { node: unknown }[] } };
+      }
+    ).menuScan.menuItems.edges.map((edge) => edge.node);
+    expect(nodes).toEqual([
+      { id: L1, canCorrectMatch: false, forYou: null },
+      { id: L2, canCorrectMatch: false, forYou: null },
+      { id: L3, canCorrectMatch: false, forYou: null },
+    ]);
+    // Not swallowed: the failure is still reported, on the nullable field.
+    expect(result.errors?.length ?? 0).toBeGreaterThan(0);
+  });
+
   it("an anonymous viewer gets nothing, and costs no call", async () => {
     const { invoke, calls } = stubSidecar({
       "PlaceActor.get": (id) => placeDto(id),

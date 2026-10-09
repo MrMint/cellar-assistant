@@ -360,8 +360,12 @@ builder.objectFields(PlaceMenuItemType, (t) => ({
       "will let you set or clear its match (“Not this”). False for everyone " +
       "else, and for an anonymous viewer. One batched call per request, " +
       "shared with `forYou`.",
+    // Non-null, so a failed batch must not throw here: GraphQL would null the
+    // whole line, and with it the menu page around it. Not knowing is "not
+    // offered"; the same failure still surfaces on the nullable `forYou`.
     resolve: async (line, _args, context) =>
-      (await lineContext(context, line.id))?.canCorrectMatch ?? false,
+      (await lineContext(context, line.id).catch(() => null))
+        ?.canCorrectMatch ?? false,
   }),
   forYou: t.field({
     type: MenuLineForYouType,
