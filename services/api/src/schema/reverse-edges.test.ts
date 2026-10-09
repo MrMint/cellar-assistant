@@ -18,6 +18,7 @@ import type {
   TierListEntryRef,
 } from "@cellar-assistant/contracts";
 import {
+  brandFirstItemTypesActorId,
   brandItemCountsActorId,
   NotFoundError,
   offsetPage,
@@ -634,6 +635,39 @@ describe("Brand.itemCount / Brand.itemLinks (G23, G24)", () => {
           edges: [
             { node: { id: BRAND_A, itemCount: 7 } },
             { node: { id: BRAND_B, itemCount: 0 } },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("firstItemType (X23): one batched call for the page, under its own key", async () => {
+    const { invoke, calls } = sidecar({
+      "BrandsCollectionActor.list": (_id, _ctx, _filter, args) =>
+        page([brand(BRAND_A), brand(BRAND_B)], args),
+      "BrandLinksCollectionActor.firstItemTypes": ((
+        _id: string,
+        _ctx: unknown,
+        filter: { brandIds: string[] },
+      ) =>
+        filter.brandIds.map((id) => (id === BRAND_A ? "BEER" : null))) as never,
+    });
+    const result = await run(
+      `{ brands(first: 10) { ... on BrandConnection { edges { node { id firstItemType } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    const batched = callsTo(calls, "firstItemTypes");
+    expect(batched).toHaveLength(1);
+    expect(batched[0]?.actorId).toBe(
+      brandFirstItemTypesActorId({ brandIds: [BRAND_A, BRAND_B] }),
+    );
+    expect(JSON.stringify(result.data)).toBe(
+      JSON.stringify({
+        brands: {
+          edges: [
+            { node: { id: BRAND_A, firstItemType: "BEER" } },
+            { node: { id: BRAND_B, firstItemType: null } },
           ],
         },
       }),

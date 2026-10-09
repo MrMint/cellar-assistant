@@ -53,6 +53,17 @@ describe("BrandCard (restored)", () => {
     assert.match(html, /alt="Vietti logo"/);
   });
 
+  test('X23: one item is "1 item"; no type, no chip', () => {
+    const html = render(
+      <BrandCard
+        brand={{ ...card, item_count: 1, brand_type: null }}
+        href="/brands/b1"
+      />,
+    );
+    assert.match(html, />1 item</);
+    assert.doesNotMatch(html, /data-slot="brand-type-chip"/);
+  });
+
   test("no count when the API gave none", () => {
     const html = render(
       <BrandCard
@@ -71,7 +82,6 @@ describe("BrandDetails (restored)", () => {
     description: "Barolo producer",
     logo_url: null,
     brand_type: "winery",
-    created_at: "2019-06-01T00:00:00Z",
     parent_brand: { id: "b0", name: "Krause", brand_type: "manufacturer" },
     child_brands: [{ id: "b2", name: "Vietti Moscato", brand_type: "winery" }],
     item_brands: [
@@ -91,10 +101,10 @@ describe("BrandDetails (restored)", () => {
     ],
   };
 
-  test("header: h1 name, Since year, type chip, parent link, child chips", () => {
+  test("header: h1 name, type chip, parent link, child chips; no Since (X23)", () => {
     const html = render(<BrandDetails brand={brand} />);
     assert.match(html, /<h1[^>]*>Vietti<\/h1>/);
-    assert.match(html, /Since 2019/);
+    assert.doesNotMatch(html, /Since/);
     assert.match(html, />Winery</);
     assert.match(html, /Part of:/);
     assert.match(html, /href="\/brands\/b0"/);

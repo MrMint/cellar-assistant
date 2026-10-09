@@ -557,6 +557,27 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
       });
     });
 
+    it("reviewBy (X23): a named user's newest review, to any signed-in viewer", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, actor } = await seedScenario(db);
+        await actor.addReview(userCtx(owner, "r"), { score: 2.5 });
+        // A tier list's viewer reading its owner's verdict: no friendship
+        // needed, as for `reviews`.
+        expect(
+          (await actor.reviewBy(userCtx(stranger, "r"), owner))?.score,
+        ).toBe(2.5);
+        expect(await actor.reviewBy(userCtx(owner, "r"), friend)).toBeNull();
+        // Case-insensitive, like every id here.
+        expect(
+          (await actor.reviewBy(userCtx(friend, "r"), owner.toUpperCase()))
+            ?.userId,
+        ).toBe(owner);
+        await expect(actor.reviewBy(anonymousCtx("r"), owner)).rejects.toThrow(
+          ForbiddenError,
+        );
+      });
+    });
+
     it("reviews / score / brands: every signed-in viewer, anonymous refused", async () => {
       await withTestDb(async (db) => {
         const { owner, friend, stranger, actor } = await seedScenario(db);

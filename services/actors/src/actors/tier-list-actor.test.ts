@@ -13,8 +13,10 @@
  *   4. reordering is safe under a concurrent second reorder of the same list,
  *      because Dapr guarantees one turn at a time per actor id — demonstrated
  *      both as "sequential turns compose correctly" and, in contrast, "two
- *      stale activations of the same id do not", which is exactly the failure
- *      mode the guarantee rules out in production.
+ *      stale activations of the same id do not" (since D4 the second one's
+ *      write is refused by the history log's unique `seq` rather than
+ *      corrupting the board), which is exactly the failure mode the
+ *      guarantee rules out in production.
  *
  * Also covered: `addItem`'s idempotency and natural-uniqueness conflict,
  * `removeItem`'s renumbering, and `generateInsights`'s throttle/min-item gate
@@ -35,7 +37,12 @@ import {
   userCtx,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { outbox, tierListItems, tierLists } from "@cellar-assistant/db";
+import {
+  outbox,
+  tierListHistory,
+  tierListItems,
+  tierLists,
+} from "@cellar-assistant/db";
 import { and, eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
@@ -956,7 +963,7 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
       });
     });
 
-    it("shows why the guarantee matters: two stale activations of the same id corrupt state", async () => {
+    it("shows why the guarantee matters: a second, stale activation's write is refused, not merged", async () => {
       await withTestDb(async (db) => {
         const owner = await seedUser(db);
         const id = await seedTierList(db, { createdById: owner });
@@ -985,46 +992,51 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
         // its own stale in-memory copy of the aggregate loaded *before*
         // either has written anything. In production this cannot happen —
         // Dapr places exactly one activation per actor id and serialises
-        // every call into it. Simulating the violation here is what proves
-        // the guarantee is load-bearing: without it, `reorderBand`'s
-        // "compute from the cache, no lock" design is unsafe.
+        // every call into it.
         const stale1 = await activate(newTierListActor(id, db));
         const stale2 = await activate(newTierListActor(id, db));
 
         // Both computed their reorder from the *same* pre-write snapshot.
         await stale1.reorderBand(userCtx(owner, "r1"), 0, [c.id, b.id, a.id]);
-        // stale2 never reloaded after stale1's write — exactly what a second
-        // concurrent activation would do, and exactly what Dapr never allows.
-        await stale2.reorderBand(userCtx(owner, "r2"), 0, [b.id, a.id, c.id]);
 
-        // `#writePositions` skips writing a row whose *own stale cache*
-        // already shows it at the target `(band, position)` — a real
-        // optimisation (it keeps a reorder's write set to what actually
-        // moved) that becomes a correctness bug the instant two activations
-        // are alive at once: `stale2` thinks `c` is still at position 2 (its
-        // own snapshot), so it never re-writes `c`, leaving `c` at whatever
-        // `stale1` last wrote it to (position 0) while `stale2` also writes
-        // `b` to position 0. The result is two rows sharing one position —
-        // the exact invariant `reorderBand` exists to guarantee never
-        // happens. This is *not* a bug to fix in `TierListActor`: it is the
-        // failure the single-activation guarantee prevents, and why
-        // `reorderBand` may trust its in-memory cache without a version
-        // column or a `SELECT ... FOR UPDATE` — because in production there
-        // is never a `stale2`.
+        // Before D4, stale2's write landed: `#writePositions` skips a row
+        // its own stale cache already shows in place, so `c` kept stale1's
+        // position 0 while `b` was written to 0 too — two rows sharing one
+        // position, the invariant `reorderBand` exists to keep. Every
+        // recorded edit now also appends `tier_list_history` row
+        // `lastSeq + 1`, and `(tier_list_id, seq)` is unique: stale2's
+        // snapshot names the same next `seq` stale1 just took, so its whole
+        // transaction is refused instead of merged. The log is not a
+        // substitute for the guarantee (`update` writes no history), but a
+        // stale edit now fails loudly rather than corrupting the board.
+        await expect(
+          stale2.reorderBand(userCtx(owner, "r2"), 0, [b.id, a.id, c.id]),
+        ).rejects.toBeInstanceOf(ConflictError);
+
         const rows = await db
           .select({ id: tierListItems.id, position: tierListItems.position })
           .from(tierListItems)
           .where(eq(tierListItems.tierListId, id))
           .orderBy(tierListItems.position);
-        console.log(
-          "two stale activations (guarantee violated), final rows:",
-          JSON.stringify(rows, null, 2),
-        );
-        const positions = rows.map((r) => r.position);
-        // The corruption, precisely: a duplicate position where "clean
-        // sequential, never duplicated" is the whole point of this method.
-        expect(new Set(positions).size).toBeLessThan(positions.length);
-        expect(positions.sort((x, y) => x - y)).not.toEqual([0, 1, 2]);
+        expect(rows).toEqual([
+          { id: c.id, position: 0 },
+          { id: b.id, position: 1 },
+          { id: a.id, position: 2 },
+        ]);
+
+        // The refusal also rebuilt stale2's cache, so it is not wedged: the
+        // retry computes from the list as it now is, and lands cleanly.
+        await stale2.reorderBand(userCtx(owner, "r3"), 0, [b.id, a.id, c.id]);
+        const retried = await db
+          .select({ id: tierListItems.id, position: tierListItems.position })
+          .from(tierListItems)
+          .where(eq(tierListItems.tierListId, id))
+          .orderBy(tierListItems.position);
+        expect(retried).toEqual([
+          { id: b.id, position: 0 },
+          { id: a.id, position: 1 },
+          { id: c.id, position: 2 },
+        ]);
       });
     });
   });
@@ -1549,6 +1561,9 @@ describe.skipIf(skip)("TierListActor concealment", () => {
       "NOT_FOUND",
       (actor, ctx) => actor.reorderBand(ctx, 3, [ENTRY]),
     ],
+    ["editHistory", "NOT_FOUND", (actor, ctx) => actor.editHistory(ctx)],
+    ["undo", "NOT_FOUND", (actor, ctx) => actor.undo(ctx)],
+    ["redo", "NOT_FOUND", (actor, ctx) => actor.redo(ctx)],
     [
       "generateInsights",
       "FORBIDDEN",
@@ -1577,6 +1592,279 @@ describe.skipIf(skip)("TierListActor concealment", () => {
       );
       expect(hidden).toEqual(missing);
       expect(hidden.code).toBe(code);
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D4 — the edit history: every edit recorded, Undo and Redo replayed         */
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(skip)("TierListActor edit history (D4)", () => {
+  afterAll(closeTestDb);
+
+  /** Where every entry stands, as `band:name` per band in order. */
+  const board = async (actor: TierListActor, ctx: Ctx) => {
+    const rows = (await actor.items(ctx, page)).entries.map((e) => e.node);
+    return rows
+      .slice()
+      .sort((a, b) => b.band - a.band || a.position - b.position)
+      .map((row) => `${row.band}:${row.position}:${row.entry.id}`);
+  };
+
+  const setup = async (db: DbOrTx, names = ["A", "B", "C"]) => {
+    const owner = await seedUser(db);
+    const id = await seedTierList(db, { createdById: owner });
+    const actor = await activate(newTierListActor(id, db));
+    const wines = [];
+    for (const name of names) wines.push(await seedWine(db, owner, name));
+    return { owner, id, actor, wines, ctx: userCtx(owner, "r-owner") };
+  };
+
+  it("records every edit, and nothing for a no-op reorder", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      const added = [];
+      for (const wineId of wines) {
+        added.push(
+          await actor.addItem(ctx, { entry: { type: "WINE", id: wineId } }),
+        );
+      }
+      const ids = added.map((row) => row.id);
+      await actor.reorderBand(ctx, 0, ids); // already in this order
+      await actor.reorderBand(ctx, 5, [ids[2] ?? ""]);
+      await actor.removeItem(ctx, ids[0] ?? "");
+
+      const log = await db
+        .select({ seq: tierListHistory.seq, kind: tierListHistory.kind })
+        .from(tierListHistory)
+        .where(eq(tierListHistory.tierListId, id))
+        .orderBy(tierListHistory.seq);
+      expect(log).toEqual([
+        { seq: 1, kind: "ADD" },
+        { seq: 2, kind: "ADD" },
+        { seq: 3, kind: "ADD" },
+        { seq: 4, kind: "MOVE" },
+        { seq: 5, kind: "REMOVE" },
+      ]);
+      const history = await actor.editHistory(ctx);
+      expect(history).toMatchObject({
+        editCount: 5,
+        undo: {
+          seq: 5,
+          kind: "REMOVE",
+          entry: { type: "WINE", id: wines[0] },
+          entryName: "A",
+          fromBand: 0,
+          toBand: null,
+        },
+        redo: null,
+      });
+    });
+  });
+
+  it("undoes and redoes a removal, back at its own place and id", async () => {
+    await withTestDb(async (db) => {
+      const { actor, wines, ctx } = await setup(db);
+      const rows = [];
+      for (const wineId of wines) {
+        rows.push(
+          await actor.addItem(ctx, {
+            entry: { type: "WINE", id: wineId },
+            band: 3,
+            notes: wineId === wines[1] ? "the middle one" : null,
+          }),
+        );
+      }
+      const middle = rows[1];
+      if (middle === undefined) throw new Error("fixture");
+      const before = await board(actor, ctx);
+      await actor.removeItem(ctx, middle.id);
+      expect(await board(actor, ctx)).toHaveLength(2);
+
+      const step = await actor.undo(ctx);
+      expect(step.applied).toMatchObject({ kind: "REMOVE", entryName: "B" });
+      expect(step.history.redo).toMatchObject({ kind: "REMOVE" });
+      expect(await board(actor, ctx)).toEqual(before);
+      const restored = (await actor.items(ctx, page)).entries.find(
+        (e) => e.node.id === middle.id,
+      );
+      expect(restored?.node.notes).toBe("the middle one");
+
+      await actor.redo(ctx);
+      expect(await board(actor, ctx)).toEqual(
+        before
+          .filter((cell) => !cell.endsWith(String(wines[1])))
+          .map((cell, index) => cell.replace(/^3:\d+:/, `3:${index}:`)),
+      );
+    });
+  });
+
+  it("undoes an add, and a cross-band move back into both bands", async () => {
+    await withTestDb(async (db) => {
+      const { actor, wines, ctx } = await setup(db);
+      const rows = [];
+      for (const wineId of wines) {
+        rows.push(
+          await actor.addItem(ctx, { entry: { type: "WINE", id: wineId } }),
+        );
+      }
+      const start = await board(actor, ctx);
+      const first = rows[0];
+      if (first === undefined) throw new Error("fixture");
+      await actor.reorderBand(ctx, 5, [first.id]);
+      expect((await actor.editHistory(ctx))?.undo).toMatchObject({
+        kind: "MOVE",
+        entry: { id: wines[0] },
+        fromBand: 0,
+        toBand: 5,
+      });
+
+      await actor.undo(ctx);
+      expect(await board(actor, ctx)).toEqual(start);
+
+      // Undo the third ADD too: the newest add leaves, the rest stay put.
+      await actor.undo(ctx);
+      expect(await board(actor, ctx)).toEqual(start.slice(0, 2));
+      expect(await actor.editHistory(ctx)).toMatchObject({
+        undo: { kind: "ADD", entry: { id: wines[1] } },
+        redo: { kind: "ADD", entry: { id: wines[2] } },
+      });
+
+      // Redo both, in order.
+      await actor.redo(ctx);
+      expect(await board(actor, ctx)).toEqual(start);
+      await actor.redo(ctx);
+      expect((await board(actor, ctx))[0]).toBe(`5:0:${wines[0]}`);
+      expect((await actor.editHistory(ctx))?.redo).toBeNull();
+    });
+  });
+
+  it("a new edit after an undo clears redo; nothing to undo is a conflict", async () => {
+    await withTestDb(async (db) => {
+      const { actor, wines, ctx } = await setup(db);
+      await expect(actor.undo(ctx)).rejects.toBeInstanceOf(ConflictError);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      await actor.undo(ctx);
+      expect((await actor.editHistory(ctx))?.redo).not.toBeNull();
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[1] ?? "" } });
+      expect(await actor.editHistory(ctx)).toMatchObject({
+        editCount: 2,
+        redo: null,
+      });
+      await expect(actor.redo(ctx)).rejects.toBeInstanceOf(ConflictError);
+    });
+  });
+
+  it("survives a new activation — the stacks are a replay of the log", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[1] ?? "" } });
+      await actor.undo(ctx);
+
+      const fresh = await activate(newTierListActor(id, db));
+      expect(await fresh.editHistory(ctx)).toMatchObject({
+        editCount: 2,
+        undo: { kind: "ADD", entry: { id: wines[0] } },
+        redo: { kind: "ADD", entry: { id: wines[1] } },
+      });
+      await fresh.redo(ctx);
+      expect(await board(fresh, ctx)).toHaveLength(2);
+    });
+  });
+
+  it("is the owner's alone: a friend sees null and may not undo", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const friend = await seedUser(db);
+      await seedFriendship(db, owner, friend);
+      const id = await seedTierList(db, {
+        createdById: owner,
+        privacy: "FRIENDS",
+      });
+      const actor = await activate(newTierListActor(id, db));
+      const wineId = await seedWine(db, owner);
+      await actor.addItem(userCtx(owner, "r"), {
+        entry: { type: "WINE", id: wineId },
+      });
+      const friendCtx = userCtx(friend, "r-friend");
+      expect(await actor.editHistory(friendCtx)).toBeNull();
+      await expect(actor.undo(friendCtx)).rejects.toBeInstanceOf(
+        ForbiddenError,
+      );
+    });
+  });
+
+  it("an edit whose snapshot no longer parses is stepped past, not thrown on after commit", async () => {
+    await withTestDb(async (db) => {
+      const { id, owner, wines, ctx } = await setup(db);
+      const first = await activate(newTierListActor(id, db));
+      await first.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      // A row the actor never writes (a hand edit): an ADD with no snapshot.
+      await db.insert(tierListHistory).values({
+        tierListId: id,
+        seq: 2,
+        kind: "ADD",
+        targetSeq: null,
+        change: {},
+        userId: owner,
+      });
+      const fresh = await activate(newTierListActor(id, db));
+      const before = await board(fresh, ctx);
+
+      const step = await fresh.undo(ctx);
+      expect(step.applied).toMatchObject({
+        seq: 2,
+        kind: "ADD",
+        entry: null,
+        entryName: null,
+      });
+      // Nothing to apply, so the board is as it was — and the stacks moved:
+      // the next Undo is the real add beneath it.
+      expect(await board(fresh, ctx)).toEqual(before);
+      expect(step.history.undo).toMatchObject({ seq: 1, kind: "ADD" });
+      const log = await db
+        .select({ seq: tierListHistory.seq, kind: tierListHistory.kind })
+        .from(tierListHistory)
+        .where(eq(tierListHistory.tierListId, id))
+        .orderBy(tierListHistory.seq);
+      expect(log.at(-1)).toEqual({ seq: 3, kind: "UNDO" });
+    });
+  });
+
+  it("the log is append-only: an UPDATE is refused by the database", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      const refused = await db
+        .execute(sql`
+          update public.tier_list_history set kind = 'MOVE'
+          where tier_list_id = ${id}::uuid
+        `)
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      // Drizzle wraps the driver's error; the trigger's words are its cause.
+      expect(String((refused as { cause?: unknown })?.cause)).toMatch(
+        /append-only/,
+      );
+    });
+  });
+
+  it("an undo bumps content and asks for insights, like any edit", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      const before = await contentUpdatedAt(db, id);
+      await db.execute(
+        sql`update public.outbox set status = 'delivered' where target_id = ${id}`,
+      );
+      await actor.undo(ctx);
+      const after = await contentUpdatedAt(db, id);
+      expect(after?.getTime()).toBeGreaterThanOrEqual(before?.getTime() ?? 0);
+      expect(await liveOutboxRowsFor(db, id)).toHaveLength(1);
     });
   });
 });

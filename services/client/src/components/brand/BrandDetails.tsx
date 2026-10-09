@@ -4,8 +4,10 @@
  * `82450ad1:src/components/brand/BrandDetails.tsx`, restored. Changes:
  *
  * - The logo is a plain `<img>` (any host; see `BrandCard`).
- * - "Since" slices the year from the ISO string (`sinceYear`): the old
- *   `new Date(...).getFullYear()` could differ between server and browser.
+ * - X23: no "Since <year>" — it was the catalog row's `created_at`, the day
+ *   someone first scanned the brand, read as a founding year. The type chip
+ *   is the stored type or the one inferred from its first item
+ *   (`inferBrandType`), and absent when neither says anything.
  * - The two counts are the connections' `totalCount` when given, since the
  *   lists now page; `itemsFooter`, `childrenFooter` and `placesFooter` are
  *   where the page puts each list's "Show more" (the old page read every row
@@ -22,7 +24,6 @@ import { ICON_STROKE, Place } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { Badge } from "@/components/ui/badge";
 import cellar1 from "@/images/cellar1.png";
-import { sinceYear } from "./adapter";
 import { BrandTypeChip } from "./brand-type-display";
 
 export type BrandItem = {
@@ -56,9 +57,9 @@ export type BrandDetailsItem = {
   name: string;
   description?: string | null;
   logo_url?: string | null;
-  brand_type: string;
+  /** Stored or inferred (`inferBrandType`); null shows no chip. */
+  brand_type: string | null;
   parent_brand_id?: string | null;
-  created_at: string;
   parent_brand?: {
     id: string;
     name: string;
@@ -158,7 +159,6 @@ export const BrandDetails = ({
   childrenFooter,
   placesFooter,
 }: BrandDetailsProps) => {
-  const since = sinceYear(brand.created_at);
   const groupedItems = brand.item_brands.reduce(
     (acc, item) => {
       const display = getItemDisplay(item);
@@ -206,18 +206,17 @@ export const BrandDetails = ({
         <div className="flex flex-col gap-4 md:py-2">
           <div>
             <h1 className="type-title-1 text-ink-1">{brand.name}</h1>
-            {since !== null && (
-              <p className="type-callout text-ink-2">Since {since}</p>
-            )}
           </div>
 
           {isNotNil(brand.description) && (
             <p className="type-body">{brand.description}</p>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            <BrandTypeChip brandType={brand.brand_type} />
-          </div>
+          {isNotNil(brand.brand_type) && (
+            <div className="flex flex-wrap gap-2">
+              <BrandTypeChip brandType={brand.brand_type} />
+            </div>
+          )}
 
           {/* Brand hierarchy */}
           {isNotNil(brand.parent_brand) && (

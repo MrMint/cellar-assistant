@@ -628,6 +628,14 @@ export type ItemActorInterface = {
    * calling); a `system` ctx, which names nobody, gets `null`.
    */
   myReview(ctx: Ctx): Promise<ItemReviewDto | null>;
+  /**
+   * X23: `userId`'s newest review of this item, or `null` — a tier list's
+   * owner's verdict beside the entry they ranked (`TierListItem.ownerReview`).
+   * Reviews are readable by any signed-in viewer (`reviews`), so this is no
+   * wider than paging through them; anonymous is refused like every read
+   * here.
+   */
+  reviewBy(ctx: Ctx, userId: string): Promise<ItemReviewDto | null>;
   linkBrand(ctx: Ctx, input: LinkItemBrandInput): Promise<ItemBrandDto>;
   unlinkBrand(ctx: Ctx, brandId: string): Promise<UnlinkedItemBrand>;
   /** X19 / D8: creator only. See {@link ReplaceItemBrandInput}. */
@@ -695,6 +703,7 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     reviews: {},
     score: {},
     myReview: {},
+    reviewBy: {},
     // Each enqueues `regenerateVector` (N08): the item's brands are part of
     // its embedded text.
     linkBrand: { modelBacked: true },

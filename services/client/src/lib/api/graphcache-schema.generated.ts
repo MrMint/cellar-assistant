@@ -672,6 +672,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "description", type: { kind: "SCALAR", name: "String" } },
+          { name: "firstItemType", type: { kind: "ENUM", name: "ItemType" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -4556,6 +4557,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "redoTierListEdit",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RedoTierListEditResult" },
+            },
+          },
+          {
             name: "rejectFriendRequest",
             type: {
               kind: "NON_NULL",
@@ -4714,6 +4722,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "ToggleRecipeLoveResult" },
+            },
+          },
+          {
+            name: "undoTierListEdit",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "UndoTierListEditResult" },
             },
           },
           {
@@ -7804,6 +7819,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "UNION",
+        name: "RedoTierListEditResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierListHistoryStep" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "OBJECT",
         name: "ReferenceRow",
         fields: [
@@ -8722,6 +8749,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "description", type: { kind: "SCALAR", name: "String" } },
           {
+            name: "editHistory",
+            type: { kind: "OBJECT", name: "TierListEditHistory" },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -8838,6 +8869,87 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "TierListEdit",
+        fields: [
+          {
+            name: "at",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          { name: "entryId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "entryName", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "entryType",
+            type: { kind: "ENUM", name: "TierListEntryType" },
+          },
+          { name: "fromBand", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEditKind" },
+            },
+          },
+          {
+            name: "seq",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "toBand", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListEditHistory",
+        fields: [
+          {
+            name: "canRedo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "canUndo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "editCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "redo", type: { kind: "OBJECT", name: "TierListEdit" } },
+          { name: "undo", type: { kind: "OBJECT", name: "TierListEdit" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListHistoryStep",
+        fields: [
+          {
+            name: "applied",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListEdit" },
+            },
+          },
+          {
+            name: "history",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListEditHistory" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "TierListItem",
         fields: [
           {
@@ -8858,6 +8970,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "item", type: { kind: "INTERFACE", name: "Item" } },
           { name: "notes", type: { kind: "SCALAR", name: "String" } },
+          { name: "ownerReview", type: { kind: "OBJECT", name: "ItemReview" } },
           { name: "place", type: { kind: "OBJECT", name: "Place" } },
           {
             name: "position",
@@ -8999,6 +9112,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ToggleRecipeLovePayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "UndoTierListEditResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierListHistoryStep" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },

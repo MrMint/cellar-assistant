@@ -1116,6 +1116,28 @@ END`),
 	index("tier_list_items_tier_list_id_idx").using("btree", table.tierListId.asc().nullsLast()),
 	unique("unique_beer_in_tier_list").on(table.tierListId, table.beerId),	unique("unique_coffee_in_tier_list").on(table.tierListId, table.coffeeId),	unique("unique_place_in_tier_list").on(table.tierListId, table.placeId),	unique("unique_sake_in_tier_list").on(table.tierListId, table.sakeId),	unique("unique_spirit_in_tier_list").on(table.tierListId, table.spiritId),	unique("unique_tea_in_tier_list").on(table.tierListId, table.teaId),	unique("unique_wine_in_tier_list").on(table.tierListId, table.wineId),check("exactly_one_tier_item_reference", sql`(num_nonnulls(place_id, wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("tier_list_items_band_check", sql`((band >= 0) AND (band <= 5))`),]);
 
+// D4 (tier-list edit history, `migrations/*_tier_list_history`): one row per
+// owner edit of a tier list's entries (ADD, REMOVE, MOVE) and per undo/redo of
+// one (UNDO, REDO naming the edit's `seq`). Append-only — the migration adds a
+// trigger refusing UPDATE — so undo and redo are new rows, never rewrites, and
+// the undo/redo stacks are a replay of this log (`lib/tier-list-history.ts`).
+// `change` is the edit's own snapshot: the row for an ADD/REMOVE, the touched
+// bands' orders before and after for a MOVE.
+export const tierListHistory = pgTable("tier_list_history", {
+	id: uuid().defaultRandom().primaryKey(),
+	tierListId: uuid("tier_list_id").notNull().references(() => tierLists.id, { onDelete: "cascade" } ),
+	seq: integer().notNull(),
+	kind: text().notNull(),
+	targetSeq: integer("target_seq"),
+	change: jsonb().notNull(),
+	userId: uuid("user_id").references(() => user.id, { onDelete: "set null" } ),
+	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
+}, (table) => [
+	unique("tier_list_history_tier_list_id_seq_key").on(table.tierListId, table.seq),
+	check("tier_list_history_kind_check", sql`(kind = ANY (ARRAY['ADD'::text, 'REMOVE'::text, 'MOVE'::text, 'UNDO'::text, 'REDO'::text]))`),
+	check("tier_list_history_target_seq_check", sql`((kind = ANY (ARRAY['UNDO'::text, 'REDO'::text])) = (target_seq IS NOT NULL))`),
+]);
+
 export const tierLists = pgTable("tier_lists", {
 	id: uuid().defaultRandom().primaryKey(),
 	name: text().notNull(),

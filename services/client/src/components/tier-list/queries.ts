@@ -28,7 +28,9 @@ import {
   TierListCardFragment,
   TierListCoreFragment,
   TierListEditFragment,
+  TierListEditHistoryFragment,
   TierListItemFragment,
+  TierListRecordedEditFragment,
 } from "./fragments";
 
 /** The API caps `first` at 100 on every connection. */
@@ -71,6 +73,9 @@ export const GetTierListQuery = graphql(
         __typename
         ... on TierList {
           ...TierListCore
+          editHistory {
+            ...TierListEditHistoryFields
+          }
           items(first: $first, after: $after) {
             totalCount
             pageInfo {
@@ -89,7 +94,12 @@ export const GetTierListQuery = graphql(
       }
     }
   `,
-  [TierListCoreFragment, TierListItemFragment, ActorErrorFieldsFragment],
+  [
+    TierListCoreFragment,
+    TierListEditHistoryFragment,
+    TierListItemFragment,
+    ActorErrorFieldsFragment,
+  ],
 );
 
 /** The edit form's initial values. */
@@ -166,6 +176,10 @@ export const GetTierListsForItemQuery = graphql(
           data {
             __typename
             id
+            myReview {
+              id
+              score
+            }
             tierListEntries(first: $first) {
               edges {
                 node {
@@ -192,6 +206,10 @@ export const GetTierListsForPlaceQuery = graphql(
         __typename
         ... on Place {
           id
+          myInteraction {
+            id
+            rating
+          }
           tierListEntries(first: $first) {
             edges {
               node {
@@ -325,6 +343,56 @@ export const ReorderBandMutation = graphql(
   [ActorErrorFieldsFragment],
 );
 
+/** D4: take back the latest edit; the toast and the buttons read the rest. */
+export const UndoTierListEditMutation = graphql(
+  `
+    mutation UndoTierListEdit($tierListId: ID!) {
+      undoTierListEdit(tierListId: $tierListId) {
+        __typename
+        ... on TierListHistoryStep {
+          applied {
+            ...TierListEditFields
+          }
+          history {
+            ...TierListEditHistoryFields
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [
+    TierListRecordedEditFragment,
+    TierListEditHistoryFragment,
+    ActorErrorFieldsFragment,
+  ],
+);
+
+/** D4: put back the latest undone edit. */
+export const RedoTierListEditMutation = graphql(
+  `
+    mutation RedoTierListEdit($tierListId: ID!) {
+      redoTierListEdit(tierListId: $tierListId) {
+        __typename
+        ... on TierListHistoryStep {
+          applied {
+            ...TierListEditFields
+          }
+          history {
+            ...TierListEditHistoryFields
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [
+    TierListRecordedEditFragment,
+    TierListEditHistoryFragment,
+    ActorErrorFieldsFragment,
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // In-page add (AddEntryModal) — kept from the rewrite
 // ---------------------------------------------------------------------------
@@ -353,6 +421,10 @@ export const TierListItemPickerQuery = graphql(
                 id
                 type
                 country
+                myReview {
+                  id
+                  score
+                }
                 ... on Wine {
                   wineVariety: variety
                   wineVintage: vintage
@@ -404,6 +476,10 @@ export const TierListPlacePickerQuery = graphql(
                 primaryCategory
                 locality
                 countryCode
+                myInteraction {
+                  id
+                  rating
+                }
               }
             }
           }

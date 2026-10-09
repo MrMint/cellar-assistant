@@ -54,7 +54,11 @@
  * (compares against each activation's own cache) lets a second, stale
  * activation leave a row un-rewritten because *it* still thinks that row is
  * already correct, producing two rows sharing one position — the exact
- * invariant this method exists to guarantee.
+ * invariant this method exists to guarantee. (Since D4 every recorded edit
+ * also takes the next `tier_list_history.seq`, unique per list, so such a
+ * stale second write is now refused whole rather than merged, as a retryable
+ * `ConflictError` after a cache rebuild (`#recordedTx`); that is a backstop,
+ * not a reason to drop the guarantee — `update` records nothing.)
  *
  * ## Content-change signal, replacing a trigger with an outbox row
  *
@@ -117,6 +121,20 @@
  * loudly rather than pretending insights were generated. See the B7 report for
  * the reasoning; this is a deliberate scope boundary, not an oversight.
  *
+ * ## Edit history, Undo and Redo (D4)
+ *
+ * Every edit to the entries — `addItem` (ADD), `removeItem` (REMOVE), a
+ * `reorderBand` that moved something (MOVE, within or across bands) — appends
+ * a `tier_list_history` row in the same transaction, carrying a snapshot of
+ * what it changed. `undo` / `redo` apply the edit on top of the matching
+ * stack backwards or forwards and append an `UNDO` / `REDO` row naming it.
+ * The log is append-only (a trigger refuses UPDATE), and where Undo and Redo
+ * stand is a replay of it (`lib/tier-list-history.ts`), so it survives a
+ * reload and a new activation. Applying is forgiving: an entry that is gone
+ * is skipped and every touched band is renumbered, so a stale edit never
+ * strands the ones beneath it. `editHistory` is the creator's alone; anyone
+ * else who may see the list gets `null`.
+ *
  * ## No `updateItem` — read the permissions this replaces
  *
  * Today's `tier_list_items` update permission allows writing `band`,
@@ -141,7 +159,10 @@ import type {
   RemovedTierListItem,
   TierListActorInterface,
   TierListDto,
+  TierListEditDto,
+  TierListEditHistoryDto,
   TierListEntryRef,
+  TierListHistoryStepResult,
   TierListItemDto,
   UpdateTierListInput,
 } from "@cellar-assistant/contracts";
@@ -158,8 +179,12 @@ import {
   TierListActorDescriptor,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { tierListItems, tierLists } from "@cellar-assistant/db";
-import { eq, sql } from "@cellar-assistant/db/orm";
+import {
+  tierListHistory,
+  tierListItems,
+  tierLists,
+} from "@cellar-assistant/db";
+import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import { canSeeTierList, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
@@ -175,6 +200,21 @@ import {
   MIN_GROUNDED_ENTRIES,
   resolveTierListEntries,
 } from "../lib/tier-list-entries.ts";
+import type {
+  BandOrders,
+  EditChange,
+  EntrySnapshot,
+  HistoryLogRow,
+  MoveSubject,
+} from "../lib/tier-list-history.ts";
+import {
+  historyStacks,
+  insertAt,
+  isEditKind,
+  movedEntry,
+  parseChange,
+  planBandOrders,
+} from "../lib/tier-list-history.ts";
 import { tierListInsightsStatus } from "../lib/tier-list-insights-status.ts";
 import { hiddenPlaceIds, placeIsVisible } from "../lib/unshared-places.ts";
 import { requireUuid } from "../lib/uuid.ts";
@@ -187,6 +227,12 @@ export type TierListAggregate = {
   readonly tierList: TierListRow;
   /** Every row, `band desc, position asc` — the plan's own read ordering. */
   readonly items: readonly TierListItemRow[];
+  /**
+   * D4: the edit log's replay columns, `seq` order — enough to know where
+   * Undo and Redo stand (`historyStacks`). The snapshots are read only when
+   * an edit is undone, redone or described.
+   */
+  readonly history: readonly HistoryLogRow[];
 };
 
 /**
@@ -346,6 +392,57 @@ const toItemDto = (row: TierListItemRow): TierListItemDto => ({
   updatedAt: iso(row.updatedAt),
 });
 
+/** One band's ids in position order. */
+const bandOrderOf = (
+  rows: readonly { id: string; band: number; position: number }[],
+  band: number,
+): string[] =>
+  rows
+    .filter((row) => row.band === band)
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((row) => row.id);
+
+/** A row as a REMOVE records it, so an Undo can put it back exactly. */
+const snapshotOf = (row: TierListItemRow): EntrySnapshot => ({
+  id: row.id,
+  entry: entryRefOf(row),
+  band: row.band,
+  position: row.position,
+  notes: row.notes,
+  createdAt: iso(row.createdAt),
+});
+
+/** The one entry a reorder moved, with what it ranks, or `null`. */
+const subjectOf = (
+  before: BandOrders,
+  after: BandOrders,
+  byId: ReadonlyMap<string, TierListItemRow>,
+): MoveSubject | null => {
+  const moved = movedEntry(before, after);
+  if (moved === null) return null;
+  const row = byId.get(moved.id);
+  return row === undefined ? null : { ...moved, entry: entryRefOf(row) };
+};
+
+/**
+ * The history's `(tier_list_id, seq)` key refusing a write: this activation's
+ * cache named a `seq` another writer had already taken, so its picture of the
+ * list is stale (see the class doc on stale activations).
+ */
+const isStaleHistoryWrite = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const cause = (error as { cause?: unknown }).cause;
+  const pg = (cause instanceof Error ? cause : error) as {
+    code?: unknown;
+    constraint?: unknown;
+  };
+  return (
+    pg.code === "23505" &&
+    pg.constraint === "tier_list_history_tier_list_id_seq_key"
+  );
+};
+
 /** Throws instead of a non-null assertion (repo style) when a lookup "can't" miss. */
 const mustGet = <K, V>(map: ReadonlyMap<K, V>, key: K, what: string): V => {
   const value = map.get(key);
@@ -386,7 +483,17 @@ export class TierListActor
       .where(eq(tierListItems.tierListId, id))
       .orderBy(sql`${tierListItems.band} desc, ${tierListItems.position} asc`);
 
-    return { tierList, items };
+    const history = await this.db
+      .select({
+        seq: tierListHistory.seq,
+        kind: tierListHistory.kind,
+        targetSeq: tierListHistory.targetSeq,
+      })
+      .from(tierListHistory)
+      .where(eq(tierListHistory.tierListId, id))
+      .orderBy(tierListHistory.seq);
+
+    return { tierList, items, history };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -542,20 +649,38 @@ export class TierListActor
     }
 
     const position = aggregate.items.filter((row) => row.band === band).length;
+    const createdAt = new Date();
+    const notes = input.notes ?? null;
 
-    await this.tx(async (tx) => {
-      await tx
+    await this.#recordedTx(async (tx) => {
+      const inserted = await tx
         .insert(tierListItems)
         .values({
           id: tierListItemId,
           tierListId: this.key,
           band,
           position,
-          notes: input.notes ?? null,
+          notes,
+          createdAt,
+          updatedAt: createdAt,
           [entryProperty(entry.type)]: entry.id,
         })
         // Belt and braces for a redelivery racing itself, same as `CellarActor`.
-        .onConflictDoNothing({ target: tierListItems.id });
+        .onConflictDoNothing({ target: tierListItems.id })
+        .returning({ id: tierListItems.id });
+      if (inserted.length > 0) {
+        await this.#record(tx, ctx, {
+          kind: "ADD",
+          row: {
+            id: tierListItemId,
+            entry,
+            band,
+            position,
+            notes,
+            createdAt: createdAt.toISOString(),
+          },
+        });
+      }
       await this.#bumpContentAndEnqueueInsights(tx, ctx);
     });
     await this.reload();
@@ -583,11 +708,12 @@ export class TierListActor
       .sort((a, b) => a.position - b.position)
       .map((row) => row.id);
 
-    await this.tx(async (tx) => {
+    await this.#recordedTx(async (tx) => {
       await tx
         .delete(tierListItems)
         .where(eq(tierListItems.id, tierListItemId));
       await this.#writePositions(tx, item.band, remaining);
+      await this.#record(tx, ctx, { kind: "REMOVE", row: snapshotOf(item) });
       await this.#bumpContentAndEnqueueInsights(tx, ctx);
     });
     await this.reload();
@@ -648,7 +774,13 @@ export class TierListActor
       [...movedIds].map((id) => mustGet(byId, id, "tier_list_item").band),
     );
 
-    await this.tx(async (tx) => {
+    // D4: the touched bands, before and after, are the MOVE's snapshot.
+    const before: Record<string, string[]> = {
+      [String(targetBand)]: currentInTarget,
+    };
+    const after: Record<string, string[]> = { [String(targetBand)]: [...ids] };
+
+    await this.#recordedTx(async (tx) => {
       let moved = await this.#writePositions(tx, targetBand, ids, byId);
       for (const sourceBand of sourceBands) {
         const remaining = aggregate.items
@@ -656,19 +788,378 @@ export class TierListActor
           .slice()
           .sort((a, b) => a.position - b.position)
           .map((row) => row.id);
+        before[String(sourceBand)] = bandOrderOf(aggregate.items, sourceBand);
+        after[String(sourceBand)] = remaining;
         moved += await this.#writePositions(tx, sourceBand, remaining, byId);
       }
       // A reorder that reorders nothing is not a content change (see the class
       // doc, "A no-op reorder is not a content change"). `#writePositions`
       // already knows — it skips every row that is where it belongs — so the
-      // count it returns is exactly "did anything move".
-      if (moved > 0) await this.#bumpContentAndEnqueueInsights(tx, ctx);
+      // count it returns is exactly "did anything move". Nor is it an edit
+      // worth an Undo.
+      if (moved > 0) {
+        await this.#record(tx, ctx, {
+          kind: "MOVE",
+          before,
+          after,
+          subject: subjectOf(before, after, byId),
+        });
+        await this.#bumpContentAndEnqueueInsights(tx, ctx);
+      }
     });
     await this.reload();
 
     return this.requireAggregate()
       .items.filter((row) => row.band === targetBand)
       .map(toItemDto);
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Edit history (D4)                                                       */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Creator only, and `null` (not a refusal) for anyone else who may see the
+   * list: a friend's page simply has no Undo. Invisible → `NotFound`.
+   */
+  async editHistory(ctx: Ctx): Promise<TierListEditHistoryDto | null> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    if (!isOwner(ctx, aggregate.tierList.createdById)) return null;
+    return await this.#describeHistory(aggregate);
+  }
+
+  async undo(ctx: Ctx): Promise<TierListHistoryStepResult> {
+    return await this.#step(ctx, "UNDO");
+  }
+
+  async redo(ctx: Ctx): Promise<TierListHistoryStepResult> {
+    return await this.#step(ctx, "REDO");
+  }
+
+  /**
+   * One Undo or Redo: the edit on top of the matching stack, applied
+   * backwards (Undo) or forwards (Redo), and a new log row saying so — one
+   * transaction, with the content bump every edit makes.
+   *
+   * Applying is forgiving by design (`planBandOrders`): an entry that is no
+   * longer on the list is skipped, one already back is left alone, and every
+   * touched band ends at clean `0..n-1`. The step is recorded either way, so
+   * the stacks always advance — a history that refused to move past one
+   * stale edit would strand every edit beneath it.
+   */
+  async #step(
+    ctx: Ctx,
+    direction: "UNDO" | "REDO",
+  ): Promise<TierListHistoryStepResult> {
+    const aggregate = this.requireAggregate();
+    const what = direction === "UNDO" ? "undo" : "redo";
+    await this.#requireCreator(ctx, aggregate, `${what} edits to this list`);
+
+    const stacks = historyStacks(aggregate.history);
+    const stack = direction === "UNDO" ? stacks.undo : stacks.redo;
+    const targetSeq = stack[stack.length - 1];
+    if (targetSeq === undefined) {
+      throw new ConflictError(`there is nothing to ${what} on this list`);
+    }
+    const [target] = await this.#historyRows([targetSeq]);
+    if (target === undefined) {
+      throw new ConflictError(`history row ${targetSeq} vanished mid-turn`);
+    }
+    // Described before the write, so nothing can fail after it commits. A
+    // row whose snapshot no longer parses still advances the stacks (below)
+    // and is named only by its kind.
+    const [described] = await this.#describeEdits([target]);
+    const applied: TierListEditDto = described ?? {
+      seq: target.seq,
+      kind: isEditKind(target.kind) ? target.kind : "MOVE",
+      entry: null,
+      entryName: null,
+      fromBand: null,
+      toBand: null,
+      at: target.createdAt.toISOString(),
+    };
+    const change = parseChange(target.kind, target.change);
+
+    await this.#recordedTx(async (tx) => {
+      if (change !== null) {
+        await this.#apply(tx, change, direction === "UNDO" ? "back" : "forth");
+      }
+      await this.#insertHistory(tx, ctx, {
+        kind: direction,
+        targetSeq,
+        change: {},
+      });
+      await this.#bumpContentAndEnqueueInsights(tx, ctx);
+    });
+    await this.reload();
+
+    return {
+      applied,
+      history: await this.#describeHistory(this.requireAggregate()),
+    };
+  }
+
+  /**
+   * One edit, backwards or forwards. ADD forwards and REMOVE backwards put a
+   * row back; the other two take it out; a MOVE writes the touched bands'
+   * `before` or `after` orders.
+   */
+  async #apply(
+    tx: DbOrTx,
+    change: EditChange,
+    way: "back" | "forth",
+  ): Promise<void> {
+    if (change.kind === "MOVE") {
+      await this.#writeOrders(
+        tx,
+        planBandOrders(
+          this.requireAggregate().items,
+          way === "back" ? change.before : change.after,
+        ),
+      );
+      return;
+    }
+    const putBack =
+      (change.kind === "ADD" && way === "forth") ||
+      (change.kind === "REMOVE" && way === "back");
+    if (putBack) await this.#putBack(tx, change.row);
+    else await this.#takeOut(tx, change.row.id);
+  }
+
+  /** Removes the row if it is still there, and closes its band's gap. */
+  async #takeOut(tx: DbOrTx, tierListItemId: string): Promise<void> {
+    const items = this.requireAggregate().items;
+    const row = items.find((item) => item.id === tierListItemId);
+    if (row === undefined) return;
+    await tx.delete(tierListItems).where(eq(tierListItems.id, row.id));
+    const rest = items.filter((item) => item.id !== row.id);
+    await this.#writeOrders(
+      tx,
+      new Map([[row.band, bandOrderOf(rest, row.band)]]),
+      rest,
+    );
+  }
+
+  /**
+   * Re-inserts a recorded row under its own id, at its recorded band and
+   * position (clamped to the band's length now). Skipped when the row, or
+   * the same entry under another id, is already on the list, or when what it
+   * ranked can no longer be read.
+   */
+  async #putBack(tx: DbOrTx, snapshot: EntrySnapshot): Promise<void> {
+    const items = this.requireAggregate().items;
+    if (items.some((row) => row.id === snapshot.id)) return;
+    const alreadyPresent = items.some((row) => {
+      const ref = entryRefOf(row);
+      return ref.type === snapshot.entry.type && ref.id === snapshot.entry.id;
+    });
+    if (alreadyPresent) return;
+    const found = await resolveTierListEntries(tx, [snapshot.entry]);
+    if (!found.has(entryKey(snapshot.entry))) return;
+
+    const order = insertAt(
+      bandOrderOf(items, snapshot.band),
+      snapshot.id,
+      snapshot.position,
+    );
+    const position = order.indexOf(snapshot.id);
+    const createdAt =
+      snapshot.createdAt === null ? new Date() : new Date(snapshot.createdAt);
+    await tx
+      .insert(tierListItems)
+      .values({
+        id: snapshot.id,
+        tierListId: this.key,
+        band: snapshot.band,
+        position,
+        notes: snapshot.notes,
+        createdAt,
+        updatedAt: new Date(),
+        [entryProperty(snapshot.entry.type)]: snapshot.entry.id,
+      })
+      .onConflictDoNothing({ target: tierListItems.id });
+    await this.#writeOrders(tx, new Map([[snapshot.band, order]]), [
+      ...items,
+      { id: snapshot.id, band: snapshot.band, position },
+    ]);
+  }
+
+  /**
+   * Writes each band's complete order as `0..n-1`, skipping rows already
+   * where they belong. `known` is where each row stands now (the cached
+   * aggregate unless the caller has just inserted or deleted one).
+   */
+  async #writeOrders(
+    tx: DbOrTx,
+    orders: ReadonlyMap<number, readonly string[]>,
+    known: readonly {
+      id: string;
+      band: number;
+      position: number;
+    }[] = this.requireAggregate().items,
+  ): Promise<void> {
+    const index = new Map(known.map((row) => [row.id, row]));
+    for (const [band, ids] of orders) {
+      for (const [position, id] of ids.entries()) {
+        const current = index.get(id);
+        if (current?.band === band && current.position === position) continue;
+        await tx
+          .update(tierListItems)
+          .set({ band, position, updatedAt: new Date() })
+          .where(
+            and(
+              eq(tierListItems.id, id),
+              eq(tierListItems.tierListId, this.key),
+            ),
+          );
+      }
+    }
+  }
+
+  /**
+   * `tx` for every write that appends to the history. A stale cache's write
+   * is refused whole by the `seq` key; without a reload it would stay stale
+   * and refuse every later edit until the activation went idle, so the cache
+   * is rebuilt and the caller gets a retryable conflict — the next attempt
+   * runs against the list as it is.
+   */
+  async #recordedTx(fn: (tx: DbOrTx) => Promise<void>): Promise<void> {
+    try {
+      await this.tx(fn);
+    } catch (error) {
+      if (!isStaleHistoryWrite(error)) throw error;
+      await this.reload();
+      throw new ConflictError("This list changed somewhere else. Try again.");
+    }
+  }
+
+  /** Appends one edit to the log, at the next `seq`. */
+  async #record(tx: DbOrTx, ctx: Ctx, change: EditChange): Promise<void> {
+    await this.#insertHistory(tx, ctx, {
+      kind: change.kind,
+      targetSeq: null,
+      change,
+    });
+  }
+
+  async #insertHistory(
+    tx: DbOrTx,
+    ctx: Ctx,
+    row: {
+      kind: string;
+      targetSeq: number | null;
+      change: EditChange | Record<string, never>;
+    },
+  ): Promise<void> {
+    const { lastSeq } = historyStacks(this.requireAggregate().history);
+    await tx.insert(tierListHistory).values({
+      tierListId: this.key,
+      seq: lastSeq + 1,
+      kind: row.kind,
+      targetSeq: row.targetSeq,
+      change: row.change,
+      userId: ctx.viewerId,
+    });
+  }
+
+  async #historyRows(seqs: readonly number[]): Promise<
+    readonly {
+      seq: number;
+      kind: string;
+      change: unknown;
+      createdAt: Date;
+    }[]
+  > {
+    if (seqs.length === 0) return [];
+    return await this.db
+      .select({
+        seq: tierListHistory.seq,
+        kind: tierListHistory.kind,
+        change: tierListHistory.change,
+        createdAt: tierListHistory.createdAt,
+      })
+      .from(tierListHistory)
+      .where(
+        and(
+          eq(tierListHistory.tierListId, this.key),
+          inArray(tierListHistory.seq, [...seqs]),
+        ),
+      );
+  }
+
+  async #describeHistory(
+    aggregate: TierListAggregate,
+  ): Promise<TierListEditHistoryDto> {
+    const stacks = historyStacks(aggregate.history);
+    const undoSeq = stacks.undo[stacks.undo.length - 1];
+    const redoSeq = stacks.redo[stacks.redo.length - 1];
+    const wanted = [undoSeq, redoSeq].filter(
+      (seq): seq is number => seq !== undefined,
+    );
+    const edits = await this.#describeEdits(await this.#historyRows(wanted));
+    const bySeq = new Map(edits.map((edit) => [edit.seq, edit]));
+    return {
+      editCount: stacks.editCount,
+      undo: undoSeq === undefined ? null : (bySeq.get(undoSeq) ?? null),
+      redo: redoSeq === undefined ? null : (bySeq.get(redoSeq) ?? null),
+    };
+  }
+
+  /**
+   * Edit rows as a person reads them, the entries' names read now (one
+   * batched read per entry type, as the insights path does).
+   */
+  async #describeEdits(
+    rows: readonly {
+      seq: number;
+      kind: string;
+      change: unknown;
+      createdAt: Date;
+    }[],
+  ): Promise<TierListEditDto[]> {
+    const parsed = rows.flatMap((row) => {
+      const change = parseChange(row.kind, row.change);
+      return change === null ? [] : [{ row, change }];
+    });
+    const refs = parsed.flatMap(({ change }) => {
+      const ref =
+        change.kind === "MOVE" ? change.subject?.entry : change.row.entry;
+      return ref === undefined ? [] : [ref];
+    });
+    const names =
+      refs.length === 0
+        ? new Map()
+        : await resolveTierListEntries(this.db, refs);
+    return parsed.map(({ row, change }): TierListEditDto => {
+      const entry =
+        change.kind === "MOVE"
+          ? (change.subject?.entry ?? null)
+          : change.row.entry;
+      const name =
+        entry === null ? null : (names.get(entryKey(entry))?.name ?? null);
+      const at = row.createdAt.toISOString();
+      if (change.kind === "MOVE") {
+        return {
+          seq: row.seq,
+          kind: "MOVE",
+          entry,
+          entryName: name,
+          fromBand: change.subject?.fromBand ?? null,
+          toBand: change.subject?.toBand ?? null,
+          at,
+        };
+      }
+      return {
+        seq: row.seq,
+        kind: change.kind,
+        entry,
+        entryName: name,
+        fromBand: change.kind === "REMOVE" ? change.row.band : null,
+        toBand: change.kind === "ADD" ? change.row.band : null,
+        at,
+      };
+    });
   }
 
   /**

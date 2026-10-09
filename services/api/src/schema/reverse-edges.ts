@@ -40,12 +40,14 @@ import type {
   CheckInDto,
   ItemImageDto,
   ItemRef,
+  ItemType,
   RecipeIngredientDto,
   TierListEntryRef,
   TierListItemDto,
 } from "@cellar-assistant/contracts";
 import {
   BrandLinksCollectionActorDescriptor,
+  brandFirstItemTypesActorId,
   brandItemCountsActorId,
   brandLinksCollectionActorId,
   CellarActorDescriptor,
@@ -495,6 +497,42 @@ builder.objectFields(Brand, (t) => ({
         }
       }
       return keys.map((key) => counts.get(key) ?? 0);
+    },
+  }),
+
+  firstItemType: t.loadable({
+    type: ItemTypeEnum,
+    nullable: true,
+    description:
+      "X23: the type of the earliest item linked to this brand, or null " +
+      "when it carries none — what a client infers the brand's kind from " +
+      "when `brandType` is unset or `other`. One batched call per page of " +
+      "brands. Null for an anonymous viewer.",
+    resolve: (brand) => brand.id,
+    load: async (keys: string[], context: ApiContext) => {
+      if (context.ctx.viewerId === null) return keys.map(() => null);
+      const types = new Map<string, ItemType | null>();
+      const distinct = [...new Set(keys)];
+      for (
+        let start = 0;
+        start < distinct.length;
+        start += REVERSE_EDGE_MAX_PARENTS
+      ) {
+        const brandIds = distinct.slice(
+          start,
+          start + REVERSE_EDGE_MAX_PARENTS,
+        );
+        const answer = await context
+          .actor(
+            BrandLinksCollectionActorDescriptor,
+            brandFirstItemTypesActorId({ brandIds }),
+          )
+          .firstItemTypes({ brandIds });
+        for (const [index, id] of brandIds.entries()) {
+          types.set(id, answer[index] ?? null);
+        }
+      }
+      return keys.map((key) => types.get(key) ?? null);
     },
   }),
 

@@ -12,6 +12,7 @@
  * GraphQL round trip.
  */
 
+import { inferBrandType } from "@/components/brand/adapter";
 import {
   type ApiItemType,
   cellarItemHref,
@@ -420,6 +421,8 @@ export const brandFromNode = (node: {
     id: string;
     name: string;
     brandType?: string | null;
+    /** X23: the earliest-linked item's type, when `brandType` says nothing. */
+    firstItemType?: ApiItemType | null;
     logoUrl?: string | null;
   };
 }): ItemBrand => ({
@@ -429,7 +432,9 @@ export const brandFromNode = (node: {
     id: node.brand.id,
     name: node.brand.name,
     logo_url: node.brand.logoUrl ?? null,
-    brand_type: node.brand.brandType ?? null,
+    // The same inference as the brand pages (X23): a stored type, else the
+    // producer of its first item, else nothing — never "Other".
+    brand_type: inferBrandType(node.brand.brandType, node.brand.firstItemType),
   },
 });
 

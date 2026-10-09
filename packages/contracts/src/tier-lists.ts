@@ -178,6 +178,65 @@ export type TierListItemDto = {
 };
 
 /* -------------------------------------------------------------------------- */
+/* Edit history (D4)                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * D4: the edits a tier list's history records and Undo/Redo step through.
+ * `MOVE` is any `reorderBand` that moved something — within a band, or into
+ * another one (a band change).
+ */
+export const TIER_LIST_EDIT_KINDS = ["ADD", "REMOVE", "MOVE"] as const;
+
+export type TierListEditKind = (typeof TIER_LIST_EDIT_KINDS)[number];
+
+/**
+ * One recorded edit, as Undo and Redo describe it: "Undo: moved Barolo to
+ * Outstanding". The history row itself is `tier_list_history`; this is the
+ * part a person needs.
+ */
+export type TierListEditDto = {
+  /** Per list, from 1, in the order the edits happened. */
+  readonly seq: number;
+  readonly kind: TierListEditKind;
+  /**
+   * What the edit was about: the entry added or removed, or the one that
+   * moved. `null` for a reorder that moved several entries at once, where
+   * no single entry is the subject.
+   */
+  readonly entry: TierListEntryRef | null;
+  /**
+   * The entry's display name, read when the history is asked for (so a
+   * renamed item reads as it is now). `null` when there is no single entry,
+   * or its row could not be read.
+   */
+  readonly entryName: string | null;
+  /** The band it left; `null` for an `ADD`. */
+  readonly fromBand: number | null;
+  /** The band it landed in; `null` for a `REMOVE`. */
+  readonly toBand: number | null;
+  readonly at: string;
+};
+
+/**
+ * Where the list's history stands for its owner: the edit Undo would take
+ * back and the one Redo would put back, each `null` when there is none. A
+ * new edit after an undo clears Redo, as everywhere else.
+ */
+export type TierListEditHistoryDto = {
+  /** Edits recorded so far (ADD, REMOVE, MOVE), undone ones included. */
+  readonly editCount: number;
+  readonly undo: TierListEditDto | null;
+  readonly redo: TierListEditDto | null;
+};
+
+/** What `undo` / `redo` did, and where the history stands after it. */
+export type TierListHistoryStepResult = {
+  readonly applied: TierListEditDto;
+  readonly history: TierListEditHistoryDto;
+};
+
+/* -------------------------------------------------------------------------- */
 /* Inputs                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -284,6 +343,22 @@ export type TierListActorInterface = {
   ): Promise<readonly TierListItemDto[]>;
 
   /**
+   * D4: where the edit history stands — **creator only**. `null` for anyone
+   * else who may see the list: the history is the owner's tool, not part of
+   * what a shared list shows. Not visible at all → `NotFound`, as `get`.
+   */
+  editHistory(ctx: Ctx): Promise<TierListEditHistoryDto | null>;
+  /**
+   * D4: take back the latest edit not already undone, and record that as a
+   * new `UNDO` row (the log is append-only). Creator only. Nothing to undo
+   * is a `ConflictError`. A content change like any other edit: bumps
+   * `content_updated_at` and asks for insights.
+   */
+  undo(ctx: Ctx): Promise<TierListHistoryStepResult>;
+  /** D4: put back the latest undone edit — `undo`'s mirror; a `REDO` row. */
+  redo(ctx: Ctx): Promise<TierListHistoryStepResult>;
+
+  /**
    * `system`, via the outbox — replaces the `tier_list_items_content_changed`
    * trigger plus the `generate_tier_list_insights` event trigger. Enqueued by
    * every content-changing write, never by `update`. Idempotent by
@@ -311,6 +386,9 @@ export const TierListActorDescriptor: ActorDescriptor<TierListActorInterface> =
       addItem: { modelBacked: true },
       removeItem: { modelBacked: true },
       reorderBand: { modelBacked: true },
+      editHistory: {},
+      undo: { modelBacked: true },
+      redo: { modelBacked: true },
       generateInsights: {},
     },
   };

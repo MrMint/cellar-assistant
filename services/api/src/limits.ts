@@ -238,6 +238,8 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     ["Mutation.addTierListItem", { via: ["TierListActor.addItem"] }],
     ["Mutation.removeTierListItem", { via: ["TierListActor.removeItem"] }],
     ["Mutation.reorderTierListBand", { via: ["TierListActor.reorderBand"] }],
+    ["Mutation.undoTierListEdit", { via: ["TierListActor.undo"] }],
+    ["Mutation.redoTierListEdit", { via: ["TierListActor.redo"] }],
     // An embedding it enqueues (`regenerateVector`).
     ["Mutation.createItem", { via: ["ItemActor.create"] }],
     ["Mutation.updateItem", { via: ["ItemActor.update"] }],
