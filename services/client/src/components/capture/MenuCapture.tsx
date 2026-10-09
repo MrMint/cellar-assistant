@@ -383,7 +383,13 @@ function PlaceCard({
     );
   }
 
-  if (searching || (geo.requested && geo.loading)) {
+  // Still asking the browser what it would say, a watch with no fix yet, or
+  // the nearby read in flight: never "no place here" before we know.
+  if (
+    searching ||
+    geo.permission === "unknown" ||
+    (geo.requested && geo.loading)
+  ) {
     return shell(
       <p
         role="status"
