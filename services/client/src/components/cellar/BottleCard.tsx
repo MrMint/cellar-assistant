@@ -29,6 +29,18 @@ const cardTitle = (cell: CellarGridItem): string =>
     ? `${cell.item.vintage} ${cell.item.name}`
     : cell.item.name;
 
+/**
+ * What a screen reader hears for a ×N card: the lead bottle's state, then the
+ * rest — "Open 8 days, 40% left. 3 bottles, 1 open."
+ */
+export const groupSpoken = (
+  spoken: string,
+  group: CellarGridItem["group"],
+): string => {
+  if (group === undefined || group.count <= 1) return spoken;
+  return `${spoken}. ${group.count} bottles, ${group.openCount} open.`;
+};
+
 export type BottleCardProps = {
   cell: CellarGridItem;
   href: string;
@@ -53,6 +65,12 @@ export type BottleCardProps = {
  *
  * The whole tile is one target: the title link, stretched over it. Nothing
  * else on the card is interactive, so there is nothing for it to swallow.
+ *
+ * X04: a card can stand for identical bottles — "×3" on the plate, the lead
+ * bottle's state under it (the one the list put first: the open one, under
+ * "Open first"), and the link goes to that bottle. A search's meaning match
+ * says so under the state, so a near neighbour never reads as the bottle
+ * asked for.
  */
 export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
   const { item, type } = cell;
@@ -60,6 +78,8 @@ export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
   const finished = state.kind === "finished";
   const title = cardTitle(cell);
   const photo = item.displayImageUrl;
+  const count = cell.group?.count ?? 1;
+  const similar = cell.group?.match === "MEANING";
 
   return (
     <div
@@ -91,6 +111,15 @@ export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
             plate={item.plate ?? { name: item.name }}
             muted={finished}
           />
+        )}
+        {count > 1 && (
+          <span
+            data-slot="bottle-card-count"
+            aria-hidden
+            className="surface-glass type-footnote absolute top-2 left-2 rounded-full px-2 py-0.5 font-semibold text-ink-1 tabular"
+          >
+            ×{count}
+          </span>
         )}
         {item.myScore !== null && item.myScore !== undefined && (
           <span
@@ -128,8 +157,15 @@ export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
               {Math.round(state.level)}%
             </span>
           )}
-          <span className="sr-only">{state.spoken}</span>
+          <span className="sr-only">
+            {groupSpoken(state.spoken, cell.group)}
+          </span>
         </p>
+        {similar && (
+          <p data-slot="bottle-card-match" className="type-footnote text-ink-3">
+            Similar to your search
+          </p>
+        )}
         <div
           aria-hidden
           data-slot="bottle-level"

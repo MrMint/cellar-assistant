@@ -1,7 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
-import { useEffect, useRef, useTransition } from "react";
+import { type ReactNode, useEffect, useRef, useTransition } from "react";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { SortChip } from "@/components/app/SortChip";
 import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemTypes";
@@ -30,6 +31,14 @@ interface CellarItemsControlsProps {
   initialTypes: ItemTypeValue[];
   initialSort: CellarSort;
   initialStatus: CellarStatus;
+  /** Emptied bottles — shown on the segment's "Finished" (X04). */
+  finishedCount?: number;
+  /**
+   * X04 / D3: the dashboard, drawn between the bar (title, search) and the
+   * collection's own controls. Absent while a search is active: a search's
+   * results belong right under the field you typed into.
+   */
+  dashboard?: ReactNode;
 }
 
 /**
@@ -52,6 +61,11 @@ interface CellarItemsControlsProps {
  * the type chips, and the sort chip (`?sort=`) beside "Add item" — both in
  * the URL like the rest, so a reload or a shared link keeps them. While a
  * search is active the order is the search's, and the chip says so.
+ *
+ * X04 makes this the cellar home: the bar (with Edit in its ⋯ for an owner)
+ * and the search, then the dashboard, then the collection under its own
+ * heading (`#collection`, where the dashboard's tiles land) with the segment
+ * — "Finished" carrying its count — the type chips, the sort and Add.
  */
 export function CellarItemsControls({
   cellarId,
@@ -62,7 +76,10 @@ export function CellarItemsControls({
   initialTypes,
   initialSort,
   initialStatus,
+  finishedCount,
+  dashboard,
 }: CellarItemsControlsProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const hasMounted = useRef(false);
 
@@ -121,44 +138,81 @@ export function CellarItemsControls({
 
   const searching = (search || initialSearch).trim() !== "";
 
+  const statuses = CELLAR_STATUSES.map((option) =>
+    option.value === "finished" && finishedCount !== undefined
+      ? { ...option, count: finishedCount }
+      : option,
+  );
+
   return (
-    <HeaderBar
-      serverBreadcrumbs={{
-        cellarName,
-      }}
-      defaultSearchValue={search || initialSearch}
-      isSearching={isPending}
-      onSearchChange={handleSearchChange}
-      searchLabel="Search this cellar"
-      endComponent={
-        <div className="flex min-w-0 flex-col gap-3">
-          <SegmentedControl
-            aria-label="Show"
-            value={status}
+    <div className="flex flex-col gap-4">
+      <HeaderBar
+        serverBreadcrumbs={{
+          cellarName,
+        }}
+        overflow={
+          canAdd
+            ? [
+                {
+                  label: "Edit cellar",
+                  onSelect: () => router.push(`/cellars/${cellarId}/edit`),
+                },
+              ]
+            : undefined
+        }
+        defaultSearchValue={search || initialSearch}
+        isSearching={isPending}
+        onSearchChange={handleSearchChange}
+        searchLabel="Search this cellar"
+      />
+
+      {dashboard}
+
+      <section
+        aria-labelledby="collection"
+        data-slot="cellar-collection-controls"
+        className="flex min-w-0 flex-col gap-3"
+      >
+        <h2
+          id="collection"
+          className={
+            dashboard === undefined ? "sr-only" : "type-headline scroll-mt-4"
+          }
+        >
+          Collection
+        </h2>
+        <SegmentedControl
+          aria-label="Show"
+          value={status}
+          onValueChange={(next) =>
+            setStatusParam(next === DEFAULT_CELLAR_STATUS ? null : next)
+          }
+          options={statuses}
+          className="sm:max-w-sm"
+        />
+        <CellarItemsFilter
+          types={currentTypes}
+          onTypesChange={handleTypesChange}
+          counts={counts}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <SortChip
+            options={CELLAR_SORTS}
+            value={sort}
             onValueChange={(next) =>
-              setStatusParam(next === DEFAULT_CELLAR_STATUS ? null : next)
+              setSortParam(next === DEFAULT_CELLAR_SORT ? null : next)
             }
-            options={CELLAR_STATUSES}
-            className="sm:max-w-sm"
+            overriddenBy={
+              searching
+                ? "Best match"
+                : status === "finished"
+                  ? "Latest finished"
+                  : undefined
+            }
           />
-          <CellarItemsFilter
-            types={currentTypes}
-            onTypesChange={handleTypesChange}
-            counts={counts}
-          />
-          <div className="flex items-center justify-between gap-3">
-            <SortChip
-              options={CELLAR_SORTS}
-              value={sort}
-              onValueChange={(next) =>
-                setSortParam(next === DEFAULT_CELLAR_SORT ? null : next)
-              }
-              overriddenBy={searching ? "Best match" : undefined}
-            />
-            <AddItemButton cellarId={cellarId} canAdd={canAdd} />
-          </div>
+          <AddItemButton cellarId={cellarId} canAdd={canAdd} />
         </div>
-      }
-    />
+      </section>
+    </div>
   );
 }

@@ -10,6 +10,11 @@ export type SegmentedOption<V extends string> = {
   label: string;
   icon?: ReactNode;
   disabled?: boolean;
+  /**
+   * A count after the label, in the recessive ink ("Finished 12"). Part of
+   * the segment's name, so it is heard as well as seen. Absent: none.
+   */
+  count?: number;
 };
 
 export type SegmentedControlProps<V extends string> = {
@@ -68,6 +73,11 @@ export function SegmentedControl<V extends string>({
         >
           {option.icon}
           <span className="truncate">{option.label}</span>
+          {option.count !== undefined && (
+            <span data-slot="segment-count" className="tabular text-ink-3">
+              {option.count}
+            </span>
+          )}
         </ToggleGroupPrimitive.Item>
       ))}
     </ToggleGroupPrimitive.Root>

@@ -283,4 +283,35 @@ describe("BottleCard", () => {
     );
     assert.match(html, />Pliny<\/a>/);
   });
+
+  test("X04: identical bottles show ×N, and say it", () => {
+    const html = render(
+      <BottleCard
+        cell={{
+          ...cell({ bottle: { openAt: daysAgo(8), percentageRemaining: 40 } }),
+          group: { count: 3, openCount: 1, match: null },
+        }}
+        href="/x"
+        now={NOW}
+      />,
+    );
+    assert.match(html, /data-slot="bottle-card-count"[^>]*>×3</);
+    assert.match(html, /Open 8 days, 40% left\. 3 bottles, 1 open\./);
+    assert.doesNotMatch(html, /data-slot="bottle-card-match"/);
+  });
+
+  test("X04: one bottle shows no ×1; a meaning match says so", () => {
+    const html = render(
+      <BottleCard
+        cell={{
+          ...cell({}),
+          group: { count: 1, openCount: 0, match: "MEANING" },
+        }}
+        href="/x"
+        now={NOW}
+      />,
+    );
+    assert.doesNotMatch(html, /bottle-card-count/);
+    assert.match(html, /Similar to your search/);
+  });
 });

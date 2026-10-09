@@ -11,6 +11,7 @@ import {
   cellarCardFromSource,
   cellarCardItemCounts,
   cellarGridItemFromSource,
+  cellarGroupCellFromSource,
   editCoOwnerOptions,
   userFromProfile,
 } from "./adapter";
@@ -155,6 +156,7 @@ describe("cellarGridItemFromSource + cellarBottleHref", () => {
       openAt: null,
       emptyAt: null,
       percentageRemaining: 100,
+      createdAt: null,
     });
     const open = cellarGridItemFromSource({
       id: "b2",
@@ -167,6 +169,7 @@ describe("cellarGridItemFromSource + cellarBottleHref", () => {
       openAt: "2026-10-01T00:00:00.000Z",
       emptyAt: null,
       percentageRemaining: 35,
+      createdAt: null,
     });
   });
 
@@ -198,7 +201,7 @@ describe("cellarGridItemFromSource + cellarBottleHref", () => {
 });
 
 describe("cellarItemsVariables (first page and later pages agree)", () => {
-  test("no search: open first, in the cellar, no semantic query, no filter", () => {
+  test("no search: open first, in the cellar, no search, no filter", () => {
     assert.deepEqual(
       cellarItemsVariables("c1", { search: "", types: [] }, null),
       {
@@ -208,7 +211,7 @@ describe("cellarItemsVariables (first page and later pages agree)", () => {
         types: null,
         sort: "OPEN_FIRST",
         status: "ACTIVE",
-        semanticQuery: null,
+        search: null,
       },
     );
     assert.equal(ITEMS_PAGE_SIZE, 50, "the old page size");
@@ -257,7 +260,7 @@ describe("cellarItemsVariables (first page and later pages agree)", () => {
       "cur",
     );
     assert.equal(vars.sort, null);
-    assert.equal(vars.semanticQuery, "smoky");
+    assert.equal(vars.search, "smoky");
     assert.equal(vars.after, "cur");
     assert.equal(
       cellarItemsVariables("c1", { search: "   ", types: [] }, null).sort,
@@ -320,6 +323,32 @@ describe("cellarItemsVariables (first page and later pages agree)", () => {
         status: "in-cellar",
       }),
     );
+  });
+});
+
+describe("cellarGroupCellFromSource (X04 ×N)", () => {
+  test("the lead bottle's cell, with the group's count and match", () => {
+    const cell = cellarGroupCellFromSource({
+      count: 3,
+      openCount: 1,
+      match: "NAME",
+      lead: {
+        id: "bottle-1",
+        createdAt: "2026-10-01T00:00:00.000Z",
+        openAt: "2026-10-02T00:00:00.000Z",
+        percentageRemaining: 40,
+        item: {
+          id: "item-1",
+          type: "SPIRIT",
+          name: "Lagavulin 16",
+          images: { edges: [] },
+        },
+      },
+    });
+    assert.equal(cell.item.id, "bottle-1");
+    assert.equal(cell.item.itemId, "item-1");
+    assert.deepEqual(cell.group, { count: 3, openCount: 1, match: "NAME" });
+    assert.equal(cell.bottle.createdAt, "2026-10-01T00:00:00.000Z");
   });
 });
 

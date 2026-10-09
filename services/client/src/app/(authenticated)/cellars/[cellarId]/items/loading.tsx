@@ -1,5 +1,5 @@
-import { CellarItemsGridSkeleton } from "@/components/cellar/CellarItemsGridSkeleton";
+import { CellarHomeShell } from "@/components/cellar/CellarHomeShell";
 
 export default function Loading() {
-  return <CellarItemsGridSkeleton />;
+  return <CellarHomeShell />;
 }

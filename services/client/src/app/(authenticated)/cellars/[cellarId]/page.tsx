@@ -1,101 +1,17 @@
-import { notFound } from "next/navigation";
-import { canAddToCellar, cellarGridItem } from "@/components/cellar/adapter";
-import { CellarOverviewHeader } from "@/components/cellar/CellarOverviewHeader";
-import { CellarOverviewItems } from "@/components/cellar/CellarOverviewItems";
-import { EmptyCellar } from "@/components/cellar/EmptyCellar";
-import {
-  CellarInfoFragment,
-  GetCellarOverviewQuery,
-} from "@/components/cellar/fragments";
-import { CellarCheckIns } from "@/components/cellar-api/CellarCheckIns";
-import {
-  OVERVIEW_ITEMS_PAGE_SIZE,
-  OVERVIEW_SORT,
-} from "@/components/cellar-api/pagination";
-import { ViewerQuery } from "@/lib/api/cellars";
-import { readFragment } from "@/lib/api/graphql";
-import { isNotFound, unwrapResult } from "@/lib/api/result";
-import { apiServerQuery } from "@/lib/api/urql-server";
+import { redirect } from "next/navigation";
 
 /**
- * `/cellars/[cellarId]` — **new-only**, kept under decision 2 and listed for
- * the user to ratify. The old page at this path printed the cellar id, and its
- * breadcrumb sent everyone on to `/items`.
- *
- * Drawn with the restored blocks rather than the rewrite's: `HeaderBar` with
- * the cellar's breadcrumb and the old "Add item" button, an edit icon as on
- * `CellarCard`, a preview of bottles as `BottleCard`s (with "Check in"), and the
- * check-in history (`CellarCheckIns`, which e2e 04 drives).
+ * `/cellars/[cellarId]` — the old overview ("Open and recent", Check in, the
+ * check-in history), merged into the cellar home at `/items` (X04, decision
+ * D3: "merge it into the cellar page, and make the top a dashboard"). Kept as
+ * a redirect so links and bookmarks to it land on the merged page; the
+ * `items` layout answers a private or missing cellar with the 404.
  */
-export const dynamic = "force-dynamic";
-
-const CHECK_INS = 20;
-
 export default async function CellarPage({
   params,
 }: {
   params: Promise<{ cellarId: string }>;
 }) {
   const { cellarId } = await params;
-  const [detail, viewer] = await Promise.all([
-    apiServerQuery(GetCellarOverviewQuery, {
-      cellarId,
-      items: OVERVIEW_ITEMS_PAGE_SIZE,
-      checkIns: CHECK_INS,
-      sort: OVERVIEW_SORT,
-    }),
-    apiServerQuery(ViewerQuery, {}),
-  ]);
-
-  const result = unwrapResult(detail.cellar, "Cellar");
-  if (!result.ok) {
-    // §1.6 makes NOT_FOUND cover "not yours to see" as well, on purpose: a
-    // cellar id must not be an oracle for whether a cellar exists.
-    if (isNotFound(result.error)) notFound();
-    return (
-      <p role="alert" className="type-body text-destructive">
-        {result.error.message}
-      </p>
-    );
-  }
-
-  const cellar = readFragment(CellarInfoFragment, result.data);
-  const viewerId = viewer.me?.id ?? null;
-  const canAdd = canAddToCellar(cellar, viewerId);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <CellarOverviewHeader
-        cellarId={cellar.id}
-        cellarName={cellar.name}
-        activeCount={cellar.itemCounts.total}
-        canAdd={canAdd}
-      />
-
-      {cellar.itemCounts.total === 0 ? (
-        // N15: the same first-run state as the items page, not "Open and
-        // recent" over "No items in this cellar".
-        <EmptyCellar cellarId={cellar.id} canAdd={canAdd} />
-      ) : (
-        <>
-          <h2 className="type-headline">Open and recent</h2>
-          <CellarOverviewItems
-            cellarId={cellar.id}
-            items={result.data.items.edges.map((edge) =>
-              cellarGridItem(edge.node),
-            )}
-            asOf={Date.now()}
-          />
-        </>
-      )}
-
-      <CellarCheckIns
-        cellarId={cellar.id}
-        initialEdges={[...result.data.checkIns.edges]}
-        initialHasNextPage={result.data.checkIns.pageInfo.hasNextPage}
-        totalCount={result.data.checkIns.totalCount ?? null}
-        viewerId={viewerId}
-      />
-    </div>
-  );
+  redirect(`/cellars/${encodeURIComponent(cellarId)}/items`);
 }

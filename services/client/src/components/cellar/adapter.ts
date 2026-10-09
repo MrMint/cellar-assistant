@@ -23,7 +23,13 @@ import type { ItemCardItem } from "@/components/item/ItemCard/types";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
 import type { BottleFields } from "./bottle-state";
 import type { CellarCardProps } from "./CellarCard";
-import { CellarBottleCardFragment, CellarCardFragment } from "./fragments";
+import type { DiaryLog } from "./diary";
+import {
+  CellarBottleCardFragment,
+  CellarCardFragment,
+  CellarDiaryEntryFragment,
+  CellarItemGroupCardFragment,
+} from "./fragments";
 
 export type CellarCardCellar = CellarCardProps["cellar"];
 export type CellarCardUser = CellarCardCellar["createdBy"];
@@ -120,11 +126,25 @@ export const canAddToCellar = (
 export type CellarGridItem = {
   type: ApiItemType;
   item: ItemCardItem;
-  bottle: Required<BottleFields>;
+  bottle: Required<BottleFields> & {
+    /** When it went into the cellar — "Recently added". */
+    createdAt?: string | null;
+  };
+  /**
+   * X04's ×N: how many identical bottles this cell stands for (the lead is
+   * `item.id`), how many of them are open, and how a search found it.
+   * Absent on a list that does not group.
+   */
+  group?: {
+    count: number;
+    openCount: number;
+    match: "NAME" | "MEANING" | null;
+  };
 };
 
 export type CellarGridSource = {
   id: string;
+  createdAt?: string | null;
   item: ItemCardSource;
   openAt?: string | null;
   emptyAt?: string | null;
@@ -160,11 +180,42 @@ export const cellarGridItemFromSource = (
       openAt: node.openAt ?? null,
       emptyAt: node.emptyAt ?? null,
       percentageRemaining: node.percentageRemaining ?? 100,
+      createdAt: node.createdAt ?? null,
     },
   };
 };
 
-/** A `Cellar.items` node (`...CellarBottleCard`) → a grid cell. */
+export type CellarGroupSource = {
+  count: number;
+  openCount: number;
+  match?: "NAME" | "MEANING" | null;
+  lead: CellarGridSource;
+};
+
+/** A `CellarItemGroup` (structural) → a grid cell with its ×N (X04). */
+export const cellarGroupCellFromSource = (
+  group: CellarGroupSource,
+): CellarGridItem => ({
+  ...cellarGridItemFromSource(group.lead),
+  group: {
+    count: group.count,
+    openCount: group.openCount,
+    match: group.match ?? null,
+  },
+});
+
+/** A `Cellar.itemGroups` node (`...CellarItemGroupCard`) → a grid cell. */
+export const cellarGroupCell = (
+  data: FragmentOf<typeof CellarItemGroupCardFragment>,
+): CellarGridItem => {
+  const group = readFragment(CellarItemGroupCardFragment, data);
+  const lead = readFragment(CellarBottleCardFragment, group.lead);
+  return cellarGroupCellFromSource({
+    ...group,
+    lead: { ...lead, item: readFragment(ItemCardFragment, lead.item) },
+  });
+};
+
 export const cellarGridItem = (
   data: FragmentOf<typeof CellarBottleCardFragment>,
 ): CellarGridItem => {
@@ -173,6 +224,27 @@ export const cellarGridItem = (
     ...node,
     item: readFragment(ItemCardFragment, node.item),
   });
+};
+
+/** One Finished-diary entry (X04): the bottle's cell, and your log from it. */
+export type DiaryEntry = {
+  cell: CellarGridItem;
+  log: DiaryLog | null;
+};
+
+/** A `CellarDiaryEntry` node → a diary entry. */
+export const diaryEntry = (
+  data: FragmentOf<typeof CellarDiaryEntryFragment>,
+): DiaryEntry => {
+  const group = readFragment(CellarDiaryEntryFragment, data);
+  const lead = readFragment(CellarBottleCardFragment, group.lead);
+  return {
+    cell: cellarGridItemFromSource({
+      ...lead,
+      item: readFragment(ItemCardFragment, lead.item),
+    }),
+    log: group.lead.myLog ?? null,
+  };
 };
 
 /**

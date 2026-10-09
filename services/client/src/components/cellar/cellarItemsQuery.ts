@@ -81,14 +81,15 @@ export type CellarItemsArgs = {
 };
 
 /**
- * `GetCellarItemsQuery`'s variables.
+ * `GetCellarItemGroupsQuery`'s variables (X04).
  *
- * - **Order.** With a search, `semanticQuery` (distance, ties by name — the
- *   schema says so); without, the sort chip's choice, "Open first" by
- *   default (N13b; the restored grid used `NAME_ASC`, now "A–Z"). The two
- *   are never both sent: a semantic query overrides the sort.
+ * - **Order.** With a search, the search's: it **narrows** — name matches,
+ *   then near meanings, nothing else — so the sort chip steps aside; without,
+ *   the chip's choice, "Open first" by default (N13b). The two are never both
+ *   sent.
  * - **Status.** The segment's choice; "In cellar" (ACTIVE) by default, which
- *   hides finished bottles (decision 4).
+ *   hides finished bottles (decision 4). "Finished" is the diary, which has
+ *   its own query (`cellarDiaryVariables`).
  * - **Types.** None or all six is no filter, as the old `buildItemsWhereClause`
  *   had it (`types.length > 0 && types.length < 6`).
  */
@@ -113,8 +114,24 @@ export const cellarItemsVariables = (
         : null,
     status:
       CELLAR_STATUSES.find((entry) => entry.value === status)?.api ?? "ACTIVE",
-    semanticQuery: search === "" ? null : search,
+    search: search === "" ? null : search,
   };
+};
+
+/** The Finished diary's pages: its order and status are fixed by the query. */
+export const DIARY_PAGE_SIZE = 30;
+
+export const cellarDiaryVariables = (
+  cellarId: string,
+  args: Pick<CellarItemsArgs, "search" | "types">,
+  after: string | null,
+) => {
+  const { types, search } = cellarItemsVariables(
+    cellarId,
+    { ...args, status: "finished" },
+    after,
+  );
+  return { cellarId, first: DIARY_PAGE_SIZE, after, types, search };
 };
 
 /**

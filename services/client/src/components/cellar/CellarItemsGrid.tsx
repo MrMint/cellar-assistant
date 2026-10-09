@@ -12,7 +12,7 @@ import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import {
   type CellarGridItem,
   cellarBottleHref,
-  cellarGridItem,
+  cellarGroupCell,
 } from "./adapter";
 import { BottleCard } from "./BottleCard";
 import { CellarItemsEmpty } from "./CellarItemsEmpty";
@@ -25,7 +25,7 @@ import {
   cellarItemsCacheKey,
   cellarItemsVariables,
 } from "./cellarItemsQuery";
-import { GetCellarItemsQuery } from "./fragments";
+import { GetCellarItemGroupsQuery } from "./fragments";
 import { virtualTotal } from "./virtualTotal";
 
 const SCROLL_STORAGE_KEY = "scroll-restore";
@@ -69,6 +69,9 @@ interface CellarItemsGridProps {
 
 /**
  * `82450ad1:src/components/cellar/CellarItemsGrid.tsx`, restored.
+ *
+ * X04: the cells are `Cellar.itemGroups` — identical bottles as one card with
+ * a ×N — and a search narrows the list rather than re-sorting it.
  *
  * The virtualizer, eager load-more, module cache, sessionStorage scroll
  * restore, skeleton rows and responsive columns are the old ones. The data
@@ -116,7 +119,7 @@ export function CellarItemsGrid({
   });
 
   const list = usePagedConnection({
-    query: GetCellarItemsQuery,
+    query: GetCellarItemGroupsQuery,
     variables: (current: CellarItemsArgs, after) =>
       cellarItemsVariables(cellarId, current, after),
     select: (data) => {
@@ -124,8 +127,8 @@ export function CellarItemsGrid({
       return cellar.ok
         ? {
             ok: true,
-            data: toPage(cellar.data.items, (edge) =>
-              cellarGridItem(edge.node),
+            data: toPage(cellar.data.itemGroups, (edge) =>
+              cellarGroupCell(edge.node),
             ),
           }
         : cellar;
@@ -340,6 +343,7 @@ export function CellarItemsGrid({
       {/* Virtualized grid — scroll position is set in useLayoutEffect (before
           paint), so the grid is always visible at the correct offset. */}
       <div
+        data-slot="cellar-grid"
         className="relative w-full"
         style={{ height: virtualizer.getTotalSize() }}
       >
