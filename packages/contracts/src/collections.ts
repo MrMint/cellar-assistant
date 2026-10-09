@@ -79,7 +79,7 @@
  */
 import type { ActorDescriptor } from "./actors.ts";
 import type { BrandDto } from "./brand.ts";
-import type { ItemTypeCountsDto } from "./cellars.ts";
+import type { CellarItemDto, ItemTypeCountsDto } from "./cellars.ts";
 import type { ItemCheckInDto } from "./check-ins.ts";
 import type { Ctx } from "./ctx.ts";
 import type {
@@ -87,6 +87,7 @@ import type {
   FriendRequestStatus,
   RecipeCategory,
 } from "./enums.ts";
+import { ValidationError } from "./errors.ts";
 import type {
   ItemBrandDto,
   ItemRef,
@@ -213,6 +214,14 @@ export type CellarsCollectionActorInterface = {
     ctx: Ctx,
     refs: readonly ItemRef[],
   ): Promise<readonly CappedList<string>[]>;
+  /**
+   * **projection** — Home's Continue shelf (X10): open bottles (`open_at` set,
+   * `empty_at` not) in cellars the viewer created or co-owns — `stats`'s
+   * set, never a friend's or a stranger's — most recently opened first. A
+   * `cellar_items` row has no entity actor of its own (it belongs to
+   * `CellarActor(cellar)`), so the rows come back whole.
+   */
+  openBottles(ctx: Ctx, page: PageArgs): Promise<Page<CellarItemDto>>;
 };
 
 /** {@link CellarsCollectionActorInterface.stats}. */
@@ -235,6 +244,7 @@ export const CellarsCollectionActorDescriptor: ActorDescriptor<CellarsCollection
       list: {},
       stats: {},
       containing: {},
+      openBottles: {},
     },
   };
 
@@ -474,6 +484,107 @@ export type ActivityFilter = {
   readonly limit: number;
 };
 
+/* -------------------------------------------------------------------------- */
+/* Friends feed — Home's "Friends" section (X10)                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Where a page of the friends feed ended: the last entry's instant (to the
+ * millisecond, as `occurredAt` carries it), kind and source row id. The
+ * feed's order is `occurredAt` newest first, then kind A→Z, then id Z→A —
+ * `recentActivity`'s order — and a cursor names one point in it exactly, so
+ * the next page starts strictly after it whichever kind it was.
+ */
+export type ActivityFeedCursor = {
+  readonly at: string;
+  readonly kind: ActivityKind;
+  readonly id: string;
+};
+
+/** What `friendsFeed` reads: the kinds (empty = all four). */
+export type FriendsFeedFilter = {
+  readonly kinds: readonly ActivityKind[];
+};
+
+const FEED_CURSOR_PREFIX = "feed:";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const ISO_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/** `feed:<iso>|<kind>|<uuid>` — opaque to clients, readable in a log. */
+export const activityFeedCursor = (entry: {
+  readonly occurredAt: string;
+  readonly kind: ActivityKind;
+  readonly id: string;
+}): string =>
+  `${FEED_CURSOR_PREFIX}${new Date(entry.occurredAt).toISOString()}|${entry.kind}|${entry.id}`;
+
+/**
+ * Reads a cursor back. Refuses anything the server did not mint — a cursor
+ * from another list, or a hand-edited one — rather than starting the page
+ * somewhere it was not asked to.
+ */
+export const parseActivityFeedCursor = (cursor: string): ActivityFeedCursor => {
+  const refuse = (): never => {
+    throw new ValidationError(`not a feed cursor: ${cursor}`);
+  };
+  if (!cursor.startsWith(FEED_CURSOR_PREFIX)) refuse();
+  const [at, kind, id, ...rest] = cursor
+    .slice(FEED_CURSOR_PREFIX.length)
+    .split("|");
+  if (
+    rest.length > 0 ||
+    at === undefined ||
+    kind === undefined ||
+    id === undefined ||
+    !ISO_MS.test(at) ||
+    Number.isNaN(Date.parse(at)) ||
+    !isActivityKind(kind) ||
+    !UUID.test(id)
+  ) {
+    return refuse();
+  }
+  return { at, kind, id };
+};
+
+/**
+ * Whether `entry` comes after `cursor` in the feed's order — the rule each
+ * kind's SQL applies, stated once in plain code for the tests to hold it to.
+ */
+export const isAfterFeedCursor = (
+  entry: {
+    readonly occurredAt: string;
+    readonly kind: ActivityKind;
+    readonly id: string;
+  },
+  cursor: ActivityFeedCursor,
+): boolean => {
+  const at = new Date(entry.occurredAt).toISOString();
+  if (at !== cursor.at) return at < cursor.at;
+  if (entry.kind !== cursor.kind) return entry.kind > cursor.kind;
+  return entry.id < cursor.id;
+};
+
+/** The feed's order: newest first, then kind A→Z, then id Z→A. */
+export const compareFeedEntries = (
+  a: {
+    readonly occurredAt: string;
+    readonly kind: ActivityKind;
+    readonly id: string;
+  },
+  b: {
+    readonly occurredAt: string;
+    readonly kind: ActivityKind;
+    readonly id: string;
+  },
+): number => {
+  const atA = new Date(a.occurredAt).toISOString();
+  const atB = new Date(b.occurredAt).toISOString();
+  if (atA !== atB) return atA < atB ? 1 : -1;
+  if (a.kind !== b.kind) return a.kind < b.kind ? -1 : 1;
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? 1 : -1;
+};
+
 /**
  * One feed row — **projection**: none of the three source rows has an entity
  * actor addressable by its own id (`item_reviews` belongs to `ItemActor(item)`,
@@ -552,6 +663,19 @@ export type FriendsCollectionActorInterface = {
     ctx: Ctx,
     filter: ActivityFilter,
   ): Promise<readonly ActivityEntryDto[]>;
+  /**
+   * **projection** — Home's Friends section (X10): what the viewer's
+   * **friends** did (never the viewer's own rows), every kind keeping
+   * `recentActivity`'s rule, newest first and paged for real. The cursor is
+   * an {@link ActivityFeedCursor}: each kind reads `first + 1` rows strictly
+   * after it, the merge keeps `first`, so a page never skips or repeats a row
+   * however the kinds interleave.
+   */
+  friendsFeed(
+    ctx: Ctx,
+    filter: FriendsFeedFilter,
+    page: PageArgs,
+  ): Promise<Page<ActivityEntryDto>>;
 };
 
 export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollectionActorInterface> =
@@ -562,6 +686,7 @@ export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollection
       friends: {},
       requests: {},
       recentActivity: {},
+      friendsFeed: {},
     },
   };
 

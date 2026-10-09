@@ -186,6 +186,33 @@ builder.objectField(Viewer, "recentActivity", (t) =>
   }),
 );
 
+builder.objectField(Viewer, "friendsFeed", (t) =>
+  t.field({
+    type: ActivityEntryConnection,
+    description:
+      "Home's Friends section (X10): what your friends did — never your own " +
+      "rows — newest first, each kind under `recentActivity`'s rule, and " +
+      "paged for real: `after` takes an `edge.cursor` from the page before.",
+    args: {
+      ...t.arg.connectionArgs(),
+      kinds: t.arg({
+        type: [ActivityKindEnum],
+        required: false,
+        description: "Only these kinds; omitted or empty means all of them.",
+      }),
+    },
+    resolve: async (viewer, args, context) =>
+      connectionFromPage(
+        await context
+          .actor(
+            FriendsCollectionActorDescriptor,
+            viewerCollectionActorId(viewer.id),
+          )
+          .friendsFeed({ kinds: args.kinds ?? [] }, toPageArgs(args)),
+      ),
+  }),
+);
+
 /* -------------------------------------------------------------------------- */
 /* Nearby places                                                               */
 /* -------------------------------------------------------------------------- */
