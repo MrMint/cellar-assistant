@@ -46,7 +46,7 @@ export type UnnamedControl = {
 /** Native and shadcn controls, and Radix's `…Trigger` / `…Close` buttons. */
 const CONTROL_TAG = /^(?:button|Button|a|Link|\w+Trigger|\w+Close)$/;
 const CONTROL_ROLES = new Set(["button", "link"]);
-const NAMING_ATTRIBUTES = new Set(["aria-label", "aria-labelledby", "title"]);
+const NAMING_ATTRIBUTES = ["aria-label", "aria-labelledby", "title"] as const;
 
 type Jsx = ts.JsxElement | ts.JsxSelfClosingElement;
 
@@ -80,7 +80,7 @@ const hasSpread = (node: Jsx) =>
 
 /** A name-giving attribute with a value that is not the empty string. */
 const namedByAttribute = (node: Jsx): boolean =>
-  [...NAMING_ATTRIBUTES].some((name) => {
+  NAMING_ATTRIBUTES.some((name) => {
     const attr = attribute(node, name);
     if (attr === undefined) return false;
     const text = stringAttribute(node, name);
