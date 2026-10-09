@@ -31,6 +31,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
+import {
+  captureHrefWithPhoto,
+  photoHandoff,
+} from "@/lib/capture/photo-handoff";
 import { uploadSearchPhoto } from "@/lib/items/image-search";
 import { BarcodeScanner } from "../common/BarcodeScanner";
 import { CameraCapture } from "../common/CameraCapture";
@@ -145,9 +149,13 @@ export const ClientSearchInterface = ({
     input: {},
   });
   const urqlClient = useClient();
-  // N07/D25: photo search is hidden, not refused, where the deployment's
-  // embedding model cannot embed a photo.
-  const photoOffered = isOffered(useAiCapabilities(), "imageSearch");
+  // N07/D25: photo search is not offered where the deployment's embedding
+  // model cannot embed a photo. X06: the Photo button stays where a label
+  // can still be read — its fallback reads the photo as a label in Add.
+  const capabilities = useAiCapabilities();
+  const photoSearchOffered = isOffered(capabilities, "imageSearch");
+  const photoOffered =
+    photoSearchOffered || isOffered(capabilities, "labelRead");
   const [photoError, setPhotoError] = useState<string | null>(null);
 
   // The old action resolved after its redirect; a transition's end is the
@@ -167,10 +175,21 @@ export const ClientSearchInterface = ({
   const handlePhoto = (image: string) => {
     send({ type: "CAPTURED", image });
     setPhotoError(null);
+    if (!photoSearchOffered) {
+      // X06: nothing here can search by photo, so the photo goes straight to
+      // its fallback — read as a label in Add, with the same bytes.
+      setPhotoNavigating(true);
+      const href = captureHrefWithPhoto("bottle", photoHandoff.put(image));
+      startNavigation(() => router.push(href));
+      return;
+    }
     uploadSearchPhoto(urqlClient, image)
       .then((fileId) => {
         const href = imageSearchHref(fileId);
         if (href === null) throw new Error("The photo could not be uploaded.");
+        // Kept for the results' "Read the label instead" (X06), under the
+        // search file's id — the one thing the results page knows.
+        photoHandoff.put(image, fileId);
         setPhotoNavigating(true);
         startNavigation(() => router.push(href));
       })
@@ -271,7 +290,11 @@ export const ClientSearchInterface = ({
                         <IconButton
                           variant="secondary"
                           size="sm"
-                          aria-label="Search by photo"
+                          aria-label={
+                            photoSearchOffered
+                              ? "Search by photo"
+                              : "Photograph a label"
+                          }
                           onClick={() => send({ type: "SEARCH_IMAGE" })}
                         >
                           <Camera />
@@ -362,7 +385,11 @@ export const ClientSearchInterface = ({
             exit="exit"
           >
             <CaptureCard
-              title="Take a picture of the item"
+              title={
+                photoSearchOffered
+                  ? "Take a picture of the item"
+                  : "Take a picture of the label"
+              }
               onCancel={() => send({ type: "CANCEL" })}
             >
               <CameraCapture onCapture={handlePhoto} />
