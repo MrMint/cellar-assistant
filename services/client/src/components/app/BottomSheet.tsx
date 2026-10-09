@@ -10,6 +10,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { keepOpenForToasts } from "./toastLayer";
 import { useReturnFocus } from "./useReturnFocus";
 
 export type SheetSnap = "peek" | "half" | "full";
@@ -128,6 +129,7 @@ export function BottomSheet({
         data-slot="bottom-sheet"
         role={role}
         onCloseAutoFocus={returnFocus}
+        onInteractOutside={keepOpenForToasts}
         className={cn(
           "surface-glass touch-none-select rounded-t-lg border-none text-foreground outline-none",
           "pb-[max(1rem,env(safe-area-inset-bottom))]",

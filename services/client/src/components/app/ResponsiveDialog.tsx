@@ -11,6 +11,7 @@ import {
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { BottomSheet, type BottomSheetProps } from "./BottomSheet";
+import { keepOpenForToasts } from "./toastLayer";
 import { useReturnFocus } from "./useReturnFocus";
 
 export type ResponsiveDialogProps = Pick<
@@ -84,6 +85,7 @@ export function ResponsiveDialog({
         onPointerDownOutside={(e) => {
           if (!dismissible) e.preventDefault();
         }}
+        onInteractOutside={keepOpenForToasts}
         className={cn(
           // Capped and scrolling, as Joy's ModalDialog was: ui/dialog has no
           // height limit, so a long body ran off the viewport from md up.
