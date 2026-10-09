@@ -1,6 +1,5 @@
-import { AppBar } from "@/components/app/AppBar";
-import { Pantry } from "@/components/app/icons";
 import { Page } from "@/components/app/Page";
+import { BarAppBar } from "@/components/bar/BarAppBar";
 import { BAR_SECTION_LIMIT, WhatCanIMakeQuery } from "@/components/bar/queries";
 import { WhatCanIMake } from "@/components/bar/WhatCanIMake";
 import { unwrapResult } from "@/lib/api/result";
@@ -24,13 +23,7 @@ export default async function BarPage() {
 
   return (
     <Page>
-      <AppBar
-        title="What can I make"
-        parent="/recipes"
-        actions={[
-          { label: "Bar pantry", icon: Pantry, href: "/recipes/bar/pantry" },
-        ]}
-      />
+      <BarAppBar />
       {result.ok ? (
         <WhatCanIMake
           data={{
