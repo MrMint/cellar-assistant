@@ -163,23 +163,31 @@ export function PourTrend({
         </div>
       </div>
 
-      <table id={tableId} className="sr-only">
-        <caption>{trend.spoken}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Month</th>
-            <th scope="col">Pours</th>
-          </tr>
-        </thead>
-        <tbody>
-          {trend.months.map((month) => (
-            <tr key={month.key}>
-              <th scope="row">{month.long}</th>
-              <td>{month.count}</td>
+      {/*
+        `sr-only` goes on a wrapper, not the table: a table ignores the 1px
+        width and lays out at its content's width, which widened the whole
+        document past a phone's screen (390 → 632) and let the page scroll
+        sideways. The wrapper's 1px box and overflow clip it.
+      */}
+      <div className="sr-only">
+        <table id={tableId}>
+          <caption>{trend.spoken}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Month</th>
+              <th scope="col">Pours</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {trend.months.map((month) => (
+              <tr key={month.key}>
+                <th scope="row">{month.long}</th>
+                <td>{month.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

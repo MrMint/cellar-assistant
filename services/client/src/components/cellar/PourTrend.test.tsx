@@ -49,6 +49,12 @@ describe("PourTrend", () => {
       container.querySelector("caption")?.textContent ?? "",
       /^20 pours in the last 12 months/,
     );
+    // Hidden by a 1px wrapper, not by `sr-only` on the table itself: a table
+    // lays out at its content's width whatever its own `width`, and that
+    // widened the page past a phone's screen (390 → 632).
+    const table = container.querySelector("table");
+    assert.equal(table?.classList.contains("sr-only"), false);
+    assert.equal(table?.parentElement?.classList.contains("sr-only"), true);
     // Months with pours are bars; empty months are only the baseline.
     assert.equal(container.querySelectorAll("svg path").length, 5);
     // The current month is drawn in full ink.
