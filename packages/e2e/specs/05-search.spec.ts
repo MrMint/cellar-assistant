@@ -179,8 +179,7 @@ test("the collection line counts only cellars you own or co-own (G36)", async ({
   }
 });
 
-test("typing searches on the debounce and renders results or an honest notice", async ({
-  api,
+test("typing searches on the debounce and renders sections or one empty state (X12)", async ({
   primary,
 }) => {
   const noise = watch(primary);
@@ -188,28 +187,70 @@ test("typing searches on the debounce and renders results or an honest notice", 
   // The old box has no submit button: a 300 ms debounce navigates to ?q=.
   await searchBox(primary).fill("a bold red wine");
   await primary.waitForURL(/[?&]q=a(\+|%20)bold(\+|%20)red(\+|%20)wine/);
-  // The old section titles are Typography title-lg, a <p>, not a heading.
-  await expect(
-    primary.getByText("Search results for \u201ca bold red wine\u201d", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  // X12: one page of sections, or — when nothing anywhere matched — one
+  // empty state. Never a blank results area: with no embedding provider
+  // every section still matches by name (D25), so "nothing" is honest.
+  const sections = primary.locator("[data-search-sections]");
+  const empty = primary.getByText("Nothing called “a bold red wine” yet.");
+  await expect(sections.or(empty)).toBeVisible({ timeout: 30_000 });
   await settleNetwork(primary);
-
-  const text = await bodyText(primary);
-  const probe = await embeddingsAvailable(api);
-  if (!probe.ok) {
-    // The page must degrade visibly, not render a silent empty list.
-    expect(
-      text,
-      "search failed server-side and the page said nothing about it",
-    ).toMatch(/unavailable|could not|not available/i);
-  } else {
-    expect(text).toMatch(
-      /No items found for|Can.t find what you.re looking for\? Add an item/,
+  if ((await sections.count()) > 0) {
+    // D10's order, whichever sections this stack's data fills.
+    const order = await primary.evaluate(() =>
+      [...document.querySelectorAll("[data-search-section]")].map((el) =>
+        el.getAttribute("data-search-section"),
+      ),
     );
+    const d10 = ["bottles", "items", "places", "recipes", "people", "brands"];
+    expect(order).toEqual(d10.filter((name) => order.includes(name)));
+    // Three rows a section at most, before See all.
+    for (const name of order) {
+      const rows = await primary
+        .locator(`[data-search-section="${name}"] [data-search-row]`)
+        .count();
+      expect(
+        rows,
+        `section ${name} shows more than three rows`,
+      ).toBeLessThanOrEqual(3);
+    }
   }
   expect(noise.pageErrors, "the search page threw").toEqual([]);
+});
+
+test("a named item is not padded with unrelated ones (X12)", async ({
+  api,
+}) => {
+  // Through the API, so this holds on any stack: a phrase that names an item
+  // exactly returns the items whose names match, plus near neighbours — not
+  // twenty of whatever is nearest. Take a real item name off the catalog.
+  const probe = await api.query(
+    `query { itemSearch(text: "wine", limit: 1, first: 1) {
+       __typename ... on ItemSearchConnection { edges { node { name } } }
+     } }`,
+  );
+  const name = probe.itemSearch.edges?.[0]?.node.name as string | undefined;
+  test.skip(name === undefined, "no items on this stack to search for");
+  if (name === undefined) return;
+  const search = async (narrow: boolean): Promise<string[]> =>
+    (
+      await api.query(
+        `query S($text: String!, $narrow: Boolean) {
+           itemSearch(text: $text, narrow: $narrow, limit: 20, first: 20) {
+             __typename
+             ... on ItemSearchConnection { edges { node { name } } }
+           }
+         }`,
+        { text: name, narrow },
+      )
+    ).itemSearch.edges.map(
+      (edge: { node: { name: string } }) => edge.node.name,
+    );
+  const plain = await search(false);
+  const narrowed = await search(true);
+  expect(narrowed, "the named item is missing").toContain(name);
+  expect(narrowed.length).toBeLessThanOrEqual(plain.length);
+  // Narrowing only removes: what stays is in the plain answer's order.
+  expect(plain.filter((n) => narrowed.includes(n))).toEqual(narrowed);
 });
 
 test("a scanned code is looked up server-side from ?barcode=", async ({
@@ -506,7 +547,7 @@ test("the landing view is visible before any script runs", async ({
   }
 });
 
-test("a text search ends with the catalog's Brands, See all into /brands (D1)", async ({
+test("a text search has a Brands section, its See all into /brands (D1, D10)", async ({
   api,
   primary,
 }) => {
@@ -525,12 +566,11 @@ test("a text search ends with the catalog's Brands, See all into /brands (D1)", 
 
   const noise = watch(primary);
   await primary.goto(`/search?q=${encodeURIComponent(brand.name)}`);
+  const brands = primary.locator('[data-search-section="brands"]');
   await expect(
-    primary.getByRole("heading", { name: "Brands", exact: true }),
+    brands.getByRole("heading", { name: "Brands", exact: true }),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(
-    primary.locator(`a[href="/brands/${brand.id}"]`).first(),
-  ).toBeVisible();
+  await expect(brands.locator(`a[href="/brands/${brand.id}"]`)).toBeVisible();
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 
   // `/brands?q=` opens with the term already searched.
