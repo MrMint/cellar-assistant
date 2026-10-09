@@ -693,7 +693,7 @@ export class RecipeActor
     ) {
       this.refuseAsAbsent();
     }
-    const rows = aggregate.ingredients.map(ingredientRowToDto);
+    const rows = aggregate.ingredients.map((row) => ingredientRowToDto(row));
     const names = await ingredientNames(
       this.db,
       rows.map((row) => row.ref),
