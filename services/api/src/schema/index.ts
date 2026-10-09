@@ -75,5 +75,9 @@ import "./want-to-try.ts";
 // X17: the share reads and friend invites. Reuses enums from `item.ts`,
 // `recipe.ts` and `tier-list.ts`, and adds a field to `Viewer`.
 import "./share.ts";
+// X18: `Viewer.counts` and `friendProfile`, whose sections are `TierList`,
+// `Cellar` and `ItemCheckIn` connections and whose person is a `UserProfile`
+// — refs from four modules, so it comes after every one of them.
+import "./friend-profile.ts";
 
 export const schema = builder.toSchema();
