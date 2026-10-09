@@ -117,7 +117,16 @@ export type TierListHistoryStepResult =
       applied: TierListEditView;
       history: TierListHistoryView;
     }
-  | { success: false; error: string };
+  | {
+      success: false;
+      error: string;
+      /**
+       * The refusal was `TIER_LIST_HISTORY_MOVED`: the list changed elsewhere
+       * and nothing was stepped. A caller that does not show the list (the
+       * item page's add toast) words that itself.
+       */
+      moved?: boolean;
+    };
 
 const transportError = (error: { message: string } | undefined) =>
   error === undefined ? null : error.message;
@@ -319,6 +328,7 @@ export function useTierListActions() {
           // other one already stepped, or edited. The actor's own words are
           // a log line.
           error: historyStepFailure(direction, result.error),
+          moved: result.error.reason === "TIER_LIST_HISTORY_MOVED",
         };
       }
       return {

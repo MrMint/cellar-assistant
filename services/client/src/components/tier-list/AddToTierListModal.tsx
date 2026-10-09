@@ -177,7 +177,13 @@ export function AddToTierListModal({
               notify(`Took ${entityName} off ${listName}`);
               router.refresh();
             } else {
-              fail(result.error);
+              // This page does not show the list, so the list page's "here's
+              // where it stands now" would point at nothing.
+              fail(
+                result.moved === true
+                  ? `${listName} changed somewhere else, so nothing was undone.`
+                  : result.error,
+              );
             }
           });
         },

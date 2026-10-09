@@ -191,16 +191,23 @@ export function TierListViewPage({
    * shows. Just after an edit made here the page knows *that* it can undo but
    * not *which* edit until the refresh lands, so it waits for that — never
    * steps blind, which is what let a stale tab take back another tab's edit.
+   *
+   * `"nothing"` when the history it now holds has no such step (a refresh
+   * after another tab's change can take it away); `"pending"` when the
+   * refresh has not named it within `STEP_SEQ_WAIT_MS`.
    */
   const seqToStep = useCallback(
-    async (direction: "undo" | "redo"): Promise<number | null> => {
+    async (
+      direction: "undo" | "redo",
+    ): Promise<number | "nothing" | "pending"> => {
       for (let waited = 0; ; waited += STEP_SEQ_POLL_MS) {
         const current = historyRef.current;
         const seq = stepSeq(current, direction);
         if (seq !== null) return seq;
         const possible =
           direction === "undo" ? current.canUndo : current.canRedo;
-        if (!possible || waited >= STEP_SEQ_WAIT_MS) return null;
+        if (!possible) return "nothing";
+        if (waited >= STEP_SEQ_WAIT_MS) return "pending";
         await new Promise((resolve) => setTimeout(resolve, STEP_SEQ_POLL_MS));
       }
     },
@@ -247,15 +254,15 @@ export function TierListViewPage({
       steppingRef.current = true;
       setStepping(true);
       const expectedSeq = expected ?? (await seqToStep(direction));
-      if (expectedSeq === null) {
+      if (typeof expectedSeq !== "number") {
         steppingRef.current = false;
         setStepping(false);
+        const verb = direction === "undo" ? "Undo" : "Redo";
         notify(
-          `Still saving your last change. Try ${direction === "undo" ? "Undo" : "Redo"} again.`,
-          {
-            tone: "error",
-            id: TIER_LIST_EDIT_TOAST,
-          },
+          expectedSeq === "nothing"
+            ? `Nothing to ${direction} on this list any more.`
+            : `Still catching up with your last change. Try ${verb} again.`,
+          { tone: "error", id: TIER_LIST_EDIT_TOAST },
         );
         router.refresh();
         return;

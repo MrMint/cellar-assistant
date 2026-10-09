@@ -259,6 +259,35 @@ describe("Arrange (X23 / D4)", () => {
     assert.deepEqual(calls.slice(2), ["undo tl-1 #8", "refresh"]);
   });
 
+  test("a removal's Undo whose refresh shows nothing left to undo sends nothing, and says so", async () => {
+    await render({
+      ...data,
+      history: { canUndo: false, canRedo: false, undo: null, redo: null },
+    });
+    await click(button("Arrange"));
+    await click(button("Remove Rioja"));
+    let tapped: Promise<void> | undefined;
+    await act(async () => {
+      tapped = Promise.resolve(toasts.at(-1)?.options?.undo?.());
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    // Another tab already took the removal back: the refresh has no Undo.
+    await render({
+      ...data,
+      history: { canUndo: false, canRedo: true, undo: null, redo: edit },
+    });
+    await act(async () => {
+      await tapped;
+      await new Promise((r) => setTimeout(r, 250));
+    });
+    assert.deepEqual(calls, ["remove row-1", "refresh", "refresh"]);
+    assert.equal(
+      toasts.at(-1)?.message,
+      "Nothing to undo on this list any more.",
+    );
+    assert.equal(toasts.at(-1)?.options?.tone, "error");
+  });
+
   test("⌘Z while arranging is Undo; outside Arrange it does nothing", async () => {
     await render();
     const press = async (shiftKey = false) =>
