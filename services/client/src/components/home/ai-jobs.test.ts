@@ -79,7 +79,7 @@ describe("words", () => {
     assert.equal(aiJobHref(job({})), "/map/scans/s1");
     assert.equal(
       aiJobHref(job({ kind: "RECIPE_PHOTO", status: "READY", recipeId: "r1" })),
-      "/recipes/r1",
+      "/recipes/r1/edit",
     );
     assert.equal(aiJobHref(job({ kind: "RECIPE_PHOTO" })), null);
     assert.equal(
@@ -138,7 +138,7 @@ describe("isWatchedAt", () => {
       status: "READY",
       recipeId: "r1",
     });
-    assert.equal(isWatchedAt(recipe, "/recipes/ai-generator"), true);
+    assert.equal(isWatchedAt(recipe, "/recipes/new"), true);
     assert.equal(isWatchedAt(recipe, "/cellars"), false);
     assert.equal(isWatchedAt(job({ kind: "LABEL_READ" }), "/"), true);
   });

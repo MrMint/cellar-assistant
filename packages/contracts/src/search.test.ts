@@ -52,7 +52,7 @@ const SURFACES: readonly [
   [
     "RecipeSearchActor",
     (v) => recipeSearchActorId({ term: "negroni" }, v),
-    false,
+    true,
   ],
   ["UserSearchActor", (v) => userSearchActorId({ term: "jar" }, v), true],
   [
@@ -109,7 +109,7 @@ describe("search actor keys (§1.5, §2.3)", () => {
       });
     }
 
-    it("names exactly the §1.5 surfaces, plus X27's two place surfaces", () => {
+    it("names exactly the §1.5 surfaces, plus X27's place surfaces and X15's recipes", () => {
       // X27: a place search and a duplicate check both answer with the
       // viewer's own places under review, so neither may share an activation
       // across viewers any more — with or without a tier-list / visit filter.
@@ -117,6 +117,7 @@ describe("search actor keys (§1.5, §2.3)", () => {
         SURFACES.filter(([, , scoped]) => scoped).map(([label]) => label),
       ).toEqual([
         "CellarItemSearchActor",
+        "RecipeSearchActor",
         "UserSearchActor",
         "DuplicatePlaceSearchActor",
         "PlaceSearchActor (no tier-list / visit filter)",

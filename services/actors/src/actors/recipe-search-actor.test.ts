@@ -336,6 +336,53 @@ describe.skipIf(skip)("RecipeSearchActor (§2.3)", () => {
     });
   });
 
+  it("X15: a viewer finds their own recipes and drafts, friends' FRIENDS ones and everyone's PUBLIC ones; the menu matcher only PUBLIC", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const friend = await seedUser(db);
+      const stranger = await seedUser(db);
+      await seedFriendship(db, owner, friend);
+      const tag = `x15${Date.now()}`;
+      await seedRecipe(db, { name: `${tag} public`, createdById: owner });
+      await seedRecipe(db, {
+        name: `${tag} friends`,
+        createdById: owner,
+        privacy: "FRIENDS",
+      });
+      await seedRecipe(db, {
+        name: `${tag} private`,
+        createdById: owner,
+        privacy: "PRIVATE",
+      });
+      await seedRecipe(db, {
+        name: `${tag} draft`,
+        createdById: owner,
+        privacy: "PUBLIC",
+        isDraft: true,
+      });
+
+      const input: RecipeSearchInput = { term: tag };
+      const names = async (viewer: string | null, ctx: Ctx) =>
+        (await newActor(input, db, viewer).all(ctx, input))
+          .map((hit) => hit.name.slice(tag.length + 1))
+          .sort();
+      expect(await names(owner, userCtx(owner))).toEqual([
+        "draft",
+        "friends",
+        "private",
+        "public",
+      ]);
+      expect(await names(friend, userCtx(friend))).toEqual([
+        "friends",
+        "public",
+      ]);
+      expect(await names(stranger, userCtx(stranger))).toEqual(["public"]);
+      expect(
+        await names(null, { viewerId: null, kind: "system", requestId: "r" }),
+      ).toEqual(["public"]);
+    });
+  });
+
   it("shows the same catalog to owner, friend and stranger; refuses anonymous", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);

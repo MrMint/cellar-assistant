@@ -196,7 +196,13 @@ const seedTea = async (db: DbOrTx, createdById: string): Promise<string> => {
 const seedRecipe = async (db: DbOrTx, createdById: string): Promise<string> => {
   const [row] = await db
     .insert(recipes)
-    .values({ name: `Recipe ${Date.now()}`, type: "cocktail", createdById })
+    // X15: PUBLIC, the pre-D22 catalog these tests describe.
+    .values({
+      name: `Recipe ${Date.now()}`,
+      type: "cocktail",
+      createdById,
+      privacy: "PUBLIC",
+    })
     .returning({ id: recipes.id });
   if (row === undefined) throw new Error("seedRecipe: no row");
   return row.id;
@@ -2493,6 +2499,9 @@ describe("UserActor makes no external call (§2.1, B4 acceptance)", () => {
       "../lib/outbox.ts",
       "../lib/outbox-targets.ts",
       "../lib/profile-store.ts",
+      // X15: `visibleRecipeIds`, one SQL read of `recipes` — guarded import
+      // by import in `no-external-calls.test.ts`.
+      "../lib/recipe-visibility.ts",
       // X27: `placeIsVisible`, a Drizzle read of `places` — guarded import by
       // import in `no-external-calls.test.ts`.
       "../lib/unshared-places.ts",

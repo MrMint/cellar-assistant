@@ -169,7 +169,8 @@ const FIELDS: readonly {
         },
         ctx.viewerId,
       ),
-    viewerScoped: false,
+    // X15: recipes are private first, so the answer is the viewer's.
+    viewerScoped: true,
   },
   {
     // X12 / D9: universal search's Recipes — `hybrid` joins the key.

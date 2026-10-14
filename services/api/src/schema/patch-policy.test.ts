@@ -207,6 +207,8 @@ const FIELDS: ReadonlyArray<
   ["updateRecipe", "prepTimeMinutes", "clearable", "10", 10],
   ["updateRecipe", "servingSize", "clearable", "2", 2],
   ["updateRecipe", "imageUrl", "clearable", `"u"`, "u"],
+  ["updateRecipe", "privacy", "keep", "PUBLIC", "PUBLIC"],
+  ["updateRecipe", "isDraft", "keep", "false", false],
 
   ["updateRecipeReview", "score", "clearable", "4.5", 4.5],
   ["updateRecipeReview", "text", "clearable", `"T"`, "T"],
@@ -372,6 +374,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   setWantToTry: NAMES_A_TARGET,
   startItemOnboarding: STARTS,
   startRecipePhotoJob: STARTS,
+  startRecipeTextJob: STARTS,
   suggestItemDetails: ASKS,
   suggestNewItemDetails: ASKS,
 };

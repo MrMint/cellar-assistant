@@ -45,11 +45,15 @@ export const aiJobHref = (job: AiJob): string | null => {
       return `/map/scans/${job.subjectId}`;
     case "RECIPE_PHOTO":
       if (job.status === "READY") {
-        return job.recipeId === null ? "/recipes" : `/recipes/${job.recipeId}`;
+        // X15: what the reader wrote is a private draft, reviewed in its
+        // editor before it is a recipe.
+        return job.recipeId === null
+          ? "/recipes"
+          : `/recipes/${job.recipeId}/edit`;
       }
-      // The photo reader has no page of its own per job; a failure is
-      // retried from the drafter.
-      return job.status === "FAILED" ? "/recipes/ai-generator" : null;
+      // The reader has no page of its own per job; a failure is retried
+      // from New recipe › Photo (X15).
+      return job.status === "FAILED" ? "/recipes/new?from=photo" : null;
     case "TIER_LIST_INSIGHTS":
       return `/tier-lists/${job.subjectId}`;
   }
@@ -184,7 +188,7 @@ export const isWatchedAt = (job: AiJob, pathname: string): boolean => {
     case "MENU_SCAN":
       return job.placeId !== null && pathname === `/places/${job.placeId}`;
     case "RECIPE_PHOTO":
-      return pathname === "/recipes/ai-generator";
+      return pathname === "/recipes/new";
     default:
       return false;
   }

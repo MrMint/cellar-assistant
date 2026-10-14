@@ -532,6 +532,29 @@ builder.queryField("lovedRecipes", (t) =>
   }),
 );
 
+builder.queryField("myRecipes", (t) =>
+  t.field({
+    type: RecipeConnection,
+    description:
+      "X15: the recipes the viewer wrote, newest change first. `drafts: " +
+      "true` for AI drafts waiting on review, `false` for published ones, " +
+      "omitted for both. At most 200.",
+    errors: {},
+    args: {
+      ...t.arg.connectionArgs(),
+      drafts: t.arg.boolean({ required: false }),
+    },
+    resolve: async (_root, args, context) => {
+      const viewerId = requireViewer(context, "see your recipes");
+      return connectionFromPage(
+        await context
+          .actor(UserActorDescriptor, viewerId)
+          .myRecipes(toPageArgs(args), args.drafts ?? null),
+      );
+    },
+  }),
+);
+
 /* -------------------------------------------------------------------------- */
 /* Mutations                                                                   */
 /* -------------------------------------------------------------------------- */

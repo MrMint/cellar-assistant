@@ -967,6 +967,12 @@ export const recipes = pgTable("recipes", {
 	updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 	recipeGroupId: uuid("recipe_group_id").references((): AnyPgColumn => recipeGroups.id, { onDelete: "set null" } ),
 	createdById: uuid("created_by_id").references(() => user.id, { onDelete: "set null" } ),
+	// X15 / D22: recipes are private first. Rows from before the column read
+	// PUBLIC (the migration backfills them), new ones PRIVATE. A draft (AI
+	// output nobody has reviewed yet) is its creator's alone whatever the
+	// privacy says (`canSeeRecipe` in packages/policy).
+	privacy: permissionType().default("PRIVATE").notNull(),
+	isDraft: boolean("is_draft").default(false).notNull(),
 }, (table) => [
 	foreignKey({
 		columns: [table.canonicalRecipeId],
@@ -979,6 +985,7 @@ export const recipes = pgTable("recipes", {
 	index("idx_recipes_group_id").using("btree", table.recipeGroupId.asc().nullsLast()),
 	index("idx_recipes_name").using("btree", table.name.asc().nullsLast()),
 	index("idx_recipes_type").using("btree", table.type.asc().nullsLast()),
+	index("idx_recipes_shared").using("btree", table.id.asc().nullsLast()).where(sql`((privacy = 'PUBLIC'::permission_type) AND (NOT is_draft))`),
 check("recipes_difficulty_level_check", sql`((difficulty_level >= 1) AND (difficulty_level <= 5))`),check("recipes_type_check", sql`(type = ANY (ARRAY['food'::text, 'cocktail'::text]))`),]);
 
 export const sakeCategory = pgTable("sake_category", {

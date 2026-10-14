@@ -285,6 +285,40 @@ describe.skipIf(skip)("BarActor (X14)", () => {
     });
   });
 
+  it("X15: judges the viewer's own and shared recipes, never someone else's private one", async () => {
+    await withTestDb(async (db) => {
+      const me = await seedUser(db);
+      const other = await seedUser(db);
+      await db.execute(sql`
+        insert into public.bar_pantry_items (user_id, kind) values
+          (${me}::uuid, 'lemon'), (${me}::uuid, 'simple_syrup')
+      `);
+      const lines = [
+        { generic: "Lemon juice", quantity: 1, unit: "oz" },
+        { generic: "Simple syrup", quantity: 1, unit: "oz" },
+      ];
+      const shared = await seedCocktail(db, "Shared lemonade", lines);
+      const theirs = await seedCocktail(db, "Their secret lemonade", lines);
+      const mine = await seedCocktail(db, "My own lemonade", lines);
+      await db.execute(sql`
+        update public.recipes set privacy = 'PRIVATE', created_by_id = ${other}::uuid
+        where id = ${theirs}::uuid
+      `);
+      await db.execute(sql`
+        update public.recipes set privacy = 'PRIVATE', is_draft = true,
+          created_by_id = ${me}::uuid
+        where id = ${mine}::uuid
+      `);
+      const answer = await (await barOf(me, db)).whatCanIMake(userCtx(me), {
+        limit: 50,
+      });
+      const makeNow = answer.makeNow.map((m) => m.recipeId);
+      expect(makeNow).toContain(shared);
+      expect(makeNow).toContain(mine);
+      expect(makeNow).not.toContain(theirs);
+    });
+  });
+
   it("lists cocktails with this bottle's kind, and says Use it up for an open one", async () => {
     await withTestDb(async (db) => {
       const me = await seedUser(db);

@@ -60,6 +60,7 @@ import {
   assertNoCallerSuppliedUser,
   JOB_STATUSES,
   RECIPE_PHOTO_STAGES,
+  RECIPE_TEXT_MAX,
   RecipePhotoJobActorDescriptor,
   recipePhotoJobActorId,
 } from "@cellar-assistant/contracts";
@@ -281,6 +282,7 @@ builder.mutationField("startRecipePhotoJob", (t) =>
       // bite, and what makes adding a user field here a compile error.
       const payload: RecipePhotoJobPayload = {
         fileId: String(args.input.fileId),
+        text: null,
         additionalFileIds: args.input.additionalFileIds?.map(String) ?? [],
         notes: args.input.notes ?? null,
         recipeGroupId:
@@ -292,6 +294,52 @@ builder.mutationField("startRecipePhotoJob", (t) =>
       // The runtime half, because the same object is re-read from `jobs.payload`
       // as untyped JSON on every outbox delivery.
       assertNoCallerSuppliedUser(payload, "a recipe-photo job's payload");
+      return context
+        .actor(
+          RecipePhotoJobActorDescriptor,
+          recipePhotoJobActorId(
+            args.jobId === undefined || args.jobId === null
+              ? randomUUID()
+              : String(args.jobId),
+          ),
+        )
+        .start(payload);
+    },
+  }),
+);
+
+const StartRecipeTextJobInput = builder.inputType("StartRecipeTextJobInput", {
+  description:
+    "X15's Paste: recipe text, read by the same job as a photo. No `userId`, " +
+    "for the same reason as `StartRecipePhotoJobInput`.",
+  fields: (t) => ({
+    text: t.string({
+      required: true,
+      description: `The pasted recipe, at most ${RECIPE_TEXT_MAX} characters.`,
+    }),
+    notes: t.string({ required: false }),
+  }),
+});
+
+builder.mutationField("startRecipeTextJob", (t) =>
+  t.field({
+    type: RecipePhotoJobType,
+    description:
+      "X15: read a recipe out of pasted text. The same job, stages and " +
+      "polling as `startRecipePhotoJob` (`recipePhotoJob(jobId:)`); the " +
+      "result is a private draft for its author to review. Idempotent on " +
+      "`jobId`.",
+    errors: {},
+    args: {
+      jobId: t.arg.id({ required: false }),
+      input: t.arg({ type: StartRecipeTextJobInput, required: true }),
+    },
+    resolve: (_root, args, context) => {
+      const payload: RecipePhotoJobPayload = {
+        text: args.input.text,
+        notes: args.input.notes ?? null,
+      };
+      assertNoCallerSuppliedUser(payload, "a recipe-text job's payload");
       return context
         .actor(
           RecipePhotoJobActorDescriptor,

@@ -25,10 +25,6 @@ mock.module("next/navigation", () => ({
 const { RecipeDetails } = await import("./RecipeDetails");
 const { RecipeGroupCard } = await import("./RecipeGroupCard");
 const { RecipeVersionsTab } = await import("./RecipeVersionsTab");
-const { RecipePhotoProcessor } = await import("./RecipePhotoProcessor");
-const { AIRecipeGenerator, AIRecipeGeneratorView } = await import(
-  "./AIRecipeGenerator"
-);
 const { RecipeGroupSearch } = await import("../search/RecipeGroupSearch");
 
 const client = new Client({
@@ -122,8 +118,13 @@ describe("RecipeDetails (restored)", () => {
     assert.match(html, />Negroni</);
   });
 
-  test("the fallback picture; Share lives in the bar's ⋯ (X17)", () => {
-    assert.match(html, /data-alt="A cocktail"/);
+  test("the fallback picture is a drawn cocktail plate, never a wine bottle; Share lives in the bar's ⋯ (X17)", () => {
+    // X15: review #44 — the hero of a cocktail was the wine-bottle PNG.
+    assert.match(
+      html,
+      /data-slot="recipe-plate"[^>]*data-recipe-type="cocktail"/,
+    );
+    assert.doesNotMatch(html, /data-next-image/);
     // The old "Share Recipe" card under the photo is gone: Share is a row in
     // the AppBar's overflow, whose rows a static render never mounts.
     assert.doesNotMatch(html, />Share Recipe</);
@@ -276,19 +277,18 @@ describe("RecipeGroupSearch (restored)", () => {
   );
 
   test("the search card and its filters", () => {
-    assert.match(html, />Search Recipe Groups</);
-    assert.match(
-      html,
-      /placeholder="Search by recipe name, description, or tags\.\.\."/,
-    );
+    // X15: plain words — "recipes", not "recipe groups".
+    assert.match(html, />Search recipes</);
+    assert.match(html, /placeholder="Search recipes"/);
+    assert.doesNotMatch(html, /[Rr]ecipe [Gg]roups/);
     assert.match(html, /aria-label="Category"/);
     assert.match(html, /aria-label="Base Spirit"/);
   });
 
   test("the empty state", () => {
-    assert.match(html, />No recipe groups found</);
-    assert.match(html, /Try adjusting your search criteria or filters/);
-    assert.match(html, />Clear Filters</);
+    assert.match(html, />No recipes found</);
+    assert.match(html, /Try another word, or clear the filters\./);
+    assert.match(html, />Clear filters</);
   });
 });
 
@@ -364,31 +364,36 @@ describe("RecipeVersionsTab (restored)", () => {
   });
 });
 
-describe("AI Recipe Generator (restored)", () => {
-  test("the processor card", () => {
-    const html = render(<RecipePhotoProcessor />);
-    assert.match(html, />AI Recipe Generator</);
-    assert.match(html, />Choose Photo</);
-    assert.match(html, />Extract Recipes</);
+describe("RecipeDetails for its author (X15)", () => {
+  const html = (overrides: Partial<Recipe>) =>
+    render(
+      <RecipeDetails
+        recipe={{ ...recipe, created_by_id: "me", ...overrides }}
+        viewerId="me"
+      />,
+    );
+
+  test("a draft says the AI read it, that only you see it, and leads to the review", () => {
+    const page = html({ is_draft: true, privacy: "PRIVATE" });
+    assert.match(page, /data-ai-draft="suggested"/);
+    assert.match(page, /Only you can see it until you check it/);
+    assert.match(page, /href="\/recipes\/r1\/edit"[^>]*>Review draft</);
   });
 
-  test("the page, without the invented capability numbers", () => {
-    const html = render(<AIRecipeGenerator />);
-    assert.match(html, /<h1[^>]*>AI Recipe Generator</);
-    assert.match(html, />AI Features</);
-    assert.match(html, />Best Results Tips</);
-    assert.match(html, />How It Works</);
-    assert.match(html, />1. Upload Photo</);
-    assert.doesNotMatch(html, /OCR Accuracy|System Capabilities|95%/);
-    assert.doesNotMatch(html, /your cellar/);
+  test("a saved recipe says who can see it, with the way to change it", () => {
+    const page = html({ is_draft: false, privacy: "PRIVATE" });
+    assert.match(page, /Only you can see this recipe\./);
+    assert.match(page, /href="\/recipes\/r1\/edit"[^>]*>Change</);
+    assert.doesNotMatch(page, /data-ai-draft=/);
   });
 
-  test("where recipe photos are not offered, the notice alone — no pitch around it", () => {
-    const html = render(<AIRecipeGeneratorView recipePhotoOffered={false} />);
-    assert.match(html, /Reading recipe photos isn&#x27;t available here/);
-    assert.doesNotMatch(html, /Transform any menu photo/);
-    assert.doesNotMatch(html, />AI Features</);
-    assert.doesNotMatch(html, />How It Works</);
-    assert.doesNotMatch(html, />Choose Photo</);
+  test("someone else's recipe draws neither", () => {
+    const page = render(
+      <RecipeDetails
+        recipe={{ ...recipe, created_by_id: "author", privacy: "PUBLIC" }}
+        viewerId="me"
+      />,
+    );
+    assert.doesNotMatch(page, /Review draft|Who can see|>Change</);
   });
 });

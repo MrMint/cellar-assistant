@@ -73,6 +73,7 @@ import * as mapQueries from "@/components/map/queries";
 import * as menuLinesQueries from "@/components/menu-lines/queries";
 import * as pourQueries from "@/components/pour/queries";
 import * as rankingFragments from "@/components/ranking/fragments";
+import * as recipeEditorDocuments from "@/components/recipe/editor/documents";
 import * as recipeFragments from "@/components/recipe/fragments";
 import * as recipeQueries from "@/components/recipe/queries";
 import * as searchQueries from "@/components/search/queries";
@@ -114,6 +115,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/menu-lines/queries.ts": menuLinesQueries,
   "components/pour/queries.ts": pourQueries,
   "components/ranking/fragments.ts": rankingFragments,
+  "components/recipe/editor/documents.ts": recipeEditorDocuments,
   "components/recipe/fragments.ts": recipeFragments,
   "components/recipe/queries.ts": recipeQueries,
   "components/search/queries.ts": searchQueries,

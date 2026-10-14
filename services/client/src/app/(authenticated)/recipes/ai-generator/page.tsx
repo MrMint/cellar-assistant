@@ -1,13 +1,10 @@
-import { AIRecipeGenerator } from "@/components/recipe/AIRecipeGenerator";
+import { redirect } from "next/navigation";
 
 /**
- * `/recipes/ai-generator` — `82450ad1:src/app/(authenticated)/recipes/ai-generator/page.tsx`,
- * restored as `AIRecipeGenerator` (the old page was itself a client component;
- * it moved beside the other recipe components so this route stays a server
- * entry with `dynamic` set).
+ * `/recipes/ai-generator` — the old orphaned generator. Its job is now New
+ * recipe › Photo (X15), which starts reading the moment a photo is chosen;
+ * old links land there.
  */
-export const dynamic = "force-dynamic";
-
-export default function AIRecipeGeneratorPage() {
-  return <AIRecipeGenerator />;
+export default function AIRecipeGeneratorPage(): never {
+  redirect("/recipes/new?from=photo");
 }

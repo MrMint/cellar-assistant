@@ -189,7 +189,8 @@ export type ModelBackedField = {
  *  - **Vision and LLM calls inside the request** — `startItemOnboarding`
  *    (`item_defaults`), `createPlace` (`place_review`).
  *  - **Vision and LLM calls it enqueues** — `createMenuScan` (menu extraction,
- *    then match verification), `startRecipePhotoJob` (`recipe_photo`), and the
+ *    then match verification), `startRecipePhotoJob` and `startRecipeTextJob`
+ *    (`recipe_photo`), and the
  *    three tier-list edits that enqueue `generateInsights`.
  *  - **Embeddings it enqueues** — every write that enqueues an item's or a
  *    recipe's `regenerateVector`, directly or by recomputing a recipe group's
@@ -239,6 +240,8 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     // A vision or LLM call it enqueues.
     ["Mutation.createMenuScan", { via: ["MenuScanActor.create"] }],
     ["Mutation.startRecipePhotoJob", { via: ["RecipePhotoJobActor.start"] }],
+    // X15's Paste: the same job, reading text.
+    ["Mutation.startRecipeTextJob", { via: ["RecipePhotoJobActor.start"] }],
     ["Mutation.addTierListItem", { via: ["TierListActor.addItem"] }],
     ["Mutation.removeTierListItem", { via: ["TierListActor.removeItem"] }],
     ["Mutation.reorderTierListBand", { via: ["TierListActor.reorderBand"] }],

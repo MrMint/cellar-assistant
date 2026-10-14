@@ -55,6 +55,9 @@ const ROUTES = [
   "/map/create-place",
   "/recipes",
   "/recipes/ai-generator",
+  // X15: New recipe — the choices, and the editor for Type.
+  "/recipes/new",
+  "/recipes/new?from=type",
   // X14: What can I make (G29) and the Bar pantry (D23).
   "/recipes/bar",
   "/recipes/bar/pantry",

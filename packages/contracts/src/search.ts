@@ -571,13 +571,20 @@ export const RecipeSearchActorDescriptor: ActorDescriptor<
   internalMethods: { all: { timeoutMs: 20_000 } },
 };
 
-/** Viewer-insensitive: recipes are catalog data with no privacy column. */
+/**
+ * **Viewer-scoped** since X15 (D22): a recipe is private first, so the answer
+ * depends on who asks — their own recipes and drafts, their friends' FRIENDS
+ * ones, and everyone's PUBLIC ones — and one activation may not serve two
+ * viewers. A `null` viewer (the menu matcher's `system` work) has its own
+ * activation, which answers PUBLIC recipes only.
+ */
 export const recipeSearchActorId = (
   input: RecipeSearchInput,
-  _viewerId: string | null,
+  viewerId: string | null,
 ): string =>
   searchHash({
     kind: "recipe",
+    viewerId,
     term: normaliseText(input.term),
     semanticQuery: normaliseText(input.semanticQuery),
     type: normaliseText(input.type),

@@ -181,3 +181,100 @@ describe.skipIf(skip)("UserActor — recipe Love (D9)", () => {
     });
   });
 });
+
+describe.skipIf(skip)("UserActor — recipe privacy (X15 / D22)", () => {
+  it("Love and Want to try on a recipe you may not see are 'not found', exactly like a missing one", async () => {
+    await withTestDb(async (db) => {
+      const me = await seedUser(db);
+      const author = await seedUser(db);
+      const secret = await seedRecipe(db, {
+        name: "Secret Sour",
+        createdById: author,
+        privacy: "PRIVATE",
+      });
+      const draft = await seedRecipe(db, {
+        name: "Read off a photo",
+        createdById: author,
+        privacy: "PUBLIC",
+        isDraft: true,
+      });
+      const actor = await actorOf(me, db);
+      const ctx = userCtx(me);
+      for (const id of [secret, draft, randomUUID()]) {
+        await expect(actor.toggleRecipeLove(ctx, id)).rejects.toBeInstanceOf(
+          NotFoundError,
+        );
+        await expect(
+          actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: id }, true),
+        ).rejects.toBeInstanceOf(NotFoundError);
+      }
+      // The author may Love their own private draft.
+      const authors = await actorOf(author, db);
+      expect(
+        (await authors.toggleRecipeLove(userCtx(author), draft)).loved,
+      ).toBe(true);
+    });
+  });
+
+  it("a recipe made private since it was loved or saved drops out of both lists", async () => {
+    await withTestDb(async (db) => {
+      const me = await seedUser(db);
+      const author = await seedUser(db);
+      const kept = await seedRecipe(db, {
+        name: "Martinez",
+        createdById: author,
+      });
+      const hidden = await seedRecipe(db, {
+        name: "Bijou",
+        createdById: author,
+      });
+      const actor = await actorOf(me, db);
+      const ctx = userCtx(me);
+      await actor.toggleRecipeLove(ctx, kept);
+      await actor.toggleRecipeLove(ctx, hidden);
+      await actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: kept }, true);
+      await actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: hidden }, true);
+
+      await db.execute(sql`
+        update public.recipes set privacy = 'PRIVATE' where id = ${hidden}::uuid
+      `);
+      const loved = await actor.lovedRecipes(ctx, pageArgs({ first: 10 }));
+      expect(loved.entries.map((entry) => entry.node)).toEqual([kept]);
+      const saved = await actor.wantToTry(ctx, pageArgs({ first: 10 }));
+      expect(saved.entries.map((entry) => entry.node.target)).toEqual([
+        { kind: "RECIPE", recipeId: kept },
+      ]);
+    });
+  });
+
+  it("myRecipes lists your own recipes, drafts apart, and nobody else's", async () => {
+    await withTestDb(async (db) => {
+      const me = await seedUser(db);
+      const other = await seedUser(db);
+      const mine = await seedRecipe(db, {
+        name: "Mine",
+        createdById: me,
+        privacy: "PRIVATE",
+      });
+      const myDraft = await seedRecipe(db, {
+        name: "My draft",
+        createdById: me,
+        privacy: "PRIVATE",
+        isDraft: true,
+      });
+      await seedRecipe(db, { name: "Theirs", createdById: other });
+      const actor = await actorOf(me, db);
+      const ctx = userCtx(me);
+      const ids = async (drafts?: boolean | null) =>
+        (await actor.myRecipes(ctx, pageArgs({ first: 10 }), drafts)).entries
+          .map((entry) => entry.node)
+          .sort();
+      expect(await ids()).toEqual([mine, myDraft].sort());
+      expect(await ids(true)).toEqual([myDraft]);
+      expect(await ids(false)).toEqual([mine]);
+      await expect(
+        actor.myRecipes(userCtx(other), pageArgs({ first: 10 })),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+});

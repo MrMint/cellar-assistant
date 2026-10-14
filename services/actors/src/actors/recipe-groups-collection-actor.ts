@@ -47,8 +47,14 @@
  * asc`. Both are keysets with an id tie-break, so groups created in the same
  * instant (a seed, a migration) page without skips or repeats.
  *
- * Catalog visibility (§1.6): any signed-in viewer. `recipe_groups` has no
- * privacy column, and B6 already treats the recipe catalog that way.
+ * ## Visibility (X15 / D22)
+ *
+ * `recipe_groups` has no privacy column; its *versions* do. A group is listed
+ * for a viewer when they created it or can see at least one version in it
+ * (`recipeVisibleSql`), its `recipeCount` counts only those, and the term
+ * matches only their names — so a private recipe never surfaces a group, a
+ * count or a name to anyone else. `ingredientUses` (an item's "Used in
+ * Recipes") lists only the lines of recipes the viewer may see.
  */
 import type {
   ActorCategory,
@@ -95,6 +101,11 @@ import {
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { ingredientRowToDto } from "../lib/recipe-ingredients.ts";
+import {
+  type RecipeScope,
+  recipeScope,
+  recipeVisibleSql,
+} from "../lib/recipe-visibility.ts";
 import { escapeLike } from "./brand-search-actor.ts";
 
 type GroupRow = {
@@ -224,6 +235,7 @@ export class RecipeGroupsCollectionActor
       recipeIngredientUsesActorId(filter),
       async () => {
         if (filter.refs.length === 0) return [];
+        const visible = recipeVisibleSql(await recipeScope(this.db, ctx));
         const arc = ARCS.recipeIngredients;
         const matches = ITEM_TYPES.flatMap((type) => {
           const ids = filter.refs
@@ -251,7 +263,7 @@ export class RecipeGroupsCollectionActor
                    (count(*) over (partition by ${partition}))::int as total
             from public.recipe_ingredients ri
             join public.recipes r on r.id = ri.recipe_id
-            where ${sql.join(matches, sql` or `)}
+            where (${sql.join(matches, sql` or `)}) and ${visible}
           ) ranked
           where rn <= ${REVERSE_EDGE_CAP}
           order by rn
@@ -312,14 +324,15 @@ export class RecipeGroupsCollectionActor
       );
     }
     const order = ORDERS[normalizeRecipeGroupOrder(filter.orderBy)];
+    const scope = await recipeScope(this.db, ctx);
     return mapPage(
       await this.paged<GroupRow>(
         ctx,
         filter,
         page,
-        (after, limit) => this.#read(filter, after, limit),
+        (after, limit) => this.#read(filter, scope, after, limit),
         order.cursorOf,
-        () => this.#scope(filter),
+        () => this.#scope(filter, scope),
       ),
       (row): RecipeGroupDto => {
         if (!isRecipeCategory(row.category)) {
@@ -346,7 +359,17 @@ export class RecipeGroupsCollectionActor
   }
 
   /** Shared by the page and its `count(*)` — see `PageScope`. */
-  #scope(filter: RecipeGroupsFilter): PageScope {
+  #scope(filter: RecipeGroupsFilter, scope: RecipeScope): PageScope {
+    const visible = recipeVisibleSql(scope);
+    const viewer =
+      scope.kind === "viewer"
+        ? sql`g.created_by_id = ${scope.viewer}::uuid or `
+        : sql``;
+    const listed =
+      scope.kind === "everything"
+        ? sql`true`
+        : sql`(${viewer}exists (select 1 from public.recipes r
+                     where r.recipe_group_id = g.id and ${visible}))`;
     const category =
       filter.category == null
         ? sql`true`
@@ -370,29 +393,37 @@ export class RecipeGroupsCollectionActor
             or coalesce(g.description, '') ilike ${pattern} escape '\\'
             or exists (select 1 from public.recipes r
                         where r.recipe_group_id = g.id
+                          and ${visible}
                           and r.name ilike ${pattern} escape '\\'))`;
     return {
       from: sql`public.recipe_groups g`,
-      where: sql`${category} and ${baseSpirit} and ${text}`,
+      where: sql`${listed} and ${category} and ${baseSpirit} and ${text}`,
     };
   }
 
   async #read(
     filter: RecipeGroupsFilter,
+    scope: RecipeScope,
     after: KeysetCursor | null,
     limit: number,
   ): Promise<readonly GroupRow[]> {
     const orderBy = normalizeRecipeGroupOrder(filter.orderBy);
     const { sort, cast, direction } = ORDERS[orderBy];
     const cursor = requireCursorFor(orderBy, after);
-    const { from, where } = this.#scope(filter);
+    const { from, where } = this.#scope(filter, scope);
     const { rows } = await this.db.execute<GroupRow>(sql`
       select g.id, g.name, g.description, g.category::text as category,
              g.base_spirit, g.tags, g.image_url, g.created_by_id,
-             g.canonical_recipe_id, g.created_at, g.updated_at,
+             -- X15: named only when the viewer may see it.
+             case when exists (
+               select 1 from public.recipes r
+               where r.id = g.canonical_recipe_id and ${recipeVisibleSql(scope)}
+             ) then g.canonical_recipe_id end as canonical_recipe_id,
+             g.created_at, g.updated_at,
              (${ORDERS.NEWEST.sort})::text as sort_key,
              (select count(*) from public.recipes r
-               where r.recipe_group_id = g.id) as recipe_count
+               where r.recipe_group_id = g.id
+                 and ${recipeVisibleSql(scope)}) as recipe_count
       from ${from}
       where ${where}
         and ${keysetWhere(cursor, sort, ID, cast, direction)}

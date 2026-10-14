@@ -78,6 +78,7 @@ import { ActorBase } from "../lib/actor-base.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
+import { recipeScope, recipeVisibleSql } from "../lib/recipe-visibility.ts";
 import { requireUuid } from "../lib/uuid.ts";
 
 /** Bottles read per inventory — far past any one person's shelf. */
@@ -210,7 +211,7 @@ export class BarActor extends ActorBase implements BarActorInterface {
     const limit = requireLimit(input?.limit);
     const [inventory, catalog] = await Promise.all([
       this.#inventory(),
-      this.#catalog(),
+      this.#catalog(ctx),
     ]);
     const best = this.#bestPerGroup(catalog, inventory);
     const makeNow = best
@@ -243,7 +244,7 @@ export class BarActor extends ActorBase implements BarActorInterface {
     const kind = await this.#itemKind(item);
     const [inventory, catalog] = await Promise.all([
       this.#inventory(),
-      this.#catalog(),
+      this.#catalog(ctx),
     ]);
     const answers = new Set<string>(kindsSatisfiedBy(kind));
     const using = catalog.filter((recipe) =>
@@ -380,15 +381,20 @@ export class BarActor extends ActorBase implements BarActorInterface {
    * ingredient, kinds and roles stored or inferred. One query: the recipe
    * set is chosen in a CTE so the cap counts recipes, not ingredient rows
    * (a row cap would cut a recipe's list in half and misjudge it).
+   *
+   * X15: only recipes the viewer may see (`recipeVisibleSql`) — their own,
+   * drafts included, their friends' FRIENDS ones and everyone's PUBLIC ones.
+   * The cap counts those, so a private recipe never takes a slot.
    */
-  async #catalog(): Promise<ScannedRecipe[]> {
+  async #catalog(ctx: Ctx): Promise<ScannedRecipe[]> {
+    const visible = recipeVisibleSql(await recipeScope(this.db, ctx));
     const { rows } = await this.db.execute<CatalogRow>(sql`
       with scanned as (
         select r.id, r.name, r.recipe_group_id, r.created_at,
                g.canonical_recipe_id
         from public.recipes r
         left join public.recipe_groups g on g.id = r.recipe_group_id
-        where r.type = 'cocktail'
+        where r.type = 'cocktail' and ${visible}
         order by r.created_at desc nulls last, r.id desc
         limit ${BAR_RECIPE_SCAN_CAP}
       )

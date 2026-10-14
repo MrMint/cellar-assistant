@@ -133,8 +133,9 @@ export const CAPTURE_OPTIONS: readonly CaptureOption[] = [
   {
     key: "recipe",
     label: "Recipe",
-    description: "Write one or let AI draft it",
-    href: "/recipes/ai-generator",
+    description: "From a photo, pasted text, or typed in",
+    // X15: Photo · Paste · Type, then a private draft to check.
+    href: "/recipes/new",
     icon: Cocktail,
   },
   {

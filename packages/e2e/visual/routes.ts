@@ -585,7 +585,7 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       slug: "recipes",
       path: "/recipes",
       as: "demo",
-      note: "recipe groups index",
+      note: "the Bar: drafts, your recipes, all recipes",
       desktop: true,
     },
     {
@@ -610,12 +610,20 @@ export function visualRoutes(seed: Seed): VisualRoute[] {
       note: "recipe detail",
       desktop: true,
     },
+    // X15: the old generator redirects to New recipe › Photo.
     {
       slice: "S9",
-      slug: "ai-generator",
-      path: "/recipes/ai-generator",
+      slug: "recipe-new",
+      path: "/recipes/new",
       as: "demo",
-      note: "AI recipe generator",
+      note: "New recipe: Photo · Paste · Type",
+    },
+    {
+      slice: "S9",
+      slug: "recipe-new-type",
+      path: "/recipes/new?from=type",
+      as: "demo",
+      note: "New recipe › Type: the editor, private first",
     },
 
     // S10 — tier lists and insights

@@ -1883,6 +1883,9 @@ input CreateRecipeInput {
   imageUrl: String
   name: String!
   prepTimeMinutes: Int
+
+  """Defaults to PRIVATE (D22: private first)."""
+  privacy: PermissionType
   recipeGroupId: ID
   servingSize: Int
   type: RecipeType!
@@ -4015,6 +4018,11 @@ type Mutation {
   ): StartRecipePhotoJobResult!
 
   """
+  X15: read a recipe out of pasted text. The same job, stages and polling as `startRecipePhotoJob` (`recipePhotoJob(jobId:)`); the result is a private draft for its author to review. Idempotent on `jobId`.
+  """
+  startRecipeTextJob(input: StartRecipeTextJobInput!, jobId: ID): StartRecipeTextJobResult!
+
+  """
   Flavour words from a typed note, for the drinker to confirm. Returns only words the note contains; abstains when it names no flavour. Writes nothing. A model call (`ai_model/flavour_tags`).
   """
   suggestFlavourTags(
@@ -5168,6 +5176,30 @@ type Query {
   ): QueryMyPlaceInteractionsResult!
 
   """
+  X15: the recipes the viewer wrote, newest change first. `drafts: true` for AI drafts waiting on review, `false` for published ones, omitted for both. At most 200.
+  """
+  myRecipes(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+    drafts: Boolean
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): QueryMyRecipesResult!
+
+  """
   `/tier-lists` — every tier list the viewer may see, most recently changed first (C3's `TierListsCollectionActor`, §2.2). Ids from the collection, hydrated by the `TierList` DataLoader (§1.5). The visibility rule is `canSeeTierList`, the same one `TierListActor` and the map's tier-list filter use. `section` narrows to one part of that set — Yours, From friends or Discover (decision D2).
   """
   myTierLists(
@@ -5496,6 +5528,8 @@ union QueryMyPlaceInteractionResult = BudgetExceededError | ConflictError | Forb
 
 union QueryMyPlaceInteractionsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | PlaceInteractionConnection | ValidationError
 
+union QueryMyRecipesResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeConnection | ValidationError
+
 union QueryMyTierListsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListConnection | ValidationError
 
 union QueryPlaceResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Place | ValidationError
@@ -5570,7 +5604,7 @@ type RankingsEdge {
 }
 
 """
-One version of a drink or dish. Visible to any signed-in viewer; only its creator may edit it.
+One version of a drink or dish. Private first (X15 / D22): visible by `privacy`'s four-branch rule, a draft only to its creator, and `NotFoundError` to everyone else. Only its creator may edit it.
 """
 type Recipe {
   canonicalRecipeId: ID
@@ -5644,6 +5678,11 @@ type Recipe {
   ): RecipeInstructionConnection!
 
   """
+  AI output its creator has not reviewed yet — theirs alone, whatever `privacy` says. `updateRecipe(input: { isDraft: false })` publishes it.
+  """
+  isDraft: Boolean!
+
+  """
   D9: Love replaces the old heart. `false` for an anonymous viewer. One batched `UserActor` call per request.
   """
   isLoved: Boolean!
@@ -5669,6 +5708,11 @@ type Recipe {
   """
   netScore: Int!
   prepTimeMinutes: Int
+
+  """
+  X15 / D22: who may see it — PRIVATE (new recipes), FRIENDS or PUBLIC (every recipe from before privacy existed). Only PUBLIC recipes have a share page.
+  """
+  privacy: PermissionType!
 
   """The group this is a version of, if it belongs to one."""
   recipeGroup: RecipeGroup
@@ -5734,7 +5778,9 @@ One drink, with its versions. `canonicalRecipeId` is derived from votes — high
 type RecipeGroup {
   baseSpirit: String
 
-  """Resolved through the `Recipe` DataLoader."""
+  """
+  Resolved through the `Recipe` DataLoader. Null when the viewer may not see it (X15: another person's private version).
+  """
   canonicalRecipe: Recipe
   canonicalRecipeId: ID
   category: RecipeCategory!
@@ -7213,6 +7259,18 @@ input StartRecipePhotoJobInput {
 
 union StartRecipePhotoJobResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipePhotoJob | ValidationError
 
+"""
+X15's Paste: recipe text, read by the same job as a photo. No `userId`, for the same reason as `StartRecipePhotoJobInput`.
+"""
+input StartRecipeTextJobInput {
+  notes: String
+
+  """The pasted recipe, at most 8000 characters."""
+  text: String!
+}
+
+union StartRecipeTextJobResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipePhotoJob | ValidationError
+
 union SuggestFlavourTagsResult = BudgetExceededError | ConflictError | FlavourTagSuggestionsPayload | ForbiddenError | NotFoundError | ValidationError
 
 """
@@ -7860,8 +7918,14 @@ input UpdateRecipeInput {
   description: String
   difficultyLevel: Int
   imageUrl: String
+
+  """
+  `false` publishes a draft at its `privacy`. A published recipe cannot become a draft again (`ValidationError`).
+  """
+  isDraft: Boolean
   name: String
   prepTimeMinutes: Int
+  privacy: PermissionType
   recipeGroupId: ID
   servingSize: Int
   type: RecipeType

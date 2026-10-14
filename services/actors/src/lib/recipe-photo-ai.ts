@@ -35,8 +35,13 @@ import { ConflictError } from "@cellar-assistant/contracts";
 
 export type RecipePhotoExtractionRequest = {
   readonly jobId: string;
-  /** `files.id` of the photo, already verified by `FileActor`. */
-  readonly fileId: string;
+  /**
+   * `files.id` of the photo, verified by `validateStart`; `null` for pasted
+   * text (X15), when `text` is set instead.
+   */
+  readonly fileId: string | null;
+  /** X15's Paste: the recipe as text. Exactly one of this and `fileId`. */
+  readonly text?: string | null;
   readonly additionalFileIds: readonly string[];
   /** Whatever the user typed alongside the photo. Prompt context. */
   readonly notes: string | null;

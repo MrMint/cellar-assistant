@@ -111,6 +111,7 @@ import {
   buildMenuMatchPrompt,
   buildPlaceReviewPrompt,
   buildRecipePhotoPrompt,
+  buildRecipeTextPrompt,
   FLAVOUR_TAGS_SCHEMA,
   INSIGHTS_FIELDS,
   INSIGHTS_REQUIRED_FIELDS,
@@ -865,13 +866,25 @@ const requireRecipeType = (value: unknown, jobId: string): RecipeType => {
 export const providerRecipePhotoExtractor =
   (provider: ProviderFor, loadImages: ImageLoader): RecipePhotoExtractor =>
   async (ctx, request) => {
-    const images = await loadImages(ctx, [
-      request.fileId,
-      ...request.additionalFileIds,
-    ]);
+    // X15's Paste: the same schema and the same abstention, read from text
+    // instead of pixels — `imageDescription` then says what the text is, and
+    // `recipeIsLegible` whether it is a recipe at all.
+    const pasted = request.fileId === null ? (request.text ?? "") : null;
+    if (pasted !== null && pasted.trim() === "") {
+      throw new ValidationError(
+        `job ${request.jobId} has neither a photo nor any text to read`,
+      );
+    }
+    const images =
+      pasted !== null || request.fileId === null
+        ? []
+        : await loadImages(ctx, [request.fileId, ...request.additionalFileIds]);
     const { content, metadata } = await provider(ctx).generateContent(
       {
-        prompt: buildRecipePhotoPrompt(request.notes),
+        prompt:
+          pasted === null
+            ? buildRecipePhotoPrompt(request.notes)
+            : buildRecipeTextPrompt(pasted, request.notes),
         images,
         schema: RECIPE_PHOTO_SCHEMA,
       },
@@ -893,11 +906,17 @@ export const providerRecipePhotoExtractor =
     }
     if (!recipeIsLegible) {
       throw new ValidationError(
-        `no recipe could be read from the photo for job ${request.jobId}` +
-          describedAs(imageDescription) +
-          ". Nothing has been created: a plausible recipe nobody " +
-          "photographed is worse than no recipe at all. Retake the photo so " +
-          "the written ingredients and method are legible, and start again.",
+        pasted !== null
+          ? `no recipe could be read from the pasted text for job ${request.jobId}` +
+              describedAs(imageDescription) +
+              ". Nothing has been created: a recipe the text does not " +
+              "contain is worse than no recipe at all. Paste the " +
+              "ingredients and the method, or type the recipe in."
+          : `no recipe could be read from the photo for job ${request.jobId}` +
+              describedAs(imageDescription) +
+              ". Nothing has been created: a plausible recipe nobody " +
+              "photographed is worse than no recipe at all. Retake the photo so " +
+              "the written ingredients and method are legible, and start again.",
         "NOTHING_READ",
       );
     }

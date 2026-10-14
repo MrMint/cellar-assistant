@@ -212,6 +212,7 @@ import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import type { ProfileFields, ProfileStore } from "../lib/profile-store.ts";
 import { betterAuthProfileStore } from "../lib/profile-store.ts";
+import { visibleRecipeIds } from "../lib/recipe-visibility.ts";
 import { placeIsVisible, placeRefVisibleSql } from "../lib/unshared-places.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 
@@ -222,6 +223,13 @@ export type PlaceInteractionRow = typeof userPlaceInteractions.$inferSelect;
 export type WantToTryRow = typeof wantToTry.$inferSelect;
 export type BarPantryRow = typeof barPantryItems.$inferSelect;
 export type RecipeLoveRow = typeof recipeFavorites.$inferSelect;
+
+/**
+ * X15: how many of a user's own recipes `myRecipes` reads. A person's own
+ * recipes are a handful — the cap keeps the read bounded (§1.5) without a
+ * keyset for a list nobody pages past a screen or two of.
+ */
+const MY_RECIPES_CAP = 200;
 export type FriendInviteRow = typeof friendInvites.$inferSelect;
 
 /**
@@ -1652,10 +1660,21 @@ export class UserActor
         : Promise.resolve([]),
     ]);
 
+    // X15: a recipe made private (or deleted) since it was saved drops out
+    // silently — the list resolves each recipe by id, and a hidden one would
+    // fail the whole page or name it.
+    const recipesShown = await visibleRecipeIds(
+      this.db,
+      ctx,
+      wishRows.flatMap((row) => (row.recipeId === null ? [] : [row.recipeId])),
+    );
     const entries: { entry: WantToTryEntryDto; at: number; id: string }[] = [];
     for (const row of wishRows) {
       const target = wishTarget(row);
       if (target === null || !only.has(target.kind)) continue;
+      if (target.kind === "RECIPE" && !recipesShown.has(target.recipeId)) {
+        continue;
+      }
       entries.push({
         entry: { target, savedAt: requiredIso(row.createdAt) },
         at: row.createdAt?.getTime() ?? 0,
@@ -1767,7 +1786,9 @@ export class UserActor
           .values({ userId: this.key, ...WISHES.values(target.item) });
       });
     } else {
-      if (!(await this.#recipeExists(target.recipeId))) {
+      // X15: a recipe the viewer may not see is "not found", exactly like
+      // one that does not exist — saving it must not confirm it exists.
+      if (!(await this.#recipeVisible(ctx, target.recipeId))) {
         throw new NotFoundError(`recipe ${target.recipeId} not found`);
       }
       await this.tx(async (tx) => {
@@ -1905,11 +1926,9 @@ export class UserActor
       return { recipeId, loved, changed: true };
     }
     if (existing !== undefined) return { recipeId, loved, changed: false };
-    const [found] = await this.db
-      .select({ id: recipes.id })
-      .from(recipes)
-      .where(eq(recipes.id, recipeId));
-    if (found === undefined) {
+    // X15: Love on a recipe the viewer may not see is "not found", the same
+    // answer as an id that names nothing — no existence oracle.
+    if (!(await this.#recipeVisible(ctx, recipeId))) {
       throw new NotFoundError(`recipe ${recipeId} not found`);
     }
     await this.tx(async (tx) => {
@@ -1928,7 +1947,9 @@ export class UserActor
    * Newest Love first. A recipe deleted since is left out: its row went with
    * it (`ON DELETE CASCADE`, written by `RecipeActor`'s delete, not this
    * actor), so the cached aggregate can still hold it — and handing its id
-   * to the API would fail the whole list on one dead node.
+   * to the API would fail the whole list on one dead node. So is one its
+   * author has made private since (X15): the Love stays, and comes back if
+   * the recipe is shared again, but the list never names a hidden recipe.
    */
   async lovedRecipes(ctx: Ctx, page: PageArgs): Promise<Page<string>> {
     const aggregate = this.requireAggregate();
@@ -1940,19 +1961,47 @@ export class UserActor
           a.id.localeCompare(b.id),
       )
       .map((row) => row.recipeId);
-    const alive =
-      ids.length === 0
-        ? new Set<string>()
-        : new Set(
-            (
-              await this.db
-                .select({ id: recipes.id })
-                .from(recipes)
-                .where(inArray(recipes.id, ids))
-            ).map((row) => row.id),
-          );
+    const alive = await visibleRecipeIds(this.db, ctx, ids);
     return offsetPage(
       ids.filter((id) => alive.has(id)),
+      page,
+    );
+  }
+
+  /**
+   * X15: the recipes this user wrote, newest change first. Read fresh —
+   * `recipes` is `RecipeActor`'s table, and a recipe written or published a
+   * moment ago must be listed now. Self only (`UserActorInterface`).
+   */
+  async myRecipes(
+    ctx: Ctx,
+    page: PageArgs,
+    drafts?: boolean | null,
+  ): Promise<Page<string>> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "list these recipes");
+    if (
+      drafts !== null &&
+      drafts !== undefined &&
+      typeof drafts !== "boolean"
+    ) {
+      throw new ValidationError("drafts must be a boolean");
+    }
+    const rows = await this.db
+      .select({ id: recipes.id })
+      .from(recipes)
+      .where(
+        drafts === null || drafts === undefined
+          ? eq(recipes.createdById, this.key)
+          : and(eq(recipes.createdById, this.key), eq(recipes.isDraft, drafts)),
+      )
+      .orderBy(
+        sql`coalesce(${recipes.updatedAt}, ${recipes.createdAt}) desc nulls last`,
+        sql`${recipes.id} asc`,
+      )
+      .limit(MY_RECIPES_CAP);
+    return offsetPage(
+      rows.map((row) => row.id),
       page,
     );
   }
@@ -2029,12 +2078,8 @@ export class UserActor
     return placeIsVisible(this.db, ctx, placeId);
   }
 
-  async #recipeExists(recipeId: string): Promise<boolean> {
-    const [row] = await this.db
-      .select({ id: recipes.id })
-      .from(recipes)
-      .where(eq(recipes.id, recipeId));
-    return row !== undefined;
+  async #recipeVisible(ctx: Ctx, recipeId: string): Promise<boolean> {
+    return (await visibleRecipeIds(this.db, ctx, [recipeId])).has(recipeId);
   }
 
   /**

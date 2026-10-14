@@ -9,9 +9,9 @@ import {
 
 /**
  * The restored recipe pages (UI parity wave 8), asserted against the
- * production copy at `82450ad1` — "Recipe Groups", "Search Recipe Groups",
- * "View all N versions", "{name} - All Versions", "Community Vote",
- * "Add a review for this recipe...", "AI Recipe Generator".
+ * production copy at `82450ad1` — "View all N versions", "{name} - All
+ * Versions", "Community Vote", "Add a review for this recipe..." — and X15's
+ * plain words where it replaced the old ones ("Bar", "Search recipes").
  *
  * Most of that UI never loaded in production (`recipe_votes` and
  * `recipe_reviews` had no Hasura permissions), so these are its first
@@ -64,6 +64,10 @@ test("creates a recipe group with two versions", async ({ api }) => {
           name: unique(`E2 Recipe ${suffix}`),
           type: "cocktail",
           recipeGroupId: groupId,
+          // X15 / D22: private first. These versions stand for the shared
+          // catalog — votes, the canonical and the group's name are about
+          // recipes everyone can see.
+          privacy: "PUBLIC",
         },
       },
     );
@@ -159,16 +163,14 @@ test("/recipes: the old search finds the group and opens its page", async ({
 
   await primary.goto("/recipes");
   await expect(
-    primary.getByRole("heading", { name: "Recipe Groups" }),
+    primary.getByRole("heading", { name: "Bar", level: 1 }),
   ).toBeVisible({ timeout: 20_000 });
   // After the vote, the group's name follows its canonical (`RecipeGroup.name`
   // "follows the canonical recipe's name"), so search by the version's name,
   // which G26's term matches too.
   const canonicalName = g.recipeNames[0] ?? "";
-  await primary
-    .getByPlaceholder("Search by recipe name, description, or tags...")
-    .fill(canonicalName);
-  await expect(primary.getByText("Found 1 recipe groups")).toBeVisible({
+  await primary.getByPlaceholder("Search recipes").fill(canonicalName);
+  await expect(primary.getByText("1 recipe", { exact: true })).toBeVisible({
     timeout: 20_000,
   });
   await primary.getByRole("heading", { name: canonicalName }).click();
@@ -297,19 +299,18 @@ test("a text-only review from the old form lands in the old list", async ({
   expect(noise.pageErrors, "the recipe page threw").toEqual([]);
 });
 
-test("/recipes/ai-generator is the old page over the real job", async ({
+test("/recipes/ai-generator lands on New recipe › Photo (X15)", async ({
   primary,
 }) => {
   const noise = watch(primary);
   await primary.goto("/recipes/ai-generator");
+  await primary.waitForURL(/\/recipes\/new\?from=photo$/, { timeout: 20_000 });
   await settleNetwork(primary);
-  expect(noise.pageErrors, "the AI generator page threw").toEqual([]);
+  expect(noise.pageErrors, "the composer threw").toEqual([]);
   await expect(
-    primary.getByRole("heading", { name: "AI Recipe Generator" }).first(),
+    primary.getByRole("heading", { name: "New recipe" }),
   ).toBeVisible();
-  await expect(
-    primary.getByRole("button", { name: "Extract Recipes" }),
-  ).toBeDisabled();
   const text = await bodyText(primary);
   expect(text).not.toContain("OCR Accuracy");
+  expect(text).not.toContain("AI Recipe Generator");
 });

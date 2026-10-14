@@ -1,19 +1,28 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { isNotNil } from "ramda";
+import { useState } from "react";
+import { useMutation } from "urql";
+import { AIDraftField } from "@/components/app/AIDraftField";
+import { ConfirmSheet } from "@/components/app/ConfirmSheet";
+import { Lock, People, Public } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { notify } from "@/components/app/notify";
 import { MakeabilitySummary } from "@/components/bar/Availability";
+import { ApiError } from "@/components/cellar-api/ApiError";
 import { Badge } from "@/components/ui/badge";
-import beer1 from "@/images/beer1.png";
-import wine1 from "@/images/wine1.png";
+import { Button } from "@/components/ui/button";
+import { type ApiFailure, unwrapResult } from "@/lib/api/result";
 import { AddRecipeReview } from "./AddRecipeReview";
 import type { RecipeDetailsItem } from "./adapter";
 import { CanonicalRecipeBadge } from "./CanonicalRecipeBadge";
+import { DeleteRecipeMutation } from "./editor/documents";
+import { PRIVACY_COPY } from "./editor/recipe-draft";
 import { RecipeDetailsCard } from "./RecipeDetailsCard";
 import { RecipeHeaderServer } from "./RecipeHeaderServer";
 import { RecipeIngredientList } from "./RecipeIngredientList";
+import { RecipePlate } from "./RecipePlate";
 import { RecipeReviews } from "./RecipeReviews";
 import { useRecipeShareItem } from "./RecipeShare";
 
@@ -23,11 +32,11 @@ export type {
   RecipeInstruction,
 } from "./adapter";
 
-const getFallback = (type: "food" | "cocktail") => {
-  return type === "food"
-    ? { image: beer1, alt: "A food dish" }
-    : { image: wine1, alt: "A cocktail" };
-};
+const PRIVACY_ICON = {
+  PRIVATE: Lock,
+  FRIENDS: People,
+  PUBLIC: Public,
+} as const;
 
 export type RecipeDetailsProps = {
   recipe: RecipeDetailsItem;
@@ -75,8 +84,22 @@ export const RecipeDetails = ({
   onChanged,
 }: RecipeDetailsProps) => {
   const router = useRouter();
-  const fallback = getFallback(recipe.type);
   const reviews = recipe.recipe_reviews ?? [];
+  const isOwner =
+    viewerId !== null &&
+    recipe.created_by_id !== undefined &&
+    recipe.created_by_id === viewerId;
+  const isDraft = recipe.is_draft === true;
+  const privacy =
+    recipe.privacy === "FRIENDS" || recipe.privacy === "PUBLIC"
+      ? recipe.privacy
+      : recipe.privacy === "PRIVATE"
+        ? "PRIVATE"
+        : null;
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteFailure, setDeleteFailure] = useState<ApiFailure | null>(null);
+  const [, deleteRecipe] = useMutation(DeleteRecipeMutation);
   const mine =
     viewerId === null
       ? null
@@ -85,7 +108,27 @@ export const RecipeDetails = ({
   const shareItem = useRecipeShareItem({
     recipeId: recipe.id,
     recipeName: recipe.name,
+    privacy: recipe.privacy,
+    isDraft,
+    isOwner,
   });
+  const remove = async () => {
+    setDeleting(true);
+    setDeleteFailure(null);
+    const result = unwrapResult(
+      (await deleteRecipe({ recipeId: recipe.id })).data?.deleteRecipe,
+      "DeletedRecipe",
+    );
+    setDeleting(false);
+    if (!result.ok) {
+      setDeleteFailure(result.error);
+      return;
+    }
+    setConfirmingDelete(false);
+    notify(`Deleted ${recipe.name}.`);
+    router.replace("/recipes");
+    router.refresh();
+  };
   const changed = () => {
     if (onChanged === undefined) router.refresh();
     else onChanged();
@@ -97,12 +140,47 @@ export const RecipeDetails = ({
         recipeId={recipe.id}
         recipeName={recipe.name}
         recipeType={recipe.type}
-        overflow={[shareItem]}
+        overflow={
+          isOwner
+            ? [
+                shareItem,
+                {
+                  label: isDraft ? "Review draft" : "Edit recipe",
+                  onSelect: () => router.push(`/recipes/${recipe.id}/edit`),
+                },
+                {
+                  label: isDraft ? "Discard draft" : "Delete recipe",
+                  onSelect: () => setConfirmingDelete(true),
+                  destructive: true,
+                },
+              ]
+            : [shareItem]
+        }
       />
+
+      {/* X15 / D22: what the AI read is the author's alone until saved. */}
+      {isOwner && isDraft && (
+        <AIDraftField source="suggested" drafted>
+          <div className="flex flex-col gap-2 pr-24">
+            <p className="type-callout text-ink-2">
+              The AI read this recipe. Only you can see it until you check it
+              and save it.
+            </p>
+            <Button asChild className="self-start">
+              <Link href={`/recipes/${recipe.id}/edit`} underline="none">
+                Review draft
+              </Link>
+            </Button>
+          </div>
+        </AIDraftField>
+      )}
+      {isOwner && !isDraft && privacy !== null && (
+        <PrivacyLine privacy={privacy} recipeId={recipe.id} />
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-2">
-          <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-1">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-surface-1 sm:aspect-square">
             {isNotNil(recipe.image_url) ? (
               // biome-ignore lint/performance/noImgElement: a free-form URL; next/image would need its host allowlisted.
               <img
@@ -111,12 +189,8 @@ export const RecipeDetails = ({
                 className="absolute inset-0 size-full object-cover"
               />
             ) : (
-              <Image
-                src={fallback.image}
-                alt={fallback.alt}
-                fill
-                className="object-cover"
-              />
+              // X15: a drawn plate, never a wine bottle for a cocktail.
+              <RecipePlate name={recipe.name} type={recipe.type} />
             )}
           </div>
         </div>
@@ -266,6 +340,55 @@ export const RecipeDetails = ({
           </div>
         </div>
       </div>
+
+      {isOwner && (
+        <ConfirmSheet
+          open={confirmingDelete}
+          onOpenChange={setConfirmingDelete}
+          title={isDraft ? "Discard this draft?" : "Delete this recipe?"}
+          description={
+            isDraft
+              ? "What the AI read is thrown away."
+              : "Its reviews, votes and Loves go with it."
+          }
+          confirmLabel={isDraft ? "Discard" : "Delete"}
+          pending={deleting}
+          onConfirm={() => void remove()}
+        >
+          {deleteFailure !== null && (
+            <ApiError title="Couldn't delete" error={deleteFailure} />
+          )}
+        </ConfirmSheet>
+      )}
     </div>
   );
 };
+
+/** Who can see your recipe, with the way to change it (X15 / D22). */
+function PrivacyLine({
+  privacy,
+  recipeId,
+}: {
+  privacy: "PRIVATE" | "FRIENDS" | "PUBLIC";
+  recipeId: string;
+}) {
+  const Icon = PRIVACY_ICON[privacy];
+  return (
+    <div className="flex min-h-11 items-center gap-2 rounded-lg bg-surface-1 px-4 py-2">
+      <Icon aria-hidden className="size-4 shrink-0 text-ink-2" />
+      <p className="min-w-0 flex-1 type-callout text-ink-2">
+        <span className="font-semibold text-ink-1">
+          {PRIVACY_COPY[privacy].label}.
+        </span>{" "}
+        {PRIVACY_COPY[privacy].line}
+      </p>
+      <Link
+        href={`/recipes/${recipeId}/edit`}
+        underline="always"
+        className="-mr-2 inline-flex min-h-11 shrink-0 items-center px-2 type-callout text-ink-1"
+      >
+        Change
+      </Link>
+    </div>
+  );
+}

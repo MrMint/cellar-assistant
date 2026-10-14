@@ -359,13 +359,25 @@ export const seedRecipe = async (
     readonly description?: string | null;
     readonly type?: "food" | "cocktail";
     readonly createdById?: string | null;
+    /**
+     * X15: defaults to `PUBLIC` — a fixture recipe stands for the catalog
+     * every pre-D22 search was written against. Pass `PRIVATE`/`FRIENDS` (or
+     * `isDraft`) to test the visibility rule itself.
+     */
+    readonly privacy?: "PUBLIC" | "FRIENDS" | "PRIVATE";
+    readonly isDraft?: boolean;
+    readonly recipeGroupId?: string | null;
   },
 ): Promise<string> => {
   const id = randomUUID();
   await db.execute(sql`
-    insert into public.recipes (id, name, description, type, created_by_id)
+    insert into public.recipes
+      (id, name, description, type, created_by_id, privacy, is_draft,
+       recipe_group_id)
     values (${id}::uuid, ${input.name}, ${input.description ?? null},
-            ${input.type ?? "cocktail"}, ${input.createdById ?? null}::uuid)
+            ${input.type ?? "cocktail"}, ${input.createdById ?? null}::uuid,
+            ${input.privacy ?? "PUBLIC"}::permission_type,
+            ${input.isDraft ?? false}, ${input.recipeGroupId ?? null}::uuid)
   `);
   return id;
 };

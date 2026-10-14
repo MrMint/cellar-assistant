@@ -43,8 +43,10 @@ import {
   ITEM_TYPES,
   NotFoundError,
   RECIPE_PHOTO_STAGES,
+  RECIPE_TEXT_MAX,
   systemCtx,
   userCtx,
+  ValidationError,
 } from "@cellar-assistant/contracts";
 import { files, friends, jobs, outbox } from "@cellar-assistant/db";
 import { and, eq, sql } from "@cellar-assistant/db/orm";
@@ -386,6 +388,79 @@ describe.skipIf(skip)("RecipePhotoJobActor — target-stack §7 IDOR", () => {
       expect(extractions[0]?.viewerId).toBe(owner);
       expect(extractions[0]?.kind).toBe("user");
       expect((await jobRow(db, jobId)).createdBy).toBe(owner);
+    });
+  });
+
+  it("X15 / D22: what the model read is a private draft, never published by the job", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const fileId = await seedFile(db, owner);
+      const jobId = randomUUID();
+      const { extract } = countingExtractor();
+      const { write, calls } = recordingWriter();
+      const actor = await jobActor(db, jobId, extract, noHits, write);
+      await actor.start(userCtx(owner, "req"), { fileId });
+      await runToCompletion(actor, jobId);
+      const created = calls.find((call) => call.method === "createRecipe");
+      expect(created?.input).toMatchObject({
+        privacy: "PRIVATE",
+        isDraft: true,
+      });
+    });
+  });
+
+  it("X15's Paste: reads pasted text with no file at all, and passes the text to the model", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const jobId = randomUUID();
+      const requests: unknown[] = [];
+      const extract: RecipePhotoExtractor = async (_ctx, request) => {
+        requests.push(request);
+        return { recipe: EXTRACTION, model: "fake-text-1" };
+      };
+      const { write, calls } = recordingWriter();
+      // A verifier that fails loudly: nothing on the text path may ask it.
+      const actor = await jobActor(
+        db,
+        jobId,
+        extract,
+        noHits,
+        write,
+        async () => {
+          throw new Error("the text path verified a file");
+        },
+      );
+      await actor.start(userCtx(owner, "req"), {
+        text: "Negroni: 1 oz gin, 1 oz Campari, 1 oz sweet vermouth. Stir.",
+      });
+      await runToCompletion(actor, jobId);
+      expect(requests[0]).toMatchObject({
+        fileId: null,
+        text: "Negroni: 1 oz gin, 1 oz Campari, 1 oz sweet vermouth. Stir.",
+      });
+      expect(calls.map((call) => call.method)).toContain("createRecipe");
+      expect((await jobRow(db, jobId)).status).toBe("completed");
+    });
+  });
+
+  it("X15's Paste: refuses blank text, text with a photo, and text past the cap — before any job exists", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const fileId = await seedFile(db, owner);
+      for (const payload of [
+        { text: "   " },
+        { text: "a recipe", fileId },
+        { text: "x".repeat(RECIPE_TEXT_MAX + 1) },
+      ]) {
+        const jobId = randomUUID();
+        const { extract } = countingExtractor();
+        const { write } = recordingWriter();
+        const actor = await jobActor(db, jobId, extract, noHits, write);
+        await expect(
+          actor.start(userCtx(owner, "req"), payload),
+        ).rejects.toThrow(ValidationError);
+        expect(await outboxFor(db, jobId)).toHaveLength(0);
+      }
     });
   });
 

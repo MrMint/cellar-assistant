@@ -76,12 +76,12 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "cleanup clears drops any answer that lands after it, and it stops when " +
       "nothing runs. A poll is a loop over one small set, not a list to page.",
   },
-  "recipe/RecipePhotoProcessor.tsx": {
+  "recipe/editor/useRecipeJob.ts": {
     calls: 1,
     reason:
-      "Polls one recipe-photo job to a terminal state with network-only reads " +
-      "in an effect whose cleanup sets `cancelled`; a poll is a loop over one " +
-      "object, not a list.",
+      "Polls one recipe-reading job (photo or pasted text, X15) to a terminal " +
+      "state with network-only reads in an effect whose cleanup sets " +
+      "`cancelled`; a poll is a loop over one object, not a list.",
   },
   "common/OnboardingWizard/actors/closeOnboarding.ts": {
     calls: 1,
