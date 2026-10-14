@@ -237,11 +237,16 @@ export class RecipeSearchActor
     const contains = `%${escapeLike(q.term)}%`;
     const startsWith = `${escapeLike(q.term)}%`;
     const typeFilter = q.type === "" ? sql`true` : sql`r.type = ${q.type}`;
+    // X15 (D22): both halves are the viewer's, like the plain search — the
+    // filter sits inside the vector scan so it keeps going until `limit`
+    // visible recipes pass.
+    const visible = recipeVisibleSql(await recipeScope(this.db, ctx));
     const { rows: named } = await this.db.execute<Row>(sql`
       select r.id, r.name, r.description, r.type, r.recipe_group_id,
              null::float8 as distance
       from public.recipes r
       where r.name ilike ${contains} escape '\\' and ${typeFilter}
+        and ${visible}
       order by (lower(r.name) = ${q.term.toLowerCase()}) desc,
                (r.name ilike ${startsWith} escape '\\') desc,
                length(r.name) asc,
@@ -268,7 +273,7 @@ export class RecipeSearchActor
                  (rv.vector <=> ${literal}::halfvec)::float8 as distance
           from public.recipe_vectors rv
           join public.recipes r on r.id = rv.recipe_id
-          where rv.vector is not null and ${typeFilter}
+          where rv.vector is not null and ${typeFilter} and ${visible}
           order by rv.vector <=> ${literal}::halfvec
           limit ${q.limit}
         )

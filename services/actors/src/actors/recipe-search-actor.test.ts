@@ -141,6 +141,49 @@ describe.skipIf(skip)("RecipeSearchActor (§2.3)", () => {
       });
     });
 
+    it("X15: both halves are the viewer's — a private recipe is found by its author, never by anyone else", async () => {
+      await withTestDb(async (db) => {
+        const author = await seedUser(db);
+        const stranger = await seedUser(db);
+        await seedBar(db);
+        // One hidden by name, one hidden by meaning (its vector is the
+        // nearest of all), and a draft that would be both.
+        const byName = await seedRecipe(db, {
+          name: "Negroni Secret",
+          createdById: author,
+          privacy: "PRIVATE",
+        });
+        const byMeaning = await seedRecipe(db, {
+          name: "House Aperitivo",
+          createdById: author,
+          privacy: "PRIVATE",
+        });
+        const draft = await seedRecipe(db, {
+          name: "Negroni Draft",
+          createdById: author,
+          privacy: "PUBLIC",
+          isDraft: true,
+        });
+        await seedRecipeVector(db, byName, blendedVector(0, 1, 0.9));
+        await seedRecipeVector(db, byMeaning, blendedVector(0, 1, 0.05));
+        await seedRecipeVector(db, draft, blendedVector(0, 1, 0.05));
+        const input: RecipeSearchInput = { term: "negroni", hybrid: true };
+        const names = async (viewer: string) =>
+          (await newActor(input, db, viewer).all(userCtx(viewer), input)).map(
+            (h) => h.name,
+          );
+        const theirs = await names(stranger);
+        expect(theirs).not.toContain("Negroni Secret");
+        expect(theirs).not.toContain("House Aperitivo");
+        expect(theirs).not.toContain("Negroni Draft");
+        expect(theirs).toContain("Negroni");
+        const own = await names(author);
+        expect(own).toContain("Negroni Secret");
+        expect(own).toContain("House Aperitivo");
+        expect(own).toContain("Negroni Draft");
+      });
+    });
+
     it("answers with the names alone when the term cannot be embedded (D25)", async () => {
       await withTestDb(async (db) => {
         const viewer = await seedUser(db);

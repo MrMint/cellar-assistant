@@ -188,7 +188,8 @@ const FIELDS: readonly {
         },
         ctx.viewerId,
       ),
-    viewerScoped: false,
+    // X15: and so is the hybrid one.
+    viewerScoped: true,
   },
   {
     actorType: "UserSearchActor",
