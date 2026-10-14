@@ -22,6 +22,7 @@
  */
 
 import { sectionPageSize } from "@/components/cellar-api/pagination";
+import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 import {
@@ -259,7 +260,7 @@ export const AddTierListMutation = graphql(
   [ActorErrorFieldsFragment],
 );
 
-/** Only the fields passed are written; also the editing lock. */
+/** Only the fields passed are written. */
 export const EditTierListMutation = graphql(
   `
     mutation EditTierList($id: ID!, $input: UpdateTierListInput!) {
@@ -267,7 +268,6 @@ export const EditTierListMutation = graphql(
         __typename
         ... on TierList {
           id
-          isEditingLocked
         }
         ...ActorErrorFields
       }
@@ -318,6 +318,60 @@ export const AddItemToTierListMutation = graphql(
                 seq
                 kind
                 entryId
+              }
+            }
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
+/**
+ * X16's multi-add: several entries as one edit, which one Undo takes back.
+ * Each `tierListItemId` is minted client-side, so a retry is idempotent.
+ */
+export const AddItemsToTierListMutation = graphql(
+  `
+    mutation AddItemsToTierList(
+      $tierListId: ID!
+      $input: AddTierListItemsInput!
+    ) {
+      addTierListItems(tierListId: $tierListId, input: $input) {
+        __typename
+        ... on AddTierListItemsPayload {
+          skippedCount
+          added(first: 100) {
+            totalCount
+            edges {
+              node {
+                id
+                band
+                position
+                entryType
+              }
+            }
+          }
+          # Which edit the multi-add recorded, so its toast's Undo names
+          # exactly it (undoTierListEdit's expectedSeq) — read once, through
+          # the first added row, in the same request.
+          latest: added(first: 1) {
+            edges {
+              node {
+                id
+                tierList {
+                  id
+                  editHistory {
+                    undo {
+                      seq
+                      kind
+                      entryId
+                      entryCount
+                    }
+                  }
+                }
               }
             }
           }
@@ -520,3 +574,163 @@ export const TierListPlacePickerQuery = graphql(
   `,
   [ActorErrorFieldsFragment],
 );
+
+// ---------------------------------------------------------------------------
+// X16 — adding without typing, templates, and what to try next
+// ---------------------------------------------------------------------------
+
+/** Add entry's sections ride one page: three sections of at most 30. */
+export const SUGGESTIONS_PAGE_SIZE = 100;
+
+/**
+ * Add entry's sections — In your cellars, Tasted (not ranked), Friends
+ * ranked — for the list's own type. The owner's alone: anyone else gets an
+ * empty connection. The item selection is the picker's, so a suggestion row
+ * and a search row describe a bottle the same way.
+ */
+export const TierListAddSuggestionsQuery = graphql(
+  `
+    query TierListAddSuggestions($id: ID!, $first: Int!) {
+      tierList(id: $id) {
+        __typename
+        ... on TierList {
+          id
+          addSuggestions(first: $first) {
+            edges {
+              cursor
+              node {
+                section
+                entryType
+                myScore
+                cellarName
+                bottleCount
+                logCount
+                lastTastedAt
+                friendBand
+                friendCount
+                friend {
+                  id
+                  displayName
+                }
+                place {
+                  id
+                  name
+                  displayName
+                  primaryCategory
+                  locality
+                  countryCode
+                }
+                item {
+                  __typename
+                  id
+                  type
+                  name
+                  country
+                  ... on Wine {
+                    wineVariety: variety
+                    wineVintage: vintage
+                  }
+                  ... on Beer {
+                    beerStyle: style
+                  }
+                  ... on Spirit {
+                    spiritKind: spiritType
+                  }
+                  ... on Sake {
+                    sakeCategory: category
+                    sakeRegion: region
+                  }
+                  ... on Tea {
+                    teaCategory: category
+                    teaRegion: region
+                  }
+                }
+              }
+            }
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
+/** How many cards Try this next asks for. */
+export const TRY_NEXT_PAGE_SIZE = 6;
+
+/**
+ * X16's grounded Try this next: catalog cards, each with the fact behind
+ * it. The item is the shared card fragment (photo or LabelPlate, name,
+ * maker) plus its Want to try state.
+ */
+export const TierListTryNextQuery = graphql(
+  `
+    query TierListTryNext($id: ID!, $first: Int!) {
+      tierList(id: $id) {
+        __typename
+        ... on TierList {
+          id
+          tryNext(first: $first) {
+            edges {
+              cursor
+              node {
+                reason
+                entryType
+                friendBand
+                friendCount
+                likeName
+                likeBand
+                friend {
+                  id
+                  displayName
+                }
+                place {
+                  id
+                  name
+                  displayName
+                  primaryCategory
+                  locality
+                  countryCode
+                  myInteraction {
+                    id
+                    wantToVisit
+                  }
+                }
+                item {
+                  __typename
+                  id
+                  isWantToTry
+                  ...ItemCard
+                }
+              }
+            }
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ItemCardFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * X16's templates: per list type, how many you have rated — what a list
+ * started from your ratings would hold.
+ */
+export const TierListTemplatesQuery = graphql(`
+  query TierListTemplates {
+    me {
+      id
+      tierListTemplates(first: 10) {
+        edges {
+          node {
+            listType
+            entryType
+            ratedCount
+          }
+        }
+      }
+    }
+  }
+`);

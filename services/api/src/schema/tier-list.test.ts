@@ -28,7 +28,6 @@ const tierListDto = {
   createdById: viewer.id,
   privacy: "PRIVATE" as const,
   listType: "place",
-  isEditingLocked: false,
   itemCount: 0,
   aiInsights: null,
   insightsGeneratedAt: null,

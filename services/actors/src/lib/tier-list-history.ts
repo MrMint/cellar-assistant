@@ -108,9 +108,15 @@ export type MoveSubject = {
   readonly toBand: number;
 };
 
+/**
+ * An ADD or a REMOVE. `rows` holds one snapshot for a single add or removal
+ * and several for X16's multi-add (or a list started from your ratings),
+ * which is one edit: Undo takes every row back at once. Rows written before
+ * X16 carry a single `row`, which {@link parseChange} still reads.
+ */
 export type EntryChange = {
   readonly kind: "ADD" | "REMOVE";
-  readonly row: EntrySnapshot;
+  readonly rows: readonly EntrySnapshot[];
 };
 
 export type MoveChange = {
@@ -196,8 +202,16 @@ const parseSubject = (value: unknown): MoveSubject | null => {
 export const parseChange = (kind: string, raw: unknown): EditChange | null => {
   if (!isRecord(raw)) return null;
   if (kind === "ADD" || kind === "REMOVE") {
+    if (Array.isArray(raw.rows)) {
+      const rows = raw.rows.map(parseSnapshot);
+      if (rows.length === 0) return null;
+      const parsed = rows.filter((row): row is EntrySnapshot => row !== null);
+      // One unreadable snapshot makes the whole edit one it can no longer
+      // apply faithfully, so none of it is guessed at.
+      return parsed.length === rows.length ? { kind, rows: parsed } : null;
+    }
     const row = parseSnapshot(raw.row);
-    return row === null ? null : { kind, row };
+    return row === null ? null : { kind, rows: [row] };
   }
   if (kind === "MOVE") {
     const before = parseBandOrders(raw.before);
@@ -357,4 +371,59 @@ export const movedEntry = (
   );
   if (best === undefined) return null;
   return { id: best, fromBand: Number(band), toBand: Number(band) };
+};
+
+/**
+ * How many entries a MOVE shifted: those whose band or place in it differs
+ * between `before` and `after`. A single drag within a band shifts its
+ * neighbours too, so the dragged entry is what `movedEntry` names and this
+ * is only a count — Undo's label reads "1 entry" for one dragged into
+ * another band and more for a reorder the history could not single out.
+ */
+export const movedCount = (before: BandOrders, after: BandOrders): number => {
+  const placeOf = (orders: BandOrders) => {
+    const map = new Map<string, string>();
+    for (const [band, ids] of Object.entries(orders)) {
+      for (const [index, id] of ids.entries()) map.set(id, `${band}:${index}`);
+    }
+    return map;
+  };
+  const was = placeOf(before);
+  let count = 0;
+  for (const [id, place] of placeOf(after)) {
+    if (was.get(id) !== place) count += 1;
+  }
+  return count;
+};
+
+/**
+ * X16: rows for several entries appended to the ends of their bands, in the
+ * order asked — what a multi-add (or a list started from your ratings) writes
+ * and records as one edit. `existing` is the list's rows now; each band's
+ * next position counts those and every row appended to it before.
+ */
+export const appendedSnapshots = (
+  existing: readonly { readonly band: number }[],
+  asks: readonly {
+    readonly id: string;
+    readonly entry: TierListEntryRef;
+    readonly band: number;
+    readonly notes: string | null;
+  }[],
+  createdAt: string = new Date().toISOString(),
+): EntrySnapshot[] => {
+  const next = new Map<number, number>();
+  for (const row of existing) next.set(row.band, (next.get(row.band) ?? 0) + 1);
+  return asks.map((ask) => {
+    const position = next.get(ask.band) ?? 0;
+    next.set(ask.band, position + 1);
+    return {
+      id: ask.id,
+      entry: ask.entry,
+      band: ask.band,
+      position,
+      notes: ask.notes,
+      createdAt,
+    };
+  });
 };

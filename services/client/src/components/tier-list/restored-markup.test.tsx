@@ -59,7 +59,6 @@ const data = {
   privacy: "FRIENDS",
   listType: "place",
   isOwner: true,
-  isEditingLocked: false,
   itemCount: items.length,
   items,
   history: null,
@@ -259,7 +258,7 @@ describe("AddToTierListButton (restored)", () => {
   });
 });
 
-describe("Add entry rows (X23)", () => {
+describe("Add entry rows (X23, X16)", () => {
   const row = {
     id: "w1",
     entityType: "wine" as const,
@@ -268,13 +267,18 @@ describe("Add entry rows (X23)", () => {
     myScore: 4 as number | null,
   };
 
-  test("the whole row is the button, and says where the entry lands", () => {
+  test("the whole row is a checkbox, and says where the entry lands", () => {
     const html = render(
-      <CandidateRow row={row} onList={false} busy={false} onPick={() => {}} />,
+      <CandidateRow
+        row={row}
+        onList={false}
+        busy={false}
+        onToggle={() => {}}
+      />,
     );
     assert.match(
       html,
-      /^<button type="button" data-slot="add-entry-candidate"[^>]*>[\s\S]*Add <\/span>Barolo[\s\S]*Nebbiolo · 2016[\s\S]*You 4 ·[\s\S]*>Very Good<\/span><\/span><\/button>$/,
+      /^<button type="button" role="checkbox" aria-checked="false" data-slot="add-entry-candidate"[^>]*>[\s\S]*>Barolo<[\s\S]*Nebbiolo · 2016[\s\S]*You 4 ·[\s\S]*>Very Good<\/span><\/span><\/button>$/,
     );
     assert.doesNotMatch(html, /disabled=""/);
     const unrated = render(
@@ -282,19 +286,32 @@ describe("Add entry rows (X23)", () => {
         row={{ ...row, myScore: null }}
         onList={false}
         busy={false}
-        onPick={() => {}}
+        onToggle={() => {}}
       />,
     );
     assert.match(unrated, />Unrated</);
     assert.doesNotMatch(unrated, /You /);
   });
 
+  test("picked: checked; a suggestion says why before what it is", () => {
+    const html = render(
+      <CandidateRow
+        row={{ ...row, reason: "In Garage · 2 bottles" }}
+        onList={false}
+        picked
+        busy={false}
+        onToggle={() => {}}
+      />,
+    );
+    assert.match(html, /aria-checked="true"/);
+    assert.match(html, />In Garage · 2 bottles · Nebbiolo · 2016</);
+  });
+
   test("already on the board: On this list, and nothing to press", () => {
     const html = render(
-      <CandidateRow row={row} onList busy={false} onPick={() => {}} />,
+      <CandidateRow row={row} onList busy={false} onToggle={() => {}} />,
     );
     assert.match(html, /disabled=""/);
     assert.match(html, />On this list</);
-    assert.doesNotMatch(html, />Add </);
   });
 });

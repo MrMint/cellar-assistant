@@ -258,7 +258,6 @@ describe("tierListDataFrom", () => {
     createdById: "me",
     privacy: "FRIENDS",
     listType: "place",
-    isEditingLocked: true,
     aiInsights: null,
     contentUpdatedAt: "2026-10-01T00:00:00Z",
   };
@@ -266,7 +265,6 @@ describe("tierListDataFrom", () => {
   test("owner is creator-only; count is the rows held; place stats for place lists", () => {
     const { data, insightsData } = tierListDataFrom(core, [placeNode()], "me");
     assert.equal(data.isOwner, true);
-    assert.equal(data.isEditingLocked, true);
     assert.equal(data.itemCount, 1);
     assert.equal(insightsData.showPlaceStats, true);
     assert.equal(

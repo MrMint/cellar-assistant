@@ -19,7 +19,8 @@
     "./place-categories": "./src/place-categories.ts",
     "./place-review-status": "./src/place-review-status.ts",
     "./proxy": "./src/proxy.ts",
-    "./quantity": "./src/quantity.ts"
+    "./quantity": "./src/quantity.ts",
+    "./bands": "./src/bands.ts"
   },
   "scripts": {
     "build": "echo 'no build step: consumed as TypeScript source'",

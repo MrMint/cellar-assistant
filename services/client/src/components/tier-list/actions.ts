@@ -22,8 +22,8 @@
  *   `allSettled`) → `reorderBandAction({ band, orderedIds })`: one band's full
  *   order in one transaction (`reorderCallFor` in `adapter.ts`).
  * - The editing lock is gone from the page (X23/D4: "Arrange" replaces the
- *   padlock), so `setTierListEditingLockAction` went with it; the column and
- *   `updateTierList({ isEditingLocked })` remain, unused by this client.
+ *   padlock), so `setTierListEditingLockAction` went with it, and X16 retired
+ *   the flag from the API too (the column waits for a contract migration).
  * - New (D4): `undoAction` / `redoAction`, one step of the list's server-side
  *   edit history each, answering what they did and where the history stands.
  *
@@ -37,11 +37,13 @@ import { addEntryFailureMessage, entryTypeOf } from "./adapter";
 import type { TierListEntityType } from "./constants";
 import {
   addedEditSeq,
+  addedEntriesEditSeq,
   historyStepFailure,
   type TierListEditView,
   type TierListHistoryView,
 } from "./history";
 import {
+  AddItemsToTierListMutation,
   AddItemToTierListMutation,
   AddTierListMutation,
   DeleteTierListMutation,
@@ -110,6 +112,31 @@ export type TierListItemResult = {
   error?: string;
 };
 
+/** X16's multi-add: how many went on, and how many the server passed over. */
+export type TierListItemsResult =
+  | {
+      success: true;
+      added: number;
+      skipped: number;
+      /**
+       * The multi-add's own edit, for its toast's Undo (`expectedSeq`); null
+       * when the list's history no longer has it on top
+       * (`addedEntriesEditSeq`).
+       */
+      editSeq: number | null;
+    }
+  | { success: false; error: string };
+
+/** One entry of a multi-add: what it is, and the band it lands in. */
+export type TierListPick = {
+  id: string;
+  entityType: string;
+  band: number;
+};
+
+/** X16: how a new list starts — empty, or from your ratings. */
+export type TierListStart = "EMPTY" | "RATINGS";
+
 /** One Undo or Redo: what it did, and where the history stands after it. */
 export type TierListHistoryStepResult =
   | {
@@ -136,6 +163,7 @@ export function useTierListActions() {
   const [, editTierList] = useMutation(EditTierListMutation);
   const [, deleteTierList] = useMutation(DeleteTierListMutation);
   const [, addItem] = useMutation(AddItemToTierListMutation);
+  const [, addItems] = useMutation(AddItemsToTierListMutation);
   const [, removeItem] = useMutation(RemoveItemFromTierListMutation);
   const [, reorderBand] = useMutation(ReorderBandMutation);
   const [, undoEdit] = useMutation(UndoTierListEditMutation);
@@ -147,6 +175,7 @@ export function useTierListActions() {
       description: string | undefined,
       privacy: Permission_Type_Enum,
       listType: string,
+      startFrom: TierListStart = "EMPTY",
     ): Promise<TierListResult> => {
       const validationError = validateTierListInput(name, description, privacy);
       if (validationError) return { success: false, error: validationError };
@@ -159,6 +188,7 @@ export function useTierListActions() {
           description: description?.trim() || undefined,
           privacy,
           listType,
+          startFrom,
         },
       });
       const failed = transportError(response.error);
@@ -264,6 +294,67 @@ export function useTierListActions() {
     [addItem],
   );
 
+  /**
+   * X16: several entries as one edit (one Undo takes them all back). Each
+   * row id is minted here, so a retried request adds nothing twice.
+   */
+  const addItemsToTierListAction = useCallback(
+    async (
+      tierListId: string,
+      picks: readonly TierListPick[],
+    ): Promise<TierListItemsResult> => {
+      if (picks.length === 0) {
+        return { success: false, error: "Pick something to add." };
+      }
+      for (const pick of picks) {
+        if (!isValidListType(pick.entityType)) {
+          return {
+            success: false,
+            error: "That isn't something a list ranks.",
+          };
+        }
+        if (!Number.isInteger(pick.band) || pick.band < 0 || pick.band > 5) {
+          return { success: false, error: "Invalid band" };
+        }
+      }
+      const response = await addItems({
+        tierListId,
+        input: {
+          entries: picks.map((pick) => ({
+            tierListItemId: crypto.randomUUID(),
+            entry: {
+              id: pick.id,
+              type: entryTypeOf(pick.entityType as TierListEntityType),
+            },
+            band: pick.band,
+          })),
+        },
+      });
+      const failed = transportError(response.error);
+      if (failed !== null) return { success: false, error: failed };
+      const result = unwrapResult(
+        response.data?.addTierListItems ?? undefined,
+        "AddTierListItemsPayload",
+      );
+      if (!result.ok) {
+        return { success: false, error: addEntryFailureMessage(result.error) };
+      }
+      const added =
+        result.data.added.totalCount ?? result.data.added.edges.length;
+      return {
+        success: true,
+        added,
+        skipped: result.data.skippedCount,
+        editSeq: addedEntriesEditSeq(
+          result.data.latest.edges[0]?.node.tierList?.editHistory?.undo,
+          picks.map((pick) => pick.id),
+          added,
+        ),
+      };
+    },
+    [addItems],
+  );
+
   const removeItemFromTierListAction = useCallback(
     async (
       tierListItemId: string,
@@ -357,6 +448,7 @@ export function useTierListActions() {
       editTierListAction,
       deleteTierListAction,
       addItemToTierListAction,
+      addItemsToTierListAction,
       removeItemFromTierListAction,
       reorderBandAction,
       undoAction,
@@ -367,6 +459,7 @@ export function useTierListActions() {
       editTierListAction,
       deleteTierListAction,
       addItemToTierListAction,
+      addItemsToTierListAction,
       removeItemFromTierListAction,
       reorderBandAction,
       undoAction,

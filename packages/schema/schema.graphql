@@ -206,6 +206,42 @@ input AddTierListItemInput {
 
 union AddTierListItemResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListItem | ValidationError
 
+input AddTierListItemsInput {
+  """1 to 100 entries, each appended to its band in order."""
+  entries: [AddTierListItemInput!]!
+}
+
+"""X16's multi-add: what went on, as one edit."""
+type AddTierListItemsPayload {
+  """The rows added, in the order asked; at most 100."""
+  added(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TierListItemConnection!
+
+  """
+  Entries not added: already on the list, named twice, or no longer readable.
+  """
+  skippedCount: Int!
+}
+
+union AddTierListItemsResult = AddTierListItemsPayload | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
 """
 Which AI-backed features this deployment can serve. False only when the configured provider genuinely cannot (no provider at all, or an embedding model that cannot embed a photo); hide those features.
 """
@@ -1900,6 +1936,11 @@ input CreateTierListInput {
   listType: String
   name: String!
   privacy: PermissionType
+
+  """
+  X16: RATINGS starts the list pre-banded with everything of its type you have rated, each in the band your rating gives it, best first, at most 100 — one edit, which one Undo takes back. Omitted or EMPTY: an empty list.
+  """
+  startFrom: TierListStart
 }
 
 union CreateTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierList | ValidationError
@@ -3691,6 +3732,11 @@ type Mutation {
   addTierListItem(input: AddTierListItemInput!, tierListId: ID!): AddTierListItemResult!
 
   """
+  X16's multi-add: several entries in one transaction and one history edit, so one Undo takes them all back. Entries already on the list, named twice or unreadable are skipped and counted, not refused.
+  """
+  addTierListItems(input: AddTierListItemsInput!, tierListId: ID!): AddTierListItemsResult!
+
+  """
   Any signed-in viewer may add an image. The file is verified through `FileActor` first — an upload that never landed is refused.
   """
   attachItemImage(input: AttachItemImageInput!, itemId: ID!, type: ItemType!): AttachItemImageResult!
@@ -4090,7 +4136,7 @@ type Mutation {
   """Author only — not the recipe's creator, not an admin's peer."""
   updateRecipeReview(input: UpdateRecipeReviewInput!, recipeId: ID!, reviewId: ID!): UpdateRecipeReviewResult!
 
-  """Header fields only — name, description, privacy, lock. Creator only."""
+  """Header fields only — name, description, privacy. Creator only."""
   updateTierList(input: UpdateTierListInput!, tierListId: ID!): UpdateTierListResult!
 
   """
@@ -7588,6 +7634,29 @@ enum TeaForm {
 A ranked list of items and/or places. Visible when PUBLIC, or FRIENDS and you are a friend of its creator, or you are its creator — there is no co-owner concept here, unlike Cellar.
 """
 type TierList {
+  """
+  X16: Add entry's sections for the list's own type — In your cellars, Tasted (not ranked), Friends ranked — in that order, none of them on it already, at most 30 a section. The owner's alone: empty for anyone else.
+  """
+  addSuggestions(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TierListSuggestionConnection!
+
   """`generateInsights`'s output. Null until first generated."""
   aiInsights: JSON
   contentUpdatedAt: DateTime!
@@ -7619,7 +7688,6 @@ type TierList {
   Where the generated insights stand (N07). Render this; do not infer "generating" from a null `aiInsights`.
   """
   insightsStatus: TierListInsightsStatus!
-  isEditingLocked: Boolean!
   itemCount: Int!
 
   """Every ranked entry, `band desc, position asc`."""
@@ -7647,6 +7715,29 @@ type TierList {
   listType: String!
   name: String!
   privacy: PermissionType!
+
+  """
+  X16: Try this next, for you — entries of the list's type you have not had, each with the fact that put it there, at most 12 (`first`, default 6). No model call; empty rather than padded.
+  """
+  tryNext(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TierListTryNextConnection!
   updatedAt: DateTime
 }
 
@@ -7667,6 +7758,11 @@ type TierListEdge {
 type TierListEdit {
   at: DateTime!
 
+  """
+  X16: how many entries the edit added or removed — more than one for a multi-add or a list started from your ratings, which Undo takes back whole. For a MOVE, the entries that changed place.
+  """
+  entryCount: Int!
+
   """The item's or place's id (not the row's)."""
   entryId: ID
 
@@ -7674,7 +7770,7 @@ type TierListEdit {
   entryName: String
 
   """
-  What the edited entry ranks. Null for a reorder that moved several entries at once.
+  What the edited entry ranks. Null for a reorder that moved several entries at once, and for a multi-add.
   """
   entryType: TierListEntryType
 
@@ -7685,7 +7781,9 @@ type TierListEdit {
   """Per list, from 1, in the order the edits happened."""
   seq: Int!
 
-  """The band it landed in; null for REMOVE."""
+  """
+  The band it landed in; null for REMOVE, and for a multi-add whose entries went to more than one band.
+  """
   toBand: Int
 }
 
@@ -7789,6 +7887,144 @@ type TierListItemConnection {
 type TierListItemEdge {
   cursor: String!
   node: TierListItem!
+}
+
+"""
+X16: how a new list starts — EMPTY, or RATINGS: pre-banded from everything of its type you have rated.
+"""
+enum TierListStart {
+  EMPTY
+  RATINGS
+}
+
+"""
+One row of Add entry's sections, with the facts that say why it is there. Exactly one of `item` and `place` is set, by `entryType`.
+"""
+type TierListSuggestion {
+  """IN_CELLARS: bottles of it not finished."""
+  bottleCount: Int
+
+  """IN_CELLARS: the cellar you touched it in most recently."""
+  cellarName: String
+  entryType: TierListEntryType!
+
+  """
+  FRIENDS_RANKED: the friend who ranked it highest (newest list on a tie).
+  """
+  friend: UserProfile
+
+  """FRIENDS_RANKED: that friend's band for it."""
+  friendBand: Int
+
+  """FRIENDS_RANKED: how many friends rank it."""
+  friendCount: Int
+  item: Item
+
+  """TASTED: when you last rated, logged or visited it."""
+  lastTastedAt: DateTime
+
+  """TASTED: your drink logs of it (at it, for a place)."""
+  logCount: Int
+
+  """
+  Your verdict, which picks the band it lands in: your newest review's score (a place: your rating), else your newest scored drink log's.
+  """
+  myScore: Float
+  place: Place
+  section: TierListSuggestionSection!
+}
+
+type TierListSuggestionConnection {
+  edges: [TierListSuggestionEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type TierListSuggestionEdge {
+  cursor: String!
+  node: TierListSuggestion!
+}
+
+"""
+X16: Add entry's sections. IN_CELLARS: items of the list's type in a cellar you made or co-own. TASTED: what you rated or logged (a place list: rated, visited, or a drink logged there). FRIENDS_RANKED: what friends ranked on their own lists you may see. An entry is in the first section that has it; none is on the list already.
+"""
+enum TierListSuggestionSection {
+  FRIENDS_RANKED
+  IN_CELLARS
+  TASTED
+}
+
+"""X16: what a list started from your ratings would hold, per type."""
+type TierListTemplate {
+  entryType: TierListEntryType!
+
+  """The `listType` to create it with."""
+  listType: String!
+
+  """Distinct items you reviewed, or places you rated, of this type."""
+  ratedCount: Int!
+}
+
+type TierListTemplateConnection {
+  edges: [TierListTemplateEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type TierListTemplateEdge {
+  cursor: String!
+  node: TierListTemplate!
+}
+
+"""
+X16: one card of Try this next, with the fact that put it there. Exactly one of `item` and `place` is set, by `entryType`.
+"""
+type TierListTryNext {
+  entryType: TierListEntryType!
+
+  """FRIEND_RANKED: who ranked it highest."""
+  friend: UserProfile
+
+  """FRIEND_RANKED: their band for it (4 or 5)."""
+  friendBand: Int
+
+  """FRIEND_RANKED: friends who rank it that high."""
+  friendCount: Int
+  item: Item
+
+  """LIKE_TOP: that entry's band on this list."""
+  likeBand: Int
+
+  """LIKE_TOP / LIKE_LOVED: the entry it is like, by name."""
+  likeName: String
+  place: Place
+  reason: TierListTryNextReason!
+}
+
+type TierListTryNextConnection {
+  edges: [TierListTryNextEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type TierListTryNextEdge {
+  cursor: String!
+  node: TierListTryNext!
+}
+
+"""
+X16: why a card is in Try this next. FRIEND_RANKED: a friend put it in one of their top two bands. LIKE_TOP: it sits next to one of this list's top-two-band entries in the catalog. LIKE_LOVED: next to an item you love. Never a score.
+"""
+enum TierListTryNextReason {
+  FRIEND_RANKED
+  LIKE_LOVED
+  LIKE_TOP
 }
 
 union UndoTierListEditResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListHistoryStep | ValidationError
@@ -7944,7 +8180,6 @@ union UpdateRecipeReviewResult = BudgetExceededError | ConflictError | Forbidden
 """Only the fields you pass are written. Creator only."""
 input UpdateTierListInput {
   description: String
-  isEditingLocked: Boolean
   name: String
   privacy: PermissionType
 }
@@ -8261,6 +8496,29 @@ type Viewer {
     limit: Int
   ): ActivityEntryConnection!
   role: ViewerRole!
+
+  """
+  X16: for each of the seven list types, how many of them you have rated — what `createTierList(startFrom: RATINGS)` would start with.
+  """
+  tierListTemplates(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TierListTemplateConnection!
 
   """
   The viewer's Want to try list (X08): items, recipes and places, newest first. Owner-only, like Loved.

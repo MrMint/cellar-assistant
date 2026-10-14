@@ -1,16 +1,31 @@
 "use client";
 
-import { type FormEvent, useCallback, useState } from "react";
-import { useClient } from "urql";
-import { Add, Check, ICON_STROKE, Place, Search } from "@/components/app/icons";
+import {
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useId,
+  useMemo,
+  useState,
+} from "react";
+import { useClient, useQuery } from "urql";
+import {
+  Check,
+  Close,
+  ICON_STROKE,
+  Place,
+  Search,
+} from "@/components/app/icons";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { formatScore } from "@/components/app/Score";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
+  InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
@@ -18,31 +33,30 @@ import { createLatestOnly } from "@/lib/latest-only";
 import { cn } from "@/lib/utils";
 import { displayItemName } from "@/utilities/smart-title-case";
 import { isValidListType } from "./actions";
+import { entryTypeOf, itemEntrySubtitle, placeEntrySubtitle } from "./adapter";
 import {
-  candidateHref,
-  entryTypeOf,
-  itemEntrySubtitle,
-  placeEntrySubtitle,
-} from "./adapter";
+  type AddEntryCandidate,
+  type AddEntrySection,
+  addButtonLabel,
+  candidateKey,
+  type Picks,
+  SECTION_PREVIEW,
+  type SuggestionNode,
+  sectionTitle,
+  suggestionSections,
+  togglePick,
+} from "./add-entry";
 import { BAND_LABELS, BAND_TONES, type TierListEntityType } from "./constants";
 import { bandForScore } from "./history";
 import {
   PICKER_PAGE_SIZE,
+  SUGGESTIONS_PAGE_SIZE,
+  TierListAddSuggestionsQuery,
   TierListItemPickerQuery,
   TierListPlacePickerQuery,
 } from "./queries";
 
-export type AddEntryCandidate = {
-  id: string;
-  entityType: TierListEntityType;
-  name: string;
-  subtitle: string;
-  /**
-   * Your own rating of it (an item review, a place rating), or null — the
-   * band it lands in follows from it (`bandForScore`, X23).
-   */
-  myScore: number | null;
-};
+export type { AddEntryCandidate } from "./add-entry";
 
 const ENTITY_LABELS: Record<TierListEntityType, string> = {
   place: "places",
@@ -55,42 +69,44 @@ const ENTITY_LABELS: Record<TierListEntityType, string> = {
 };
 
 /**
- * In-page add — **new-only, kept** (decision 2) and restyled in the old
- * `AddToTierListModal`'s idiom (the numbered-list rows, the danger line for
- * errors), on the app's `ResponsiveDialog`: a bottom sheet on a phone, a
- * centred dialog from `md` up.
+ * Add entry — **without typing** (X16). The sheet opens on what you already
+ * know: **In your cellars**, **Tasted, not ranked** (your ratings and drink
+ * logs; for a place list, where you've been) and **Friends ranked** — every
+ * row saying why it is there and the band it will land in. Tap as many as
+ * you like, then **Add N entries**: one multi-add, one edit in the list's
+ * history, so the toast's Undo takes them all back.
  *
- * The rewrite's picker offered items *and* places on every list; the old app
- * only ever added an entity to a list of its own type (`list_type`), so this
- * one searches the list's type alone: `placeSearch` for a place list,
- * `itemSearch` narrowed to the one item type otherwise. Both embed the phrase,
- * so the search is a submitted form, not search-as-you-type.
+ * Search stays at the top for anything else: `placeSearch` for a place list,
+ * `itemSearch` narrowed to the list's type otherwise. Both embed the phrase,
+ * so it is a submitted form, not search-as-you-type. A search's rows are
+ * pickable the same way, and picks made in the sections survive a search.
  *
- * The parent remounts it on every open (`key`), so a reopened picker starts
- * empty rather than showing the last query's rows as if they were fresh.
- *
- * X23: the **whole row** is the button (the old row's name did nothing; only
- * a small Add did), each row says where it will land — your rating's band,
- * or Unrated — and what is already on the board reads **On this list**,
- * disabled, instead of offering an add the actor would only refuse.
+ * Kept from X23: the **whole row** is the control, each row says where it
+ * will land — your rating's band, or Unrated — and what is already on the
+ * board reads **On this list**, disabled. The parent remounts the sheet on
+ * every open (`key`), so a reopened one starts with nothing picked and no
+ * stale search.
  */
 export function AddEntryModal({
   open,
   onClose,
-  onPick,
+  onAdd,
   busy,
   error,
   listType,
   onList,
+  tierListId,
 }: {
   open: boolean;
   onClose: () => void;
-  onPick: (candidate: AddEntryCandidate) => void;
+  /** The picks, in the order picked. */
+  onAdd: (candidates: AddEntryCandidate[]) => void;
   busy: boolean;
   error: string | null;
   listType: string;
   /** Board hrefs of the entries already on the list (`onListHrefs`). */
   onList: ReadonlySet<string>;
+  tierListId: string;
 }) {
   const client = useClient();
   const entityType: TierListEntityType = isValidListType(listType)
@@ -100,8 +116,23 @@ export function AddEntryModal({
   const [rows, setRows] = useState<AddEntryCandidate[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [picks, setPicks] = useState<Picks>(() => new Map());
   /** A resubmit retires the search before it: only the newest may land. */
   const [searchGate] = useState(createLatestOnly);
+
+  const toggle = useCallback(
+    (candidate: AddEntryCandidate) =>
+      setPicks((current) => togglePick(current, candidate)),
+    [],
+  );
+
+  const clearSearch = useCallback(() => {
+    searchGate.begin();
+    setText("");
+    setRows(null);
+    setSearchError(null);
+    setLoading(false);
+  }, [searchGate]);
 
   const search = useCallback(
     async (event: FormEvent) => {
@@ -192,12 +223,12 @@ export function AddEntryModal({
   );
 
   const message = searchError ?? error;
-
   const placeholder =
     entityType === "place"
       ? "Search places by name or what they are"
       : `Search ${ENTITY_LABELS[entityType]} by name or description`;
   const SearchGlyph = entityType === "place" ? Place : Search;
+  const picked = Array.from(picks.values());
 
   return (
     <ResponsiveDialog
@@ -207,6 +238,16 @@ export function AddEntryModal({
       }}
       title="Add entry"
       className="md:max-w-[480px]"
+      footer={
+        <Button
+          className="w-full"
+          disabled={picked.length === 0 || busy}
+          onClick={() => onAdd(picked)}
+        >
+          {busy && <Spinner aria-hidden />}
+          {addButtonLabel(picked.length)}
+        </Button>
+      }
     >
       <div className="flex flex-col gap-4 pb-1">
         <form onSubmit={search} className="flex gap-2">
@@ -215,15 +256,31 @@ export function AddEntryModal({
               <SearchGlyph aria-hidden strokeWidth={ICON_STROKE} />
             </InputGroupAddon>
             <InputGroupInput
-              autoFocus
               type="search"
               aria-label={placeholder}
               value={text}
               onChange={(event) => setText(event.target.value)}
               placeholder={placeholder}
             />
+            {rows !== null && (
+              <InputGroupAddon align="inline-end">
+                {/* 32 pt drawn, 44 pt to the thumb (the ::after). */}
+                <InputGroupButton
+                  size="icon-sm"
+                  aria-label="Clear search"
+                  className="relative after:absolute after:-inset-1.5"
+                  onClick={clearSearch}
+                >
+                  <Close aria-hidden strokeWidth={ICON_STROKE} />
+                </InputGroupButton>
+              </InputGroupAddon>
+            )}
           </InputGroup>
-          <Button type="submit" disabled={loading || text.trim() === ""}>
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={loading || text.trim() === ""}
+          >
             {loading && <Spinner aria-hidden />}
             Search
           </Button>
@@ -239,28 +296,31 @@ export function AddEntryModal({
           <div className="flex justify-center py-4">
             <Spinner />
           </div>
-        ) : rows === null ? (
-          <p className="text-center text-ink-3 type-callout">
-            Search for {entityType === "place" ? "a place" : "an item"} to add.
-            It lands in the band your rating gives it, or Unrated.
-          </p>
-        ) : rows.length === 0 ? (
-          <p className="text-center text-ink-3 type-callout">
-            Nothing matched that phrase.
-          </p>
+        ) : rows !== null ? (
+          rows.length === 0 ? (
+            <p className="text-center text-ink-3 type-callout">
+              Nothing matched that phrase.
+            </p>
+          ) : (
+            <CandidateList
+              label="Search results"
+              rows={rows}
+              onList={onList}
+              picks={picks}
+              busy={busy}
+              onToggle={toggle}
+            />
+          )
         ) : (
-          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1 md:max-h-[60vh] md:overflow-y-auto">
-            {rows.map((row) => (
-              <li key={`${row.entityType}-${row.id}`}>
-                <CandidateRow
-                  row={row}
-                  onList={onList.has(candidateHref(row))}
-                  busy={busy}
-                  onPick={onPick}
-                />
-              </li>
-            ))}
-          </ul>
+          <Suggestions
+            open={open}
+            tierListId={tierListId}
+            entityType={entityType}
+            onList={onList}
+            picks={picks}
+            busy={busy}
+            onToggle={toggle}
+          />
         )}
       </div>
     </ResponsiveDialog>
@@ -268,53 +328,226 @@ export function AddEntryModal({
 }
 
 /**
- * One search result, the whole row a button: name and description, then
- * where it would land — "You 4 · Very Good" — or, already on the board,
- * "On this list" and nothing to press.
+ * The three sections, asked for once per open. Each shows a few rows and a
+ * "Show N more"; an empty section is not drawn, and with none at all the
+ * sheet says what search is for instead.
+ */
+function Suggestions({
+  open,
+  tierListId,
+  entityType,
+  onList,
+  picks,
+  busy,
+  onToggle,
+}: {
+  open: boolean;
+  tierListId: string;
+  entityType: TierListEntityType;
+  onList: ReadonlySet<string>;
+  picks: Picks;
+  busy: boolean;
+  onToggle: (candidate: AddEntryCandidate) => void;
+}) {
+  const [{ data, fetching, error }] = useQuery({
+    query: TierListAddSuggestionsQuery,
+    variables: { id: tierListId, first: SUGGESTIONS_PAGE_SIZE },
+    // What you own and taste changes between opens: the last answer shows at
+    // once and the fresh one replaces it (the sheet is remounted per open, so
+    // this is one read per open). A row added since reads "On this list".
+    requestPolicy: "cache-and-network",
+    pause: !open,
+  });
+  const [expanded, setExpanded] = useState<ReadonlySet<AddEntrySection>>(
+    () => new Set(),
+  );
+
+  const sections = useMemo(() => {
+    if (data === undefined) return null;
+    const result = unwrapResult(data.tierList, "TierList");
+    if (!result.ok) return [];
+    const nodes: SuggestionNode[] = result.data.addSuggestions.edges.map(
+      (edge) => edge.node,
+    );
+    return suggestionSections(nodes, entityType);
+  }, [data, entityType]);
+
+  if (fetching && sections === null) {
+    return (
+      <div
+        role="status"
+        aria-label="Finding what you've had"
+        className="flex flex-col gap-2"
+      >
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-14 w-full" />
+        <Skeleton className="h-14 w-full" />
+      </div>
+    );
+  }
+
+  if (error !== undefined || sections === null || sections.length === 0) {
+    return (
+      <p className="text-center text-ink-3 type-callout">
+        {error !== undefined
+          ? "Couldn't load what you've had just now. Search instead."
+          : `Search for ${entityType === "place" ? "a place" : "an item"} to add.`}{" "}
+        It lands in the band your rating gives it, or Unrated.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {sections.map(({ section, rows }) => {
+        const open = expanded.has(section);
+        const shown = open ? rows : rows.slice(0, SECTION_PREVIEW);
+        const hidden = rows.length - shown.length;
+        return (
+          <CandidateList
+            key={section}
+            label={sectionTitle(section, entityType)}
+            heading
+            rows={shown}
+            onList={onList}
+            picks={picks}
+            busy={busy}
+            onToggle={onToggle}
+            more={
+              hidden > 0 ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="self-start text-ink-2"
+                  onClick={() =>
+                    setExpanded((current) => {
+                      const next = new Set(current);
+                      next.add(section);
+                      return next;
+                    })
+                  }
+                >
+                  Show {hidden} more
+                </Button>
+              ) : undefined
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** A labelled list of pickable rows, with an optional visible heading. */
+function CandidateList({
+  label,
+  heading = false,
+  rows,
+  onList,
+  picks,
+  busy,
+  onToggle,
+  more,
+}: {
+  label: string;
+  heading?: boolean;
+  rows: readonly AddEntryCandidate[];
+  onList: ReadonlySet<string>;
+  picks: Picks;
+  busy: boolean;
+  onToggle: (candidate: AddEntryCandidate) => void;
+  more?: ReactNode;
+}) {
+  const headingId = useId();
+  return (
+    <section className="flex flex-col gap-1.5">
+      {heading && (
+        <h3 id={headingId} className="px-1 text-ink-2 type-overline">
+          {label}
+        </h3>
+      )}
+      <ul
+        aria-label={heading ? undefined : label}
+        aria-labelledby={heading ? headingId : undefined}
+        className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1"
+      >
+        {rows.map((row) => {
+          const key = candidateKey(row);
+          return (
+            <li key={key}>
+              <CandidateRow
+                row={row}
+                onList={onList.has(key)}
+                picked={picks.has(key)}
+                busy={busy}
+                onToggle={onToggle}
+              />
+            </li>
+          );
+        })}
+      </ul>
+      {more}
+    </section>
+  );
+}
+
+/**
+ * One candidate, the whole row a checkbox: its name, why it is offered (or
+ * what it is), then where it would land — "You 4 · Very Good" — or, already
+ * on the board, "On this list" and nothing to press.
  */
 export function CandidateRow({
   row,
   onList,
+  picked = false,
   busy,
-  onPick,
+  onToggle,
 }: {
   row: AddEntryCandidate;
   onList: boolean;
+  picked?: boolean;
   busy: boolean;
-  onPick: (candidate: AddEntryCandidate) => void;
+  onToggle: (candidate: AddEntryCandidate) => void;
 }) {
   const band = bandForScore(row.myScore);
   const tone = BAND_TONES[band] ?? BAND_TONES[0];
+  const detail = [row.reason, row.subtitle]
+    .filter((part): part is string => part !== undefined && part !== "")
+    .join(" · ");
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a whole list row is the control (name, why, band); a native checkbox cannot hold that content
     <button
       type="button"
+      role="checkbox"
+      aria-checked={onList || picked}
       data-slot="add-entry-candidate"
       disabled={onList || busy}
       aria-disabled={onList || busy}
-      onClick={() => onPick(row)}
+      onClick={() => onToggle(row)}
       className={cn(
         "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-surface-2 enabled:active:bg-surface-3",
         busy && !onList && "opacity-60",
       )}
     >
-      <span className="flex size-5 shrink-0 items-center justify-center text-ink-2">
-        {onList ? (
-          <Check
-            aria-hidden
-            strokeWidth={ICON_STROKE}
-            className="size-5 text-success"
-          />
-        ) : (
-          <Add aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-6 shrink-0 items-center justify-center rounded-full transition-colors duration-(--ca-dur-micro) ease-standard",
+          onList
+            ? "text-success"
+            : picked
+              ? "bg-ink-1 text-background"
+              : "border-2 border-ink-3/60",
         )}
+      >
+        {(onList || picked) && <Check strokeWidth={2.25} className="size-4" />}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-semibold text-ink-1 type-callout">
-          {!onList && <span className="sr-only">Add </span>}
           {row.name}
         </span>
-        {row.subtitle !== "" && (
-          <span className="truncate type-footnote">{row.subtitle}</span>
+        {detail !== "" && (
+          <span className="truncate type-footnote">{detail}</span>
         )}
       </span>
       {onList ? (

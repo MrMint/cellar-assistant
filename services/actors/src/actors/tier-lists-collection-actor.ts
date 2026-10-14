@@ -34,6 +34,7 @@ import type {
   TierListEntryRef,
   TierListItemDto,
   TierListsCollectionActorInterface,
+  TierListTemplateDto,
 } from "@cellar-assistant/contracts";
 import {
   ConflictError,
@@ -59,6 +60,7 @@ import {
   uuidArray,
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
+import { ratedCounts } from "../lib/tier-list-suggestions.ts";
 import { placeRefVisibleSql } from "../lib/unshared-places.ts";
 import { type VisibleRow, visibleWhere } from "../lib/visibility-sql.ts";
 
@@ -220,6 +222,17 @@ export class TierListsCollectionActor
         return { nodes: bucket?.nodes ?? [], totalCount: bucket?.total ?? 0 };
       });
     });
+  }
+
+  /**
+   * X16's templates: how many of each entry type the viewer has rated. The
+   * viewer's own rows only (reviews, place ratings), so the key check is
+   * the whole authorisation.
+   */
+  async templates(ctx: Ctx): Promise<readonly TierListTemplateDto[]> {
+    return await this.batch(ctx, null, [], async () =>
+      ratedCounts(this.db, this.key),
+    );
   }
 
   /** Shared by the page and its `count(*)` — see `PageScope`. */

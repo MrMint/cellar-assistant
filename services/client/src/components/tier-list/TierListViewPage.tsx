@@ -13,7 +13,7 @@
  * with Undo, Redo, Add entry and Done. Undo and Redo step the list's
  * server-side edit history (`TierList.editHistory`), so a mistake from
  * yesterday is still one tap away, and every edit's toast offers the same
- * Undo. The old `isEditingLocked` flag is no longer read or written here.
+ * Undo. The old `isEditingLocked` padlock is retired, in the API too (X16).
  *
  * Kept from the rewrite (decision 2): the in-page **Add entry**, now inside
  * Arrange (and on an empty list's own empty state). A new entry lands in the
@@ -68,7 +68,7 @@ import { useShareLink } from "@/lib/share/use-share-link";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
 import { itemTypeOfList, onListHrefs } from "./adapter";
-import { BAND_LABELS } from "./constants";
+import { addedMessage } from "./add-entry";
 import {
   bandForScore,
   historyActionLabel,
@@ -112,6 +112,14 @@ const TRIGGER =
  */
 const STEP_SEQ_WAIT_MS = 4000;
 const STEP_SEQ_POLL_MS = 100;
+
+/**
+ * The Arrange bar's two labelled buttons: glyphs off below 400 px, tighter
+ * padding below 360, so Undo · Redo · Add entry · Done fit a 320 pt phone
+ * without the bar overflowing its 16 pt gutters.
+ */
+const ARRANGE_BUTTON =
+  "min-w-0 flex-1 max-[399px]:[&>svg]:hidden max-[359px]:px-3 max-[359px]:has-[>svg]:px-3";
 
 const NO_HISTORY: TierListHistoryView = {
   canUndo: false,
@@ -161,7 +169,7 @@ export function TierListViewPage({
   const PrivacyIcon = privacyInfo.icon;
 
   const router = useRouter();
-  const { addItemToTierListAction, undoAction, redoAction } =
+  const { addItemsToTierListAction, undoAction, redoAction } =
     useTierListActions();
   const [arranging, setArranging] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -315,34 +323,46 @@ export function TierListViewPage({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [addOpen, history.canRedo, history.canUndo, isArranging, step]);
 
-  const handleAddEntry = useCallback(
-    async (candidate: AddEntryCandidate) => {
+  /**
+   * X16: everything picked goes on as one multi-add — one edit, so the
+   * toast's Undo takes all of it back — each in the band your own verdict
+   * gives it, Unrated without one.
+   */
+  const handleAdd = useCallback(
+    async (candidates: AddEntryCandidate[]) => {
+      if (candidates.length === 0) return;
       setAdding(true);
       setAddError(null);
-      const band = bandForScore(candidate.myScore);
-      const result = await addItemToTierListAction(
+      const result = await addItemsToTierListAction(
         data.id,
-        candidate.id,
-        candidate.entityType,
-        band,
+        candidates.map((candidate) => ({
+          id: candidate.id,
+          entityType: candidate.entityType,
+          band: bandForScore(candidate.myScore),
+        })),
       );
       setAdding(false);
       if (!result.success) {
-        setAddError(result.error ?? "Failed to add item to tier list");
+        setAddError(result.error);
         return;
       }
       setAddOpen(false);
+      const message = addedMessage(candidates, result.added, result.skipped);
+      if (result.added === 0) {
+        notify(message, { id: TIER_LIST_EDIT_TOAST });
+        return;
+      }
       markEdited();
       // The add's own edit, read back with it: the toast's Undo takes back
-      // exactly that, or is not offered (`addedEditSeq`).
-      const editSeq = result.editSeq ?? null;
-      notify(`Added ${candidate.name} to ${BAND_LABELS[band]}`, {
+      // exactly that, or is not offered (`addedEntriesEditSeq`).
+      const editSeq = result.editSeq;
+      notify(message, {
         id: TIER_LIST_EDIT_TOAST,
         ...(editSeq === null ? {} : { undo: () => void step("undo", editSeq) }),
       });
       router.refresh();
     },
-    [addItemToTierListAction, data.id, markEdited, router, step],
+    [addItemsToTierListAction, data.id, markEdited, router, step],
   );
 
   const handleEdited = useCallback(() => markEdited(), [markEdited]);
@@ -488,7 +508,10 @@ export function TierListViewPage({
           {board}
           {/* The app's ActionBar: sticky 12 pt above the tab bar on glass,
               in the thumb zone. In flow after the board, so the last row
-              scrolls clear of it. */}
+              scrolls clear of it. Four controls share a phone's width: below
+              400 px the two buttons drop their glyphs, and below 360 (a
+              320 pt SE) "Add entry" reads "Add" and both tighten their
+              padding — the accessible names never change. */}
           <ActionBar role="toolbar" aria-label="Arrange">
             <IconButton
               variant="ghost"
@@ -506,11 +529,21 @@ export function TierListViewPage({
             >
               <Redo />
             </IconButton>
-            <Button variant="secondary" className="flex-1" onClick={openAdd}>
+            <Button
+              variant="secondary"
+              aria-label="Add entry"
+              className={ARRANGE_BUTTON}
+              onClick={openAdd}
+            >
               <Add aria-hidden strokeWidth={ICON_STROKE} />
-              Add entry
+              <span>
+                Add<span className="max-[359px]:hidden"> entry</span>
+              </span>
             </Button>
-            <Button className="flex-1" onClick={() => setArranging(false)}>
+            <Button
+              className={ARRANGE_BUTTON}
+              onClick={() => setArranging(false)}
+            >
               <Check aria-hidden strokeWidth={ICON_STROKE} />
               Done
             </Button>
@@ -537,6 +570,7 @@ export function TierListViewPage({
               tryNext={
                 tryNextType === null ? null : { itemType: tryNextType, onList }
               }
+              grounded={{ tierListId: data.id, isOwner: data.isOwner }}
             />
           </TabsContent>
         </Tabs>
@@ -546,11 +580,12 @@ export function TierListViewPage({
         key={addSession}
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onPick={(candidate) => void handleAddEntry(candidate)}
+        onAdd={(candidates) => void handleAdd(candidates)}
         busy={adding}
         error={addError}
         listType={data.listType}
         onList={onList}
+        tierListId={data.id}
       />
     </div>
   );

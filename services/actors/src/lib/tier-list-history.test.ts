@@ -83,12 +83,28 @@ describe("parseChange", () => {
     createdAt: "2026-10-08T00:00:00.000Z",
   };
 
-  it("reads ADD and REMOVE snapshots", () => {
+  it("reads ADD and REMOVE snapshots — a pre-X16 single `row` as one row", () => {
     expect(parseChange("ADD", { kind: "ADD", row })).toEqual({
       kind: "ADD",
-      row,
+      rows: [row],
     });
-    expect(parseChange("REMOVE", { row })).toMatchObject({ kind: "REMOVE" });
+    expect(parseChange("REMOVE", { row })).toMatchObject({
+      kind: "REMOVE",
+      rows: [row],
+    });
+  });
+
+  it("reads X16's multi-add as one edit of several rows", () => {
+    const second = { ...row, id: "row-2", position: 1 };
+    expect(parseChange("ADD", { kind: "ADD", rows: [row, second] })).toEqual({
+      kind: "ADD",
+      rows: [row, second],
+    });
+  });
+
+  it("refuses a multi-add with any unreadable row, or none", () => {
+    expect(parseChange("ADD", { rows: [row, { ...row, band: 9 }] })).toBeNull();
+    expect(parseChange("ADD", { rows: [] })).toBeNull();
   });
 
   it("reads a MOVE with and without a subject", () => {

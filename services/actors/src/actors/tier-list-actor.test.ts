@@ -342,10 +342,11 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
 
         const updated = await actor.update(userCtx(owner, "r"), {
           name: "Renamed",
-          isEditingLocked: true,
         });
         expect(updated.name).toBe("Renamed");
-        expect(updated.isEditingLocked).toBe(true);
+        // X16: the padlock is retired — Arrange replaced it — so the DTO no
+        // longer carries it (the column stays until a contract migration).
+        expect(updated).not.toHaveProperty("isEditingLocked");
         expect(updated.contentUpdatedAt).toBe(before.contentUpdatedAt);
         expect(await outboxRowsFor(db, id)).toHaveLength(0);
       });

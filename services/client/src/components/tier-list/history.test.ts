@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   addedEditSeq,
+  addedEntriesEditSeq,
   bandForScore,
   editPhrase,
   historyActionLabel,
@@ -167,5 +168,82 @@ describe("addedEditSeq (the add's own Undo)", () => {
     ]) {
       assert.equal(addedEditSeq(undo, "w-1"), null);
     }
+  });
+});
+
+describe("history wording for several entries at once (X16)", () => {
+  const many = (overrides: Partial<TierListEditView>) =>
+    edit({
+      kind: "ADD",
+      entryName: null,
+      fromBand: null,
+      entryCount: 4,
+      ...overrides,
+    });
+
+  test("a multi-add across bands is counted, not named", () => {
+    assert.equal(editPhrase(many({ toBand: null })), "added 4 entries");
+    assert.equal(
+      historyActionLabel("undo", many({ toBand: null })),
+      "Undo: added 4 entries",
+    );
+    assert.equal(
+      historyStepMessage("undo", many({ toBand: null })),
+      "Took 4 entries off the list",
+    );
+    assert.equal(
+      historyStepMessage("redo", many({ toBand: null })),
+      "Added 4 entries again",
+    );
+  });
+
+  test("into one band, it says which", () => {
+    assert.equal(
+      editPhrase(many({ toBand: 5 })),
+      "added 4 entries to Outstanding",
+    );
+  });
+
+  test("a single add still names its entry", () => {
+    assert.equal(
+      editPhrase(
+        edit({ kind: "ADD", fromBand: null, toBand: 3, entryCount: 1 }),
+      ),
+      "added Barolo Riserva to Good",
+    );
+  });
+});
+
+describe("addedEntriesEditSeq (a multi-add's own Undo, X16 x expectedSeq)", () => {
+  test("several added: the newest edit when it is an ADD of that many", () => {
+    const undo = { seq: 12, kind: "ADD", entryId: null, entryCount: 3 };
+    assert.equal(addedEntriesEditSeq(undo, ["a", "b", "c", "d"], 3), 12);
+    assert.equal(
+      addedEntriesEditSeq({ ...undo, entryCount: 2 }, ["a", "b", "c"], 3),
+      null,
+    );
+    assert.equal(
+      addedEntriesEditSeq({ ...undo, kind: "MOVE" }, ["a", "b", "c"], 3),
+      null,
+    );
+  });
+
+  test("one added: an ADD of one of the entries asked for", () => {
+    const one = { seq: 7, kind: "ADD", entryId: "W-2", entryCount: 1 };
+    assert.equal(addedEntriesEditSeq(one, ["w-1", "w-2"], 1), 7);
+    assert.equal(addedEntriesEditSeq(one, ["w-1", "w-3"], 1), null);
+  });
+
+  test("nothing added, or no history, is no Undo", () => {
+    assert.equal(addedEntriesEditSeq(null, ["a"], 1), null);
+    assert.equal(addedEntriesEditSeq(undefined, ["a"], 1), null);
+    assert.equal(
+      addedEntriesEditSeq(
+        { seq: 1, kind: "ADD", entryId: "a", entryCount: 1 },
+        ["a"],
+        0,
+      ),
+      null,
+    );
   });
 });

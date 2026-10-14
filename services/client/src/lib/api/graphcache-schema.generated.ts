@@ -312,6 +312,36 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "AddTierListItemsPayload",
+        fields: [
+          {
+            name: "added",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListItemConnection" },
+            },
+          },
+          {
+            name: "skippedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "AddTierListItemsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "AddTierListItemsPayload" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
         name: "AiCapabilities",
         fields: [
           {
@@ -4925,6 +4955,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "AddTierListItemResult" },
+            },
+          },
+          {
+            name: "addTierListItems",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "AddTierListItemsResult" },
             },
           },
           {
@@ -10155,6 +10192,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "TierList",
         fields: [
+          {
+            name: "addSuggestions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListSuggestionConnection" },
+            },
+          },
           { name: "aiInsights", type: { kind: "SCALAR", name: "JSON" } },
           {
             name: "contentUpdatedAt",
@@ -10198,13 +10242,6 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
-            name: "isEditingLocked",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "SCALAR", name: "Boolean" },
-            },
-          },
-          {
             name: "itemCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
@@ -10234,6 +10271,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "PermissionType" },
+            },
+          },
+          {
+            name: "tryNext",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListTryNextConnection" },
             },
           },
           { name: "updatedAt", type: { kind: "SCALAR", name: "DateTime" } },
@@ -10299,6 +10343,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "DateTime" },
             },
+          },
+          {
+            name: "entryCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           { name: "entryId", type: { kind: "SCALAR", name: "ID" } },
           { name: "entryName", type: { kind: "SCALAR", name: "String" } },
@@ -10451,6 +10499,237 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "TierListItem" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListSuggestion",
+        fields: [
+          { name: "bottleCount", type: { kind: "SCALAR", name: "Int" } },
+          { name: "cellarName", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "entryType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEntryType" },
+            },
+          },
+          { name: "friend", type: { kind: "OBJECT", name: "UserProfile" } },
+          { name: "friendBand", type: { kind: "SCALAR", name: "Int" } },
+          { name: "friendCount", type: { kind: "SCALAR", name: "Int" } },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          { name: "lastTastedAt", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "logCount", type: { kind: "SCALAR", name: "Int" } },
+          { name: "myScore", type: { kind: "SCALAR", name: "Float" } },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          {
+            name: "section",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListSuggestionSection" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListSuggestionConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TierListSuggestionEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListSuggestionEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListSuggestion" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTemplate",
+        fields: [
+          {
+            name: "entryType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEntryType" },
+            },
+          },
+          {
+            name: "listType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "ratedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTemplateConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TierListTemplateEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTemplateEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListTemplate" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTryNext",
+        fields: [
+          {
+            name: "entryType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEntryType" },
+            },
+          },
+          { name: "friend", type: { kind: "OBJECT", name: "UserProfile" } },
+          { name: "friendBand", type: { kind: "SCALAR", name: "Int" } },
+          { name: "friendCount", type: { kind: "SCALAR", name: "Int" } },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          { name: "likeBand", type: { kind: "SCALAR", name: "Int" } },
+          { name: "likeName", type: { kind: "SCALAR", name: "String" } },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          {
+            name: "reason",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListTryNextReason" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTryNextConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TierListTryNextEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTryNextEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListTryNext" },
             },
           },
         ],
@@ -10958,6 +11237,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ViewerRole" },
+            },
+          },
+          {
+            name: "tierListTemplates",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListTemplateConnection" },
             },
           },
           {
