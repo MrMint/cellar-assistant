@@ -83,7 +83,8 @@ test("New recipe › Type: private first, and saving opens it", async ({
   recipeId = page.url().split("/").at(-1) ?? "";
 
   await expect(page.getByText("Only you can see this recipe.")).toBeVisible();
-  await expect(page.getByText("Lemon juice")).toBeVisible();
+  // Exact: the bar's "Missing 2 · Gin, Lemon juice" line (X14) names it too.
+  await expect(page.getByText("Lemon juice", { exact: true })).toBeVisible();
   // A cocktail with no photo is drawn as a cocktail, never a wine bottle.
   await expect(
     page.locator('[data-slot="recipe-plate"][data-recipe-type="cocktail"]'),
