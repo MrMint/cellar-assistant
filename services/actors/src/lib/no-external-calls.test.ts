@@ -250,6 +250,13 @@ const GUARDED: readonly Guarded[] = [
     sidecarTargets: [],
   },
   {
+    // X18: "cellars this user created or co-owns" as a SQL fragment — builds
+    // SQL, issues no query. `UserActor.counts` imports it for the bottles.
+    file: "../lib/cellar-ownership.ts",
+    imports: ["@cellar-assistant/db/orm"],
+    sidecarTargets: [],
+  },
+  {
     // X15: who may see a recipe — SQL fragments and one friendship read, no
     // I/O beyond the database. `UserActor` imports it for Love and Want to
     // try on a recipe, which must not confirm a private one exists.
@@ -296,6 +303,8 @@ const GUARDED: readonly Guarded[] = [
       "../lib/unshared-places.ts",
       // X15: `visibleRecipeIds` — guarded above.
       "../lib/recipe-visibility.ts",
+      // X18: `cellarOwnedBySql` for the Me hub's counts — guarded above.
+      "../lib/cellar-ownership.ts",
     ],
     sidecarTargets: [],
   },

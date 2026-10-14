@@ -2489,6 +2489,9 @@ describe("UserActor makes no external call (§2.1, B4 acceptance)", () => {
       // Pure: a module-local registry `installAI` fills at boot (N07); its
       // only import is the contracts package.
       "../lib/ai/capabilities.ts",
+      // X18: `cellarOwnedBySql`, a SQL fragment for the Me hub's counts —
+      // guarded import by import in `no-external-calls.test.ts`.
+      "../lib/cellar-ownership.ts",
       "../lib/db.ts",
       "../lib/delivery.ts",
       "../lib/guards.ts",
