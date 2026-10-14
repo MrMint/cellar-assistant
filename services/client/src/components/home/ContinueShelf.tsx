@@ -7,7 +7,7 @@ import { ICON_STROKE, Pour } from "@/components/app/icons";
 import { LabelPlate } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
 import { InsetSection, ListRow } from "@/components/app/Page";
-import { itemTypeTokens } from "@/components/app/TypeChip";
+import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
 import { bottleState } from "@/components/cellar/bottle-state";
 import { LogDrinkSheet } from "@/components/drink-log/LogDrinkSheet";
 import { useDrinkLogFeedback } from "@/components/drink-log/useDrinkLogFeedback";
@@ -129,15 +129,14 @@ export function ContinueSection({
               leading={
                 <span
                   className={cn(
-                    "flex size-9 items-center justify-center overflow-hidden rounded-md",
+                    "flex size-9 items-center justify-center rounded-md",
                     itemTypeTokens[bottle.type].tintClass,
                   )}
                 >
-                  <LabelPlate
-                    type={bottle.type}
-                    plate={bottle.plate}
-                    className="size-full"
-                  />
+                  {/* A plate's text cannot be read at 36 px, and it spilled
+                      past the row's edge (clipped, but measured): the type's
+                      glyph, as universal search's rows draw it. */}
+                  <TypeGlyph type={bottle.type} className="size-5" />
                 </span>
               }
               title={
